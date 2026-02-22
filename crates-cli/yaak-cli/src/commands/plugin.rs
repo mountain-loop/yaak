@@ -163,7 +163,7 @@ fn generate(args: GenerateArgs) -> CommandResult {
     ui::info("Next steps:");
     println!("  1. cd {}", output_dir.display());
     println!("  2. npm install");
-    println!("  3. yaakcli build");
+    println!("  3. yaak plugin build");
     Ok(())
 }
 
@@ -173,7 +173,7 @@ async fn publish(args: PluginPathArg) -> CommandResult {
 
     let environment = current_environment();
     let token = get_auth_token(environment)?
-        .ok_or_else(|| "Not logged in. Run `yaakcli auth login`.".to_string())?;
+        .ok_or_else(|| "Not logged in. Run `yaak auth login`.".to_string())?;
 
     ui::info(&format!("Building plugin {}...", plugin_dir.display()));
     let warnings = build_plugin_bundle(&plugin_dir).await?;
@@ -437,8 +437,8 @@ const TEMPLATE_PACKAGE_JSON: &str = r#"{
   "private": true,
   "version": "0.0.1",
   "scripts": {
-    "build": "yaakcli plugin build",
-    "dev": "yaakcli plugin dev"
+    "build": "yaak plugin build",
+    "dev": "yaak plugin dev"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

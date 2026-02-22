@@ -11,6 +11,7 @@
     "prepublishOnly": "node ./prepublish.js"
   },
   "bin": {
+    "yaak": "bin/cli.js",
     "yaakcli": "bin/cli.js"
   },
   "optionalDependencies": {

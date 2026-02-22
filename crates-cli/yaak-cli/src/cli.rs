@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "yaakcli")]
+#[command(name = "yaak")]
 #[command(about = "Yaak CLI - API client from the command line")]
 pub struct Cli {
     /// Use a custom data directory

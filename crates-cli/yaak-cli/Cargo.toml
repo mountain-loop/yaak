@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [[bin]]
-name = "yaakcli"
+name = "yaak"
 path = "src/main.rs"
 
 [dependencies]

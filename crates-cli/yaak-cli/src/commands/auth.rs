@@ -130,7 +130,7 @@ async fn whoami() -> CommandResult {
         Some(token) => token,
         None => {
             ui::warning("Not logged in");
-            ui::info("Please run `yaakcli auth login`");
+            ui::info("Please run `yaak auth login`");
             return Ok(());
         }
     };
@@ -152,7 +152,7 @@ async fn whoami() -> CommandResult {
         if status.as_u16() == 401 {
             let _ = delete_auth_token(environment);
             return Err(
-                "Unauthorized to access CLI. Run `yaakcli auth login` to refresh credentials."
+                "Unauthorized to access CLI. Run `yaak auth login` to refresh credentials."
                     .to_string(),
             );
         }

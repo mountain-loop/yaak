@@ -8,7 +8,7 @@ const BINARY_DISTRIBUTION_PACKAGES = {
 };
 
 const BINARY_DISTRIBUTION_VERSION = require("./package.json").version;
-const BINARY_NAME = process.platform === "win32" ? "yaakcli.exe" : "yaakcli";
+const BINARY_NAME = process.platform === "win32" ? "yaak.exe" : "yaak";
 const PLATFORM_SPECIFIC_PACKAGE_NAME =
   BINARY_DISTRIBUTION_PACKAGES[`${process.platform}_${process.arch}`];
 
