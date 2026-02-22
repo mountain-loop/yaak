@@ -33,9 +33,8 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::{Instant, timeout};
-use yaak_models::db_context::DbContext;
 use yaak_models::models::Plugin;
-use yaak_models::util::{UpdateSource, generate_id};
+use yaak_models::util::generate_id;
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result as TemplateResult;
 
@@ -179,33 +178,6 @@ impl PluginManager {
         let plugins_dir = self.get_plugins_dir();
         info!("Loading bundled plugins from {plugins_dir:?}");
         read_plugins_dir(&plugins_dir).await
-    }
-
-    /// Ensure all bundled plugin directories are present in the plugins table.
-    /// Returns a list of newly registered plugin directories.
-    pub async fn ensure_bundled_plugins_registered(
-        &self,
-        db: &DbContext<'_>,
-    ) -> Result<Vec<String>> {
-        let bundled_dirs = self.list_bundled_plugin_dirs().await?;
-        let mut registered = Vec::new();
-
-        for dir in bundled_dirs {
-            if db.get_plugin_by_directory(&dir).is_none() {
-                db.upsert_plugin(
-                    &Plugin {
-                        directory: dir.clone(),
-                        enabled: true,
-                        url: None,
-                        ..Default::default()
-                    },
-                    &UpdateSource::Background,
-                )?;
-                registered.push(dir);
-            }
-        }
-
-        Ok(registered)
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {

@@ -8,6 +8,7 @@ use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::db_context::DbContext;
 use yaak_models::query_manager::QueryManager;
+use yaak_plugins::bootstrap;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
 
@@ -51,38 +52,23 @@ impl CliContext {
                         .expect("Failed to prepare embedded plugin runtime")
                 });
 
-            let plugin_manager = Arc::new(
-                PluginManager::new(
-                    vendored_plugin_dir,
-                    installed_plugin_dir,
-                    node_bin_path,
-                    plugin_runtime_main,
-                    false,
-                )
-                .await,
-            );
-
+            match bootstrap::create_and_initialize_manager(
+                vendored_plugin_dir,
+                installed_plugin_dir,
+                node_bin_path,
+                plugin_runtime_main,
+                &query_manager,
+                &PluginContext::new_empty(),
+                false,
+            )
+            .await
             {
-                let db = query_manager.connect();
-                if let Err(err) = plugin_manager.ensure_bundled_plugins_registered(&db).await {
-                    eprintln!("Warning: Failed to register bundled plugins: {err}");
+                Ok(plugin_manager) => Some(plugin_manager),
+                Err(err) => {
+                    eprintln!("Warning: Failed to initialize plugins: {err}");
+                    None
                 }
             }
-
-            let plugins = query_manager.connect().list_plugins().unwrap_or_default();
-            if !plugins.is_empty() {
-                let errors = plugin_manager
-                    .initialize_all_plugins(plugins, &PluginContext::new_empty())
-                    .await;
-                for (plugin_dir, error_msg) in errors {
-                    eprintln!(
-                        "Warning: Failed to initialize plugin '{}': {}",
-                        plugin_dir, error_msg
-                    );
-                }
-            }
-
-            Some(plugin_manager)
         } else {
             None
         };
