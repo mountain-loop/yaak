@@ -27,8 +27,14 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install dependencies
         run: npm ci
+
+      - name: Install wasm-pack
+        run: npm run bootstrap:install-wasm-pack
 
       - name: Build plugin assets
         run: |

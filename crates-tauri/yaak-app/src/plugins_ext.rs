@@ -27,7 +27,6 @@ use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
 };
-use yaak_plugins::bootstrap;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
@@ -274,7 +273,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             // Create plugin manager asynchronously
             let app_handle_clone = app_handle.clone();
             tauri::async_runtime::block_on(async move {
-                let manager = bootstrap::create_and_initialize_manager(
+                let manager = PluginManager::new(
                     vendored_plugin_dir,
                     installed_plugin_dir,
                     node_bin_path,
