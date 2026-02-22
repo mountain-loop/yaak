@@ -1,4 +1,6 @@
 use crate::plugin_events::CliPluginEventBridge;
+use include_dir::{Dir, include_dir};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -8,6 +10,13 @@ use yaak_models::db_context::DbContext;
 use yaak_models::query_manager::QueryManager;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
+
+const EMBEDDED_PLUGIN_RUNTIME: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs"
+));
+static EMBEDDED_VENDORED_PLUGINS: Dir<'_> =
+    include_dir!("$CARGO_MANIFEST_DIR/../../crates-tauri/yaak-app/vendored/plugins");
 
 pub struct CliContext {
     data_dir: PathBuf,
@@ -33,10 +42,13 @@ impl CliContext {
             let installed_plugin_dir = data_dir.join("installed-plugins");
             let node_bin_path = PathBuf::from("node");
 
+            prepare_embedded_vendored_plugins(&vendored_plugin_dir)
+                .expect("Failed to prepare bundled plugins");
+
             let plugin_runtime_main =
                 std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
-                    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                        .join("../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs")
+                    prepare_embedded_plugin_runtime(&data_dir)
+                        .expect("Failed to prepare embedded plugin runtime")
                 });
 
             let plugin_manager = Arc::new(
@@ -49,6 +61,13 @@ impl CliContext {
                 )
                 .await,
             );
+
+            {
+                let db = query_manager.connect();
+                if let Err(err) = plugin_manager.ensure_bundled_plugins_registered(&db).await {
+                    eprintln!("Warning: Failed to register bundled plugins: {err}");
+                }
+            }
 
             let plugins = query_manager.connect().list_plugins().unwrap_or_default();
             if !plugins.is_empty() {
@@ -112,4 +131,18 @@ impl CliContext {
             plugin_manager.terminate().await;
         }
     }
+}
+
+fn prepare_embedded_plugin_runtime(data_dir: &Path) -> std::io::Result<PathBuf> {
+    let runtime_dir = data_dir.join("vendored").join("plugin-runtime");
+    fs::create_dir_all(&runtime_dir)?;
+    let runtime_main = runtime_dir.join("index.cjs");
+    fs::write(&runtime_main, EMBEDDED_PLUGIN_RUNTIME)?;
+    Ok(runtime_main)
+}
+
+fn prepare_embedded_vendored_plugins(vendored_plugin_dir: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(vendored_plugin_dir)?;
+    EMBEDDED_VENDORED_PLUGINS.extract(vendored_plugin_dir)?;
+    Ok(())
 }

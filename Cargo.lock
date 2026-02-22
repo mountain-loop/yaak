@@ -10149,6 +10149,7 @@ dependencies = [
  "env_logger",
  "futures",
  "hex",
+ "include_dir",
  "keyring",
  "log 0.4.29",
  "oxc_resolver",
