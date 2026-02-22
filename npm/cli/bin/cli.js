@@ -15,6 +15,16 @@ function getBinaryPath() {
   }
 }
 
-childProcess.execFileSync(getBinaryPath(), process.argv.slice(2), {
+const result = childProcess.spawnSync(getBinaryPath(), process.argv.slice(2), {
   stdio: "inherit"
 });
+
+if (result.error) {
+  throw result.error;
+}
+
+if (result.signal) {
+  process.kill(process.pid, result.signal);
+}
+
+process.exit(result.status ?? 1);
