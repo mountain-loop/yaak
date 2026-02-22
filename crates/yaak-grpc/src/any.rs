@@ -55,6 +55,7 @@ mod tests {
 
         let mut out = Vec::new();
         super::collect_any_types(json, &mut out);
+        out.sort();
         assert_eq!(out, vec!["foo.bar", "mount_source.MountSourceRBDVolume"]);
     }
 }
