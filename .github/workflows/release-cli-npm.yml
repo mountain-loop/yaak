@@ -120,33 +120,42 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME#yaak-cli-}"
           fi
+          VERSION="${VERSION#v}"
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE="${VERSION#*-}"
+            NPM_TAG="${PRERELEASE%%.*}"
+          else
+            NPM_TAG="latest"
+          fi
           echo "Preparing CLI npm packages for version: $VERSION"
+          echo "Publishing with npm dist-tag: $NPM_TAG"
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_ENV"
           YAAK_CLI_VERSION="$VERSION" node npm/prepare-publish.js
 
       - name: Publish @yaakapp/cli-darwin-arm64
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli-darwin-arm64
 
       - name: Publish @yaakapp/cli-darwin-x64
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli-darwin-x64
 
       - name: Publish @yaakapp/cli-linux-arm64
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli-linux-arm64
 
       - name: Publish @yaakapp/cli-linux-x64
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli-linux-x64
 
       - name: Publish @yaakapp/cli-win32-arm64
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli-win32-arm64
 
       - name: Publish @yaakapp/cli-win32-x64
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli-win32-x64
 
       - name: Publish @yaakapp/cli
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "$NPM_TAG"
         working-directory: npm/cli
