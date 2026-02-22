@@ -8,7 +8,6 @@ use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::db_context::DbContext;
 use yaak_models::query_manager::QueryManager;
-use yaak_plugins::bootstrap;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
 
@@ -52,7 +51,7 @@ impl CliContext {
                         .expect("Failed to prepare embedded plugin runtime")
                 });
 
-            match bootstrap::create_and_initialize_manager(
+            match PluginManager::new(
                 vendored_plugin_dir,
                 installed_plugin_dir,
                 node_bin_path,
@@ -63,7 +62,7 @@ impl CliContext {
             )
             .await
             {
-                Ok(plugin_manager) => Some(plugin_manager),
+                Ok(plugin_manager) => Some(Arc::new(plugin_manager)),
                 Err(err) => {
                     eprintln!("Warning: Failed to initialize plugins: {err}");
                     None

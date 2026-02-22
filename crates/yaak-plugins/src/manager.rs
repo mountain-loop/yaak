@@ -34,7 +34,8 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::{Instant, timeout};
 use yaak_models::models::Plugin;
-use yaak_models::util::generate_id;
+use yaak_models::query_manager::QueryManager;
+use yaak_models::util::{UpdateSource, generate_id};
 use yaak_templates::error::Error::RenderError;
 use yaak_templates::error::Result as TemplateResult;
 
@@ -61,14 +62,18 @@ impl PluginManager {
     /// * `installed_plugin_dir` - Path to installed plugins directory
     /// * `node_bin_path` - Path to the yaaknode binary
     /// * `plugin_runtime_main` - Path to the plugin runtime index.cjs
+    /// * `query_manager` - Query manager for bundled plugin registration and loading
+    /// * `plugin_context` - Context to use while initializing plugins
     /// * `dev_mode` - Whether the app is in dev mode (affects plugin loading)
     pub async fn new(
         vendored_plugin_dir: PathBuf,
         installed_plugin_dir: PathBuf,
         node_bin_path: PathBuf,
         plugin_runtime_main: PathBuf,
+        query_manager: &QueryManager,
+        plugin_context: &PluginContext,
         dev_mode: bool,
-    ) -> PluginManager {
+    ) -> Result<PluginManager> {
         let (events_tx, mut events_rx) = mpsc::channel(2048);
         let (kill_server_tx, kill_server_rx) = tokio::sync::watch::channel(false);
         let (killed_tx, killed_rx) = oneshot::channel();
@@ -151,12 +156,40 @@ impl PluginManager {
             &kill_server_rx,
             killed_tx,
         )
-        .await
-        .unwrap();
+        .await?;
         info!("Waiting for plugins to initialize");
-        init_plugins_task.await.unwrap();
+        init_plugins_task.await.map_err(|e| PluginErr(e.to_string()))?;
 
-        plugin_manager
+        let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
+        let db = query_manager.connect();
+        for dir in bundled_dirs {
+            if db.get_plugin_by_directory(&dir).is_none() {
+                db.upsert_plugin(
+                    &Plugin {
+                        directory: dir,
+                        enabled: true,
+                        url: None,
+                        ..Default::default()
+                    },
+                    &UpdateSource::Background,
+                )?;
+            }
+        }
+
+        let plugins = db.list_plugins()?;
+        drop(db);
+
+        let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
+        if !init_errors.is_empty() {
+            let joined = init_errors
+                .into_iter()
+                .map(|(dir, err)| format!("{dir}: {err}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(PluginErr(format!("Failed to initialize plugin(s): {joined}")));
+        }
+
+        Ok(plugin_manager)
     }
 
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)

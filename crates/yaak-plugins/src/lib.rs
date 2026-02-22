@@ -7,7 +7,6 @@
 //! by yaak-app's plugins_ext module.
 
 pub mod api;
-pub mod bootstrap;
 mod checksum;
 pub mod error;
 pub mod events;
