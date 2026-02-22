@@ -231,6 +231,9 @@ async fn receive_oauth_code(
             }
             Err(error) => {
                 let _ = write_bad_request(&mut stream, &error).await;
+                if error.starts_with("OAuth provider returned error:") {
+                    return Err(error);
+                }
             }
         }
     }
@@ -246,13 +249,27 @@ async fn parse_callback_request(stream: &mut TcpStream) -> CommandResult<(String
         .map_err(|e| format!("Failed to parse callback URL: {e}"))?;
     let mut state: Option<String> = None;
     let mut code: Option<String> = None;
+    let mut oauth_error: Option<String> = None;
+    let mut oauth_error_description: Option<String> = None;
 
     for (k, v) in url.query_pairs() {
         if k == "state" {
             state = Some(v.into_owned());
         } else if k == "code" {
             code = Some(v.into_owned());
+        } else if k == "error" {
+            oauth_error = Some(v.into_owned());
+        } else if k == "error_description" {
+            oauth_error_description = Some(v.into_owned());
         }
+    }
+
+    if let Some(error) = oauth_error {
+        let mut message = format!("OAuth provider returned error: {error}");
+        if let Some(description) = oauth_error_description.filter(|d| !d.is_empty()) {
+            message.push_str(&format!(" ({description})"));
+        }
+        return Err(message);
     }
 
     let state = state.ok_or_else(|| "Missing 'state' query parameter".to_string())?;
@@ -474,6 +491,54 @@ mod tests {
         let parsed = server.await.expect("join").expect("parse");
         assert_eq!(parsed.0, "xyz");
         assert_eq!(parsed.1, "abc123");
+    }
+
+    #[tokio::test]
+    async fn parse_callback_request_oauth_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = listener.local_addr().expect("local addr");
+
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept");
+            parse_callback_request(&mut stream).await
+        });
+
+        let mut client = TcpStream::connect(addr).await.expect("connect");
+        client
+            .write_all(
+                b"GET /oauth/callback?error=access_denied&error_description=User%20denied&state=xyz HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            )
+            .await
+            .expect("write");
+
+        let err = server.await.expect("join").expect_err("should fail");
+        assert!(err.contains("OAuth provider returned error: access_denied"));
+        assert!(err.contains("User denied"));
+    }
+
+    #[tokio::test]
+    async fn receive_oauth_code_fails_fast_on_provider_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let addr = listener.local_addr().expect("local addr");
+
+        let server = tokio::spawn(async move {
+            receive_oauth_code(listener, "expected-state", "http://localhost:9444").await
+        });
+
+        let mut client = TcpStream::connect(addr).await.expect("connect");
+        client
+            .write_all(
+                b"GET /oauth/callback?error=access_denied&state=expected-state HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            )
+            .await
+            .expect("write");
+
+        let result = tokio::time::timeout(std::time::Duration::from_secs(2), server)
+            .await
+            .expect("should not timeout")
+            .expect("join");
+        let err = result.expect_err("should return oauth error");
+        assert!(err.contains("OAuth provider returned error: access_denied"));
     }
 
     #[test]
