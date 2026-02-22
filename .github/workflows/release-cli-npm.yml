@@ -117,46 +117,30 @@ jobs:
           echo "Preparing CLI npm packages for version: $VERSION"
           YAAK_CLI_VERSION="$VERSION" node npm/prepare-publish.js
 
-      - name: Ensure NPM token exists
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "NPM_TOKEN is not configured"
-            exit 1
-          fi
-
       - name: Publish @yaakapp/cli-darwin-arm64
         run: npm publish --provenance --access public
         working-directory: npm/cli-darwin-arm64
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
       - name: Publish @yaakapp/cli-darwin-x64
         run: npm publish --provenance --access public
         working-directory: npm/cli-darwin-x64
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
       - name: Publish @yaakapp/cli-linux-arm64
         run: npm publish --provenance --access public
         working-directory: npm/cli-linux-arm64
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
       - name: Publish @yaakapp/cli-linux-x64
         run: npm publish --provenance --access public
         working-directory: npm/cli-linux-x64
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
       - name: Publish @yaakapp/cli-win32-arm64
         run: npm publish --provenance --access public
         working-directory: npm/cli-win32-arm64
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
       - name: Publish @yaakapp/cli-win32-x64
         run: npm publish --provenance --access public
         working-directory: npm/cli-win32-x64
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
       - name: Publish @yaakapp/cli
         run: npm publish --provenance --access public
         working-directory: npm/cli
-        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
