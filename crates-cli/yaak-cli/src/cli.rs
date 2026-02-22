@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "yaakcli")]
+#[command(name = "yaak")]
 #[command(about = "Yaak CLI - API client from the command line")]
 pub struct Cli {
     /// Use a custom data directory
@@ -23,6 +23,18 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Authentication commands
+    Auth(AuthArgs),
+
+    /// Plugin development and publishing commands
+    Plugin(PluginArgs),
+
+    #[command(hide = true)]
+    Build(PluginPathArg),
+
+    #[command(hide = true)]
+    Dev(PluginPathArg),
+
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
@@ -304,4 +316,60 @@ pub enum EnvironmentCommands {
         #[arg(short, long)]
         yes: bool,
     },
+}
+
+#[derive(Args)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub command: AuthCommands,
+}
+
+#[derive(Subcommand)]
+pub enum AuthCommands {
+    /// Login to Yaak via web browser
+    Login,
+
+    /// Sign out of the Yaak CLI
+    Logout,
+
+    /// Print the current logged-in user's info
+    Whoami,
+}
+
+#[derive(Args)]
+pub struct PluginArgs {
+    #[command(subcommand)]
+    pub command: PluginCommands,
+}
+
+#[derive(Subcommand)]
+pub enum PluginCommands {
+    /// Transpile code into a runnable plugin bundle
+    Build(PluginPathArg),
+
+    /// Build plugin bundle continuously when the filesystem changes
+    Dev(PluginPathArg),
+
+    /// Generate a "Hello World" Yaak plugin
+    Generate(GenerateArgs),
+
+    /// Publish a Yaak plugin version to the plugin registry
+    Publish(PluginPathArg),
+}
+
+#[derive(Args, Clone)]
+pub struct PluginPathArg {
+    /// Path to plugin directory (defaults to current working directory)
+    pub path: Option<PathBuf>,
+}
+
+#[derive(Args, Clone)]
+pub struct GenerateArgs {
+    /// Plugin name (defaults to a generated name in interactive mode)
+    #[arg(long)]
+    pub name: Option<String>,
+
+    /// Output directory for the generated plugin (defaults to ./<name> in interactive mode)
+    #[arg(long)]
+    pub dir: Option<PathBuf>,
 }

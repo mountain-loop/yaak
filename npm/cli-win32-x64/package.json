@@ -1,0 +1,10 @@
+{
+  "name": "@yaakapp/cli-win32-x64",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mountain-loop/yaak.git"
+  },
+  "os": ["win32"],
+  "cpu": ["x64"]
+}

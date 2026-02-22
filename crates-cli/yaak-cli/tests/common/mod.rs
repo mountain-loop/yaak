@@ -10,7 +10,7 @@ use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 
 pub fn cli_cmd(data_dir: &Path) -> Command {
-    let mut cmd = cargo_bin_cmd!("yaakcli");
+    let mut cmd = cargo_bin_cmd!("yaak");
     cmd.arg("--data-dir").arg(data_dir);
     cmd
 }

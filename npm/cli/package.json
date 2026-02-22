@@ -1,0 +1,25 @@
+{
+  "name": "@yaakapp/cli",
+  "version": "0.0.1",
+  "main": "./index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mountain-loop/yaak.git"
+  },
+  "scripts": {
+    "postinstall": "node ./install.js",
+    "prepublishOnly": "node ./prepublish.js"
+  },
+  "bin": {
+    "yaak": "bin/cli.js",
+    "yaakcli": "bin/cli.js"
+  },
+  "optionalDependencies": {
+    "@yaakapp/cli-darwin-x64": "0.0.1",
+    "@yaakapp/cli-darwin-arm64": "0.0.1",
+    "@yaakapp/cli-linux-arm64": "0.0.1",
+    "@yaakapp/cli-linux-x64": "0.0.1",
+    "@yaakapp/cli-win32-x64": "0.0.1",
+    "@yaakapp/cli-win32-arm64": "0.0.1"
+  }
+}

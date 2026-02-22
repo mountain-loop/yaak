@@ -1,0 +1,162 @@
+name: Release CLI to NPM
+
+on:
+  push:
+    tags: [yaak-cli-*]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: CLI version to publish (for example 0.4.0 or v0.4.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.pkg }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: cli-darwin-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            binary: yaak
+          - pkg: cli-darwin-x64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            binary: yaak
+          - pkg: cli-linux-arm64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: yaak
+          - pkg: cli-linux-x64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            binary: yaak
+          - pkg: cli-win32-arm64
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            binary: yaak.exe
+          - pkg: cli-win32-x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: yaak.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-cli-npm
+          cache-on-failure: true
+
+      - name: Build yaak
+        run: cargo build --locked --release -p yaak-cli --bin yaak --target ${{ matrix.target }}
+
+      - name: Stage binary artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "npm/dist/${{ matrix.pkg }}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "npm/dist/${{ matrix.pkg }}/${{ matrix.binary }}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.pkg }}
+          path: npm/dist/${{ matrix.pkg }}/${{ matrix.binary }}
+          if-no-files-found: error
+
+  publish-npm:
+    name: Publish @yaakapp/cli packages
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: npm/dist
+          merge-multiple: false
+
+      - name: Prepare npm packages
+        shell: bash
+        env:
+          WORKFLOW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$WORKFLOW_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#yaak-cli-}"
+          fi
+          echo "Preparing CLI npm packages for version: $VERSION"
+          YAAK_CLI_VERSION="$VERSION" node npm/prepare-publish.js
+
+      - name: Ensure NPM token exists
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN is not configured"
+            exit 1
+          fi
+
+      - name: Publish @yaakapp/cli-darwin-arm64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-darwin-arm64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli-darwin-x64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-darwin-x64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli-linux-arm64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-linux-arm64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli-linux-x64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-linux-x64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli-win32-arm64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-win32-arm64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli-win32-x64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-win32-x64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli
+        run: npm publish --provenance --access public
+        working-directory: npm/cli
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
