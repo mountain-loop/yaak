@@ -23,7 +23,6 @@ use tokio::sync::Mutex;
 use ts_rs::TS;
 use yaak_api::yaak_api_client;
 use yaak_models::models::Plugin;
-use yaak_models::util::UpdateSource;
 use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
@@ -281,28 +280,11 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 )
                 .await;
 
-                // Initialize all plugins after manager is created
-                let bundled_dirs = manager
-                    .list_bundled_plugin_dirs()
-                    .await
-                    .expect("Failed to list bundled plugins");
-
-                // Ensure all bundled plugins make it into the database
                 let db = app_handle_clone.db();
-                for dir in &bundled_dirs {
-                    if db.get_plugin_by_directory(dir).is_none() {
-                        db.upsert_plugin(
-                            &Plugin {
-                                directory: dir.clone(),
-                                enabled: true,
-                                url: None,
-                                ..Default::default()
-                            },
-                            &UpdateSource::Background,
-                        )
-                        .expect("Failed to upsert bundled plugin");
-                    }
-                }
+                manager
+                    .ensure_bundled_plugins_registered(&db)
+                    .await
+                    .expect("Failed to register bundled plugins");
 
                 // Get all plugins from database and initialize
                 let plugins = db.list_plugins().expect("Failed to list plugins from database");

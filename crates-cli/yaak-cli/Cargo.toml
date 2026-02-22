@@ -16,6 +16,7 @@ dirs = "6"
 env_logger = "0.11"
 futures = "0.3"
 hex = { workspace = true }
+include_dir = "0.7"
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
 log = { workspace = true }
 rand = "0.8"
