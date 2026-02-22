@@ -114,40 +114,37 @@ jobs:
             exit 1
           fi
 
-      - name: Publish npm packages
-        working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          node <<'JS'
-          const { execSync } = require('node:child_process');
-          const { readFileSync } = require('node:fs');
+      - name: Publish @yaakapp/cli-darwin-arm64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-darwin-arm64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
-          const order = [
-            'cli-darwin-arm64',
-            'cli-darwin-x64',
-            'cli-linux-arm64',
-            'cli-linux-x64',
-            'cli-win32-arm64',
-            'cli-win32-x64',
-            'cli'
-          ];
+      - name: Publish @yaakapp/cli-darwin-x64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-darwin-x64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
-          function pkg(dir) {
-            return JSON.parse(readFileSync(`./${dir}/package.json`, 'utf-8'));
-          }
+      - name: Publish @yaakapp/cli-linux-arm64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-linux-arm64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
-          for (const dir of order) {
-            const p = pkg(dir);
-            const spec = `${p.name}@${p.version}`;
+      - name: Publish @yaakapp/cli-linux-x64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-linux-x64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
-            try {
-              execSync(`npm view ${spec} version`, { stdio: 'pipe' });
-              console.log(`Skipping ${spec} (already published)`);
-              continue;
-            } catch (_) {
-              console.log(`Publishing ${spec}`);
-              execSync(`npm publish ./${dir} --access public`, { stdio: 'inherit' });
-            }
-          }
-          JS
+      - name: Publish @yaakapp/cli-win32-arm64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-win32-arm64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli-win32-x64
+        run: npm publish --provenance --access public
+        working-directory: npm/cli-win32-x64
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+      - name: Publish @yaakapp/cli
+        run: npm publish --provenance --access public
+        working-directory: npm/cli
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
