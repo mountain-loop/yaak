@@ -2,11 +2,11 @@ name: Release CLI to NPM
 
 on:
   push:
-    tags: [v*]
+    tags: [yaakcli-v*]
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish (for example v2026.3.0)
+        description: CLI version to publish (for example 0.4.0 or v0.4.0)
         required: true
         type: string
 
@@ -104,9 +104,18 @@ jobs:
           merge-multiple: false
 
       - name: Prepare npm packages
+        shell: bash
         env:
-          YAAK_CLI_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-        run: node npm/prepare-publish.js
+          WORKFLOW_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="$WORKFLOW_VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#yaakcli-v}"
+          fi
+          echo "Preparing CLI npm packages for version: $VERSION"
+          YAAK_CLI_VERSION="$VERSION" node npm/prepare-publish.js
 
       - name: Ensure NPM token exists
         env:
