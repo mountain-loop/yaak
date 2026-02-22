@@ -23,6 +23,9 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Authentication commands
+    Auth(AuthArgs),
+
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
@@ -304,4 +307,22 @@ pub enum EnvironmentCommands {
         #[arg(short, long)]
         yes: bool,
     },
+}
+
+#[derive(Args)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub command: AuthCommands,
+}
+
+#[derive(Subcommand)]
+pub enum AuthCommands {
+    /// Login to Yaak via web browser
+    Login,
+
+    /// Sign out of the Yaak CLI
+    Logout,
+
+    /// Print the current logged-in user's info
+    Whoami,
 }

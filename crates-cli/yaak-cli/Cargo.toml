@@ -9,15 +9,23 @@ name = "yaakcli"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
+console = "0.15"
 dirs = "6"
 env_logger = "0.11"
 futures = "0.3"
+hex = { workspace = true }
+keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
 log = { workspace = true }
+rand = "0.8"
+reqwest = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "net", "signal", "time"] }
+webbrowser = "1"
 yaak = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }

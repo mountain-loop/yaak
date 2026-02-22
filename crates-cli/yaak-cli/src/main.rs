@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod context;
 mod plugin_events;
+mod ui;
 mod utils;
 
 use clap::Parser;
@@ -33,6 +34,7 @@ async fn main() {
     let context = CliContext::initialize(data_dir, app_id, needs_plugins).await;
 
     let exit_code = match command {
+        Commands::Auth(args) => commands::auth::run(args).await,
         Commands::Send(args) => {
             commands::send::run(&context, args, environment.as_deref(), verbose).await
         }
