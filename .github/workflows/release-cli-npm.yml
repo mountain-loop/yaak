@@ -4,6 +4,11 @@ on:
   push:
     tags: [v*]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish (for example v2026.3.0)
+        required: true
+        type: string
 
 jobs:
   build-binaries:
@@ -97,7 +102,7 @@ jobs:
 
       - name: Prepare npm packages
         env:
-          YAAK_CLI_VERSION: ${{ github.ref_name }}
+          YAAK_CLI_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
         run: node npm/prepare-publish.js
 
       - name: Ensure NPM token exists
