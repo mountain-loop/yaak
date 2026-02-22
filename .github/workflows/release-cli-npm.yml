@@ -1,0 +1,148 @@
+name: Release CLI to NPM
+
+on:
+  push:
+    tags: [v*]
+  workflow_dispatch:
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.pkg }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: cli-darwin-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            binary: yaakcli
+          - pkg: cli-darwin-x64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            binary: yaakcli
+          - pkg: cli-linux-arm64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: yaakcli
+          - pkg: cli-linux-x64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            binary: yaakcli
+          - pkg: cli-win32-arm64
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+            binary: yaakcli.exe
+          - pkg: cli-win32-x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: yaakcli.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-cli-npm
+          cache-on-failure: true
+
+      - name: Build yaakcli
+        run: cargo build --locked --release -p yaak-cli --bin yaakcli --target ${{ matrix.target }}
+
+      - name: Stage binary artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "npm/dist/${{ matrix.pkg }}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" "npm/dist/${{ matrix.pkg }}/${{ matrix.binary }}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.pkg }}
+          path: npm/dist/${{ matrix.pkg }}/${{ matrix.binary }}
+          if-no-files-found: error
+
+  publish-npm:
+    name: Publish @yaakapp/cli packages
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: npm/dist
+          merge-multiple: false
+
+      - name: Prepare npm packages
+        env:
+          YAAK_CLI_VERSION: ${{ github.ref_name }}
+        run: node npm/prepare-publish.js
+
+      - name: Ensure NPM token exists
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN is not configured"
+            exit 1
+          fi
+
+      - name: Publish npm packages
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          node <<'JS'
+          const { execSync } = require('node:child_process');
+          const { readFileSync } = require('node:fs');
+
+          const order = [
+            'cli-darwin-arm64',
+            'cli-darwin-x64',
+            'cli-linux-arm64',
+            'cli-linux-x64',
+            'cli-win32-arm64',
+            'cli-win32-x64',
+            'cli'
+          ];
+
+          function pkg(dir) {
+            return JSON.parse(readFileSync(`./${dir}/package.json`, 'utf-8'));
+          }
+
+          for (const dir of order) {
+            const p = pkg(dir);
+            const spec = `${p.name}@${p.version}`;
+
+            try {
+              execSync(`npm view ${spec} version`, { stdio: 'pipe' });
+              console.log(`Skipping ${spec} (already published)`);
+              continue;
+            } catch (_) {
+              console.log(`Publishing ${spec}`);
+              execSync(`npm publish ./${dir} --access public`, { stdio: 'inherit' });
+            }
+          }
+          JS
