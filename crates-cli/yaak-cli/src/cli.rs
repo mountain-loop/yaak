@@ -4,6 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(name = "yaak")]
 #[command(about = "Yaak CLI - API client from the command line")]
+#[command(version)]
 pub struct Cli {
     /// Use a custom data directory
     #[arg(long, global = true)]

@@ -1,4 +1,4 @@
-const { copyFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
+const { chmodSync, copyFileSync, existsSync, readFileSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const version = process.env.YAAK_CLI_VERSION?.replace(/^v/, "");
@@ -50,6 +50,9 @@ for (const { src, dest } of binaries) {
     process.exit(1);
   }
   copyFileSync(src, dest);
+  if (!dest.endsWith(".exe")) {
+    chmodSync(dest, 0o755);
+  }
 }
 
 for (const pkg of packages) {
