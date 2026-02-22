@@ -79,7 +79,6 @@ pub async fn run(args: AuthArgs) -> i32 {
 
 async fn login() -> CommandResult {
     let environment = current_environment();
-    delete_auth_token(environment)?;
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
