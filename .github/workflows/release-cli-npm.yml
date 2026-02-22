@@ -61,6 +61,12 @@ jobs:
           shared-key: release-cli-npm
           cache-on-failure: true
 
+      - name: Install Linux build dependencies
+        if: startsWith(matrix.runner, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev
+
       - name: Build yaak
         run: cargo build --locked --release -p yaak-cli --bin yaak --target ${{ matrix.target }}
 
