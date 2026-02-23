@@ -1,5 +1,6 @@
 use crate::cli::{AuthArgs, AuthCommands};
 use crate::ui;
+use crate::utils::http;
 use base64::Engine as _;
 use keyring::Entry;
 use rand::RngCore;
@@ -136,10 +137,8 @@ async fn whoami() -> CommandResult {
     };
 
     let url = format!("{}/api/v1/whoami", environment.api_base_url());
-    let response = reqwest::Client::new()
+    let response = http::build_client(Some(&token))?
         .get(url)
-        .header("X-Yaak-Session", token)
-        .header(reqwest::header::USER_AGENT, user_agent())
         .send()
         .await
         .map_err(|e| format!("Failed to call whoami endpoint: {e}"))?;
@@ -156,7 +155,7 @@ async fn whoami() -> CommandResult {
                     .to_string(),
             );
         }
-        return Err(parse_api_error(status.as_u16(), &body));
+        return Err(http::parse_api_error(status.as_u16(), &body));
     }
 
     println!("{body}");
@@ -342,9 +341,8 @@ async fn write_redirect(stream: &mut TcpStream, location: &str) -> std::io::Resu
 }
 
 async fn exchange_access_token(oauth: &OAuthFlow, code: &str) -> CommandResult<String> {
-    let response = reqwest::Client::new()
+    let response = http::build_client(None)?
         .post(&oauth.token_url)
-        .header(reqwest::header::USER_AGENT, user_agent())
         .form(&[
             ("grant_type", "authorization_code"),
             ("client_id", OAUTH_CLIENT_ID),
@@ -406,36 +404,10 @@ fn delete_auth_token(environment: Environment) -> CommandResult {
     }
 }
 
-fn parse_api_error(status: u16, body: &str) -> String {
-    if let Ok(value) = serde_json::from_str::<Value>(body) {
-        if let Some(message) = value.get("message").and_then(Value::as_str) {
-            return message.to_string();
-        }
-        if let Some(error) = value.get("error").and_then(Value::as_str) {
-            return error.to_string();
-        }
-    }
-
-    format!("API error {status}: {body}")
-}
-
 fn random_hex(bytes: usize) -> String {
     let mut data = vec![0_u8; bytes];
     OsRng.fill_bytes(&mut data);
     hex::encode(data)
-}
-
-fn user_agent() -> String {
-    format!("YaakCli/{} ({})", env!("CARGO_PKG_VERSION"), ua_platform())
-}
-
-fn ua_platform() -> &'static str {
-    match std::env::consts::OS {
-        "windows" => "Win",
-        "darwin" => "Mac",
-        "linux" => "Linux",
-        _ => "Unknown",
-    }
 }
 
 fn confirm_open_browser() -> CommandResult<bool> {
