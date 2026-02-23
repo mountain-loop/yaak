@@ -189,10 +189,23 @@ fn request_schema_http_outputs_json_schema() {
         .args(["request", "schema", "http"])
         .assert()
         .success()
-        .stdout(contains("\"type\": \"object\""))
-        .stdout(contains("\"authentication\""))
+        .stdout(contains("\"type\":\"object\""))
+        .stdout(contains("\"authentication\":"))
         .stdout(contains("/foo/:id/comments/:commentId"))
         .stdout(contains("put concrete values in `urlParameters`"));
+}
+
+#[test]
+fn request_schema_http_pretty_prints_with_flag() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+
+    cli_cmd(data_dir)
+        .args(["request", "schema", "http", "--pretty"])
+        .assert()
+        .success()
+        .stdout(contains("\"type\": \"object\""))
+        .stdout(contains("\"authentication\""));
 }
 
 #[test]
