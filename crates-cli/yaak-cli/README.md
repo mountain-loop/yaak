@@ -1,93 +1,66 @@
-# yaak-cli
+# Yaak CLI
 
-Command-line interface for Yaak.
+The `yaak` CLI for publishing plugins and creating/updating/sending requests. 
 
-## Command Overview
+## Installation
 
-Current top-level commands:
+```sh
+npm install @yaakapp/cli
+```
+
+## Agentic Workflows
+
+The `yaak` CLI is primarily meant to be used by AI agents, and has the following features:
+
+- `schema` subcommands to get the JSON Schema for any model (eg. `yaak request schema http`)
+- `--json '{...}'` input format to create and update data
+- `--verbose` mode for extracting debug info while sending requests
+- The ability to send entire workspaces and folders (Supports `--parallel` and `--fail-fast`)
+
+### Example Prompts
+
+Use the `yaak` CLI with agents like Claude or Codex to do useful things for you.
+
+Here are some example prompts:
 
 ```text
-yaakcli send <request_id>
-yaakcli agent-help
-yaakcli workspace list
-yaakcli workspace schema [--pretty]
-yaakcli workspace show <workspace_id>
-yaakcli workspace create --name <name>
-yaakcli workspace create --json '{"name":"My Workspace"}'
-yaakcli workspace create '{"name":"My Workspace"}'
-yaakcli workspace update --json '{"id":"wk_abc","description":"Updated"}'
-yaakcli workspace delete <workspace_id> [--yes]
-yaakcli request list <workspace_id>
-yaakcli request show <request_id>
-yaakcli request send <request_id>
-yaakcli request create <workspace_id> --name <name> --url <url> [--method GET]
-yaakcli request create --json '{"workspaceId":"wk_abc","name":"Users","url":"https://api.example.com/users"}'
-yaakcli request create '{"workspaceId":"wk_abc","name":"Users","url":"https://api.example.com/users"}'
-yaakcli request update --json '{"id":"rq_abc","name":"Users v2"}'
-yaakcli request delete <request_id> [--yes]
-yaakcli folder list <workspace_id>
-yaakcli folder show <folder_id>
-yaakcli folder create <workspace_id> --name <name>
-yaakcli folder create --json '{"workspaceId":"wk_abc","name":"Auth"}'
-yaakcli folder create '{"workspaceId":"wk_abc","name":"Auth"}'
-yaakcli folder update --json '{"id":"fl_abc","name":"Auth v2"}'
-yaakcli folder delete <folder_id> [--yes]
-yaakcli environment list <workspace_id>
-yaakcli environment schema [--pretty]
-yaakcli environment show <environment_id>
-yaakcli environment create <workspace_id> --name <name>
-yaakcli environment create --json '{"workspaceId":"wk_abc","name":"Production"}'
-yaakcli environment create '{"workspaceId":"wk_abc","name":"Production"}'
-yaakcli environment update --json '{"id":"ev_abc","color":"#00ff00"}'
-yaakcli environment delete <environment_id> [--yes]
+Scan my API routes and create a workspace (using yaak cli) with 
+all the requests needed for me to do manual testing?  
 ```
 
-Global options:
-
-- `--data-dir <path>`: use a custom data directory
-- `-e, --environment <id>`: environment to use during request rendering/sending
-- `-v, --verbose`: verbose send output (events and streamed response body)
-- `--log [level]`: enable CLI logging; optional level is `error|warn|info|debug|trace`
-
-Notes:
-
-- `send` is currently a shortcut for sending an HTTP request ID.
-- `delete` commands prompt for confirmation unless `--yes` is provided.
-- In non-interactive mode, `delete` commands require `--yes`.
-- `create` and `update` commands support `--json` and positional JSON shorthand.
-- For `create` commands, use one input mode at a time. Example: do not combine `<workspace_id>` with `--json`.
-- Template tags use `${[ ... ]}` syntax (for example `${[API_BASE_URL]}`), not `{{ ... }}`.
-- `update` uses JSON Merge Patch semantics (RFC 7386) for partial updates.
-
-## Examples
-
-```bash
-yaakcli workspace list
-yaakcli workspace create --name "My Workspace"
-yaakcli workspace show wk_abc
-yaakcli workspace update --json '{"id":"wk_abc","description":"Team workspace"}'
-yaakcli request list wk_abc
-yaakcli request show rq_abc
-yaakcli request create wk_abc --name "Users" --url "https://api.example.com/users"
-yaakcli request update --json '{"id":"rq_abc","name":"Users v2"}'
-yaakcli request send rq_abc -e ev_abc
-yaakcli request delete rq_abc --yes
-yaakcli folder create wk_abc --name "Auth"
-yaakcli folder update --json '{"id":"fl_abc","name":"Auth v2"}'
-yaakcli environment create wk_abc --name "Production"
-yaakcli environment update --json '{"id":"ev_abc","color":"#00ff00"}'
+```text
+Send all the GraphQL requests in my workspace
 ```
 
-## Roadmap
+## Description
 
-Planned command expansion (request schema and polymorphic send) is tracked in `PLAN.md`.
+Here's the current print of `yaak --help`
 
-When command behavior changes, update this README and verify with:
+```text
+Yaak CLI - API client from the command line
 
-```bash
-cargo run -q -p yaak-cli -- --help
-cargo run -q -p yaak-cli -- request --help
-cargo run -q -p yaak-cli -- workspace --help
-cargo run -q -p yaak-cli -- folder --help
-cargo run -q -p yaak-cli -- environment --help
+Usage: yaak [OPTIONS] <COMMAND>
+
+Commands:
+  auth         Authentication commands
+  plugin       Plugin development and publishing commands
+  send         Send a request, folder, or workspace by ID
+  workspace    Workspace commands
+  request      Request commands
+  folder       Folder commands
+  environment  Environment commands
+
+Options:
+      --data-dir <DATA_DIR>        Use a custom data directory
+  -e, --environment <ENVIRONMENT>  Environment ID to use for variable substitution
+  -v, --verbose                    Enable verbose send output (events and streamed response body)
+      --log [<LEVEL>]              Enable CLI logging; optionally set level (error|warn|info|debug|trace) [possible values: error, warn, info, debug, trace]
+  -h, --help                       Print help
+  -V, --version                    Print version
+
+Agent Hints:
+  - Template variable syntax is ${[ my_var ]}, not {{ ... }}
+  - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
+  - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
+  - Deletion requires confirmation (--yes for non-interactive environments)
 ```

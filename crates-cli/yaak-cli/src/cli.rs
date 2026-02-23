@@ -68,12 +68,8 @@ pub struct SendArgs {
     /// Request, folder, or workspace ID
     pub id: String,
 
-    /// Execute requests sequentially (default)
-    #[arg(long, conflicts_with = "parallel")]
-    pub sequential: bool,
-
     /// Execute requests in parallel
-    #[arg(long, conflicts_with = "sequential")]
+    #[arg(long)]
     pub parallel: bool,
 
     /// Stop on first request failure when sending folders/workspaces
@@ -342,8 +338,8 @@ pub enum EnvironmentCommands {
   1) yaak environment create <workspace_id> --name <name>
   2) yaak environment create --json '{"workspaceId":"wk_abc","name":"Production"}'
   3) yaak environment create '{"workspaceId":"wk_abc","name":"Production"}'
-
-Do not combine <workspace_id> with --json."#)]
+  4) yaak environment create <workspace_id> --json '{"name":"Production"}'
+"#)]
     Create {
         /// Workspace ID for flag-based mode, or positional JSON payload shorthand
         #[arg(value_name = "WORKSPACE_ID_OR_JSON")]

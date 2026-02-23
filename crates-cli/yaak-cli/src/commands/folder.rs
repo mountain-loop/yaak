@@ -2,8 +2,8 @@ use crate::cli::{FolderArgs, FolderCommands};
 use crate::context::CliContext;
 use crate::utils::confirm::confirm_delete;
 use crate::utils::json::{
-    apply_merge_patch, is_json_shorthand, parse_optional_json, parse_required_json, require_id,
-    validate_create_id,
+    apply_merge_patch, is_json_shorthand, merge_workspace_id_arg, parse_optional_json,
+    parse_required_json, require_id, validate_create_id,
 };
 use yaak_models::models::Folder;
 use yaak_models::util::UpdateSource;
@@ -58,15 +58,11 @@ fn create(
     name: Option<String>,
     json: Option<String>,
 ) -> CommandResult {
-    if json.is_some() && workspace_id.as_deref().is_some_and(|v| !is_json_shorthand(v)) {
-        return Err("folder create cannot combine workspace_id with --json payload".to_string());
-    }
+    let json_shorthand =
+        workspace_id.as_deref().filter(|v| is_json_shorthand(v)).map(str::to_owned);
+    let workspace_id_arg = workspace_id.filter(|v| !is_json_shorthand(v));
 
-    let payload = parse_optional_json(
-        json,
-        workspace_id.clone().filter(|v| is_json_shorthand(v)),
-        "folder create",
-    )?;
+    let payload = parse_optional_json(json, json_shorthand, "folder create")?;
 
     if let Some(payload) = payload {
         if name.is_some() {
@@ -74,12 +70,13 @@ fn create(
         }
 
         validate_create_id(&payload, "folder")?;
-        let folder: Folder = serde_json::from_value(payload)
+        let mut folder: Folder = serde_json::from_value(payload)
             .map_err(|e| format!("Failed to parse folder create JSON: {e}"))?;
-
-        if folder.workspace_id.is_empty() {
-            return Err("folder create JSON requires non-empty \"workspaceId\"".to_string());
-        }
+        merge_workspace_id_arg(
+            workspace_id_arg.as_deref(),
+            &mut folder.workspace_id,
+            "folder create",
+        )?;
 
         let created = ctx
             .db()
@@ -90,7 +87,7 @@ fn create(
         return Ok(());
     }
 
-    let workspace_id = workspace_id.ok_or_else(|| {
+    let workspace_id = workspace_id_arg.ok_or_else(|| {
         "folder create requires workspace_id unless JSON payload is provided".to_string()
     })?;
     let name = name.ok_or_else(|| {

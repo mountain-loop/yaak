@@ -80,6 +80,54 @@ fn json_create_and_update_merge_patch_round_trip() {
 }
 
 #[test]
+fn create_merges_positional_workspace_id_into_json_payload() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+
+    let create_assert = cli_cmd(data_dir)
+        .args([
+            "environment",
+            "create",
+            "wk_test",
+            "--json",
+            r#"{"name":"Merged Environment"}"#,
+        ])
+        .assert()
+        .success();
+    let environment_id = parse_created_id(&create_assert.get_output().stdout, "environment create");
+
+    cli_cmd(data_dir)
+        .args(["environment", "show", &environment_id])
+        .assert()
+        .success()
+        .stdout(contains("\"workspaceId\": \"wk_test\""))
+        .stdout(contains("\"name\": \"Merged Environment\""));
+}
+
+#[test]
+fn create_rejects_conflicting_workspace_ids_between_arg_and_json() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+    seed_workspace(data_dir, "wk_other");
+
+    cli_cmd(data_dir)
+        .args([
+            "environment",
+            "create",
+            "wk_test",
+            "--json",
+            r#"{"workspaceId":"wk_other","name":"Mismatch"}"#,
+        ])
+        .assert()
+        .failure()
+        .stderr(contains(
+            "environment create got conflicting workspace_id values between positional arg and JSON payload",
+        ));
+}
+
+#[test]
 fn environment_schema_outputs_json_schema() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let data_dir = temp_dir.path();
@@ -91,6 +139,8 @@ fn environment_schema_outputs_json_schema() {
         .stdout(contains("\"type\":\"object\""))
         .stdout(contains("\"x-yaak-agent-hints\""))
         .stdout(contains("\"templateVariableSyntax\":\"${[ my_var ]}\""))
-        .stdout(contains("\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\""))
+        .stdout(contains(
+            "\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\"",
+        ))
         .stdout(contains("\"workspaceId\""));
 }
