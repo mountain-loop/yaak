@@ -131,6 +131,54 @@ fn create_allows_workspace_only_with_empty_defaults() {
 }
 
 #[test]
+fn create_merges_positional_workspace_id_into_json_payload() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+
+    let create_assert = cli_cmd(data_dir)
+        .args([
+            "request",
+            "create",
+            "wk_test",
+            "--json",
+            r#"{"name":"Merged Request","url":"https://example.com"}"#,
+        ])
+        .assert()
+        .success();
+    let request_id = parse_created_id(&create_assert.get_output().stdout, "request create");
+
+    cli_cmd(data_dir)
+        .args(["request", "show", &request_id])
+        .assert()
+        .success()
+        .stdout(contains("\"workspaceId\": \"wk_test\""))
+        .stdout(contains("\"name\": \"Merged Request\""));
+}
+
+#[test]
+fn create_rejects_conflicting_workspace_ids_between_arg_and_json() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+    seed_workspace(data_dir, "wk_other");
+
+    cli_cmd(data_dir)
+        .args([
+            "request",
+            "create",
+            "wk_test",
+            "--json",
+            r#"{"workspaceId":"wk_other","name":"Mismatch"}"#,
+        ])
+        .assert()
+        .failure()
+        .stderr(contains(
+            "request create got conflicting workspace_id values between positional arg and JSON payload",
+        ));
+}
+
+#[test]
 fn request_send_persists_response_body_and_events() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let data_dir = temp_dir.path();
@@ -191,7 +239,9 @@ fn request_schema_http_outputs_json_schema() {
         .stdout(contains("\"type\":\"object\""))
         .stdout(contains("\"x-yaak-agent-hints\""))
         .stdout(contains("\"templateVariableSyntax\":\"${[ my_var ]}\""))
-        .stdout(contains("\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\""))
+        .stdout(contains(
+            "\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\"",
+        ))
         .stdout(contains("\"authentication\":"))
         .stdout(contains("/foo/:id/comments/:commentId"))
         .stdout(contains("put concrete values in `urlParameters`"));

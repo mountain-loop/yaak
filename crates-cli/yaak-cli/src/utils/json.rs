@@ -63,6 +63,30 @@ pub fn validate_create_id(payload: &Value, context: &str) -> JsonResult<()> {
     }
 }
 
+pub fn merge_workspace_id_arg(
+    workspace_id_from_arg: Option<&str>,
+    payload_workspace_id: &mut String,
+    context: &str,
+) -> JsonResult<()> {
+    if let Some(workspace_id_arg) = workspace_id_from_arg {
+        if payload_workspace_id.is_empty() {
+            *payload_workspace_id = workspace_id_arg.to_string();
+        } else if payload_workspace_id != workspace_id_arg {
+            return Err(format!(
+                "{context} got conflicting workspace_id values between positional arg and JSON payload"
+            ));
+        }
+    }
+
+    if payload_workspace_id.is_empty() {
+        return Err(format!(
+            "{context} requires non-empty \"workspaceId\" in JSON payload or positional workspace_id"
+        ));
+    }
+
+    Ok(())
+}
+
 pub fn apply_merge_patch<T>(existing: &T, patch: &Value, id: &str, context: &str) -> JsonResult<T>
 where
     T: Serialize + DeserializeOwned,
