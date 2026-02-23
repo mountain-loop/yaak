@@ -31,7 +31,6 @@ fn top_level_send_workspace_sends_http_requests_and_prints_summary() {
         .args(["send", "wk_test"])
         .assert()
         .success()
-        .stdout(contains("HTTP 200 OK"))
         .stdout(contains("workspace bulk send"))
         .stdout(contains("Send summary: 1 succeeded, 0 failed"));
 }
@@ -62,7 +61,6 @@ fn top_level_send_folder_sends_http_requests_and_prints_summary() {
         .args(["send", "fl_test"])
         .assert()
         .success()
-        .stdout(contains("HTTP 200 OK"))
         .stdout(contains("folder bulk send"))
         .stdout(contains("Send summary: 1 succeeded, 0 failed"));
 }

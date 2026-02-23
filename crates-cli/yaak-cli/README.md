@@ -46,7 +46,8 @@ Global options:
 
 - `--data-dir <path>`: use a custom data directory
 - `-e, --environment <id>`: environment to use during request rendering/sending
-- `-v, --verbose`: verbose logging and send output
+- `-v, --verbose`: verbose send output (events and streamed response body)
+- `--log [level]`: enable CLI logging; optional level is `error|warn|info|debug|trace`
 
 Notes:
 

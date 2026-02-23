@@ -154,6 +154,7 @@ async fn send_http_request_inner<R: Runtime>(
         cookie_jar_id,
         response_dir: &response_dir,
         emit_events_to: None,
+        emit_response_body_chunks_to: None,
         existing_response: Some(response_ctx.response().clone()),
         plugin_manager,
         encryption_manager,

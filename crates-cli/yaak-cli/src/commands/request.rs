@@ -9,7 +9,9 @@ use crate::utils::schema::append_agent_hints;
 use schemars::schema_for;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
+use std::io::Write;
 use tokio::sync::mpsc;
+use yaak_http::sender::HttpResponseEvent as SenderHttpResponseEvent;
 use yaak::send::{SendHttpRequestByIdWithPluginsParams, send_http_request_by_id_with_plugins};
 use yaak_models::models::{GrpcRequest, HttpRequest, WebsocketRequest};
 use yaak_models::queries::any_request::AnyRequest;
@@ -470,12 +472,22 @@ async fn send_http_request_by_id(
 ) -> Result<(), String> {
     let plugin_context = PluginContext::new(None, Some(workspace_id.to_string()));
 
-    let (event_tx, mut event_rx) = mpsc::channel(100);
+    let (event_tx, mut event_rx) = mpsc::channel::<SenderHttpResponseEvent>(100);
+    let (body_chunk_tx, mut body_chunk_rx) = mpsc::unbounded_channel::<Vec<u8>>();
     let event_handle = tokio::spawn(async move {
         while let Some(event) = event_rx.recv().await {
-            if verbose {
+            if verbose && !matches!(event, SenderHttpResponseEvent::ChunkReceived { .. }) {
                 println!("{}", event);
             }
+        }
+    });
+    let body_handle = tokio::task::spawn_blocking(move || {
+        let mut stdout = std::io::stdout();
+        while let Some(chunk) = body_chunk_rx.blocking_recv() {
+            if stdout.write_all(&chunk).is_err() {
+                break;
+            }
+            let _ = stdout.flush();
         }
     });
     let response_dir = ctx.data_dir().join("responses");
@@ -489,6 +501,7 @@ async fn send_http_request_by_id(
         cookie_jar_id: None,
         response_dir: &response_dir,
         emit_events_to: Some(event_tx),
+        emit_response_body_chunks_to: Some(body_chunk_tx),
         plugin_manager: ctx.plugin_manager(),
         encryption_manager: ctx.encryption_manager.clone(),
         plugin_context: &plugin_context,
@@ -498,24 +511,7 @@ async fn send_http_request_by_id(
     .await;
 
     let _ = event_handle.await;
-    let result = result.map_err(|e| e.to_string())?;
-
-    if verbose {
-        println!();
-    }
-    println!(
-        "HTTP {} {}",
-        result.response.status,
-        result.response.status_reason.as_deref().unwrap_or("")
-    );
-    if verbose {
-        for header in &result.response.headers {
-            println!("{}: {}", header.name, header.value);
-        }
-        println!();
-    }
-    let body = String::from_utf8(result.response_body)
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
-    println!("{}", body);
+    let _ = body_handle.await;
+    result.map_err(|e| e.to_string())?;
     Ok(())
 }

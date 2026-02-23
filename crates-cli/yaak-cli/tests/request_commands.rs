@@ -156,7 +156,6 @@ fn request_send_persists_response_body_and_events() {
         .args(["request", "send", &request_id])
         .assert()
         .success()
-        .stdout(contains("HTTP 200 OK"))
         .stdout(contains("hello from integration test"));
 
     let qm = query_manager(data_dir);
