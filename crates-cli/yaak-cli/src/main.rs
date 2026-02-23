@@ -4,6 +4,7 @@ mod context;
 mod plugin_events;
 mod ui;
 mod utils;
+mod version;
 
 use clap::Parser;
 use cli::{Cli, Commands, RequestCommands};

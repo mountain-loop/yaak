@@ -85,6 +85,8 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType) -> CommandRes
             .map_err(|e| format!("Failed to serialize WebSocket request schema: {e}"))?,
     };
 
+    enrich_schema_guidance(&mut schema, request_type);
+
     if let Err(error) = merge_auth_schema_from_plugins(ctx, &mut schema).await {
         eprintln!("Warning: Failed to enrich authentication schema from plugins: {error}");
     }
@@ -93,6 +95,37 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType) -> CommandRes
         .map_err(|e| format!("Failed to format schema JSON: {e}"))?;
     println!("{output}");
     Ok(())
+}
+
+fn enrich_schema_guidance(schema: &mut Value, request_type: RequestSchemaType) {
+    if !matches!(request_type, RequestSchemaType::Http) {
+        return;
+    }
+
+    let Some(properties) = schema.get_mut("properties").and_then(Value::as_object_mut) else {
+        return;
+    };
+
+    if let Some(url_schema) = properties.get_mut("url").and_then(Value::as_object_mut) {
+        append_description(
+            url_schema,
+            "For path segments like `/foo/:id/comments/:commentId`, put concrete values in `urlParameters` using names without `:` (for example `id`, `commentId`).",
+        );
+    }
+}
+
+fn append_description(schema: &mut Map<String, Value>, extra: &str) {
+    match schema.get_mut("description") {
+        Some(Value::String(existing)) if !existing.trim().is_empty() => {
+            if !existing.ends_with(' ') {
+                existing.push(' ');
+            }
+            existing.push_str(extra);
+        }
+        _ => {
+            schema.insert("description".to_string(), Value::String(extra.to_string()));
+        }
+    }
 }
 
 async fn merge_auth_schema_from_plugins(

@@ -190,7 +190,9 @@ fn request_schema_http_outputs_json_schema() {
         .assert()
         .success()
         .stdout(contains("\"type\": \"object\""))
-        .stdout(contains("\"authentication\""));
+        .stdout(contains("\"authentication\""))
+        .stdout(contains("/foo/:id/comments/:commentId"))
+        .stdout(contains("put concrete values in `urlParameters`"));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 use crate::cli::{GenerateArgs, PluginArgs, PluginCommands, PluginPathArg};
 use crate::ui;
+use crate::utils::http;
 use keyring::Entry;
 use rand::Rng;
 use rolldown::{
@@ -7,7 +8,6 @@ use rolldown::{
     WatchOption, Watcher,
 };
 use serde::Deserialize;
-use serde_json::Value;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
@@ -186,10 +186,8 @@ async fn publish(args: PluginPathArg) -> CommandResult {
 
     ui::info("Uploading plugin");
     let url = format!("{}/api/v1/plugins/publish", environment.api_base_url());
-    let response = reqwest::Client::new()
+    let response = http::build_client(Some(&token))?
         .post(url)
-        .header("X-Yaak-Session", token)
-        .header(reqwest::header::USER_AGENT, user_agent())
         .header(reqwest::header::CONTENT_TYPE, "application/zip")
         .body(archive)
         .send()
@@ -201,7 +199,7 @@ async fn publish(args: PluginPathArg) -> CommandResult {
         response.text().await.map_err(|e| format!("Failed reading publish response body: {e}"))?;
 
     if !status.is_success() {
-        return Err(parse_api_error(status.as_u16(), &body));
+        return Err(http::parse_api_error(status.as_u16(), &body));
     }
 
     let published: PublishResponse = serde_json::from_str(&body)
@@ -386,32 +384,6 @@ fn get_auth_token(environment: Environment) -> CommandResult<Option<String>> {
         Ok(token) => Ok(Some(token)),
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(err) => Err(format!("Failed to read auth token: {err}")),
-    }
-}
-
-fn parse_api_error(status: u16, body: &str) -> String {
-    if let Ok(value) = serde_json::from_str::<Value>(body) {
-        if let Some(message) = value.get("message").and_then(Value::as_str) {
-            return message.to_string();
-        }
-        if let Some(error) = value.get("error").and_then(Value::as_str) {
-            return error.to_string();
-        }
-    }
-
-    format!("API error {status}: {body}")
-}
-
-fn user_agent() -> String {
-    format!("YaakCli/{} ({})", env!("CARGO_PKG_VERSION"), ua_platform())
-}
-
-fn ua_platform() -> &'static str {
-    match std::env::consts::OS {
-        "windows" => "Win",
-        "darwin" => "Mac",
-        "linux" => "Linux",
-        _ => "Unknown",
     }
 }
 
