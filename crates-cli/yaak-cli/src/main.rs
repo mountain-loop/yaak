@@ -12,10 +12,18 @@ use context::CliContext;
 
 #[tokio::main]
 async fn main() {
-    let Cli { data_dir, environment, verbose, command } = Cli::parse();
+    let Cli { data_dir, environment, verbose, log, command } = Cli::parse();
 
-    if verbose {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    if let Some(log_level) = log {
+        match log_level {
+            Some(level) => {
+                env_logger::Builder::new().filter_level(level.as_filter()).init();
+            }
+            None => {
+                env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+                    .init();
+            }
+        }
     }
 
     let app_id = if cfg!(debug_assertions) { "app.yaak.desktop.dev" } else { "app.yaak.desktop" };
