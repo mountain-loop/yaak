@@ -21,9 +21,13 @@ pub struct Cli {
     #[arg(long, short, global = true)]
     pub environment: Option<String>,
 
-    /// Enable verbose logging
+    /// Enable verbose send output (events and streamed response body)
     #[arg(long, short, global = true)]
     pub verbose: bool,
+
+    /// Enable CLI logging; optionally set level (error|warn|info|debug|trace)
+    #[arg(long, global = true, value_name = "LEVEL", num_args = 0..=1, ignore_case = true)]
+    pub log: Option<Option<LogLevel>>,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -225,6 +229,27 @@ pub enum RequestSchemaType {
     Http,
     Grpc,
     Websocket,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    pub fn as_filter(self) -> log::LevelFilter {
+        match self {
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Trace => log::LevelFilter::Trace,
+        }
+    }
 }
 
 #[derive(Args)]

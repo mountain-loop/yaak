@@ -239,6 +239,7 @@ pub struct SendHttpRequestByIdParams<'a, T: TemplateCallback> {
     pub cookie_jar_id: Option<String>,
     pub response_dir: &'a Path,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
+    pub emit_response_body_chunks_to: Option<mpsc::UnboundedSender<Vec<u8>>>,
     pub cancelled_rx: Option<watch::Receiver<bool>>,
     pub prepare_sendable_request: Option<&'a dyn PrepareSendableRequest>,
     pub executor: Option<&'a dyn SendRequestExecutor>,
@@ -255,6 +256,7 @@ pub struct SendHttpRequestParams<'a, T: TemplateCallback> {
     pub cookie_jar_id: Option<String>,
     pub response_dir: &'a Path,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
+    pub emit_response_body_chunks_to: Option<mpsc::UnboundedSender<Vec<u8>>>,
     pub cancelled_rx: Option<watch::Receiver<bool>>,
     pub auth_context_id: Option<String>,
     pub existing_response: Option<HttpResponse>,
@@ -271,6 +273,7 @@ pub struct SendHttpRequestWithPluginsParams<'a> {
     pub cookie_jar_id: Option<String>,
     pub response_dir: &'a Path,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
+    pub emit_response_body_chunks_to: Option<mpsc::UnboundedSender<Vec<u8>>>,
     pub existing_response: Option<HttpResponse>,
     pub plugin_manager: Arc<PluginManager>,
     pub encryption_manager: Arc<EncryptionManager>,
@@ -288,6 +291,7 @@ pub struct SendHttpRequestByIdWithPluginsParams<'a> {
     pub cookie_jar_id: Option<String>,
     pub response_dir: &'a Path,
     pub emit_events_to: Option<mpsc::Sender<SenderHttpResponseEvent>>,
+    pub emit_response_body_chunks_to: Option<mpsc::UnboundedSender<Vec<u8>>>,
     pub plugin_manager: Arc<PluginManager>,
     pub encryption_manager: Arc<EncryptionManager>,
     pub plugin_context: &'a PluginContext,
@@ -353,6 +357,7 @@ pub async fn send_http_request_by_id_with_plugins(
         cookie_jar_id: params.cookie_jar_id,
         response_dir: params.response_dir,
         emit_events_to: params.emit_events_to,
+        emit_response_body_chunks_to: params.emit_response_body_chunks_to,
         existing_response: None,
         plugin_manager: params.plugin_manager,
         encryption_manager: params.encryption_manager,
@@ -397,6 +402,7 @@ pub async fn send_http_request_with_plugins(
         cookie_jar_id: params.cookie_jar_id,
         response_dir: params.response_dir,
         emit_events_to: params.emit_events_to,
+        emit_response_body_chunks_to: params.emit_response_body_chunks_to,
         cancelled_rx: params.cancelled_rx,
         auth_context_id: None,
         existing_response: params.existing_response,
@@ -427,6 +433,7 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
         cookie_jar_id: params.cookie_jar_id,
         response_dir: params.response_dir,
         emit_events_to: params.emit_events_to,
+        emit_response_body_chunks_to: params.emit_response_body_chunks_to,
         cancelled_rx: params.cancelled_rx,
         existing_response: None,
         prepare_sendable_request: params.prepare_sendable_request,
@@ -687,13 +694,17 @@ pub async fn send_http_request<T: TemplateCallback>(
             Ok(n) => {
                 written_bytes += n;
                 let start_idx = response_body.len() - n;
-                file.write_all(&response_body[start_idx..]).await.map_err(|source| {
+                let chunk = &response_body[start_idx..];
+                file.write_all(chunk).await.map_err(|source| {
                     SendHttpRequestError::WriteResponseBody { path: body_path.clone(), source }
                 })?;
                 file.flush().await.map_err(|source| SendHttpRequestError::WriteResponseBody {
                     path: body_path.clone(),
                     source,
                 })?;
+                if let Some(tx) = params.emit_response_body_chunks_to.as_ref() {
+                    let _ = tx.send(chunk.to_vec());
+                }
 
                 let now = Instant::now();
                 let should_update = now.duration_since(last_progress_update).as_millis()
