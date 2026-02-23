@@ -154,6 +154,10 @@ pub enum RequestCommands {
     Schema {
         #[arg(value_enum)]
         request_type: RequestSchemaType,
+
+        /// Pretty-print schema JSON output
+        #[arg(long)]
+        pretty: bool,
     },
 
     /// Create a new HTTP request

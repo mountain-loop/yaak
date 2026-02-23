@@ -35,8 +35,8 @@ pub async fn run(
                 }
             };
         }
-        RequestCommands::Schema { request_type } => {
-            return match schema(ctx, request_type).await {
+        RequestCommands::Schema { request_type, pretty } => {
+            return match schema(ctx, request_type, pretty).await {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("Error: {error}");
@@ -75,7 +75,7 @@ fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {
     Ok(())
 }
 
-async fn schema(ctx: &CliContext, request_type: RequestSchemaType) -> CommandResult {
+async fn schema(ctx: &CliContext, request_type: RequestSchemaType, pretty: bool) -> CommandResult {
     let mut schema = match request_type {
         RequestSchemaType::Http => serde_json::to_value(schema_for!(HttpRequest))
             .map_err(|e| format!("Failed to serialize HTTP request schema: {e}"))?,
@@ -91,7 +91,11 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType) -> CommandRes
         eprintln!("Warning: Failed to enrich authentication schema from plugins: {error}");
     }
 
-    let output = serde_json::to_string_pretty(&schema)
+    let output = if pretty {
+        serde_json::to_string_pretty(&schema)
+    } else {
+        serde_json::to_string(&schema)
+    }
         .map_err(|e| format!("Failed to format schema JSON: {e}"))?;
     println!("{output}");
     Ok(())
