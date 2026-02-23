@@ -5,6 +5,8 @@ use crate::utils::json::{
     apply_merge_patch, is_json_shorthand, parse_optional_json, parse_required_json, require_id,
     validate_create_id,
 };
+use crate::utils::schema::append_agent_hints;
+use schemars::schema_for;
 use yaak_models::models::Environment;
 use yaak_models::util::UpdateSource;
 
@@ -13,6 +15,7 @@ type CommandResult<T = ()> = std::result::Result<T, String>;
 pub fn run(ctx: &CliContext, args: EnvironmentArgs) -> i32 {
     let result = match args.command {
         EnvironmentCommands::List { workspace_id } => list(ctx, &workspace_id),
+        EnvironmentCommands::Schema { pretty } => schema(pretty),
         EnvironmentCommands::Show { environment_id } => show(ctx, &environment_id),
         EnvironmentCommands::Create { workspace_id, name, json } => {
             create(ctx, workspace_id, name, json)
@@ -28,6 +31,23 @@ pub fn run(ctx: &CliContext, args: EnvironmentArgs) -> i32 {
             1
         }
     }
+}
+
+fn schema(pretty: bool) -> CommandResult {
+    let mut schema =
+        serde_json::to_value(schema_for!(Environment)).map_err(|e| format!(
+            "Failed to serialize environment schema: {e}"
+        ))?;
+    append_agent_hints(&mut schema);
+
+    let output = if pretty {
+        serde_json::to_string_pretty(&schema)
+    } else {
+        serde_json::to_string(&schema)
+    }
+    .map_err(|e| format!("Failed to format environment schema JSON: {e}"))?;
+    println!("{output}");
+    Ok(())
 }
 
 fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {

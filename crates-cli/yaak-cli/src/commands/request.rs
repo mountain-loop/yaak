@@ -5,6 +5,7 @@ use crate::utils::json::{
     apply_merge_patch, is_json_shorthand, parse_optional_json, parse_required_json, require_id,
     validate_create_id,
 };
+use crate::utils::schema::append_agent_hints;
 use schemars::schema_for;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -86,17 +87,15 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType, pretty: bool)
     };
 
     enrich_schema_guidance(&mut schema, request_type);
+    append_agent_hints(&mut schema);
 
     if let Err(error) = merge_auth_schema_from_plugins(ctx, &mut schema).await {
         eprintln!("Warning: Failed to enrich authentication schema from plugins: {error}");
     }
 
-    let output = if pretty {
-        serde_json::to_string_pretty(&schema)
-    } else {
-        serde_json::to_string(&schema)
-    }
-        .map_err(|e| format!("Failed to format schema JSON: {e}"))?;
+    let output =
+        if pretty { serde_json::to_string_pretty(&schema) } else { serde_json::to_string(&schema) }
+            .map_err(|e| format!("Failed to format schema JSON: {e}"))?;
     println!("{output}");
     Ok(())
 }

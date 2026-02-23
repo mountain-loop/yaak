@@ -57,3 +57,19 @@ fn json_create_and_update_merge_patch_round_trip() {
         .stdout(contains("\"name\": \"Json Workspace\""))
         .stdout(contains("\"description\": \"Updated via JSON\""));
 }
+
+#[test]
+fn workspace_schema_outputs_json_schema() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+
+    cli_cmd(data_dir)
+        .args(["workspace", "schema"])
+        .assert()
+        .success()
+        .stdout(contains("\"type\":\"object\""))
+        .stdout(contains("\"x-yaak-agent-hints\""))
+        .stdout(contains("\"templateVariableSyntax\":\"${[ my_var ]}\""))
+        .stdout(contains("\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\""))
+        .stdout(contains("\"name\""));
+}
