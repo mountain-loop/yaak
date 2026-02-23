@@ -8,7 +8,9 @@ Current top-level commands:
 
 ```text
 yaakcli send <request_id>
+yaakcli agent-help
 yaakcli workspace list
+yaakcli workspace schema [--pretty]
 yaakcli workspace show <workspace_id>
 yaakcli workspace create --name <name>
 yaakcli workspace create --json '{"name":"My Workspace"}'
@@ -31,6 +33,7 @@ yaakcli folder create '{"workspaceId":"wk_abc","name":"Auth"}'
 yaakcli folder update --json '{"id":"fl_abc","name":"Auth v2"}'
 yaakcli folder delete <folder_id> [--yes]
 yaakcli environment list <workspace_id>
+yaakcli environment schema [--pretty]
 yaakcli environment show <environment_id>
 yaakcli environment create <workspace_id> --name <name>
 yaakcli environment create --json '{"workspaceId":"wk_abc","name":"Production"}'
@@ -51,6 +54,8 @@ Notes:
 - `delete` commands prompt for confirmation unless `--yes` is provided.
 - In non-interactive mode, `delete` commands require `--yes`.
 - `create` and `update` commands support `--json` and positional JSON shorthand.
+- For `create` commands, use one input mode at a time. Example: do not combine `<workspace_id>` with `--json`.
+- Template tags use `${[ ... ]}` syntax (for example `${[API_BASE_URL]}`), not `{{ ... }}`.
 - `update` uses JSON Merge Patch semantics (RFC 7386) for partial updates.
 
 ## Examples

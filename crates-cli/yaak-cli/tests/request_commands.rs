@@ -190,6 +190,9 @@ fn request_schema_http_outputs_json_schema() {
         .assert()
         .success()
         .stdout(contains("\"type\":\"object\""))
+        .stdout(contains("\"x-yaak-agent-hints\""))
+        .stdout(contains("\"templateVariableSyntax\":\"${[ my_var ]}\""))
+        .stdout(contains("\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\""))
         .stdout(contains("\"authentication\":"))
         .stdout(contains("/foo/:id/comments/:commentId"))
         .stdout(contains("put concrete values in `urlParameters`"));

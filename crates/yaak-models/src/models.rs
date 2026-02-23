@@ -74,7 +74,7 @@ pub struct ClientCertificate {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct DnsOverride {
@@ -293,7 +293,7 @@ impl UpsertModelInfo for Settings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "workspaces")]
@@ -590,7 +590,7 @@ impl UpsertModelInfo for CookieJar {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "environments")]
@@ -700,7 +700,7 @@ impl UpsertModelInfo for Environment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct EnvironmentVariable {

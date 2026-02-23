@@ -5,6 +5,13 @@ use std::path::PathBuf;
 #[command(name = "yaak")]
 #[command(about = "Yaak CLI - API client from the command line")]
 #[command(version = crate::version::cli_version())]
+#[command(disable_help_subcommand = true)]
+#[command(after_help = r#"Agent Hints:
+  - Template variable syntax is ${[ my_var ]}, not {{ ... }}
+  - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
+  - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
+  - Deletion requires confirmation (--yes for non-interactive environments)
+  "#)]
 pub struct Cli {
     /// Use a custom data directory
     #[arg(long, global = true)]
@@ -71,6 +78,7 @@ pub struct SendArgs {
 }
 
 #[derive(Args)]
+#[command(disable_help_subcommand = true)]
 pub struct WorkspaceArgs {
     #[command(subcommand)]
     pub command: WorkspaceCommands,
@@ -80,6 +88,13 @@ pub struct WorkspaceArgs {
 pub enum WorkspaceCommands {
     /// List all workspaces
     List,
+
+    /// Output JSON schema for workspace create/update payloads
+    Schema {
+        /// Pretty-print schema JSON output
+        #[arg(long)]
+        pretty: bool,
+    },
 
     /// Show a workspace as JSON
     Show {
@@ -125,6 +140,7 @@ pub enum WorkspaceCommands {
 }
 
 #[derive(Args)]
+#[command(disable_help_subcommand = true)]
 pub struct RequestArgs {
     #[command(subcommand)]
     pub command: RequestCommands,
@@ -212,6 +228,7 @@ pub enum RequestSchemaType {
 }
 
 #[derive(Args)]
+#[command(disable_help_subcommand = true)]
 pub struct FolderArgs {
     #[command(subcommand)]
     pub command: FolderCommands,
@@ -268,6 +285,7 @@ pub enum FolderCommands {
 }
 
 #[derive(Args)]
+#[command(disable_help_subcommand = true)]
 pub struct EnvironmentArgs {
     #[command(subcommand)]
     pub command: EnvironmentCommands,
@@ -281,6 +299,13 @@ pub enum EnvironmentCommands {
         workspace_id: String,
     },
 
+    /// Output JSON schema for environment create/update payloads
+    Schema {
+        /// Pretty-print schema JSON output
+        #[arg(long)]
+        pretty: bool,
+    },
+
     /// Show an environment as JSON
     Show {
         /// Environment ID
@@ -288,15 +313,22 @@ pub enum EnvironmentCommands {
     },
 
     /// Create an environment
+    #[command(after_help = r#"Modes (choose one):
+  1) yaak environment create <workspace_id> --name <name>
+  2) yaak environment create --json '{"workspaceId":"wk_abc","name":"Production"}'
+  3) yaak environment create '{"workspaceId":"wk_abc","name":"Production"}'
+
+Do not combine <workspace_id> with --json."#)]
     Create {
-        /// Workspace ID (or positional JSON payload shorthand)
+        /// Workspace ID for flag-based mode, or positional JSON payload shorthand
+        #[arg(value_name = "WORKSPACE_ID_OR_JSON")]
         workspace_id: Option<String>,
 
         /// Environment name
         #[arg(short, long)]
         name: Option<String>,
 
-        /// JSON payload
+        /// JSON payload (use instead of WORKSPACE_ID/--name)
         #[arg(long)]
         json: Option<String>,
     },
@@ -324,6 +356,7 @@ pub enum EnvironmentCommands {
 }
 
 #[derive(Args)]
+#[command(disable_help_subcommand = true)]
 pub struct AuthArgs {
     #[command(subcommand)]
     pub command: AuthCommands,
@@ -342,6 +375,7 @@ pub enum AuthCommands {
 }
 
 #[derive(Args)]
+#[command(disable_help_subcommand = true)]
 pub struct PluginArgs {
     #[command(subcommand)]
     pub command: PluginCommands,
