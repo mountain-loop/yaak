@@ -362,7 +362,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                         workspace_id: http_request.workspace_id.clone(),
                         ..Default::default()
                     },
-                    &UpdateSource::Plugin,
+                    &UpdateSource::from_window_label(window.label()),
                     &blobs,
                 )?
             };
