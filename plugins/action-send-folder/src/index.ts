@@ -40,17 +40,21 @@ export const plugin: PluginDefinition = {
           return;
         }
 
-        // Send each request sequentially
+        // Send all requests in parallel
+        const results = await Promise.allSettled(
+          requestsToSend.map((request) => ctx.httpRequest.send({ httpRequest: request })),
+        );
+
         let successCount = 0;
         let errorCount = 0;
 
-        for (const request of requestsToSend) {
-          try {
-            await ctx.httpRequest.send({ httpRequest: request });
+        for (const [index, result] of results.entries()) {
+          if (result.status === 'fulfilled') {
             successCount++;
-          } catch (error) {
+          } else {
             errorCount++;
-            console.error(`Failed to send request ${request.id}:`, error);
+            const request = requestsToSend[index];
+            console.error(`Failed to send request ${request?.id ?? '<unknown>'}:`, result.reason);
           }
         }
 
