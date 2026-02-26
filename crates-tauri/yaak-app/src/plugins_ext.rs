@@ -10,6 +10,7 @@ use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
 use log::{error, info, warn};
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -239,10 +240,15 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")
         .setup(|app_handle, _| {
             // Resolve paths for plugin manager
-            let vendored_plugin_dir = app_handle
+            let bundled_plugin_dir = app_handle
                 .path()
                 .resolve("vendored/plugins", BaseDirectory::Resource)
                 .expect("failed to resolve plugin directory resource");
+            let vendored_plugin_dir = if is_dev() {
+                resolve_workspace_plugins_dir().unwrap_or(bundled_plugin_dir)
+            } else {
+                bundled_plugin_dir
+            };
 
             let installed_plugin_dir = app_handle
                 .path()
@@ -266,7 +272,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 .expect("failed to resolve plugin runtime")
                 .join("index.cjs");
 
-            let dev_mode = is_dev();
             let query_manager =
                 app_handle.state::<yaak_models::query_manager::QueryManager>().inner().clone();
 
@@ -280,7 +285,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     plugin_runtime_main,
                     &query_manager,
                     &PluginContext::new_empty(),
-                    dev_mode,
                 )
                 .await
                 .expect("Failed to initialize plugins");
@@ -321,4 +325,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             _ => {}
         })
         .build()
+}
+
+fn resolve_workspace_plugins_dir() -> Option<PathBuf> {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("plugins")
+        .canonicalize()
+        .ok()
 }
