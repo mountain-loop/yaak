@@ -1,14 +1,16 @@
+use yaak_models::models::AnyModel;
 use yaak_models::query_manager::QueryManager;
+use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CloseWindowRequest, CopyTextRequest, DeleteKeyValueRequest, DeleteKeyValueResponse,
-    DeleteModelRequest, ErrorResponse, FindHttpResponsesRequest, GetCookieValueRequest,
-    GetHttpRequestByIdRequest, GetHttpRequestByIdResponse, GetKeyValueRequest, GetKeyValueResponse,
-    InternalEventPayload, ListCookieNamesRequest, ListFoldersRequest, ListFoldersResponse,
-    ListHttpRequestsRequest, ListHttpRequestsResponse, ListOpenWorkspacesRequest,
-    OpenExternalUrlRequest, OpenWindowRequest, PromptFormRequest, PromptTextRequest,
-    ReloadResponse, RenderGrpcRequestRequest, RenderHttpRequestRequest, SendHttpRequestRequest,
-    SetKeyValueRequest, ShowToastRequest, TemplateRenderRequest, UpsertModelRequest,
-    WindowInfoRequest,
+    DeleteModelRequest, DeleteModelResponse, ErrorResponse, FindHttpResponsesRequest,
+    FindHttpResponsesResponse, GetCookieValueRequest, GetHttpRequestByIdRequest,
+    GetHttpRequestByIdResponse, GetKeyValueRequest, GetKeyValueResponse, InternalEventPayload,
+    ListCookieNamesRequest, ListFoldersRequest, ListFoldersResponse, ListHttpRequestsRequest,
+    ListHttpRequestsResponse, ListOpenWorkspacesRequest, OpenExternalUrlRequest, OpenWindowRequest,
+    PromptFormRequest, PromptTextRequest, ReloadResponse, RenderGrpcRequestRequest,
+    RenderHttpRequestRequest, SendHttpRequestRequest, SetKeyValueRequest, ShowToastRequest,
+    TemplateRenderRequest, UpsertModelRequest, UpsertModelResponse, WindowInfoRequest,
 };
 
 pub struct SharedPluginEventContext<'a> {
@@ -37,6 +39,9 @@ pub enum SharedRequest<'a> {
     GetHttpRequestById(&'a GetHttpRequestByIdRequest),
     ListFolders(&'a ListFoldersRequest),
     ListHttpRequests(&'a ListHttpRequestsRequest),
+    FindHttpResponses(&'a FindHttpResponsesRequest),
+    UpsertModel(&'a UpsertModelRequest),
+    DeleteModel(&'a DeleteModelRequest),
 }
 
 #[derive(Debug)]
@@ -45,9 +50,6 @@ pub enum HostRequest<'a> {
     CopyText(&'a CopyTextRequest),
     PromptText(&'a PromptTextRequest),
     PromptForm(&'a PromptFormRequest),
-    FindHttpResponses(&'a FindHttpResponsesRequest),
-    UpsertModel(&'a UpsertModelRequest),
-    DeleteModel(&'a DeleteModelRequest),
     RenderGrpcRequest(&'a RenderGrpcRequestRequest),
     RenderHttpRequest(&'a RenderHttpRequestRequest),
     TemplateRender(&'a TemplateRenderRequest),
@@ -71,9 +73,6 @@ impl HostRequest<'_> {
             HostRequest::CopyText(_) => "copy_text_request".to_string(),
             HostRequest::PromptText(_) => "prompt_text_request".to_string(),
             HostRequest::PromptForm(_) => "prompt_form_request".to_string(),
-            HostRequest::FindHttpResponses(_) => "find_http_responses_request".to_string(),
-            HostRequest::UpsertModel(_) => "upsert_model_request".to_string(),
-            HostRequest::DeleteModel(_) => "delete_model_request".to_string(),
             HostRequest::RenderGrpcRequest(_) => "render_grpc_request_request".to_string(),
             HostRequest::RenderHttpRequest(_) => "render_http_request_request".to_string(),
             HostRequest::TemplateRender(_) => "template_render_request".to_string(),
@@ -135,13 +134,13 @@ impl<'a> From<&'a InternalEventPayload> for GroupedPluginRequest<'a> {
                 GroupedPluginRequest::Host(HostRequest::PromptForm(req))
             }
             InternalEventPayload::FindHttpResponsesRequest(req) => {
-                GroupedPluginRequest::Host(HostRequest::FindHttpResponses(req))
+                GroupedPluginRequest::Shared(SharedRequest::FindHttpResponses(req))
             }
             InternalEventPayload::UpsertModelRequest(req) => {
-                GroupedPluginRequest::Host(HostRequest::UpsertModel(req))
+                GroupedPluginRequest::Shared(SharedRequest::UpsertModel(req))
             }
             InternalEventPayload::DeleteModelRequest(req) => {
-                GroupedPluginRequest::Host(HostRequest::DeleteModel(req))
+                GroupedPluginRequest::Shared(SharedRequest::DeleteModel(req))
             }
             InternalEventPayload::RenderGrpcRequestRequest(req) => {
                 GroupedPluginRequest::Host(HostRequest::RenderGrpcRequest(req))
@@ -275,17 +274,175 @@ fn build_shared_reply(
                 http_requests,
             })
         }
+        SharedRequest::FindHttpResponses(req) => {
+            let http_responses = query_manager
+                .connect()
+                .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
+                .unwrap_or_default();
+            InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
+                http_responses,
+            })
+        }
+        SharedRequest::UpsertModel(req) => {
+            use AnyModel::*;
+
+            let model = match &req.model {
+                HttpRequest(m) => {
+                    match query_manager.connect().upsert_http_request(m, &UpdateSource::Plugin) {
+                        Ok(model) => HttpRequest(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to upsert HTTP request: {err}"),
+                            });
+                        }
+                    }
+                }
+                GrpcRequest(m) => {
+                    match query_manager.connect().upsert_grpc_request(m, &UpdateSource::Plugin) {
+                        Ok(model) => GrpcRequest(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to upsert gRPC request: {err}"),
+                            });
+                        }
+                    }
+                }
+                WebsocketRequest(m) => {
+                    match query_manager.connect().upsert_websocket_request(m, &UpdateSource::Plugin)
+                    {
+                        Ok(model) => WebsocketRequest(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to upsert WebSocket request: {err}"),
+                            });
+                        }
+                    }
+                }
+                Folder(m) => {
+                    match query_manager.connect().upsert_folder(m, &UpdateSource::Plugin) {
+                        Ok(model) => Folder(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to upsert folder: {err}"),
+                            });
+                        }
+                    }
+                }
+                Environment(m) => {
+                    match query_manager.connect().upsert_environment(m, &UpdateSource::Plugin) {
+                        Ok(model) => Environment(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to upsert environment: {err}"),
+                            });
+                        }
+                    }
+                }
+                Workspace(m) => {
+                    match query_manager.connect().upsert_workspace(m, &UpdateSource::Plugin) {
+                        Ok(model) => Workspace(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to upsert workspace: {err}"),
+                            });
+                        }
+                    }
+                }
+                _ => {
+                    return InternalEventPayload::ErrorResponse(ErrorResponse {
+                        error: "Upsert not supported for this model type".to_string(),
+                    });
+                }
+            };
+
+            InternalEventPayload::UpsertModelResponse(UpsertModelResponse { model })
+        }
+        SharedRequest::DeleteModel(req) => {
+            let model = match req.model.as_str() {
+                "http_request" => {
+                    match query_manager
+                        .connect()
+                        .delete_http_request_by_id(&req.id, &UpdateSource::Plugin)
+                    {
+                        Ok(model) => AnyModel::HttpRequest(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to delete HTTP request: {err}"),
+                            });
+                        }
+                    }
+                }
+                "grpc_request" => {
+                    match query_manager
+                        .connect()
+                        .delete_grpc_request_by_id(&req.id, &UpdateSource::Plugin)
+                    {
+                        Ok(model) => AnyModel::GrpcRequest(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to delete gRPC request: {err}"),
+                            });
+                        }
+                    }
+                }
+                "websocket_request" => {
+                    match query_manager
+                        .connect()
+                        .delete_websocket_request_by_id(&req.id, &UpdateSource::Plugin)
+                    {
+                        Ok(model) => AnyModel::WebsocketRequest(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to delete WebSocket request: {err}"),
+                            });
+                        }
+                    }
+                }
+                "folder" => match query_manager
+                    .connect()
+                    .delete_folder_by_id(&req.id, &UpdateSource::Plugin)
+                {
+                    Ok(model) => AnyModel::Folder(model),
+                    Err(err) => {
+                        return InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to delete folder: {err}"),
+                        });
+                    }
+                },
+                "environment" => {
+                    match query_manager
+                        .connect()
+                        .delete_environment_by_id(&req.id, &UpdateSource::Plugin)
+                    {
+                        Ok(model) => AnyModel::Environment(model),
+                        Err(err) => {
+                            return InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to delete environment: {err}"),
+                            });
+                        }
+                    }
+                }
+                _ => {
+                    return InternalEventPayload::ErrorResponse(ErrorResponse {
+                        error: "Delete not supported for this model type".to_string(),
+                    });
+                }
+            };
+
+            InternalEventPayload::DeleteModelResponse(DeleteModelResponse { model })
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yaak_models::models::{Folder, HttpRequest, Workspace};
+    use tempfile::TempDir;
+    use yaak_models::models::{AnyModel, Folder, HttpRequest, Workspace};
     use yaak_models::util::UpdateSource;
 
-    fn seed_query_manager() -> QueryManager {
-        let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    fn seed_query_manager() -> (QueryManager, TempDir) {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let db_path = temp_dir.path().join("db.sqlite");
         let blob_path = temp_dir.path().join("blobs.sqlite");
         let (query_manager, _blob_manager, _rx) =
@@ -332,12 +489,12 @@ mod tests {
             )
             .expect("Failed to seed request");
 
-        query_manager
+        (query_manager, temp_dir)
     }
 
     #[test]
     fn list_requests_requires_workspace_when_folder_missing() {
-        let query_manager = seed_query_manager();
+        let (query_manager, _temp_dir) = seed_query_manager();
         let payload = InternalEventPayload::ListHttpRequestsRequest(
             yaak_plugins::events::ListHttpRequestsRequest { folder_id: None },
         );
@@ -355,7 +512,7 @@ mod tests {
 
     #[test]
     fn list_requests_by_workspace_and_folder() {
-        let query_manager = seed_query_manager();
+        let (query_manager, _temp_dir) = seed_query_manager();
 
         let by_workspace_payload = InternalEventPayload::ListHttpRequestsRequest(
             yaak_plugins::events::ListHttpRequestsRequest { folder_id: None },
@@ -395,8 +552,82 @@ mod tests {
     }
 
     #[test]
+    fn find_http_responses_is_shared_handled() {
+        let (query_manager, _temp_dir) = seed_query_manager();
+        let payload = InternalEventPayload::FindHttpResponsesRequest(FindHttpResponsesRequest {
+            request_id: "rq_test".to_string(),
+            limit: Some(1),
+        });
+
+        let result = handle_shared_plugin_event(
+            &query_manager,
+            &payload,
+            SharedPluginEventContext { plugin_name: "@yaak/test", workspace_id: Some("wk_test") },
+        );
+
+        match result {
+            GroupedPluginEvent::Handled(Some(InternalEventPayload::FindHttpResponsesResponse(
+                resp,
+            ))) => {
+                assert!(resp.http_responses.is_empty());
+            }
+            other => panic!("unexpected find responses result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn upsert_and_delete_model_are_shared_handled() {
+        let (query_manager, _temp_dir) = seed_query_manager();
+
+        let existing = query_manager
+            .connect()
+            .get_http_request("rq_test")
+            .expect("Failed to load seeded request");
+        let upsert_payload = InternalEventPayload::UpsertModelRequest(UpsertModelRequest {
+            model: AnyModel::HttpRequest(HttpRequest {
+                name: "Request Updated".to_string(),
+                ..existing
+            }),
+        });
+
+        let upsert_result = handle_shared_plugin_event(
+            &query_manager,
+            &upsert_payload,
+            SharedPluginEventContext { plugin_name: "@yaak/test", workspace_id: Some("wk_test") },
+        );
+        match upsert_result {
+            GroupedPluginEvent::Handled(Some(InternalEventPayload::UpsertModelResponse(resp))) => {
+                match resp.model {
+                    AnyModel::HttpRequest(r) => assert_eq!(r.name, "Request Updated"),
+                    other => panic!("unexpected upsert model type: {other:?}"),
+                }
+            }
+            other => panic!("unexpected upsert result: {other:?}"),
+        }
+
+        let delete_payload = InternalEventPayload::DeleteModelRequest(DeleteModelRequest {
+            model: "http_request".to_string(),
+            id: "rq_test".to_string(),
+        });
+        let delete_result = handle_shared_plugin_event(
+            &query_manager,
+            &delete_payload,
+            SharedPluginEventContext { plugin_name: "@yaak/test", workspace_id: Some("wk_test") },
+        );
+        match delete_result {
+            GroupedPluginEvent::Handled(Some(InternalEventPayload::DeleteModelResponse(resp))) => {
+                match resp.model {
+                    AnyModel::HttpRequest(r) => assert_eq!(r.id, "rq_test"),
+                    other => panic!("unexpected delete model type: {other:?}"),
+                }
+            }
+            other => panic!("unexpected delete result: {other:?}"),
+        }
+    }
+
+    #[test]
     fn host_request_classification_works() {
-        let query_manager = seed_query_manager();
+        let (query_manager, _temp_dir) = seed_query_manager();
         let payload = InternalEventPayload::WindowInfoRequest(WindowInfoRequest {
             label: "main".to_string(),
         });
