@@ -19,13 +19,13 @@ use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak_crypto::manager::EncryptionManager;
-use yaak_models::models::{AnyModel, HttpResponse, Plugin};
+use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{
-    Color, EmptyPayload, ErrorResponse, FindHttpResponsesResponse, GetCookieValueResponse, Icon,
-    InternalEvent, InternalEventPayload, ListCookieNamesResponse, ListOpenWorkspacesResponse,
+    Color, EmptyPayload, ErrorResponse, GetCookieValueResponse, Icon, InternalEvent,
+    InternalEventPayload, ListCookieNamesResponse, ListOpenWorkspacesResponse,
     RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse,
     ShowToastRequest, TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent,
     WorkspaceInfo,
@@ -189,71 +189,6 @@ async fn handle_host_plugin_request<R: Runtime>(
 
                 Ok(None)
             }
-        }
-        HostRequest::FindHttpResponses(req) => {
-            let http_responses = app_handle
-                .db()
-                .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
-                .unwrap_or_default();
-            Ok(Some(InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
-                http_responses,
-            })))
-        }
-        HostRequest::UpsertModel(req) => {
-            use AnyModel::*;
-            let model = match &req.model {
-                HttpRequest(m) => {
-                    HttpRequest(app_handle.db().upsert_http_request(m, &UpdateSource::Plugin)?)
-                }
-                GrpcRequest(m) => {
-                    GrpcRequest(app_handle.db().upsert_grpc_request(m, &UpdateSource::Plugin)?)
-                }
-                WebsocketRequest(m) => WebsocketRequest(
-                    app_handle.db().upsert_websocket_request(m, &UpdateSource::Plugin)?,
-                ),
-                Folder(m) => Folder(app_handle.db().upsert_folder(m, &UpdateSource::Plugin)?),
-                Environment(m) => {
-                    Environment(app_handle.db().upsert_environment(m, &UpdateSource::Plugin)?)
-                }
-                Workspace(m) => {
-                    Workspace(app_handle.db().upsert_workspace(m, &UpdateSource::Plugin)?)
-                }
-                _ => {
-                    return Err(PluginErr("Upsert not supported for this model type".into()).into());
-                }
-            };
-
-            Ok(Some(InternalEventPayload::UpsertModelResponse(
-                yaak_plugins::events::UpsertModelResponse { model },
-            )))
-        }
-        HostRequest::DeleteModel(req) => {
-            let model = match req.model.as_str() {
-                "http_request" => AnyModel::HttpRequest(
-                    app_handle.db().delete_http_request_by_id(&req.id, &UpdateSource::Plugin)?,
-                ),
-                "grpc_request" => AnyModel::GrpcRequest(
-                    app_handle.db().delete_grpc_request_by_id(&req.id, &UpdateSource::Plugin)?,
-                ),
-                "websocket_request" => AnyModel::WebsocketRequest(
-                    app_handle
-                        .db()
-                        .delete_websocket_request_by_id(&req.id, &UpdateSource::Plugin)?,
-                ),
-                "folder" => AnyModel::Folder(
-                    app_handle.db().delete_folder_by_id(&req.id, &UpdateSource::Plugin)?,
-                ),
-                "environment" => AnyModel::Environment(
-                    app_handle.db().delete_environment_by_id(&req.id, &UpdateSource::Plugin)?,
-                ),
-                _ => {
-                    return Err(PluginErr("Delete not supported for this model type".into()).into());
-                }
-            };
-
-            Ok(Some(InternalEventPayload::DeleteModelResponse(
-                yaak_plugins::events::DeleteModelResponse { model },
-            )))
         }
         HostRequest::RenderGrpcRequest(req) => {
             let window = get_window_from_plugin_context(app_handle, plugin_context)?;
