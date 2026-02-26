@@ -165,10 +165,10 @@ function takeFromExternrefTable0(idx) {
  * @param {string} template
  * @returns {any}
  */
-export function unescape_template(template) {
+export function escape_template(template) {
     const ptr0 = passStringToWasm0(template, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.unescape_template(ptr0, len0);
+    const ret = wasm.escape_template(ptr0, len0);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -193,10 +193,10 @@ export function parse_template(template) {
  * @param {string} template
  * @returns {any}
  */
-export function escape_template(template) {
+export function unescape_template(template) {
     const ptr0 = passStringToWasm0(template, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.escape_template(ptr0, len0);
+    const ret = wasm.unescape_template(ptr0, len0);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
