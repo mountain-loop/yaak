@@ -135,35 +135,16 @@ fn prepare_embedded_vendored_plugins(vendored_plugin_dir: &Path) -> std::io::Res
     Ok(())
 }
 
-fn resolve_workspace_plugins_dir() -> Option<PathBuf> {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("plugins")
-        .canonicalize()
-        .ok()
+fn resolve_bundled_plugin_dir_for_cli(embedded_vendored_plugin_dir: &Path) -> PathBuf {
+    resolve_workspace_plugins_dir_from_cwd()
+        .unwrap_or_else(|| embedded_vendored_plugin_dir.to_path_buf())
 }
 
-fn resolve_bundled_plugin_dir_for_cli(embedded_vendored_plugin_dir: &Path) -> PathBuf {
-    if !use_workspace_plugins_for_cli_dev() {
-        return embedded_vendored_plugin_dir.to_path_buf();
+fn resolve_workspace_plugins_dir_from_cwd() -> Option<PathBuf> {
+    let plugins_dir = std::env::current_dir().ok()?.join("plugins");
+    if !plugins_dir.is_dir() {
+        return None;
     }
 
-    resolve_workspace_plugins_dir().unwrap_or_else(|| {
-        panic!(
-            "YAAK_USE_WORKSPACE_PLUGINS is enabled, but ROOT/plugins could not be resolved"
-        )
-    })
-}
-
-fn use_workspace_plugins_for_cli_dev() -> bool {
-    std::env::var("YAAK_USE_WORKSPACE_PLUGINS")
-        .ok()
-        .map(|v| {
-            let v = v.trim();
-            v.eq_ignore_ascii_case("1")
-                || v.eq_ignore_ascii_case("true")
-                || v.eq_ignore_ascii_case("yes")
-                || v.eq_ignore_ascii_case("on")
-        })
-        .unwrap_or(false)
+    plugins_dir.canonicalize().ok().or(Some(plugins_dir))
 }
