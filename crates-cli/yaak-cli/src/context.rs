@@ -140,15 +140,14 @@ fn resolve_bundled_plugin_dir_for_cli(embedded_vendored_plugin_dir: &Path) -> Pa
         return embedded_vendored_plugin_dir.to_path_buf();
     }
 
-    resolve_workspace_plugins_dir_from_cwd()
-        .unwrap_or_else(|| embedded_vendored_plugin_dir.to_path_buf())
-}
+    let plugins_dir = match std::env::current_dir() {
+        Ok(cwd) => cwd.join("plugins"),
+        Err(_) => return embedded_vendored_plugin_dir.to_path_buf(),
+    };
 
-fn resolve_workspace_plugins_dir_from_cwd() -> Option<PathBuf> {
-    let plugins_dir = std::env::current_dir().ok()?.join("plugins");
     if !plugins_dir.is_dir() {
-        return None;
+        return embedded_vendored_plugin_dir.to_path_buf();
     }
 
-    plugins_dir.canonicalize().ok().or(Some(plugins_dir))
+    plugins_dir.canonicalize().unwrap_or(plugins_dir)
 }
