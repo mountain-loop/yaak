@@ -67,7 +67,7 @@ impl CliContext {
                 plugin_runtime_main,
                 &query_manager,
                 &PluginContext::new_empty(),
-                dev_mode,
+                false,
             )
             .await
             {
