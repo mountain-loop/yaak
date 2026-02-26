@@ -38,14 +38,9 @@ impl CliContext {
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
         let plugin_manager = if with_plugins {
-            let dev_mode = cfg!(debug_assertions);
             let embedded_vendored_plugin_dir = data_dir.join("vendored-plugins");
-            let vendored_plugin_dir = if dev_mode {
-                resolve_workspace_plugins_dir()
-                    .unwrap_or_else(|| embedded_vendored_plugin_dir.clone())
-            } else {
-                embedded_vendored_plugin_dir.clone()
-            };
+            let vendored_plugin_dir =
+                resolve_bundled_plugin_dir_for_cli(&embedded_vendored_plugin_dir);
             let installed_plugin_dir = data_dir.join("installed-plugins");
             let node_bin_path = PathBuf::from("node");
 
@@ -146,4 +141,29 @@ fn resolve_workspace_plugins_dir() -> Option<PathBuf> {
         .join("plugins")
         .canonicalize()
         .ok()
+}
+
+fn resolve_bundled_plugin_dir_for_cli(embedded_vendored_plugin_dir: &Path) -> PathBuf {
+    if !use_workspace_plugins_for_cli_dev() {
+        return embedded_vendored_plugin_dir.to_path_buf();
+    }
+
+    resolve_workspace_plugins_dir().unwrap_or_else(|| {
+        panic!(
+            "YAAK_USE_WORKSPACE_PLUGINS is enabled, but ROOT/plugins could not be resolved"
+        )
+    })
+}
+
+fn use_workspace_plugins_for_cli_dev() -> bool {
+    std::env::var("YAAK_USE_WORKSPACE_PLUGINS")
+        .ok()
+        .map(|v| {
+            let v = v.trim();
+            v.eq_ignore_ascii_case("1")
+                || v.eq_ignore_ascii_case("true")
+                || v.eq_ignore_ascii_case("yes")
+                || v.eq_ignore_ascii_case("on")
+        })
+        .unwrap_or(false)
 }
