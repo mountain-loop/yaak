@@ -240,14 +240,14 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("yaak-plugins")
         .setup(|app_handle, _| {
             // Resolve paths for plugin manager
-            let bundled_plugin_dir = app_handle
+            let vendored_plugin_dir = app_handle
                 .path()
                 .resolve("vendored/plugins", BaseDirectory::Resource)
                 .expect("failed to resolve plugin directory resource");
-            let vendored_plugin_dir = if is_dev() {
-                resolve_workspace_plugins_dir().unwrap_or(bundled_plugin_dir)
+            let bundled_plugin_dir = if is_dev() {
+                resolve_workspace_plugins_dir().unwrap_or_else(|| vendored_plugin_dir.clone())
             } else {
-                bundled_plugin_dir
+                vendored_plugin_dir.clone()
             };
 
             let installed_plugin_dir = app_handle
@@ -279,6 +279,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let app_handle_clone = app_handle.clone();
             tauri::async_runtime::block_on(async move {
                 let manager = PluginManager::new(
+                    bundled_plugin_dir,
                     vendored_plugin_dir,
                     installed_plugin_dir,
                     node_bin_path,

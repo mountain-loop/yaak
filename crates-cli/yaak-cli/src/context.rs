@@ -39,13 +39,13 @@ impl CliContext {
 
         let plugin_manager = if with_plugins {
             let embedded_vendored_plugin_dir = data_dir.join("vendored-plugins");
-            let vendored_plugin_dir =
+            let bundled_plugin_dir =
                 resolve_bundled_plugin_dir_for_cli(&embedded_vendored_plugin_dir);
             let installed_plugin_dir = data_dir.join("installed-plugins");
             let node_bin_path = PathBuf::from("node");
 
-            if vendored_plugin_dir == embedded_vendored_plugin_dir {
-                prepare_embedded_vendored_plugins(&vendored_plugin_dir)
+            if bundled_plugin_dir == embedded_vendored_plugin_dir {
+                prepare_embedded_vendored_plugins(&embedded_vendored_plugin_dir)
                     .expect("Failed to prepare bundled plugins");
             }
 
@@ -56,7 +56,8 @@ impl CliContext {
                 });
 
             match PluginManager::new(
-                vendored_plugin_dir,
+                bundled_plugin_dir,
+                embedded_vendored_plugin_dir,
                 installed_plugin_dir,
                 node_bin_path,
                 plugin_runtime_main,

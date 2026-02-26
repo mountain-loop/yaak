@@ -45,6 +45,7 @@ pub struct PluginManager {
     kill_tx: tokio::sync::watch::Sender<bool>,
     killed_rx: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
     ws_service: Arc<PluginRuntimeServerWebsocket>,
+    bundled_plugin_dir: PathBuf,
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
 }
@@ -56,6 +57,7 @@ impl PluginManager {
     /// Create a new PluginManager with the given paths.
     ///
     /// # Arguments
+    /// * `bundled_plugin_dir` - Directory to scan for bundled plugins
     /// * `vendored_plugin_dir` - Path to vendored plugins directory
     /// * `installed_plugin_dir` - Path to installed plugins directory
     /// * `node_bin_path` - Path to the yaaknode binary
@@ -63,6 +65,7 @@ impl PluginManager {
     /// * `query_manager` - Query manager for bundled plugin registration and loading
     /// * `plugin_context` - Context to use while initializing plugins
     pub async fn new(
+        bundled_plugin_dir: PathBuf,
         vendored_plugin_dir: PathBuf,
         installed_plugin_dir: PathBuf,
         node_bin_path: PathBuf,
@@ -85,6 +88,7 @@ impl PluginManager {
             ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
             killed_rx: Arc::new(Mutex::new(Some(killed_rx))),
+            bundled_plugin_dir,
             vendored_plugin_dir,
             installed_plugin_dir,
         };
@@ -190,8 +194,8 @@ impl PluginManager {
     /// Read plugin directories from disk and return their paths.
     /// This is useful for discovering bundled plugins.
     pub async fn list_bundled_plugin_dirs(&self) -> Result<Vec<String>> {
-        info!("Loading bundled plugins from {:?}", self.vendored_plugin_dir);
-        read_plugins_dir(&self.vendored_plugin_dir).await
+        info!("Loading bundled plugins from {:?}", self.bundled_plugin_dir);
+        read_plugins_dir(&self.bundled_plugin_dir).await
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
