@@ -38,12 +38,21 @@ impl CliContext {
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
         let plugin_manager = if with_plugins {
-            let vendored_plugin_dir = data_dir.join("vendored-plugins");
+            let dev_mode = cfg!(debug_assertions);
+            let embedded_vendored_plugin_dir = data_dir.join("vendored-plugins");
+            let vendored_plugin_dir = if dev_mode {
+                resolve_workspace_plugins_dir()
+                    .unwrap_or_else(|| embedded_vendored_plugin_dir.clone())
+            } else {
+                embedded_vendored_plugin_dir.clone()
+            };
             let installed_plugin_dir = data_dir.join("installed-plugins");
             let node_bin_path = PathBuf::from("node");
 
-            prepare_embedded_vendored_plugins(&vendored_plugin_dir)
-                .expect("Failed to prepare bundled plugins");
+            if vendored_plugin_dir == embedded_vendored_plugin_dir {
+                prepare_embedded_vendored_plugins(&vendored_plugin_dir)
+                    .expect("Failed to prepare bundled plugins");
+            }
 
             let plugin_runtime_main =
                 std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
@@ -58,7 +67,7 @@ impl CliContext {
                 plugin_runtime_main,
                 &query_manager,
                 &PluginContext::new_empty(),
-                false,
+                dev_mode,
             )
             .await
             {
@@ -130,4 +139,12 @@ fn prepare_embedded_vendored_plugins(vendored_plugin_dir: &Path) -> std::io::Res
     fs::create_dir_all(vendored_plugin_dir)?;
     EMBEDDED_VENDORED_PLUGINS.extract(vendored_plugin_dir)?;
     Ok(())
+}
+
+fn resolve_workspace_plugins_dir() -> Option<PathBuf> {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("plugins")
+        .canonicalize()
+        .ok()
 }
