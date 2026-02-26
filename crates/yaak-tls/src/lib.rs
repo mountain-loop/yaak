@@ -273,6 +273,5 @@ pub fn find_client_certificate(
         });
     }
 
-    debug!("No matching client certificate found for {}", url_string);
     None
 }
