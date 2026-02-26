@@ -136,6 +136,10 @@ fn prepare_embedded_vendored_plugins(vendored_plugin_dir: &Path) -> std::io::Res
 }
 
 fn resolve_bundled_plugin_dir_for_cli(embedded_vendored_plugin_dir: &Path) -> PathBuf {
+    if !cfg!(debug_assertions) {
+        return embedded_vendored_plugin_dir.to_path_buf();
+    }
+
     resolve_workspace_plugins_dir_from_cwd()
         .unwrap_or_else(|| embedded_vendored_plugin_dir.to_path_buf())
 }
