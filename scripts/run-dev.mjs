@@ -45,6 +45,9 @@ const args = [
   ...additionalArgs
 ];
 
-const result = spawnSync('tauri', args, { stdio: 'inherit', shell: false, env: process.env });
+// Invoke the tauri CLI JS entry point directly via node to avoid shell escaping issues on Windows
+const tauriJs = path.join(rootDir, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
+
+const result = spawnSync(process.execPath, [tauriJs, ...args], { stdio: 'inherit', env: process.env });
 
 process.exit(result.status || 0);

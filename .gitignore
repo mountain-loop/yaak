@@ -54,3 +54,6 @@ flatpak/node-sources.json
 
 # Local Codex desktop env state
 .codex/environments/environment.toml
+
+# Claude Code local settings
+.claude/settings.local.json
