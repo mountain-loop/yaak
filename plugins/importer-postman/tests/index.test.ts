@@ -22,4 +22,39 @@ describe('importer-postman', () => {
       );
     });
   }
+
+  test('Imports object descriptions without [object Object]', () => {
+    const result = convertPostman(
+      JSON.stringify({
+        info: {
+          name: 'Description Test',
+          schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+        },
+        item: [
+          {
+            name: 'Request 1',
+            request: {
+              method: 'GET',
+              description: {
+                content: 'Lijst van klanten',
+                type: 'text/plain',
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result?.resources.workspaces).toEqual([
+      expect.objectContaining({
+        name: 'Description Test',
+      }),
+    ]);
+    expect(result?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        name: 'Request 1',
+        description: 'Lijst van klanten',
+      }),
+    ]);
+  });
 });
