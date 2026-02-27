@@ -1081,16 +1081,10 @@ async fn read_plugins_dir(dir: &PathBuf) -> Result<Vec<String>> {
 fn fix_windows_paths(p: &PathBuf) -> String {
     use dunce;
     use path_slash::PathBufExt;
-    use regex::Regex;
 
-    // 1. Remove UNC prefix for Windows paths to pass to sidecar
-    let safe_path = dunce::simplified(p.as_path()).to_string_lossy().to_string();
+    // 1. Remove UNC prefix for Windows paths
+    let safe_path = dunce::simplified(p.as_path());
 
-    // 2. Remove the drive letter
-    let safe_path = Regex::new("^[a-zA-Z]:").unwrap().replace(safe_path.as_str(), "");
-
-    // 3. Convert backslashes to forward
-    let safe_path = PathBuf::from(safe_path.to_string()).to_slash_lossy().to_string();
-
-    safe_path
+    // 2. Convert backslashes to forward slashes for Node.js compatibility
+    PathBuf::from(safe_path).to_slash_lossy().to_string()
 }
