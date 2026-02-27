@@ -8535,7 +8535,6 @@ dependencies = [
  "md5 0.7.0",
  "path-slash",
  "rand 0.9.1",
- "regex 1.11.1",
  "reqwest",
  "serde",
  "serde_json",
