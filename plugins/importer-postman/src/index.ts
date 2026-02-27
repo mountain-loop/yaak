@@ -55,19 +55,11 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     folders: [],
   };
 
-  const rawDescription = info.description;
-  const description =
-    typeof rawDescription === 'object' && rawDescription != null && 'content' in rawDescription
-      ? String(rawDescription.content)
-      : rawDescription == null
-        ? undefined
-        : String(rawDescription);
-
   const workspace: ExportResources['workspaces'][0] = {
     model: 'workspace',
     id: generateId('workspace'),
     name: info.name ? String(info.name) : 'Postman Import',
-    description,
+    description: importDescription(info.description),
     ...globalAuth,
   };
   exportResources.workspaces.push(workspace);
@@ -139,7 +131,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
         workspaceId: workspace.id,
         folderId,
         name: v.name,
-        description: r.description ? String(r.description) : undefined,
+        description: importDescription(r.description),
         method: typeof r.method === 'string' ? r.method : 'GET',
         url,
         urlParameters,
@@ -507,6 +499,26 @@ function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
 function toArray<T>(value: unknown): T[] {
   if (Object.prototype.toString.call(value) === '[object Array]') return value as T[];
   return [];
+}
+
+function importDescription(rawDescription: unknown): string | undefined {
+  if (rawDescription == null) {
+    return undefined;
+  }
+
+  if (typeof rawDescription === 'string') {
+    return rawDescription;
+  }
+
+  if (typeof rawDescription === 'object' && !Array.isArray(rawDescription)) {
+    const description = toRecord(rawDescription);
+    if ('content' in description && description.content != null) {
+      return String(description.content);
+    }
+    return undefined;
+  }
+
+  return String(rawDescription);
 }
 
 /** Recursively render all nested object properties */
