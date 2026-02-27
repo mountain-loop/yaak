@@ -7,6 +7,29 @@ describe('importer-openapi', () => {
   const p = path.join(__dirname, 'fixtures');
   const fixtures = fs.readdirSync(p);
 
+  test('Maps operation description to request description', async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: '3.0.0',
+        info: { title: 'Description Test', version: '1.0.0' },
+        paths: {
+          '/klanten': {
+            get: {
+              description: 'Lijst van klanten',
+              responses: { '200': { description: 'ok' } },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        description: 'Lijst van klanten',
+      }),
+    ]);
+  });
+
   test('Skips invalid file', async () => {
     const imported = await convertOpenApi('{}');
     expect(imported).toBeUndefined();
