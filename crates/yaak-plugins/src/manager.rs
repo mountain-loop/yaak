@@ -24,7 +24,6 @@ use crate::plugin_handle::PluginHandle;
 use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{error, info, warn};
 use std::collections::HashMap;
-use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,9 +45,9 @@ pub struct PluginManager {
     kill_tx: tokio::sync::watch::Sender<bool>,
     killed_rx: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
     ws_service: Arc<PluginRuntimeServerWebsocket>,
+    bundled_plugin_dir: PathBuf,
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
-    dev_mode: bool,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -58,21 +57,21 @@ impl PluginManager {
     /// Create a new PluginManager with the given paths.
     ///
     /// # Arguments
+    /// * `bundled_plugin_dir` - Directory to scan for bundled plugins
     /// * `vendored_plugin_dir` - Path to vendored plugins directory
     /// * `installed_plugin_dir` - Path to installed plugins directory
     /// * `node_bin_path` - Path to the yaaknode binary
     /// * `plugin_runtime_main` - Path to the plugin runtime index.cjs
     /// * `query_manager` - Query manager for bundled plugin registration and loading
     /// * `plugin_context` - Context to use while initializing plugins
-    /// * `dev_mode` - Whether the app is in dev mode (affects plugin loading)
     pub async fn new(
+        bundled_plugin_dir: PathBuf,
         vendored_plugin_dir: PathBuf,
         installed_plugin_dir: PathBuf,
         node_bin_path: PathBuf,
         plugin_runtime_main: PathBuf,
         query_manager: &QueryManager,
         plugin_context: &PluginContext,
-        dev_mode: bool,
     ) -> Result<PluginManager> {
         let (events_tx, mut events_rx) = mpsc::channel(2048);
         let (kill_server_tx, kill_server_rx) = tokio::sync::watch::channel(false);
@@ -89,9 +88,9 @@ impl PluginManager {
             ws_service: Arc::new(ws_service.clone()),
             kill_tx: kill_server_tx,
             killed_rx: Arc::new(Mutex::new(Some(killed_rx))),
+            bundled_plugin_dir,
             vendored_plugin_dir,
             installed_plugin_dir,
-            dev_mode,
         };
 
         // Forward events to subscribers
@@ -192,25 +191,11 @@ impl PluginManager {
         Ok(plugin_manager)
     }
 
-    /// Get the vendored plugin directory path (resolves dev mode path if applicable)
-    pub fn get_plugins_dir(&self) -> PathBuf {
-        if self.dev_mode {
-            // Use plugins directly for easy development
-            // Tauri runs from crates-tauri/yaak-app/, so go up two levels to reach project root
-            env::current_dir()
-                .map(|cwd| cwd.join("../../plugins").canonicalize().unwrap())
-                .unwrap_or_else(|_| self.vendored_plugin_dir.clone())
-        } else {
-            self.vendored_plugin_dir.clone()
-        }
-    }
-
     /// Read plugin directories from disk and return their paths.
     /// This is useful for discovering bundled plugins.
     pub async fn list_bundled_plugin_dirs(&self) -> Result<Vec<String>> {
-        let plugins_dir = self.get_plugins_dir();
-        info!("Loading bundled plugins from {plugins_dir:?}");
-        read_plugins_dir(&plugins_dir).await
+        info!("Loading bundled plugins from {:?}", self.bundled_plugin_dir);
+        read_plugins_dir(&self.bundled_plugin_dir).await
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {

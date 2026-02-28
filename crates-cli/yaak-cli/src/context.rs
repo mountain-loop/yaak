@@ -38,12 +38,16 @@ impl CliContext {
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
         let plugin_manager = if with_plugins {
-            let vendored_plugin_dir = data_dir.join("vendored-plugins");
+            let embedded_vendored_plugin_dir = data_dir.join("vendored-plugins");
+            let bundled_plugin_dir =
+                resolve_bundled_plugin_dir_for_cli(&embedded_vendored_plugin_dir);
             let installed_plugin_dir = data_dir.join("installed-plugins");
             let node_bin_path = PathBuf::from("node");
 
-            prepare_embedded_vendored_plugins(&vendored_plugin_dir)
-                .expect("Failed to prepare bundled plugins");
+            if bundled_plugin_dir == embedded_vendored_plugin_dir {
+                prepare_embedded_vendored_plugins(&embedded_vendored_plugin_dir)
+                    .expect("Failed to prepare bundled plugins");
+            }
 
             let plugin_runtime_main =
                 std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
@@ -52,13 +56,13 @@ impl CliContext {
                 });
 
             match PluginManager::new(
-                vendored_plugin_dir,
+                bundled_plugin_dir,
+                embedded_vendored_plugin_dir,
                 installed_plugin_dir,
                 node_bin_path,
                 plugin_runtime_main,
                 &query_manager,
                 &PluginContext::new_empty(),
-                false,
             )
             .await
             {
@@ -130,4 +134,21 @@ fn prepare_embedded_vendored_plugins(vendored_plugin_dir: &Path) -> std::io::Res
     fs::create_dir_all(vendored_plugin_dir)?;
     EMBEDDED_VENDORED_PLUGINS.extract(vendored_plugin_dir)?;
     Ok(())
+}
+
+fn resolve_bundled_plugin_dir_for_cli(embedded_vendored_plugin_dir: &Path) -> PathBuf {
+    if !cfg!(debug_assertions) {
+        return embedded_vendored_plugin_dir.to_path_buf();
+    }
+
+    let plugins_dir = match std::env::current_dir() {
+        Ok(cwd) => cwd.join("plugins"),
+        Err(_) => return embedded_vendored_plugin_dir.to_path_buf(),
+    };
+
+    if !plugins_dir.is_dir() {
+        return embedded_vendored_plugin_dir.to_path_buf();
+    }
+
+    plugins_dir.canonicalize().unwrap_or(plugins_dir)
 }
