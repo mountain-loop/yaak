@@ -11,7 +11,7 @@ export const plugin: PluginDefinition = {
       async onSelect(ctx, args) {
         const rendered_request = await ctx.grpcRequest.render({
           grpcRequest: args.grpcRequest,
-          purpose: 'preview',
+          purpose: 'send',
         });
         const data = await convert(rendered_request, args.protoFiles);
         await ctx.clipboard.copyText(data);
@@ -103,7 +103,7 @@ export async function convert(request: Partial<GrpcRequest>, allProtoFiles: stri
 
   // Add form params
   if (request.message) {
-    xs.push('-d', `${quote(JSON.stringify(JSON.parse(request.message)))}`);
+    xs.push('-d', quote(request.message));
     xs.push(NEWLINE);
   }
 

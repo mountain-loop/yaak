@@ -151,7 +151,26 @@ describe('exporter-curl', () => {
       [
         `grpcurl -import-path '/'`,
         `-proto '/foo.proto'`,
-        `-d '{"foo":"bar","baz":1}'`,
+        `-d '{\n  "foo": "bar",\n  "baz": 1\n}'`,
+        'yaak.app',
+      ].join(' \\\n  '),
+    );
+  });
+
+  test('Sends data with unresolved template tags', async () => {
+    expect(
+      await convert(
+        {
+          url: 'https://yaak.app',
+          message: '{"timestamp": ${[ faker "timestamp" ]}, "foo": "bar"}',
+        },
+        ['/foo.proto'],
+      ),
+    ).toEqual(
+      [
+        `grpcurl -import-path '/'`,
+        `-proto '/foo.proto'`,
+        `-d '{"timestamp": \${[ faker "timestamp" ]}, "foo": "bar"}'`,
         'yaak.app',
       ].join(' \\\n  '),
     );
