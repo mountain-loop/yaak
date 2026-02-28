@@ -1,7 +1,6 @@
 use crate::client::HttpConnectionOptions;
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
-use log::info;
 use reqwest::Client;
 use std::collections::BTreeMap;
 use std::sync::Arc;
