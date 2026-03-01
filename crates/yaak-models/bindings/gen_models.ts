@@ -75,7 +75,7 @@ export type ProxySetting = { "type": "enabled", http: string, https: string, aut
 
 export type ProxySettingAuth = { user: string, password: string, };
 
-export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, clientCertificates: Array<ClientCertificate>, coloredMethods: boolean, editorFont: string | null, editorFontSize: number, editorKeymap: EditorKeymap, editorSoftWrap: boolean, hideWindowControls: boolean, useNativeTitlebar: boolean, interfaceFont: string | null, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, hideLicenseBadge: boolean, autoupdate: boolean, autoDownloadUpdates: boolean, checkNotifications: boolean, hotkeys: { [key in string]?: Array<string> }, };
+export type Settings = { model: "settings", id: string, createdAt: string, updatedAt: string, appearance: string, clientCertificates: Array<ClientCertificate>, coloredMethods: boolean, editorFont: string | null, editorFontSize: number, editorKeymap: EditorKeymap, editorIndentation: number, editorSoftWrap: boolean, hideWindowControls: boolean, useNativeTitlebar: boolean, interfaceFont: string | null, interfaceFontSize: number, interfaceScale: number, openWorkspaceNewWindow: boolean | null, proxy: ProxySetting | null, themeDark: string, themeLight: string, updateChannel: string, hideLicenseBadge: boolean, autoupdate: boolean, autoDownloadUpdates: boolean, checkNotifications: boolean, hotkeys: { [key in string]?: Array<string> }, };
 
 export type SyncState = { model: "sync_state", id: string, workspaceId: string, createdAt: string, updatedAt: string, flushedAt: string, modelId: string, checksum: string, relPath: string, syncDir: string, };
 
@@ -93,6 +93,6 @@ export type WebsocketMessageType = "text" | "binary";
 
 export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
 
-export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingDnsOverrides: Array<DnsOverride>, };
+export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, };
 
 export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, settingSyncDir: string | null, };
