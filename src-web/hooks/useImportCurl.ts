@@ -14,9 +14,11 @@ export function useImportCurl() {
     mutationFn: async ({
       overwriteRequestId,
       command,
+      name,
     }: {
       overwriteRequestId?: string;
       command: string;
+      name?: string;
     }) => {
       const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       const importedRequest: HttpRequest = await invokeCmd('cmd_curl_to_request', {
@@ -24,10 +26,16 @@ export function useImportCurl() {
         workspaceId,
       });
 
+      // Apply custom name if provided
+      const requestToCreate = {
+        ...importedRequest,
+        name: name?.trim() || importedRequest.name,
+      };
+
       let verb: string;
       if (overwriteRequestId == null) {
         verb = 'Created';
-        await createRequestAndNavigate(importedRequest);
+        await createRequestAndNavigate(requestToCreate);
       } else {
         verb = 'Updated';
         await patchModelById(importedRequest.model, overwriteRequestId, (r: HttpRequest) => ({
