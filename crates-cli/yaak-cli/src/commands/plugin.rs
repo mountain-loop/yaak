@@ -4,8 +4,8 @@ use crate::utils::http;
 use keyring::Entry;
 use rand::Rng;
 use rolldown::{
-    Bundler, BundlerOptions, ExperimentalOptions, InputItem, LogLevel, OutputFormat, Platform,
-    WatchOption, Watcher,
+    BundleEvent, Bundler, BundlerOptions, ExperimentalOptions, InputItem, LogLevel, OutputFormat,
+    Platform, WatchOption, Watcher, WatcherEvent,
 };
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -114,12 +114,53 @@ async fn dev(args: PluginPathArg) -> CommandResult {
     ensure_plugin_build_inputs(&plugin_dir)?;
 
     ui::info(&format!("Watching plugin {}...", plugin_dir.display()));
-    ui::info("Press Ctrl-C to stop");
 
     let bundler = Bundler::new(bundler_options(&plugin_dir, true))
         .map_err(|err| format!("Failed to initialize Rolldown watcher: {err}"))?;
     let watcher = Watcher::new(vec![Arc::new(Mutex::new(bundler))], None)
         .map_err(|err| format!("Failed to start Rolldown watcher: {err}"))?;
+    let emitter = watcher.emitter();
+    let watch_root = plugin_dir.clone();
+    let _event_logger = tokio::spawn(async move {
+        loop {
+            let event = {
+                let rx = emitter.rx.lock().await;
+                rx.recv()
+            };
+
+            let Ok(event) = event else {
+                break;
+            };
+
+            match event {
+                WatcherEvent::Change(change) => {
+                    let changed_path = Path::new(change.path.as_str());
+                    let display_path = changed_path
+                        .strip_prefix(&watch_root)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| {
+                            changed_path
+                                .file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| "unknown".to_string())
+                        });
+                    ui::info(&format!("Rebuilding plugin {display_path}"));
+                }
+                WatcherEvent::Event(BundleEvent::BundleEnd(_)) => {}
+                WatcherEvent::Event(BundleEvent::Error(event)) => {
+                    if event.error.diagnostics.is_empty() {
+                        ui::error("Plugin build failed");
+                    } else {
+                        for diagnostic in event.error.diagnostics {
+                            ui::error(&diagnostic.to_string());
+                        }
+                    }
+                }
+                WatcherEvent::Close => break,
+                _ => {}
+            }
+        }
+    });
 
     watcher.start().await;
     Ok(())

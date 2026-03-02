@@ -118,7 +118,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                     &InternalEventPayload::ShowToastRequest(ShowToastRequest {
                         message: format!("Reloaded plugin {}@{}", info.name, info.version),
                         icon: Some(Icon::Info),
-                        timeout: Some(3000),
+                        timeout: Some(5000),
                         ..Default::default()
                     }),
                     None,
