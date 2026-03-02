@@ -22,7 +22,8 @@ use tauri::{
 use tokio::sync::Mutex;
 use ts_rs::TS;
 use yaak_api::yaak_api_client;
-use yaak_models::models::Plugin;
+use yaak_models::models::{Plugin, PluginSource};
+use yaak_models::util::UpdateSource;
 use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
@@ -162,6 +163,28 @@ pub async fn cmd_plugins_install<R: Runtime>(
     )
     .await?;
     Ok(())
+}
+
+#[command]
+pub async fn cmd_plugins_install_from_directory<R: Runtime>(
+    window: WebviewWindow<R>,
+    directory: &str,
+) -> Result<Plugin> {
+    let plugin = window.db().upsert_plugin(
+        &Plugin {
+            directory: directory.into(),
+            url: None,
+            enabled: true,
+            source: PluginSource::Filesystem,
+            ..Default::default()
+        },
+        &UpdateSource::from_window_label(window.label()),
+    )?;
+
+    let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
+    plugin_manager.add_plugin(&window.plugin_context(), &plugin).await?;
+
+    Ok(plugin)
 }
 
 #[command]
