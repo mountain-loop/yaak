@@ -4,6 +4,7 @@ import { invokeCmd } from './tauri';
 export interface AppInfo {
   isDev: boolean;
   version: string;
+  cliVersion: string | null;
   name: string;
   appDataDir: string;
   appLogDir: string;
