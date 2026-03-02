@@ -8,7 +8,6 @@ import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
 import { Editor } from './core/Editor/LazyEditor';
 import { type EventDetailAction, EventDetailHeader, EventViewer } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
-import { HttpMethodTagRaw } from './core/HttpMethodTag';
 import { HttpStatusTagRaw } from './core/HttpStatusTag';
 import { Icon, type IconProps } from './core/Icon';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
