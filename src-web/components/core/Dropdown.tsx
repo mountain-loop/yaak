@@ -896,9 +896,9 @@ function MenuItem({
   };
 
   const rightSlot = item.submenu ? (
-    <Icon icon="chevron_right" color='secondary' />
+    <Icon icon="chevron_right" color="secondary" />
   ) : (
-    (item.rightSlot ?? <Hotkey action={item.hotKeyAction ?? null} />)
+    (item.rightSlot ?? <Hotkey variant="text" action={item.hotKeyAction ?? null} />)
   );
 
   return (
@@ -937,7 +937,7 @@ function MenuItem({
       )}
       {...props}
     >
-      <div className={classNames('truncate')}>{item.label}</div>
+      <div className={classNames('truncate min-w-[5rem]')}>{item.label}</div>
     </Button>
   );
 }

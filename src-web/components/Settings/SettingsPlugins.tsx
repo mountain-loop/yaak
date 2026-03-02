@@ -15,7 +15,6 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
-import { appInfo } from '../../lib/appInfo';
 import { showConfirmDelete } from '../../lib/confirm';
 import { minPromiseMillis } from '../../lib/minPromiseMillis';
 import { Button } from '../core/Button';
@@ -33,16 +32,6 @@ import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';
 
-function isPluginBundled(plugin: Plugin, vendoredPluginDir: string): boolean {
-  const normalizedDir = plugin.directory.replace(/\\/g, '/');
-  const normalizedVendoredDir = vendoredPluginDir.replace(/\\/g, '/');
-  return (
-    normalizedDir.includes(normalizedVendoredDir) ||
-    normalizedDir.includes('vendored/plugins') ||
-    normalizedDir.includes('/plugins/')
-  );
-}
-
 interface SettingsPluginsProps {
   defaultSubtab?: string;
 }
@@ -50,8 +39,8 @@ interface SettingsPluginsProps {
 export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
   const [directory, setDirectory] = useState<string | null>(null);
   const plugins = useAtomValue(pluginsAtom);
-  const bundledPlugins = plugins.filter((p) => isPluginBundled(p, appInfo.vendoredPluginDir));
-  const installedPlugins = plugins.filter((p) => !isPluginBundled(p, appInfo.vendoredPluginDir));
+  const bundledPlugins = plugins.filter((p) => p.source === 'bundled');
+  const installedPlugins = plugins.filter((p) => p.source !== 'bundled');
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   return (

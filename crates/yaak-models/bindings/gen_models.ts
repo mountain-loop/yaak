@@ -67,7 +67,9 @@ export type ParentAuthentication = { authentication: Record<string, any>, authen
 
 export type ParentHeaders = { headers: Array<HttpRequestHeader>, };
 
-export type Plugin = { model: "plugin", id: string, createdAt: string, updatedAt: string, checkedAt: string | null, directory: string, enabled: boolean, url: string | null, };
+export type Plugin = { model: "plugin", id: string, createdAt: string, updatedAt: string, checkedAt: string | null, directory: string, enabled: boolean, url: string | null, source: PluginSource, };
+
+export type PluginSource = "bundled" | "filesystem" | "registry";
 
 export type PluginKeyValue = { model: "plugin_key_value", createdAt: string, updatedAt: string, pluginName: string, key: string, value: string, };
 

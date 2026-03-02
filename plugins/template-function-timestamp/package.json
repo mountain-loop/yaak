@@ -1,5 +1,7 @@
 {
   "name": "@yaak/template-function-timestamp",
+  "displayName": "Timestamp Template Functions",
+  "description": "Template functions for dealing with timestamps",
   "private": true,
   "version": "0.1.0",
   "scripts": {

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::str::FromStr;
 use ts_rs::TS;
-use yaak_models::models::Plugin;
+use yaak_models::models::{Plugin, PluginSource};
 
 /// Get plugin info from the registry.
 pub async fn get_plugin(
@@ -58,7 +58,7 @@ pub async fn check_plugin_updates(
 ) -> Result<PluginUpdatesResponse> {
     let name_versions: Vec<PluginNameVersion> = plugins
         .into_iter()
-        .filter(|p| p.url.is_some()) // Only check plugins with URLs (from registry)
+        .filter(|p| matches!(p.source, PluginSource::Registry)) // Only check registry-installed plugins
         .filter_map(|p| match get_plugin_meta(&Path::new(&p.directory)) {
             Ok(m) => Some(PluginNameVersion { name: m.name, version: m.version }),
             Err(e) => {

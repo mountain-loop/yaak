@@ -1,1 +1,2 @@
 - Tag safety: app releases use `v*` tags and CLI releases use `yaak-cli-*` tags; always confirm which one is requested before retagging.
+- Do not commit, push, or tag without explicit approval
