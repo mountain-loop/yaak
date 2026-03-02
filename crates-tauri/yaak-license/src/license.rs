@@ -7,7 +7,7 @@ use std::ops::Add;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
-use yaak_api::yaak_api_client;
+use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_common::platform::get_os_str;
 use yaak_models::db_context::DbContext;
 use yaak_models::query_manager::QueryManager;
@@ -119,7 +119,7 @@ pub async fn activate_license<R: Runtime>(
 ) -> Result<()> {
     info!("Activating license {}", license_key);
     let app_version = window.app_handle().package_info().version.to_string();
-    let client = yaak_api_client(&app_version)?;
+    let client = yaak_api_client(ApiClientKind::App, &app_version)?;
     let payload = ActivateLicenseRequestPayload {
         license_key: license_key.to_string(),
         app_platform: get_os_str().to_string(),
@@ -157,7 +157,7 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
     let activation_id = get_activation_id(app_handle).await;
 
     let app_version = window.app_handle().package_info().version.to_string();
-    let client = yaak_api_client(&app_version)?;
+    let client = yaak_api_client(ApiClientKind::App, &app_version)?;
     let path = format!("/licenses/activations/{}/deactivate", activation_id);
     let payload =
         DeactivateLicenseRequestPayload { app_platform: get_os_str().to_string(), app_version };
@@ -203,7 +203,7 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
         (true, _) => {
             info!("Checking license activation");
             // A license has been activated, so let's check the license server
-            let client = yaak_api_client(&payload.app_version)?;
+            let client = yaak_api_client(ApiClientKind::App, &payload.app_version)?;
             let path = format!("/licenses/activations/{activation_id}/check-v2");
             let response = client.post(build_url(&path)).json(&payload).send().await?;
 

@@ -31,18 +31,13 @@ pub fn run(ctx: &CliContext, args: WorkspaceArgs) -> i32 {
 }
 
 fn schema(pretty: bool) -> CommandResult {
-    let mut schema =
-        serde_json::to_value(schema_for!(Workspace)).map_err(|e| format!(
-            "Failed to serialize workspace schema: {e}"
-        ))?;
+    let mut schema = serde_json::to_value(schema_for!(Workspace))
+        .map_err(|e| format!("Failed to serialize workspace schema: {e}"))?;
     append_agent_hints(&mut schema);
 
-    let output = if pretty {
-        serde_json::to_string_pretty(&schema)
-    } else {
-        serde_json::to_string(&schema)
-    }
-    .map_err(|e| format!("Failed to format workspace schema JSON: {e}"))?;
+    let output =
+        if pretty { serde_json::to_string_pretty(&schema) } else { serde_json::to_string(&schema) }
+            .map_err(|e| format!("Failed to format workspace schema JSON: {e}"))?;
     println!("{output}");
     Ok(())
 }

@@ -5,6 +5,7 @@ mod plugin_events;
 mod ui;
 mod utils;
 mod version;
+mod version_check;
 
 use clap::Parser;
 use cli::{Cli, Commands, RequestCommands};
@@ -31,6 +32,8 @@ async fn main() {
     let data_dir = data_dir.unwrap_or_else(|| {
         dirs::data_dir().expect("Could not determine data directory").join(app_id)
     });
+
+    version_check::maybe_check_for_updates().await;
 
     let needs_context = matches!(
         &command,

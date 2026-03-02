@@ -10166,6 +10166,7 @@ dependencies = [
  "walkdir",
  "webbrowser",
  "yaak",
+ "yaak-api",
  "yaak-crypto",
  "yaak-http",
  "yaak-models",

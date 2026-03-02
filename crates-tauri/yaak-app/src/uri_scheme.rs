@@ -8,7 +8,7 @@ use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use yaak_api::yaak_api_client;
+use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
@@ -47,7 +47,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
             let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
             let query_manager = app_handle.db_manager();
             let app_version = app_handle.package_info().version.to_string();
-            let http_client = yaak_api_client(&app_version)?;
+            let http_client = yaak_api_client(ApiClientKind::App, &app_version)?;
             let plugin_context = window.plugin_context();
             let pv = download_and_install(
                 plugin_manager,
@@ -88,7 +88,8 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 }
 
                 let app_version = app_handle.package_info().version.to_string();
-                let resp = yaak_api_client(&app_version)?.get(file_url).send().await?;
+                let resp =
+                    yaak_api_client(ApiClientKind::App, &app_version)?.get(file_url).send().await?;
                 let json = resp.bytes().await?;
                 let p = app_handle
                     .path()

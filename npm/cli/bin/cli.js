@@ -16,7 +16,8 @@ function getBinaryPath() {
 }
 
 const result = childProcess.spawnSync(getBinaryPath(), process.argv.slice(2), {
-  stdio: "inherit"
+  stdio: "inherit",
+  env: { ...process.env, YAAK_CLI_INSTALL_SOURCE: process.env.YAAK_CLI_INSTALL_SOURCE ?? "npm" },
 });
 
 if (result.error) {
