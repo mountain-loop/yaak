@@ -9,7 +9,7 @@ use log::info;
 use std::fs::{create_dir_all, remove_dir_all};
 use std::io::Cursor;
 use std::sync::Arc;
-use yaak_models::models::Plugin;
+use yaak_models::models::{Plugin, PluginSource};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 
@@ -78,6 +78,7 @@ pub async fn download_and_install(
                 directory: plugin_dir_str.clone(),
                 enabled: true,
                 url: Some(plugin_version.url.clone()),
+                source: PluginSource::Registry,
                 ..Default::default()
             },
             &UpdateSource::Background,

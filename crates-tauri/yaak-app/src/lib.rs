@@ -38,7 +38,7 @@ use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Plugin,
-    Workspace, WorkspaceMeta,
+    PluginSource, Workspace, WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
@@ -1354,7 +1354,13 @@ async fn cmd_install_plugin<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> YaakResult<Plugin> {
     let plugin = app_handle.db().upsert_plugin(
-        &Plugin { directory: directory.into(), url, enabled: true, ..Default::default() },
+        &Plugin {
+            directory: directory.into(),
+            url,
+            enabled: true,
+            source: PluginSource::Filesystem,
+            ..Default::default()
+        },
         &UpdateSource::from_window_label(window.label()),
     )?;
 
