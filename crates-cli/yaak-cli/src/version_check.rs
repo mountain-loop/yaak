@@ -110,7 +110,7 @@ fn should_skip_check() -> bool {
 }
 
 async fn fetch_version_check() -> Option<VersionCheckResponse> {
-    let api_url = format!("{}/api/v1/cli/version-check", api_base_url());
+    let api_url = format!("{}/cli/check", update_base_url());
     let current_version = version::cli_version();
     let payload = VersionCheckRequest {
         current_version,
@@ -146,11 +146,10 @@ fn install_source() -> String {
         .unwrap_or_else(|| "source".to_string())
 }
 
-fn api_base_url() -> &'static str {
+fn update_base_url() -> &'static str {
     match std::env::var("ENVIRONMENT").ok().as_deref() {
-        Some("staging") => "https://todo.yaak.app",
         Some("development") => "http://localhost:9444",
-        _ => "https://api.yaak.app",
+        _ => "https://update.yaak.app",
     }
 }
 
