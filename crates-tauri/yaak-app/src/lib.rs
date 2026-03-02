@@ -37,8 +37,8 @@ use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Plugin,
-    PluginSource, Workspace, WorkspaceMeta,
+    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Workspace,
+    WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
 use yaak_plugins::events::{
@@ -1346,35 +1346,6 @@ async fn cmd_send_http_request<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_install_plugin<R: Runtime>(
-    directory: &str,
-    url: Option<String>,
-    plugin_manager: State<'_, PluginManager>,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> YaakResult<Plugin> {
-    let plugin = app_handle.db().upsert_plugin(
-        &Plugin {
-            directory: directory.into(),
-            url,
-            enabled: true,
-            source: PluginSource::Filesystem,
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-    )?;
-
-    plugin_manager
-        .add_plugin(
-            &PluginContext::new(Some(window.label().to_string()), window.workspace_id()),
-            &plugin,
-        )
-        .await?;
-
-    Ok(plugin)
-}
-
-#[tauri::command]
 async fn cmd_reload_plugins<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -1658,7 +1629,6 @@ pub fn run() {
             cmd_workspace_actions,
             cmd_folder_actions,
             cmd_import_data,
-            cmd_install_plugin,
             cmd_metadata,
             cmd_new_child_window,
             cmd_new_main_window,
@@ -1727,6 +1697,7 @@ pub fn run() {
             git_ext::cmd_git_rm_remote,
             //
             // Plugin commands
+            plugins_ext::cmd_plugins_install_from_directory,
             plugins_ext::cmd_plugins_search,
             plugins_ext::cmd_plugins_install,
             plugins_ext::cmd_plugins_uninstall,

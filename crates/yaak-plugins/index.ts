@@ -24,3 +24,7 @@ export async function checkPluginUpdates() {
 export async function updateAllPlugins() {
   return invoke<PluginNameVersion[]>('cmd_plugins_update_all', {});
 }
+
+export async function installPluginFromDirectory(directory: string) {
+  return invoke<void>('cmd_plugins_install_from_directory', { directory });
+}

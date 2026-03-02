@@ -36,7 +36,6 @@ type TauriCmd =
   | 'cmd_http_request_body'
   | 'cmd_http_response_body'
   | 'cmd_import_data'
-  | 'cmd_install_plugin'
   | 'cmd_metadata'
   | 'cmd_restart'
   | 'cmd_new_child_window'
