@@ -14,16 +14,34 @@ const ancestorsAtom = atom((get) => [...get(foldersAtom), ...get(workspacesAtom)
 
 export type HeaderModel = HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
 
-export function useInheritedHeaders(baseModel: HeaderModel | null) {
+export type HeaderSource = {
+  id: string;
+  name: string;
+  model: 'workspace' | 'folder' | 'default';
+};
+
+export type InheritedHeader = HttpRequestHeader & {
+  source: HeaderSource;
+};
+
+export function useInheritedHeaders(baseModel: HeaderModel | null): InheritedHeader[] {
   const parents = useAtomValue(ancestorsAtom);
 
-  if (baseModel == null) return [];
-  if (baseModel.model === 'workspace') return defaultHeaders;
+  const defaultSource: HeaderSource = { id: 'default', name: 'Default', model: 'default' };
 
-  const next = (child: HeaderModel): HttpRequestHeader[] => {
+  if (baseModel == null) return [];
+  if (baseModel.model === 'workspace') {
+    return defaultHeaders.map((h) => ({ ...h, source: defaultSource }));
+  }
+
+  const next = (child: HeaderModel): InheritedHeader[] => {
     // Short-circuit at workspace level - return global defaults + workspace headers
     if (child.model === 'workspace') {
-      return [...defaultHeaders, ...child.headers];
+      const workspaceSource: HeaderSource = { id: child.id, name: child.name, model: 'workspace' };
+      return [
+        ...defaultHeaders.map((h) => ({ ...h, source: defaultSource })),
+        ...child.headers.map((h) => ({ ...h, source: workspaceSource })),
+      ];
     }
 
     // Recurse up the tree
@@ -38,13 +56,18 @@ export function useInheritedHeaders(baseModel: HeaderModel | null) {
     }
 
     const headers = next(parent);
-    return [...headers, ...parent.headers];
+    const parentSource: HeaderSource = {
+      id: parent.id,
+      name: parent.name,
+      model: parent.model as 'workspace' | 'folder',
+    };
+    return [...headers, ...parent.headers.map((h) => ({ ...h, source: parentSource }))];
   };
 
   const allHeaders = next(baseModel);
 
   // Deduplicate by header name (case-insensitive), keeping the latest (most specific) value
-  const headersByName = new Map<string, HttpRequestHeader>();
+  const headersByName = new Map<string, InheritedHeader>();
   for (const header of allHeaders) {
     headersByName.set(header.name.toLowerCase(), header);
   }
