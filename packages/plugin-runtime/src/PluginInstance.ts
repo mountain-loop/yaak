@@ -76,10 +76,10 @@ export class PluginInstance {
     this.#mod = {};
 
     const fileChangeCallback = async () => {
-      await this.#mod?.dispose?.();
-      this.#importModule();
       const ctx = this.#newCtx(workerData.context);
       try {
+        await this.#mod?.dispose?.();
+        this.#importModule();
         await this.#mod?.init?.(ctx);
         this.#sendPayload(
           workerData.context,
@@ -90,7 +90,7 @@ export class PluginInstance {
           null,
         );
       } catch (err: unknown) {
-        ctx.toast.show({
+        await ctx.toast.show({
           message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err}`,
           color: 'notice',
           icon: 'alert_triangle',
@@ -1003,6 +1003,7 @@ function watchFile(filepath: string, cb: () => void) {
     const stat = statSync(filepath, { throwIfNoEntry: false });
     if (stat == null || stat.mtimeMs !== watchedFiles[filepath]?.mtimeMs) {
       watchedFiles[filepath] = stat ?? null;
+      console.log('[plugin-runtime] watchFile triggered', filepath);
       cb();
     }
   });
