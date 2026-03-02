@@ -352,29 +352,17 @@ impl PluginManager {
         let start = Instant::now();
         let mut errors = Vec::new();
         let plugins = self.resolve_plugins_for_runtime_from_db(plugins).await;
-        let desired_dirs: HashSet<String> =
-            plugins.iter().map(|plugin| plugin.directory.clone()).collect();
 
-        // Remove handles that are not part of the resolved set.
+        // Rebuild runtime handles from scratch to avoid stale/duplicate handles.
         let existing_handles = { self.plugin_handles.lock().await.clone() };
         for plugin_handle in existing_handles {
-            if desired_dirs.contains(&plugin_handle.dir) {
-                continue;
-            }
             if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
-                error!("Failed to remove stale plugin {} {e:?}", plugin_handle.dir);
+                error!("Failed to remove plugin {} {e:?}", plugin_handle.dir);
                 errors.push((plugin_handle.dir.clone(), e.to_string()));
             }
         }
 
         for plugin in plugins {
-            // First remove the plugin if it exists and is enabled
-            if let Some(plugin_handle) = self.get_plugin_by_dir(&plugin.directory).await {
-                if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
-                    error!("Failed to remove plugin {} {e:?}", plugin.directory);
-                    continue;
-                }
-            }
             if let Err(e) = self.add_plugin(plugin_context, &plugin).await {
                 warn!("Failed to add plugin {} {e:?}", plugin.directory);
                 errors.push((plugin.directory.clone(), e.to_string()));
