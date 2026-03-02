@@ -13,12 +13,16 @@ describe('template-function-faker', () => {
   it('renders date results as unquoted ISO strings', async () => {
     const { plugin } = await import('../src/index');
     const fn = plugin.templateFunctions?.find((fn) => fn.name === 'faker.date.future');
+    const onRender = fn?.onRender;
 
-    expect(fn?.onRender).toBeTypeOf('function');
+    expect(onRender).toBeTypeOf('function');
+    if (onRender == null) {
+      throw new Error("Expected template function 'faker.date.future' to define onRender");
+    }
 
-    const result = await fn!.onRender!(
-      {} as Parameters<NonNullable<typeof fn.onRender>>[0],
-      { values: {} } as Parameters<NonNullable<typeof fn.onRender>>[1],
+    const result = await onRender(
+      {} as Parameters<typeof onRender>[0],
+      { values: {} } as Parameters<typeof onRender>[1],
     );
 
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);

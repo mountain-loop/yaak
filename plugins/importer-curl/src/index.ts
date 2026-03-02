@@ -82,7 +82,9 @@ function splitCommands(rawData: string): string[] {
   let inDollarQuote = false;
 
   for (let i = 0; i < joined.length; i++) {
-    const ch = joined[i]!;
+    if (joined[i] === undefined) break; // Make TS happy
+
+    const ch = joined[i];
     const next = joined[i + 1];
 
     // Track quoting state to avoid splitting inside quoted strings
@@ -121,7 +123,11 @@ function splitCommands(rawData: string): string[] {
     const inQuote = inSingleQuote || inDoubleQuote || inDollarQuote;
 
     // Split on ;, newline, or CRLF when not inside quotes and not escaped
-    if (!inQuote && !isEscaped(i) && (ch === ';' || ch === '\n' || (ch === '\r' && next === '\n'))) {
+    if (
+      !inQuote &&
+      !isEscaped(i) &&
+      (ch === ';' || ch === '\n' || (ch === '\r' && next === '\n'))
+    ) {
       if (ch === '\r') i++; // Skip the \n in \r\n
       if (current.trim()) {
         commands.push(current.trim());

@@ -206,7 +206,10 @@ export const plugin: PluginDefinition = {
         // Create snippet generator
         const snippet = new HTTPSnippet(harRequest);
         const generateSnippet = (target: string, client: string): string => {
-          const result = snippet.convert(target as any, client);
+          const result = snippet.convert(
+            target as Parameters<typeof snippet.convert>[0],
+            client as Parameters<typeof snippet.convert>[1],
+          );
           return (Array.isArray(result) ? result.join('\n') : result || '').replace(/\r\n/g, '\n');
         };
 
