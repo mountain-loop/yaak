@@ -47,6 +47,14 @@ pub enum Commands {
     #[command(hide = true)]
     Dev(PluginPathArg),
 
+    /// Backward-compatible alias for `plugin generate`
+    #[command(hide = true)]
+    Generate(GenerateArgs),
+
+    /// Backward-compatible alias for `plugin publish`
+    #[command(hide = true)]
+    Publish(PluginPathArg),
+
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
