@@ -181,7 +181,6 @@ impl PluginManager {
         let plugins = db.list_plugins()?;
         drop(db);
 
-        let plugins = plugin_manager.resolve_plugins_for_runtime(plugins, bundled_dirs);
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {
             let joined = init_errors
@@ -341,7 +340,8 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Initialize all plugins from the provided list.
+    /// Initialize all plugins from the provided DB list.
+    /// Plugin candidates are resolved for this runtime instance before initialization.
     /// Returns a list of (plugin_directory, error_message) for any plugins that failed to initialize.
     pub async fn initialize_all_plugins(
         &self,
@@ -351,6 +351,21 @@ impl PluginManager {
         info!("Initializing all plugins");
         let start = Instant::now();
         let mut errors = Vec::new();
+        let plugins = self.resolve_plugins_for_runtime_from_db(plugins).await;
+        let desired_dirs: HashSet<String> =
+            plugins.iter().map(|plugin| plugin.directory.clone()).collect();
+
+        // Remove handles that are not part of the resolved set.
+        let existing_handles = { self.plugin_handles.lock().await.clone() };
+        for plugin_handle in existing_handles {
+            if desired_dirs.contains(&plugin_handle.dir) {
+                continue;
+            }
+            if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
+                error!("Failed to remove stale plugin {} {e:?}", plugin_handle.dir);
+                errors.push((plugin_handle.dir.clone(), e.to_string()));
+            }
+        }
 
         for plugin in plugins {
             // First remove the plugin if it exists and is enabled
