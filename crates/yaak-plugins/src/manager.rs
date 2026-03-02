@@ -21,9 +21,10 @@ use crate::events::{
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
+use crate::plugin_meta::get_plugin_meta;
 use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -33,7 +34,7 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::{Instant, timeout};
-use yaak_models::models::Plugin;
+use yaak_models::models::{Plugin, PluginSource};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, generate_id};
 use yaak_templates::error::Error::RenderError;
@@ -162,13 +163,14 @@ impl PluginManager {
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
         let db = query_manager.connect();
-        for dir in bundled_dirs {
-            if db.get_plugin_by_directory(&dir).is_none() {
+        for dir in &bundled_dirs {
+            if db.get_plugin_by_directory(dir).is_none() {
                 db.upsert_plugin(
                     &Plugin {
-                        directory: dir,
+                        directory: dir.clone(),
                         enabled: true,
                         url: None,
+                        source: PluginSource::Bundled,
                         ..Default::default()
                     },
                     &UpdateSource::Background,
@@ -179,6 +181,7 @@ impl PluginManager {
         let plugins = db.list_plugins()?;
         drop(db);
 
+        let plugins = plugin_manager.resolve_plugins_for_runtime(plugins, bundled_dirs);
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {
             let joined = init_errors
@@ -211,6 +214,57 @@ impl PluginManager {
         let plugins_dir = self.get_plugins_dir();
         info!("Loading bundled plugins from {plugins_dir:?}");
         read_plugins_dir(&plugins_dir).await
+    }
+
+    pub async fn resolve_plugins_for_runtime_from_db(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
+        let bundled_dirs = match self.list_bundled_plugin_dirs().await {
+            Ok(dirs) => dirs,
+            Err(err) => {
+                warn!("Failed to read bundled plugin dirs for resolution: {err:?}");
+                Vec::new()
+            }
+        };
+        self.resolve_plugins_for_runtime(plugins, bundled_dirs)
+    }
+
+    /// Resolve the plugin set for the current runtime instance.
+    ///
+    /// Rules:
+    /// - Drop bundled rows that are not present in this instance's bundled directory list.
+    /// - Deduplicate by plugin metadata name (fallback to directory key when metadata is unreadable).
+    /// - Prefer sources in this order: filesystem > registry > bundled.
+    /// - For same-source conflicts, prefer the most recently installed row (`created_at`).
+    fn resolve_plugins_for_runtime(
+        &self,
+        plugins: Vec<Plugin>,
+        bundled_dirs: Vec<String>,
+    ) -> Vec<Plugin> {
+        let bundled_dir_set: HashSet<String> = bundled_dirs.into_iter().collect();
+        let mut selected: HashMap<String, Plugin> = HashMap::new();
+
+        for plugin in plugins {
+            if matches!(plugin.source, PluginSource::Bundled)
+                && !bundled_dir_set.contains(&plugin.directory)
+            {
+                continue;
+            }
+
+            let key = match get_plugin_meta(Path::new(&plugin.directory)) {
+                Ok(meta) => meta.name,
+                Err(_) => format!("__dir__{}", plugin.directory),
+            };
+
+            match selected.get(&key) {
+                Some(existing) if !prefer_plugin(&plugin, existing) => {}
+                _ => {
+                    selected.insert(key, plugin);
+                }
+            }
+        }
+
+        let mut resolved = selected.into_values().collect::<Vec<_>>();
+        resolved.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        resolved
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
@@ -1061,6 +1115,24 @@ impl PluginManager {
             e => Err(PluginErr(format!("Export returned invalid event {:?}", e))),
         }
     }
+}
+
+fn source_priority(source: &PluginSource) -> i32 {
+    match source {
+        PluginSource::Filesystem => 3,
+        PluginSource::Registry => 2,
+        PluginSource::Bundled => 1,
+    }
+}
+
+fn prefer_plugin(candidate: &Plugin, existing: &Plugin) -> bool {
+    let candidate_priority = source_priority(&candidate.source);
+    let existing_priority = source_priority(&existing.source);
+    if candidate_priority != existing_priority {
+        return candidate_priority > existing_priority;
+    }
+
+    candidate.created_at > existing.created_at
 }
 
 async fn read_plugins_dir(dir: &PathBuf) -> Result<Vec<String>> {

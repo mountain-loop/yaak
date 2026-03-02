@@ -2074,6 +2074,46 @@ pub struct Plugin {
     pub directory: String,
     pub enabled: bool,
     pub url: Option<String>,
+    pub source: PluginSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum PluginSource {
+    Bundled,
+    Filesystem,
+    Registry,
+}
+
+impl FromStr for PluginSource {
+    type Err = crate::error::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "bundled" => Ok(Self::Bundled),
+            "filesystem" => Ok(Self::Filesystem),
+            "registry" => Ok(Self::Registry),
+            _ => Ok(Self::default()),
+        }
+    }
+}
+
+impl Display for PluginSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            PluginSource::Bundled => "bundled".to_string(),
+            PluginSource::Filesystem => "filesystem".to_string(),
+            PluginSource::Registry => "registry".to_string(),
+        };
+        write!(f, "{}", str)
+    }
+}
+
+impl Default for PluginSource {
+    fn default() -> Self {
+        Self::Filesystem
+    }
 }
 
 impl UpsertModelInfo for Plugin {
@@ -2109,6 +2149,7 @@ impl UpsertModelInfo for Plugin {
             (Directory, self.directory.into()),
             (Url, self.url.into()),
             (Enabled, self.enabled.into()),
+            (Source, self.source.to_string().into()),
         ])
     }
 
@@ -2119,6 +2160,7 @@ impl UpsertModelInfo for Plugin {
             PluginIden::Directory,
             PluginIden::Url,
             PluginIden::Enabled,
+            PluginIden::Source,
         ]
     }
 
@@ -2135,6 +2177,7 @@ impl UpsertModelInfo for Plugin {
             url: row.get("url")?,
             directory: row.get("directory")?,
             enabled: row.get("enabled")?,
+            source: PluginSource::from_str(row.get::<_, String>("source")?.as_str()).unwrap(),
         })
     }
 }

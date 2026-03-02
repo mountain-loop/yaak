@@ -26,6 +26,10 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn upsert_plugin(&self, plugin: &Plugin, source: &UpdateSource) -> Result<Plugin> {
-        self.upsert(plugin, source)
+        let mut plugin_to_upsert = plugin.clone();
+        if let Some(existing) = self.get_plugin_by_directory(&plugin.directory) {
+            plugin_to_upsert.id = existing.id;
+        }
+        self.upsert(&plugin_to_upsert, source)
     }
 }

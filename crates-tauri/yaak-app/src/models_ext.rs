@@ -15,6 +15,7 @@ use yaak_models::error::Result;
 use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
+use yaak_plugins::manager::PluginManager;
 
 const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
 const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 1000;
@@ -255,23 +256,32 @@ pub(crate) fn models_upsert_graphql_introspection<R: Runtime>(
 }
 
 #[tauri::command]
-pub(crate) fn models_workspace_models<R: Runtime>(
+pub(crate) async fn models_workspace_models<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: Option<&str>,
+    plugin_manager: State<'_, PluginManager>,
 ) -> Result<String> {
-    let db = window.db();
     let mut l: Vec<AnyModel> = Vec::new();
 
-    // Add the settings
-    l.push(db.get_settings().into());
+    // Add the global models
+    {
+        let db = window.db();
+        l.push(db.get_settings().into());
+        l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
+    }
 
-    // Add global models
-    l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
-    l.append(&mut db.list_plugins()?.into_iter().map(Into::into).collect());
+    let plugins = {
+        let db = window.db();
+        db.list_plugins()?
+    };
+
+    let plugins = plugin_manager.resolve_plugins_for_runtime_from_db(plugins).await;
+    l.append(&mut plugins.into_iter().map(Into::into).collect());
 
     // Add the workspace children
     if let Some(wid) = workspace_id {
+        let db = window.db();
         l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_environments_ensure_base(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
