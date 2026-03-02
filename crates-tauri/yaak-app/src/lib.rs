@@ -31,6 +31,7 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
+use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
@@ -97,6 +98,7 @@ impl<R: Runtime> PluginContextExt<R> for WebviewWindow<R> {
 struct AppMetaData {
     is_dev: bool,
     version: String,
+    cli_version: Option<String>,
     name: String,
     app_data_dir: String,
     app_log_dir: String,
@@ -113,9 +115,11 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
     let vendored_plugin_dir =
         app_handle.path().resolve("vendored/plugins", BaseDirectory::Resource)?;
     let default_project_dir = app_handle.path().home_dir()?.join("YaakProjects");
+    let cli_version = detect_cli_version().await;
     Ok(AppMetaData {
         is_dev: is_dev(),
         version: app_handle.package_info().version.to_string(),
+        cli_version,
         name: app_handle.package_info().name.to_string(),
         app_data_dir: app_data_dir.to_string_lossy().to_string(),
         app_log_dir: app_log_dir.to_string_lossy().to_string(),
@@ -124,6 +128,28 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
         feature_license: cfg!(feature = "license"),
         feature_updater: cfg!(feature = "updater"),
     })
+}
+
+async fn detect_cli_version() -> Option<String> {
+    // Prefer `yaak`, but support the legacy `yaakcli` alias if present.
+    if let Some(version) = detect_cli_version_for_binary("yaak").await {
+        return Some(version);
+    }
+    detect_cli_version_for_binary("yaakcli").await
+}
+
+async fn detect_cli_version_for_binary(program: &str) -> Option<String> {
+    let mut cmd = new_checked_command(program, "--version").await.ok()?;
+    let out = cmd.arg("--version").output().await.ok()?;
+    if !out.status.success() {
+        return None;
+    }
+
+    let line = String::from_utf8(out.stdout).ok()?;
+    let line = line.lines().find(|l| !l.trim().is_empty())?.trim();
+    let mut parts = line.split_whitespace();
+    let _name = parts.next();
+    Some(parts.next().unwrap_or(line).to_string())
 }
 
 #[tauri::command]

@@ -32,6 +32,8 @@ import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
 import { useScrollIntoView } from '../hooks/useScrollIntoView';
 import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
+import { appInfo } from '../lib/appInfo';
+import { copyToClipboard } from '../lib/copy';
 import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { showDialog } from '../lib/dialog';
@@ -162,6 +164,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         label: 'Send Request',
         onSelect: () => sendRequest(activeRequest.id),
       });
+      if (appInfo.cliVersion != null) {
+        commands.push({
+          key: 'request.copy_cli_send',
+          searchText: `copy cli send yaak request send ${activeRequest.id}`,
+          label: 'Copy CLI Send Command',
+          onSelect: () => copyToClipboard(`yaak request send ${activeRequest.id}`),
+        });
+      }
       httpRequestActions.forEach((a, i) => {
         commands.push({
           key: `http_request_action.${i}`,
