@@ -17,6 +17,14 @@ pub fn warning(message: &str) {
     }
 }
 
+pub fn warning_stderr(message: &str) {
+    if io::stderr().is_terminal() {
+        eprintln!("{:<8} {}", style("WARNING").yellow().bold(), style(message).yellow());
+    } else {
+        eprintln!("WARNING  {message}");
+    }
+}
+
 pub fn success(message: &str) {
     if io::stdout().is_terminal() {
         println!("{:<8} {}", style("SUCCESS").green().bold(), style(message).green());

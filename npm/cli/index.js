@@ -15,6 +15,7 @@ function getBinaryPath() {
 
 module.exports.runBinary = function runBinary(...args) {
   childProcess.execFileSync(getBinaryPath(), args, {
-    stdio: "inherit"
+    stdio: "inherit",
+    env: { ...process.env, YAAK_CLI_INSTALL_SOURCE: process.env.YAAK_CLI_INSTALL_SOURCE ?? "npm" },
   });
 };

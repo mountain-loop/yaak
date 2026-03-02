@@ -32,6 +32,7 @@ walkdir = "2"
 webbrowser = "1"
 zip = "4"
 yaak = { workspace = true }
+yaak-api = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }
 yaak-models = { workspace = true }

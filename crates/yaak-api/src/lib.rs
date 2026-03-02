@@ -8,14 +8,24 @@ use reqwest::header::{HeaderMap, HeaderValue};
 use std::time::Duration;
 use yaak_common::platform::{get_ua_arch, get_ua_platform};
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ApiClientKind {
+    App,
+    Cli,
+}
+
 /// Build a reqwest Client configured for Yaak's own API calls.
 ///
 /// Includes a custom User-Agent, JSON accept header, 20s timeout, gzip,
 /// and automatic OS-level proxy detection via sysproxy.
-pub fn yaak_api_client(version: &str) -> Result<Client> {
+pub fn yaak_api_client(kind: ApiClientKind, version: &str) -> Result<Client> {
     let platform = get_ua_platform();
     let arch = get_ua_arch();
-    let ua = format!("Yaak/{version} ({platform}; {arch})");
+    let product = match kind {
+        ApiClientKind::App => "Yaak",
+        ApiClientKind::Cli => "YaakCli",
+    };
+    let ua = format!("{product}/{version} ({platform}; {arch})");
 
     let mut default_headers = HeaderMap::new();
     default_headers.insert("Accept", HeaderValue::from_str("application/json").unwrap());

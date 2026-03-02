@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
-use yaak_api::yaak_api_client;
+use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_common::platform::get_os_str;
 use yaak_models::util::UpdateSource;
 
@@ -102,7 +102,7 @@ impl YaakNotifier {
 
         let launch_info = get_or_upsert_launch_info(app_handle);
         let app_version = app_handle.package_info().version.to_string();
-        let req = yaak_api_client(&app_version)?
+        let req = yaak_api_client(ApiClientKind::App, &app_version)?
             .request(Method::GET, "https://notify.yaak.app/notifications")
             .query(&[
                 ("version", &launch_info.current_version),

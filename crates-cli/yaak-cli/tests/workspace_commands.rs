@@ -70,6 +70,8 @@ fn workspace_schema_outputs_json_schema() {
         .stdout(contains("\"type\":\"object\""))
         .stdout(contains("\"x-yaak-agent-hints\""))
         .stdout(contains("\"templateVariableSyntax\":\"${[ my_var ]}\""))
-        .stdout(contains("\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\""))
+        .stdout(contains(
+            "\"templateFunctionSyntax\":\"${[ namespace.my_func(a='aaa',b='bbb') ]}\"",
+        ))
         .stdout(contains("\"name\""));
 }
