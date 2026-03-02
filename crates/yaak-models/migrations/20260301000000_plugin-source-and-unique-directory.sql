@@ -14,7 +14,6 @@ WHERE source = 'filesystem'
     -- Normalize separators so this also works for Windows paths.
     replace(directory, '\', '/') LIKE '%/vendored/plugins/%'
         OR replace(directory, '\', '/') LIKE '%/vendored-plugins/%'
-        OR replace(directory, '\', '/') LIKE '%/plugins/%'
     );
 
 -- Keep one row per exact directory before adding uniqueness.
