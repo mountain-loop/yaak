@@ -9,11 +9,15 @@ mod version_check;
 
 use clap::Parser;
 use cli::{Cli, Commands, RequestCommands};
-use context::CliContext;
+use context::{CliContext, CliExecutionContext};
+use std::sync::Arc;
+use yaak_crypto::manager::EncryptionManager;
+use yaak_models::queries::any_request::AnyRequest;
+use yaak_models::query_manager::QueryManager;
 
 #[tokio::main]
 async fn main() {
-    let Cli { data_dir, environment, verbose, log, command } = Cli::parse();
+    let Cli { data_dir, environment, cookie_jar, verbose, log, command } = Cli::parse();
 
     if let Some(log_level) = log {
         match log_level {
@@ -35,28 +39,16 @@ async fn main() {
 
     version_check::maybe_check_for_updates().await;
 
-    let needs_context = matches!(
-        &command,
-        Commands::Send(_)
-            | Commands::Workspace(_)
-            | Commands::Request(_)
-            | Commands::Folder(_)
-            | Commands::Environment(_)
-    );
-
-    let needs_plugins = matches!(
-        &command,
-        Commands::Send(_)
-            | Commands::Request(cli::RequestArgs {
-                command: RequestCommands::Send { .. } | RequestCommands::Schema { .. },
-            })
-    );
-
-    let context = if needs_context {
-        Some(CliContext::initialize(data_dir, app_id, needs_plugins).await)
-    } else {
-        None
-    };
+    let db_path = data_dir.join("db.sqlite");
+    let blob_path = data_dir.join("blobs.sqlite");
+    let (query_manager, blob_manager, _rx) =
+        match yaak_models::init_standalone(&db_path, &blob_path) {
+            Ok(v) => v,
+            Err(err) => {
+                eprintln!("Error: Failed to initialize database: {err}");
+                std::process::exit(1);
+            }
+        };
 
     let exit_code = match command {
         Commands::Auth(args) => commands::auth::run(args).await,
@@ -66,41 +58,258 @@ async fn main() {
         Commands::Generate(args) => commands::plugin::run_generate(args).await,
         Commands::Publish(args) => commands::plugin::run_publish(args).await,
         Commands::Send(args) => {
-            commands::send::run(
-                context.as_ref().expect("context initialized for send"),
-                args,
+            let query_manager = query_manager.clone();
+            let blob_manager = blob_manager.clone();
+
+            let execution_context_result = resolve_send_execution_context(
+                &query_manager,
+                &args.id,
                 environment.as_deref(),
-                verbose,
-            )
-            .await
+                cookie_jar.as_deref(),
+            );
+            match execution_context_result {
+                Ok(execution_context) => {
+                    let context = CliContext::new(
+                        data_dir.clone(),
+                        query_manager.clone(),
+                        blob_manager,
+                        Arc::new(EncryptionManager::new(query_manager, app_id)),
+                        true,
+                        execution_context,
+                    )
+                    .await;
+
+                    let exit_code = commands::send::run(
+                        &context,
+                        args,
+                        environment.as_deref(),
+                        cookie_jar.as_deref(),
+                        verbose,
+                    )
+                    .await;
+                    context.shutdown().await;
+                    exit_code
+                }
+                Err(error) => {
+                    eprintln!("Error: {error}");
+                    1
+                }
+            }
         }
-        Commands::Workspace(args) => commands::workspace::run(
-            context.as_ref().expect("context initialized for workspace"),
-            args,
-        ),
-        Commands::Request(args) => {
-            commands::request::run(
-                context.as_ref().expect("context initialized for request"),
-                args,
-                environment.as_deref(),
-                verbose,
+        Commands::CookieJar(args) => {
+            let query_manager = query_manager.clone();
+            let blob_manager = blob_manager.clone();
+            let execution_context = CliExecutionContext::default();
+
+            let context = CliContext::new(
+                data_dir.clone(),
+                query_manager.clone(),
+                blob_manager,
+                Arc::new(EncryptionManager::new(query_manager, app_id)),
+                false,
+                execution_context,
             )
-            .await
+            .await;
+            let exit_code = commands::cookie_jar::run(&context, args);
+            context.shutdown().await;
+            exit_code
+        }
+        Commands::Workspace(args) => {
+            let query_manager = query_manager.clone();
+            let blob_manager = blob_manager.clone();
+            let execution_context = CliExecutionContext::default();
+
+            let context = CliContext::new(
+                data_dir.clone(),
+                query_manager.clone(),
+                blob_manager,
+                Arc::new(EncryptionManager::new(query_manager, app_id)),
+                false,
+                execution_context,
+            )
+            .await;
+            let exit_code = commands::workspace::run(&context, args);
+            context.shutdown().await;
+            exit_code
+        }
+        Commands::Request(args) => {
+            let query_manager = query_manager.clone();
+            let blob_manager = blob_manager.clone();
+
+            let execution_context_result = match &args.command {
+                RequestCommands::Send { request_id } => resolve_request_execution_context(
+                    &query_manager,
+                    request_id,
+                    environment.as_deref(),
+                    cookie_jar.as_deref(),
+                ),
+                _ => Ok(CliExecutionContext::default()),
+            };
+            match execution_context_result {
+                Ok(execution_context) => {
+                    let with_plugins = matches!(
+                        &args.command,
+                        RequestCommands::Send { .. } | RequestCommands::Schema { .. }
+                    );
+                    let context = CliContext::new(
+                        data_dir.clone(),
+                        query_manager.clone(),
+                        blob_manager,
+                        Arc::new(EncryptionManager::new(query_manager, app_id)),
+                        with_plugins,
+                        execution_context,
+                    )
+                    .await;
+
+                    let exit_code = commands::request::run(
+                        &context,
+                        args,
+                        environment.as_deref(),
+                        cookie_jar.as_deref(),
+                        verbose,
+                    )
+                    .await;
+                    context.shutdown().await;
+                    exit_code
+                }
+                Err(error) => {
+                    eprintln!("Error: {error}");
+                    1
+                }
+            }
         }
         Commands::Folder(args) => {
-            commands::folder::run(context.as_ref().expect("context initialized for folder"), args)
-        }
-        Commands::Environment(args) => commands::environment::run(
-            context.as_ref().expect("context initialized for environment"),
-            args,
-        ),
-    };
+            let query_manager = query_manager.clone();
+            let blob_manager = blob_manager.clone();
+            let execution_context = CliExecutionContext::default();
 
-    if let Some(context) = &context {
-        context.shutdown().await;
-    }
+            let context = CliContext::new(
+                data_dir.clone(),
+                query_manager.clone(),
+                blob_manager,
+                Arc::new(EncryptionManager::new(query_manager, app_id)),
+                false,
+                execution_context,
+            )
+            .await;
+            let exit_code = commands::folder::run(&context, args);
+            context.shutdown().await;
+            exit_code
+        }
+        Commands::Environment(args) => {
+            let query_manager = query_manager.clone();
+            let blob_manager = blob_manager.clone();
+            let execution_context = CliExecutionContext::default();
+
+            let context = CliContext::new(
+                data_dir.clone(),
+                query_manager.clone(),
+                blob_manager,
+                Arc::new(EncryptionManager::new(query_manager, app_id)),
+                false,
+                execution_context,
+            )
+            .await;
+            let exit_code = commands::environment::run(&context, args);
+            context.shutdown().await;
+            exit_code
+        }
+    };
 
     if exit_code != 0 {
         std::process::exit(exit_code);
     }
+}
+
+fn resolve_send_execution_context(
+    query_manager: &QueryManager,
+    id: &str,
+    environment: Option<&str>,
+    explicit_cookie_jar_id: Option<&str>,
+) -> Result<CliExecutionContext, String> {
+    if let Ok(request) = query_manager.connect().get_any_request(id) {
+        let (request_id, workspace_id) = match request {
+            AnyRequest::HttpRequest(r) => (Some(r.id), r.workspace_id),
+            AnyRequest::GrpcRequest(r) => (Some(r.id), r.workspace_id),
+            AnyRequest::WebsocketRequest(r) => (Some(r.id), r.workspace_id),
+        };
+        let cookie_jar_id =
+            resolve_cookie_jar_id(query_manager, &workspace_id, explicit_cookie_jar_id)?;
+        return Ok(CliExecutionContext {
+            request_id,
+            workspace_id: Some(workspace_id),
+            environment_id: environment.map(str::to_string),
+            cookie_jar_id,
+        });
+    }
+
+    if let Ok(folder) = query_manager.connect().get_folder(id) {
+        let cookie_jar_id =
+            resolve_cookie_jar_id(query_manager, &folder.workspace_id, explicit_cookie_jar_id)?;
+        return Ok(CliExecutionContext {
+            request_id: None,
+            workspace_id: Some(folder.workspace_id),
+            environment_id: environment.map(str::to_string),
+            cookie_jar_id,
+        });
+    }
+
+    if let Ok(workspace) = query_manager.connect().get_workspace(id) {
+        let cookie_jar_id =
+            resolve_cookie_jar_id(query_manager, &workspace.id, explicit_cookie_jar_id)?;
+        return Ok(CliExecutionContext {
+            request_id: None,
+            workspace_id: Some(workspace.id),
+            environment_id: environment.map(str::to_string),
+            cookie_jar_id,
+        });
+    }
+
+    Err(format!("Could not resolve ID '{}' as request, folder, or workspace", id))
+}
+
+fn resolve_request_execution_context(
+    query_manager: &QueryManager,
+    request_id: &str,
+    environment: Option<&str>,
+    explicit_cookie_jar_id: Option<&str>,
+) -> Result<CliExecutionContext, String> {
+    let request = query_manager
+        .connect()
+        .get_any_request(request_id)
+        .map_err(|e| format!("Failed to get request: {e}"))?;
+
+    let workspace_id = match request {
+        AnyRequest::HttpRequest(r) => r.workspace_id,
+        AnyRequest::GrpcRequest(r) => r.workspace_id,
+        AnyRequest::WebsocketRequest(r) => r.workspace_id,
+    };
+    let cookie_jar_id =
+        resolve_cookie_jar_id(query_manager, &workspace_id, explicit_cookie_jar_id)?;
+
+    Ok(CliExecutionContext {
+        request_id: Some(request_id.to_string()),
+        workspace_id: Some(workspace_id),
+        environment_id: environment.map(str::to_string),
+        cookie_jar_id,
+    })
+}
+
+fn resolve_cookie_jar_id(
+    query_manager: &QueryManager,
+    workspace_id: &str,
+    explicit_cookie_jar_id: Option<&str>,
+) -> Result<Option<String>, String> {
+    if let Some(cookie_jar_id) = explicit_cookie_jar_id {
+        return Ok(Some(cookie_jar_id.to_string()));
+    }
+
+    let default_cookie_jar = query_manager
+        .connect()
+        .list_cookie_jars(workspace_id)
+        .map_err(|e| format!("Failed to list cookie jars: {e}"))?
+        .into_iter()
+        .min_by_key(|jar| jar.created_at)
+        .map(|jar| jar.id);
+    Ok(default_cookie_jar)
 }

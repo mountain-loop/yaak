@@ -18,6 +18,14 @@ const EMBEDDED_PLUGIN_RUNTIME: &str = include_str!(concat!(
 static EMBEDDED_VENDORED_PLUGINS: Dir<'_> =
     include_dir!("$CARGO_MANIFEST_DIR/../../crates-tauri/yaak-app/vendored/plugins");
 
+#[derive(Clone, Debug, Default)]
+pub struct CliExecutionContext {
+    pub request_id: Option<String>,
+    pub workspace_id: Option<String>,
+    pub environment_id: Option<String>,
+    pub cookie_jar_id: Option<String>,
+}
+
 pub struct CliContext {
     data_dir: PathBuf,
     query_manager: QueryManager,
@@ -28,15 +36,14 @@ pub struct CliContext {
 }
 
 impl CliContext {
-    pub async fn initialize(data_dir: PathBuf, app_id: &str, with_plugins: bool) -> Self {
-        let db_path = data_dir.join("db.sqlite");
-        let blob_path = data_dir.join("blobs.sqlite");
-
-        let (query_manager, blob_manager, _rx) = yaak_models::init_standalone(&db_path, &blob_path)
-            .expect("Failed to initialize database");
-
-        let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
-
+    pub async fn new(
+        data_dir: PathBuf,
+        query_manager: QueryManager,
+        blob_manager: BlobManager,
+        encryption_manager: Arc<EncryptionManager>,
+        with_plugins: bool,
+        execution_context: CliExecutionContext,
+    ) -> Self {
         let plugin_manager = if with_plugins {
             let vendored_plugin_dir = data_dir.join("vendored-plugins");
             let installed_plugin_dir = data_dir.join("installed-plugins");
@@ -80,6 +87,7 @@ impl CliContext {
                     blob_manager.clone(),
                     encryption_manager.clone(),
                     data_dir.clone(),
+                    execution_context.clone(),
                 )
                 .await,
             )

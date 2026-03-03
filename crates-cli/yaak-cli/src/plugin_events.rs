@@ -1,3 +1,4 @@
+use crate::context::CliExecutionContext;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -15,9 +16,10 @@ use yaak_models::query_manager::QueryManager;
 use yaak_models::render::make_vars_hashmap;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
-    EmptyPayload, ErrorResponse, InternalEvent, InternalEventPayload, ListOpenWorkspacesResponse,
-    RenderGrpcRequestResponse, RenderHttpRequestResponse, SendHttpRequestResponse,
-    TemplateRenderResponse, WorkspaceInfo,
+    EmptyPayload, ErrorResponse, GetCookieValueResponse, InternalEvent, InternalEventPayload,
+    ListCookieNamesResponse, ListOpenWorkspacesResponse, PluginContext, RenderGrpcRequestResponse,
+    RenderHttpRequestResponse, SendHttpRequestResponse, TemplateRenderResponse, WindowInfoResponse,
+    WorkspaceInfo,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -34,6 +36,7 @@ struct CliHostContext {
     plugin_manager: Arc<PluginManager>,
     encryption_manager: Arc<EncryptionManager>,
     response_dir: PathBuf,
+    execution_context: CliExecutionContext,
 }
 
 impl CliPluginEventBridge {
@@ -43,6 +46,7 @@ impl CliPluginEventBridge {
         blob_manager: BlobManager,
         encryption_manager: Arc<EncryptionManager>,
         data_dir: PathBuf,
+        execution_context: CliExecutionContext,
     ) -> Self {
         let (rx_id, mut rx) = plugin_manager.subscribe("cli").await;
         let rx_id_for_task = rx_id.clone();
@@ -53,6 +57,7 @@ impl CliPluginEventBridge {
             plugin_manager,
             encryption_manager,
             response_dir: data_dir.join("responses"),
+            execution_context,
         });
 
         let task = tokio::spawn(async move {
@@ -109,13 +114,14 @@ async fn build_plugin_reply(
     event: &InternalEvent,
     plugin_name: &str,
 ) -> Option<InternalEventPayload> {
+    let execution_context = &host_context.execution_context;
+    let shared_workspace_id =
+        event.context.workspace_id.as_deref().or(execution_context.workspace_id.as_deref());
+
     match handle_shared_plugin_event(
         &host_context.query_manager,
         &event.payload,
-        SharedPluginEventContext {
-            plugin_name,
-            workspace_id: event.context.workspace_id.as_deref(),
-        },
+        SharedPluginEventContext { plugin_name, workspace_id: shared_workspace_id },
     ) {
         GroupedPluginEvent::Handled(payload) => payload,
         GroupedPluginEvent::ToHandle(host_request) => match host_request {
@@ -147,7 +153,12 @@ async fn build_plugin_reply(
             HostRequest::SendHttpRequest(send_http_request_request) => {
                 let mut http_request = send_http_request_request.http_request.clone();
                 if http_request.workspace_id.is_empty() {
-                    let Some(workspace_id) = event.context.workspace_id.clone() else {
+                    let Some(workspace_id) = event
+                        .context
+                        .workspace_id
+                        .clone()
+                        .or_else(|| execution_context.workspace_id.clone())
+                    else {
                         return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
                             error: "workspace_id is required to send HTTP requests in CLI"
                                 .to_string(),
@@ -156,18 +167,38 @@ async fn build_plugin_reply(
                     http_request.workspace_id = workspace_id;
                 }
 
-                let mut plugin_context = event.context.clone();
-                if plugin_context.workspace_id.is_none() {
-                    plugin_context.workspace_id = Some(http_request.workspace_id.clone());
-                }
+                let cookie_jar_id =
+                    if let Some(cookie_jar_id) = execution_context.cookie_jar_id.clone() {
+                        Some(cookie_jar_id)
+                    } else {
+                        match host_context
+                            .query_manager
+                            .connect()
+                            .list_cookie_jars(http_request.workspace_id.as_str())
+                        {
+                            Ok(cookie_jars) => cookie_jars
+                                .into_iter()
+                                .min_by_key(|jar| jar.created_at)
+                                .map(|jar| jar.id),
+                            Err(err) => {
+                                return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                                    error: format!("Failed to list cookie jars in CLI: {err}"),
+                                }));
+                            }
+                        }
+                    };
+                let plugin_context = PluginContext {
+                    workspace_id: Some(http_request.workspace_id.clone()),
+                    ..event.context.clone()
+                };
 
                 match send_http_request_with_plugins(SendHttpRequestWithPluginsParams {
                     query_manager: &host_context.query_manager,
                     blob_manager: &host_context.blob_manager,
                     request: http_request,
-                    environment_id: None,
+                    environment_id: execution_context.environment_id.as_deref(),
                     update_source: UpdateSource::Plugin,
-                    cookie_jar_id: None,
+                    cookie_jar_id,
                     response_dir: &host_context.response_dir,
                     emit_events_to: None,
                     emit_response_body_chunks_to: None,
@@ -191,7 +222,12 @@ async fn build_plugin_reply(
             HostRequest::RenderGrpcRequest(render_grpc_request_request) => {
                 let mut grpc_request = render_grpc_request_request.grpc_request.clone();
                 if grpc_request.workspace_id.is_empty() {
-                    let Some(workspace_id) = event.context.workspace_id.clone() else {
+                    let Some(workspace_id) = event
+                        .context
+                        .workspace_id
+                        .clone()
+                        .or_else(|| execution_context.workspace_id.clone())
+                    else {
                         return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
                             error: "workspace_id is required to render gRPC requests in CLI"
                                 .to_string(),
@@ -200,16 +236,16 @@ async fn build_plugin_reply(
                     grpc_request.workspace_id = workspace_id;
                 }
 
-                let mut plugin_context = event.context.clone();
-                if plugin_context.workspace_id.is_none() {
-                    plugin_context.workspace_id = Some(grpc_request.workspace_id.clone());
-                }
+                let plugin_context = PluginContext {
+                    workspace_id: Some(grpc_request.workspace_id.clone()),
+                    ..event.context.clone()
+                };
 
                 let environment_chain =
                     match host_context.query_manager.connect().resolve_environments(
                         &grpc_request.workspace_id,
                         grpc_request.folder_id.as_deref(),
-                        None,
+                        execution_context.environment_id.as_deref(),
                     ) {
                         Ok(chain) => chain,
                         Err(err) => {
@@ -246,7 +282,12 @@ async fn build_plugin_reply(
             HostRequest::RenderHttpRequest(render_http_request_request) => {
                 let mut http_request = render_http_request_request.http_request.clone();
                 if http_request.workspace_id.is_empty() {
-                    let Some(workspace_id) = event.context.workspace_id.clone() else {
+                    let Some(workspace_id) = event
+                        .context
+                        .workspace_id
+                        .clone()
+                        .or_else(|| execution_context.workspace_id.clone())
+                    else {
                         return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
                             error: "workspace_id is required to render HTTP requests in CLI"
                                 .to_string(),
@@ -255,16 +296,16 @@ async fn build_plugin_reply(
                     http_request.workspace_id = workspace_id;
                 }
 
-                let mut plugin_context = event.context.clone();
-                if plugin_context.workspace_id.is_none() {
-                    plugin_context.workspace_id = Some(http_request.workspace_id.clone());
-                }
+                let plugin_context = PluginContext {
+                    workspace_id: Some(http_request.workspace_id.clone()),
+                    ..event.context.clone()
+                };
 
                 let environment_chain =
                     match host_context.query_manager.connect().resolve_environments(
                         &http_request.workspace_id,
                         http_request.folder_id.as_deref(),
-                        None,
+                        execution_context.environment_id.as_deref(),
                     ) {
                         Ok(chain) => chain,
                         Err(err) => {
@@ -299,29 +340,35 @@ async fn build_plugin_reply(
                 }
             }
             HostRequest::TemplateRender(template_render_request) => {
-                let Some(workspace_id) = event.context.workspace_id.clone() else {
+                let Some(workspace_id) = event
+                    .context
+                    .workspace_id
+                    .clone()
+                    .or_else(|| execution_context.workspace_id.clone())
+                else {
                     return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
                         error: "workspace_id is required to render templates in CLI".to_string(),
                     }));
                 };
 
-                let mut plugin_context = event.context.clone();
-                if plugin_context.workspace_id.is_none() {
-                    plugin_context.workspace_id = Some(workspace_id.clone());
-                }
-
-                let environment_chain = match host_context
-                    .query_manager
-                    .connect()
-                    .resolve_environments(&workspace_id, None, None)
-                {
-                    Ok(chain) => chain,
-                    Err(err) => {
-                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                            error: format!("Failed to resolve environments in CLI: {err}"),
-                        }));
-                    }
+                let plugin_context = PluginContext {
+                    workspace_id: Some(workspace_id.clone()),
+                    ..event.context.clone()
                 };
+
+                let environment_chain =
+                    match host_context.query_manager.connect().resolve_environments(
+                        &workspace_id,
+                        None,
+                        execution_context.environment_id.as_deref(),
+                    ) {
+                        Ok(chain) => chain,
+                        Err(err) => {
+                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to resolve environments in CLI: {err}"),
+                            }));
+                        }
+                    };
 
                 let template_callback = PluginTemplateCallback::new(
                     host_context.plugin_manager.clone(),
@@ -381,20 +428,64 @@ async fn build_plugin_reply(
                 }))
             }
             HostRequest::ListCookieNames(_) => {
-                Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                    error: "Unsupported plugin request in CLI: list_cookie_names_request"
-                        .to_string(),
+                let Some(cookie_jar_id) = execution_context.cookie_jar_id.as_deref() else {
+                    return Some(InternalEventPayload::ListCookieNamesResponse(
+                        ListCookieNamesResponse { names: Vec::new() },
+                    ));
+                };
+
+                let cookie_jar =
+                    match host_context.query_manager.connect().get_cookie_jar(cookie_jar_id) {
+                        Ok(cookie_jar) => cookie_jar,
+                        Err(err) => {
+                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to load cookie jar in CLI: {err}"),
+                            }));
+                        }
+                    };
+
+                let names = cookie_jar
+                    .cookies
+                    .into_iter()
+                    .filter_map(|c| parse_cookie_name_value(&c.raw_cookie).map(|(name, _)| name))
+                    .collect();
+
+                Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse {
+                    names,
                 }))
             }
-            HostRequest::GetCookieValue(_) => {
-                Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                    error: "Unsupported plugin request in CLI: get_cookie_value_request"
-                        .to_string(),
-                }))
+            HostRequest::GetCookieValue(req) => {
+                let Some(cookie_jar_id) = execution_context.cookie_jar_id.as_deref() else {
+                    return Some(InternalEventPayload::GetCookieValueResponse(
+                        GetCookieValueResponse { value: None },
+                    ));
+                };
+
+                let cookie_jar =
+                    match host_context.query_manager.connect().get_cookie_jar(cookie_jar_id) {
+                        Ok(cookie_jar) => cookie_jar,
+                        Err(err) => {
+                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: format!("Failed to load cookie jar in CLI: {err}"),
+                            }));
+                        }
+                    };
+
+                let value = cookie_jar.cookies.into_iter().find_map(|c| {
+                    let (name, value) = parse_cookie_name_value(&c.raw_cookie)?;
+                    if name == req.name { Some(value) } else { None }
+                });
+                Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value }))
             }
-            HostRequest::WindowInfo(_) => {
-                Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                    error: "Unsupported plugin request in CLI: window_info_request".to_string(),
+            HostRequest::WindowInfo(req) => {
+                Some(InternalEventPayload::WindowInfoResponse(WindowInfoResponse {
+                    label: req.label.clone(),
+                    request_id: execution_context.request_id.clone(),
+                    workspace_id: execution_context
+                        .workspace_id
+                        .clone()
+                        .or_else(|| event.context.workspace_id.clone()),
+                    environment_id: execution_context.environment_id.clone(),
                 }))
             }
             HostRequest::OtherRequest(payload) => {
@@ -469,4 +560,10 @@ async fn render_grpc_request_for_cli<T: TemplateCallback>(
     let url = parse_and_render(grpc_request.url.as_str(), vars, cb, opt).await?;
 
     Ok(GrpcRequest { url, metadata, authentication, ..grpc_request.to_owned() })
+}
+
+fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
+    let first_part = raw_cookie.split(';').next()?.trim();
+    let (name, value) = first_part.split_once('=')?;
+    Some((name.trim().to_string(), value.to_string()))
 }
