@@ -73,7 +73,16 @@ impl CliContext {
         };
 
         let plugin_event_bridge = if let Some(plugin_manager) = &plugin_manager {
-            Some(CliPluginEventBridge::start(plugin_manager.clone(), query_manager.clone()).await)
+            Some(
+                CliPluginEventBridge::start(
+                    plugin_manager.clone(),
+                    query_manager.clone(),
+                    blob_manager.clone(),
+                    encryption_manager.clone(),
+                    data_dir.clone(),
+                )
+                .await,
+            )
         } else {
             None
         };

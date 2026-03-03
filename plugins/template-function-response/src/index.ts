@@ -317,7 +317,8 @@ async function getResponse(
     finalBehavior === 'always' ||
     (finalBehavior === BEHAVIOR_TTL && shouldSendExpired(response, ttl))
   ) {
-    // NOTE: Render inside this conditional, or we'll get infinite recursion (render->render->...)
+    // Explicitly render the request before send (instead of relying on send() to render) so that we can
+    // preserve the render purpose.
     const renderedHttpRequest = await ctx.httpRequest.render({ httpRequest, purpose });
     response = await ctx.httpRequest.send({ httpRequest: renderedHttpRequest });
   }
