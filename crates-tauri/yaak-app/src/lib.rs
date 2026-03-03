@@ -131,11 +131,7 @@ async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
 }
 
 async fn detect_cli_version() -> Option<String> {
-    // Prefer `yaak`, but support the legacy `yaakcli` alias if present.
-    if let Some(version) = detect_cli_version_for_binary("yaak").await {
-        return Some(version);
-    }
-    detect_cli_version_for_binary("yaakcli").await
+    detect_cli_version_for_binary("yaak").await
 }
 
 async fn detect_cli_version_for_binary(program: &str) -> Option<String> {

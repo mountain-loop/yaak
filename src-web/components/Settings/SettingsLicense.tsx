@@ -41,11 +41,7 @@ function SettingsLicenseCmp() {
 
       case 'trialing':
         return (
-          <Banner color="info" className="@container flex items-center gap-x-5 max-w-xl">
-            <LocalImage
-              src="static/greg.jpeg"
-              className="hidden @sm:block rounded-full h-14 w-14"
-            />
+          <Banner color="info" className="max-w-lg">
             <p className="w-full">
               <strong>
                 {pluralizeCount('day', differenceInDays(check.data.data.end, new Date()))}
@@ -55,10 +51,6 @@ function SettingsLicenseCmp() {
               <span className="opacity-50">Personal use is always free, forever.</span>
               <Separator className="my-2" />
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
-                <Link noUnderline href="mailto:support@yaak.app">
-                  Contact Support
-                </Link>
-                <Icon icon="dot" size="sm" color="secondary" />
                 <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
                   Learn More
                 </Link>
@@ -69,24 +61,16 @@ function SettingsLicenseCmp() {
 
       case 'personal_use':
         return (
-          <Banner color="notice" className="@container flex items-center gap-x-5 max-w-xl">
-            <LocalImage
-              src="static/greg.jpeg"
-              className="hidden @sm:block rounded-full h-14 w-14"
-            />
+          <Banner color="notice" className="max-w-lg">
             <p className="w-full">
               Your commercial-use trial has ended.
               <br />
               <span className="opacity-50">
-                You may continue using Yaak for personal use free, forever.
+                You may continue using Yaak for personal use only.
                 <br />A license is required for commercial use.
               </span>
               <Separator className="my-2" />
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
-                <Link noUnderline href="mailto:support@yaak.app">
-                  Contact Support
-                </Link>
-                <Icon icon="dot" size="sm" color="secondary" />
                 <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
                   Learn More
                 </Link>

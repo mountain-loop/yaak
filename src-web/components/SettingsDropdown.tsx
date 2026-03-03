@@ -65,17 +65,25 @@ export function SettingsDropdown() {
         },
         { type: 'separator', label: `Yaak v${appInfo.version}` },
         {
-          label: 'Purchase License',
-          color: 'success',
-          hidden: check.data == null || check.data.status === 'active',
-          leftSlot: <Icon icon="circle_dollar_sign" />,
-          onSelect: () => openSettings.mutate('license'),
-        },
-        {
           label: 'Check for Updates',
           leftSlot: <Icon icon="update" />,
           hidden: !appInfo.featureUpdater,
           onSelect: () => checkForUpdates.mutate(),
+        },
+        {
+          label: 'Purchase License',
+          color: 'success',
+          hidden: check.data == null || check.data.status === 'active',
+          leftSlot: <Icon icon="circle_dollar_sign" />,
+          rightSlot: <Icon icon="external_link" color="success" className="opacity-60" />,
+          onSelect: () => openUrl('https://yaak.app/pricing'),
+        },
+        {
+          label: 'Install CLI',
+          hidden: appInfo.cliVersion != null,
+          leftSlot: <Icon icon="square_terminal" />,
+          rightSlot: <Icon icon="external_link" color="secondary" />,
+          onSelect: () => openUrl('https://yaak.app/docs/cli'),
         },
         {
           label: 'Feedback',
