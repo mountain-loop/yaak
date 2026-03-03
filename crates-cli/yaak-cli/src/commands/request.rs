@@ -481,7 +481,8 @@ async fn send_http_request_by_id(
 ) -> Result<(), String> {
     let cookie_jar_id = resolve_cookie_jar_id(ctx, workspace_id, cookie_jar_id)?;
 
-    let plugin_context = PluginContext::new(None, Some(workspace_id.to_string()));
+    let plugin_context =
+        PluginContext::new(Some("cli".to_string()), Some(workspace_id.to_string()));
 
     let (event_tx, mut event_rx) = mpsc::channel::<SenderHttpResponseEvent>(100);
     let (body_chunk_tx, mut body_chunk_rx) = mpsc::unbounded_channel::<Vec<u8>>();

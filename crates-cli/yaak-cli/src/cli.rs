@@ -444,6 +444,9 @@ pub enum PluginCommands {
     /// Generate a "Hello World" Yaak plugin
     Generate(GenerateArgs),
 
+    /// Install a plugin from a local directory or from the registry
+    Install(InstallPluginArgs),
+
     /// Publish a Yaak plugin version to the plugin registry
     Publish(PluginPathArg),
 }
@@ -463,4 +466,10 @@ pub struct GenerateArgs {
     /// Output directory for the generated plugin (defaults to ./<name> in interactive mode)
     #[arg(long)]
     pub dir: Option<PathBuf>,
+}
+
+#[derive(Args, Clone)]
+pub struct InstallPluginArgs {
+    /// Local plugin directory path, or registry plugin spec (@org/plugin[@version])
+    pub source: String,
 }

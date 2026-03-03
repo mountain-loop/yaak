@@ -8,7 +8,7 @@ mod version;
 mod version_check;
 
 use clap::Parser;
-use cli::{Cli, Commands, RequestCommands};
+use cli::{Cli, Commands, PluginCommands, RequestCommands};
 use context::{CliContext, CliExecutionContext};
 use std::sync::Arc;
 use yaak_crypto::manager::EncryptionManager;
@@ -52,7 +52,29 @@ async fn main() {
 
     let exit_code = match command {
         Commands::Auth(args) => commands::auth::run(args).await,
-        Commands::Plugin(args) => commands::plugin::run(args).await,
+        Commands::Plugin(args) => match args.command {
+            PluginCommands::Build(args) => commands::plugin::run_build(args).await,
+            PluginCommands::Dev(args) => commands::plugin::run_dev(args).await,
+            PluginCommands::Generate(args) => commands::plugin::run_generate(args).await,
+            PluginCommands::Publish(args) => commands::plugin::run_publish(args).await,
+            PluginCommands::Install(install_args) => {
+                let query_manager = query_manager.clone();
+                let blob_manager = blob_manager.clone();
+                let execution_context = CliExecutionContext::default();
+                let context = CliContext::new(
+                    data_dir.clone(),
+                    query_manager.clone(),
+                    blob_manager,
+                    Arc::new(EncryptionManager::new(query_manager, app_id)),
+                    true,
+                    execution_context,
+                )
+                .await;
+                let exit_code = commands::plugin::run_install(&context, install_args).await;
+                context.shutdown().await;
+                exit_code
+            }
+        },
         Commands::Build(args) => commands::plugin::run_build(args).await,
         Commands::Dev(args) => commands::plugin::run_dev(args).await,
         Commands::Generate(args) => commands::plugin::run_generate(args).await,

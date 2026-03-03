@@ -1,0 +1,10 @@
+{
+  "name": "@gschier/prompt-form-cli-test",
+  "displayName": "Prompt Form CLI Test",
+  "description": "Tiny plugin to test prompt.form in the CLI host",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "yaak plugin build"
+  }
+}
