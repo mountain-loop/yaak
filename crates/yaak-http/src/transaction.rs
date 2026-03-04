@@ -1,7 +1,7 @@
 use crate::cookies::CookieStore;
 use crate::error::Result;
 use crate::sender::{HttpResponse, HttpResponseEvent, HttpSender, RedirectBehavior};
-use crate::types::SendableHttpRequest;
+use crate::types::{SendableBody, SendableHttpRequest};
 use log::debug;
 use tokio::sync::mpsc;
 use tokio::sync::watch::Receiver;
@@ -87,6 +87,10 @@ impl<S: HttpSender> HttpTransaction<S> {
             };
 
             // Build request for this iteration
+            let preserved_body = match &current_body {
+                Some(SendableBody::Bytes(b)) => Some(SendableBody::Bytes(b.clone())),
+                _ => None,
+            };
             let request_had_body = current_body.is_some();
             let req = SendableHttpRequest {
                 url: current_url.clone(),
@@ -216,7 +220,23 @@ impl<S: HttpSender> HttpTransaction<S> {
                 });
             }
 
-            let dropped_body = matches!(behavior, RedirectBehavior::DropBody) && request_had_body;
+            // Restore body for Preserve redirects (307/308), drop for others.
+            // Stream bodies can't be replayed (same limitation as reqwest).
+            current_body = if matches!(behavior, RedirectBehavior::Preserve) {
+                if request_had_body && preserved_body.is_none() {
+                    // Stream body was consumed and can't be replayed (same as reqwest)
+                    return Err(crate::error::Error::RequestError(
+                        "Cannot follow redirect: request body was a stream and cannot be resent"
+                            .to_string(),
+                    ));
+                }
+                preserved_body
+            } else {
+                None
+            };
+
+            // Body was dropped if the request had one but we can't resend it
+            let dropped_body = request_had_body && current_body.is_none();
 
             send_event(HttpResponseEvent::Redirect {
                 url: current_url.clone(),
@@ -225,10 +245,6 @@ impl<S: HttpSender> HttpTransaction<S> {
                 dropped_body,
                 dropped_headers,
             });
-
-            // Reset body for next iteration (since it was moved in the send call)
-            // For redirects that change method to GET or for all redirects since body was consumed
-            current_body = None;
 
             redirect_count += 1;
         }
