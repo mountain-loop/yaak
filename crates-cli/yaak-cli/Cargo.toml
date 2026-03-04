@@ -9,12 +9,14 @@ name = "yaak"
 path = "src/main.rs"
 
 [dependencies]
+arboard = "3"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }
 console = "0.15"
 dirs = "6"
 env_logger = "0.11"
 futures = "0.3"
+inquire = { version = "0.7", features = ["editor"] }
 hex = { workspace = true }
 include_dir = "0.7"
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
