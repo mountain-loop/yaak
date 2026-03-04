@@ -1499,6 +1499,10 @@ pub enum HttpResponseEventData {
         url: String,
         status: u16,
         behavior: String,
+        #[serde(default)]
+        dropped_body: bool,
+        #[serde(default)]
+        dropped_headers: Vec<String>,
     },
     SendUrl {
         method: String,

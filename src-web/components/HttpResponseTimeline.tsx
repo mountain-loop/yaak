@@ -187,6 +187,7 @@ function EventDetails({
 
     // Redirect - show status, URL, and behavior
     if (e.type === 'redirect') {
+      const droppedHeaders = e.dropped_headers ?? [];
       return (
         <KeyValueRows>
           <KeyValueRow label="Status">
@@ -195,6 +196,10 @@ function EventDetails({
           <KeyValueRow label="Location">{e.url}</KeyValueRow>
           <KeyValueRow label="Behavior">
             {e.behavior === 'drop_body' ? 'Drop body, change to GET' : 'Preserve method and body'}
+          </KeyValueRow>
+          <KeyValueRow label="Body Dropped">{e.dropped_body ? 'Yes' : 'No'}</KeyValueRow>
+          <KeyValueRow label="Headers Dropped">
+            {droppedHeaders.length > 0 ? droppedHeaders.join(', ') : '--'}
           </KeyValueRow>
         </KeyValueRows>
       );
@@ -268,7 +273,17 @@ function getEventTextParts(event: HttpResponseEventData): EventTextParts {
       return { prefix: '<', text: `${event.name}: ${event.value}` };
     case 'redirect': {
       const behavior = event.behavior === 'drop_body' ? 'drop body' : 'preserve';
-      return { prefix: '*', text: `Redirect ${event.status} -> ${event.url} (${behavior})` };
+      const droppedHeaders = event.dropped_headers ?? [];
+      const dropped = [
+        event.dropped_body ? 'body dropped' : null,
+        droppedHeaders.length > 0 ? `headers dropped: ${droppedHeaders.join(', ')}` : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+      return {
+        prefix: '*',
+        text: `Redirect ${event.status} -> ${event.url} (${behavior}${dropped ? `, ${dropped}` : ''})`,
+      };
     }
     case 'setting':
       return { prefix: '*', text: `Setting ${event.name}=${event.value}` };
@@ -323,13 +338,23 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
         label: 'Info',
         summary: event.message,
       };
-    case 'redirect':
+    case 'redirect': {
+      const droppedHeaders = event.dropped_headers ?? [];
+      const dropped = [
+        event.dropped_body ? 'drop body' : null,
+        droppedHeaders.length > 0
+          ? `drop ${droppedHeaders.length} ${droppedHeaders.length === 1 ? 'header' : 'headers'}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
       return {
         icon: 'arrow_big_right_dash',
         color: 'success',
         label: 'Redirect',
-        summary: `Redirecting ${event.status} ${event.url}${event.behavior === 'drop_body' ? ' (drop body)' : ''}`,
+        summary: `Redirecting ${event.status} ${event.url}${dropped ? ` (${dropped})` : ''}`,
       };
+    }
     case 'send_url':
       return {
         icon: 'arrow_big_up_dash',

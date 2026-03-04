@@ -87,6 +87,7 @@ impl<S: HttpSender> HttpTransaction<S> {
             };
 
             // Build request for this iteration
+            let request_had_body = current_body.is_some();
             let req = SendableHttpRequest {
                 url: current_url.clone(),
                 method: current_method.clone(),
@@ -182,8 +183,6 @@ impl<S: HttpSender> HttpTransaction<S> {
                 format!("{}/{}", base_path, location)
             };
 
-            Self::remove_sensitive_headers(&mut current_headers, &previous_url, &current_url);
-
             // Determine redirect behavior based on status code and method
             let behavior = if status == 303 {
                 // 303 See Other always changes to GET
@@ -197,11 +196,8 @@ impl<S: HttpSender> HttpTransaction<S> {
                 RedirectBehavior::Preserve
             };
 
-            send_event(HttpResponseEvent::Redirect {
-                url: current_url.clone(),
-                status,
-                behavior: behavior.clone(),
-            });
+            let mut dropped_headers =
+                Self::remove_sensitive_headers(&mut current_headers, &previous_url, &current_url);
 
             // Handle method changes for certain redirect codes
             if matches!(behavior, RedirectBehavior::DropBody) {
@@ -211,9 +207,24 @@ impl<S: HttpSender> HttpTransaction<S> {
                 // Remove content-related headers
                 current_headers.retain(|h| {
                     let name_lower = h.0.to_lowercase();
-                    !name_lower.starts_with("content-") && name_lower != "transfer-encoding"
+                    let should_drop =
+                        name_lower.starts_with("content-") || name_lower == "transfer-encoding";
+                    if should_drop {
+                        Self::push_header_if_missing(&mut dropped_headers, &h.0);
+                    }
+                    !should_drop
                 });
             }
+
+            let dropped_body = matches!(behavior, RedirectBehavior::DropBody) && request_had_body;
+
+            send_event(HttpResponseEvent::Redirect {
+                url: current_url.clone(),
+                status,
+                behavior: behavior.clone(),
+                dropped_body,
+                dropped_headers,
+            });
 
             // Reset body for next iteration (since it was moved in the send call)
             // For redirects that change method to GET or for all redirects since body was consumed
@@ -231,7 +242,8 @@ impl<S: HttpSender> HttpTransaction<S> {
         headers: &mut Vec<(String, String)>,
         previous_url: &str,
         next_url: &str,
-    ) {
+    ) -> Vec<String> {
+        let mut dropped_headers = Vec::new();
         let previous_host = Url::parse(previous_url).ok().and_then(|u| {
             u.host_str().map(|h| format!("{}:{}", h, u.port_or_known_default().unwrap_or(0)))
         });
@@ -241,12 +253,23 @@ impl<S: HttpSender> HttpTransaction<S> {
         if previous_host != next_host {
             headers.retain(|h| {
                 let name_lower = h.0.to_lowercase();
-                name_lower != "authorization"
-                    && name_lower != "cookie"
-                    && name_lower != "cookie2"
-                    && name_lower != "proxy-authorization"
-                    && name_lower != "www-authenticate"
+                let should_drop = name_lower == "authorization"
+                    || name_lower == "cookie"
+                    || name_lower == "cookie2"
+                    || name_lower == "proxy-authorization"
+                    || name_lower == "www-authenticate";
+                if should_drop {
+                    Self::push_header_if_missing(&mut dropped_headers, &h.0);
+                }
+                !should_drop
             });
+        }
+        dropped_headers
+    }
+
+    fn push_header_if_missing(headers: &mut Vec<String>, name: &str) {
+        if !headers.iter().any(|h| h.eq_ignore_ascii_case(name)) {
+            headers.push(name.to_string());
         }
     }
 
