@@ -16,6 +16,7 @@ use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugin
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::{Environment, GrpcRequest, HttpRequestHeader};
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::make_vars_hashmap;
 use yaak_models::util::UpdateSource;
@@ -361,10 +362,19 @@ async fn build_plugin_reply(
                     ..event.context.clone()
                 };
 
+                let folder_id = execution_context.request_id.as_ref().and_then(|rid| {
+                    match host_context.query_manager.connect().get_any_request(rid) {
+                        Ok(AnyRequest::HttpRequest(r)) => r.folder_id,
+                        Ok(AnyRequest::GrpcRequest(r)) => r.folder_id,
+                        Ok(AnyRequest::WebsocketRequest(r)) => r.folder_id,
+                        Err(_) => None,
+                    }
+                });
+
                 let environment_chain =
                     match host_context.query_manager.connect().resolve_environments(
                         &workspace_id,
-                        None,
+                        folder_id.as_deref(),
                         execution_context.environment_id.as_deref(),
                     ) {
                         Ok(chain) => chain,
