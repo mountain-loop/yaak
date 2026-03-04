@@ -197,7 +197,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 {shouldShowRedirectDropWarning ? (
                   <Tooltip
                     tabIndex={0}
-                    className="pl-3 flex-shrink-0 max-w-full justify-self-end overflow-hidden"
+                    className="my-auto pl-3 flex-shrink-0 max-w-full justify-self-end overflow-hidden"
                     content={
                       <VStack alignItems="start" space={1} className="text-xs">
                         <span className="font-medium text-warning">
