@@ -36,72 +36,72 @@ pub struct CliContext {
 }
 
 impl CliContext {
-    pub async fn new(
-        data_dir: PathBuf,
-        query_manager: QueryManager,
-        blob_manager: BlobManager,
-        encryption_manager: Arc<EncryptionManager>,
-        with_plugins: bool,
-        execution_context: CliExecutionContext,
-    ) -> Self {
-        let plugin_manager = if with_plugins {
-            let vendored_plugin_dir = data_dir.join("vendored-plugins");
-            let installed_plugin_dir = data_dir.join("installed-plugins");
-            let node_bin_path = PathBuf::from("node");
-
-            prepare_embedded_vendored_plugins(&vendored_plugin_dir)
-                .expect("Failed to prepare bundled plugins");
-
-            let plugin_runtime_main =
-                std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
-                    prepare_embedded_plugin_runtime(&data_dir)
-                        .expect("Failed to prepare embedded plugin runtime")
-                });
-
-            match PluginManager::new(
-                vendored_plugin_dir,
-                installed_plugin_dir,
-                node_bin_path,
-                plugin_runtime_main,
-                &query_manager,
-                &PluginContext::new_empty(),
-                false,
-            )
-            .await
-            {
-                Ok(plugin_manager) => Some(Arc::new(plugin_manager)),
+    pub fn new(data_dir: PathBuf, app_id: &str) -> Self {
+        let db_path = data_dir.join("db.sqlite");
+        let blob_path = data_dir.join("blobs.sqlite");
+        let (query_manager, blob_manager, _rx) =
+            match yaak_models::init_standalone(&db_path, &blob_path) {
+                Ok(v) => v,
                 Err(err) => {
-                    eprintln!("Warning: Failed to initialize plugins: {err}");
-                    None
+                    eprintln!("Error: Failed to initialize database: {err}");
+                    std::process::exit(1);
                 }
-            }
-        } else {
-            None
-        };
-
-        let plugin_event_bridge = if let Some(plugin_manager) = &plugin_manager {
-            Some(
-                CliPluginEventBridge::start(
-                    plugin_manager.clone(),
-                    query_manager.clone(),
-                    blob_manager.clone(),
-                    encryption_manager.clone(),
-                    data_dir.clone(),
-                    execution_context.clone(),
-                )
-                .await,
-            )
-        } else {
-            None
-        };
+            };
+        let encryption_manager =
+            Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
         Self {
             data_dir,
             query_manager,
             blob_manager,
             encryption_manager,
-            plugin_manager,
-            plugin_event_bridge: Mutex::new(plugin_event_bridge),
+            plugin_manager: None,
+            plugin_event_bridge: Mutex::new(None),
+        }
+    }
+
+    pub async fn init_plugins(&mut self, execution_context: CliExecutionContext) {
+        let vendored_plugin_dir = self.data_dir.join("vendored-plugins");
+        let installed_plugin_dir = self.data_dir.join("installed-plugins");
+        let node_bin_path = PathBuf::from("node");
+
+        prepare_embedded_vendored_plugins(&vendored_plugin_dir)
+            .expect("Failed to prepare bundled plugins");
+
+        let plugin_runtime_main =
+            std::env::var("YAAK_PLUGIN_RUNTIME").map(PathBuf::from).unwrap_or_else(|_| {
+                prepare_embedded_plugin_runtime(&self.data_dir)
+                    .expect("Failed to prepare embedded plugin runtime")
+            });
+
+        match PluginManager::new(
+            vendored_plugin_dir,
+            installed_plugin_dir,
+            node_bin_path,
+            plugin_runtime_main,
+            &self.query_manager,
+            &PluginContext::new_empty(),
+            false,
+        )
+        .await
+        {
+            Ok(plugin_manager) => {
+                let plugin_manager = Arc::new(plugin_manager);
+                let plugin_event_bridge = CliPluginEventBridge::start(
+                    plugin_manager.clone(),
+                    self.query_manager.clone(),
+                    self.blob_manager.clone(),
+                    self.encryption_manager.clone(),
+                    self.data_dir.clone(),
+                    execution_context,
+                )
+                .await;
+                self.plugin_manager = Some(plugin_manager);
+                *self.plugin_event_bridge.lock().await = Some(plugin_event_bridge);
+            }
+            Err(err) => {
+                eprintln!("Warning: Failed to initialize plugins: {err}");
+            }
         }
     }
 

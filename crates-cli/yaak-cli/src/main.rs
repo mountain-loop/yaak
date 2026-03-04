@@ -10,10 +10,7 @@ mod version_check;
 use clap::Parser;
 use cli::{Cli, Commands, PluginCommands, RequestCommands};
 use context::{CliContext, CliExecutionContext};
-use std::sync::Arc;
-use yaak_crypto::manager::EncryptionManager;
 use yaak_models::queries::any_request::AnyRequest;
-use yaak_models::query_manager::QueryManager;
 
 #[tokio::main]
 async fn main() {
@@ -39,17 +36,6 @@ async fn main() {
 
     version_check::maybe_check_for_updates().await;
 
-    let db_path = data_dir.join("db.sqlite");
-    let blob_path = data_dir.join("blobs.sqlite");
-    let (query_manager, blob_manager, _rx) =
-        match yaak_models::init_standalone(&db_path, &blob_path) {
-            Ok(v) => v,
-            Err(err) => {
-                eprintln!("Error: Failed to initialize database: {err}");
-                std::process::exit(1);
-            }
-        };
-
     let exit_code = match command {
         Commands::Auth(args) => commands::auth::run(args).await,
         Commands::Plugin(args) => match args.command {
@@ -58,18 +44,8 @@ async fn main() {
             PluginCommands::Generate(args) => commands::plugin::run_generate(args).await,
             PluginCommands::Publish(args) => commands::plugin::run_publish(args).await,
             PluginCommands::Install(install_args) => {
-                let query_manager = query_manager.clone();
-                let blob_manager = blob_manager.clone();
-                let execution_context = CliExecutionContext::default();
-                let context = CliContext::new(
-                    data_dir.clone(),
-                    query_manager.clone(),
-                    blob_manager,
-                    Arc::new(EncryptionManager::new(query_manager, app_id)),
-                    true,
-                    execution_context,
-                )
-                .await;
+                let mut context = CliContext::new(data_dir.clone(), app_id);
+                context.init_plugins(CliExecutionContext::default()).await;
                 let exit_code = commands::plugin::run_install(&context, install_args).await;
                 context.shutdown().await;
                 exit_code
@@ -80,27 +56,15 @@ async fn main() {
         Commands::Generate(args) => commands::plugin::run_generate(args).await,
         Commands::Publish(args) => commands::plugin::run_publish(args).await,
         Commands::Send(args) => {
-            let query_manager = query_manager.clone();
-            let blob_manager = blob_manager.clone();
-
-            let execution_context_result = resolve_send_execution_context(
-                &query_manager,
+            let mut context = CliContext::new(data_dir.clone(), app_id);
+            match resolve_send_execution_context(
+                &context,
                 &args.id,
                 environment.as_deref(),
                 cookie_jar.as_deref(),
-            );
-            match execution_context_result {
+            ) {
                 Ok(execution_context) => {
-                    let context = CliContext::new(
-                        data_dir.clone(),
-                        query_manager.clone(),
-                        blob_manager,
-                        Arc::new(EncryptionManager::new(query_manager, app_id)),
-                        true,
-                        execution_context,
-                    )
-                    .await;
-
+                    context.init_plugins(execution_context).await;
                     let exit_code = commands::send::run(
                         &context,
                         args,
@@ -119,48 +83,22 @@ async fn main() {
             }
         }
         Commands::CookieJar(args) => {
-            let query_manager = query_manager.clone();
-            let blob_manager = blob_manager.clone();
-            let execution_context = CliExecutionContext::default();
-
-            let context = CliContext::new(
-                data_dir.clone(),
-                query_manager.clone(),
-                blob_manager,
-                Arc::new(EncryptionManager::new(query_manager, app_id)),
-                false,
-                execution_context,
-            )
-            .await;
+            let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::cookie_jar::run(&context, args);
             context.shutdown().await;
             exit_code
         }
         Commands::Workspace(args) => {
-            let query_manager = query_manager.clone();
-            let blob_manager = blob_manager.clone();
-            let execution_context = CliExecutionContext::default();
-
-            let context = CliContext::new(
-                data_dir.clone(),
-                query_manager.clone(),
-                blob_manager,
-                Arc::new(EncryptionManager::new(query_manager, app_id)),
-                false,
-                execution_context,
-            )
-            .await;
+            let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::workspace::run(&context, args);
             context.shutdown().await;
             exit_code
         }
         Commands::Request(args) => {
-            let query_manager = query_manager.clone();
-            let blob_manager = blob_manager.clone();
-
+            let mut context = CliContext::new(data_dir.clone(), app_id);
             let execution_context_result = match &args.command {
                 RequestCommands::Send { request_id } => resolve_request_execution_context(
-                    &query_manager,
+                    &context,
                     request_id,
                     environment.as_deref(),
                     cookie_jar.as_deref(),
@@ -173,16 +111,9 @@ async fn main() {
                         &args.command,
                         RequestCommands::Send { .. } | RequestCommands::Schema { .. }
                     );
-                    let context = CliContext::new(
-                        data_dir.clone(),
-                        query_manager.clone(),
-                        blob_manager,
-                        Arc::new(EncryptionManager::new(query_manager, app_id)),
-                        with_plugins,
-                        execution_context,
-                    )
-                    .await;
-
+                    if with_plugins {
+                        context.init_plugins(execution_context).await;
+                    }
                     let exit_code = commands::request::run(
                         &context,
                         args,
@@ -201,37 +132,13 @@ async fn main() {
             }
         }
         Commands::Folder(args) => {
-            let query_manager = query_manager.clone();
-            let blob_manager = blob_manager.clone();
-            let execution_context = CliExecutionContext::default();
-
-            let context = CliContext::new(
-                data_dir.clone(),
-                query_manager.clone(),
-                blob_manager,
-                Arc::new(EncryptionManager::new(query_manager, app_id)),
-                false,
-                execution_context,
-            )
-            .await;
+            let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::folder::run(&context, args);
             context.shutdown().await;
             exit_code
         }
         Commands::Environment(args) => {
-            let query_manager = query_manager.clone();
-            let blob_manager = blob_manager.clone();
-            let execution_context = CliExecutionContext::default();
-
-            let context = CliContext::new(
-                data_dir.clone(),
-                query_manager.clone(),
-                blob_manager,
-                Arc::new(EncryptionManager::new(query_manager, app_id)),
-                false,
-                execution_context,
-            )
-            .await;
+            let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::environment::run(&context, args);
             context.shutdown().await;
             exit_code
@@ -244,19 +151,19 @@ async fn main() {
 }
 
 fn resolve_send_execution_context(
-    query_manager: &QueryManager,
+    context: &CliContext,
     id: &str,
     environment: Option<&str>,
     explicit_cookie_jar_id: Option<&str>,
 ) -> Result<CliExecutionContext, String> {
-    if let Ok(request) = query_manager.connect().get_any_request(id) {
+    if let Ok(request) = context.db().get_any_request(id) {
         let (request_id, workspace_id) = match request {
             AnyRequest::HttpRequest(r) => (Some(r.id), r.workspace_id),
             AnyRequest::GrpcRequest(r) => (Some(r.id), r.workspace_id),
             AnyRequest::WebsocketRequest(r) => (Some(r.id), r.workspace_id),
         };
         let cookie_jar_id =
-            resolve_cookie_jar_id(query_manager, &workspace_id, explicit_cookie_jar_id)?;
+            resolve_cookie_jar_id(context, &workspace_id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
             request_id,
             workspace_id: Some(workspace_id),
@@ -265,9 +172,9 @@ fn resolve_send_execution_context(
         });
     }
 
-    if let Ok(folder) = query_manager.connect().get_folder(id) {
+    if let Ok(folder) = context.db().get_folder(id) {
         let cookie_jar_id =
-            resolve_cookie_jar_id(query_manager, &folder.workspace_id, explicit_cookie_jar_id)?;
+            resolve_cookie_jar_id(context, &folder.workspace_id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
             request_id: None,
             workspace_id: Some(folder.workspace_id),
@@ -276,9 +183,9 @@ fn resolve_send_execution_context(
         });
     }
 
-    if let Ok(workspace) = query_manager.connect().get_workspace(id) {
+    if let Ok(workspace) = context.db().get_workspace(id) {
         let cookie_jar_id =
-            resolve_cookie_jar_id(query_manager, &workspace.id, explicit_cookie_jar_id)?;
+            resolve_cookie_jar_id(context, &workspace.id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
             request_id: None,
             workspace_id: Some(workspace.id),
@@ -291,13 +198,13 @@ fn resolve_send_execution_context(
 }
 
 fn resolve_request_execution_context(
-    query_manager: &QueryManager,
+    context: &CliContext,
     request_id: &str,
     environment: Option<&str>,
     explicit_cookie_jar_id: Option<&str>,
 ) -> Result<CliExecutionContext, String> {
-    let request = query_manager
-        .connect()
+    let request = context
+        .db()
         .get_any_request(request_id)
         .map_err(|e| format!("Failed to get request: {e}"))?;
 
@@ -307,7 +214,7 @@ fn resolve_request_execution_context(
         AnyRequest::WebsocketRequest(r) => r.workspace_id,
     };
     let cookie_jar_id =
-        resolve_cookie_jar_id(query_manager, &workspace_id, explicit_cookie_jar_id)?;
+        resolve_cookie_jar_id(context, &workspace_id, explicit_cookie_jar_id)?;
 
     Ok(CliExecutionContext {
         request_id: Some(request_id.to_string()),
@@ -318,7 +225,7 @@ fn resolve_request_execution_context(
 }
 
 fn resolve_cookie_jar_id(
-    query_manager: &QueryManager,
+    context: &CliContext,
     workspace_id: &str,
     explicit_cookie_jar_id: Option<&str>,
 ) -> Result<Option<String>, String> {
@@ -326,8 +233,8 @@ fn resolve_cookie_jar_id(
         return Ok(Some(cookie_jar_id.to_string()));
     }
 
-    let default_cookie_jar = query_manager
-        .connect()
+    let default_cookie_jar = context
+        .db()
         .list_cookie_jars(workspace_id)
         .map_err(|e| format!("Failed to list cookie jars: {e}"))?
         .into_iter()
