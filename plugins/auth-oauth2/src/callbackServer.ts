@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import http from 'node:http';
 import type { Context } from '@yaakapp/api';
 
-export const HOSTED_CALLBACK_URL = 'https://oauth.yaak.app/redirect';
+export const HOSTED_CALLBACK_URL_BASE = 'https://oauth.yaak.app/redirect';
 export const DEFAULT_LOCALHOST_PORT = 8765;
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -176,12 +176,15 @@ export function startCallbackServer(options: {
 
 /**
  * Build the redirect URI for the hosted callback page.
- * The hosted page will redirect to the local server with the OAuth response.
+ * The port is encoded in the URL path so the hosted page can redirect
+ * to the local server without relying on query params (which some OAuth
+ * providers strip). The default port is omitted for a cleaner URL.
  */
-export function buildHostedCallbackRedirectUri(localPort: number, localPath: string): string {
-  const localRedirectUri = `http://127.0.0.1:${localPort}${localPath}`;
-  // The hosted callback page will read params and redirect to the local server
-  return `${HOSTED_CALLBACK_URL}?redirect_to=${encodeURIComponent(localRedirectUri)}`;
+export function buildHostedCallbackRedirectUri(localPort: number): string {
+  if (localPort === DEFAULT_LOCALHOST_PORT) {
+    return HOSTED_CALLBACK_URL_BASE;
+  }
+  return `${HOSTED_CALLBACK_URL_BASE}/${localPort}`;
 }
 
 /**
@@ -213,14 +216,9 @@ export async function getRedirectUrlViaExternalBrowser(
 ): Promise<{ callbackUrl: string; redirectUri: string }> {
   const { callbackType, callbackPort } = options;
 
-  // Determine port based on callback type:
-  // - localhost: use specified port or default stable port
-  // - hosted: use random port (0) since hosted page redirects to local
-  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0;
+  const port = callbackPort ?? DEFAULT_LOCALHOST_PORT;
 
-  console.log(
-    `[oauth2] Starting callback server (type: ${callbackType}, port: ${port || 'random'})`,
-  );
+  console.log(`[oauth2] Starting callback server (type: ${callbackType}, port: ${port})`);
 
   const server = await startCallbackServer({
     port,
@@ -232,7 +230,7 @@ export async function getRedirectUrlViaExternalBrowser(
     let oauthRedirectUri: string;
 
     if (callbackType === 'hosted') {
-      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port, '/callback');
+      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port);
       console.log('[oauth2] Using hosted callback redirect:', oauthRedirectUri);
     } else {
       oauthRedirectUri = server.redirectUri;

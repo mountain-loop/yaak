@@ -18,12 +18,12 @@ export type CallHttpAuthenticationActionRequest = { index: number, pluginRefId: 
 
 export type CallHttpAuthenticationRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, };
 
-export type CallHttpAuthenticationResponse = { 
+export type CallHttpAuthenticationResponse = {
 /**
  * HTTP headers to add to the request. Existing headers will be replaced, while
  * new headers will be added.
  */
-setHeaders?: Array<HttpHeader>, 
+setHeaders?: Array<HttpHeader>,
 /**
  * Query parameters to add to the request. Existing params will be replaced, while
  * new params will be added.
@@ -78,7 +78,7 @@ export type ExportHttpRequestRequest = { httpRequest: HttpRequest, };
 
 export type ExportHttpRequestResponse = { content: string, };
 
-export type FileFilter = { name: string, 
+export type FileFilter = { name: string,
 /**
  * File extensions to require
  */
@@ -100,149 +100,149 @@ export type FormInputAccordion = { label: string, inputs?: Array<FormInput>, hid
 
 export type FormInputBanner = { inputs?: Array<FormInput>, hidden?: boolean, color?: Color, };
 
-export type FormInputBase = { 
+export type FormInputBase = {
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
 description?: string, };
 
-export type FormInputCheckbox = { 
+export type FormInputCheckbox = {
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
 description?: string, };
 
-export type FormInputEditor = { 
+export type FormInputEditor = {
 /**
  * Placeholder for the text input
  */
-placeholder?: string | null, 
+placeholder?: string | null,
 /**
  * Don't show the editor gutter (line numbers, folds, etc.)
  */
-hideGutter?: boolean, 
+hideGutter?: boolean,
 /**
  * Language for syntax highlighting
  */
-language?: EditorLanguage, readOnly?: boolean, 
+language?: EditorLanguage, readOnly?: boolean,
 /**
  * Fixed number of visible rows
  */
-rows?: number, completionOptions?: Array<GenericCompletionOption>, 
+rows?: number, completionOptions?: Array<GenericCompletionOption>,
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
 description?: string, };
 
-export type FormInputFile = { 
+export type FormInputFile = {
 /**
  * The title of the file selection window
  */
-title: string, 
+title: string,
 /**
  * Allow selecting multiple files
  */
-multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<FileFilter>, 
+multiple?: boolean, directory?: boolean, defaultPath?: string, filters?: Array<FileFilter>,
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
@@ -250,63 +250,63 @@ description?: string, };
 
 export type FormInputHStack = { inputs?: Array<FormInput>, hidden?: boolean, };
 
-export type FormInputHttpRequest = { 
+export type FormInputHttpRequest = {
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
 description?: string, };
 
-export type FormInputKeyValue = { 
+export type FormInputKeyValue = {
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
@@ -314,36 +314,36 @@ description?: string, };
 
 export type FormInputMarkdown = { content: string, hidden?: boolean, };
 
-export type FormInputSelect = { 
+export type FormInputSelect = {
 /**
  * The options that will be available in the select input
  */
-options: Array<FormInputSelectOption>, 
+options: Array<FormInputSelectOption>,
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
@@ -351,44 +351,44 @@ description?: string, };
 
 export type FormInputSelectOption = { label: string, value: string, };
 
-export type FormInputText = { 
+export type FormInputText = {
 /**
  * Placeholder for the text input
  */
-placeholder?: string | null, 
+placeholder?: string | null,
 /**
  * Placeholder for the text input
  */
-password?: boolean, 
+password?: boolean,
 /**
  * Whether to allow newlines in the input, like a <textarea/>
  */
-multiLine?: boolean, completionOptions?: Array<GenericCompletionOption>, 
+multiLine?: boolean, completionOptions?: Array<GenericCompletionOption>,
 /**
  * The name of the input. The value will be stored at this object attribute in the resulting data
  */
-name: string, 
+name: string,
 /**
  * Whether this input is visible for the given configuration. Use this to
  * make branching forms.
  */
-hidden?: boolean, 
+hidden?: boolean,
 /**
  * Whether the user must fill in the argument
  */
-optional?: boolean, 
+optional?: boolean,
 /**
  * The label of the input
  */
-label?: string, 
+label?: string,
 /**
  * Visually hide the label of the input
  */
-hideLabel?: boolean, 
+hideLabel?: boolean,
 /**
  * The default value
  */
-defaultValue?: string, disabled?: boolean, 
+defaultValue?: string, disabled?: boolean,
 /**
  * Longer description of the input, likely shown in a tooltip
  */
@@ -474,7 +474,7 @@ export type ListOpenWorkspacesResponse = { workspaces: Array<WorkspaceInfo>, };
 
 export type OpenExternalUrlRequest = { url: string, };
 
-export type OpenWindowRequest = { url: string, 
+export type OpenWindowRequest = { url: string,
 /**
  * Label for the window. If not provided, a random one will be generated.
  */
@@ -486,15 +486,15 @@ export type PromptFormRequest = { id: string, title: string, description?: strin
 
 export type PromptFormResponse = { values: { [key in string]?: JsonPrimitive } | null, done?: boolean, };
 
-export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string, 
+export type PromptTextRequest = { id: string, title: string, label: string, description?: string, defaultValue?: string, placeholder?: string,
 /**
  * Text to add to the confirmation button
  */
-confirmText?: string, password?: boolean, 
+confirmText?: string, password?: boolean,
 /**
  * Text to add to the cancel button
  */
-cancelText?: string, 
+cancelText?: string,
 /**
  * Require the user to enter a non-empty value
  */
@@ -524,12 +524,12 @@ export type SetKeyValueResponse = {};
 
 export type ShowToastRequest = { message: string, color?: Color, icon?: Icon, timeout?: number, };
 
-export type TemplateFunction = { name: string, previewType?: TemplateFunctionPreviewType, description?: string, 
+export type TemplateFunction = { name: string, previewType?: TemplateFunctionPreviewType, description?: string,
 /**
  * Also support alternative names. This is useful for not breaking existing
  * tags when changing the `name` property
  */
-aliases?: Array<string>, args: Array<TemplateFunctionArg>, 
+aliases?: Array<string>, args: Array<TemplateFunctionArg>,
 /**
  * A list of arg names to show in the inline preview. If not provided, none will be shown (for privacy reasons).
  */
@@ -546,23 +546,23 @@ export type TemplateRenderRequest = { data: JsonValue, purpose: RenderPurpose, }
 
 export type TemplateRenderResponse = { data: JsonValue, };
 
-export type Theme = { 
+export type Theme = {
 /**
  * How the theme is identified. This should never be changed
  */
-id: string, 
+id: string,
 /**
  * The friendly name of the theme to be displayed to the user
  */
-label: string, 
+label: string,
 /**
  * Whether the theme will be used for dark or light appearance
  */
-dark: boolean, 
+dark: boolean,
 /**
  * The default top-level colors for the theme
  */
-base: ThemeComponentColors, 
+base: ThemeComponentColors,
 /**
  * Optionally override theme for individual UI components for more control
  */

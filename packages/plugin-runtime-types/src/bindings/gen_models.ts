@@ -18,7 +18,12 @@ export type EditorKeymap = "default" | "vim" | "vscode" | "emacs";
 
 export type EncryptedKey = { encryptedKey: string, };
 
-export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, public: boolean, parentModel: string, parentId: string | null, variables: Array<EnvironmentVariable>, color: string | null, sortPriority: number, };
+export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, public: boolean, parentModel: string, parentId: string | null, 
+/**
+ * Variables defined in this environment scope.
+ * Child environments override parent variables by name.
+ */
+variables: Array<EnvironmentVariable>, color: string | null, sortPriority: number, };
 
 export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, id?: string, };
 
@@ -34,9 +39,17 @@ export type GrpcEvent = { model: "grpc_event", id: string, createdAt: string, up
 
 export type GrpcEventType = "info" | "error" | "client_message" | "server_message" | "connection_start" | "connection_end";
 
-export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<HttpRequestHeader>, method: string | null, name: string, service: string | null, sortPriority: number, url: string, };
+export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<HttpRequestHeader>, method: string | null, name: string, service: string | null, sortPriority: number, 
+/**
+ * Server URL (http for plaintext or https for secure)
+ */
+url: string, };
 
-export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, 
+/**
+ * URL parameters used for both path placeholders (`:id`) and query string entries.
+ */
+urlParameters: Array<HttpUrlParameter>, };
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
@@ -55,11 +68,18 @@ export type HttpResponseHeader = { name: string, value: string, };
 
 export type HttpResponseState = "initialized" | "connected" | "closed";
 
-export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id?: string, };
+export type HttpUrlParameter = { enabled?: boolean, 
+/**
+ * Colon-prefixed parameters are treated as path parameters if they match, like `/users/:id`
+ * Other entries are appended as query parameters
+ */
+name: string, value: string, id?: string, };
 
 export type KeyValue = { model: "key_value", id: string, createdAt: string, updatedAt: string, key: string, namespace: string, value: string, };
 
-export type Plugin = { model: "plugin", id: string, createdAt: string, updatedAt: string, checkedAt: string | null, directory: string, enabled: boolean, url: string | null, };
+export type Plugin = { model: "plugin", id: string, createdAt: string, updatedAt: string, checkedAt: string | null, directory: string, enabled: boolean, url: string | null, source: PluginSource, };
+
+export type PluginSource = "bundled" | "filesystem" | "registry";
 
 export type ProxySetting = { "type": "enabled", http: string, https: string, auth: ProxySettingAuth | null, bypass: string, disabled: boolean, } | { "type": "disabled" };
 
@@ -77,7 +97,11 @@ export type WebsocketEvent = { model: "websocket_event", id: string, createdAt: 
 
 export type WebsocketEventType = "binary" | "close" | "frame" | "open" | "ping" | "pong" | "text";
 
-export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, 
+/**
+ * URL parameters used for both path placeholders (`:id`) and query string entries.
+ */
+urlParameters: Array<HttpUrlParameter>, };
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingDnsOverrides: Array<DnsOverride>, };
 
