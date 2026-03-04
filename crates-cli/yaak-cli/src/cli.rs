@@ -21,6 +21,10 @@ pub struct Cli {
     #[arg(long, short, global = true)]
     pub environment: Option<String>,
 
+    /// Cookie jar ID to use when sending requests
+    #[arg(long = "cookie-jar", global = true, value_name = "COOKIE_JAR_ID")]
+    pub cookie_jar: Option<String>,
+
     /// Enable verbose send output (events and streamed response body)
     #[arg(long, short, global = true)]
     pub verbose: bool,
@@ -58,6 +62,9 @@ pub enum Commands {
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
+    /// Cookie jar commands
+    CookieJar(CookieJarArgs),
+
     /// Workspace commands
     Workspace(WorkspaceArgs),
 
@@ -83,6 +90,22 @@ pub struct SendArgs {
     /// Stop on first request failure when sending folders/workspaces
     #[arg(long, conflicts_with = "parallel")]
     pub fail_fast: bool,
+}
+
+#[derive(Args)]
+#[command(disable_help_subcommand = true)]
+pub struct CookieJarArgs {
+    #[command(subcommand)]
+    pub command: CookieJarCommands,
+}
+
+#[derive(Subcommand)]
+pub enum CookieJarCommands {
+    /// List cookie jars in a workspace
+    List {
+        /// Workspace ID (optional when exactly one workspace exists)
+        workspace_id: Option<String>,
+    },
 }
 
 #[derive(Args)]
@@ -158,8 +181,8 @@ pub struct RequestArgs {
 pub enum RequestCommands {
     /// List requests in a workspace
     List {
-        /// Workspace ID
-        workspace_id: String,
+        /// Workspace ID (optional when exactly one workspace exists)
+        workspace_id: Option<String>,
     },
 
     /// Show a request as JSON
@@ -267,8 +290,8 @@ pub struct FolderArgs {
 pub enum FolderCommands {
     /// List folders in a workspace
     List {
-        /// Workspace ID
-        workspace_id: String,
+        /// Workspace ID (optional when exactly one workspace exists)
+        workspace_id: Option<String>,
     },
 
     /// Show a folder as JSON
@@ -324,8 +347,8 @@ pub struct EnvironmentArgs {
 pub enum EnvironmentCommands {
     /// List environments in a workspace
     List {
-        /// Workspace ID
-        workspace_id: String,
+        /// Workspace ID (optional when exactly one workspace exists)
+        workspace_id: Option<String>,
     },
 
     /// Output JSON schema for environment create/update payloads
@@ -421,6 +444,9 @@ pub enum PluginCommands {
     /// Generate a "Hello World" Yaak plugin
     Generate(GenerateArgs),
 
+    /// Install a plugin from a local directory or from the registry
+    Install(InstallPluginArgs),
+
     /// Publish a Yaak plugin version to the plugin registry
     Publish(PluginPathArg),
 }
@@ -440,4 +466,10 @@ pub struct GenerateArgs {
     /// Output directory for the generated plugin (defaults to ./<name> in interactive mode)
     #[arg(long)]
     pub dir: Option<PathBuf>,
+}
+
+#[derive(Args, Clone)]
+pub struct InstallPluginArgs {
+    /// Local plugin directory path, or registry plugin spec (@org/plugin[@version])
+    pub source: String,
 }
