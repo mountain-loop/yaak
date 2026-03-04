@@ -9,6 +9,7 @@ import {
   searchPlugins,
   uninstallPlugin,
 } from '@yaakapp-internal/plugins';
+import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -49,6 +50,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
         defaultValue={defaultSubtab}
         label="Plugins"
         addBorders
+        tabListClassName="px-6 pt-2"
         tabs={[
           { label: 'Discover', value: 'search' },
           {
@@ -63,13 +65,13 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
           },
         ]}
       >
-        <TabContent value="search">
+        <TabContent value="search" className="px-6">
           <PluginSearch />
         </TabContent>
         <TabContent value="installed" className="pb-0">
           <div className="h-full grid grid-rows-[minmax(0,1fr)_auto]">
-            <InstalledPlugins plugins={installedPlugins} />
-            <footer className="grid grid-cols-[minmax(0,1fr)_auto] -mx-4 py-2 px-4 border-t bg-surface-highlight border-border-subtle min-w-0">
+            <InstalledPlugins plugins={installedPlugins} className="px-6" />
+            <footer className="grid grid-cols-[minmax(0,1fr)_auto] py-2 px-4 border-t bg-surface-highlight border-border-subtle min-w-0">
               <SelectFile
                 size="xs"
                 noun="Plugin"
@@ -111,7 +113,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
             </footer>
           </div>
         </TabContent>
-        <TabContent value="bundled" className="pb-0">
+        <TabContent value="bundled" className="pb-0 px-6">
           <BundledPlugins plugins={bundledPlugins} />
         </TabContent>
       </Tabs>
@@ -330,9 +332,9 @@ function PluginSearch() {
   );
 }
 
-function InstalledPlugins({ plugins }: { plugins: Plugin[] }) {
+function InstalledPlugins({ plugins, className }: { plugins: Plugin[]; className?: string }) {
   return plugins.length === 0 ? (
-    <div className="pb-4">
+    <div className={classNames(className, 'pb-4')}>
       <EmptyStateText className="text-center">
         Plugins extend the functionality of Yaak.
         <br />
@@ -340,7 +342,7 @@ function InstalledPlugins({ plugins }: { plugins: Plugin[] }) {
       </EmptyStateText>
     </div>
   ) : (
-    <Table scrollable>
+    <Table scrollable className={className}>
       <TableHead>
         <TableRow>
           <TableHeaderCell className="w-0" />

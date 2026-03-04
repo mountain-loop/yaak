@@ -39,9 +39,9 @@ const tabs = [
   TAB_THEME,
   TAB_INTERFACE,
   TAB_SHORTCUTS,
+  TAB_PLUGINS,
   TAB_CERTIFICATES,
   TAB_PROXY,
-  TAB_PLUGINS,
   TAB_LICENSE,
 ] as const;
 export type SettingsTab = (typeof tabs)[number];
@@ -120,7 +120,7 @@ export default function Settings({ hide }: Props) {
               value === TAB_CERTIFICATES ? (
                 <CountBadge count={settings.clientCertificates.length} />
               ) : value === TAB_PLUGINS ? (
-                <CountBadge count={plugins.length} />
+                <CountBadge count={plugins.filter((p) => p.source !== 'bundled').length} />
               ) : value === TAB_PROXY && settings.proxy?.type === 'enabled' ? (
                 <CountBadge count />
               ) : value === TAB_LICENSE && licenseCheck.check.data?.status === 'personal_use' ? (
@@ -141,7 +141,7 @@ export default function Settings({ hide }: Props) {
         <TabContent value={TAB_SHORTCUTS} className="overflow-y-auto h-full px-6 !py-4">
           <SettingsHotkeys />
         </TabContent>
-        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1 px-6 !py-4">
+        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1">
           <SettingsPlugins defaultSubtab={mainTab === TAB_PLUGINS ? subtab : undefined} />
         </TabContent>
         <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-6 !py-4">
