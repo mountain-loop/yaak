@@ -11,6 +11,7 @@ pub fn format_json(text: &str, tab: &str) -> String {
     let mut new_json = "".to_string();
     let mut depth = 0;
     let mut state = FormatState::None;
+    let mut saw_newline_in_whitespace = false;
 
     loop {
         let rest_of_chars = chars.clone();
@@ -74,8 +75,8 @@ pub fn format_json(text: &str, tab: &str) -> String {
             }
             // Check if the comma handler already added \n + indent
             let trimmed = new_json.trim_end_matches(|c: char| c == ' ' || c == '\t');
-            if trimmed.ends_with(",\n") {
-                // After comma: undo the newline+indent, make comment trailing
+            if trimmed.ends_with(",\n") && !saw_newline_in_whitespace {
+                // Trailing comment on the same line as comma (e.g. "foo",// comment)
                 new_json.truncate(trimmed.len() - 1);
                 new_json.push(' ');
             } else if !trimmed.ends_with('\n') && !new_json.is_empty() {
@@ -85,6 +86,7 @@ pub fn format_json(text: &str, tab: &str) -> String {
             new_json.push_str(&comment);
             new_json.push('\n');
             new_json.push_str(tab.to_string().repeat(depth).as_str());
+            saw_newline_in_whitespace = false;
             continue;
         }
 
@@ -180,8 +182,12 @@ pub fn format_json(text: &str, tab: &str) -> String {
                     || current_char == '\t'
                     || current_char == '\r'
                 {
+                    if current_char == '\n' {
+                        saw_newline_in_whitespace = true;
+                    }
                     // Don't add these
                 } else {
+                    saw_newline_in_whitespace = false;
                     new_json.push(current_char);
                 }
             }
@@ -499,6 +505,26 @@ mod tests {
 {
   "foo": "// not a comment",
   "bar": "/* also not */"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment_on_line_after_comma() {
+        assert_eq!(
+            format_json(
+                r#"{
+  "a": "aaa",
+  // "b": "bbb"
+}"#,
+                "  "
+            ),
+            r#"
+{
+  "a": "aaa",
+  // "b": "bbb"
 }
 "#
             .trim()

@@ -113,11 +113,67 @@ pub fn strip_json_comments(text: &str) -> String {
     }
 
     // Remove lines that are now empty (were comment-only lines)
-    result
+    let result = result
         .lines()
         .filter(|line| !line.trim().is_empty())
         .collect::<Vec<&str>>()
-        .join("\n")
+        .join("\n");
+
+    // Remove trailing commas before } or ]
+    strip_trailing_commas(&result)
+}
+
+/// Removes trailing commas before closing braces/brackets, respecting strings.
+fn strip_trailing_commas(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    let mut in_string = false;
+
+    while i < chars.len() {
+        let ch = chars[i];
+
+        if in_string {
+            result.push(ch);
+            match ch {
+                '"' => in_string = false,
+                '\\' => {
+                    i += 1;
+                    if i < chars.len() {
+                        result.push(chars[i]);
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+            continue;
+        }
+
+        if ch == '"' {
+            in_string = true;
+            result.push(ch);
+            i += 1;
+            continue;
+        }
+
+        if ch == ',' {
+            // Look ahead past whitespace/newlines for } or ]
+            let mut j = i + 1;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if j < chars.len() && (chars[j] == '}' || chars[j] == ']') {
+                // Skip the comma
+                i += 1;
+                continue;
+            }
+        }
+
+        result.push(ch);
+        i += 1;
+    }
+
+    result
 }
 
 #[cfg(test)]
@@ -231,5 +287,32 @@ mod tests {
   "baz": 123
 }"#
         );
+    }
+
+    #[test]
+    fn test_trailing_comma_after_comment_removed() {
+        assert_eq!(
+            strip_json_comments(r#"{
+  "a": "aaa",
+  // "b": "bbb"
+}"#),
+            r#"{
+  "a": "aaa"
+}"#
+        );
+    }
+
+    #[test]
+    fn test_trailing_comma_in_array() {
+        assert_eq!(
+            strip_json_comments(r#"[1, 2, /* 3 */]"#),
+            r#"[1, 2]"#
+        );
+    }
+
+    #[test]
+    fn test_comma_inside_string_preserved() {
+        let input = r#"{"a": "hello,}"#;
+        assert_eq!(strip_json_comments(input), input);
     }
 }
