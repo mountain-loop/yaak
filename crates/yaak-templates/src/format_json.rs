@@ -11,6 +11,7 @@ pub fn format_json(text: &str, tab: &str) -> String {
     let mut new_json = "".to_string();
     let mut depth = 0;
     let mut state = FormatState::None;
+    let mut saw_newline_in_whitespace = false;
 
     loop {
         let rest_of_chars = chars.clone();
@@ -58,6 +59,62 @@ pub fn format_json(text: &str, tab: &str) -> String {
             new_json.push_str("${[");
             chars.next(); // Skip {
             chars.next(); // Skip [
+            continue;
+        }
+
+        // Handle line comments (//)
+        if current_char == '/' && chars.peek() == Some(&'/') {
+            chars.next(); // Skip second /
+            // Collect the rest of the comment until newline
+            let mut comment = String::from("//");
+            loop {
+                match chars.peek() {
+                    Some(&'\n') | None => break,
+                    Some(_) => comment.push(chars.next().unwrap()),
+                }
+            }
+            // Check if the comma handler already added \n + indent
+            let trimmed = new_json.trim_end_matches(|c: char| c == ' ' || c == '\t');
+            if trimmed.ends_with(",\n") && !saw_newline_in_whitespace {
+                // Trailing comment on the same line as comma (e.g. "foo",// comment)
+                new_json.truncate(trimmed.len() - 1);
+                new_json.push(' ');
+            } else if !trimmed.ends_with('\n') && !new_json.is_empty() {
+                // Trailing comment after a value (no newline before us)
+                new_json.push(' ');
+            }
+            new_json.push_str(&comment);
+            new_json.push('\n');
+            new_json.push_str(tab.to_string().repeat(depth).as_str());
+            saw_newline_in_whitespace = false;
+            continue;
+        }
+
+        // Handle block comments (/* ... */)
+        if current_char == '/' && chars.peek() == Some(&'*') {
+            chars.next(); // Skip *
+            let mut comment = String::from("/*");
+            loop {
+                match chars.next() {
+                    None => break,
+                    Some('*') if chars.peek() == Some(&'/') => {
+                        chars.next(); // Skip /
+                        comment.push_str("*/");
+                        break;
+                    }
+                    Some(c) => comment.push(c),
+                }
+            }
+            // If we're not already on a fresh line, add newline + indent before comment
+            let trimmed = new_json.trim_end_matches(|c: char| c == ' ' || c == '\t');
+            if !trimmed.is_empty() && !trimmed.ends_with('\n') {
+                new_json.push('\n');
+                new_json.push_str(tab.to_string().repeat(depth).as_str());
+            }
+            new_json.push_str(&comment);
+            // After block comment, add newline + indent for the next content
+            new_json.push('\n');
+            new_json.push_str(tab.to_string().repeat(depth).as_str());
             continue;
         }
 
@@ -125,20 +182,37 @@ pub fn format_json(text: &str, tab: &str) -> String {
                     || current_char == '\t'
                     || current_char == '\r'
                 {
+                    if current_char == '\n' {
+                        saw_newline_in_whitespace = true;
+                    }
                     // Don't add these
                 } else {
+                    saw_newline_in_whitespace = false;
                     new_json.push(current_char);
                 }
             }
         }
     }
 
-    // Replace only lines containing whitespace with nothing
-    new_json
-        .lines()
-        .filter(|line| !line.trim().is_empty()) // Filter out whitespace-only lines
-        .collect::<Vec<&str>>() // Collect the non-empty lines into a vector
-        .join("\n") // Join the lines back into a single string
+    // Filter out whitespace-only lines, but preserve empty lines inside block comments
+    let mut result_lines: Vec<&str> = Vec::new();
+    let mut in_block_comment = false;
+    for line in new_json.lines() {
+        if in_block_comment {
+            result_lines.push(line);
+            if line.contains("*/") {
+                in_block_comment = false;
+            }
+        } else {
+            if line.contains("/*") && !line.contains("*/") {
+                in_block_comment = true;
+            }
+            if !line.trim().is_empty() {
+                result_lines.push(line);
+            }
+        }
+    }
+    result_lines.iter().map(|line| line.trim_end()).collect::<Vec<&str>>().join("\n")
 }
 
 #[cfg(test)]
@@ -296,6 +370,161 @@ mod tests {
             format_json(r#"{}}"#, "  "),
             r#"
 {}
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_line_comment_between_keys() {
+        assert_eq!(
+            format_json(
+                r#"{"foo":"bar",// a comment
+"baz":"qux"}"#,
+                "  "
+            ),
+            r#"
+{
+  "foo": "bar", // a comment
+  "baz": "qux"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_line_comment_at_end() {
+        assert_eq!(
+            format_json(
+                r#"{"foo":"bar" // trailing
+}"#,
+                "  "
+            ),
+            r#"
+{
+  "foo": "bar" // trailing
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_block_comment() {
+        assert_eq!(
+            format_json(r#"{"foo":"bar",/* comment */"baz":"qux"}"#, "  "),
+            r#"
+{
+  "foo": "bar",
+  /* comment */
+  "baz": "qux"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment_in_array() {
+        assert_eq!(
+            format_json(
+                r#"[1,// item comment
+2,3]"#,
+                "  "
+            ),
+            r#"
+[
+  1, // item comment
+  2,
+  3
+]
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment_only_line() {
+        assert_eq!(
+            format_json(
+                r#"{
+  // this is a standalone comment
+  "foo": "bar"
+}"#,
+                "  "
+            ),
+            r#"
+{
+  // this is a standalone comment
+  "foo": "bar"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_multiline_block_comment() {
+        assert_eq!(
+            format_json(
+                r#"{
+  "foo": "bar"
+  /**
+   Hello World!
+
+   Hi there
+   */
+}"#,
+                "  "
+            ),
+            r#"
+{
+  "foo": "bar"
+  /**
+   Hello World!
+
+   Hi there
+   */
+}
+"#
+            .trim()
+        );
+    }
+
+    // NOTE: trailing whitespace on output lines is trimmed by the formatter.
+    // We can't easily add a test for this because raw string literals get
+    // trailing whitespace stripped by the editor/linter.
+
+    #[test]
+    fn test_comment_inside_string_ignored() {
+        assert_eq!(
+            format_json(r#"{"foo":"// not a comment","bar":"/* also not */"}"#, "  "),
+            r#"
+{
+  "foo": "// not a comment",
+  "bar": "/* also not */"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment_on_line_after_comma() {
+        assert_eq!(
+            format_json(
+                r#"{
+  "a": "aaa",
+  // "b": "bbb"
+}"#,
+                "  "
+            ),
+            r#"
+{
+  "a": "aaa",
+  // "b": "bbb"
 }
 "#
             .trim()

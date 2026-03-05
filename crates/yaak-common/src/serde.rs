@@ -21,3 +21,10 @@ pub fn get_str_map<'a>(v: &'a BTreeMap<String, Value>, key: &str) -> &'a str {
         Some(v) => v.as_str().unwrap_or_default(),
     }
 }
+
+pub fn get_bool_map(v: &BTreeMap<String, Value>, key: &str, fallback: bool) -> bool {
+    match v.get(key) {
+        None => fallback,
+        Some(v) => v.as_bool().unwrap_or(fallback),
+    }
+}

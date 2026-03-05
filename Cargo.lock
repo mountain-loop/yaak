@@ -10399,6 +10399,7 @@ dependencies = [
  "urlencoding",
  "yaak-common",
  "yaak-models",
+ "yaak-templates",
  "yaak-tls",
  "zstd",
 ]
