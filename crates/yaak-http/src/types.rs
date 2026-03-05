@@ -11,6 +11,7 @@ use std::time::Duration;
 use tokio::io::AsyncRead;
 use yaak_common::serde::{get_bool, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
+use yaak_templates::strip_json_comments::strip_json_comments;
 
 pub(crate) const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
@@ -136,14 +137,31 @@ pub fn append_query_params(url: &str, params: Vec<(String, String)>) -> String {
 
 fn build_url(r: &HttpRequest) -> String {
     let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
-    append_query_params(
+    let mut url = append_query_params(
         &url_string,
         params
             .iter()
             .filter(|p| p.enabled && !p.name.is_empty())
             .map(|p| (p.name.clone(), p.value.clone()))
             .collect(),
-    )
+    );
+
+    // GraphQL GET requests encode query/variables as URL query parameters
+    if r.method.to_lowercase() == "get" && r.body_type.as_deref() == Some("graphql") {
+        url = append_graphql_query_params(&url, &r.body);
+    }
+
+    url
+}
+
+fn append_graphql_query_params(url: &str, body: &BTreeMap<String, serde_json::Value>) -> String {
+    let query = get_str_map(body, "query").to_string();
+    let variables = strip_json_comments(&get_str_map(body, "variables"));
+    let mut params = vec![("query".to_string(), query)];
+    if !variables.trim().is_empty() {
+        params.push(("variables".to_string(), variables));
+    }
+    append_query_params(url, params)
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
@@ -266,7 +284,7 @@ fn build_graphql_body(
     body: &BTreeMap<String, serde_json::Value>,
 ) -> Option<SendableBodyWithMeta> {
     let query = get_str_map(body, "query");
-    let variables = get_str_map(body, "variables");
+    let variables = strip_json_comments(&get_str_map(body, "variables"));
 
     if method.to_lowercase() == "get" {
         // GraphQL GET requests use query parameters, not a body
