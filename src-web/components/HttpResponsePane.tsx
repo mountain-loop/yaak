@@ -1,4 +1,4 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
+import type { HttpResponse, HttpResponseEvent } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import type { ComponentType, CSSProperties } from 'react';
 import { lazy, Suspense, useMemo } from 'react';
@@ -18,11 +18,14 @@ import { CountBadge } from './core/CountBadge';
 import { HotkeyList } from './core/HotkeyList';
 import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
+import { Icon } from './core/Icon';
 import { LoadingIcon } from './core/LoadingIcon';
+import { PillButton } from './core/PillButton';
 import { SizeTag } from './core/SizeTag';
 import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
+import { Tooltip } from './core/Tooltip';
 import { EmptyStateText } from './EmptyStateText';
 import { ErrorBoundary } from './ErrorBoundary';
 import { HttpResponseTimeline } from './HttpResponseTimeline';
@@ -57,6 +60,11 @@ const TAB_TIMELINE = 'timeline';
 
 export type TimelineViewMode = 'timeline' | 'text';
 
+interface RedirectDropWarning {
+  droppedBodyCount: number;
+  droppedHeaders: string[];
+}
+
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
@@ -65,6 +73,12 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
 
   const responseEvents = useHttpResponseEvents(activeResponse);
+  const redirectDropWarning = useMemo(
+    () => getRedirectDropWarning(responseEvents.data),
+    [responseEvents.data],
+  );
+  const shouldShowRedirectDropWarning =
+    activeResponse?.state === 'closed' && redirectDropWarning != null;
 
   const cookieCounts = useMemo(() => getCookieCounts(responseEvents.data), [responseEvents.data]);
 
@@ -162,32 +176,77 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
             )}
           >
             {activeResponse && (
-              <HStack
-                space={2}
-                alignItems="center"
+              <div
                 className={classNames(
+                  'grid grid-cols-[auto_minmax(4rem,1fr)_auto]',
                   'cursor-default select-none',
                   'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars',
                 )}
               >
-                {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}
-                <HttpStatusTag showReason response={activeResponse} />
-                <span>&bull;</span>
-                <HttpResponseDurationTag response={activeResponse} />
-                <span>&bull;</span>
-                <SizeTag
-                  contentLength={activeResponse.contentLength ?? 0}
-                  contentLengthCompressed={activeResponse.contentLengthCompressed}
-                />
-
-                <div className="ml-auto">
+                <HStack space={2} className="w-full flex-shrink-0">
+                  {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}
+                  <HttpStatusTag showReason response={activeResponse} />
+                  <span>&bull;</span>
+                  <HttpResponseDurationTag response={activeResponse} />
+                  <span>&bull;</span>
+                  <SizeTag
+                    contentLength={activeResponse.contentLength ?? 0}
+                    contentLengthCompressed={activeResponse.contentLengthCompressed}
+                  />
+                </HStack>
+                {shouldShowRedirectDropWarning ? (
+                  <Tooltip
+                    tabIndex={0}
+                    className="my-auto pl-3 flex-shrink-0 max-w-full justify-self-end overflow-hidden"
+                    content={
+                      <VStack alignItems="start" space={1} className="text-xs">
+                        <span className="font-medium text-warning">
+                          Redirect changed this request
+                        </span>
+                        {redirectDropWarning.droppedBodyCount > 0 && (
+                          <span>
+                            Body dropped on {redirectDropWarning.droppedBodyCount}{' '}
+                            {redirectDropWarning.droppedBodyCount === 1
+                              ? 'redirect hop'
+                              : 'redirect hops'}
+                          </span>
+                        )}
+                        {redirectDropWarning.droppedHeaders.length > 0 && (
+                          <span>
+                            Headers dropped:{' '}
+                            <span className="font-mono">
+                              {redirectDropWarning.droppedHeaders.join(', ')}
+                            </span>
+                          </span>
+                        )}
+                        <span className="text-text-subtle">See Timeline for details.</span>
+                      </VStack>
+                    }
+                  >
+                    <span className="inline-flex min-w-0">
+                      <PillButton
+                        color="warning"
+                        className="font-sans text-sm !flex-shrink max-w-full"
+                        innerClassName="flex items-center"
+                        leftSlot={<Icon icon="alert_triangle" size="xs" color="warning" />}
+                      >
+                        <span className="truncate">
+                          {getRedirectWarningLabel(redirectDropWarning)}
+                        </span>
+                      </PillButton>
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span />
+                )}
+                <div className="justify-self-end flex-shrink-0">
                   <RecentHttpResponsesDropdown
                     responses={responses}
                     activeResponse={activeResponse}
                     onPinnedResponseId={setPinnedResponseId}
                   />
                 </div>
-              </HStack>
+              </div>
             )}
           </HStack>
 
@@ -272,6 +331,54 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       )}
     </div>
   );
+}
+
+function getRedirectDropWarning(
+  events: HttpResponseEvent[] | undefined,
+): RedirectDropWarning | null {
+  if (events == null || events.length === 0) return null;
+
+  let droppedBodyCount = 0;
+  const droppedHeaders = new Set<string>();
+  for (const e of events) {
+    const event = e.event;
+    if (event.type !== 'redirect') {
+      continue;
+    }
+
+    if (event.dropped_body) {
+      droppedBodyCount += 1;
+    }
+    for (const headerName of event.dropped_headers ?? []) {
+      pushHeaderName(droppedHeaders, headerName);
+    }
+  }
+
+  if (droppedBodyCount === 0 && droppedHeaders.size === 0) {
+    return null;
+  }
+
+  return {
+    droppedBodyCount,
+    droppedHeaders: Array.from(droppedHeaders).sort(),
+  };
+}
+
+function pushHeaderName(headers: Set<string>, headerName: string): void {
+  const existing = Array.from(headers).find((h) => h.toLowerCase() === headerName.toLowerCase());
+  if (existing == null) {
+    headers.add(headerName);
+  }
+}
+
+function getRedirectWarningLabel(warning: RedirectDropWarning): string {
+  if (warning.droppedBodyCount > 0 && warning.droppedHeaders.length > 0) {
+    return 'Dropped body and headers';
+  }
+  if (warning.droppedBodyCount > 0) {
+    return 'Dropped body';
+  }
+  return 'Dropped headers';
 }
 
 function EnsureCompleteResponse({

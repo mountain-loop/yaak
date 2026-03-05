@@ -47,8 +47,7 @@ impl CliContext {
                     std::process::exit(1);
                 }
             };
-        let encryption_manager =
-            Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
+        let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
         Self {
             data_dir,
