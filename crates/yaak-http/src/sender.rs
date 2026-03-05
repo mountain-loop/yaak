@@ -30,6 +30,8 @@ pub enum HttpResponseEvent {
         url: String,
         status: u16,
         behavior: RedirectBehavior,
+        dropped_body: bool,
+        dropped_headers: Vec<String>,
     },
     SendUrl {
         method: String,
@@ -67,12 +69,28 @@ impl Display for HttpResponseEvent {
         match self {
             HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
-            HttpResponseEvent::Redirect { url, status, behavior } => {
+            HttpResponseEvent::Redirect {
+                url,
+                status,
+                behavior,
+                dropped_body,
+                dropped_headers,
+            } => {
                 let behavior_str = match behavior {
                     RedirectBehavior::Preserve => "preserve",
                     RedirectBehavior::DropBody => "drop body",
                 };
-                write!(f, "* Redirect {} -> {} ({})", status, url, behavior_str)
+                let body_str = if *dropped_body { ", body dropped" } else { "" };
+                let headers_str = if dropped_headers.is_empty() {
+                    String::new()
+                } else {
+                    format!(", headers dropped: {}", dropped_headers.join(", "))
+                };
+                write!(
+                    f,
+                    "* Redirect {} -> {} ({}{}{})",
+                    status, url, behavior_str, body_str, headers_str
+                )
             }
             HttpResponseEvent::SendUrl {
                 method,
@@ -130,13 +148,21 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
         match event {
             HttpResponseEvent::Setting(name, value) => D::Setting { name, value },
             HttpResponseEvent::Info(message) => D::Info { message },
-            HttpResponseEvent::Redirect { url, status, behavior } => D::Redirect {
+            HttpResponseEvent::Redirect {
+                url,
+                status,
+                behavior,
+                dropped_body,
+                dropped_headers,
+            } => D::Redirect {
                 url,
                 status,
                 behavior: match behavior {
                     RedirectBehavior::Preserve => "preserve".to_string(),
                     RedirectBehavior::DropBody => "drop_body".to_string(),
                 },
+                dropped_body,
+                dropped_headers,
             },
             HttpResponseEvent::SendUrl {
                 method,

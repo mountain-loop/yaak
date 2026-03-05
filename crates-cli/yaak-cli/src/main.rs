@@ -162,8 +162,7 @@ fn resolve_send_execution_context(
             AnyRequest::GrpcRequest(r) => (Some(r.id), r.workspace_id),
             AnyRequest::WebsocketRequest(r) => (Some(r.id), r.workspace_id),
         };
-        let cookie_jar_id =
-            resolve_cookie_jar_id(context, &workspace_id, explicit_cookie_jar_id)?;
+        let cookie_jar_id = resolve_cookie_jar_id(context, &workspace_id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
             request_id,
             workspace_id: Some(workspace_id),
@@ -184,8 +183,7 @@ fn resolve_send_execution_context(
     }
 
     if let Ok(workspace) = context.db().get_workspace(id) {
-        let cookie_jar_id =
-            resolve_cookie_jar_id(context, &workspace.id, explicit_cookie_jar_id)?;
+        let cookie_jar_id = resolve_cookie_jar_id(context, &workspace.id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
             request_id: None,
             workspace_id: Some(workspace.id),
@@ -213,8 +211,7 @@ fn resolve_request_execution_context(
         AnyRequest::GrpcRequest(r) => r.workspace_id,
         AnyRequest::WebsocketRequest(r) => r.workspace_id,
     };
-    let cookie_jar_id =
-        resolve_cookie_jar_id(context, &workspace_id, explicit_cookie_jar_id)?;
+    let cookie_jar_id = resolve_cookie_jar_id(context, &workspace_id, explicit_cookie_jar_id)?;
 
     Ok(CliExecutionContext {
         request_id: Some(request_id.to_string()),

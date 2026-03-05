@@ -9,7 +9,6 @@ import type { Algorithm } from 'jsonwebtoken';
 import {
   buildHostedCallbackRedirectUri,
   DEFAULT_LOCALHOST_PORT,
-  HOSTED_CALLBACK_URL_BASE,
   stopActiveServer,
 } from './callbackServer';
 import {
