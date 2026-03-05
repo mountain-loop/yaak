@@ -135,6 +135,40 @@ pub fn append_query_params(url: &str, params: Vec<(String, String)>) -> String {
     result
 }
 
+fn strip_query_params(url: &str, names: &[&str]) -> String {
+    // Split off fragment
+    let (base_and_query, fragment) = if let Some(hash_pos) = url.find('#') {
+        (&url[..hash_pos], Some(&url[hash_pos..]))
+    } else {
+        (url, None)
+    };
+
+    let result = if let Some(q_pos) = base_and_query.find('?') {
+        let base = &base_and_query[..q_pos];
+        let query = &base_and_query[q_pos + 1..];
+        let filtered: Vec<&str> = query
+            .split('&')
+            .filter(|pair| {
+                let key = pair.split('=').next().unwrap_or("");
+                let decoded = urlencoding::decode(key).unwrap_or_default();
+                !names.contains(&decoded.as_ref())
+            })
+            .collect();
+        if filtered.is_empty() {
+            base.to_string()
+        } else {
+            format!("{}?{}", base, filtered.join("&"))
+        }
+    } else {
+        base_and_query.to_string()
+    };
+
+    match fragment {
+        Some(f) => format!("{}{}", result, f),
+        None => result,
+    }
+}
+
 fn build_url(r: &HttpRequest) -> String {
     let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
     let mut url = append_query_params(
@@ -161,7 +195,9 @@ fn append_graphql_query_params(url: &str, body: &BTreeMap<String, serde_json::Va
     if !variables.trim().is_empty() {
         params.push(("variables".to_string(), variables));
     }
-    append_query_params(url, params)
+    // Strip existing query/variables params to avoid duplicates
+    let url = strip_query_params(url, &["query", "variables"]);
+    append_query_params(&url, params)
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {

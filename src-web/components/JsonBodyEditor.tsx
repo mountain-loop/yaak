@@ -30,7 +30,13 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
 
   const lintExtension = useMemo(
     () =>
-      linter(jsonParseLinter(autoFix ? { allowComments: true, allowTrailingCommas: true } : {})),
+      linter(
+        jsonParseLinter(
+          autoFix
+            ? { allowComments: true, allowTrailingCommas: true }
+            : { allowComments: false, allowTrailingCommas: false },
+        ),
+      ),
     [autoFix],
   );
 
