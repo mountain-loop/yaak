@@ -61,6 +61,61 @@ pub fn format_json(text: &str, tab: &str) -> String {
             continue;
         }
 
+        // Handle line comments (//)
+        if current_char == '/' && chars.peek() == Some(&'/') {
+            chars.next(); // Skip second /
+            // Collect the rest of the comment until newline
+            let mut comment = String::from("//");
+            loop {
+                match chars.peek() {
+                    Some(&'\n') | None => break,
+                    Some(_) => comment.push(chars.next().unwrap()),
+                }
+            }
+            // Check if the comma handler already added \n + indent
+            let trimmed = new_json.trim_end_matches(|c: char| c == ' ' || c == '\t');
+            if trimmed.ends_with(",\n") {
+                // After comma: undo the newline+indent, make comment trailing
+                new_json.truncate(trimmed.len() - 1);
+                new_json.push(' ');
+            } else if !trimmed.ends_with('\n') && !new_json.is_empty() {
+                // Trailing comment after a value (no newline before us)
+                new_json.push(' ');
+            }
+            new_json.push_str(&comment);
+            new_json.push('\n');
+            new_json.push_str(tab.to_string().repeat(depth).as_str());
+            continue;
+        }
+
+        // Handle block comments (/* ... */)
+        if current_char == '/' && chars.peek() == Some(&'*') {
+            chars.next(); // Skip *
+            let mut comment = String::from("/*");
+            loop {
+                match chars.next() {
+                    None => break,
+                    Some('*') if chars.peek() == Some(&'/') => {
+                        chars.next(); // Skip /
+                        comment.push_str("*/");
+                        break;
+                    }
+                    Some(c) => comment.push(c),
+                }
+            }
+            // If we're not already on a fresh line, add newline + indent before comment
+            let trimmed = new_json.trim_end_matches(|c: char| c == ' ' || c == '\t');
+            if !trimmed.is_empty() && !trimmed.ends_with('\n') {
+                new_json.push('\n');
+                new_json.push_str(tab.to_string().repeat(depth).as_str());
+            }
+            new_json.push_str(&comment);
+            // After block comment, add newline + indent for the next content
+            new_json.push('\n');
+            new_json.push_str(tab.to_string().repeat(depth).as_str());
+            continue;
+        }
+
         match current_char {
             ',' => {
                 new_json.push(current_char);
@@ -133,12 +188,25 @@ pub fn format_json(text: &str, tab: &str) -> String {
         }
     }
 
-    // Replace only lines containing whitespace with nothing
-    new_json
-        .lines()
-        .filter(|line| !line.trim().is_empty()) // Filter out whitespace-only lines
-        .collect::<Vec<&str>>() // Collect the non-empty lines into a vector
-        .join("\n") // Join the lines back into a single string
+    // Filter out whitespace-only lines, but preserve empty lines inside block comments
+    let mut result_lines: Vec<&str> = Vec::new();
+    let mut in_block_comment = false;
+    for line in new_json.lines() {
+        if in_block_comment {
+            result_lines.push(line);
+            if line.contains("*/") {
+                in_block_comment = false;
+            }
+        } else {
+            if line.contains("/*") && !line.contains("*/") {
+                in_block_comment = true;
+            }
+            if !line.trim().is_empty() {
+                result_lines.push(line);
+            }
+        }
+    }
+    result_lines.iter().map(|line| line.trim_end()).collect::<Vec<&str>>().join("\n")
 }
 
 #[cfg(test)]
@@ -296,6 +364,141 @@ mod tests {
             format_json(r#"{}}"#, "  "),
             r#"
 {}
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_line_comment_between_keys() {
+        assert_eq!(
+            format_json(
+                r#"{"foo":"bar",// a comment
+"baz":"qux"}"#,
+                "  "
+            ),
+            r#"
+{
+  "foo": "bar", // a comment
+  "baz": "qux"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_line_comment_at_end() {
+        assert_eq!(
+            format_json(
+                r#"{"foo":"bar" // trailing
+}"#,
+                "  "
+            ),
+            r#"
+{
+  "foo": "bar" // trailing
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_block_comment() {
+        assert_eq!(
+            format_json(r#"{"foo":"bar",/* comment */"baz":"qux"}"#, "  "),
+            r#"
+{
+  "foo": "bar",
+  /* comment */
+  "baz": "qux"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment_in_array() {
+        assert_eq!(
+            format_json(
+                r#"[1,// item comment
+2,3]"#,
+                "  "
+            ),
+            r#"
+[
+  1, // item comment
+  2,
+  3
+]
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_comment_only_line() {
+        assert_eq!(
+            format_json(
+                r#"{
+  // this is a standalone comment
+  "foo": "bar"
+}"#,
+                "  "
+            ),
+            r#"
+{
+  // this is a standalone comment
+  "foo": "bar"
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_multiline_block_comment() {
+        assert_eq!(
+            format_json(
+                r#"{
+  "foo": "bar"
+  /**
+   Hello World!
+
+   Hi there
+   */
+}"#,
+                "  "
+            ),
+            r#"
+{
+  "foo": "bar"
+  /**
+   Hello World!
+
+   Hi there
+   */
+}
+"#
+            .trim()
+        );
+    }
+
+    // NOTE: trailing whitespace on output lines is trimmed by the formatter.
+    // We can't easily add a test for this because raw string literals get
+    // trailing whitespace stripped by the editor/linter.
+
+    #[test]
+    fn test_comment_inside_string_ignored() {
+        assert_eq!(
+            format_json(r#"{"foo":"// not a comment","bar":"/* also not */"}"#, "  "),
+            r#"
+{
+  "foo": "// not a comment",
+  "bar": "/* also not */"
 }
 "#
             .trim()
