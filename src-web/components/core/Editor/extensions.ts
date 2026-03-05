@@ -8,7 +8,7 @@ import { history, historyKeymap } from '@codemirror/commands';
 import { go } from '@codemirror/lang-go';
 import { java } from '@codemirror/lang-java';
 import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
+import { jsonc, jsoncLanguage } from '@shopify/lang-jsonc';
 import { markdown } from '@codemirror/lang-markdown';
 import { php } from '@codemirror/lang-php';
 import { python } from '@codemirror/lang-python';
@@ -107,7 +107,7 @@ const syntaxExtensions: Record<
   null | (() => LanguageSupport)
 > = {
   graphql: null,
-  json: json,
+  json: jsonc,
   javascript: javascript,
   // HTML as XML because HTML is oddly slow
   html: xml,
@@ -194,6 +194,11 @@ export function getLanguageExtension({
 
   if (language === 'json') {
     extraExtensions.push(linter(jsonParseLinter()));
+    extraExtensions.push(
+      jsoncLanguage.data.of({
+        commentTokens: { line: '//', block: { open: '/*', close: '*/' } },
+      }),
+    );
     if (!hideGutter) {
       extraExtensions.push(lintGutter());
     }
