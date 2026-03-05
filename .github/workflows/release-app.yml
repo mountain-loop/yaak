@@ -13,12 +13,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # for Arm-based Macs (M1 and above).
+          - platform: "macos-26" # for Arm-based Macs (M1 and above).
             args: "--target aarch64-apple-darwin"
             yaak_arch: "arm64"
             os: "macos"
             targets: "aarch64-apple-darwin"
-          - platform: "macos-latest" # for Intel-based Macs.
+          - platform: "macos-26-intel" # for Intel-based Macs.
             args: "--target x86_64-apple-darwin"
             yaak_arch: "x64"
             os: "macos"

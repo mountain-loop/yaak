@@ -40,7 +40,7 @@ export function HeaderSize({
     } else if (type() === 'macos') {
       if (!isFullscreen) {
         // Add large padding for window controls
-        s.paddingLeft = 72 / settings.interfaceScale;
+        s.paddingLeft = 76 / settings.interfaceScale;
       }
     } else if (!ignoreControlsSpacing && !settings.hideWindowControls) {
       s.paddingRight = WINDOW_CONTROLS_WIDTH;
