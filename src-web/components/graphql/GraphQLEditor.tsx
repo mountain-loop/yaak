@@ -1,6 +1,5 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
 
-import { formatSdl } from 'format-graphql';
 import { useAtom } from 'jotai';
 import { useCallback, useMemo } from 'react';
 import { useLocalStorage } from 'react-use';
@@ -16,6 +15,7 @@ import { Editor } from '../core/Editor/LazyEditor';
 import { FormattedError } from '../core/FormattedError';
 import { Icon } from '../core/Icon';
 import { Separator } from '../core/Separator';
+import { tryFormatGraphql } from '../../lib/formatters';
 import { showGraphQLDocExplorerAtom } from './graphqlAtoms';
 
 type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & {
@@ -211,7 +211,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
         language="graphql"
         heightMode="auto"
         graphQLSchema={schema}
-        format={formatSdl}
+        format={tryFormatGraphql}
         defaultValue={currentBody.query}
         onChange={handleChangeQuery}
         placeholder="..."

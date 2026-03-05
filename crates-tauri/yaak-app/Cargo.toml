@@ -30,6 +30,7 @@ eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client
 http = { version = "1.2.0", default-features = false }
 log = { workspace = true }
 md5 = "0.8.0"
+pretty_graphql = "0.2"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.25.0"
 mime_guess = "2.0.5"
