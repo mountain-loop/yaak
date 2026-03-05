@@ -12,6 +12,11 @@ unsafe impl Sync for UnsafeWindowHandle {}
 
 const WINDOW_CONTROL_PAD_X: f64 = 13.0;
 const WINDOW_CONTROL_PAD_Y: f64 = 18.0;
+/// Extra pixels to add to the title bar height when the default title bar is
+/// already as tall as button_height + PAD_Y (i.e. macOS Tahoe 26+, where the
+/// default is 32px and 14 + 18 = 32). On pre-Tahoe this is unused because the
+/// default title bar is shorter than button_height + PAD_Y.
+const TITLEBAR_EXTRA_HEIGHT: f64 = 4.0;
 const MAIN_WINDOW_PREFIX: &str = "main_";
 
 pub(crate) fn update_window_title<R: Runtime>(window: Window<R>, title: String) {
@@ -95,12 +100,29 @@ fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64,
             ns_window.standardWindowButton_(NSWindowButton::NSWindowMiniaturizeButton);
         let zoom = ns_window.standardWindowButton_(NSWindowButton::NSWindowZoomButton);
 
-        let title_bar_container_view = close.superview().superview();
-
         let close_rect: NSRect = msg_send![close, frame];
         let button_height = close_rect.size.height;
 
-        let title_bar_frame_height = button_height + y;
+        let title_bar_container_view = close.superview().superview();
+
+        // Capture the OS default title bar height on the first call, before
+        // we've modified it. This avoids the height growing on repeated calls.
+        use std::sync::OnceLock;
+        static DEFAULT_TITLEBAR_HEIGHT: OnceLock<f64> = OnceLock::new();
+        let default_height =
+            *DEFAULT_TITLEBAR_HEIGHT.get_or_init(|| NSView::frame(title_bar_container_view).size.height);
+
+        // On pre-Tahoe, button_height + y is larger than the default title bar
+        // height, so the resize works as before. On Tahoe (26+), the default is
+        // already 32px and button_height + y = 32, so nothing changes. In that
+        // case, add TITLEBAR_EXTRA_HEIGHT extra pixels to push the buttons down.
+        let desired = button_height + y;
+        let title_bar_frame_height = if desired > default_height {
+            desired
+        } else {
+            default_height + TITLEBAR_EXTRA_HEIGHT
+        };
+
         let mut title_bar_rect = NSView::frame(title_bar_container_view);
         title_bar_rect.size.height = title_bar_frame_height;
         title_bar_rect.origin.y = NSView::frame(ns_window).size.height - title_bar_frame_height;
