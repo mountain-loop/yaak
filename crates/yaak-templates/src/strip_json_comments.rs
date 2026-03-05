@@ -1,3 +1,14 @@
+/// Strips JSON comments only if the result is valid JSON. If stripping comments
+/// produces invalid JSON, the original text is returned unchanged.
+pub fn maybe_strip_json_comments(text: &str) -> String {
+    let stripped = strip_json_comments(text);
+    if serde_json::from_str::<serde_json::Value>(&stripped).is_ok() {
+        stripped
+    } else {
+        text.to_string()
+    }
+}
+
 /// Strips comments from JSONC, preserving the original formatting as much as possible.
 ///
 /// - Trailing comments on a line are removed (along with preceding whitespace)
