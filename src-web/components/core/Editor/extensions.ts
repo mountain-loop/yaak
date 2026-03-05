@@ -8,7 +8,6 @@ import { history, historyKeymap } from '@codemirror/commands';
 import { go } from '@codemirror/lang-go';
 import { java } from '@codemirror/lang-java';
 import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { php } from '@codemirror/lang-php';
 import { python } from '@codemirror/lang-python';
@@ -34,7 +33,6 @@ import { ruby } from '@codemirror/legacy-modes/mode/ruby';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { swift } from '@codemirror/legacy-modes/mode/swift';
 import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
-
 import { search, searchKeymap } from '@codemirror/search';
 import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
@@ -50,6 +48,7 @@ import {
   rectangularSelection,
 } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
+import { jsonc, jsoncLanguage } from '@shopify/lang-jsonc';
 import { graphql } from 'cm6-graphql';
 import type { GraphQLSchema } from 'graphql';
 import { activeRequestIdAtom } from '../../../hooks/useActiveRequestId';
@@ -61,13 +60,13 @@ import { showGraphQLDocExplorerAtom } from '../../graphql/graphqlAtoms';
 import type { EditorProps } from './Editor';
 import { jsonParseLinter } from './json-lint';
 import { pairs } from './pairs/extension';
+import { searchMatchCount } from './searchMatchCount';
 import { text } from './text/extension';
 import { timeline } from './timeline/extension';
 import type { TwigCompletionOption } from './twig/completion';
 import { twig } from './twig/extension';
 import { pathParametersPlugin } from './twig/pathParameters';
 import { url } from './url/extension';
-import { searchMatchCount } from './searchMatchCount';
 
 export const syntaxHighlightStyle = HighlightStyle.define([
   {
@@ -107,7 +106,7 @@ const syntaxExtensions: Record<
   null | (() => LanguageSupport)
 > = {
   graphql: null,
-  json: json,
+  json: jsonc,
   javascript: javascript,
   // HTML as XML because HTML is oddly slow
   html: xml,
@@ -140,6 +139,7 @@ const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript
 export function getLanguageExtension({
   useTemplating,
   language = 'text',
+  lintExtension,
   environmentVariables,
   autocomplete,
   hideGutter,
@@ -156,7 +156,7 @@ export function getLanguageExtension({
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
   graphQLSchema: GraphQLSchema | null;
-} & Pick<EditorProps, 'language' | 'autocomplete' | 'hideGutter'>) {
+} & Pick<EditorProps, 'language' | 'autocomplete' | 'hideGutter' | 'lintExtension'>) {
   const extraExtensions: Extension[] = [];
 
   if (language === 'url') {
@@ -193,7 +193,12 @@ export function getLanguageExtension({
   }
 
   if (language === 'json') {
-    extraExtensions.push(linter(jsonParseLinter()));
+    extraExtensions.push(lintExtension ?? linter(jsonParseLinter()));
+    extraExtensions.push(
+      jsoncLanguage.data.of({
+        commentTokens: { line: '//', block: { open: '/*', close: '*/' } },
+      }),
+    );
     if (!hideGutter) {
       extraExtensions.push(lintGutter());
     }

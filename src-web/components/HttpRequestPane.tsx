@@ -48,6 +48,7 @@ import { FormMultipartEditor } from './FormMultipartEditor';
 import { FormUrlencodedEditor } from './FormUrlencodedEditor';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
+import { JsonBodyEditor } from './JsonBodyEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { RequestMethodDropdown } from './RequestMethodDropdown';
 import { UrlBar } from './UrlBar';
@@ -257,7 +258,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   const handleBodyTextChange = useCallback(
-    (text: string) => patchModel(activeRequest, { body: { text } }),
+    (text: string) => patchModel(activeRequest, { body: { ...activeRequest.body, text } }),
     [activeRequest],
   );
 
@@ -370,16 +371,10 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             <TabContent value={TAB_BODY}>
               <ConfirmLargeRequestBody request={activeRequest}>
                 {activeRequest.bodyType === BODY_TYPE_JSON ? (
-                  <Editor
+                  <JsonBodyEditor
                     forceUpdateKey={forceUpdateKey}
-                    autocompleteFunctions
-                    autocompleteVariables
-                    placeholder="..."
                     heightMode={fullHeight ? 'full' : 'auto'}
-                    defaultValue={`${activeRequest.body?.text ?? ''}`}
-                    language="json"
-                    onChange={handleBodyTextChange}
-                    stateKey={`json.${activeRequest.id}`}
+                    request={activeRequest}
                   />
                 ) : activeRequest.bodyType === BODY_TYPE_XML ? (
                   <Editor

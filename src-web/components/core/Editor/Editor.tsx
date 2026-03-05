@@ -78,6 +78,7 @@ export interface EditorProps {
   hideGutter?: boolean;
   id?: string;
   language?: EditorLanguage | 'pairs' | 'url' | 'timeline' | null;
+  lintExtension?: Extension;
   graphQLSchema?: GraphQLSchema | null;
   onBlur?: () => void;
   onChange?: (value: string) => void;
@@ -124,6 +125,7 @@ function EditorInner({
   hideGutter,
   graphQLSchema,
   language,
+  lintExtension,
   onBlur,
   onChange,
   onFocus,
@@ -332,6 +334,7 @@ function EditorInner({
     const ext = getLanguageExtension({
       useTemplating,
       language,
+      lintExtension,
       hideGutter,
       environmentVariables,
       autocomplete,
@@ -344,6 +347,7 @@ function EditorInner({
     view.dispatch({ effects: languageCompartment.reconfigure(ext) });
   }, [
     language,
+    lintExtension,
     autocomplete,
     environmentVariables,
     onClickFunction,
@@ -371,6 +375,7 @@ function EditorInner({
         const langExt = getLanguageExtension({
           useTemplating,
           language,
+          lintExtension,
           completionOptions,
           autocomplete,
           environmentVariables,

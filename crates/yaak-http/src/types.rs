@@ -9,8 +9,9 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::io::AsyncRead;
-use yaak_common::serde::{get_bool, get_str, get_str_map};
+use yaak_common::serde::{get_bool, get_bool_map, get_str, get_str_map};
 use yaak_models::models::HttpRequest;
+use yaak_templates::strip_json_comments::{maybe_strip_json_comments, strip_json_comments};
 
 pub(crate) const MULTIPART_BOUNDARY: &str = "------YaakFormBoundary";
 
@@ -134,16 +135,69 @@ pub fn append_query_params(url: &str, params: Vec<(String, String)>) -> String {
     result
 }
 
+fn strip_query_params(url: &str, names: &[&str]) -> String {
+    // Split off fragment
+    let (base_and_query, fragment) = if let Some(hash_pos) = url.find('#') {
+        (&url[..hash_pos], Some(&url[hash_pos..]))
+    } else {
+        (url, None)
+    };
+
+    let result = if let Some(q_pos) = base_and_query.find('?') {
+        let base = &base_and_query[..q_pos];
+        let query = &base_and_query[q_pos + 1..];
+        let filtered: Vec<&str> = query
+            .split('&')
+            .filter(|pair| {
+                let key = pair.split('=').next().unwrap_or("");
+                let decoded = urlencoding::decode(key).unwrap_or_default();
+                !names.contains(&decoded.as_ref())
+            })
+            .collect();
+        if filtered.is_empty() {
+            base.to_string()
+        } else {
+            format!("{}?{}", base, filtered.join("&"))
+        }
+    } else {
+        base_and_query.to_string()
+    };
+
+    match fragment {
+        Some(f) => format!("{}{}", result, f),
+        None => result,
+    }
+}
+
 fn build_url(r: &HttpRequest) -> String {
     let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
-    append_query_params(
+    let mut url = append_query_params(
         &url_string,
         params
             .iter()
             .filter(|p| p.enabled && !p.name.is_empty())
             .map(|p| (p.name.clone(), p.value.clone()))
             .collect(),
-    )
+    );
+
+    // GraphQL GET requests encode query/variables as URL query parameters
+    if r.method.to_lowercase() == "get" && r.body_type.as_deref() == Some("graphql") {
+        url = append_graphql_query_params(&url, &r.body);
+    }
+
+    url
+}
+
+fn append_graphql_query_params(url: &str, body: &BTreeMap<String, serde_json::Value>) -> String {
+    let query = get_str_map(body, "query").to_string();
+    let variables = strip_json_comments(&get_str_map(body, "variables"));
+    let mut params = vec![("query".to_string(), query)];
+    if !variables.trim().is_empty() {
+        params.push(("variables".to_string(), variables));
+    }
+    // Strip existing query/variables params to avoid duplicates
+    let url = strip_query_params(url, &["query", "variables"]);
+    append_query_params(&url, params)
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
@@ -177,7 +231,7 @@ async fn build_body(
             (build_form_body(&body), Some("application/x-www-form-urlencoded".to_string()))
         }
         "multipart/form-data" => build_multipart_body(&body, &headers).await?,
-        _ if body.contains_key("text") => (build_text_body(&body), None),
+        _ if body.contains_key("text") => (build_text_body(&body, body_type), None),
         t => {
             warn!("Unsupported body type: {}", t);
             (None, None)
@@ -252,13 +306,20 @@ async fn build_binary_body(
     }))
 }
 
-fn build_text_body(body: &BTreeMap<String, serde_json::Value>) -> Option<SendableBodyWithMeta> {
+fn build_text_body(body: &BTreeMap<String, serde_json::Value>, body_type: &str) -> Option<SendableBodyWithMeta> {
     let text = get_str_map(body, "text");
     if text.is_empty() {
-        None
-    } else {
-        Some(SendableBodyWithMeta::Bytes(Bytes::from(text.to_string())))
+        return None;
     }
+
+    let send_comments = get_bool_map(body, "sendJsonComments", false);
+    let text = if !send_comments && body_type == "application/json" {
+        maybe_strip_json_comments(text)
+    } else {
+        text.to_string()
+    };
+
+    Some(SendableBodyWithMeta::Bytes(Bytes::from(text)))
 }
 
 fn build_graphql_body(
@@ -266,7 +327,7 @@ fn build_graphql_body(
     body: &BTreeMap<String, serde_json::Value>,
 ) -> Option<SendableBodyWithMeta> {
     let query = get_str_map(body, "query");
-    let variables = get_str_map(body, "variables");
+    let variables = strip_json_comments(&get_str_map(body, "variables"));
 
     if method.to_lowercase() == "get" {
         // GraphQL GET requests use query parameters, not a body
@@ -684,7 +745,7 @@ mod tests {
         let mut body = BTreeMap::new();
         body.insert("text".to_string(), json!("Hello, World!"));
 
-        let result = build_text_body(&body);
+        let result = build_text_body(&body, "application/json");
         match result {
             Some(SendableBodyWithMeta::Bytes(bytes)) => {
                 assert_eq!(bytes, Bytes::from("Hello, World!"))
@@ -698,7 +759,7 @@ mod tests {
         let mut body = BTreeMap::new();
         body.insert("text".to_string(), json!(""));
 
-        let result = build_text_body(&body);
+        let result = build_text_body(&body, "application/json");
         assert!(result.is_none());
     }
 
@@ -706,8 +767,55 @@ mod tests {
     async fn test_text_body_missing() {
         let body = BTreeMap::new();
 
-        let result = build_text_body(&body);
+        let result = build_text_body(&body, "application/json");
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_text_body_strips_json_comments_by_default() {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("{\n  // comment\n  \"foo\": \"bar\"\n}"));
+
+        let result = build_text_body(&body, "application/json");
+        match result {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
+                let text = String::from_utf8_lossy(&bytes);
+                assert!(!text.contains("// comment"));
+                assert!(text.contains("\"foo\": \"bar\""));
+            }
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_text_body_send_json_comments_when_opted_in() {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("{\n  // comment\n  \"foo\": \"bar\"\n}"));
+        body.insert("sendJsonComments".to_string(), json!(true));
+
+        let result = build_text_body(&body, "application/json");
+        match result {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
+                let text = String::from_utf8_lossy(&bytes);
+                assert!(text.contains("// comment"));
+            }
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_text_body_no_strip_for_non_json() {
+        let mut body = BTreeMap::new();
+        body.insert("text".to_string(), json!("// not json\nsome text"));
+
+        let result = build_text_body(&body, "text/plain");
+        match result {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
+                let text = String::from_utf8_lossy(&bytes);
+                assert!(text.contains("// not json"));
+            }
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
     }
 
     #[tokio::test]

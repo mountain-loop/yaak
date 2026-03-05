@@ -1,4 +1,4 @@
-import { jsonLanguage } from '@codemirror/lang-json';
+import { jsoncLanguage } from '@shopify/lang-jsonc';
 import { linter } from '@codemirror/lint';
 import type { EditorView } from '@codemirror/view';
 import type { GrpcRequest } from '@yaakapp-internal/models';
@@ -115,7 +115,7 @@ export function GrpcEditor({
         delay: 200,
         needsRefresh: handleRefresh,
       }),
-      jsonLanguage.data.of({
+      jsoncLanguage.data.of({
         autocomplete: jsonCompletion(),
       }),
       stateExtensions({}),

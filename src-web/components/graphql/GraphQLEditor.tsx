@@ -156,6 +156,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                 { type: 'separator', label: 'Setting' },
                 {
                   label: 'Automatic Introspection',
+                  keepOpenOnSelect: true,
                   onSelect: () => {
                     setAutoIntrospectDisabled({
                       ...autoIntrospectDisabled,

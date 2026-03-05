@@ -34,6 +34,7 @@ use tokio::time;
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
+use yaak_templates::strip_json_comments::strip_json_comments;
 use yaak_grpc::{Code, ServiceDefinition, serialize_message};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
@@ -433,6 +434,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             result.expect("Failed to render template")
                         })
                     });
+                    let msg = strip_json_comments(&msg);
                     in_msg_tx.try_send(msg.clone()).unwrap();
                 }
                 Ok(IncomingMsg::Commit) => {
@@ -468,6 +470,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
         )
         .await?;
+        let msg = strip_json_comments(&msg);
 
         app_handle.db().upsert_grpc_event(
             &GrpcEvent {
