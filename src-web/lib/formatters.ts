@@ -20,6 +20,18 @@ export async function tryFormatJson(text: string): Promise<string> {
   return text;
 }
 
+export async function tryFormatGraphql(text: string): Promise<string> {
+  if (text === '') return text;
+
+  try {
+    return await invokeCmd<string>('cmd_format_graphql', { text });
+  } catch (err) {
+    console.warn('Failed to format GraphQL', err);
+  }
+
+  return text;
+}
+
 export async function tryFormatXml(text: string): Promise<string> {
   if (text === '') return text;
 

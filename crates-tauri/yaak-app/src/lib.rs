@@ -873,6 +873,14 @@ async fn cmd_format_json(text: &str) -> YaakResult<String> {
 }
 
 #[tauri::command]
+async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
+    match pretty_graphql::format_text(text, &Default::default()) {
+        Ok(formatted) => Ok(formatted),
+        Err(_) => Ok(text.to_string()),
+    }
+}
+
+#[tauri::command]
 async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1641,6 +1649,7 @@ pub fn run() {
             cmd_http_request_body,
             cmd_http_response_body,
             cmd_format_json,
+            cmd_format_graphql,
             cmd_get_http_authentication_summaries,
             cmd_get_http_authentication_config,
             cmd_get_sse_events,
