@@ -327,6 +327,7 @@ function EditorInner({
   );
 
   // Update the language extension when the language changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally limited deps
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;
@@ -360,6 +361,7 @@ function EditorInner({
   ]);
 
   // Initialize the editor when ref mounts
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only reinitialize when necessary
   const initEditorRef = useCallback(
     function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {

@@ -138,7 +138,7 @@ function bannerColorVariables(color: YaakColor | null): Partial<CSSVariables> {
   };
 }
 
-function inputCSS(color: YaakColor | null): Partial<CSSVariables> {
+function _inputCSS(color: YaakColor | null): Partial<CSSVariables> {
   if (color == null) return {};
 
   const theme: Partial<ThemeComponentColors> = {

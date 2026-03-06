@@ -13,7 +13,6 @@ import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';
-import { LocalImage } from '../LocalImage';
 
 export function SettingsLicense() {
   return (

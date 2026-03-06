@@ -1,4 +1,4 @@
-import { useCachedNode } from '@dnd-kit/core/dist/hooks/utilities';
+
 import type { GitStatusEntry } from '@yaakapp-internal/git';
 import { useGit } from '@yaakapp-internal/git';
 import type {
@@ -12,7 +12,6 @@ import type {
 import classNames from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
 import { modelToYaml } from '../../lib/diffYaml';
-import { isSubEnvironment } from '../../lib/model_util';
 import { resolvedModelName } from '../../lib/resolvedModelName';
 import { showErrorToast } from '../../lib/toast';
 import { Banner } from '../core/Banner';
