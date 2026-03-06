@@ -17,6 +17,7 @@ members = [
     "crates/yaak-tls",
     "crates/yaak-ws",
     "crates/yaak-api",
+    "crates/yaak-proxy",
     # CLI crates
     "crates-cli/yaak-cli",
     # Tauri-specific crates
@@ -63,6 +64,7 @@ yaak-templates = { path = "crates/yaak-templates" }
 yaak-tls = { path = "crates/yaak-tls" }
 yaak-ws = { path = "crates/yaak-ws" }
 yaak-api = { path = "crates/yaak-api" }
+yaak-proxy = { path = "crates/yaak-proxy" }
 
 # Internal crates - Tauri-specific
 yaak-fonts = { path = "crates-tauri/yaak-fonts" }

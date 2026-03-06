@@ -1,0 +1,18 @@
+[package]
+name = "yaak-proxy"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+hyper = { version = "1", features = ["http1", "http2", "server", "client"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto", "client-legacy"] }
+http-body-util = "0.1"
+http = "1"
+bytes = "1"
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "sync", "macros", "time", "io-util"] }
+rcgen = "0.13"
+rustls = { workspace = true, features = ["ring"] }
+rustls-native-certs = "0.8"
+tokio-rustls = "0.26"
+pem = "3"
