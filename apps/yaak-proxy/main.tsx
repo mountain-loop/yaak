@@ -1,4 +1,5 @@
 import "./main.css";
+import { Button } from "@yaakapp-internal/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { StrictMode } from "react";
 import { useState } from "react";
@@ -45,25 +46,38 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <section className="hero-card">
-        <p className="eyebrow">Monorepo Smoke Test</p>
-        <h1>Yaak Proxy</h1>
-        <p className="lede">
-          This is a minimal proxy app stub running on the new `apps/yaak-proxy`
-          and `crates-tauri/yaak-app-proxy` structure.
-        </p>
-        <div className="controls">
-          <button className="btn" disabled={busy} onClick={startProxy}>
-            Start Proxy
-          </button>
-          <button className="btn ghost" disabled={busy} onClick={stopProxy}>
-            Stop Proxy
-          </button>
-        </div>
-        <div className="status">
-          <span>Status: {status}</span>
-          {port != null ? <span>Port: {port}</span> : null}
+    <main className="h-full w-full overflow-auto p-6">
+      <section className="flex items-start">
+        <div className="flex w-full max-w-xl flex-col gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-text">Yaak Proxy</h1>
+            <p className="mt-2 text-sm text-text-subtle">Status: {status}</p>
+            <p className="mt-1 text-sm text-text-subtle">
+              Port: {port ?? "Not running"}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Button
+              disabled={busy}
+              onClick={startProxy}
+              size="sm"
+              tone="primary"
+            >
+              Start Proxy
+            </Button>
+            <Button
+              disabled={busy}
+              onClick={stopProxy}
+              size="sm"
+              variant="border"
+            >
+              Stop Proxy
+            </Button>
+            <Button size="sm" type="button">
+              Shared Button
+            </Button>
+          </div>
         </div>
       </section>
     </main>

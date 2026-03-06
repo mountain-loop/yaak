@@ -9,6 +9,8 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@yaakapp-internal/theme": "^1.0.0",
+    "@yaakapp-internal/ui": "^1.0.0",
     "@tauri-apps/api": "^2.9.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

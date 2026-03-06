@@ -15,9 +15,16 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@yaakapp-internal/theme": ["../../packages/theme/src/index.ts"],
+      "@yaakapp-internal/theme/*": ["../../packages/theme/src/*"],
+      "@yaakapp-internal/ui": ["../../packages/ui/src/index.ts"],
+      "@yaakapp-internal/ui/*": ["../../packages/ui/src/*"],
+    },
   },
   "include": ["."],
   "exclude": ["vite.config.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "references": [{ "path": "./tsconfig.node.json" }],
 }

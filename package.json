@@ -7,6 +7,9 @@
     "url": "git+https://github.com/mountain-loop/yaak.git"
   },
   "workspaces": [
+    "packages/ui",
+    "packages/theme",
+    "packages/tailwind-config",
     "packages/common-lib",
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
