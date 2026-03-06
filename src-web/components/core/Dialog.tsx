@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { Overlay } from '../Overlay';
 import { Heading } from './Heading';
 import { IconButton } from './IconButton';
-import { DialogSize } from '@yaakapp-internal/plugins';
+import type { DialogSize } from '@yaakapp-internal/plugins';
 
 export interface DialogProps {
   children: ReactNode;
