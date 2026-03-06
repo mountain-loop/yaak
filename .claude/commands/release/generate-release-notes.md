@@ -37,6 +37,7 @@ The skill generates markdown-formatted release notes following this structure:
 
 **IMPORTANT**: Always add a blank lines around the markdown code fence and output the markdown code block last
 **IMPORTANT**: PRs by `@gschier` should not mention the @username
+**IMPORTANT**: These are app release notes. Exclude CLI-only changes (commits prefixed with `cli:` or only touching `crates-cli/`) since the CLI has its own release process.
 
 ## After Generating Release Notes
 

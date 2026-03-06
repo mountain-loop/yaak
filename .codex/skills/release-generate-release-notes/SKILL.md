@@ -32,6 +32,7 @@ Generate formatted markdown release notes for a Yaak tag.
 - Keep a blank line before and after the code fence.
 - Output the markdown code block last.
 - Do not append `by @gschier` for PRs authored by `@gschier`.
+- These are app release notes. Exclude CLI-only changes (commits prefixed with `cli:` or only touching `crates-cli/`) since the CLI has its own release process.
 
 ## Release Creation Prompt
 
