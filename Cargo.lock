@@ -10240,7 +10240,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-app"
+name = "yaak-app-client"
 version = "0.0.0"
 dependencies = [
  "charset",
@@ -10298,6 +10298,16 @@ dependencies = [
  "yaak-templates",
  "yaak-tls",
  "yaak-ws",
+]
+
+[[package]]
+name = "yaak-app-proxy"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-build",
+ "yaak-proxy",
 ]
 
 [[package]]

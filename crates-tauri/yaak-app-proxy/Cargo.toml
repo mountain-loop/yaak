@@ -1,0 +1,18 @@
+[package]
+name = "yaak-app-proxy"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[lib]
+name = "tauri_app_proxy_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.3", features = [] }
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+tauri = { workspace = true }
+yaak-proxy = { workspace = true }

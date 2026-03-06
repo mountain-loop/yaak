@@ -198,7 +198,7 @@ impl PluginManager {
     pub fn get_plugins_dir(&self) -> PathBuf {
         if self.dev_mode {
             // Use plugins directly for easy development
-            // Tauri runs from crates-tauri/yaak-app/, so go up two levels to reach project root
+            // Tauri runs from crates-tauri/yaak-app-client/, so go up two levels to reach project root
             env::current_dir()
                 .map(|cwd| cwd.join("../../plugins").canonicalize().unwrap())
                 .unwrap_or_else(|_| self.vendored_plugin_dir.clone())

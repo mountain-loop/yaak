@@ -1,0 +1,13 @@
+{
+  "productName": "Yaak Proxy Dev",
+  "identifier": "app.yaak.proxy.dev",
+  "bundle": {
+    "icon": [
+      "../yaak-app-client/icons/dev/32x32.png",
+      "../yaak-app-client/icons/dev/128x128.png",
+      "../yaak-app-client/icons/dev/128x128@2x.png",
+      "../yaak-app-client/icons/dev/icon.icns",
+      "../yaak-app-client/icons/dev/icon.ico"
+    ]
+  }
+}

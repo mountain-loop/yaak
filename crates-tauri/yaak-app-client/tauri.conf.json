@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "identifier": "app.yaak.desktop",
   "build": {
-    "beforeBuildCommand": "npm run tauri-before-build",
-    "beforeDevCommand": "npm run tauri-before-dev",
+    "beforeBuildCommand": "npm --prefix ../.. run client:tauri-before-build",
+    "beforeDevCommand": "npm --prefix ../.. run client:tauri-before-dev",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "../../dist"
+    "frontendDist": "../../dist/apps/yaak-client"
   },
   "app": {
     "withGlobalTauri": false,
@@ -14,10 +14,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": [
-            "$APPDATA/responses/*",
-            "$RESOURCE/static/*"
-          ]
+          "allow": ["$APPDATA/responses/*", "$RESOURCE/static/*"]
         }
       }
     }
@@ -25,9 +22,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "yaak"
-        ]
+        "schemes": ["yaak"]
       }
     }
   },

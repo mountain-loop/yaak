@@ -1,5 +1,5 @@
 {
-  "name": "yaak-app",
+  "name": "yaak-monorepo",
   "private": true,
   "version": "0.0.0",
   "repository": {
@@ -48,7 +48,8 @@
     "plugins/template-function-request",
     "plugins/template-function-response",
     "plugins/themes-yaak",
-    "crates-tauri/yaak-app",
+    "crates-tauri/yaak-app-client",
+    "crates-tauri/yaak-app-proxy",
     "crates-tauri/yaak-fonts",
     "crates-tauri/yaak-license",
     "crates-tauri/yaak-mac-window",
@@ -60,20 +61,23 @@
     "crates/yaak-sync",
     "crates/yaak-templates",
     "crates/yaak-ws",
-    "src-web"
+    "apps/yaak-client",
+    "apps/yaak-proxy"
   ],
   "scripts": {
     "prepare": "husky",
     "init": "npm install && npm run bootstrap",
-    "start": "npm run app-dev",
-    "app-build": "tauri build",
-    "app-dev": "node scripts/run-dev.mjs",
+    "start": "npm run client:dev",
+    "client:build": "tauri build --config crates-tauri/yaak-app-client/tauri.conf.json",
+    "client:dev": "node scripts/run-dev.mjs client",
+    "proxy:build": "tauri build --config crates-tauri/yaak-app-proxy/tauri.conf.json",
+    "proxy:dev": "node scripts/run-dev.mjs proxy",
     "migration": "node scripts/create-migration.cjs",
     "build": "npm run --workspaces --if-present build",
     "test": "npm run --workspaces --if-present test",
-    "icons": "run-p icons:*",
-    "icons:dev": "tauri icon crates-tauri/yaak-app/icons/icon-dev.png --output crates-tauri/yaak-app/icons/dev",
-    "icons:release": "tauri icon crates-tauri/yaak-app/icons/icon.png --output crates-tauri/yaak-app/icons/release",
+    "icons": "run-p client:icons:*",
+    "client:icons:dev": "tauri icon crates-tauri/yaak-app-client/icons/icon-dev.png --output crates-tauri/yaak-app-client/icons/dev",
+    "client:icons:release": "tauri icon crates-tauri/yaak-app-client/icons/icon.png --output crates-tauri/yaak-app-client/icons/release",
     "bootstrap": "run-s bootstrap:*",
     "bootstrap:install-wasm-pack": "node scripts/install-wasm-pack.cjs",
     "bootstrap:build": "npm run build",
@@ -88,8 +92,10 @@
     "format": "biome format --write .",
     "replace-version": "node scripts/replace-version.cjs",
     "tauri": "tauri",
-    "tauri-before-build": "npm run bootstrap",
-    "tauri-before-dev": "node scripts/run-workspaces-dev.mjs"
+    "client:tauri-before-build": "npm run bootstrap",
+    "client:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-client",
+    "proxy:tauri-before-build": "npm run bootstrap",
+    "proxy:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-proxy"
   },
   "overrides": {
     "js-yaml": "^4.1.1"

@@ -45,8 +45,8 @@ jobs:
         with:
           name: vendored-assets
           path: |
-            crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs
-            crates-tauri/yaak-app/vendored/plugins
+            crates-tauri/yaak-app-client/vendored/plugin-runtime/index.cjs
+            crates-tauri/yaak-app-client/vendored/plugins
           if-no-files-found: error
 
   build-binaries:
@@ -107,7 +107,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: vendored-assets
-          path: crates-tauri/yaak-app/vendored
+          path: crates-tauri/yaak-app-client/vendored
 
       - name: Set CLI build version
         shell: bash

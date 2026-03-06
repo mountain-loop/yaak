@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for the Yaak Proxy app",
+  "windows": [
+    "*"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

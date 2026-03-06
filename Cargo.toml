@@ -21,7 +21,8 @@ members = [
     # CLI crates
     "crates-cli/yaak-cli",
     # Tauri-specific crates
-    "crates-tauri/yaak-app",
+    "crates-tauri/yaak-app-client",
+    "crates-tauri/yaak-app-proxy",
     "crates-tauri/yaak-fonts",
     "crates-tauri/yaak-license",
     "crates-tauri/yaak-mac-window",

@@ -13,10 +13,10 @@ use yaak_plugins::manager::PluginManager;
 
 const EMBEDDED_PLUGIN_RUNTIME: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs"
+    "/../../crates-tauri/yaak-app-client/vendored/plugin-runtime/index.cjs"
 ));
 static EMBEDDED_VENDORED_PLUGINS: Dir<'_> =
-    include_dir!("$CARGO_MANIFEST_DIR/../../crates-tauri/yaak-app/vendored/plugins");
+    include_dir!("$CARGO_MANIFEST_DIR/../../crates-tauri/yaak-app-client/vendored/plugins");
 
 #[derive(Clone, Debug, Default)]
 pub struct CliExecutionContext {

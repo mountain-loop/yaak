@@ -1,5 +1,5 @@
 [package]
-name = "yaak-app"
+name = "yaak-app-client"
 version = "0.0.0"
 edition = "2024"
 authors = ["Gregory Schier"]
@@ -7,7 +7,7 @@ publish = false
 
 # Produce a library for mobile support
 [lib]
-name = "tauri_app_lib"
+name = "tauri_app_client_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [features]

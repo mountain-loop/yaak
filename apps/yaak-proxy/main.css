@@ -1,0 +1,95 @@
+:root {
+  color: #f4efe7;
+  background:
+    radial-gradient(circle at top, rgba(217, 119, 6, 0.35), transparent 45%),
+    linear-gradient(180deg, #18212b 0%, #0f141a 100%);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.hero-card {
+  width: min(680px, 100%);
+  padding: 40px;
+  border: 1px solid rgba(244, 239, 231, 0.12);
+  border-radius: 28px;
+  background: rgba(9, 12, 16, 0.7);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #f6ad55;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(44px, 8vw, 84px);
+  line-height: 0.95;
+}
+
+.lede {
+  margin: 20px 0 0;
+  max-width: 48ch;
+  font-size: 18px;
+  line-height: 1.6;
+  color: rgba(244, 239, 231, 0.78);
+}
+
+.controls {
+  margin-top: 28px;
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #f6ad55;
+  color: #111;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f4efe7;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.status {
+  margin-top: 14px;
+  display: flex;
+  gap: 16px;
+  color: rgba(244, 239, 231, 0.88);
+  font-size: 14px;
+}
