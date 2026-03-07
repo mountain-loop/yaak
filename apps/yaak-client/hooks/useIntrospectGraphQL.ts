@@ -8,7 +8,7 @@ import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { getResponseBodyText } from '../lib/responseBody';
 import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';
 import { useActiveEnvironment } from './useActiveEnvironment';
-import { useDebouncedValue } from './useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 
 const introspectionRequestBody = JSON.stringify({
   query: getIntrospectionQuery(),

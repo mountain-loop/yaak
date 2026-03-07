@@ -5,7 +5,7 @@ import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
 import { activeEnvironmentIdAtom, useActiveEnvironment } from './useActiveEnvironment';
-import { useDebouncedValue } from './useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 
 export interface ReflectResponseService {
   name: string;

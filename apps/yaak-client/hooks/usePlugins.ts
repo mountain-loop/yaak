@@ -5,7 +5,7 @@ import { jotaiStore } from '../lib/jotai';
 import { minPromiseMillis } from '../lib/minPromiseMillis';
 import { invokeCmd } from '../lib/tauri';
 import { activeWorkspaceIdAtom } from './useActiveWorkspace';
-import { useDebouncedValue } from './useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 import { invalidateAllPluginInfo } from './usePluginInfo';
 
 export function usePluginsKey() {

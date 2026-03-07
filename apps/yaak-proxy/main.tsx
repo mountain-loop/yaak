@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { type } from "@tauri-apps/plugin-os";
 import { Button, HeaderSize } from "@yaakapp-internal/ui";
+import classNames from "classnames";
 import { StrictMode } from "react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -51,7 +52,7 @@ function App() {
   }
 
   return (
-    <div className="h-full w-full grid grid-rows-[auto_1fr]">
+    <div className={classNames('h-full w-full grid grid-rows-[auto_1fr]', osType === 'linux' && 'border border-border-subtle')}>
       <HeaderSize
         size="lg"
         osType={osType}

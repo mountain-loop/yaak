@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { createGlobalState } from 'react-use';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 import { useFormatText } from '../../hooks/useFormatText';
 import type { EditorProps } from '../core/Editor/Editor';
 import { hyperlink } from '../core/Editor/hyperlink/extension';

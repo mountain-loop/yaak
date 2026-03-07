@@ -12,7 +12,7 @@ import {
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';

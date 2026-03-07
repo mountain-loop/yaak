@@ -12,7 +12,7 @@ import { parseTemplate } from '@yaakapp-internal/templates';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateFunctionConfig } from '../hooks/useTemplateFunctionConfig';
 import {

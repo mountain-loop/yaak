@@ -25,7 +25,7 @@ import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactNode } from 're
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { useContainerSize } from '../../hooks/useContainerQuery';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useDebouncedValue } from '@yaakapp-internal/ui';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { jotaiStore } from '../../lib/jotai';
 import { Banner } from '../core/Banner';

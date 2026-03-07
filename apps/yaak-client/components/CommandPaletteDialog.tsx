@@ -21,7 +21,7 @@ import { useActiveRequest } from '../hooks/useActiveRequest';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { useAllRequests } from '../hooks/useAllRequests';
 import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
-import { useDebouncedState } from '../hooks/useDebouncedState';
+import { useDebouncedState } from '@yaakapp-internal/ui';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
 import { useGrpcRequestActions } from '../hooks/useGrpcRequestActions';
 import type { HotkeyAction } from '../hooks/useHotKey';
