@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
-import { Icon } from './Icon';
+import { Icon } from '@yaakapp-internal/ui';
 
 interface Props {
   depth?: number;

@@ -4,9 +4,7 @@ import { forwardRef, useCallback } from 'react';
 import { useTimedBoolean } from '../../hooks/useTimedBoolean';
 import type { ButtonProps } from './Button';
 import { Button } from './Button';
-import type { IconProps } from './Icon';
-import { Icon } from './Icon';
-import { LoadingIcon } from './LoadingIcon';
+import { Icon, LoadingIcon, type IconProps } from '@yaakapp-internal/ui';
 
 export type IconButtonProps = IconProps &
   ButtonProps & {

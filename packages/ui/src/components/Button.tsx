@@ -1,15 +1,5 @@
+import type { Color } from "@yaakapp-internal/plugins";
 import type { HTMLAttributes, ReactNode } from "react";
-
-type ButtonColor =
-  | "default"
-  | "custom"
-  | "primary"
-  | "secondary"
-  | "info"
-  | "success"
-  | "notice"
-  | "warning"
-  | "danger";
 
 type ButtonVariant = "border" | "solid";
 type ButtonSize = "2xs" | "xs" | "sm" | "md" | "auto";
@@ -19,8 +9,8 @@ export type ButtonProps = Omit<
   "color" | "onChange"
 > & {
   innerClassName?: string;
-  color?: ButtonColor;
-  tone?: Exclude<ButtonColor, "custom">;
+  color?: Color | "custom" | "default";
+  tone?: Color | "default";
   variant?: ButtonVariant;
   isLoading?: boolean;
   size?: ButtonSize;

@@ -9,7 +9,7 @@ import { Editor } from './core/Editor/LazyEditor';
 import { type EventDetailAction, EventDetailHeader, EventViewer } from './core/EventViewer';
 import { EventViewerRow } from './core/EventViewerRow';
 import { HttpStatusTagRaw } from './core/HttpStatusTag';
-import { Icon, type IconProps } from './core/Icon';
+import { Icon, type IconProps } from '@yaakapp-internal/ui';
 import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
 import type { TimelineViewMode } from './HttpResponsePane';
 

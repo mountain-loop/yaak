@@ -28,7 +28,7 @@ import { Dropdown } from './Dropdown';
 import type { EditorProps } from './Editor/Editor';
 import type { GenericCompletionConfig } from './Editor/genericCompletion';
 import { Editor } from './Editor/LazyEditor';
-import { Icon } from './Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './IconButton';
 import type { InputHandle, InputProps } from './Input';
 import { Input } from './Input';

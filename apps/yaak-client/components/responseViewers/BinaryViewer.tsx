@@ -4,7 +4,7 @@ import { getContentTypeFromHeaders } from '../../lib/model_util';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
 import { InlineCode } from '../core/InlineCode';
-import { LoadingIcon } from '../core/LoadingIcon';
+import { LoadingIcon } from '@yaakapp-internal/ui';
 import { EmptyStateText } from '../EmptyStateText';
 
 interface Props {

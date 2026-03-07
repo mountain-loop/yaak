@@ -2,7 +2,7 @@ import type { HttpResponse } from '@yaakapp-internal/models';
 import { lazy, Suspense } from 'react';
 import { useHttpRequestBody } from '../hooks/useHttpRequestBody';
 import { getMimeTypeFromContentType, languageFromContentType } from '../lib/contentType';
-import { LoadingIcon } from './core/LoadingIcon';
+import { LoadingIcon } from '@yaakapp-internal/ui';
 import { EmptyStateText } from './EmptyStateText';
 import { AudioViewer } from './responseViewers/AudioViewer';
 import { CsvViewer } from './responseViewers/CsvViewer';

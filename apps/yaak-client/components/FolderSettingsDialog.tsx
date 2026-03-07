@@ -15,7 +15,7 @@ import { hideDialog } from '../lib/dialog';
 import { CopyIconButton } from './CopyIconButton';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { InlineCode } from './core/InlineCode';
 import { Input } from './core/Input';
 import { Link } from './core/Link';

@@ -20,7 +20,7 @@ import { Button } from '../core/Button';
 import type { CheckboxProps } from '../core/Checkbox';
 import { Checkbox } from '../core/Checkbox';
 import { DiffViewer } from '../core/Editor/DiffViewer';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { InlineCode } from '../core/InlineCode';
 import { Input } from '../core/Input';
 import { Separator } from '../core/Separator';

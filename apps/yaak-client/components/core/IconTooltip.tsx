@@ -1,5 +1,4 @@
-import type { IconProps } from './Icon';
-import { Icon } from './Icon';
+import { Icon, type IconProps } from '@yaakapp-internal/ui';
 import type { TooltipProps } from './Tooltip';
 import { Tooltip } from './Tooltip';
 

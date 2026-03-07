@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useWindowFocus } from '../hooks/useWindowFocus';
 import { Button } from './core/Button';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 
 export function ImportCurlButton() {
   const focused = useWindowFocus();

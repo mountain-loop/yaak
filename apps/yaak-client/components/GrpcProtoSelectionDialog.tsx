@@ -6,7 +6,7 @@ import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { pluralizeCount } from '../lib/pluralize';
 import { Banner } from './core/Banner';
 import { Button } from './core/Button';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import { Link } from './core/Link';

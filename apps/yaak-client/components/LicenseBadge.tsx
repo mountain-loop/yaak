@@ -12,7 +12,7 @@ import { jotaiStore } from '../lib/jotai';
 import { CargoFeature } from './CargoFeature';
 import type { ButtonProps } from './core/Button';
 import { Dropdown, type DropdownItem } from './core/Dropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { PillButton } from './core/PillButton';
 
 const dismissedAtom = atomWithKVStorage<string | null>('dismissed_license_expired', null);

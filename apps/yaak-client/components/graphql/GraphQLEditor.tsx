@@ -14,7 +14,7 @@ import { Dropdown } from '../core/Dropdown';
 import type { EditorProps } from '../core/Editor/Editor';
 import { Editor } from '../core/Editor/LazyEditor';
 import { FormattedError } from '../core/FormattedError';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { Separator } from '../core/Separator';
 import { showGraphQLDocExplorerAtom } from './graphqlAtoms';
 

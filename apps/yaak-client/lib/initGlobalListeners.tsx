@@ -17,7 +17,7 @@ import type {
 import { openSettings } from "../commands/openSettings";
 import { Button } from "../components/core/Button";
 import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading";
-import { Icon } from "../components/core/Icon";
+import { Icon } from "@yaakapp-internal/ui";
 import { HStack, VStack } from "../components/core/Stacks";
 
 // Listen for toasts

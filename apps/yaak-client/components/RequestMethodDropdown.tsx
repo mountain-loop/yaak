@@ -6,7 +6,7 @@ import { showPrompt } from '../lib/prompt';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { HttpMethodTag, HttpMethodTagRaw } from './core/HttpMethodTag';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
 

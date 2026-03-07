@@ -15,7 +15,7 @@ import { resolvedModelName } from '../lib/resolvedModelName';
 import { showColorPicker } from '../lib/showColorPicker';
 import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';

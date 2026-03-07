@@ -4,7 +4,7 @@ import { useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { createFolder } from '../commands/commands';
 import type { DropdownItem } from '../components/core/Dropdown';
-import { Icon } from '../components/core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
 import { generateId } from '../lib/generateId';
 import { BODY_TYPE_GRAPHQL } from '../lib/model_util';

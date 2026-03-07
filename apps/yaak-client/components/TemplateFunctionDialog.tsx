@@ -28,7 +28,7 @@ import { Button } from './core/Button';
 import { collectArgumentValues } from './core/Editor/twig/util';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
-import { LoadingIcon } from './core/LoadingIcon';
+import { LoadingIcon } from '@yaakapp-internal/ui';
 import { PlainInput } from './core/PlainInput';
 import { HStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';

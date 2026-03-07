@@ -8,7 +8,7 @@ import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 
 type Props = {

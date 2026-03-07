@@ -10,7 +10,7 @@ import type { EditorProps } from '../core/Editor/Editor';
 import { Editor } from '../core/Editor/LazyEditor';
 import { EventDetailHeader, EventViewer } from '../core/EventViewer';
 import { EventViewerRow } from '../core/EventViewerRow';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { InlineCode } from '../core/InlineCode';
 import { HStack, VStack } from '../core/Stacks';
 

@@ -27,7 +27,7 @@ import { DropMarker } from '../../DropMarker';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import type { ButtonProps } from '../Button';
 import { Button } from '../Button';
-import { Icon } from '../Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import type { RadioDropdownProps } from '../RadioDropdown';
 import { RadioDropdown } from '../RadioDropdown';
 

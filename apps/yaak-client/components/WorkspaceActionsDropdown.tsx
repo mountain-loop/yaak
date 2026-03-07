@@ -22,7 +22,7 @@ import { CloneGitRepositoryDialog } from './CloneGitRepositoryDialog';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import type { DropdownItem } from './core/Dropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import type { RadioDropdownItem } from './core/RadioDropdown';
 import { RadioDropdown } from './core/RadioDropdown';
 import { SwitchWorkspaceDialog } from './SwitchWorkspaceDialog';

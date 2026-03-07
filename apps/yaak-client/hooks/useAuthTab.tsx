@@ -3,7 +3,7 @@ import { modelTypeLabel, patchModel } from '@yaakapp-internal/models';
 import { useMemo } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { Icon } from '../components/core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconTooltip } from '../components/core/IconTooltip';
 import { InlineCode } from '../components/core/InlineCode';
 import { HStack } from '../components/core/Stacks';

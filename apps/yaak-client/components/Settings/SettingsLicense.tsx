@@ -8,7 +8,7 @@ import { pluralizeCount } from '../../lib/pluralize';
 import { CargoFeature } from '../CargoFeature';
 import { Banner } from '../core/Banner';
 import { Button } from '../core/Button';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
 import { Separator } from '../core/Separator';

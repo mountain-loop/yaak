@@ -14,7 +14,7 @@ import { computeSideForDragMove } from '../../../lib/dnd';
 import { jotaiStore } from '../../../lib/jotai';
 import type { ContextMenuProps, DropdownItem } from '../Dropdown';
 import { ContextMenu } from '../Dropdown';
-import { Icon } from '../Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
 import type { TreeNode } from './common';
 import { getNodeKey } from './common';

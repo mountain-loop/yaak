@@ -2,7 +2,7 @@ import { Link as RouterLink } from '@tanstack/react-router';
 import classNames from 'classnames';
 import type { HTMLAttributes } from 'react';
 import { appInfo } from '../../lib/appInfo';
-import { Icon } from './Icon';
+import { Icon } from '@yaakapp-internal/ui';
 
 interface Props extends HTMLAttributes<HTMLAnchorElement> {
   href: string;

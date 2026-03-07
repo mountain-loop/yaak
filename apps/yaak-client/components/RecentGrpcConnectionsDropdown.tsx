@@ -4,7 +4,7 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import { useDeleteGrpcConnections } from '../hooks/useDeleteGrpcConnections';
 import { pluralizeCount } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
 

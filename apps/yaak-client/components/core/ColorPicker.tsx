@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import { useState } from 'react';
 import { HexColorPicker } from 'react-colorful';
 import { useRandomKey } from '../../hooks/useRandomKey';
-import { Icon } from './Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { PlainInput } from './PlainInput';
 
 interface Props {

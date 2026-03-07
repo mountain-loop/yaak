@@ -1,6 +1,6 @@
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import { Icon } from './Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconTooltip } from './IconTooltip';
 import { HStack } from './Stacks';
 

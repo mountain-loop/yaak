@@ -14,7 +14,7 @@ import { CargoFeature } from '../CargoFeature';
 import { Button } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { Link } from '../core/Link';
 import { Select } from '../core/Select';
 import { HStack, VStack } from '../core/Stacks';

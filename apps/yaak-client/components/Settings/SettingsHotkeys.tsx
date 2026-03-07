@@ -18,7 +18,7 @@ import { Button } from '../core/Button';
 import { Dropdown, type DropdownItem } from '../core/Dropdown';
 import { Heading } from '../core/Heading';
 import { HotkeyRaw } from '../core/Hotkey';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from '../core/IconButton';
 import { PlainInput } from '../core/PlainInput';
 import { HStack, VStack } from '../core/Stacks';

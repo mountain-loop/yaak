@@ -11,7 +11,7 @@ import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
 import { RadioDropdown } from './core/RadioDropdown';

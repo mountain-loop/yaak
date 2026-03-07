@@ -9,7 +9,7 @@ import { showDialog } from '../lib/dialog';
 import { importData } from '../lib/importData';
 import type { DropdownRef } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 

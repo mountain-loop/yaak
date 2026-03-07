@@ -35,8 +35,7 @@ import { ErrorBoundary } from '../ErrorBoundary';
 import { Overlay } from '../Overlay';
 import { Button } from './Button';
 import { Hotkey } from './Hotkey';
-import { Icon, type IconProps } from './Icon';
-import { LoadingIcon } from './LoadingIcon';
+import { Icon, LoadingIcon, type IconProps } from '@yaakapp-internal/ui';
 import { Separator } from './Separator';
 import { HStack, VStack } from './Stacks';
 

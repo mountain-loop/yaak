@@ -6,7 +6,7 @@ import { useSaveResponse } from '../hooks/useSaveResponse';
 import { pluralize } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
 import { HttpStatusTag } from './core/HttpStatusTag';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { HStack } from './core/Stacks';
 

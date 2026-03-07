@@ -3,7 +3,7 @@ import { type ReactNode, useRef } from 'react';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { generateId } from '../../lib/generateId';
 import { Button } from './Button';
-import type { IconProps } from './Icon';
+import type { IconProps } from '@yaakapp-internal/ui';
 import { IconButton, type IconButtonProps } from './IconButton';
 import { Label } from './Label';
 import { HStack } from './Stacks';

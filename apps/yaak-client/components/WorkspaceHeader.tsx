@@ -6,7 +6,7 @@ import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { PillButton } from './core/PillButton';
 import { HStack } from './core/Stacks';

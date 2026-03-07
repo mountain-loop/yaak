@@ -1,6 +1,9 @@
 export { Button } from "./components/Button";
 export type { ButtonProps } from "./components/Button";
 export { HeaderSize } from "./components/HeaderSize";
+export { Icon } from "./components/Icon";
+export type { IconProps } from "./components/Icon";
+export { LoadingIcon } from "./components/LoadingIcon";
 export { WindowControls } from "./components/WindowControls";
 export { useIsFullscreen } from "./hooks/useIsFullscreen";
 export { useDebouncedValue } from "./hooks/useDebouncedValue";

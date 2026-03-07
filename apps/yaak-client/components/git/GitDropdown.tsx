@@ -16,7 +16,7 @@ import { showErrorToast, showToast } from '../../lib/toast';
 import { Banner } from '../core/Banner';
 import type { DropdownItem } from '../core/Dropdown';
 import { Dropdown } from '../core/Dropdown';
-import { Icon } from '../core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { InlineCode } from '../core/InlineCode';
 import { gitCallbacks } from './callbacks';
 import { GitCommitDialog } from './GitCommitDialog';

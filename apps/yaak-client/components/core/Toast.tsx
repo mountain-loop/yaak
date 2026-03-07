@@ -4,8 +4,7 @@ import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
 
 import { useKey } from 'react-use';
-import type { IconProps } from './Icon';
-import { Icon } from './Icon';
+import { Icon, type IconProps } from '@yaakapp-internal/ui';
 import { IconButton } from './IconButton';
 import { VStack } from './Stacks';
 

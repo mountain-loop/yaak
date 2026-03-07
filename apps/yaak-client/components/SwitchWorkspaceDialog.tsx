@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { switchWorkspace } from '../commands/switchWorkspace';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
-import { Icon } from './core/Icon';
+import { Icon } from '@yaakapp-internal/ui';
 import { InlineCode } from './core/InlineCode';
 import { HStack, VStack } from './core/Stacks';
 
