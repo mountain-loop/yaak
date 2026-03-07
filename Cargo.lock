@@ -10297,6 +10297,7 @@ dependencies = [
  "yaak-tauri-utils",
  "yaak-templates",
  "yaak-tls",
+ "yaak-window",
  "yaak-ws",
 ]
 
@@ -10304,10 +10305,12 @@ dependencies = [
 name = "yaak-app-proxy"
 version = "0.0.0"
 dependencies = [
+ "log 0.4.29",
  "serde",
  "tauri",
  "tauri-build",
  "yaak-proxy",
+ "yaak-window",
 ]
 
 [[package]]
@@ -10630,6 +10633,17 @@ dependencies = [
  "thiserror 2.0.17",
  "url",
  "yaak-models",
+]
+
+[[package]]
+name = "yaak-window"
+version = "0.1.0"
+dependencies = [
+ "log 0.4.29",
+ "md5 0.8.0",
+ "rand 0.9.1",
+ "tauri",
+ "tokio",
 ]
 
 [[package]]

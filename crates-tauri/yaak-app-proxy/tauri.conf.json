@@ -10,16 +10,7 @@
   },
   "app": {
     "withGlobalTauri": false,
-    "windows": [
-      {
-        "label": "main",
-        "title": "Yaak Proxy",
-        "width": 1000,
-        "height": 700,
-        "minWidth": 720,
-        "minHeight": 480
-      }
-    ]
+    "windows": []
   },
   "bundle": {
     "icon": [

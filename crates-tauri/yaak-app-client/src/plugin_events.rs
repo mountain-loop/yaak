@@ -3,7 +3,7 @@ use crate::http_request::send_http_request_with_context;
 use crate::models_ext::BlobManagerExt;
 use crate::models_ext::QueryManagerExt;
 use crate::render::{render_grpc_request, render_http_request, render_json_value};
-use crate::window::{CreateWindowConfig, create_window};
+use yaak_window::window::{CreateWindowConfig, create_window};
 use crate::{
     call_frontend, cookie_jar_from_window, environment_from_window, get_window_from_plugin_context,
     workspace_from_window,
@@ -320,6 +320,7 @@ async fn handle_host_plugin_request<R: Runtime>(
         HostRequest::OpenWindow(req) => {
             let (navigation_tx, mut navigation_rx) = tokio::sync::mpsc::channel(128);
             let (close_tx, mut close_rx) = tokio::sync::mpsc::channel(128);
+            let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
             let win_config = CreateWindowConfig {
                 url: &req.url,
                 label: &req.label,
@@ -328,6 +329,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 close_tx: Some(close_tx),
                 inner_size: req.size.clone().map(|s| (s.width, s.height)),
                 data_dir_key: req.data_dir_key.clone(),
+                use_native_titlebar,
                 ..Default::default()
             };
             if let Err(e) = create_window(app_handle, win_config) {

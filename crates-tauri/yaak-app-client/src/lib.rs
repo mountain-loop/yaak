@@ -78,9 +78,78 @@ mod render;
 mod sync_ext;
 mod updates;
 mod uri_scheme;
-mod window;
 mod window_menu;
 mod ws_ext;
+
+fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
+    #[allow(unused_variables)]
+    let menu = window_menu::app_menu(win.app_handle())?;
+
+    // This causes the window to not be clickable (in AppImage), so disable on Linux
+    #[cfg(not(target_os = "linux"))]
+    win.app_handle().set_menu(menu).expect("Failed to set app menu");
+
+    let webview_window = win.clone();
+    win.on_menu_event(move |w, event| {
+        use tauri::{Emitter, LogicalSize, PhysicalSize};
+        use tauri_plugin_opener::OpenerExt;
+
+        if !w.is_focused().unwrap() {
+            return;
+        }
+
+        let event_id = event.id().0.as_str();
+        match event_id {
+            "hacked_quit" => {
+                w.webview_windows().iter().for_each(|(_, w)| {
+                    info!("Closing window {}", w.label());
+                    let _ = w.close();
+                });
+            }
+            "close" => w.close().unwrap(),
+            "zoom_reset" => w.emit("zoom_reset", true).unwrap(),
+            "zoom_in" => w.emit("zoom_in", true).unwrap(),
+            "zoom_out" => w.emit("zoom_out", true).unwrap(),
+            "settings" => w.emit("settings", true).unwrap(),
+            "open_feedback" => {
+                if let Err(e) =
+                    w.app_handle().opener().open_url("https://yaak.app/feedback", None::<&str>)
+                {
+                    warn!("Failed to open feedback {e:?}")
+                }
+            }
+
+            // Commands for development
+            "dev.reset_size" => webview_window
+                .set_size(LogicalSize::new(1100.0, 600.0))
+                .unwrap(),
+            "dev.reset_size_16x9" => {
+                let width = webview_window.outer_size().unwrap().width;
+                let height = width * 9 / 16;
+                webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
+            }
+            "dev.reset_size_16x10" => {
+                let width = webview_window.outer_size().unwrap().width;
+                let height = width * 10 / 16;
+                webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
+            }
+            "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
+            "dev.generate_theme_css" => {
+                w.emit("generate_theme_css", true).unwrap();
+            }
+            "dev.toggle_devtools" => {
+                if webview_window.is_devtools_open() {
+                    webview_window.close_devtools();
+                } else {
+                    webview_window.open_devtools();
+                }
+            }
+            _ => {}
+        }
+    });
+
+    Ok(())
+}
 
 /// Extension trait for easily creating a PluginContext from a WebviewWindow
 pub trait PluginContextExt<R: Runtime> {
@@ -1452,13 +1521,17 @@ async fn cmd_new_child_window(
     title: &str,
     inner_size: (f64, f64),
 ) -> YaakResult<()> {
-    window::create_child_window(&parent_window, url, label, title, inner_size)?;
+    let use_native_titlebar = parent_window.app_handle().db().get_settings().use_native_titlebar;
+    let win = yaak_window::window::create_child_window(&parent_window, url, label, title, inner_size, use_native_titlebar)?;
+    setup_window_menu(&win)?;
     Ok(())
 }
 
 #[tauri::command]
 async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> YaakResult<()> {
-    window::create_main_window(&app_handle, url)?;
+    let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
+    let win = yaak_window::window::create_main_window(&app_handle, url, use_native_titlebar)?;
+    setup_window_menu(&win)?;
     Ok(())
 }
 
@@ -1737,7 +1810,10 @@ pub fn run() {
         .run(|app_handle, event| {
             match event {
                 RunEvent::Ready => {
-                    let _ = window::create_main_window(app_handle, "/");
+                    let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
+                    if let Ok(win) = yaak_window::window::create_main_window(app_handle, "/", use_native_titlebar) {
+                        let _ = setup_window_menu(&win);
+                    }
                     let h = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         let info = history::get_or_upsert_launch_info(&h);

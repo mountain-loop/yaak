@@ -27,6 +27,7 @@ members = [
     "crates-tauri/yaak-license",
     "crates-tauri/yaak-mac-window",
     "crates-tauri/yaak-tauri-utils",
+    "crates-tauri/yaak-window",
 ]
 
 [workspace.dependencies]
@@ -72,6 +73,7 @@ yaak-fonts = { path = "crates-tauri/yaak-fonts" }
 yaak-license = { path = "crates-tauri/yaak-license" }
 yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
 yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
+yaak-window = { path = "crates-tauri/yaak-window" }
 
 [profile.release]
 strip = false

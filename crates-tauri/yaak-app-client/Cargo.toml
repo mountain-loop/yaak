@@ -75,4 +75,5 @@ yaak-sse = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }
+yaak-window = { workspace = true }
 yaak-ws = { workspace = true }

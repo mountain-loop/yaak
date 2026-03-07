@@ -1,13 +1,6 @@
-use crate::error::Result;
-use crate::models_ext::QueryManagerExt;
-use crate::window_menu::app_menu;
-use log::{info, warn};
+use log::info;
 use rand::random;
-use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, PhysicalSize, Runtime, WebviewUrl, WebviewWindow,
-    WindowEvent,
-};
-use tauri_plugin_opener::OpenerExt;
+use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WindowEvent};
 use tokio::sync::mpsc;
 
 const DEFAULT_WINDOW_WIDTH: f64 = 1100.0;
@@ -16,11 +9,11 @@ const DEFAULT_WINDOW_HEIGHT: f64 = 600.0;
 const MIN_WINDOW_WIDTH: f64 = 300.0;
 const MIN_WINDOW_HEIGHT: f64 = 300.0;
 
-pub(crate) const MAIN_WINDOW_PREFIX: &str = "main_";
+pub const MAIN_WINDOW_PREFIX: &str = "main_";
 const OTHER_WINDOW_PREFIX: &str = "other_";
 
 #[derive(Default, Debug)]
-pub(crate) struct CreateWindowConfig<'s> {
+pub struct CreateWindowConfig<'s> {
     pub url: &'s str,
     pub label: &'s str,
     pub title: &'s str,
@@ -29,27 +22,22 @@ pub(crate) struct CreateWindowConfig<'s> {
     pub navigation_tx: Option<mpsc::Sender<String>>,
     pub close_tx: Option<mpsc::Sender<()>>,
     pub data_dir_key: Option<String>,
+    pub visible: bool,
     pub hide_titlebar: bool,
+    pub use_native_titlebar: bool,
 }
 
-pub(crate) fn create_window<R: Runtime>(
+pub fn create_window<R: Runtime>(
     handle: &AppHandle<R>,
     config: CreateWindowConfig,
-) -> Result<WebviewWindow<R>> {
-    #[allow(unused_variables)]
-    let menu = app_menu(handle)?;
-
-    // This causes the window to not be clickable (in AppImage), so disable on Linux
-    #[cfg(not(target_os = "linux"))]
-    handle.set_menu(menu).expect("Failed to set app menu");
-
+) -> tauri::Result<WebviewWindow<R>> {
     info!("Create new window label={}", config.label);
 
     let mut win_builder =
         tauri::WebviewWindowBuilder::new(handle, config.label, WebviewUrl::App(config.url.into()))
             .title(config.title)
             .resizable(true)
-            .visible(false) // To prevent theme flashing, the frontend code calls show() immediately after configuring the theme
+            .visible(config.visible)
             .fullscreen(false)
             .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
 
@@ -96,8 +84,7 @@ pub(crate) fn create_window<R: Runtime>(
         });
     }
 
-    let settings = handle.db().get_settings();
-    if config.hide_titlebar && !settings.use_native_titlebar {
+    if config.hide_titlebar && !config.use_native_titlebar {
         #[cfg(target_os = "macos")]
         {
             use tauri::TitleBarStyle;
@@ -129,68 +116,14 @@ pub(crate) fn create_window<R: Runtime>(
         });
     }
 
-    let webview_window = win.clone();
-    win.on_menu_event(move |w, event| {
-        if !w.is_focused().unwrap() {
-            return;
-        }
-
-        let event_id = event.id().0.as_str();
-        match event_id {
-            "hacked_quit" => {
-                // Cmd+Q on macOS doesn't trigger `CloseRequested` so we use a custom Quit menu
-                // and trigger close() for each window.
-                w.webview_windows().iter().for_each(|(_, w)| {
-                    info!("Closing window {}", w.label());
-                    let _ = w.close();
-                });
-            }
-            "close" => w.close().unwrap(),
-            "zoom_reset" => w.emit("zoom_reset", true).unwrap(),
-            "zoom_in" => w.emit("zoom_in", true).unwrap(),
-            "zoom_out" => w.emit("zoom_out", true).unwrap(),
-            "settings" => w.emit("settings", true).unwrap(),
-            "open_feedback" => {
-                if let Err(e) =
-                    w.app_handle().opener().open_url("https://yaak.app/feedback", None::<&str>)
-                {
-                    warn!("Failed to open feedback {e:?}")
-                }
-            }
-
-            // Commands for development
-            "dev.reset_size" => webview_window
-                .set_size(LogicalSize::new(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT))
-                .unwrap(),
-            "dev.reset_size_16x9" => {
-                let width = webview_window.outer_size().unwrap().width;
-                let height = width * 9 / 16;
-                webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
-            }
-            "dev.reset_size_16x10" => {
-                let width = webview_window.outer_size().unwrap().width;
-                let height = width * 10 / 16;
-                webview_window.set_size(PhysicalSize::new(width, height)).unwrap()
-            }
-            "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
-            "dev.generate_theme_css" => {
-                w.emit("generate_theme_css", true).unwrap();
-            }
-            "dev.toggle_devtools" => {
-                if webview_window.is_devtools_open() {
-                    webview_window.close_devtools();
-                } else {
-                    webview_window.open_devtools();
-                }
-            }
-            _ => {}
-        }
-    });
-
     Ok(win)
 }
 
-pub(crate) fn create_main_window(handle: &AppHandle, url: &str) -> Result<WebviewWindow> {
+pub fn create_main_window(
+    handle: &AppHandle,
+    url: &str,
+    use_native_titlebar: bool,
+) -> tauri::Result<WebviewWindow> {
     let mut counter = 0;
     let label = loop {
         let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
@@ -212,19 +145,21 @@ pub(crate) fn create_main_window(handle: &AppHandle, url: &str) -> Result<Webvie
             100.0 + random::<f64>() * 20.0,
         )),
         hide_titlebar: true,
+        use_native_titlebar,
         ..Default::default()
     };
 
     create_window(handle, config)
 }
 
-pub(crate) fn create_child_window(
+pub fn create_child_window(
     parent_window: &WebviewWindow,
     url: &str,
     label: &str,
     title: &str,
     inner_size: (f64, f64),
-) -> Result<WebviewWindow> {
+    use_native_titlebar: bool,
+) -> tauri::Result<WebviewWindow> {
     let app_handle = parent_window.app_handle();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
     let scale_factor = parent_window.scale_factor()?;
@@ -245,6 +180,7 @@ pub(crate) fn create_child_window(
         inner_size: Some(inner_size),
         position: Some(position),
         hide_titlebar: true,
+        use_native_titlebar,
         ..Default::default()
     };
 

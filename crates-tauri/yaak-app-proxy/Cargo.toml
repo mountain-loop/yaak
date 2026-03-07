@@ -13,6 +13,8 @@ crate-type = ["staticlib", "cdylib", "lib"]
 tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
+log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true }
 yaak-proxy = { workspace = true }
+yaak-window = { workspace = true }
