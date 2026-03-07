@@ -1,5 +1,5 @@
 import { type } from '@tauri-apps/plugin-os';
-import { useIsFullscreen } from './useIsFullscreen';
+import { useIsFullscreen } from '@yaakapp-internal/ui';
 
 export function useStoplightsVisible() {
   const fullscreen = useIsFullscreen();

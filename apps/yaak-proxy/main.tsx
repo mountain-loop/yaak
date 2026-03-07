@@ -1,9 +1,13 @@
 import "./main.css";
-import { Button } from "@yaakapp-internal/ui";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { type } from "@tauri-apps/plugin-os";
+import { Button, HeaderSize } from "@yaakapp-internal/ui";
 import { StrictMode } from "react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+
+const queryClient = new QueryClient();
 
 type ProxyStartResult = {
   port: number;
@@ -14,6 +18,7 @@ function App() {
   const [status, setStatus] = useState("Idle");
   const [port, setPort] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const osType = type();
 
   async function startProxy() {
     setBusy(true);
@@ -46,46 +51,61 @@ function App() {
   }
 
   return (
-    <main className="h-full w-full overflow-auto p-6">
-      <section className="flex items-start">
-        <div className="flex w-full max-w-xl flex-col gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-text">Yaak Proxy</h1>
-            <p className="mt-2 text-sm text-text-subtle">Status: {status}</p>
-            <p className="mt-1 text-sm text-text-subtle">
-              Port: {port ?? "Not running"}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Button
-              disabled={busy}
-              onClick={startProxy}
-              size="sm"
-              tone="primary"
-            >
-              Start Proxy
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={stopProxy}
-              size="sm"
-              variant="border"
-            >
-              Stop Proxy
-            </Button>
-            <Button size="sm" type="button">
-              Shared Button
-            </Button>
-          </div>
+    <div className="h-full w-full grid grid-rows-[auto_1fr]">
+      <HeaderSize
+        size="lg"
+        osType={osType}
+        hideWindowControls={false}
+        useNativeTitlebar={false}
+        interfaceScale={1}
+        className="x-theme-appHeader bg-surface"
+      >
+        <div
+          data-tauri-drag-region
+          className="flex items-center h-full px-2 text-sm font-semibold text-text-subtle"
+        >
+          Yaak Proxy
         </div>
-      </section>
-    </main>
+      </HeaderSize>
+      <main className="overflow-auto p-6">
+        <section className="flex items-start">
+          <div className="flex w-full max-w-xl flex-col gap-4">
+            <div>
+              <p className="text-sm text-text-subtle">Status: {status}</p>
+              <p className="mt-1 text-sm text-text-subtle">
+                Port: {port ?? "Not running"}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                disabled={busy}
+                onClick={startProxy}
+                size="sm"
+                tone="primary"
+              >
+                Start Proxy
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={stopProxy}
+                size="sm"
+                variant="border"
+              >
+                Stop Proxy
+              </Button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
-    <App />
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
   </StrictMode>,
 );

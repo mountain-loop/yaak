@@ -1,31 +1,28 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { type } from '@tauri-apps/plugin-os';
-import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { WINDOW_CONTROLS_WIDTH } from '../lib/constants';
-import { Button } from './core/Button';
-import { HStack } from './core/Stacks';
+import { Button } from './Button';
 
 interface Props {
   className?: string;
   onlyX?: boolean;
-  macos?: boolean;
+  osType: string;
+  hideWindowControls: boolean;
+  useNativeTitlebar: boolean;
 }
 
-export function WindowControls({ className, onlyX }: Props) {
+export function WindowControls({ className, onlyX, osType, hideWindowControls, useNativeTitlebar }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
-  const settings = useAtomValue(settingsAtom);
+
   // Never show controls on macOS or if hideWindowControls is true
-  if (type() === 'macos' || settings.hideWindowControls || settings.useNativeTitlebar) {
+  if (osType === 'macos' || hideWindowControls || useNativeTitlebar) {
     return null;
   }
 
   return (
-    <HStack
-      className={classNames(className, 'ml-4 absolute right-0 top-0 bottom-0')}
-      justifyContent="end"
+    <div
+      className={classNames(className, 'ml-4 absolute right-0 top-0 bottom-0 flex items-center justify-end')}
       style={{ width: WINDOW_CONTROLS_WIDTH }}
       data-tauri-drag-region
     >
@@ -88,6 +85,6 @@ export function WindowControls({ className, onlyX }: Props) {
           />
         </svg>
       </Button>
-    </HStack>
+    </div>
   );
 }

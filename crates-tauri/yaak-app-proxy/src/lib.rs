@@ -58,6 +58,7 @@ fn proxy_stop(state: State<'_, ProxyState>) -> Result<bool, String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .manage(ProxyState::default())
         .invoke_handler(tauri::generate_handler![proxy_metadata, proxy_start, proxy_stop])
         .build(tauri::generate_context!())

@@ -3,6 +3,8 @@
     "target": "es2021",
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "strict": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
     "module": "ESNext",
     "moduleResolution": "Node",
     "jsx": "react-jsx",

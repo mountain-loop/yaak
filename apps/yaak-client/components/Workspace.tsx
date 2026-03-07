@@ -1,4 +1,5 @@
-import { workspacesAtom } from '@yaakapp-internal/models';
+import { type } from '@tauri-apps/plugin-os';
+import { settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
@@ -39,7 +40,7 @@ import { HStack } from './core/Stacks';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
-import { HeaderSize } from './HeaderSize';
+import { HeaderSize } from '@yaakapp-internal/ui';
 import { HttpRequestLayout } from './HttpRequestLayout';
 import { Overlay } from './Overlay';
 import type { ResizeHandleEvent } from './ResizeHandle';
@@ -59,6 +60,8 @@ export function Workspace() {
   useGlobalWorkspaceHooks();
 
   const workspaces = useAtomValue(workspacesAtom);
+  const settings = useAtomValue(settingsAtom);
+  const osType = type();
   const [width, setWidth, resetWidth] = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
@@ -146,7 +149,7 @@ export function Workspace() {
               'grid grid-rows-[auto_1fr]',
             )}
           >
-            <HeaderSize hideControls size="lg" className="border-transparent flex items-center">
+            <HeaderSize hideControls size="lg" className="border-transparent flex items-center" osType={osType} hideWindowControls={settings.hideWindowControls} useNativeTitlebar={settings.useNativeTitlebar} interfaceScale={settings.interfaceScale}>
               <SidebarActions />
             </HeaderSize>
             <ErrorBoundary name="Sidebar (Floating)">
@@ -178,6 +181,10 @@ export function Workspace() {
         size="lg"
         className="relative x-theme-appHeader bg-surface"
         style={head}
+        osType={osType}
+        hideWindowControls={settings.hideWindowControls}
+        useNativeTitlebar={settings.useNativeTitlebar}
+        interfaceScale={settings.interfaceScale}
       >
         <div className="absolute inset-0 pointer-events-none">
           <div // Add subtle background

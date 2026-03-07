@@ -12,7 +12,7 @@ import { CountBadge } from '../core/CountBadge';
 import { Icon } from '../core/Icon';
 import { HStack } from '../core/Stacks';
 import { TabContent, type TabItem, Tabs } from '../core/Tabs/Tabs';
-import { HeaderSize } from '../HeaderSize';
+import { HeaderSize } from '@yaakapp-internal/ui';
 import { SettingsCertificates } from './SettingsCertificates';
 import { SettingsGeneral } from './SettingsGeneral';
 import { SettingsHotkeys } from './SettingsHotkeys';
@@ -77,6 +77,10 @@ export default function Settings({ hide }: Props) {
           onlyXWindowControl
           size="md"
           className="x-theme-appHeader bg-surface text-text-subtle flex items-center justify-center border-b border-border-subtle text-sm font-semibold"
+          osType={type()}
+          hideWindowControls={settings.hideWindowControls}
+          useNativeTitlebar={settings.useNativeTitlebar}
+          interfaceScale={settings.interfaceScale}
         >
           <HStack
             space={2}

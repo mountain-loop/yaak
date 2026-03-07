@@ -16,5 +16,6 @@ tauri-build = { version = "2.5.3", features = [] }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tauri = { workspace = true }
+tauri-plugin-os = "2.3.2"
 yaak-proxy = { workspace = true }
 yaak-window = { workspace = true }

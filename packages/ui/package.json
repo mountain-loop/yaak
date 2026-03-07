@@ -6,8 +6,13 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
+    "@tanstack/react-query": "^5.90.5",
+    "@tauri-apps/api": "^2.9.1",
+    "@yaakapp-internal/lib": "^1.0.0",
+    "classnames": "^2.5.1",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-use": "^17.6.0"
   },
   "peerDependencies": {
     "react": "^19.1.0",

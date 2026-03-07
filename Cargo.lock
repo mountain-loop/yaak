@@ -10309,6 +10309,7 @@ dependencies = [
  "serde",
  "tauri",
  "tauri-build",
+ "tauri-plugin-os",
  "yaak-proxy",
  "yaak-window",
 ]

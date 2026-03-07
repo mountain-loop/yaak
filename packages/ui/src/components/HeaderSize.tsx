@@ -1,7 +1,4 @@
-import { type } from '@tauri-apps/plugin-os';
-import { settingsAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useIsFullscreen } from '../hooks/useIsFullscreen';
@@ -14,6 +11,10 @@ interface HeaderSizeProps extends HTMLAttributes<HTMLDivElement> {
   ignoreControlsSpacing?: boolean;
   onlyXWindowControl?: boolean;
   hideControls?: boolean;
+  osType: string;
+  hideWindowControls: boolean;
+  useNativeTitlebar: boolean;
+  interfaceScale: number;
 }
 
 export function HeaderSize({
@@ -24,10 +25,12 @@ export function HeaderSize({
   onlyXWindowControl,
   children,
   hideControls,
+  osType,
+  hideWindowControls,
+  useNativeTitlebar,
+  interfaceScale,
 }: HeaderSizeProps) {
-  const settings = useAtomValue(settingsAtom);
   const isFullscreen = useIsFullscreen();
-  const nativeTitlebar = settings.useNativeTitlebar;
   const finalStyle = useMemo<CSSProperties>(() => {
     const s = { ...style };
 
@@ -35,14 +38,14 @@ export function HeaderSize({
     if (size === 'md') s.minHeight = HEADER_SIZE_MD;
     if (size === 'lg') s.minHeight = HEADER_SIZE_LG;
 
-    if (nativeTitlebar) {
+    if (useNativeTitlebar) {
       // No style updates when using native titlebar
-    } else if (type() === 'macos') {
+    } else if (osType === 'macos') {
       if (!isFullscreen) {
         // Add large padding for window controls
-        s.paddingLeft = 72 / settings.interfaceScale;
+        s.paddingLeft = 72 / interfaceScale;
       }
-    } else if (!ignoreControlsSpacing && !settings.hideWindowControls) {
+    } else if (!ignoreControlsSpacing && !hideWindowControls) {
       s.paddingRight = WINDOW_CONTROLS_WIDTH;
     }
 
@@ -50,11 +53,12 @@ export function HeaderSize({
   }, [
     ignoreControlsSpacing,
     isFullscreen,
-    settings.hideWindowControls,
-    settings.interfaceScale,
+    hideWindowControls,
+    interfaceScale,
     size,
     style,
-    nativeTitlebar,
+    useNativeTitlebar,
+    osType,
   ]);
 
   return (
@@ -70,6 +74,7 @@ export function HeaderSize({
     >
       {/* NOTE: This needs display:grid or else the element shrinks (even though scrollable) */}
       <div
+        data-tauri-drag-region
         className={classNames(
           'pointer-events-none h-full w-full overflow-x-auto hide-scrollbars grid',
           'px-1', // Give it some space on either end for focus outlines
@@ -77,7 +82,14 @@ export function HeaderSize({
       >
         {children}
       </div>
-      {!hideControls && !nativeTitlebar && <WindowControls onlyX={onlyXWindowControl} />}
+      {!hideControls && !useNativeTitlebar && (
+        <WindowControls
+          onlyX={onlyXWindowControl}
+          osType={osType}
+          hideWindowControls={hideWindowControls}
+          useNativeTitlebar={useNativeTitlebar}
+        />
+      )}
     </div>
   );
 }

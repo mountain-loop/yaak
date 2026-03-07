@@ -15,7 +15,6 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "baseUrl": ".",
     "paths": {
       "@yaakapp-internal/theme": ["../../packages/theme/src/index.ts"],
       "@yaakapp-internal/theme/*": ["../../packages/theme/src/*"],
