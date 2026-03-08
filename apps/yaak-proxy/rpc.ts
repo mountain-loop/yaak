@@ -22,7 +22,9 @@ export function listen<K extends keyof RpcEventSchema>(
 ): () => void {
   let unsub: (() => void) | null = null;
   tauriListen<RpcEventSchema[K]>(event, (e) => callback(e.payload))
-    .then((fn) => (unsub = fn))
+    .then((fn) => {
+      unsub = fn;
+    })
     .catch(console.error);
   return () => unsub?.();
 }
