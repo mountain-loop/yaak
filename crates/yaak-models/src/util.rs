@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use ts_rs::TS;
 use yaak_core::WorkspaceContext;
 
-pub use yaak_database::{generate_id, generate_id_of_length, generate_prefixed_id};
+pub use yaak_database::{ModelChangeEvent, generate_id, generate_id_of_length, generate_prefixed_id};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -19,14 +19,6 @@ pub struct ModelPayload {
     pub model: AnyModel,
     pub update_source: UpdateSource,
     pub change: ModelChangeEvent,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case", tag = "type")]
-#[ts(export, export_to = "gen_models.ts")]
-pub enum ModelChangeEvent {
-    Upsert { created: bool },
-    Delete,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

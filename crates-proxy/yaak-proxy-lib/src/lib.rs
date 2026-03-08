@@ -7,24 +7,26 @@ use std::sync::Mutex;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use yaak_database::UpdateSource;
+use yaak_database::{ModelChangeEvent, UpdateSource};
 use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
-use yaak_rpc::{RpcError, define_rpc};
+use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
 use crate::db::ProxyQueryManager;
-use crate::models::{ProxyEntry, ProxyHeader};
+use crate::models::{HttpExchange, ModelPayload, ProxyHeader};
 
 // -- Context --
 
 pub struct ProxyCtx {
     handle: Mutex<Option<ProxyHandle>>,
     pub db: ProxyQueryManager,
+    pub events: RpcEventEmitter,
 }
 
 impl ProxyCtx {
-    pub fn new(db_path: &Path) -> Self {
+    pub fn new(db_path: &Path, events: RpcEventEmitter) -> Self {
         Self {
             handle: Mutex::new(None),
             db: ProxyQueryManager::new(db_path),
+            events,
         }
     }
 }
@@ -68,7 +70,8 @@ fn proxy_start(ctx: &ProxyCtx, req: ProxyStartRequest) -> Result<ProxyStartRespo
     // Spawn event loop before storing the handle
     if let Some(event_rx) = proxy_handle.take_event_rx() {
         let db = ctx.db.clone();
-        std::thread::spawn(move || run_event_loop(event_rx, db));
+        let events = ctx.events.clone();
+        std::thread::spawn(move || run_event_loop(event_rx, db, events));
     }
 
     *handle = Some(proxy_handle);
@@ -85,7 +88,7 @@ fn proxy_stop(ctx: &ProxyCtx, _req: ProxyStopRequest) -> Result<bool, RpcError> 
 
 // -- Event loop --
 
-fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, db: ProxyQueryManager) {
+fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, db: ProxyQueryManager, events: RpcEventEmitter) {
     let mut in_flight: HashMap<u64, CapturedRequest> = HashMap::new();
 
     while let Ok(event) = rx.recv() {
@@ -140,22 +143,22 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, db: ProxyQueryManag
                     r.response_body_size = size;
                     r.elapsed_ms = r.elapsed_ms.or(Some(elapsed_ms));
                     r.state = RequestState::Complete;
-                    write_entry(&db, &r);
+                    write_entry(&db, &events, &r);
                 }
             }
             ProxyEvent::Error { id, error } => {
                 if let Some(mut r) = in_flight.remove(&id) {
                     r.error = Some(error);
                     r.state = RequestState::Error;
-                    write_entry(&db, &r);
+                    write_entry(&db, &events, &r);
                 }
             }
         }
     }
 }
 
-fn write_entry(db: &ProxyQueryManager, r: &CapturedRequest) {
-    let entry = ProxyEntry {
+fn write_entry(db: &ProxyQueryManager, events: &RpcEventEmitter, r: &CapturedRequest) {
+    let entry = HttpExchange {
         url: r.url.clone(),
         method: r.method.clone(),
         req_headers: r.request_headers.iter()
@@ -171,8 +174,14 @@ fn write_entry(db: &ProxyQueryManager, r: &CapturedRequest) {
         ..Default::default()
     };
     db.with_conn(|ctx| {
-        if let Err(e) = ctx.upsert(&entry, &UpdateSource::Background) {
-            warn!("Failed to write proxy entry: {e}");
+        match ctx.upsert(&entry, &UpdateSource::Background) {
+            Ok((saved, created)) => {
+                events.emit("model_write", &ModelPayload {
+                    model: saved,
+                    change: ModelChangeEvent::Upsert { created },
+                });
+            }
+            Err(e) => warn!("Failed to write proxy entry: {e}"),
         }
     });
 }
@@ -181,6 +190,11 @@ fn write_entry(db: &ProxyQueryManager, r: &CapturedRequest) {
 
 define_rpc! {
     ProxyCtx;
-    "proxy_start" => proxy_start(ProxyStartRequest) -> ProxyStartResponse,
-    "proxy_stop" => proxy_stop(ProxyStopRequest) -> bool,
+    commands {
+        proxy_start(ProxyStartRequest) -> ProxyStartResponse,
+        proxy_stop(ProxyStopRequest) -> bool,
+    }
+    events {
+        model_write(ModelPayload),
+    }
 }

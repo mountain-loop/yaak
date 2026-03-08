@@ -1,7 +1,7 @@
 use log::error;
-use tauri::{Manager, RunEvent, State};
+use tauri::{Emitter, Manager, RunEvent, State};
 use yaak_proxy_lib::ProxyCtx;
-use yaak_rpc::RpcRouter;
+use yaak_rpc::{RpcEventEmitter, RpcRouter};
 use yaak_window::window::CreateWindowConfig;
 
 #[tauri::command]
@@ -20,8 +20,21 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
-            app.manage(ProxyCtx::new(&data_dir.join("proxy.db")));
+
+            let (emitter, event_rx) = RpcEventEmitter::new();
+            app.manage(ProxyCtx::new(&data_dir.join("proxy.db"), emitter));
             app.manage(yaak_proxy_lib::build_router());
+
+            // Drain RPC events and forward as Tauri events
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                for event in event_rx {
+                    if let Err(e) = app_handle.emit(event.event, event.payload) {
+                        error!("Failed to emit RPC event: {e}");
+                    }
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![rpc])

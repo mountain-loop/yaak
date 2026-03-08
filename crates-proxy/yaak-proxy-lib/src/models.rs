@@ -3,7 +3,7 @@ use rusqlite::Row;
 use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_def};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use yaak_database::{Result as DbResult, UpdateSource, UpsertModelInfo, generate_prefixed_id, upsert_date};
+use yaak_database::{ModelChangeEvent, Result as DbResult, UpdateSource, UpsertModelInfo, generate_prefixed_id, upsert_date};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -16,8 +16,8 @@ pub struct ProxyHeader {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
-#[enum_def(table_name = "proxy_entries")]
-pub struct ProxyEntry {
+#[enum_def(table_name = "http_exchanges")]
+pub struct HttpExchange {
     pub id: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -31,21 +31,29 @@ pub struct ProxyEntry {
     pub error: Option<String>,
 }
 
-impl UpsertModelInfo for ProxyEntry {
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct ModelPayload {
+    pub model: HttpExchange,
+    pub change: ModelChangeEvent,
+}
+
+impl UpsertModelInfo for HttpExchange {
     fn table_name() -> impl IntoTableRef + IntoIden {
-        ProxyEntryIden::Table
+        HttpExchangeIden::Table
     }
 
     fn id_column() -> impl IntoIden + Eq + Clone {
-        ProxyEntryIden::Id
+        HttpExchangeIden::Id
     }
 
     fn generate_id() -> String {
-        generate_prefixed_id("pe")
+        generate_prefixed_id("he")
     }
 
     fn order_by() -> (impl IntoColumnRef, Order) {
-        (ProxyEntryIden::CreatedAt, Order::Desc)
+        (HttpExchangeIden::CreatedAt, Order::Desc)
     }
 
     fn get_id(&self) -> String {
@@ -56,7 +64,7 @@ impl UpsertModelInfo for ProxyEntry {
         self,
         source: &UpdateSource,
     ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
-        use ProxyEntryIden::*;
+        use HttpExchangeIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
@@ -73,15 +81,15 @@ impl UpsertModelInfo for ProxyEntry {
 
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
-            ProxyEntryIden::UpdatedAt,
-            ProxyEntryIden::Url,
-            ProxyEntryIden::Method,
-            ProxyEntryIden::ReqHeaders,
-            ProxyEntryIden::ReqBody,
-            ProxyEntryIden::ResStatus,
-            ProxyEntryIden::ResHeaders,
-            ProxyEntryIden::ResBody,
-            ProxyEntryIden::Error,
+            HttpExchangeIden::UpdatedAt,
+            HttpExchangeIden::Url,
+            HttpExchangeIden::Method,
+            HttpExchangeIden::ReqHeaders,
+            HttpExchangeIden::ReqBody,
+            HttpExchangeIden::ResStatus,
+            HttpExchangeIden::ResHeaders,
+            HttpExchangeIden::ResBody,
+            HttpExchangeIden::Error,
         ]
     }
 

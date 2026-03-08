@@ -1,4 +1,4 @@
-CREATE TABLE proxy_entries
+CREATE TABLE http_exchanges
 (
     id          TEXT    NOT NULL PRIMARY KEY,
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,

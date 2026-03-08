@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::mpsc;
 
 /// Type-erased handler function: takes context + JSON payload, returns JSON or error.
 type HandlerFn<Ctx> = Box<dyn Fn(&Ctx, serde_json::Value) -> Result<serde_json::Value, RpcError> + Send + Sync>;
@@ -101,29 +102,97 @@ impl<Ctx> RpcRouter<Ctx> {
     }
 }
 
-/// Define RPC commands with a single source of truth.
+/// A named event carrying a JSON payload, emitted from backend to frontend.
+#[derive(Debug, Clone, Serialize)]
+pub struct RpcEvent {
+    pub event: &'static str,
+    pub payload: serde_json::Value,
+}
+
+/// Channel-based event emitter. The backend calls `emit()`, the transport
+/// adapter (Tauri, WebSocket, etc.) drains the receiver and delivers events.
+#[derive(Clone)]
+pub struct RpcEventEmitter {
+    tx: mpsc::Sender<RpcEvent>,
+}
+
+impl RpcEventEmitter {
+    pub fn new() -> (Self, mpsc::Receiver<RpcEvent>) {
+        let (tx, rx) = mpsc::channel();
+        (Self { tx }, rx)
+    }
+
+    /// Emit a typed event. Serializes the payload to JSON.
+    pub fn emit<T: Serialize>(&self, event: &'static str, payload: &T) {
+        if let Ok(value) = serde_json::to_value(payload) {
+            let _ = self.tx.send(RpcEvent { event, payload: value });
+        }
+    }
+}
+
+/// Define RPC commands and events with a single source of truth.
 ///
 /// Generates:
 /// - `build_router()` — creates an `RpcRouter` with all handlers registered
 /// - `RpcSchema` — a struct with ts-rs derives for TypeScript type generation
+/// - `RpcEventSchema` — (if events declared) a struct mapping event names to payload types
+///
+/// The wire name for each command/event is derived from `stringify!($ident)`.
 ///
 /// # Example
 /// ```ignore
 /// define_rpc! {
 ///     ProxyCtx;
-///     "proxy_start" => proxy_start(ProxyStartRequest) -> ProxyStartResponse,
-///     "proxy_stop" => proxy_stop(ProxyStopRequest) -> bool,
+///     commands {
+///         proxy_start(ProxyStartRequest) -> ProxyStartResponse,
+///         proxy_stop(ProxyStopRequest) -> bool,
+///     }
+///     events {
+///         model_write(ModelPayload),
+///     }
 /// }
 /// ```
 #[macro_export]
 macro_rules! define_rpc {
+    // With both commands and events
     (
         $ctx:ty;
-        $( $name:literal => $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
+        commands {
+            $( $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
+        }
+        events {
+            $( $evt_ident:ident ( $evt_payload:ty ) ),* $(,)?
+        }
     ) => {
         pub fn build_router() -> $crate::RpcRouter<$ctx> {
             let mut router = $crate::RpcRouter::new();
-            $( router.register($name, $crate::rpc_handler!($handler)); )*
+            $( router.register(stringify!($handler), $crate::rpc_handler!($handler)); )*
+            router
+        }
+
+        #[derive(ts_rs::TS)]
+        #[ts(export, export_to = "gen_rpc.ts")]
+        pub struct RpcSchema {
+            $( pub $handler: ($req, $res), )*
+        }
+
+        #[derive(ts_rs::TS)]
+        #[ts(export, export_to = "gen_rpc.ts")]
+        pub struct RpcEventSchema {
+            $( pub $evt_ident: $evt_payload, )*
+        }
+    };
+
+    // Commands only (no events)
+    (
+        $ctx:ty;
+        commands {
+            $( $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
+        }
+    ) => {
+        pub fn build_router() -> $crate::RpcRouter<$ctx> {
+            let mut router = $crate::RpcRouter::new();
+            $( router.register(stringify!($handler), $crate::rpc_handler!($handler)); )*
             router
         }
 

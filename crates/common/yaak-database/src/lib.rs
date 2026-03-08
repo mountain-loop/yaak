@@ -12,7 +12,7 @@ pub use db_context::DbContext;
 pub use error::{Error, Result};
 pub use migrate::run_migrations;
 pub use traits::{UpsertModelInfo, upsert_date};
-pub use update_source::UpdateSource;
+pub use update_source::{ModelChangeEvent, UpdateSource};
 pub use util::{generate_id, generate_id_of_length, generate_prefixed_id};
 
 // Re-export pool types that consumers will need
