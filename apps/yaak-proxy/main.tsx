@@ -1,20 +1,30 @@
-import "./main.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type } from "@tauri-apps/plugin-os";
 import { Button, HeaderSize } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { StrictMode } from "react";
-import { useState } from "react";
+import { createStore, Provider, useAtomValue } from "jotai";
+import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { rpc } from "./rpc";
+import "./main.css";
+import { listen, rpc } from "./rpc";
+import { applyChange, dataAtom, httpExchangesAtom } from "./store";
 
 const queryClient = new QueryClient();
+const jotaiStore = createStore();
+
+// Subscribe to model change events from the backend
+listen("model_write", (payload) => {
+  jotaiStore.set(dataAtom, (prev) =>
+    applyChange(prev, "http_exchange", payload.model, payload.change),
+  );
+});
 
 function App() {
   const [status, setStatus] = useState("Idle");
   const [port, setPort] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const osType = type();
+  const exchanges = useAtomValue(httpExchangesAtom);
 
   async function startProxy() {
     setBusy(true);
@@ -45,7 +55,12 @@ function App() {
   }
 
   return (
-    <div className={classNames('h-full w-full grid grid-rows-[auto_1fr]', osType === 'linux' && 'border border-border-subtle')}>
+    <div
+      className={classNames(
+        "h-full w-full grid grid-rows-[auto_1fr]",
+        osType === "linux" && "border border-border-subtle",
+      )}
+    >
       <HeaderSize
         size="lg"
         osType={osType}
@@ -56,41 +71,54 @@ function App() {
       >
         <div
           data-tauri-drag-region
-          className="flex items-center h-full px-2 text-sm font-semibold text-text-subtle"
+          className="flex items-center px-2 text-sm font-semibold text-text-subtle"
         >
           Yaak Proxy
         </div>
       </HeaderSize>
-      <main className="overflow-auto p-6">
-        <section className="flex items-start">
-          <div className="flex w-full max-w-xl flex-col gap-4">
-            <div>
-              <p className="text-sm text-text-subtle">Status: {status}</p>
-              <p className="mt-1 text-sm text-text-subtle">
-                Port: {port ?? "Not running"}
-              </p>
-            </div>
+      <main className="overflow-auto p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <Button disabled={busy} onClick={startProxy} size="sm" tone="primary">
+            Start Proxy
+          </Button>
+          <Button
+            disabled={busy}
+            onClick={stopProxy}
+            size="sm"
+            variant="border"
+          >
+            Stop Proxy
+          </Button>
+          <span className="text-xs text-text-subtlest">
+            {status}
+            {port != null && ` · :${port}`}
+          </span>
+        </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button
-                disabled={busy}
-                onClick={startProxy}
-                size="sm"
-                tone="primary"
-              >
-                Start Proxy
-              </Button>
-              <Button
-                disabled={busy}
-                onClick={stopProxy}
-                size="sm"
-                variant="border"
-              >
-                Stop Proxy
-              </Button>
-            </div>
-          </div>
-        </section>
+        <div className="text-xs font-mono">
+          {exchanges.length === 0 ? (
+            <p className="text-text-subtlest">No traffic yet</p>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-text-subtlest border-b border-border-subtle">
+                  <th className="py-1 pr-3 font-medium">Method</th>
+                  <th className="py-1 pr-3 font-medium">URL</th>
+                  <th className="py-1 pr-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exchanges.map((ex) => (
+                  <tr key={ex.id} className="border-b border-border-subtle">
+                    <td className="py-1 pr-3">{ex.method}</td>
+                    <td className="py-1 pr-3 truncate max-w-md">{ex.url}</td>
+                    <td className="py-1 pr-3">{ex.resStatus ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </main>
     </div>
   );
@@ -99,7 +127,9 @@ function App() {
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      <Provider store={jotaiStore}>
+        <App />
+      </Provider>
     </QueryClientProvider>
   </StrictMode>,
 );

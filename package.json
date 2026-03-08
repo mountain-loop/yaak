@@ -10,6 +10,7 @@
     "packages/ui",
     "packages/theme",
     "packages/tailwind-config",
+    "packages/model-store",
     "packages/common-lib",
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",

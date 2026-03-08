@@ -13,8 +13,10 @@
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-os": "^2.3.2",
     "@yaakapp-internal/theme": "^1.0.0",
+    "@yaakapp-internal/model-store": "^1.0.0",
     "@yaakapp-internal/ui": "^1.0.0",
     "classnames": "^2.5.1",
+    "jotai": "^2.18.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
