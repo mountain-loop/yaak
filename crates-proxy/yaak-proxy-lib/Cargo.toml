@@ -1,0 +1,13 @@
+[package]
+name = "yaak-proxy-lib"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+ts-rs = { workspace = true }
+yaak-proxy = { workspace = true }
+yaak-rpc = { workspace = true }

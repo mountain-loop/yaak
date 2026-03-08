@@ -1,19 +1,14 @@
 import "./main.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
 import { type } from "@tauri-apps/plugin-os";
 import { Button, HeaderSize } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { StrictMode } from "react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { rpc } from "./rpc";
 
 const queryClient = new QueryClient();
-
-type ProxyStartResult = {
-  port: number;
-  alreadyRunning: boolean;
-};
 
 function App() {
   const [status, setStatus] = useState("Idle");
@@ -25,9 +20,7 @@ function App() {
     setBusy(true);
     setStatus("Starting...");
     try {
-      const result = await invoke<ProxyStartResult>("proxy_start", {
-        port: 9090,
-      });
+      const result = await rpc("proxy_start", { port: 9090 });
       setPort(result.port);
       setStatus(result.alreadyRunning ? "Already running" : "Running");
     } catch (err) {
@@ -41,7 +34,7 @@ function App() {
     setBusy(true);
     setStatus("Stopping...");
     try {
-      const stopped = await invoke<boolean>("proxy_stop");
+      const stopped = await rpc("proxy_stop", {});
       setPort(null);
       setStatus(stopped ? "Stopped" : "Not running");
     } catch (err) {

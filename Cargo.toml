@@ -4,6 +4,7 @@ members = [
     "crates/yaak",
     # Common/foundation crates
     "crates/common/yaak-database",
+    "crates/common/yaak-rpc",
     # Shared crates (no Tauri dependency)
     "crates/yaak-core",
     "crates/yaak-common",
@@ -22,6 +23,7 @@ members = [
     "crates/yaak-proxy",
     # Proxy-specific crates
     "crates-proxy/yaak-proxy-models",
+    "crates-proxy/yaak-proxy-lib",
     # CLI crates
     "crates-cli/yaak-cli",
     # Tauri-specific crates
@@ -56,6 +58,7 @@ ts-rs = "11.1.0"
 
 # Internal crates - common/foundation
 yaak-database = { path = "crates/common/yaak-database" }
+yaak-rpc = { path = "crates/common/yaak-rpc" }
 
 # Internal crates - shared
 yaak-core = { path = "crates/yaak-core" }
@@ -77,6 +80,7 @@ yaak-proxy = { path = "crates/yaak-proxy" }
 
 # Internal crates - proxy
 yaak-proxy-models = { path = "crates-proxy/yaak-proxy-models" }
+yaak-proxy-lib = { path = "crates-proxy/yaak-proxy-lib" }
 
 # Internal crates - Tauri-specific
 yaak-fonts = { path = "crates-tauri/yaak-fonts" }

@@ -10306,11 +10306,12 @@ name = "yaak-app-proxy"
 version = "0.0.0"
 dependencies = [
  "log 0.4.29",
- "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-os",
- "yaak-proxy",
+ "yaak-proxy-lib",
+ "yaak-rpc",
  "yaak-window",
 ]
 
@@ -10591,6 +10592,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-proxy-lib"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "yaak-proxy",
+ "yaak-rpc",
+]
+
+[[package]]
 name = "yaak-proxy-models"
 version = "0.1.0"
 dependencies = [
@@ -10605,6 +10617,16 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "yaak-database",
+]
+
+[[package]]
+name = "yaak-rpc"
+version = "0.0.0"
+dependencies = [
+ "log 0.4.29",
+ "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]
