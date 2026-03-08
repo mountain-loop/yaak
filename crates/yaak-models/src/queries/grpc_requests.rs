@@ -1,12 +1,12 @@
 use super::dedupe_headers;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequestHeader};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_grpc_request(&self, id: &str) -> Result<GrpcRequest> {
         self.find_one(GrpcRequestIden::Id, id)
     }

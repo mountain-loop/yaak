@@ -1,11 +1,11 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{PluginKeyValue, PluginKeyValueIden};
 use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Asterisk, Cond, Expr, OnConflict, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_plugin_key_value(&self, plugin_name: &str, key: &str) -> Option<PluginKeyValue> {
         let (sql, params) = Query::select()
             .from(PluginKeyValueIden::Table)
@@ -16,7 +16,7 @@ impl<'a> DbContext<'a> {
                     .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
             )
             .build_rusqlite(SqliteQueryBuilder);
-        self.conn.resolve().query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
+        self.conn().resolve().query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
     }
 
     pub fn set_plugin_key_value(
@@ -52,7 +52,7 @@ impl<'a> DbContext<'a> {
             .build_rusqlite(SqliteQueryBuilder);
 
         let mut stmt =
-            self.conn.prepare(sql.as_str()).expect("Failed to prepare PluginKeyValue upsert");
+            self.conn().prepare(sql.as_str()).expect("Failed to prepare PluginKeyValue upsert");
         let m: PluginKeyValue = stmt
             .query_row(&*params.as_params(), |row| row.try_into())
             .expect("Failed to upsert KeyValue");
@@ -73,7 +73,7 @@ impl<'a> DbContext<'a> {
                     .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
             )
             .build_rusqlite(SqliteQueryBuilder);
-        self.conn.execute(sql.as_str(), &*params.as_params())?;
+        self.conn().execute(sql.as_str(), &*params.as_params())?;
         Ok(true)
     }
 }

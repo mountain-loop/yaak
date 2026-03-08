@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::db_context::DbContext;
+use yaak_models::client_db::ClientDb;
 use yaak_models::query_manager::QueryManager;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
@@ -108,7 +108,7 @@ impl CliContext {
         &self.data_dir
     }
 
-    pub fn db(&self) -> DbContext<'_> {
+    pub fn db(&self) -> ClientDb<'_> {
         self.query_manager.connect()
     }
 

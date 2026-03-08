@@ -3,7 +3,7 @@ use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
     Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
 };
-use crate::util::{UpdateSource, generate_prefixed_id};
+use crate::util::generate_prefixed_id;
 use chrono::{NaiveDateTime, Utc};
 use rusqlite::Row;
 use schemars::JsonSchema;
@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use ts_rs::TS;
+pub use yaak_database::{UpsertModelInfo, upsert_date};
+use yaak_database::{UpdateSource, Result as DbResult};
 
 #[macro_export]
 macro_rules! impl_model {
@@ -190,7 +192,7 @@ impl UpsertModelInfo for Settings {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use SettingsIden::*;
         let proxy = match self.proxy {
             None => None,
@@ -346,7 +348,7 @@ impl UpsertModelInfo for Workspace {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use WorkspaceIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -453,7 +455,7 @@ impl UpsertModelInfo for WorkspaceMeta {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use WorkspaceMetaIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -554,7 +556,7 @@ impl UpsertModelInfo for CookieJar {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use CookieJarIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -642,7 +644,7 @@ impl UpsertModelInfo for Environment {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use EnvironmentIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -775,7 +777,7 @@ impl UpsertModelInfo for Folder {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use FolderIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -909,7 +911,7 @@ impl UpsertModelInfo for HttpRequest {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
@@ -1036,7 +1038,7 @@ impl UpsertModelInfo for WebsocketConnection {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use WebsocketConnectionIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1151,7 +1153,7 @@ impl UpsertModelInfo for WebsocketRequest {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use WebsocketRequestIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1276,7 +1278,7 @@ impl UpsertModelInfo for WebsocketEvent {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use WebsocketEventIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1397,7 +1399,7 @@ impl UpsertModelInfo for HttpResponse {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use HttpResponseIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1593,7 +1595,7 @@ impl UpsertModelInfo for HttpResponseEvent {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use HttpResponseEventIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1681,7 +1683,7 @@ impl UpsertModelInfo for GraphQlIntrospection {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use GraphQlIntrospectionIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1766,7 +1768,7 @@ impl UpsertModelInfo for GrpcRequest {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use GrpcRequestIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -1893,7 +1895,7 @@ impl UpsertModelInfo for GrpcConnection {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use GrpcConnectionIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -2013,7 +2015,7 @@ impl UpsertModelInfo for GrpcEvent {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use GrpcEventIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -2144,7 +2146,7 @@ impl UpsertModelInfo for Plugin {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use PluginIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -2229,7 +2231,7 @@ impl UpsertModelInfo for SyncState {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use SyncStateIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -2312,7 +2314,7 @@ impl UpsertModelInfo for KeyValue {
     fn insert_values(
         self,
         source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
         use KeyValueIden::*;
         Ok(vec![
             (CreatedAt, upsert_date(source, self.created_at)),
@@ -2525,36 +2527,3 @@ impl AnyModel {
     }
 }
 
-pub trait UpsertModelInfo {
-    fn table_name() -> impl IntoTableRef + IntoIden;
-    fn id_column() -> impl IntoIden + Eq + Clone;
-    fn generate_id() -> String;
-    fn order_by() -> (impl IntoColumnRef, Order);
-    fn get_id(&self) -> String;
-    fn insert_values(
-        self,
-        source: &UpdateSource,
-    ) -> Result<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>>;
-    fn update_columns() -> Vec<impl IntoIden>;
-    fn from_row(row: &Row) -> rusqlite::Result<Self>
-    where
-        Self: Sized;
-}
-
-// Generate the created_at or updated_at timestamps for an upsert operation, depending on the ID
-// provided.
-fn upsert_date(update_source: &UpdateSource, dt: NaiveDateTime) -> SimpleExpr {
-    match update_source {
-        // Sync and import operations always preserve timestamps
-        UpdateSource::Sync | UpdateSource::Import => {
-            if dt.and_utc().timestamp() == 0 {
-                // Sometimes data won't have timestamps (partial data)
-                Utc::now().naive_utc().into()
-            } else {
-                dt.into()
-            }
-        }
-        // Other sources will always update to the latest time
-        _ => Utc::now().naive_utc().into(),
-    }
-}

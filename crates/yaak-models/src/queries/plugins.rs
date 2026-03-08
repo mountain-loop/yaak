@@ -1,9 +1,9 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{Plugin, PluginIden};
 use crate::util::UpdateSource;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_plugin(&self, id: &str) -> Result<Plugin> {
         self.find_one(PluginIden::Id, id)
     }

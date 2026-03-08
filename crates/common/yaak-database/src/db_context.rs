@@ -1,33 +1,37 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
-use crate::models::{AnyModel, UpsertModelInfo};
-use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
-use rusqlite::{OptionalExtension, params};
+use crate::traits::UpsertModelInfo;
+use crate::update_source::UpdateSource;
 use sea_query::{
-    Asterisk, Expr, Func, IntoColumnRef, IntoIden, IntoTableRef, OnConflict, Query, SimpleExpr,
+    Asterisk, Expr, Func, IntoColumnRef, IntoIden, OnConflict, Query, SimpleExpr,
     SqliteQueryBuilder,
 };
 use sea_query_rusqlite::RusqliteBinder;
 use std::fmt::Debug;
-use std::sync::mpsc;
 
 pub struct DbContext<'a> {
-    pub(crate) _events_tx: mpsc::Sender<ModelPayload>,
-    pub(crate) conn: ConnectionOrTx<'a>,
+    conn: ConnectionOrTx<'a>,
 }
 
 impl<'a> DbContext<'a> {
-    pub(crate) fn find_one<'s, M>(
+    pub fn new(conn: ConnectionOrTx<'a>) -> Self {
+        Self { conn }
+    }
+
+    pub fn conn(&self) -> &ConnectionOrTx<'a> {
+        &self.conn
+    }
+
+    pub fn find_one<M>(
         &self,
         col: impl IntoColumnRef + IntoIden + Clone,
         value: impl Into<SimpleExpr> + Debug,
     ) -> Result<M>
     where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
+        M: UpsertModelInfo,
     {
         let value_debug = format!("{:?}", value);
-
         let value_expr = value.into();
         let (sql, params) = Query::select()
             .from(M::table_name())
@@ -47,13 +51,13 @@ impl<'a> DbContext<'a> {
         }
     }
 
-    pub(crate) fn find_optional<'s, M>(
+    pub fn find_optional<M>(
         &self,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
     ) -> Option<M>
     where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
+        M: UpsertModelInfo,
     {
         let (sql, params) = Query::select()
             .from(M::table_name())
@@ -62,13 +66,12 @@ impl<'a> DbContext<'a> {
             .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.prepare(sql.as_str()).expect("Failed to prepare query");
         stmt.query_row(&*params.as_params(), M::from_row)
-            .optional()
-            .expect("Failed to run find on DB")
+            .ok()
     }
 
-    pub(crate) fn find_all<'s, M>(&self) -> Result<Vec<M>>
+    pub fn find_all<M>(&self) -> Result<Vec<M>>
     where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
+        M: UpsertModelInfo,
     {
         let (order_by_col, order_by_dir) = M::order_by();
         let (sql, params) = Query::select()
@@ -81,16 +84,15 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub(crate) fn find_many<'s, M>(
+    pub fn find_many<M>(
         &self,
         col: impl IntoColumnRef,
         value: impl Into<SimpleExpr>,
         limit: Option<u64>,
     ) -> Result<Vec<M>>
     where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
+        M: UpsertModelInfo,
     {
-        // TODO: Figure out how to do this conditional builder better
         let (order_by_col, order_by_dir) = M::order_by();
         let (sql, params) = if let Some(limit) = limit {
             Query::select()
@@ -114,46 +116,30 @@ impl<'a> DbContext<'a> {
         Ok(items.map(|v| v.unwrap()).collect())
     }
 
-    pub(crate) fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
+    /// Upsert a model. Returns `(model, created)` where `created` is true if a new row was inserted.
+    pub fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<(M, bool)>
     where
-        M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
+        M: UpsertModelInfo + Clone,
     {
-        self.upsert_one(
-            M::table_name(),
-            M::id_column(),
-            model.get_id().as_str(),
-            model.clone().insert_values(source)?,
-            M::update_columns(),
-            source,
-        )
-    }
+        let id_iden = M::id_column().into_iden();
+        let id_val = model.get_id();
+        let other_values = model.clone().insert_values(source)?;
 
-    fn upsert_one<M>(
-        &self,
-        table: impl IntoTableRef,
-        id_col: impl IntoIden + Eq + Clone,
-        id_val: &str,
-        other_values: Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>,
-        update_columns: Vec<impl IntoIden>,
-        source: &UpdateSource,
-    ) -> Result<M>
-    where
-        M: Into<AnyModel> + From<AnyModel> + UpsertModelInfo + Clone,
-    {
-        let id_iden = id_col.into_iden();
         let mut column_vec = vec![id_iden.clone()];
-        let mut value_vec =
-            vec![if id_val == "" { M::generate_id().into() } else { id_val.into() }];
+        let mut value_vec = vec![
+            if id_val.is_empty() { M::generate_id().into() } else { id_val.into() },
+        ];
 
         for (col, val) in other_values {
             value_vec.push(val.into());
             column_vec.push(col.into_iden());
         }
 
-        let on_conflict = OnConflict::column(id_iden).update_columns(update_columns).to_owned();
+        let on_conflict =
+            OnConflict::column(id_iden).update_columns(M::update_columns()).to_owned();
 
         let (sql, params) = Query::insert()
-            .into_table(table)
+            .into_table(M::table_name())
             .columns(column_vec)
             .values_panic(value_vec)
             .on_conflict(on_conflict)
@@ -173,59 +159,19 @@ impl<'a> DbContext<'a> {
             })
         })?;
 
-        let payload = ModelPayload {
-            model: m.clone().into(),
-            update_source: source.clone(),
-            change: ModelChangeEvent::Upsert { created },
-        };
-
-        self.record_model_change(&payload)?;
-        let _ = self._events_tx.send(payload);
-
-        Ok(m)
+        Ok((m, created))
     }
 
-    pub(crate) fn delete<'s, M>(&self, m: &M, source: &UpdateSource) -> Result<M>
+    /// Delete a model by its ID. Returns the number of rows deleted.
+    pub fn delete<M>(&self, m: &M) -> Result<usize>
     where
-        M: Into<AnyModel> + Clone + UpsertModelInfo,
+        M: UpsertModelInfo,
     {
         let (sql, params) = Query::delete()
             .from_table(M::table_name())
             .cond_where(Expr::col(M::id_column().into_iden()).eq(m.get_id()))
             .build_rusqlite(SqliteQueryBuilder);
-        self.conn.execute(sql.as_str(), &*params.as_params())?;
-
-        let payload = ModelPayload {
-            model: m.clone().into(),
-            update_source: source.clone(),
-            change: ModelChangeEvent::Delete,
-        };
-
-        self.record_model_change(&payload)?;
-        let _ = self._events_tx.send(payload);
-
-        Ok(m.clone())
-    }
-
-    fn record_model_change(&self, payload: &ModelPayload) -> Result<()> {
-        let payload_json = serde_json::to_string(payload)?;
-        let source_json = serde_json::to_string(&payload.update_source)?;
-        let change_json = serde_json::to_string(&payload.change)?;
-
-        self.conn.resolve().execute(
-            r#"
-                INSERT INTO model_changes (model, model_id, change, update_source, payload)
-                VALUES (?1, ?2, ?3, ?4, ?5)
-            "#,
-            params![
-                payload.model.model(),
-                payload.model.id(),
-                change_json,
-                source_json,
-                payload_json,
-            ],
-        )?;
-
-        Ok(())
+        let count = self.conn.execute(sql.as_str(), &*params.as_params())?;
+        Ok(count)
     }
 }

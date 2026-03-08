@@ -10387,12 +10387,15 @@ dependencies = [
 name = "yaak-database"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "include_dir",
  "log 0.4.29",
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
  "rusqlite",
+ "sea-query",
+ "sea-query-rusqlite",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
@@ -10585,6 +10588,23 @@ dependencies = [
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
+]
+
+[[package]]
+name = "yaak-proxy-models"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "include_dir",
+ "log 0.4.29",
+ "r2d2",
+ "r2d2_sqlite",
+ "rusqlite",
+ "sea-query",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "yaak-database",
 ]
 
 [[package]]

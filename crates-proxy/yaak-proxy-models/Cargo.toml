@@ -1,5 +1,5 @@
 [package]
-name = "yaak-database"
+name = "yaak-proxy-models"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -8,12 +8,11 @@ publish = false
 chrono = { version = "0.4.38", features = ["serde"] }
 include_dir = "0.7"
 log = { workspace = true }
-nanoid = "0.4.0"
 r2d2 = "0.8.10"
 r2d2_sqlite = { version = "0.25.0" }
 rusqlite = { version = "0.32.1", features = ["bundled", "chrono"] }
 sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
-sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+yaak-database = { workspace = true }

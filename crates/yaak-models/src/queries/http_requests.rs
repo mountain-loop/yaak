@@ -1,12 +1,12 @@
 use super::dedupe_headers;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_http_request(&self, id: &str) -> Result<HttpRequest> {
         self.find_one(HttpRequestIden::Id, id)
     }

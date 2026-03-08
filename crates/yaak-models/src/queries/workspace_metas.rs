@@ -1,10 +1,10 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{WorkspaceMeta, WorkspaceMetaIden};
 use crate::util::UpdateSource;
 use log::info;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_workspace_meta(&self, workspace_id: &str) -> Option<WorkspaceMeta> {
         self.find_optional(WorkspaceMetaIden::WorkspaceId, workspace_id)
     }

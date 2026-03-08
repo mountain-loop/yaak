@@ -10,7 +10,7 @@ use tauri::plugin::TauriPlugin;
 use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::db_context::DbContext;
+use yaak_models::client_db::ClientDb;
 use yaak_models::error::Result;
 use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
@@ -88,10 +88,10 @@ async fn run_model_change_poller<R: Runtime>(
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 pub trait QueryManagerExt<'a, R> {
     fn db_manager(&'a self) -> State<'a, QueryManager>;
-    fn db(&'a self) -> DbContext<'a>;
+    fn db(&'a self) -> ClientDb<'a>;
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
-        F: FnOnce(&DbContext) -> Result<T>;
+        F: FnOnce(&ClientDb) -> Result<T>;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
@@ -99,14 +99,14 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
         self.state::<QueryManager>()
     }
 
-    fn db(&'a self) -> DbContext<'a> {
+    fn db(&'a self) -> ClientDb<'a> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
     }
 
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
-        F: FnOnce(&DbContext) -> Result<T>,
+        F: FnOnce(&ClientDb) -> Result<T>,
     {
         let qm = self.state::<QueryManager>();
         qm.inner().with_tx(func)

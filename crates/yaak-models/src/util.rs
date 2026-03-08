@@ -1,4 +1,4 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo, WebsocketRequest,
@@ -44,6 +44,30 @@ impl UpdateSource {
     pub fn from_window_label(label: impl Into<String>) -> Self {
         Self::Window { label: label.into() }
     }
+
+    pub fn to_db(&self) -> yaak_database::UpdateSource {
+        match self {
+            UpdateSource::Background => yaak_database::UpdateSource::Background,
+            UpdateSource::Import => yaak_database::UpdateSource::Import,
+            UpdateSource::Plugin => yaak_database::UpdateSource::Plugin,
+            UpdateSource::Sync => yaak_database::UpdateSource::Sync,
+            UpdateSource::Window { label } => {
+                yaak_database::UpdateSource::Window { label: label.clone() }
+            }
+        }
+    }
+}
+
+impl From<yaak_database::UpdateSource> for UpdateSource {
+    fn from(source: yaak_database::UpdateSource) -> Self {
+        match source {
+            yaak_database::UpdateSource::Background => UpdateSource::Background,
+            yaak_database::UpdateSource::Import => UpdateSource::Import,
+            yaak_database::UpdateSource::Plugin => UpdateSource::Plugin,
+            yaak_database::UpdateSource::Sync => UpdateSource::Sync,
+            yaak_database::UpdateSource::Window { label } => UpdateSource::Window { label },
+        }
+    }
 }
 
 #[derive(Default, Debug, Deserialize, Serialize)]
@@ -68,7 +92,7 @@ pub struct BatchUpsertResult {
 }
 
 pub fn get_workspace_export_resources(
-    db: &DbContext,
+    db: &ClientDb,
     yaak_version: &str,
     workspace_ids: Vec<&str>,
     include_private_environments: bool,

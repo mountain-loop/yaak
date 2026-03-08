@@ -1,4 +1,4 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{GrpcConnection, GrpcConnectionIden, GrpcConnectionState};
 use crate::queries::MAX_HISTORY_ITEMS;
@@ -7,7 +7,7 @@ use log::debug;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_grpc_connection(&self, id: &str) -> Result<GrpcConnection> {
         self.find_one(GrpcConnectionIden::Id, id)
     }
@@ -71,7 +71,7 @@ impl<'a> DbContext<'a> {
             .values([(GrpcConnectionIden::State, closed.as_str().into())])
             .cond_where(Expr::col(GrpcConnectionIden::State).ne(closed.as_str()))
             .build_rusqlite(SqliteQueryBuilder);
-        let mut stmt = self.conn.prepare(sql.as_str())?;
+        let mut stmt = self.conn().prepare(sql.as_str())?;
         stmt.execute(&*params.as_params())?;
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{GraphQlIntrospection, GraphQlIntrospectionIden};
 use crate::util::UpdateSource;
@@ -6,7 +6,7 @@ use chrono::{Duration, Utc};
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_graphql_introspection(&self, request_id: &str) -> Option<GraphQlIntrospection> {
         self.find_optional(GraphQlIntrospectionIden::RequestId, request_id)
     }
@@ -44,7 +44,7 @@ impl<'a> DbContext<'a> {
             .cond_where(Expr::col(GraphQlIntrospectionIden::UpdatedAt).lt(cutoff))
             .build_rusqlite(SqliteQueryBuilder);
 
-        let mut stmt = self.conn.resolve().prepare(sql.as_str())?;
+        let mut stmt = self.conn().resolve().prepare(sql.as_str())?;
         stmt.execute(&*params.as_params())?;
         Ok(())
     }

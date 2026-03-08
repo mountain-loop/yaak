@@ -1,4 +1,4 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{GrpcRequest, HttpRequest, WebsocketRequest};
 
@@ -8,7 +8,7 @@ pub enum AnyRequest {
     WebsocketRequest(WebsocketRequest),
 }
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_any_request(&self, id: &str) -> Result<AnyRequest> {
         if let Ok(http_request) = self.get_http_request(id) {
             Ok(AnyRequest::HttpRequest(http_request))

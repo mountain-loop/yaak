@@ -1,9 +1,9 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{HttpResponseEvent, HttpResponseEventIden};
 use crate::util::UpdateSource;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn list_http_response_events(&self, response_id: &str) -> Result<Vec<HttpResponseEvent>> {
         self.find_many(HttpResponseEventIden::ResponseId, response_id, None)
     }

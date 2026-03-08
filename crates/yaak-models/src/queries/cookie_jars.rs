@@ -1,9 +1,9 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{CookieJar, CookieJarIden};
 use crate::util::UpdateSource;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_cookie_jar(&self, id: &str) -> Result<CookieJar> {
         self.find_one(CookieJarIden::Id, id)
     }
