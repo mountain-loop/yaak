@@ -7,10 +7,17 @@ import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./main.css";
 import { listen, rpc } from "./rpc";
-import { applyChange, dataAtom, httpExchangesAtom } from "./store";
+import { applyChange, dataAtom, httpExchangesAtom, replaceAll } from "./store";
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
+
+// Load initial models from the database
+rpc("list_models", {}).then((res) => {
+  jotaiStore.set(dataAtom, (prev) =>
+    replaceAll(prev, "http_exchange", res.httpExchanges),
+  );
+});
 
 // Subscribe to model change events from the backend
 listen("model_write", (payload) => {

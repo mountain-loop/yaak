@@ -8,7 +8,7 @@ import { TreeItem } from './TreeItem';
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
+  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getItemKey' | 'getEditOptions' | 'renderContextMenu'
 > &
   Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
     nodes: SelectableTreeNode<T>[];

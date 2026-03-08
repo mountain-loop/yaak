@@ -1,5 +1,15 @@
-import { jotaiStore } from '../../../lib/jotai';
-import { collapsedFamily, selectedIdsFamily } from './atoms';
+import type { createStore } from 'jotai';
+import type { ReactNode } from 'react';
+import type { CollapsedAtom } from './context';
+import { selectedIdsFamily } from './atoms';
+
+export type JotaiStore = ReturnType<typeof createStore>;
+
+export type ContextMenuRenderer = (props: {
+  items: unknown[];
+  position: { x: number; y: number };
+  onClose: () => void;
+}) => ReactNode;
 
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];
@@ -18,10 +28,11 @@ export interface SelectableTreeNode<T extends { id: string }> {
 }
 
 export function getSelectedItems<T extends { id: string }>(
+  store: JotaiStore,
   treeId: string,
   selectableItems: SelectableTreeNode<T>[],
 ) {
-  const selectedItemIds = jotaiStore.get(selectedIdsFamily(treeId));
+  const selectedItemIds = store.get(selectedIdsFamily(treeId));
   return selectableItems
     .filter((i) => selectedItemIds.includes(i.node.item.id))
     .map((i) => i.node.item);
@@ -60,8 +71,8 @@ export function hasAncestor<T extends { id: string }>(node: TreeNode<T>, ancesto
   return hasAncestor(node.parent, ancestorId);
 }
 
-export function isVisibleNode<T extends { id: string }>(treeId: string, node: TreeNode<T>) {
-  const collapsed = jotaiStore.get(collapsedFamily(treeId));
+export function isVisibleNode<T extends { id: string }>(store: JotaiStore, collapsedAtom: CollapsedAtom, node: TreeNode<T>) {
+  const collapsed = store.get(collapsedAtom);
   let p = node.parent;
   while (p) {
     if (collapsed[p.item.id]) return false; // any collapsed ancestor hides this node
@@ -71,12 +82,13 @@ export function isVisibleNode<T extends { id: string }>(treeId: string, node: Tr
 }
 
 export function closestVisibleNode<T extends { id: string }>(
-  treeId: string,
+  store: JotaiStore,
+  collapsedAtom: CollapsedAtom,
   node: TreeNode<T>,
 ): TreeNode<T> | null {
   let n: TreeNode<T> | null = node;
   while (n) {
-    if (isVisibleNode(treeId, n) && !n.hidden) return n;
+    if (isVisibleNode(store, collapsedAtom, n) && !n.hidden) return n;
     if (n.parent == null) return null;
     n = n.parent;
   }

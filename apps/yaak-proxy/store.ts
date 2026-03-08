@@ -5,7 +5,7 @@ type ProxyModels = {
   http_exchange: HttpExchange;
 };
 
-export const { dataAtom, applyChange, listAtom, orderedListAtom } =
+export const { dataAtom, applyChange, replaceAll, listAtom, orderedListAtom } =
   createModelStore<ProxyModels>(["http_exchange"]);
 
 export const httpExchangesAtom = orderedListAtom(

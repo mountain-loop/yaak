@@ -1,8 +1,7 @@
 import type { DragMoveEvent } from '@dnd-kit/core';
 import { useDndContext, useDndMonitor, useDraggable, useDroppable } from '@dnd-kit/core';
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { selectAtom } from 'jotai/utils';
+import { useAtomValue, useStore } from 'jotai';
 import type {
   MouseEvent,
   PointerEvent,
@@ -10,12 +9,11 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeSideForDragMove } from '../../../lib/dnd';
-import { jotaiStore } from '../../../lib/jotai';
-import type { ContextMenuProps, DropdownItem } from '../Dropdown';
-import { ContextMenu } from '../Dropdown';
+import { computeSideForDragMove } from '@yaakapp-internal/ui';
+import type { ContextMenuRenderer } from './common';
 import { Icon } from '@yaakapp-internal/ui';
-import { collapsedFamily, isCollapsedFamily, isLastFocusedFamily, isSelectedFamily } from './atoms';
+import { isLastFocusedFamily, isSelectedFamily } from './atoms';
+import { useCollapsedAtom, useIsAncestorCollapsed, useIsCollapsed, useSetCollapsed } from './context';
 import type { TreeNode } from './common';
 import { getNodeKey } from './common';
 import type { TreeProps } from './Tree';
@@ -29,12 +27,12 @@ export interface TreeItemClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getEditOptions' | 'getItemKey'
+  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getEditOptions' | 'getItemKey' | 'renderContextMenu'
 > & {
   node: TreeNode<T>;
   className?: string;
   onClick?: (item: T, e: TreeItemClickEvent) => void;
-  getContextMenu?: (item: T) => ContextMenuProps['items'] | Promise<ContextMenuProps['items']>;
+  getContextMenu?: (item: T) => unknown[] | Promise<unknown[]>;
   depth: number;
   setRef?: (item: T, n: TreeItemHandle | null) => void;
 };
@@ -56,16 +54,20 @@ function TreeItem_<T extends { id: string }>({
   ItemLeftSlotInner,
   ItemRightSlot,
   getContextMenu,
+  renderContextMenu,
   onClick,
   getEditOptions,
   className,
   depth,
   setRef,
 }: TreeItemProps<T>) {
+  const store = useStore();
   const listItemRef = useRef<HTMLLIElement>(null);
   const draggableRef = useRef<HTMLButtonElement>(null);
+  const collapsedAtom = useCollapsedAtom();
   const isSelected = useAtomValue(isSelectedFamily({ treeId, itemId: node.item.id }));
-  const isCollapsed = useAtomValue(isCollapsedFamily({ treeId, itemId: node.item.id }));
+  const isCollapsed = useIsCollapsed(node.item.id);
+  const setCollapsed = useSetCollapsed(node.item.id);
   const isLastSelected = useAtomValue(isLastFocusedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
   const [dropHover, setDropHover] = useState<null | 'drop' | 'animate'>(null);
@@ -110,19 +112,10 @@ function TreeItem_<T extends { id: string }>({
     return ids;
   }, [node]);
 
-  const isAncestorCollapsedAtom = useMemo(
-    () =>
-      selectAtom(
-        collapsedFamily(treeId),
-        (collapsed) => ancestorIds.some((id) => collapsed[id]),
-        (a, b) => a === b,
-      ),
-    [ancestorIds, treeId],
-  );
-  const isAncestorCollapsed = useAtomValue(isAncestorCollapsedAtom);
+  const isAncestorCollapsed = useIsAncestorCollapsed(ancestorIds);
 
   const [showContextMenu, setShowContextMenu] = useState<{
-    items: DropdownItem[];
+    items: unknown[];
     x: number;
     y: number;
   } | null>(null);
@@ -133,8 +126,8 @@ function TreeItem_<T extends { id: string }>({
   );
 
   const toggleCollapsed = useCallback(() => {
-    jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), (prev) => !prev);
-  }, [node.item.id, treeId]);
+    setCollapsed((prev) => !prev);
+  }, [setCollapsed]);
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
@@ -207,12 +200,13 @@ function TreeItem_<T extends { id: string }>({
       const side = computeSideForDragMove(node.item.id, e);
       const isFolder = node.children != null;
       const hasChildren = (node.children?.length ?? 0) > 0;
-      const isCollapsed = jotaiStore.get(isCollapsedFamily({ treeId, itemId: node.item.id }));
-      if (isCollapsed && isFolder && hasChildren && side === 'after') {
+      const collapsedMap = store.get(collapsedAtom);
+      const itemCollapsed = !!collapsedMap[node.item.id];
+      if (itemCollapsed && isFolder && hasChildren && side === 'after') {
         setDropHover('animate');
         clearTimeout(startedHoverTimeout.current);
         startedHoverTimeout.current = setTimeout(() => {
-          jotaiStore.set(isCollapsedFamily({ treeId, itemId: node.item.id }), false);
+          store.set(collapsedAtom, { ...store.get(collapsedAtom), [node.item.id]: false });
           clearDropHover();
           // Force re-measure everything because all containers below the folder have been pushed down
           requestAnimationFrame(() => {
@@ -306,13 +300,12 @@ function TreeItem_<T extends { id: string }>({
           'grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 items-center rounded-md',
         )}
       >
-        {showContextMenu && (
-          <ContextMenu
-            items={showContextMenu.items}
-            triggerPosition={showContextMenu}
-            onClose={handleCloseContextMenu}
-          />
-        )}
+        {showContextMenu &&
+          renderContextMenu?.({
+            items: showContextMenu.items,
+            position: showContextMenu,
+            onClose: handleCloseContextMenu,
+          })}
         {node.children != null ? (
           <button
             type="button"

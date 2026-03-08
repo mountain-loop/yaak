@@ -22,8 +22,7 @@ import {
   useState,
 } from 'react';
 import { useKeyValue } from '../../../hooks/useKeyValue';
-import { computeSideForDragMove } from '../../../lib/dnd';
-import { DropMarker } from '../../DropMarker';
+import { computeSideForDragMove, DropMarker } from '@yaakapp-internal/ui';
 import { ErrorBoundary } from '../../ErrorBoundary';
 import type { ButtonProps } from '../Button';
 import { Button } from '../Button';

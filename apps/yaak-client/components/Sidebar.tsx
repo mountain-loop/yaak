@@ -23,7 +23,7 @@ import {
 } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { atom, useAtomValue } from 'jotai';
-import { selectAtom } from 'jotai/utils';
+import { atomFamily, selectAtom } from 'jotai/utils';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { moveToWorkspace } from '../commands/moveToWorkspace';
 import { openFolderSettings } from '../commands/openFolderSettings';
@@ -48,7 +48,7 @@ import { resolvedModelName } from '../lib/resolvedModelName';
 import { isSidebarFocused } from '../lib/scopes';
 import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
+import { ContextMenu, Dropdown } from './core/Dropdown';
 import type { FieldDef } from './core/Editor/filter/extension';
 import { filter } from './core/Editor/filter/extension';
 import { evaluate, parseQuery } from './core/Editor/filter/query';
@@ -59,12 +59,18 @@ import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
-import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
+import { isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import type { TreeItemProps } from './core/tree/TreeItem';
+import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { GitDropdown } from './git/GitDropdown';
+
+const collapsedFamily = atomFamily((treeId: string) => {
+  const key = ['sidebar_collapsed', treeId ?? 'n/a'];
+  return atomWithKVStorage<Record<string, boolean>>(key, {});
+});
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 function isSidebarLeafModel(m: AnyModel): boolean {
@@ -456,6 +462,13 @@ function Sidebar({ className }: { className?: string }) {
     [actions],
   );
 
+  const renderContextMenuFn = useCallback<NonNullable<TreeProps<SidebarModel>['renderContextMenu']>>(
+    ({ items, position, onClose }) => (
+      <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
+    ),
+    [],
+  );
+
   const hotkeys = useMemo<TreeProps<SidebarModel>['hotkeys']>(() => ({ actions }), [actions]);
 
   // Use a language compartment for the filter so we can reconfigure it when the autocompletion changes
@@ -575,11 +588,13 @@ function Sidebar({ className }: { className?: string }) {
           ref={handleTreeRefInit}
           root={tree}
           treeId={treeId}
+          collapsedAtom={collapsedFamily(treeId)}
           hotkeys={hotkeys}
           getItemKey={getItemKey}
           ItemInner={SidebarInnerItem}
           ItemLeftSlotInner={SidebarLeftSlot}
           getContextMenu={getContextMenu}
+          renderContextMenu={renderContextMenuFn}
           onActivate={handleActivate}
           getEditOptions={getEditOptions}
           className="pl-2 pr-3 pt-2 pb-2"

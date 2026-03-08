@@ -15,18 +15,26 @@ import { resolvedModelName } from '../lib/resolvedModelName';
 import { showColorPicker } from '../lib/showColorPicker';
 import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
+import { ContextMenu } from './core/Dropdown';
 import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import type { PairEditorHandle } from './core/PairEditor';
 import { SplitLayout } from './core/SplitLayout';
+import { atomFamily } from 'jotai/utils';
+import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import type { TreeNode } from './core/tree/common';
 import type { TreeHandle, TreeProps } from './core/tree/Tree';
 import { Tree } from './core/tree/Tree';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentEditor } from './EnvironmentEditor';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
+
+const collapsedFamily = atomFamily((treeId: string) => {
+  const key = ['env_collapsed', treeId ?? 'n/a'];
+  return atomWithKVStorage<Record<string, boolean>>(key, {});
+});
 
 interface Props {
   initialEnvironmentId: string | null;
@@ -292,6 +300,13 @@ function EnvironmentEditDialogSidebar({
     [setSelectedEnvironmentId],
   );
 
+  const renderContextMenuFn = useCallback<NonNullable<TreeProps<TreeModel>['renderContextMenu']>>(
+    ({ items, position, onClose }) => (
+      <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
+    ),
+    [],
+  );
+
   const tree = useAtomValue(treeAtom);
   return (
     <aside className="x-theme-sidebar h-full w-full min-w-0 grid overflow-y-auto border-r border-border-subtle ">
@@ -300,10 +315,12 @@ function EnvironmentEditDialogSidebar({
           <Tree
             ref={treeRef}
             treeId={treeId}
+            collapsedAtom={collapsedFamily(treeId)}
             className="px-2 pb-10"
             hotkeys={hotkeys}
             root={tree}
             getContextMenu={getContextMenu}
+            renderContextMenu={renderContextMenuFn}
             onDragEnd={handleDragEnd}
             getItemKey={(i) => `${i.id}::${i.name}`}
             ItemLeftSlotInner={ItemLeftSlotInner}

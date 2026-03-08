@@ -51,6 +51,17 @@ pub struct ProxyStartResponse {
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ProxyStopRequest {}
 
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListModelsRequest {}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ListModelsResponse {
+    pub http_exchanges: Vec<HttpExchange>,
+}
+
 // -- Handlers --
 
 fn proxy_start(ctx: &ProxyCtx, req: ProxyStartRequest) -> Result<ProxyStartResponse, RpcError> {
@@ -84,6 +95,15 @@ fn proxy_stop(ctx: &ProxyCtx, _req: ProxyStopRequest) -> Result<bool, RpcError> 
         .lock()
         .map_err(|_| RpcError { message: "lock poisoned".into() })?;
     Ok(handle.take().is_some())
+}
+
+fn list_models(ctx: &ProxyCtx, _req: ListModelsRequest) -> Result<ListModelsResponse, RpcError> {
+    ctx.db.with_conn(|db| {
+        Ok(ListModelsResponse {
+            http_exchanges: db.find_all::<HttpExchange>()
+                .map_err(|e| RpcError { message: e.to_string() })?,
+        })
+    })
 }
 
 // -- Event loop --
@@ -193,6 +213,7 @@ define_rpc! {
     commands {
         proxy_start(ProxyStartRequest) -> ProxyStartResponse,
         proxy_stop(ProxyStopRequest) -> bool,
+        list_models(ListModelsRequest) -> ListModelsResponse,
     }
     events {
         model_write(ModelPayload),

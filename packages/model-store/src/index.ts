@@ -71,7 +71,20 @@ export function createModelStore<M extends ModelMap>(
     );
   }
 
-  return { dataAtom, applyChange, listAtom, orderedListAtom };
+  /** Replace all models of a given type. Used for initial hydration. */
+  function replaceAll<K extends keyof M & string>(
+    prev: StoreData<M>,
+    modelType: K,
+    models: M[K][],
+  ): StoreData<M> {
+    const bucket = {} as Record<string, M[K]>;
+    for (const m of models) {
+      bucket[m.id] = m;
+    }
+    return { ...prev, [modelType]: bucket };
+  }
+
+  return { dataAtom, applyChange, replaceAll, listAtom, orderedListAtom };
 }
 
 function shallowEqual<T>(a: T[], b: T[]): boolean {

@@ -9,3 +9,5 @@ export { useIsFullscreen } from "./hooks/useIsFullscreen";
 export { useDebouncedValue } from "./hooks/useDebouncedValue";
 export { useDebouncedState } from "./hooks/useDebouncedState";
 export { HEADER_SIZE_MD, HEADER_SIZE_LG, WINDOW_CONTROLS_WIDTH } from "./lib/constants";
+export { DropMarker } from "./components/DropMarker";
+export { computeSideForDragMove } from "./lib/dnd";

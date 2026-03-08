@@ -1,9 +1,10 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { memo } from 'react';
-import { DropMarker } from '../../DropMarker';
-import { hoveredParentDepthFamily, isCollapsedFamily, isIndexHoveredFamily } from './atoms';
+import { DropMarker } from '@yaakapp-internal/ui';
+import { hoveredParentDepthFamily, isIndexHoveredFamily } from './atoms';
 import type { TreeNode } from './common';
+import { useIsCollapsed } from './context';
 
 export const TreeDropMarker = memo(function TreeDropMarker<T extends { id: string }>({
   className,
@@ -16,10 +17,9 @@ export const TreeDropMarker = memo(function TreeDropMarker<T extends { id: strin
   node: TreeNode<T> | null;
   className?: string;
 }) {
-  const itemId = node?.item.id;
   const isHovered = useAtomValue(isIndexHoveredFamily({ treeId, index }));
   const parentDepth = useAtomValue(hoveredParentDepthFamily(treeId));
-  const collapsed = useAtomValue(isCollapsedFamily({ treeId, itemId }));
+  const collapsed = useIsCollapsed(node?.item.id);
 
   // Only show if we're hovering over this index
   if (!isHovered) return null;
