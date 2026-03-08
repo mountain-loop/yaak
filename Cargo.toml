@@ -22,7 +22,6 @@ members = [
     "crates/yaak-api",
     "crates/yaak-proxy",
     # Proxy-specific crates
-    "crates-proxy/yaak-proxy-models",
     "crates-proxy/yaak-proxy-lib",
     # CLI crates
     "crates-cli/yaak-cli",
@@ -79,7 +78,6 @@ yaak-api = { path = "crates/yaak-api" }
 yaak-proxy = { path = "crates/yaak-proxy" }
 
 # Internal crates - proxy
-yaak-proxy-models = { path = "crates-proxy/yaak-proxy-models" }
 yaak-proxy-lib = { path = "crates-proxy/yaak-proxy-lib" }
 
 # Internal crates - Tauri-specific
