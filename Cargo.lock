@@ -10384,6 +10384,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-database"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "log 0.4.29",
+ "nanoid",
+ "r2d2",
+ "r2d2_sqlite",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "yaak-fonts"
 version = "0.1.0"
 dependencies = [
@@ -10523,6 +10538,7 @@ dependencies = [
  "thiserror 2.0.17",
  "ts-rs",
  "yaak-core",
+ "yaak-database",
 ]
 
 [[package]]

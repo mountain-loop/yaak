@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "crates/yaak",
+    # Common/foundation crates
+    "crates/common/yaak-database",
     # Shared crates (no Tauri dependency)
     "crates/yaak-core",
     "crates/yaak-common",
@@ -49,6 +51,9 @@ tauri-plugin-shell = "2.3.3"
 thiserror = "2.0.17"
 tokio = "1.48.0"
 ts-rs = "11.1.0"
+
+# Internal crates - common/foundation
+yaak-database = { path = "crates/common/yaak-database" }
 
 # Internal crates - shared
 yaak-core = { path = "crates/yaak-core" }
