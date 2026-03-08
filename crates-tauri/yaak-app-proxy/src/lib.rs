@@ -1,5 +1,5 @@
 use log::error;
-use tauri::{RunEvent, State};
+use tauri::{Manager, RunEvent, State};
 use yaak_proxy_lib::ProxyCtx;
 use yaak_rpc::RpcRouter;
 use yaak_window::window::CreateWindowConfig;
@@ -17,8 +17,13 @@ fn rpc(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
-        .manage(ProxyCtx::new())
-        .manage(yaak_proxy_lib::build_router())
+        .setup(|app| {
+            let data_dir = app.path().app_data_dir().expect("no app data dir");
+            std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
+            app.manage(ProxyCtx::new(&data_dir.join("proxy.db")));
+            app.manage(yaak_proxy_lib::build_router());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![rpc])
         .build(tauri::generate_context!())
         .expect("error while building yaak proxy tauri application")

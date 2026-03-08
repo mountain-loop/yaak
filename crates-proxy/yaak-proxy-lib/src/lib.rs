@@ -1,19 +1,30 @@
-use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use ts_rs::TS;
-use yaak_proxy::ProxyHandle;
-use yaak_rpc::{RpcError, define_rpc};
+pub mod db;
+pub mod models;
 
-// -- Context shared across all RPC handlers --
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Mutex;
+use log::warn;
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+use yaak_database::UpdateSource;
+use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
+use yaak_rpc::{RpcError, define_rpc};
+use crate::db::ProxyQueryManager;
+use crate::models::{ProxyEntry, ProxyHeader};
+
+// -- Context --
 
 pub struct ProxyCtx {
     handle: Mutex<Option<ProxyHandle>>,
+    pub db: ProxyQueryManager,
 }
 
 impl ProxyCtx {
-    pub fn new() -> Self {
+    pub fn new(db_path: &Path) -> Self {
         Self {
             handle: Mutex::new(None),
+            db: ProxyQueryManager::new(db_path),
         }
     }
 }
@@ -47,21 +58,21 @@ fn proxy_start(ctx: &ProxyCtx, req: ProxyStartRequest) -> Result<ProxyStartRespo
         .map_err(|_| RpcError { message: "lock poisoned".into() })?;
 
     if let Some(existing) = handle.as_ref() {
-        return Ok(ProxyStartResponse {
-            port: existing.port,
-            already_running: true,
-        });
+        return Ok(ProxyStartResponse { port: existing.port, already_running: true });
     }
 
-    let proxy_handle = yaak_proxy::start_proxy(req.port.unwrap_or(0))
+    let mut proxy_handle = yaak_proxy::start_proxy(req.port.unwrap_or(0))
         .map_err(|e| RpcError { message: e })?;
     let port = proxy_handle.port;
-    *handle = Some(proxy_handle);
 
-    Ok(ProxyStartResponse {
-        port,
-        already_running: false,
-    })
+    // Spawn event loop before storing the handle
+    if let Some(event_rx) = proxy_handle.take_event_rx() {
+        let db = ctx.db.clone();
+        std::thread::spawn(move || run_event_loop(event_rx, db));
+    }
+
+    *handle = Some(proxy_handle);
+    Ok(ProxyStartResponse { port, already_running: false })
 }
 
 fn proxy_stop(ctx: &ProxyCtx, _req: ProxyStopRequest) -> Result<bool, RpcError> {
@@ -70,6 +81,100 @@ fn proxy_stop(ctx: &ProxyCtx, _req: ProxyStopRequest) -> Result<bool, RpcError> 
         .lock()
         .map_err(|_| RpcError { message: "lock poisoned".into() })?;
     Ok(handle.take().is_some())
+}
+
+// -- Event loop --
+
+fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, db: ProxyQueryManager) {
+    let mut in_flight: HashMap<u64, CapturedRequest> = HashMap::new();
+
+    while let Ok(event) = rx.recv() {
+        match event {
+            ProxyEvent::RequestStart { id, method, url, http_version } => {
+                in_flight.insert(id, CapturedRequest {
+                    id,
+                    method,
+                    url,
+                    http_version,
+                    status: None,
+                    elapsed_ms: None,
+                    remote_http_version: None,
+                    request_headers: vec![],
+                    request_body: None,
+                    response_headers: vec![],
+                    response_body: None,
+                    response_body_size: 0,
+                    state: RequestState::Sending,
+                    error: None,
+                });
+            }
+            ProxyEvent::RequestHeader { id, name, value } => {
+                if let Some(r) = in_flight.get_mut(&id) {
+                    r.request_headers.push((name, value));
+                }
+            }
+            ProxyEvent::RequestBody { id, body } => {
+                if let Some(r) = in_flight.get_mut(&id) {
+                    r.request_body = Some(body);
+                }
+            }
+            ProxyEvent::ResponseStart { id, status, http_version, elapsed_ms } => {
+                if let Some(r) = in_flight.get_mut(&id) {
+                    r.status = Some(status);
+                    r.remote_http_version = Some(http_version);
+                    r.elapsed_ms = Some(elapsed_ms);
+                    r.state = RequestState::Receiving;
+                }
+            }
+            ProxyEvent::ResponseHeader { id, name, value } => {
+                if let Some(r) = in_flight.get_mut(&id) {
+                    r.response_headers.push((name, value));
+                }
+            }
+            ProxyEvent::ResponseBodyChunk { .. } => {
+                // Progress only — no action needed
+            }
+            ProxyEvent::ResponseBodyComplete { id, body, size, elapsed_ms } => {
+                if let Some(mut r) = in_flight.remove(&id) {
+                    r.response_body = body;
+                    r.response_body_size = size;
+                    r.elapsed_ms = r.elapsed_ms.or(Some(elapsed_ms));
+                    r.state = RequestState::Complete;
+                    write_entry(&db, &r);
+                }
+            }
+            ProxyEvent::Error { id, error } => {
+                if let Some(mut r) = in_flight.remove(&id) {
+                    r.error = Some(error);
+                    r.state = RequestState::Error;
+                    write_entry(&db, &r);
+                }
+            }
+        }
+    }
+}
+
+fn write_entry(db: &ProxyQueryManager, r: &CapturedRequest) {
+    let entry = ProxyEntry {
+        url: r.url.clone(),
+        method: r.method.clone(),
+        req_headers: r.request_headers.iter()
+            .map(|(n, v)| ProxyHeader { name: n.clone(), value: v.clone() })
+            .collect(),
+        req_body: r.request_body.clone(),
+        res_status: r.status.map(|s| s as i32),
+        res_headers: r.response_headers.iter()
+            .map(|(n, v)| ProxyHeader { name: n.clone(), value: v.clone() })
+            .collect(),
+        res_body: r.response_body.clone(),
+        error: r.error.clone(),
+        ..Default::default()
+    };
+    db.with_conn(|ctx| {
+        if let Err(e) = ctx.upsert(&entry, &UpdateSource::Background) {
+            warn!("Failed to write proxy entry: {e}");
+        }
+    });
 }
 
 // -- Router + Schema --

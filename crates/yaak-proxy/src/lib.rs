@@ -82,9 +82,16 @@ pub enum RequestState {
 pub struct ProxyHandle {
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     thread_handle: Option<std::thread::JoinHandle<()>>,
-    pub event_rx: std_mpsc::Receiver<ProxyEvent>,
+    event_rx: Option<std_mpsc::Receiver<ProxyEvent>>,
     pub port: u16,
     pub ca_pem: String,
+}
+
+impl ProxyHandle {
+    /// Take the event receiver. Can only be called once — returns `None` after the first call.
+    pub fn take_event_rx(&mut self) -> Option<std_mpsc::Receiver<ProxyEvent>> {
+        self.event_rx.take()
+    }
 }
 
 impl Drop for ProxyHandle {
@@ -158,7 +165,7 @@ pub fn start_proxy(port: u16) -> Result<ProxyHandle, String> {
         Ok(Ok(bound_port)) => Ok(ProxyHandle {
             shutdown_tx: Some(shutdown_tx),
             thread_handle: Some(thread_handle),
-            event_rx,
+            event_rx: Some(event_rx),
             port: bound_port,
             ca_pem,
         }),

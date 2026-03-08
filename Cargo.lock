@@ -10595,9 +10595,17 @@ dependencies = [
 name = "yaak-proxy-lib"
 version = "0.0.0"
 dependencies = [
+ "chrono",
+ "include_dir",
+ "log 0.4.29",
+ "r2d2",
+ "r2d2_sqlite",
+ "rusqlite",
+ "sea-query",
  "serde",
  "serde_json",
  "ts-rs",
+ "yaak-database",
  "yaak-proxy",
  "yaak-rpc",
 ]
