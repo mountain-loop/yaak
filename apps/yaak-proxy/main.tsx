@@ -28,7 +28,6 @@ listen("model_write", (payload) => {
 
 function App() {
   const [status, setStatus] = useState("Idle");
-  const [port, setPort] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const osType = type();
   const exchanges = useAtomValue(httpExchangesAtom);
@@ -37,9 +36,8 @@ function App() {
     setBusy(true);
     setStatus("Starting...");
     try {
-      const result = await rpc("proxy_start", { port: 9090 });
-      setPort(result.port);
-      setStatus(result.alreadyRunning ? "Already running" : "Running");
+      await rpc("execute_action", { scope: "global", action: "proxy_start" });
+      setStatus("Running");
     } catch (err) {
       setStatus(`Failed: ${String(err)}`);
     } finally {
@@ -51,9 +49,8 @@ function App() {
     setBusy(true);
     setStatus("Stopping...");
     try {
-      const stopped = await rpc("proxy_stop", {});
-      setPort(null);
-      setStatus(stopped ? "Stopped" : "Not running");
+      await rpc("execute_action", { scope: "global", action: "proxy_stop" });
+      setStatus("Stopped");
     } catch (err) {
       setStatus(`Failed: ${String(err)}`);
     } finally {
@@ -98,7 +95,6 @@ function App() {
           </Button>
           <span className="text-xs text-text-subtlest">
             {status}
-            {port != null && ` · :${port}`}
           </span>
         </div>
 

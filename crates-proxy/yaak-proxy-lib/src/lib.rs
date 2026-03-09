@@ -1,3 +1,4 @@
+pub mod actions;
 pub mod db;
 pub mod models;
 
@@ -10,6 +11,7 @@ use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource};
 use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
 use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
+use crate::actions::{ActionInvocation, GlobalAction};
 use crate::db::ProxyQueryManager;
 use crate::models::{HttpExchange, ModelPayload, ProxyHeader};
 
@@ -35,24 +37,6 @@ impl ProxyCtx {
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
-pub struct ProxyStartRequest {
-    pub port: Option<u16>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "gen_rpc.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct ProxyStartResponse {
-    pub port: u16,
-    pub already_running: bool,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export, export_to = "gen_rpc.ts")]
-pub struct ProxyStopRequest {}
-
-#[derive(Deserialize, TS)]
-#[ts(export, export_to = "gen_rpc.ts")]
 pub struct ListModelsRequest {}
 
 #[derive(Serialize, TS)]
@@ -64,37 +48,41 @@ pub struct ListModelsResponse {
 
 // -- Handlers --
 
-fn proxy_start(ctx: &ProxyCtx, req: ProxyStartRequest) -> Result<ProxyStartResponse, RpcError> {
-    let mut handle = ctx
-        .handle
-        .lock()
-        .map_err(|_| RpcError { message: "lock poisoned".into() })?;
+fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, RpcError> {
+    match invocation {
+        ActionInvocation::Global { action } => match action {
+            GlobalAction::ProxyStart => {
+                let mut handle = ctx
+                    .handle
+                    .lock()
+                    .map_err(|_| RpcError { message: "lock poisoned".into() })?;
 
-    if let Some(existing) = handle.as_ref() {
-        return Ok(ProxyStartResponse { port: existing.port, already_running: true });
+                if handle.is_some() {
+                    return Ok(true); // already running
+                }
+
+                let mut proxy_handle = yaak_proxy::start_proxy(9090)
+                    .map_err(|e| RpcError { message: e })?;
+
+                if let Some(event_rx) = proxy_handle.take_event_rx() {
+                    let db = ctx.db.clone();
+                    let events = ctx.events.clone();
+                    std::thread::spawn(move || run_event_loop(event_rx, db, events));
+                }
+
+                *handle = Some(proxy_handle);
+                Ok(true)
+            }
+            GlobalAction::ProxyStop => {
+                let mut handle = ctx
+                    .handle
+                    .lock()
+                    .map_err(|_| RpcError { message: "lock poisoned".into() })?;
+                handle.take();
+                Ok(true)
+            }
+        },
     }
-
-    let mut proxy_handle = yaak_proxy::start_proxy(req.port.unwrap_or(0))
-        .map_err(|e| RpcError { message: e })?;
-    let port = proxy_handle.port;
-
-    // Spawn event loop before storing the handle
-    if let Some(event_rx) = proxy_handle.take_event_rx() {
-        let db = ctx.db.clone();
-        let events = ctx.events.clone();
-        std::thread::spawn(move || run_event_loop(event_rx, db, events));
-    }
-
-    *handle = Some(proxy_handle);
-    Ok(ProxyStartResponse { port, already_running: false })
-}
-
-fn proxy_stop(ctx: &ProxyCtx, _req: ProxyStopRequest) -> Result<bool, RpcError> {
-    let mut handle = ctx
-        .handle
-        .lock()
-        .map_err(|_| RpcError { message: "lock poisoned".into() })?;
-    Ok(handle.take().is_some())
 }
 
 fn list_models(ctx: &ProxyCtx, _req: ListModelsRequest) -> Result<ListModelsResponse, RpcError> {
@@ -211,8 +199,7 @@ fn write_entry(db: &ProxyQueryManager, events: &RpcEventEmitter, r: &CapturedReq
 define_rpc! {
     ProxyCtx;
     commands {
-        proxy_start(ProxyStartRequest) -> ProxyStartResponse,
-        proxy_stop(ProxyStopRequest) -> bool,
+        execute_action(ActionInvocation) -> bool,
         list_models(ListModelsRequest) -> ListModelsResponse,
     }
     events {
