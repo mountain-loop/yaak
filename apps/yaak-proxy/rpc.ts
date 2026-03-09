@@ -3,7 +3,7 @@ import { listen as tauriListen } from "@tauri-apps/api/event";
 import type {
   RpcEventSchema,
   RpcSchema,
-} from "../../crates-proxy/yaak-proxy-lib/bindings/gen_rpc";
+} from "@yaakapp-internal/proxy-lib";
 
 type Req<K extends keyof RpcSchema> = RpcSchema[K][0];
 type Res<K extends keyof RpcSchema> = RpcSchema[K][1];

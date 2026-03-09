@@ -54,16 +54,18 @@ import { filter } from './core/Editor/filter/extension';
 import { evaluate, parseQuery } from './core/Editor/filter/query';
 import { HttpMethodTag } from './core/HttpMethodTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
-import { Icon, LoadingIcon } from '@yaakapp-internal/ui';
+import {
+  Icon,
+  LoadingIcon,
+  Tree,
+  isSelectedFamily,
+  selectedIdsFamily,
+} from '@yaakapp-internal/ui';
+import type { TreeNode, TreeHandle, TreeProps, TreeItemProps } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
-import { isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
-import type { TreeNode } from './core/tree/common';
-import type { TreeHandle, TreeProps } from './core/tree/Tree';
-import { Tree } from './core/tree/Tree';
-import type { TreeItemProps } from './core/tree/TreeItem';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { GitDropdown } from './git/GitDropdown';
 
@@ -234,93 +236,98 @@ function Sidebar({ className }: { className?: string }) {
     [],
   );
 
-  const actions = useMemo(() => {
-    const enable = () => treeRef.current?.hasFocus() ?? false;
+  const treeHasFocus = useCallback(() => treeRef.current?.hasFocus() ?? false, []);
 
-    const actions = {
-      'sidebar.context_menu': {
-        enable,
-        cb: () => treeRef.current?.showContextMenu(),
-      },
-      'sidebar.expand_all': {
-        enable: isSidebarFocused,
-        cb: () => {
-          jotaiStore.set(collapsedFamily(treeId), {});
-        },
-      },
-      'sidebar.collapse_all': {
-        enable: isSidebarFocused,
-        cb: () => {
-          if (tree == null) return;
+  const getSelectedTreeModels = useCallback(
+    () => treeRef.current?.getSelectedItems() as SidebarModel[] | undefined,
+    [],
+  );
 
-          const next = (node: TreeNode<SidebarModel>, collapsed: Record<string, boolean>) => {
-            let newCollapsed = { ...collapsed };
-            for (const n of node.children ?? []) {
-              if (n.item.model !== 'folder') continue;
-              newCollapsed[n.item.id] = true;
-              newCollapsed = next(n, newCollapsed);
-            }
-            return newCollapsed;
-          };
-          const collapsed = next(tree, {});
-          jotaiStore.set(collapsedFamily(treeId), collapsed);
-        },
-      },
-      'sidebar.selected.delete': {
-        enable,
-        cb: async (items: SidebarModel[]) => {
-          await deleteModelWithConfirm(items);
-        },
-      },
-      'sidebar.selected.rename': {
-        enable,
-        allowDefault: true,
-        cb: async (items: SidebarModel[]) => {
-          const item = items[0];
-          if (items.length === 1 && item != null) {
-            treeRef.current?.renameItem(item.id);
-          }
-        },
-      },
-      'sidebar.selected.duplicate': {
-        // Higher priority so this takes precedence over model.duplicate (same Meta+d binding)
-        priority: 10,
-        enable,
-        cb: async (items: SidebarModel[]) => {
-          if (items.length === 1 && items[0]) {
-            const item = items[0];
-            const newId = await duplicateModel(item);
-            navigateToRequestOrFolderOrWorkspace(newId, item.model);
-          } else {
-            await Promise.all(items.map(duplicateModel));
-          }
-        },
-      },
-      'sidebar.selected.move': {
-        enable,
-        cb: async (items: SidebarModel[]) => {
-          const requests = items.filter(
-            (i): i is HttpRequest | GrpcRequest | WebsocketRequest =>
-              i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request'
-          );
-          if (requests.length > 0) {
-            moveToWorkspace.mutate(requests);
-          }
-        },
-      },
-      'request.send': {
-        enable,
-        cb: async (items: SidebarModel[]) => {
-          await Promise.all(
-            items
-              .filter((i) => i.model === 'http_request')
-              .map((i) => sendAnyHttpRequest.mutate(i.id)),
-          );
-        },
-      },
-    } as const;
-    return actions;
-  }, [tree, treeId]);
+  const handleRenameSelected = useCallback((items: SidebarModel[]) => {
+    if (items.length === 1 && items[0] != null) {
+      treeRef.current?.renameItem(items[0].id);
+    }
+  }, []);
+
+  const handleDeleteSelected = useCallback(
+    async (items: SidebarModel[]) => { await deleteModelWithConfirm(items); },
+    [],
+  );
+
+  const handleDuplicateSelected = useCallback(async (items: SidebarModel[]) => {
+    if (items.length === 1 && items[0]) {
+      const newId = await duplicateModel(items[0]);
+      navigateToRequestOrFolderOrWorkspace(newId, items[0].model);
+    } else {
+      await Promise.all(items.map(duplicateModel));
+    }
+  }, []);
+
+  const handleMoveSelected = useCallback((items: SidebarModel[]) => {
+    const requests = items.filter(
+      (i): i is HttpRequest | GrpcRequest | WebsocketRequest =>
+        i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request'
+    );
+    if (requests.length > 0) {
+      moveToWorkspace.mutate(requests);
+    }
+  }, []);
+
+  const handleSendSelected = useCallback(async (items: SidebarModel[]) => {
+    await Promise.all(
+      items
+        .filter((i) => i.model === 'http_request')
+        .map((i) => sendAnyHttpRequest.mutate(i.id)),
+    );
+  }, []);
+
+  useHotKey('sidebar.context_menu', useCallback(() => {
+    treeRef.current?.showContextMenu();
+  }, []), { enable: treeHasFocus });
+
+  useHotKey('sidebar.expand_all', useCallback(() => {
+    jotaiStore.set(collapsedFamily(treeId), {});
+  }, [treeId]), { enable: isSidebarFocused });
+
+  useHotKey('sidebar.collapse_all', useCallback(() => {
+    if (tree == null) return;
+    const next = (node: TreeNode<SidebarModel>, collapsed: Record<string, boolean>) => {
+      let newCollapsed = { ...collapsed };
+      for (const n of node.children ?? []) {
+        if (n.item.model !== 'folder') continue;
+        newCollapsed[n.item.id] = true;
+        newCollapsed = next(n, newCollapsed);
+      }
+      return newCollapsed;
+    };
+    const collapsed = next(tree, {});
+    jotaiStore.set(collapsedFamily(treeId), collapsed);
+  }, [tree, treeId]), { enable: isSidebarFocused });
+
+  useHotKey('sidebar.selected.delete', useCallback(() => {
+    const items = getSelectedTreeModels();
+    if (items) handleDeleteSelected(items);
+  }, [getSelectedTreeModels, handleDeleteSelected]), { enable: treeHasFocus });
+
+  useHotKey('sidebar.selected.rename', useCallback(() => {
+    const items = getSelectedTreeModels();
+    if (items) handleRenameSelected(items);
+  }, [getSelectedTreeModels, handleRenameSelected]), { enable: treeHasFocus, allowDefault: true });
+
+  useHotKey('sidebar.selected.duplicate', useCallback(async () => {
+    const items = getSelectedTreeModels();
+    if (items) await handleDuplicateSelected(items);
+  }, [getSelectedTreeModels, handleDuplicateSelected]), { priority: 10, enable: treeHasFocus });
+
+  useHotKey('sidebar.selected.move', useCallback(() => {
+    const items = getSelectedTreeModels();
+    if (items) handleMoveSelected(items);
+  }, [getSelectedTreeModels, handleMoveSelected]), { enable: treeHasFocus });
+
+  useHotKey('request.send', useCallback(async () => {
+    const items = getSelectedTreeModels();
+    if (items) await handleSendSelected(items);
+  }, [getSelectedTreeModels, handleSendSelected]), { enable: treeHasFocus });
 
   const getContextMenu = useCallback<(items: SidebarModel[]) => Promise<DropdownItem[]>>(
     async (items) => {
@@ -356,7 +363,7 @@ function Sidebar({ className }: { className?: string }) {
           hotKeyLabelOnly: true,
           hidden: !onlyHttpRequests,
           leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => actions['request.send'].cb(items),
+          onSelect: () => handleSendSelected(items),
         },
         ...(items.length === 1 && child.model === 'http_request'
           ? await getHttpRequestActions()
@@ -426,16 +433,14 @@ function Sidebar({ className }: { className?: string }) {
           hidden: items.length > 1,
           hotKeyAction: 'sidebar.selected.rename',
           hotKeyLabelOnly: true,
-          onSelect: () => {
-            treeRef.current?.renameItem(child.id);
-          },
+          onSelect: () => handleRenameSelected(items),
         },
         {
           label: 'Duplicate',
           hotKeyAction: 'model.duplicate',
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
+          onSelect: () => handleDuplicateSelected(items),
         },
         {
           label: items.length <= 1 ? 'Move' : `Move ${requestItems.length} Requests`,
@@ -443,9 +448,7 @@ function Sidebar({ className }: { className?: string }) {
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden: workspaces.length <= 1 || requestItems.length === 0 || requestItems.length !== items.length,
-          onSelect: () => {
-            actions['sidebar.selected.move'].cb(items);
-          },
+          onSelect: () => handleMoveSelected(items),
         },
         {
           color: 'danger',
@@ -453,13 +456,13 @@ function Sidebar({ className }: { className?: string }) {
           hotKeyAction: 'sidebar.selected.delete',
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => actions['sidebar.selected.delete'].cb(items),
+          onSelect: () => handleDeleteSelected(items),
         },
         ...modelCreationItems,
       ];
       return menuItems;
     },
-    [actions],
+    [],
   );
 
   const renderContextMenuFn = useCallback<NonNullable<TreeProps<SidebarModel>['renderContextMenu']>>(
@@ -468,8 +471,6 @@ function Sidebar({ className }: { className?: string }) {
     ),
     [],
   );
-
-  const hotkeys = useMemo<TreeProps<SidebarModel>['hotkeys']>(() => ({ actions }), [actions]);
 
   // Use a language compartment for the filter so we can reconfigure it when the autocompletion changes
   const filterLanguageCompartmentRef = useRef(new Compartment());
@@ -556,14 +557,26 @@ function Sidebar({ className }: { className?: string }) {
                 {
                   label: 'Expand All Folders',
                   leftSlot: <Icon icon="chevrons_up_down" />,
-                  onSelect: actions['sidebar.expand_all'].cb,
+                  onSelect: () => jotaiStore.set(collapsedFamily(treeId), {}),
                   hotKeyAction: 'sidebar.expand_all',
                   hotKeyLabelOnly: true,
                 },
                 {
                   label: 'Collapse All Folders',
                   leftSlot: <Icon icon="chevrons_down_up" />,
-                  onSelect: actions['sidebar.collapse_all'].cb,
+                  onSelect: () => {
+                    if (tree == null) return;
+                    const next = (node: TreeNode<SidebarModel>, collapsed: Record<string, boolean>) => {
+                      let newCollapsed = { ...collapsed };
+                      for (const n of node.children ?? []) {
+                        if (n.item.model !== 'folder') continue;
+                        newCollapsed[n.item.id] = true;
+                        newCollapsed = next(n, newCollapsed);
+                      }
+                      return newCollapsed;
+                    };
+                    jotaiStore.set(collapsedFamily(treeId), next(tree, {}));
+                  },
                   hotKeyAction: 'sidebar.collapse_all',
                   hotKeyLabelOnly: true,
                 },
@@ -589,7 +602,6 @@ function Sidebar({ className }: { className?: string }) {
           root={tree}
           treeId={treeId}
           collapsedAtom={collapsedFamily(treeId)}
-          hotkeys={hotkeys}
           getItemKey={getItemKey}
           ItemInner={SidebarInnerItem}
           ItemLeftSlotInner={SidebarLeftSlot}

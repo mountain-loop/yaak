@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type } from "@tauri-apps/plugin-os";
-import { Button, HeaderSize } from "@yaakapp-internal/ui";
+import { HeaderSize } from "@yaakapp-internal/ui";
+import { ActionButton } from "./ActionButton";
 import classNames from "classnames";
 import { createStore, Provider, useAtomValue } from "jotai";
-import { StrictMode, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./main.css";
+import { initHotkeys } from "./hotkeys";
 import { listen, rpc } from "./rpc";
 import { applyChange, dataAtom, httpExchangesAtom, replaceAll } from "./store";
 
@@ -19,6 +21,9 @@ rpc("list_models", {}).then((res) => {
   );
 });
 
+// Register hotkeys from action metadata
+initHotkeys();
+
 // Subscribe to model change events from the backend
 listen("model_write", (payload) => {
   jotaiStore.set(dataAtom, (prev) =>
@@ -27,36 +32,8 @@ listen("model_write", (payload) => {
 });
 
 function App() {
-  const [status, setStatus] = useState("Idle");
-  const [busy, setBusy] = useState(false);
   const osType = type();
   const exchanges = useAtomValue(httpExchangesAtom);
-
-  async function startProxy() {
-    setBusy(true);
-    setStatus("Starting...");
-    try {
-      await rpc("execute_action", { scope: "global", action: "proxy_start" });
-      setStatus("Running");
-    } catch (err) {
-      setStatus(`Failed: ${String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function stopProxy() {
-    setBusy(true);
-    setStatus("Stopping...");
-    try {
-      await rpc("execute_action", { scope: "global", action: "proxy_stop" });
-      setStatus("Stopped");
-    } catch (err) {
-      setStatus(`Failed: ${String(err)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <div
@@ -82,20 +59,16 @@ function App() {
       </HeaderSize>
       <main className="overflow-auto p-4">
         <div className="flex items-center gap-3 mb-4">
-          <Button disabled={busy} onClick={startProxy} size="sm" tone="primary">
-            Start Proxy
-          </Button>
-          <Button
-            disabled={busy}
-            onClick={stopProxy}
+          <ActionButton
+            action={{ scope: "global", action: "proxy_start" }}
+            size="sm"
+            tone="primary"
+          />
+          <ActionButton
+            action={{ scope: "global", action: "proxy_stop" }}
             size="sm"
             variant="border"
-          >
-            Stop Proxy
-          </Button>
-          <span className="text-xs text-text-subtlest">
-            {status}
-          </span>
+          />
         </div>
 
         <div className="text-xs font-mono">

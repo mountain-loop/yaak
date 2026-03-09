@@ -9,9 +9,9 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeSideForDragMove } from '@yaakapp-internal/ui';
+import { computeSideForDragMove } from '../../lib/dnd';
 import type { ContextMenuRenderer } from './common';
-import { Icon } from '@yaakapp-internal/ui';
+import { Icon } from '../Icon';
 import { isLastFocusedFamily, isSelectedFamily } from './atoms';
 import { useCollapsedAtom, useIsAncestorCollapsed, useIsCollapsed, useSetCollapsed } from './context';
 import type { TreeNode } from './common';

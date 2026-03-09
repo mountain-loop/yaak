@@ -11,7 +11,7 @@ use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource};
 use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
 use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
-use crate::actions::{ActionInvocation, GlobalAction};
+use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
 use crate::db::ProxyQueryManager;
 use crate::models::{HttpExchange, ModelPayload, ProxyHeader};
 
@@ -34,6 +34,16 @@ impl ProxyCtx {
 }
 
 // -- Request/response types --
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListActionsRequest {}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListActionsResponse {
+    pub actions: Vec<(ActionInvocation, ActionMetadata)>,
+}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
@@ -83,6 +93,12 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
             }
         },
     }
+}
+
+fn list_actions(_ctx: &ProxyCtx, _req: ListActionsRequest) -> Result<ListActionsResponse, RpcError> {
+    Ok(ListActionsResponse {
+        actions: crate::actions::all_global_actions(),
+    })
 }
 
 fn list_models(ctx: &ProxyCtx, _req: ListModelsRequest) -> Result<ListModelsResponse, RpcError> {
@@ -200,6 +216,7 @@ define_rpc! {
     ProxyCtx;
     commands {
         execute_action(ActionInvocation) -> bool,
+        list_actions(ListActionsRequest) -> ListActionsResponse,
         list_models(ListModelsRequest) -> ListModelsResponse,
     }
     events {

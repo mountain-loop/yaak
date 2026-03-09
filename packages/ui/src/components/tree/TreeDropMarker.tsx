@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { memo } from 'react';
-import { DropMarker } from '@yaakapp-internal/ui';
+import { DropMarker } from '../DropMarker';
 import { hoveredParentDepthFamily, isIndexHoveredFamily } from './atoms';
 import type { TreeNode } from './common';
 import { useIsCollapsed } from './context';

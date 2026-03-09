@@ -22,9 +22,7 @@ import {
   useState,
 } from 'react';
 import { useKey, useKeyPressEvent } from 'react-use';
-import type { HotKeyOptions, HotkeyAction } from '../../../hooks/useHotKey';
-import { useHotKey } from '../../../hooks/useHotKey';
-import { computeSideForDragMove } from '@yaakapp-internal/ui';
+import { computeSideForDragMove } from '../../lib/dnd';
 import { useStore } from 'jotai';
 import {
   draggingIdsFamily,
@@ -57,9 +55,6 @@ export interface TreeProps<T extends { id: string }> {
   className?: string;
   onActivate?: (item: T) => void;
   onDragEnd?: (opt: { items: T[]; parent: T; children: T[]; insertAt: number }) => void;
-  hotkeys?: {
-    actions: Partial<Record<HotkeyAction, { cb: (items: T[]) => void } & HotKeyOptions>>;
-  };
   getEditOptions?: (item: T) => {
     defaultValue: string;
     placeholder?: string;
@@ -71,6 +66,7 @@ export interface TreeHandle {
   treeId: string;
   focus: () => boolean;
   hasFocus: () => boolean;
+  getSelectedItems: () => { id: string }[];
   selectItem: (id: string, focus?: boolean) => void;
   renameItem: (id: string) => void;
   showContextMenu: () => void;
@@ -83,7 +79,6 @@ function TreeInner<T extends { id: string }>(
     getContextMenu,
     getEditOptions,
     getItemKey,
-    hotkeys,
     onActivate,
     onDragEnd,
     renderContextMenu,
@@ -202,6 +197,7 @@ function TreeInner<T extends { id: string }>(
       treeId,
       focus: tryFocus,
       hasFocus: hasFocus,
+      getSelectedItems: () => getSelectedItems(store, treeId, selectableItems),
       renameItem: (id) => treeItemRefs.current[id]?.rename(),
       selectItem: (id, focus) => {
         if (store.get(selectedIdsFamily(treeId)).includes(id)) {
@@ -650,7 +646,6 @@ function TreeInner<T extends { id: string }>(
 
   return (
     <CollapsedAtomContext.Provider value={collapsedAtom}>
-      <TreeHotKeys treeId={treeId} hotkeys={hotkeys} selectableItems={selectableItems} />
       {showContextMenu &&
         renderContextMenu?.({
           items: showContextMenu.items,
@@ -740,68 +735,6 @@ function DropRegionAfterList({
   const { setNodeRef } = useDroppable({ id });
   // biome-ignore lint/a11y/noStaticElementInteractions: Meh
   return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
-}
-
-interface TreeHotKeyProps<T extends { id: string }> {
-  action: HotkeyAction;
-  selectableItems: SelectableTreeNode<T>[];
-  treeId: string;
-  onDone: (items: T[]) => void;
-  priority?: number;
-  enable?: boolean | (() => boolean);
-}
-
-function TreeHotKey<T extends { id: string }>({
-  treeId,
-  action,
-  onDone,
-  selectableItems,
-  enable,
-  ...options
-}: TreeHotKeyProps<T>) {
-  const store = useStore();
-  useHotKey(
-    action,
-    () => {
-      onDone(getSelectedItems(store, treeId, selectableItems));
-    },
-    {
-      ...options,
-      enable: () => {
-        if (enable == null) return true;
-        if (typeof enable === 'function') return enable();
-        return enable;
-      },
-    },
-  );
-  return null;
-}
-
-function TreeHotKeys<T extends { id: string }>({
-  treeId,
-  hotkeys,
-  selectableItems,
-}: {
-  treeId: string;
-  hotkeys: TreeProps<T>['hotkeys'];
-  selectableItems: SelectableTreeNode<T>[];
-}) {
-  if (hotkeys == null) return null;
-
-  return (
-    <>
-      {Object.entries(hotkeys.actions).map(([hotkey, { cb, ...options }]) => (
-        <TreeHotKey
-          key={hotkey}
-          action={hotkey as HotkeyAction}
-          treeId={treeId}
-          onDone={cb}
-          selectableItems={selectableItems}
-          {...options}
-        />
-      ))}
-    </>
-  );
 }
 
 function getValidSelectableItems<T extends { id: string }>(

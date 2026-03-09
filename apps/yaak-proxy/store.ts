@@ -1,5 +1,5 @@
 import { createModelStore } from "@yaakapp-internal/model-store";
-import type { HttpExchange } from "../../crates-proxy/yaak-proxy-lib/bindings/gen_models";
+import type { HttpExchange } from "@yaakapp-internal/proxy-lib";
 
 type ProxyModels = {
   http_exchange: HttpExchange;

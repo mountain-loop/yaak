@@ -162,7 +162,7 @@ mod tests {
         let changes = db.list_model_changes_after(0, 10).expect("Failed to list changes");
         assert_eq!(changes.len(), 1);
 
-        db.conn
+        db.conn()
             .resolve()
             .execute(
                 "UPDATE model_changes SET created_at = '2000-01-01 00:00:00.000' WHERE id = ?1",
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(all.len(), 2);
 
         let fixed_ts = "2026-02-16 00:00:00.000";
-        db.conn
+        db.conn()
             .resolve()
             .execute("UPDATE model_changes SET created_at = ?1", params![fixed_ts])
             .expect("Failed to normalize timestamps");
@@ -229,7 +229,7 @@ mod tests {
         let changes = db.list_model_changes_after(0, 10).expect("Failed to list changes");
         assert_eq!(changes.len(), 1);
 
-        db.conn
+        db.conn()
             .resolve()
             .execute(
                 "UPDATE model_changes SET created_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW', '-2 hours') WHERE id = ?1",
@@ -264,7 +264,7 @@ mod tests {
             "change": { "type": "upsert", "created": false }
         });
 
-        db.conn
+        db.conn()
             .resolve()
             .execute(
                 r#"

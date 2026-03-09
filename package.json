@@ -65,6 +65,7 @@
     "crates/yaak-sync",
     "crates/yaak-templates",
     "crates/yaak-ws",
+    "crates-proxy/yaak-proxy-lib",
     "apps/yaak-client",
     "apps/yaak-proxy"
   ],
@@ -105,7 +106,7 @@
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.13",
+    "@biomejs/biome": "^2.4.6",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.5.1",
     "dotenv-cli": "^11.0.0",

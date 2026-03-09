@@ -1,13 +1,14 @@
 import type { Environment, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import {
   environmentsBreakdownAtom,
   useEnvironmentsBreakdown,
 } from '../hooks/useEnvironmentsBreakdown';
+import { useHotKey } from '../hooks/useHotKey';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
@@ -16,7 +17,8 @@ import { showColorPicker } from '../lib/showColorPicker';
 import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
-import { Icon } from '@yaakapp-internal/ui';
+import { Icon, Tree } from '@yaakapp-internal/ui';
+import type { TreeNode, TreeHandle, TreeProps } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
@@ -24,9 +26,6 @@ import type { PairEditorHandle } from './core/PairEditor';
 import { SplitLayout } from './core/SplitLayout';
 import { atomFamily } from 'jotai/utils';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
-import type { TreeNode } from './core/tree/common';
-import type { TreeHandle, TreeProps } from './core/tree/Tree';
-import { Tree } from './core/tree/Tree';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentEditor } from './EnvironmentEditor';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
@@ -137,44 +136,43 @@ function EnvironmentEditDialogSidebar({
     [baseEnvironment?.id, selectedEnvironmentId, setSelectedEnvironmentId],
   );
 
-  const actions = useMemo(() => {
-    const enable = () => treeRef.current?.hasFocus() ?? false;
+  const treeHasFocus = useCallback(() => treeRef.current?.hasFocus() ?? false, []);
 
-    const actions = {
-      'sidebar.selected.rename': {
-        enable,
-        allowDefault: true,
-        priority: 100,
-        cb: async (items: TreeModel[]) => {
-          const item = items[0];
-          if (items.length === 1 && item != null) {
-            treeRef.current?.renameItem(item.id);
-          }
-        },
-      },
-      'sidebar.selected.delete': {
-        priority: 100,
-        enable,
-        cb: (items: TreeModel[]) => deleteModelWithConfirm(items),
-      },
-      'sidebar.selected.duplicate': {
-        priority: 100,
-        enable,
-        cb: async (items: TreeModel[]) => {
-          if (items.length === 1 && items[0]) {
-            const item = items[0];
-            const newId = await duplicateModel(item);
-            setSelectedEnvironmentId(newId);
-          } else {
-            await Promise.all(items.map(duplicateModel));
-          }
-        },
-      },
-    } as const;
-    return actions;
+  const getSelectedTreeModels = useCallback(
+    () => treeRef.current?.getSelectedItems() as TreeModel[] | undefined,
+    [],
+  );
+
+  const handleRenameSelected = useCallback(() => {
+    const items = getSelectedTreeModels();
+    if (items?.length === 1 && items[0] != null) {
+      treeRef.current?.renameItem(items[0].id);
+    }
+  }, [getSelectedTreeModels]);
+
+  const handleDeleteSelected = useCallback(
+    (items: TreeModel[]) => deleteModelWithConfirm(items),
+    [],
+  );
+
+  const handleDuplicateSelected = useCallback(async (items: TreeModel[]) => {
+    if (items.length === 1 && items[0]) {
+      const newId = await duplicateModel(items[0]);
+      setSelectedEnvironmentId(newId);
+    } else {
+      await Promise.all(items.map(duplicateModel));
+    }
   }, [setSelectedEnvironmentId]);
 
-  const hotkeys = useMemo<TreeProps<TreeModel>['hotkeys']>(() => ({ actions }), [actions]);
+  useHotKey('sidebar.selected.rename', handleRenameSelected, { enable: treeHasFocus, allowDefault: true, priority: 100 });
+  useHotKey('sidebar.selected.delete', useCallback(() => {
+    const items = getSelectedTreeModels();
+    if (items) handleDeleteSelected(items);
+  }, [getSelectedTreeModels, handleDeleteSelected]), { enable: treeHasFocus, priority: 100 });
+  useHotKey('sidebar.selected.duplicate', useCallback(async () => {
+    const items = getSelectedTreeModels();
+    if (items) await handleDuplicateSelected(items);
+  }, [getSelectedTreeModels, handleDuplicateSelected]), { enable: treeHasFocus, priority: 100 });
 
   const getContextMenu = useCallback(
     (items: TreeModel[]): ContextMenuProps['items'] => {
@@ -203,12 +201,10 @@ function EnvironmentEditDialogSidebar({
           hidden: isBaseEnvironment(environment) || !singleEnvironment,
           hotKeyAction: 'sidebar.selected.rename',
           hotKeyLabelOnly: true,
-          onSelect: async () => {
+          onSelect: () => {
             // Not sure why this is needed, but without it the
             // edit input blurs immediately after opening.
-            requestAnimationFrame(() => {
-              actions['sidebar.selected.rename'].cb(items);
-            });
+            requestAnimationFrame(() => handleRenameSelected());
           },
         },
         {
@@ -217,7 +213,7 @@ function EnvironmentEditDialogSidebar({
           hidden: isBaseEnvironment(environment),
           hotKeyAction: 'sidebar.selected.duplicate',
           hotKeyLabelOnly: true,
-          onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
+          onSelect: () => handleDuplicateSelected(items),
         },
         {
           label: environment.color ? 'Change Color' : 'Assign Color',
@@ -253,7 +249,7 @@ function EnvironmentEditDialogSidebar({
 
       return menuItems;
     },
-    [actions, baseEnvironments.length, handleDeleteEnvironment],
+    [baseEnvironments.length, handleDeleteEnvironment, setSelectedEnvironmentId],
   );
 
   const handleDragEnd = useCallback(async function handleDragEnd({
@@ -317,7 +313,6 @@ function EnvironmentEditDialogSidebar({
             treeId={treeId}
             collapsedAtom={collapsedFamily(treeId)}
             className="px-2 pb-10"
-            hotkeys={hotkeys}
             root={tree}
             getContextMenu={getContextMenu}
             renderContextMenu={renderContextMenuFn}
