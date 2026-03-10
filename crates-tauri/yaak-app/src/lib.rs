@@ -4,7 +4,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::grpc::{build_metadata, metadata_to_map, resolve_grpc_request};
 use crate::http_request::{resolve_http_request, send_http_request};
-use crate::import::import_data;
+use crate::import::{import_data, import_openapi_url};
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_json_value, render_template};
@@ -970,6 +970,15 @@ async fn cmd_import_data<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_import_openapi_url<R: Runtime>(
+    window: WebviewWindow<R>,
+    url: &str,
+    target_workspace_id: Option<String>,
+) -> YaakResult<BatchUpsertResult> {
+    import_openapi_url(&window, url, target_workspace_id.as_deref()).await
+}
+
+#[tauri::command]
 async fn cmd_http_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1663,6 +1672,7 @@ pub fn run() {
             cmd_workspace_actions,
             cmd_folder_actions,
             cmd_import_data,
+            cmd_import_openapi_url,
             cmd_metadata,
             cmd_new_child_window,
             cmd_new_main_window,

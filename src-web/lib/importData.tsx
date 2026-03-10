@@ -3,25 +3,16 @@ import { Button } from '../components/core/Button';
 import { FormattedError } from '../components/core/FormattedError';
 import { VStack } from '../components/core/Stacks';
 import { ImportDataDialog } from '../components/ImportDataDialog';
-import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { showAlert } from './alert';
 import { showDialog } from './dialog';
-import { jotaiStore } from './jotai';
 import { pluralizeCount } from './pluralize';
 import { router } from './router';
 import { invokeCmd } from './tauri';
 
 export const importData = createFastMutation({
   mutationKey: ['import_data'],
-  onError: (err: string) => {
-    showAlert({
-      id: 'import-failed',
-      title: 'Import Failed',
-      size: 'md',
-      body: <FormattedError>{err}</FormattedError>,
-    });
-  },
+  onError: showImportError,
   mutationFn: async () => {
     return new Promise<void>((resolve, reject) => {
       showDialog({
@@ -29,12 +20,9 @@ export const importData = createFastMutation({
         title: 'Import Data',
         size: 'sm',
         render: ({ hide }) => {
-          const importAndHide = async (filePath: string) => {
+          const importAndHide = async (runImport: () => Promise<void>) => {
             try {
-              const didImport = await performImport(filePath);
-              if (!didImport) {
-                return;
-              }
+              await runImport();
               resolve();
             } catch (err) {
               reject(err);
@@ -42,25 +30,61 @@ export const importData = createFastMutation({
               hide();
             }
           };
-          return <ImportDataDialog importData={importAndHide} />;
+
+          return (
+            <ImportDataDialog
+              importFile={(filePath) => importAndHide(() => performFileImport(filePath))}
+              importOpenApiUrl={(url) => importAndHide(() => performOpenApiUrlImport(url))}
+            />
+          );
         },
       });
     });
   },
 });
 
-async function performImport(filePath: string): Promise<boolean> {
-  const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
-  const imported = await invokeCmd<BatchUpsertResult>('cmd_import_data', {
-    filePath,
-    workspaceId: activeWorkspace?.id,
+export const resyncOpenApi = createFastMutation<
+  BatchUpsertResult,
+  string,
+  { url: string; workspaceId: string }
+>({
+  mutationKey: ['resync_openapi'],
+  onError: showImportError,
+  mutationFn: async ({ url, workspaceId }) => {
+    const imported = await invokeCmd<BatchUpsertResult>('cmd_import_openapi_url', {
+      url,
+      targetWorkspaceId: workspaceId,
+    });
+    showImportComplete(imported, { title: 'OpenAPI Resync Complete' });
+    return imported;
+  },
+});
+
+async function performFileImport(filePath: string): Promise<void> {
+  const imported = await invokeCmd<BatchUpsertResult>('cmd_import_data', { filePath });
+  showImportComplete(imported, { title: 'Import Complete' });
+  await navigateToImportedWorkspace(imported);
+}
+
+async function performOpenApiUrlImport(url: string): Promise<void> {
+  const imported = await invokeCmd<BatchUpsertResult>('cmd_import_openapi_url', { url });
+  showImportComplete(imported, { title: 'Import Complete' });
+  await navigateToImportedWorkspace(imported);
+}
+
+function showImportError(err: unknown) {
+  showAlert({
+    id: 'import-failed',
+    title: 'Import Failed',
+    size: 'md',
+    body: <FormattedError>{String(err)}</FormattedError>,
   });
+}
 
-  const importedWorkspace = imported.workspaces[0];
-
+function showImportComplete(imported: BatchUpsertResult, { title }: { title: string }) {
   showDialog({
     id: 'import-complete',
-    title: 'Import Complete',
+    title,
     size: 'sm',
     hideX: true,
     render: ({ hide }) => {
@@ -95,15 +119,18 @@ async function performImport(filePath: string): Promise<boolean> {
       );
     },
   });
+}
 
-  if (importedWorkspace != null) {
-    const environmentId = imported.environments[0]?.id ?? null;
-    await router.navigate({
-      to: '/workspaces/$workspaceId',
-      params: { workspaceId: importedWorkspace.id },
-      search: { environment_id: environmentId },
-    });
+async function navigateToImportedWorkspace(imported: BatchUpsertResult) {
+  const importedWorkspace = imported.workspaces[0];
+  if (importedWorkspace == null) {
+    return;
   }
 
-  return true;
+  const environmentId = imported.environments[0]?.id ?? null;
+  await router.navigate({
+    to: '/workspaces/$workspaceId',
+    params: { workspaceId: importedWorkspace.id },
+    search: { environment_id: environmentId },
+  });
 }
