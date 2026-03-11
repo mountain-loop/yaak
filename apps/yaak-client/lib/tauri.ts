@@ -17,6 +17,7 @@ type TauriCmd =
   | 'cmd_delete_send_history'
   | 'cmd_dismiss_notification'
   | 'cmd_export_data'
+  | 'cmd_format_graphql'
   | 'cmd_format_json'
   | 'cmd_get_http_authentication_config'
   | 'cmd_get_http_authentication_summaries'

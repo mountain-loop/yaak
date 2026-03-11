@@ -24,6 +24,7 @@ use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_templates::strip_json_comments::maybe_strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
 use yaak_ws::{WebsocketManager, render_websocket_request};
@@ -72,8 +73,10 @@ pub async fn cmd_ws_send<R: Runtime>(
     )
     .await?;
 
+    let message = maybe_strip_json_comments(&request.message);
+
     let mut ws_manager = ws_manager.lock().await;
-    ws_manager.send(&connection.id, Message::Text(request.message.clone().into())).await?;
+    ws_manager.send(&connection.id, Message::Text(message.clone().into())).await?;
 
     app_handle.db().upsert_websocket_event(
         &WebsocketEvent {
@@ -82,7 +85,7 @@ pub async fn cmd_ws_send<R: Runtime>(
             workspace_id: connection.workspace_id.clone(),
             is_server: false,
             message_type: WebsocketEventType::Text,
-            message: request.message.into(),
+            message: message.into(),
             ..Default::default()
         },
         &UpdateSource::from_window_label(window.label()),

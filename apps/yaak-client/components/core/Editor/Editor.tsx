@@ -78,6 +78,7 @@ export interface EditorProps {
   hideGutter?: boolean;
   id?: string;
   language?: EditorLanguage | 'pairs' | 'url' | 'timeline' | null;
+  lintExtension?: Extension;
   graphQLSchema?: GraphQLSchema | null;
   onBlur?: () => void;
   onChange?: (value: string) => void;
@@ -124,6 +125,7 @@ function EditorInner({
   hideGutter,
   graphQLSchema,
   language,
+  lintExtension,
   onBlur,
   onChange,
   onFocus,
@@ -325,13 +327,14 @@ function EditorInner({
   );
 
   // Update the language extension when the language changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: none
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally limited deps
   useEffect(() => {
     if (cm.current === null) return;
     const { view, languageCompartment } = cm.current;
     const ext = getLanguageExtension({
       useTemplating,
       language,
+      lintExtension,
       hideGutter,
       environmentVariables,
       autocomplete,
@@ -344,6 +347,7 @@ function EditorInner({
     view.dispatch({ effects: languageCompartment.reconfigure(ext) });
   }, [
     language,
+    lintExtension,
     autocomplete,
     environmentVariables,
     onClickFunction,
@@ -357,7 +361,7 @@ function EditorInner({
   ]);
 
   // Initialize the editor when ref mounts
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only reinitialize when necessary
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only reinitialize when necessary
   const initEditorRef = useCallback(
     function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
@@ -371,6 +375,7 @@ function EditorInner({
         const langExt = getLanguageExtension({
           useTemplating,
           language,
+          lintExtension,
           completionOptions,
           autocomplete,
           environmentVariables,

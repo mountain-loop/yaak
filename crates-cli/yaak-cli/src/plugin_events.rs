@@ -3,7 +3,7 @@ use arboard::Clipboard;
 use console::Term;
 use inquire::{Confirm, Editor, Password, PasswordDisplayMode, Select, Text};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,11 +11,11 @@ use tokio::task::JoinHandle;
 use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
-use yaak::render::render_http_request;
+use yaak::render::{render_grpc_request, render_http_request};
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::models::{Environment, GrpcRequest, HttpRequestHeader};
+use yaak_models::models::Environment;
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::make_vars_hashmap;
@@ -29,7 +29,7 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
-use yaak_templates::{RenderOptions, TemplateCallback, parse_and_render, render_json_value_raw};
+use yaak_templates::{RenderOptions, TemplateCallback, render_json_value_raw};
 
 pub struct CliPluginEventBridge {
     rx_id: String,
@@ -269,7 +269,7 @@ async fn build_plugin_reply(
                 );
                 let render_options = RenderOptions::throw();
 
-                match render_grpc_request_for_cli(
+                match render_grpc_request(
                     &grpc_request,
                     environment_chain,
                     &template_callback,
@@ -532,60 +532,6 @@ async fn render_json_value_for_cli<T: TemplateCallback>(
     render_json_value_raw(value, vars, cb, opt).await
 }
 
-async fn render_grpc_request_for_cli<T: TemplateCallback>(
-    grpc_request: &GrpcRequest,
-    environment_chain: Vec<Environment>,
-    cb: &T,
-    opt: &RenderOptions,
-) -> yaak_templates::error::Result<GrpcRequest> {
-    let vars = &make_vars_hashmap(environment_chain);
-
-    let mut metadata = Vec::new();
-    for p in grpc_request.metadata.clone() {
-        if !p.enabled {
-            continue;
-        }
-        metadata.push(HttpRequestHeader {
-            enabled: p.enabled,
-            name: parse_and_render(p.name.as_str(), vars, cb, opt).await?,
-            value: parse_and_render(p.value.as_str(), vars, cb, opt).await?,
-            id: p.id,
-        })
-    }
-
-    let authentication = {
-        let mut disabled = false;
-        let mut auth = BTreeMap::new();
-        match grpc_request.authentication.get("disabled") {
-            Some(Value::Bool(true)) => {
-                disabled = true;
-            }
-            Some(Value::String(tmpl)) => {
-                disabled = parse_and_render(tmpl.as_str(), vars, cb, opt)
-                    .await
-                    .unwrap_or_default()
-                    .is_empty();
-            }
-            _ => {}
-        }
-        if disabled {
-            auth.insert("disabled".to_string(), Value::Bool(true));
-        } else {
-            for (k, v) in grpc_request.authentication.clone() {
-                if k == "disabled" {
-                    auth.insert(k, Value::Bool(false));
-                } else {
-                    auth.insert(k, render_json_value_raw(v, vars, cb, opt).await?);
-                }
-            }
-        }
-        auth
-    };
-
-    let url = parse_and_render(grpc_request.url.as_str(), vars, cb, opt).await?;
-
-    Ok(GrpcRequest { url, metadata, authentication, ..grpc_request.to_owned() })
-}
 
 fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
     let first_part = raw_cookie.split(';').next()?.trim();

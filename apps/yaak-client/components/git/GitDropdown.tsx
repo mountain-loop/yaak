@@ -75,7 +75,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
 
   const currentBranch = status.data.headRefShorthand;
   const hasChanges = status.data.entries.some((e) => e.status !== 'current');
-  const hasRemotes = (status.data.origins ?? []).length > 0;
+  const _hasRemotes = (status.data.origins ?? []).length > 0;
   const { ahead, behind } = status.data;
 
   const tryCheckout = (branch: string, force: boolean) => {
