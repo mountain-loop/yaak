@@ -33,6 +33,22 @@ impl ProxyCtx {
     }
 }
 
+// -- Proxy state --
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum ProxyState {
+    Running,
+    Stopped,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ProxyStatePayload {
+    pub state: ProxyState,
+}
+
 // -- Request/response types --
 
 #[derive(Deserialize, TS)]
@@ -54,6 +70,16 @@ pub struct ListModelsRequest {}
 #[serde(rename_all = "camelCase")]
 pub struct ListModelsResponse {
     pub http_exchanges: Vec<HttpExchange>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetProxyStateRequest {}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetProxyStateResponse {
+    pub state: ProxyState,
 }
 
 // -- Handlers --
@@ -81,6 +107,9 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
                 }
 
                 *handle = Some(proxy_handle);
+                ctx.events.emit("proxy_state_changed", &ProxyStatePayload {
+                    state: ProxyState::Running,
+                });
                 Ok(true)
             }
             GlobalAction::ProxyStop => {
@@ -89,10 +118,26 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
                     .lock()
                     .map_err(|_| RpcError { message: "lock poisoned".into() })?;
                 handle.take();
+                ctx.events.emit("proxy_state_changed", &ProxyStatePayload {
+                    state: ProxyState::Stopped,
+                });
                 Ok(true)
             }
         },
     }
+}
+
+fn get_proxy_state(ctx: &ProxyCtx, _req: GetProxyStateRequest) -> Result<GetProxyStateResponse, RpcError> {
+    let handle = ctx
+        .handle
+        .lock()
+        .map_err(|_| RpcError { message: "lock poisoned".into() })?;
+    let state = if handle.is_some() {
+        ProxyState::Running
+    } else {
+        ProxyState::Stopped
+    };
+    Ok(GetProxyStateResponse { state })
 }
 
 fn list_actions(_ctx: &ProxyCtx, _req: ListActionsRequest) -> Result<ListActionsResponse, RpcError> {
@@ -216,10 +261,12 @@ define_rpc! {
     ProxyCtx;
     commands {
         execute_action(ActionInvocation) -> bool,
+        get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
         list_actions(ListActionsRequest) -> ListActionsResponse,
         list_models(ListModelsRequest) -> ListModelsResponse,
     }
     events {
         model_write(ModelPayload),
+        proxy_state_changed(ProxyStatePayload),
     }
 }

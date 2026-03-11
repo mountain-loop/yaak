@@ -1,10 +1,10 @@
-import { Button, type ButtonProps } from "@yaakapp-internal/ui";
-import { useCallback, useState } from "react";
-import type { ActionInvocation } from "@yaakapp-internal/proxy-lib";
-import { useActionMetadata } from "./hooks";
-import { rpc } from "./rpc";
+import type { ActionInvocation } from '@yaakapp-internal/proxy-lib';
+import { Button, type ButtonProps } from '@yaakapp-internal/ui';
+import { useCallback } from 'react';
+import { useActionMetadata } from './hooks';
+import { useRpcMutation } from './rpc-hooks';
 
-type ActionButtonProps = Omit<ButtonProps, "onClick" | "children"> & {
+type ActionButtonProps = Omit<ButtonProps, 'onClick' | 'children'> & {
   action: ActionInvocation;
   /** Override the label from metadata */
   children?: React.ReactNode;
@@ -12,20 +12,20 @@ type ActionButtonProps = Omit<ButtonProps, "onClick" | "children"> & {
 
 export function ActionButton({ action, children, ...props }: ActionButtonProps) {
   const meta = useActionMetadata(action);
-  const [busy, setBusy] = useState(false);
+  const { mutate, isPending } = useRpcMutation('execute_action');
 
-  const onClick = useCallback(async () => {
-    setBusy(true);
-    try {
-      await rpc("execute_action", action);
-    } finally {
-      setBusy(false);
-    }
-  }, [action]);
+  const onClick = useCallback(() => {
+    mutate(action);
+  }, [action, mutate]);
 
   return (
-    <Button {...props} disabled={props.disabled || busy} isLoading={busy} onClick={onClick}>
-      {children ?? meta?.label ?? "…"}
+    <Button
+      {...props}
+      disabled={props.disabled || isPending}
+      isLoading={isPending}
+      onClick={onClick}
+    >
+      {children ?? meta?.label ?? '…'}
     </Button>
   );
 }

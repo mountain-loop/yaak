@@ -16,3 +16,4 @@ export type { TreeHandle, TreeProps } from "./components/tree/Tree";
 export type { TreeNode } from "./components/tree/common";
 export type { TreeItemProps } from "./components/tree/TreeItem";
 export { isSelectedFamily, selectedIdsFamily } from "./components/tree/atoms";
+export { minPromiseMillis } from "./lib/minPromiseMillis";

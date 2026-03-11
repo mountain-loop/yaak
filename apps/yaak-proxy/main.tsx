@@ -1,46 +1,47 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { type } from "@tauri-apps/plugin-os";
-import { HeaderSize } from "@yaakapp-internal/ui";
-import { ActionButton } from "./ActionButton";
-import { Sidebar } from "./Sidebar";
-import classNames from "classnames";
-import { createStore, Provider, useAtomValue } from "jotai";
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import "./main.css";
-import { initHotkeys } from "./hotkeys";
-import { listen, rpc } from "./rpc";
-import { applyChange, dataAtom, httpExchangesAtom, replaceAll } from "./store";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type } from '@tauri-apps/plugin-os';
+import { HeaderSize } from '@yaakapp-internal/ui';
+import classNames from 'classnames';
+import { createStore, Provider, useAtomValue } from 'jotai';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { ActionButton } from './ActionButton';
+import { Sidebar } from './Sidebar';
+import './main.css';
+import { initHotkeys } from './hotkeys';
+import { listen, rpc } from './rpc';
+import { useRpcQueryWithEvent } from './rpc-hooks';
+import { applyChange, dataAtom, httpExchangesAtom, replaceAll } from './store';
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
 
 // Load initial models from the database
-rpc("list_models", {}).then((res) => {
-  jotaiStore.set(dataAtom, (prev) =>
-    replaceAll(prev, "http_exchange", res.httpExchanges),
-  );
+rpc('list_models', {}).then((res) => {
+  jotaiStore.set(dataAtom, (prev) => replaceAll(prev, 'http_exchange', res.httpExchanges));
 });
 
 // Register hotkeys from action metadata
 initHotkeys();
 
 // Subscribe to model change events from the backend
-listen("model_write", (payload) => {
+listen('model_write', (payload) => {
   jotaiStore.set(dataAtom, (prev) =>
-    applyChange(prev, "http_exchange", payload.model, payload.change),
+    applyChange(prev, 'http_exchange', payload.model, payload.change),
   );
 });
 
 function App() {
   const osType = type();
   const exchanges = useAtomValue(httpExchangesAtom);
+  const { data: proxyState } = useRpcQueryWithEvent('get_proxy_state', {}, 'proxy_state_changed');
+  const isRunning = proxyState?.state === 'running';
 
   return (
     <div
       className={classNames(
-        "h-full w-full grid grid-rows-[auto_1fr]",
-        osType === "linux" && "border border-border-subtle",
+        'h-full w-full grid grid-rows-[auto_1fr]',
+        osType === 'linux' && 'border border-border-subtle',
       )}
     >
       <HeaderSize
@@ -63,15 +64,25 @@ function App() {
         <main className="overflow-auto p-4">
           <div className="flex items-center gap-3 mb-4">
             <ActionButton
-              action={{ scope: "global", action: "proxy_start" }}
+              action={{ scope: 'global', action: 'proxy_start' }}
               size="sm"
               tone="primary"
+              disabled={isRunning}
             />
             <ActionButton
-              action={{ scope: "global", action: "proxy_stop" }}
+              action={{ scope: 'global', action: 'proxy_stop' }}
               size="sm"
               variant="border"
+              disabled={!isRunning}
             />
+            <span
+              className={classNames(
+                'text-xs font-medium',
+                isRunning ? 'text-success' : 'text-text-subtlest',
+              )}
+            >
+              {isRunning ? 'Running on :9090' : 'Stopped'}
+            </span>
           </div>
 
           <div className="text-xs font-mono">
@@ -91,7 +102,7 @@ function App() {
                     <tr key={ex.id} className="border-b border-border-subtle">
                       <td className="py-1 pr-3">{ex.method}</td>
                       <td className="py-1 pr-3 truncate max-w-md">{ex.url}</td>
-                      <td className="py-1 pr-3">{ex.resStatus ?? "—"}</td>
+                      <td className="py-1 pr-3">{ex.resStatus ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -104,7 +115,7 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root") as HTMLElement).render(
+createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <Provider store={jotaiStore}>

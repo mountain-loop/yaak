@@ -1,5 +1,9 @@
 import type { Color } from "@yaakapp-internal/plugins";
+import classNames from "classnames";
 import type { HTMLAttributes, ReactNode } from "react";
+import { forwardRef } from "react";
+import { Icon } from "./Icon";
+import { LoadingIcon } from "./LoadingIcon";
 
 type ButtonVariant = "border" | "solid";
 type ButtonSize = "2xs" | "xs" | "sm" | "md" | "auto";
@@ -16,41 +20,43 @@ export type ButtonProps = Omit<
   size?: ButtonSize;
   justify?: "start" | "center";
   type?: "button" | "submit";
+  forDropdown?: boolean;
   disabled?: boolean;
   title?: string;
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
 };
 
-function cx(...values: Array<string | false | null | undefined>) {
-  return values.filter(Boolean).join(" ");
-}
-
-export function Button({
-  isLoading,
-  className,
-  innerClassName,
-  children,
-  color,
-  tone,
-  type = "button",
-  justify = "center",
-  size = "md",
-  variant = "solid",
-  leftSlot,
-  rightSlot,
-  disabled,
-  title,
-  onClick,
-  ...props
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    isLoading,
+    className,
+    innerClassName,
+    children,
+    color,
+    tone,
+    forDropdown,
+    type = "button",
+    justify = "center",
+    size = "md",
+    variant = "solid",
+    leftSlot,
+    rightSlot,
+    disabled,
+    title,
+    onClick,
+    ...props
+  }: ButtonProps,
+  ref,
+) {
   const resolvedColor = color ?? tone ?? "default";
   const isDisabled = disabled || isLoading;
 
   return (
     <button
+      ref={ref}
       type={type}
-      className={cx(
+      className={classNames(
         className,
         "x-theme-button",
         `x-theme-button--${variant}`,
@@ -83,7 +89,8 @@ export function Button({
         variant === "border" && "border",
         variant === "border" &&
           resolvedColor !== "custom" &&
-          "border-border-subtle text-text-subtle enabled:hocus:border-border enabled:hocus:bg-surface-highlight enabled:hocus:text-text outline-border-subtler",
+          "border-border-subtle text-text-subtle enabled:hocus:border-border " +
+            "enabled:hocus:bg-surface-highlight enabled:hocus:text-text outline-border-subtler",
       )}
       disabled={isDisabled}
       onClick={onClick}
@@ -94,12 +101,12 @@ export function Button({
       {...props}
     >
       {isLoading ? (
-        <div className="mr-1">...</div>
+        <LoadingIcon size={size === "auto" ? "md" : size} className="mr-1" />
       ) : leftSlot ? (
         <div className="mr-2">{leftSlot}</div>
       ) : null}
       <div
-        className={cx(
+        className={classNames(
           "truncate w-full",
           justify === "start" ? "text-left" : "text-center",
           innerClassName,
@@ -107,7 +114,14 @@ export function Button({
       >
         {children}
       </div>
-      {rightSlot ? <div className="ml-1">{rightSlot}</div> : null}
+      {rightSlot && <div className="ml-1">{rightSlot}</div>}
+      {forDropdown && (
+        <Icon
+          icon="chevron_down"
+          size={size === "auto" ? "md" : size}
+          className="ml-1 -mr-1 relative top-[0.1em]"
+        />
+      )}
     </button>
   );
-}
+});

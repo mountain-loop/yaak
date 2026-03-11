@@ -1451,6 +1451,13 @@ async fn cmd_reload_plugins<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_plugin_init_errors(
+    plugin_manager: State<'_, PluginManager>,
+) -> YaakResult<Vec<(String, String)>> {
+    Ok(plugin_manager.take_init_errors().await)
+}
+
+#[tauri::command]
 async fn cmd_plugin_info<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
@@ -1728,6 +1735,7 @@ pub fn run() {
             cmd_new_child_window,
             cmd_new_main_window,
             cmd_plugin_info,
+            cmd_plugin_init_errors,
             cmd_reload_plugins,
             cmd_render_template,
             cmd_restart,

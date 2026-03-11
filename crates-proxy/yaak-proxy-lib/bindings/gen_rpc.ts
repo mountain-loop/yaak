@@ -5,6 +5,10 @@ export type ActionInvocation = { "scope": "global", action: GlobalAction, };
 
 export type ActionMetadata = { label: string, defaultHotkey: string | null, };
 
+export type GetProxyStateRequest = Record<string, never>;
+
+export type GetProxyStateResponse = { state: ProxyState, };
+
 export type GlobalAction = "proxy_start" | "proxy_stop";
 
 export type ListActionsRequest = Record<string, never>;
@@ -15,6 +19,10 @@ export type ListModelsRequest = Record<string, never>;
 
 export type ListModelsResponse = { httpExchanges: Array<HttpExchange>, };
 
-export type RpcEventSchema = { model_write: ModelPayload, };
+export type ProxyState = "running" | "stopped";
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], list_actions: [ListActionsRequest, ListActionsResponse], list_models: [ListModelsRequest, ListModelsResponse], };
+export type ProxyStatePayload = { state: ProxyState, };
+
+export type RpcEventSchema = { model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
+
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_models: [ListModelsRequest, ListModelsResponse], };

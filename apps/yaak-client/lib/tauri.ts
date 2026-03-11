@@ -41,6 +41,7 @@ type TauriCmd =
   | 'cmd_new_child_window'
   | 'cmd_new_main_window'
   | 'cmd_plugin_info'
+  | 'cmd_plugin_init_errors'
   | 'cmd_reload_plugins'
   | 'cmd_render_template'
   | 'cmd_save_response'

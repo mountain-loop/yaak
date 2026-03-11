@@ -36,6 +36,19 @@ export function initGlobalListeners() {
     showToast({ ...event.payload });
   });
 
+  // Show errors for any plugins that failed to load during startup
+  invokeCmd<[string, string][]>("cmd_plugin_init_errors").then((errors) => {
+    for (const [dir, err] of errors) {
+      const name = dir.split(/[/\\]/).pop() ?? dir;
+      showToast({
+        id: `plugin-init-error-${name}`,
+        color: "danger",
+        timeout: null,
+        message: `Failed to load plugin "${name}": ${err}`,
+      });
+    }
+  });
+
   listenToTauriEvent("settings", () => openSettings.mutate(null));
 
   // Track active dynamic form dialogs so follow-up input updates can reach them
