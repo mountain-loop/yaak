@@ -1,6 +1,7 @@
 import { linter } from '@codemirror/lint';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
+import { Icon } from '@yaakapp-internal/ui';
 import { useCallback, useMemo } from 'react';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { textLikelyContainsJsonComments } from '../lib/jsonComments';
@@ -10,7 +11,6 @@ import { Dropdown } from './core/Dropdown';
 import type { EditorProps } from './core/Editor/Editor';
 import { jsonParseLinter } from './core/Editor/json-lint';
 import { Editor } from './core/Editor/LazyEditor';
-import { Icon } from './core/Icon';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 

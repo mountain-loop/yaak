@@ -48,7 +48,7 @@ pub fn run() {
                     label: "main_0",
                     title: "Yaak Proxy",
                     inner_size: Some((1000.0, 700.0)),
-                    visible: true,
+                    visible: false,
                     hide_titlebar: true,
                     ..Default::default()
                 };
