@@ -123,6 +123,39 @@ export function initGlobalListeners() {
     console.log('Got plugin updates event', payload);
     showPluginUpdatesToast(payload);
   });
+
+  // Check for plugin initialization errors
+  invokeCmd<[string, string][]>('cmd_plugin_init_errors').then((errors) => {
+    for (const [dir, message] of errors) {
+      const dirBasename = dir.split('/').pop() ?? dir;
+      showToast({
+        id: `plugin-init-error-${dirBasename}`,
+        color: 'warning',
+        timeout: null,
+        message: (
+          <VStack>
+            <h2 className="font-semibold">Plugin failed to load</h2>
+            <p className="text-text-subtle text-sm">
+              {dirBasename}: {message}
+            </p>
+          </VStack>
+        ),
+        action: ({ hide }) => (
+          <Button
+            size="xs"
+            color="warning"
+            variant="border"
+            onClick={() => {
+              hide();
+              openSettings.mutate('plugins:installed');
+            }}
+          >
+            View Plugins
+          </Button>
+        ),
+      });
+    }
+  });
 }
 
 function showUpdateInstalledToast(version: string) {
