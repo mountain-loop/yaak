@@ -1,6 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type } from '@tauri-apps/plugin-os';
-import { HeaderSize } from '@yaakapp-internal/ui';
+import {
+  HeaderSize,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TruncatedWideTableCell,
+} from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { createStore, Provider, useAtomValue } from 'jotai';
 import { StrictMode } from 'react';
@@ -11,6 +20,7 @@ import './main.css';
 import { initHotkeys } from './hotkeys';
 import { listen, rpc } from './rpc';
 import { useRpcQueryWithEvent } from './rpc-hooks';
+import type { ProxyHeader } from '@yaakapp-internal/proxy-lib';
 import { applyChange, dataAtom, httpExchangesAtom, replaceAll } from './store';
 
 const queryClient = new QueryClient();
@@ -85,34 +95,57 @@ function App() {
             </span>
           </div>
 
-          <div className="text-xs font-mono">
-            {exchanges.length === 0 ? (
-              <p className="text-text-subtlest">No traffic yet</p>
-            ) : (
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-text-subtlest border-b border-border-subtle">
-                    <th className="py-1 pr-3 font-medium">Method</th>
-                    <th className="py-1 pr-3 font-medium">URL</th>
-                    <th className="py-1 pr-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {exchanges.map((ex) => (
-                    <tr key={ex.id} className="border-b border-border-subtle">
-                      <td className="py-1 pr-3">{ex.method}</td>
-                      <td className="py-1 pr-3 truncate max-w-md">{ex.url}</td>
-                      <td className="py-1 pr-3">{ex.resStatus ?? '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {exchanges.length === 0 ? (
+            <p className="text-text-subtlest text-sm">No traffic yet</p>
+          ) : (
+            <Table scrollable>
+              <TableHead>
+                <TableRow>
+                  <TableHeaderCell>Method</TableHeaderCell>
+                  <TableHeaderCell>URL</TableHeaderCell>
+                  <TableHeaderCell>Status</TableHeaderCell>
+                  <TableHeaderCell>Content-Type</TableHeaderCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {exchanges.map((ex) => (
+                  <TableRow key={ex.id}>
+                    <TableCell className="font-mono text-xs">{ex.method}</TableCell>
+                    <TruncatedWideTableCell className="font-mono text-xs">
+                      {ex.url}
+                    </TruncatedWideTableCell>
+                    <TableCell>
+                      <StatusBadge status={ex.resStatus} error={ex.error} />
+                    </TableCell>
+                    <TableCell className="text-text-subtle text-xs">
+                      {getContentType(ex.resHeaders)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </main>
       </div>
     </div>
   );
+}
+
+function StatusBadge({ status, error }: { status: number | null; error: string | null }) {
+  if (error) return <span className="text-xs text-danger">Error</span>;
+  if (status == null) return <span className="text-xs text-text-subtlest">—</span>;
+
+  const color =
+    status >= 500 ? 'text-danger' : status >= 400 ? 'text-warning' : status >= 300 ? 'text-notice' : 'text-success';
+
+  return <span className={classNames('text-xs font-mono', color)}>{status}</span>;
+}
+
+function getContentType(headers: ProxyHeader[]): string {
+  const ct = headers.find((h) => h.name.toLowerCase() === 'content-type')?.value;
+  if (ct == null) return '—';
+  // Strip parameters (e.g. "; charset=utf-8")
+  return ct.split(';')[0]?.trim() ?? ct;
 }
 
 createRoot(document.getElementById('root') as HTMLElement).render(

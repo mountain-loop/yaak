@@ -6,7 +6,7 @@ import { Checkbox } from './core/Checkbox';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
 import { HStack, VStack } from './core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from './core/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 
 interface Props {
   workspace: Workspace;

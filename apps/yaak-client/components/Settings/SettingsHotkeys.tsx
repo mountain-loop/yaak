@@ -22,7 +22,7 @@ import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from '../core/IconButton';
 import { PlainInput } from '../core/PlainInput';
 import { HStack, VStack } from '../core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
 const LAYOUT_INSENSITIVE_KEYS = [

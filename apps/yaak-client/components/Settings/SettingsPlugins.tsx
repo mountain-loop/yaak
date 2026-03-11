@@ -26,7 +26,7 @@ import { InlineCode } from '../core/InlineCode';
 import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
 import { HStack } from '../core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';

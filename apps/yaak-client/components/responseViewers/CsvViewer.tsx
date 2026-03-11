@@ -1,7 +1,7 @@
 import classNames from 'classnames';
 import Papa from 'papaparse';
 import { useMemo } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 
 interface Props {
   text: string | null;

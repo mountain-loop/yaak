@@ -2,7 +2,7 @@ import { useGit } from '@yaakapp-internal/git';
 import { showDialog } from '../../lib/dialog';
 import { Button } from '../core/Button';
 import { IconButton } from '../core/IconButton';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 import { gitCallbacks } from './callbacks';
 import { addGitRemote } from './showAddRemoteDialog';
 

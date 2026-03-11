@@ -8,7 +8,7 @@ import {
   TableHeaderCell,
   TableRow,
   TruncatedWideTableCell,
-} from '../core/Table';
+} from '@yaakapp-internal/ui';
 
 interface Props {
   log: GitCommit[];

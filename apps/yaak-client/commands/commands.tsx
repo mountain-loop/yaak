@@ -11,7 +11,7 @@ import {
   TableHeaderCell,
   TableRow,
   TruncatedWideTableCell,
-} from '../components/core/Table';
+} from '@yaakapp-internal/ui';
 import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
 import { createFastMutation } from '../hooks/useFastMutation';
 import { showDialog } from '../lib/dialog';
