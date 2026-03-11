@@ -81,6 +81,7 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
     parent: null,
     depth: 0,
     children: [],
+    draggable: false,
   };
 
   // Intermediate trie structure for building
@@ -153,6 +154,7 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
       parent,
       depth,
       children: [],
+      draggable: false,
     };
     for (const child of trie.children.values()) {
       node.children!.push(toTreeNode(child, node, depth + 1));
@@ -167,6 +169,7 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
     parent: rootNode,
     depth: 1,
     children: [],
+    draggable: false,
   };
 
   const sortedDomains = [...domainMap.values()].sort((a, b) =>

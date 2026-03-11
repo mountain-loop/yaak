@@ -104,14 +104,14 @@ function App() {
                   <TableHeaderCell>Method</TableHeaderCell>
                   <TableHeaderCell>URL</TableHeaderCell>
                   <TableHeaderCell>Status</TableHeaderCell>
-                  <TableHeaderCell>Content-Type</TableHeaderCell>
+                  <TableHeaderCell>Type</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {exchanges.map((ex) => (
                   <TableRow key={ex.id}>
-                    <TableCell className="font-mono text-xs">{ex.method}</TableCell>
-                    <TruncatedWideTableCell className="font-mono text-xs">
+                    <TableCell className="font-mono text-2xs">{ex.method}</TableCell>
+                    <TruncatedWideTableCell className="font-mono text-2xs">
                       {ex.url}
                     </TruncatedWideTableCell>
                     <TableCell>
