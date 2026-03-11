@@ -52,7 +52,7 @@ const SHA256_MAP = {
   [WIN_ARM]: 'd7a207fb6eec0e4b1b6613be3b7d11905375b6fd1147a071116eb8e9f24ac53b',
 };
 
-const dstDir = path.join(__dirname, `..`, 'crates-tauri', 'yaak-app', 'vendored', 'protoc');
+const dstDir = path.join(__dirname, `..`, 'crates-tauri', 'yaak-app-client', 'vendored', 'protoc');
 const key = `${process.platform}_${process.env.YAAK_TARGET_ARCH ?? process.arch}`;
 console.log(`Vendoring protoc ${VERSION} for ${key}`);
 

@@ -17,6 +17,7 @@ log = { workspace = true }
 serde_json = { workspace = true }
 tauri = { workspace = true }
 tauri-plugin-os = "2.3.2"
+yaak-mac-window = { workspace = true }
 yaak-proxy-lib = { workspace = true }
 yaak-rpc = { workspace = true }
 yaak-window = { workspace = true }

@@ -10310,6 +10310,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-os",
+ "yaak-mac-window",
  "yaak-proxy-lib",
  "yaak-rpc",
  "yaak-window",

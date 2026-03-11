@@ -17,6 +17,7 @@ fn rpc(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
+        .plugin(yaak_mac_window::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
@@ -44,7 +45,7 @@ pub fn run() {
             if let RunEvent::Ready = event {
                 let config = CreateWindowConfig {
                     url: "/",
-                    label: "main",
+                    label: "main_0",
                     title: "Yaak Proxy",
                     inner_size: Some((1000.0, 700.0)),
                     visible: true,
