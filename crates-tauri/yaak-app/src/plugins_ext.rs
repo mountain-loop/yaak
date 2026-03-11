@@ -199,6 +199,13 @@ pub async fn cmd_plugins_uninstall<R: Runtime>(
 }
 
 #[command]
+pub async fn cmd_plugin_init_errors(
+    plugin_manager: State<'_, PluginManager>,
+) -> Result<Vec<(String, String)>> {
+    Ok(plugin_manager.take_init_errors().await)
+}
+
+#[command]
 pub async fn cmd_plugins_updates<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<PluginUpdatesResponse> {
@@ -306,7 +313,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     dev_mode,
                 )
                 .await
-                .expect("Failed to initialize plugins");
+                .expect("Failed to start plugin runtime");
 
                 app_handle_clone.manage(manager);
             });

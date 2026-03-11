@@ -1383,13 +1383,12 @@ async fn cmd_reload_plugins<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<()> {
+) -> YaakResult<Vec<(String, String)>> {
     let plugins = app_handle.db().list_plugins()?;
     let plugin_context =
         PluginContext::new(Some(window.label().to_string()), window.workspace_id());
-    let _errors = plugin_manager.initialize_all_plugins(plugins, &plugin_context).await;
-    // Note: errors are returned but we don't show toasts here since this is a manual reload
-    Ok(())
+    let errors = plugin_manager.initialize_all_plugins(plugins, &plugin_context).await;
+    Ok(errors)
 }
 
 #[tauri::command]
@@ -1731,6 +1730,7 @@ pub fn run() {
             git_ext::cmd_git_rm_remote,
             //
             // Plugin commands
+            plugins_ext::cmd_plugin_init_errors,
             plugins_ext::cmd_plugins_install_from_directory,
             plugins_ext::cmd_plugins_search,
             plugins_ext::cmd_plugins_install,

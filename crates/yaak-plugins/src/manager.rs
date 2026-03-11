@@ -50,6 +50,8 @@ pub struct PluginManager {
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
     dev_mode: bool,
+    /// Errors from plugin initialization, retrievable once via `take_init_errors`.
+    init_errors: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -93,6 +95,7 @@ impl PluginManager {
             vendored_plugin_dir,
             installed_plugin_dir,
             dev_mode,
+            init_errors: Default::default(),
         };
 
         // Forward events to subscribers
@@ -183,15 +186,19 @@ impl PluginManager {
 
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {
-            let joined = init_errors
-                .into_iter()
-                .map(|(dir, err)| format!("{dir}: {err}"))
-                .collect::<Vec<_>>()
-                .join("; ");
-            return Err(PluginErr(format!("Failed to initialize plugin(s): {joined}")));
+            for (dir, err) in &init_errors {
+                warn!("Plugin failed to initialize: {dir}: {err}");
+            }
+            *plugin_manager.init_errors.lock().await = init_errors;
         }
 
         Ok(plugin_manager)
+    }
+
+    /// Take any initialization errors, clearing them from the manager.
+    /// Returns a list of `(plugin_directory, error_message)` pairs.
+    pub async fn take_init_errors(&self) -> Vec<(String, String)> {
+        std::mem::take(&mut *self.init_errors.lock().await)
     }
 
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)
