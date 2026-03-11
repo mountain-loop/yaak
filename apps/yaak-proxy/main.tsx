@@ -15,13 +15,13 @@ import { createStore, Provider, useAtomValue } from 'jotai';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ActionButton } from './ActionButton';
-import { Sidebar } from './Sidebar';
+import { filteredExchangesAtom, Sidebar } from './Sidebar';
 import './main.css';
+import type { ProxyHeader } from '@yaakapp-internal/proxy-lib';
 import { initHotkeys } from './hotkeys';
 import { listen, rpc } from './rpc';
 import { useRpcQueryWithEvent } from './rpc-hooks';
-import type { ProxyHeader } from '@yaakapp-internal/proxy-lib';
-import { applyChange, dataAtom, httpExchangesAtom, replaceAll } from './store';
+import { applyChange, dataAtom, replaceAll } from './store';
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
@@ -43,7 +43,7 @@ listen('model_write', (payload) => {
 
 function App() {
   const osType = type();
-  const exchanges = useAtomValue(httpExchangesAtom);
+  const exchanges = useAtomValue(filteredExchangesAtom);
   const { data: proxyState } = useRpcQueryWithEvent('get_proxy_state', {}, 'proxy_state_changed');
   const isRunning = proxyState?.state === 'running';
 
@@ -136,7 +136,13 @@ function StatusBadge({ status, error }: { status: number | null; error: string |
   if (status == null) return <span className="text-xs text-text-subtlest">—</span>;
 
   const color =
-    status >= 500 ? 'text-danger' : status >= 400 ? 'text-warning' : status >= 300 ? 'text-notice' : 'text-success';
+    status >= 500
+      ? 'text-danger'
+      : status >= 400
+        ? 'text-warning'
+        : status >= 300
+          ? 'text-notice'
+          : 'text-success';
 
   return <span className={classNames('text-xs font-mono', color)}>{status}</span>;
 }

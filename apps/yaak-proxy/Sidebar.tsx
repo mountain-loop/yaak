@@ -1,9 +1,9 @@
 import type { HttpExchange } from "@yaakapp-internal/proxy-lib";
-import { Tree } from "@yaakapp-internal/ui";
+import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
 import { atomFamily } from "jotai/utils";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { httpExchangesAtom } from "./store";
 
 /** A node in the sidebar tree — either a domain or a path segment. */
@@ -17,10 +17,47 @@ const collapsedAtom = atomFamily((treeId: string) =>
   atom<Record<string, boolean>>({}),
 );
 
+export const SIDEBAR_TREE_ID = "proxy-sidebar";
+
 const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
   const exchanges = get(httpExchangesAtom);
   return buildTree(exchanges);
 });
+
+/** Exchanges filtered by the currently selected sidebar node(s). */
+export const filteredExchangesAtom = atom((get) => {
+  const exchanges = get(httpExchangesAtom);
+  const tree = get(sidebarTreeAtom);
+  const selectedIds = get(selectedIdsFamily(SIDEBAR_TREE_ID));
+
+  // Nothing selected or root selected → show all
+  if (selectedIds.length === 0 || selectedIds.includes("root")) {
+    return exchanges;
+  }
+
+  // Collect exchange IDs from all selected nodes
+  const allowedIds = new Set<string>();
+  const nodeMap = new Map<string, SidebarItem>();
+  collectNodes(tree, nodeMap);
+
+  for (const selectedId of selectedIds) {
+    const node = nodeMap.get(selectedId);
+    if (node) {
+      for (const id of node.exchangeIds) {
+        allowedIds.add(id);
+      }
+    }
+  }
+
+  return exchanges.filter((ex) => allowedIds.has(ex.id));
+});
+
+function collectNodes(node: TreeNode<SidebarItem>, map: Map<string, SidebarItem>) {
+  map.set(node.item.id, node.item);
+  for (const child of node.children ?? []) {
+    collectNodes(child, map);
+  }
+}
 
 /**
  * Build a domain → path-segment trie from a flat list of exchanges.
@@ -123,13 +160,23 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
     return node;
   }
 
-  // Sort domains alphabetically, add to root
+  // Add a "Domains" folder between root and domain nodes
+  const allExchangeIds = exchanges.map((ex) => ex.id);
+  const domainsFolder: TreeNode<SidebarItem> = {
+    item: { id: "domains", label: "Domains", exchangeIds: allExchangeIds },
+    parent: rootNode,
+    depth: 1,
+    children: [],
+  };
+
   const sortedDomains = [...domainMap.values()].sort((a, b) =>
     a.label.localeCompare(b.label),
   );
   for (const domain of sortedDomains) {
-    rootNode.children!.push(toTreeNode(domain, rootNode, 1));
+    domainsFolder.children!.push(toTreeNode(domain, domainsFolder, 2));
   }
+
+  rootNode.children!.push(domainsFolder);
 
   return rootNode;
 }
@@ -148,7 +195,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
 
 export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
-  const treeId = "proxy-sidebar";
+  const treeId = SIDEBAR_TREE_ID;
 
   const getItemKey = useCallback((item: SidebarItem) => item.id, []);
 
