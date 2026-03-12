@@ -68,7 +68,7 @@ export function HeaderSize({
       className={classNames(
         className,
         'pt-[1px]', // Make up for bottom border
-        'select-none relative',
+        'select-none relative flex items-center',
         'w-full border-b border-border-subtle min-w-0',
       )}
     >

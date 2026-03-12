@@ -31,6 +31,7 @@ export function ProxyLayout() {
       )}
     >
       <HeaderSize
+        data-tauri-drag-region
         size="lg"
         osType={os}
         hideWindowControls={false}
@@ -38,8 +39,8 @@ export function ProxyLayout() {
         interfaceScale={1}
         className="x-theme-appHeader bg-surface"
       >
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto]">
-          <div className="flex items-center pl-1">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full h-full pointer-events-none">
+          <div className="flex items-center pl-1 pointer-events-auto">
             <IconButton
               size="sm"
               title="Toggle sidebar"
@@ -54,10 +55,10 @@ export function ProxyLayout() {
               }}
             />
           </div>
-          <div data-tauri-drag-region className="flex items-center text-sm px-2">
+          <div data-tauri-drag-region className="pointer-events-none flex items-center text-sm px-2">
             Yaak Proxy
           </div>
-          <div className="flex items-center gap-1 pr-1">
+          <div className="flex items-center gap-1 pr-1 pointer-events-auto">
             <span
               className={classNames('text-xs', isRunning ? 'text-success' : 'text-text-subtlest')}
             >
@@ -101,7 +102,7 @@ export function ProxyLayout() {
               <HeaderSize
                 hideControls
                 size="lg"
-                className="border-transparent flex items-center pl-1"
+                className="border-transparent pl-1"
                 osType={os}
                 hideWindowControls={false}
                 useNativeTitlebar={false}
