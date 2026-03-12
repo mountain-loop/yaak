@@ -181,6 +181,88 @@ export function convertCurl(rawData: string) {
   };
 }
 
+interface ExtractedAuthentication {
+  authenticationType: string | null;
+  authentication: Record<string, string>;
+  filteredHeaders: HttpUrlParameter[]; // headers without authorization
+}
+
+function extractAuthenticationFromHeaders(
+  headers: HttpUrlParameter[],
+): ExtractedAuthentication {
+  const authorizationHeaderIndex = headers.findIndex(
+    (h) => h.name.toLowerCase() === 'authorization',
+  );
+
+  if (authorizationHeaderIndex === -1) {
+    return {
+      authenticationType: null,
+      authentication: {},
+      filteredHeaders: headers,
+    };
+  }
+
+  const authorizationHeader = headers[authorizationHeaderIndex];
+  if (authorizationHeader == null) {
+    return {
+      authenticationType: null,
+      authentication: {},
+      filteredHeaders: headers,
+    };
+  }
+
+  const value = authorizationHeader.value.trim();
+  const spaceIndex = value.indexOf(' ');
+
+  if (spaceIndex <= 0) {
+    return {
+      authenticationType: null,
+      authentication: {},
+      filteredHeaders: headers,
+    };
+  }
+
+  const scheme = value.slice(0, spaceIndex).toLowerCase();
+  const token = value.slice(spaceIndex + 1);
+
+  // Bearer authentication (RFC 6750)
+  if (scheme === 'bearer') {
+    const filteredHeaders = headers.filter((_, i) => i !== authorizationHeaderIndex);
+    return {
+      authenticationType: 'bearer',
+      authentication: { token, prefix: 'Bearer' },
+      filteredHeaders,
+    };
+  }
+
+  // Basic authentication (RFC 7617)
+  if (scheme === 'basic') {
+    try {
+      const decoded = Buffer.from(token, 'base64').toString();
+      const colonIndex = decoded.indexOf(':');
+      if (colonIndex > 0) {
+        const filteredHeaders = headers.filter((_, i) => i !== authorizationHeaderIndex);
+        return {
+          authenticationType: 'basic',
+          authentication: {
+            username: decoded.slice(0, colonIndex),
+            password: decoded.slice(colonIndex + 1),
+          },
+          filteredHeaders,
+        };
+      }
+    } catch {
+      // Invalid base64, keep header as-is
+    }
+  }
+
+  return {
+    authenticationType: null,
+    authentication: {},
+    filteredHeaders: headers,
+  };
+}
+
 function importCommand(parseEntries: string[], workspaceId: string) {
   // ~~~~~~~~~~~~~~~~~~~~~ //
   // Collect all the flags //
@@ -323,8 +405,19 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     });
   }
 
+  // Extract authentication from Authorization headers (Bearer/Basic)
+  const {
+    authenticationType: extractedAuthenticationType,
+    authentication: extractedAuthentication,
+    filteredHeaders,
+  } = extractAuthenticationFromHeaders(headers);
+
+  // Use extracted authentication from header if found, otherwise fall back to -u/--user parsing
+  const finalAuthenticationType = extractedAuthenticationType || authenticationType;
+  const finalAuthentication = extractedAuthenticationType ? extractedAuthentication : authentication;
+
   // Body (Text or Blob)
-  const contentTypeHeader = headers.find((header) => header.name.toLowerCase() === 'content-type');
+  const contentTypeHeader = filteredHeaders.find((header) => header.name.toLowerCase() === 'content-type');
   const mimeType = contentTypeHeader ? contentTypeHeader.value.split(';')[0]?.trim() : null;
 
   // Extract boundary from Content-Type header for multipart parsing
@@ -398,7 +491,7 @@ function importCommand(parseEntries: string[], workspaceId: string) {
         value: decodeURIComponent(parameter.value || ''),
       })),
     };
-    headers.push({
+    filteredHeaders.push({
       name: 'Content-Type',
       value: 'application/x-www-form-urlencoded',
       enabled: true,
@@ -419,7 +512,7 @@ function importCommand(parseEntries: string[], workspaceId: string) {
       form: formDataParams,
     };
     if (mimeType == null) {
-      headers.push({
+      filteredHeaders.push({
         name: 'Content-Type',
         value: 'multipart/form-data',
         enabled: true,
@@ -442,9 +535,9 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     urlParameters,
     url,
     method,
-    headers,
-    authentication,
-    authenticationType,
+    headers: filteredHeaders,
+    authentication: finalAuthentication,
+    authenticationType: finalAuthenticationType,
     body,
     bodyType,
     folderId: null,
