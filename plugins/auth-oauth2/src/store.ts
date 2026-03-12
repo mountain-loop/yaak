@@ -47,6 +47,7 @@ export interface TokenStoreArgs {
   clientId: string;
   accessTokenUrl: string | null;
   authorizationUrl: string | null;
+  username?: string | null;
 }
 
 /**
@@ -59,6 +60,7 @@ function tokenStoreKey(args: TokenStoreArgs) {
   if (args.clientId) hash.update(args.clientId.trim());
   if (args.accessTokenUrl) hash.update(args.accessTokenUrl.trim().replace(/^https?:\/\//, ""));
   if (args.authorizationUrl) hash.update(args.authorizationUrl.trim().replace(/^https?:\/\//, ""));
+  if (args.username) hash.update(args.username);
   const key = hash.digest("hex");
   return ["token", key].join("::");
 }
