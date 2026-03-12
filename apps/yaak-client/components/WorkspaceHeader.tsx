@@ -20,9 +20,10 @@ import { WorkspaceActionsDropdown } from './WorkspaceActionsDropdown';
 
 interface Props {
   className?: string;
+  floatingSidebar?: boolean;
 }
 
-export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Props) {
+export const WorkspaceHeader = memo(function WorkspaceHeader({ className, floatingSidebar }: Props) {
   const togglePalette = useToggleCommandPalette();
   const [workspaceLayout, setWorkspaceLayout] = useAtom(workspaceLayoutAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);
@@ -41,7 +42,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
       )}
     >
       <HStack space={0.5} className={classNames('flex-1 pointer-events-none')}>
-        <SidebarActions />
+        <SidebarActions floating={floatingSidebar} />
         <CookieDropdown />
         <HStack className="min-w-0">
           <WorkspaceActionsDropdown />

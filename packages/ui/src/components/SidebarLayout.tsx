@@ -1,8 +1,13 @@
 import classNames from 'classnames';
+import * as m from 'motion/react-m';
 import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useContainerSize } from '../hooks/useContainerSize';
+import { Overlay } from './Overlay';
 import type { ResizeHandleEvent } from './ResizeHandle';
 import { ResizeHandle } from './ResizeHandle';
+
+const FLOATING_BREAKPOINT = 600;
 
 const side = { gridArea: 'side', minWidth: 0 };
 const drag = { gridArea: 'drag' };
@@ -13,7 +18,9 @@ interface Props {
   onWidthChange: (width: number) => void;
   hidden?: boolean;
   onHiddenChange?: (hidden: boolean) => void;
-  floating?: boolean;
+  floatingHidden?: boolean;
+  onFloatingHiddenChange?: (hidden: boolean) => void;
+  onFloatingChange?: (floating: boolean) => void;
   floatingWidth?: number;
   defaultWidth?: number;
   minWidth?: number;
@@ -27,7 +34,9 @@ export function SidebarLayout({
   onWidthChange,
   hidden = false,
   onHiddenChange,
-  floating = false,
+  floatingHidden = true,
+  onFloatingHiddenChange,
+  onFloatingChange,
   floatingWidth = 320,
   defaultWidth = 250,
   minWidth = 50,
@@ -35,6 +44,14 @@ export function SidebarLayout({
   sidebar,
   children,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const containerSize = useContainerSize(containerRef);
+  const floating = containerSize.width > 0 && containerSize.width <= FLOATING_BREAKPOINT;
+
+  useEffect(() => {
+    onFloatingChange?.(floating);
+  }, [floating]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [isResizing, setIsResizing] = useState(false);
   const startWidth = useRef<number | null>(null);
 
@@ -81,34 +98,32 @@ export function SidebarLayout({
 
   if (floating) {
     return (
-      <div className={classNames(className, 'relative w-full h-full overflow-hidden')}>
+      <div ref={containerRef} className={classNames(className, 'w-full h-full min-h-0')}>
+        <Overlay
+          open={!floatingHidden}
+          portalName="sidebar"
+          onClose={() => onFloatingHiddenChange?.(true)}
+          zIndex={20}
+        >
+          <m.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            style={{ width: floatingWidth }}
+            className="absolute top-0 left-0 bottom-0"
+          >
+            {sidebar}
+          </m.div>
+        </Overlay>
         {children}
-        {!hidden && (
-          <>
-            <div
-              className="absolute inset-0 bg-black/50 z-20 transition-opacity"
-              onClick={() => onHiddenChange?.(true)}
-            />
-            <div
-              style={{ width: floatingWidth }}
-              className="absolute top-0 left-0 bottom-0 z-20 animate-slide-in-left"
-            >
-              {sidebar}
-            </div>
-          </>
-        )}
       </div>
     );
   }
 
   return (
     <div
+      ref={containerRef}
       style={styles}
-      className={classNames(
-        className,
-        'grid w-full h-full',
-        !isResizing && 'transition-grid',
-      )}
+      className={classNames(className, 'grid w-full h-full', !isResizing && 'transition-grid')}
     >
       <div style={side} className="overflow-hidden">
         {sidebar}

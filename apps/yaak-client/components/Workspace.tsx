@@ -1,10 +1,10 @@
 import { type } from '@tauri-apps/plugin-os';
 import { settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { HeaderSize, Overlay, SidebarLayout } from '@yaakapp-internal/ui';
+import { HeaderSize, SidebarLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
@@ -24,7 +24,6 @@ import { useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { useSubscribeRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
 import { useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
 import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
@@ -55,11 +54,11 @@ export function Workspace() {
   const workspaces = useAtomValue(workspacesAtom);
   const settings = useAtomValue(settingsAtom);
   const osType = type();
-  const [width, setWidth, resetWidth] = useSidebarWidth();
+  const [width, setWidth] = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
   const activeEnvironment = useAtomValue(activeEnvironmentAtom);
-  const floating = useShouldFloatSidebar();
+  const [floating, setFloating] = useState(false);
 
   const environmentBgStyle = useMemo(() => {
     if (activeEnvironment?.color == null) return undefined;
@@ -89,7 +88,7 @@ export function Workspace() {
           className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
         />
       </div>
-      <WorkspaceHeader className="pointer-events-none" />
+      <WorkspaceHeader className="pointer-events-none" floatingSidebar={floating} />
     </HeaderSize>
   );
 
@@ -99,7 +98,30 @@ export function Workspace() {
     </ErrorBoundary>
   );
 
-  const sidebarContent = (
+  const sidebarContent = floating ? (
+    <div
+      className={classNames(
+        'x-theme-sidebar',
+        'h-full bg-surface border-r border-border-subtle',
+        'grid grid-rows-[auto_1fr]',
+      )}
+    >
+      <HeaderSize
+        hideControls
+        size="lg"
+        className="border-transparent flex items-center"
+        osType={osType}
+        hideWindowControls={settings.hideWindowControls}
+        useNativeTitlebar={settings.useNativeTitlebar}
+        interfaceScale={settings.interfaceScale}
+      >
+        <SidebarActions floating />
+      </HeaderSize>
+      <ErrorBoundary name="Sidebar (Floating)">
+        <Sidebar />
+      </ErrorBoundary>
+    </div>
+  ) : (
     <div className="x-theme-sidebar overflow-hidden bg-surface h-full">
       <ErrorBoundary name="Sidebar">
         <Sidebar className="border-r border-border-subtle" />
@@ -110,52 +132,18 @@ export function Workspace() {
   return (
     <div className="grid w-full h-full grid-rows-[auto_1fr]">
       {header}
-      {floating ? (
-        <>
-          <Overlay
-            open={!floatingSidebarHidden}
-            portalName="sidebar"
-            onClose={() => setFloatingSidebarHidden(true)}
-            zIndex={20}
-          >
-            <m.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className={classNames(
-                'x-theme-sidebar',
-                'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]',
-                'grid grid-rows-[auto_1fr]',
-              )}
-            >
-              <HeaderSize
-                hideControls
-                size="lg"
-                className="border-transparent flex items-center"
-                osType={osType}
-                hideWindowControls={settings.hideWindowControls}
-                useNativeTitlebar={settings.useNativeTitlebar}
-                interfaceScale={settings.interfaceScale}
-              >
-                <SidebarActions />
-              </HeaderSize>
-              <ErrorBoundary name="Sidebar (Floating)">
-                <Sidebar />
-              </ErrorBoundary>
-            </m.div>
-          </Overlay>
-          {workspaceBody}
-        </>
-      ) : (
-        <SidebarLayout
-          width={width ?? 250}
-          onWidthChange={setWidth}
-          hidden={sidebarHidden ?? false}
-          onHiddenChange={(hidden) => setSidebarHidden(hidden)}
-          sidebar={sidebarContent}
-        >
-          {workspaceBody}
-        </SidebarLayout>
-      )}
+      <SidebarLayout
+        width={width ?? 250}
+        onWidthChange={setWidth}
+        hidden={sidebarHidden ?? false}
+        onHiddenChange={(hidden) => setSidebarHidden(hidden)}
+        floatingHidden={floatingSidebarHidden ?? true}
+        onFloatingHiddenChange={(hidden) => setFloatingSidebarHidden(hidden)}
+        onFloatingChange={setFloating}
+        sidebar={sidebarContent}
+      >
+        {workspaceBody}
+      </SidebarLayout>
     </div>
   );
 }
