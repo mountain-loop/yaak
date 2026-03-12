@@ -154,7 +154,10 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
       children: [],
       draggable: false,
     };
-    for (const child of trie.children.values()) {
+    const sortedChildren = [...trie.children.values()].sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
+    for (const child of sortedChildren) {
       node.children?.push(toTreeNode(child, node, depth + 1));
     }
     return node;
