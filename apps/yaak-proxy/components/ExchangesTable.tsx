@@ -22,30 +22,34 @@ export function ExchangesTable({ exchanges, style, className }: Props) {
   }
 
   return (
-    <Table scrollable className={classNames('px-2', className)} style={style}>
-      <TableHead>
-        <TableRow>
-          <TableHeaderCell>Method</TableHeaderCell>
-          <TableHeaderCell>URL</TableHeaderCell>
-          <TableHeaderCell>Status</TableHeaderCell>
-          <TableHeaderCell>Type</TableHeaderCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {exchanges.map((ex) => (
-          <TableRow key={ex.id}>
-            <TableCell className="font-mono text-2xs">{ex.method}</TableCell>
-            <TruncatedWideTableCell className="font-mono text-2xs">{ex.url}</TruncatedWideTableCell>
-            <TableCell>
-              <StatusBadge status={ex.resStatus} error={ex.error} />
-            </TableCell>
-            <TableCell className="text-text-subtle text-xs">
-              {getContentType(ex.resHeaders)}
-            </TableCell>
+    <div className={className} style={style}>
+      <Table scrollable className="px-2">
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell>Method</TableHeaderCell>
+            <TableHeaderCell>URL</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell>Type</TableHeaderCell>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHead>
+        <TableBody>
+          {exchanges.map((ex) => (
+            <TableRow key={ex.id}>
+              <TableCell className="font-mono text-2xs">{ex.method}</TableCell>
+              <TruncatedWideTableCell className="font-mono text-2xs">
+                {ex.url}
+              </TruncatedWideTableCell>
+              <TableCell>
+                <StatusBadge status={ex.resStatus} error={ex.error} />
+              </TableCell>
+              <TableCell className="text-text-subtle text-xs">
+                {getContentType(ex.resHeaders)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 

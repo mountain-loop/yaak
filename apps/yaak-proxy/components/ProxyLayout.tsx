@@ -55,28 +55,29 @@ export function ProxyLayout() {
               }}
             />
           </div>
-          <div data-tauri-drag-region className="pointer-events-none flex items-center text-sm px-2">
+          <div
+            data-tauri-drag-region
+            className="pointer-events-none flex items-center text-sm px-2"
+          >
             Yaak Proxy
           </div>
           <div className="flex items-center gap-1 pr-1 pointer-events-auto">
-            <span
-              className={classNames('text-xs', isRunning ? 'text-success' : 'text-text-subtlest')}
-            >
-              {isRunning ? 'Running on :9090' : 'Stopped'}
-            </span>
             {isRunning ? (
-              <ActionIconButton
-                action={{ scope: 'global', action: 'proxy_stop' }}
-                icon="circle_stop"
-                size="sm"
-                iconColor="danger"
-              />
+              <>
+                <span className="text-2xs text-success">Running :9090</span>
+                <ActionIconButton
+                  action={{ scope: 'global', action: 'proxy_stop' }}
+                  icon="circle_stop"
+                  iconColor="secondary"
+                  size="sm"
+                />
+              </>
             ) : (
               <ActionIconButton
                 action={{ scope: 'global', action: 'proxy_start' }}
                 icon="circle_play"
+                iconColor="secondary"
                 size="sm"
-                iconColor="success"
               />
             )}
           </div>

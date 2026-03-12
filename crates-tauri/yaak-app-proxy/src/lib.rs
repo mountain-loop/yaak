@@ -1,8 +1,52 @@
-use log::error;
-use tauri::{Emitter, Manager, RunEvent, State};
+use log::{error, info, warn};
+use tauri::{Emitter, Manager, RunEvent, State, WebviewWindow};
+use tauri::Runtime;
 use yaak_proxy_lib::ProxyCtx;
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
 use yaak_window::window::CreateWindowConfig;
+
+mod window_menu;
+
+fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
+    #[allow(unused_variables)]
+    let menu = match window_menu::app_menu(win.app_handle()) {
+        Ok(m) => m,
+        Err(e) => {
+            warn!("Failed to create menu: {e:?}");
+            return;
+        }
+    };
+
+    // This causes the window to not be clickable (in AppImage), so disable on Linux
+    #[cfg(not(target_os = "linux"))]
+    win.app_handle().set_menu(menu).expect("Failed to set app menu");
+
+    let webview_window = win.clone();
+    win.on_menu_event(move |w, event| {
+        if !w.is_focused().unwrap() {
+            return;
+        }
+
+        let event_id = event.id().0.as_str();
+        match event_id {
+            "hacked_quit" => {
+                w.webview_windows().iter().for_each(|(_, w)| {
+                    info!("Closing window {}", w.label());
+                    let _ = w.close();
+                });
+            }
+            "dev.refresh" => webview_window.eval("location.reload()").unwrap(),
+            "dev.toggle_devtools" => {
+                if webview_window.is_devtools_open() {
+                    webview_window.close_devtools();
+                } else {
+                    webview_window.open_devtools();
+                }
+            }
+            _ => {}
+        }
+    });
+}
 
 #[tauri::command]
 fn rpc(
@@ -52,8 +96,9 @@ pub fn run() {
                     hide_titlebar: true,
                     ..Default::default()
                 };
-                if let Err(e) = yaak_window::window::create_window(app_handle, config) {
-                    error!("Failed to create proxy window: {e:?}");
+                match yaak_window::window::create_window(app_handle, config) {
+                    Ok(win) => setup_window_menu(&win),
+                    Err(e) => error!("Failed to create proxy window: {e:?}"),
                 }
             }
         });
