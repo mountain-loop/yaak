@@ -1,8 +1,5 @@
-import type {
-  ActionInvocation,
-  ActionMetadata,
-} from "@yaakapp-internal/proxy-lib";
-import { rpc } from "./rpc";
+import type { ActionInvocation, ActionMetadata } from '@yaakapp-internal/proxy-lib';
+import { rpc } from './rpc';
 
 type ActionBinding = {
   invocation: ActionInvocation;
@@ -11,20 +8,21 @@ type ActionBinding = {
 };
 
 /** Parse a hotkey string like "Ctrl+Shift+P" into its parts. */
-function parseHotkey(hotkey: string): ActionBinding["keys"] {
-  const parts = hotkey.split("+").map((p) => p.trim().toLowerCase());
+function parseHotkey(hotkey: string): ActionBinding['keys'] {
+  const parts = hotkey.split('+').map((p) => p.trim().toLowerCase());
   return {
-    ctrl: parts.includes("ctrl") || parts.includes("control"),
-    shift: parts.includes("shift"),
-    alt: parts.includes("alt"),
-    meta: parts.includes("meta") || parts.includes("cmd") || parts.includes("command"),
-    key: parts.filter(
-      (p) => !["ctrl", "control", "shift", "alt", "meta", "cmd", "command"].includes(p),
-    )[0] ?? "",
+    ctrl: parts.includes('ctrl') || parts.includes('control'),
+    shift: parts.includes('shift'),
+    alt: parts.includes('alt'),
+    meta: parts.includes('meta') || parts.includes('cmd') || parts.includes('command'),
+    key:
+      parts.filter(
+        (p) => !['ctrl', 'control', 'shift', 'alt', 'meta', 'cmd', 'command'].includes(p),
+      )[0] ?? '',
   };
 }
 
-function matchesEvent(binding: ActionBinding["keys"], e: KeyboardEvent): boolean {
+function matchesEvent(binding: ActionBinding['keys'], e: KeyboardEvent): boolean {
   return (
     e.ctrlKey === binding.ctrl &&
     e.shiftKey === binding.shift &&
@@ -36,7 +34,7 @@ function matchesEvent(binding: ActionBinding["keys"], e: KeyboardEvent): boolean
 
 /** Fetch all actions from Rust and register a global keydown listener. */
 export async function initHotkeys(): Promise<() => void> {
-  const { actions } = await rpc("list_actions", {});
+  const { actions } = await rpc('list_actions', {});
 
   const bindings: ActionBinding[] = actions
     .filter(
@@ -53,12 +51,12 @@ export async function initHotkeys(): Promise<() => void> {
     for (const binding of bindings) {
       if (matchesEvent(binding.keys, e)) {
         e.preventDefault();
-        rpc("execute_action", binding.invocation);
+        rpc('execute_action', binding.invocation);
         return;
       }
     }
   }
 
-  window.addEventListener("keydown", onKeyDown);
-  return () => window.removeEventListener("keydown", onKeyDown);
+  window.addEventListener('keydown', onKeyDown);
+  return () => window.removeEventListener('keydown', onKeyDown);
 }

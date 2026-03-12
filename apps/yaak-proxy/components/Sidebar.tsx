@@ -1,10 +1,10 @@
-import type { HttpExchange } from "@yaakapp-internal/proxy-lib";
-import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
-import type { TreeNode } from "@yaakapp-internal/ui";
-import { atom, useAtomValue } from "jotai";
-import { atomFamily } from "jotai/utils";
-import { useCallback } from "react";
-import { httpExchangesAtom } from "./store";
+import type { HttpExchange } from '@yaakapp-internal/proxy-lib';
+import type { TreeNode } from '@yaakapp-internal/ui';
+import { selectedIdsFamily, Tree } from '@yaakapp-internal/ui';
+import { atom, useAtomValue } from 'jotai';
+import { atomFamily } from 'jotai/utils';
+import { useCallback } from 'react';
+import { httpExchangesAtom } from '../lib/store';
 
 /** A node in the sidebar tree — either a domain or a path segment. */
 export type SidebarItem = {
@@ -13,11 +13,9 @@ export type SidebarItem = {
   exchangeIds: string[];
 };
 
-const collapsedAtom = atomFamily((treeId: string) =>
-  atom<Record<string, boolean>>({}),
-);
+const collapsedAtom = atomFamily((_treeId: string) => atom<Record<string, boolean>>({}));
 
-export const SIDEBAR_TREE_ID = "proxy-sidebar";
+export const SIDEBAR_TREE_ID = 'proxy-sidebar';
 
 const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
   const exchanges = get(httpExchangesAtom);
@@ -31,7 +29,7 @@ export const filteredExchangesAtom = atom((get) => {
   const selectedIds = get(selectedIdsFamily(SIDEBAR_TREE_ID));
 
   // Nothing selected or root selected → show all
-  if (selectedIds.length === 0 || selectedIds.includes("root")) {
+  if (selectedIds.length === 0 || selectedIds.includes('root')) {
     return exchanges;
   }
 
@@ -75,7 +73,7 @@ function collectNodes(node: TreeNode<SidebarItem>, map: Map<string, SidebarItem>
  *       /orders
  */
 function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
-  const root: SidebarItem = { id: "root", label: "All Traffic", exchangeIds: [] };
+  const root: SidebarItem = { id: 'root', label: 'All Traffic', exchangeIds: [] };
   const rootNode: TreeNode<SidebarItem> = {
     item: root,
     parent: null,
@@ -100,7 +98,7 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
     try {
       const url = new URL(ex.url);
       hostname = url.host;
-      segments = url.pathname.split("/").filter(Boolean);
+      segments = url.pathname.split('/').filter(Boolean);
     } catch {
       hostname = ex.url;
       segments = [];
@@ -127,7 +125,7 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
       let child = current.children.get(seg);
       if (!child) {
         child = {
-          id: `path:${hostname}/${pathSoFar.join("/")}`,
+          id: `path:${hostname}/${pathSoFar.join('/')}`,
           label: `/${seg}`,
           exchangeIds: [],
           children: new Map(),
@@ -157,7 +155,7 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
       draggable: false,
     };
     for (const child of trie.children.values()) {
-      node.children!.push(toTreeNode(child, node, depth + 1));
+      node.children?.push(toTreeNode(child, node, depth + 1));
     }
     return node;
   }
@@ -165,21 +163,19 @@ function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
   // Add a "Domains" folder between root and domain nodes
   const allExchangeIds = exchanges.map((ex) => ex.id);
   const domainsFolder: TreeNode<SidebarItem> = {
-    item: { id: "domains", label: "Domains", exchangeIds: allExchangeIds },
+    item: { id: 'domains', label: 'Domains', exchangeIds: allExchangeIds },
     parent: rootNode,
     depth: 1,
     children: [],
     draggable: false,
   };
 
-  const sortedDomains = [...domainMap.values()].sort((a, b) =>
-    a.label.localeCompare(b.label),
-  );
+  const sortedDomains = [...domainMap.values()].sort((a, b) => a.label.localeCompare(b.label));
   for (const domain of sortedDomains) {
-    domainsFolder.children!.push(toTreeNode(domain, domainsFolder, 2));
+    domainsFolder.children?.push(toTreeNode(domain, domainsFolder, 2));
   }
 
-  rootNode.children!.push(domainsFolder);
+  rootNode.children?.push(domainsFolder);
 
   return rootNode;
 }
@@ -189,9 +185,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
       <span className="truncate">{item.label}</span>
-      {count > 0 && (
-        <span className="text-text-subtlest text-2xs shrink-0">{count}</span>
-      )}
+      {count > 0 && <span className="text-text-subtlest text-2xs shrink-0">{count}</span>}
     </div>
   );
 }
@@ -203,7 +197,7 @@ export function Sidebar() {
   const getItemKey = useCallback((item: SidebarItem) => item.id, []);
 
   return (
-    <aside className="x-theme-sidebar h-full w-[250px] min-w-0 overflow-y-auto border-r border-border-subtle">
+    <aside className="x-theme-sidebar bg-surface h-full w-[250px] min-w-0 overflow-y-auto border-r border-border-subtle">
       <div className="pt-2 text-xs">
         <Tree
           treeId={treeId}

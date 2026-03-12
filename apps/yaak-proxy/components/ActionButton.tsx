@@ -1,8 +1,8 @@
 import type { ActionInvocation } from '@yaakapp-internal/proxy-lib';
 import { Button, type ButtonProps } from '@yaakapp-internal/ui';
 import { useCallback } from 'react';
-import { useActionMetadata } from './hooks';
-import { useRpcMutation } from './rpc-hooks';
+import { useRpcMutation } from '../hooks/useRpcMutation';
+import { useActionMetadata } from '../hooks/useActionMetadata';
 
 type ActionButtonProps = Omit<ButtonProps, 'onClick' | 'children'> & {
   action: ActionInvocation;

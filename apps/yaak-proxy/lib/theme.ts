@@ -11,20 +11,22 @@ import {
   type Appearance,
 } from "@yaakapp-internal/theme";
 
-setPlatformOnDocument(platformFromUserAgent(navigator.userAgent));
+export function initTheme() {
+  setPlatformOnDocument(platformFromUserAgent(navigator.userAgent));
 
-// Apply a quick initial theme based on CSS media query
-let preferredAppearance: Appearance = getCSSAppearance();
-applyTheme(preferredAppearance);
-
-// Then subscribe to accurate OS appearance detection and changes
-subscribeToPreferredAppearance((a) => {
-  preferredAppearance = a;
+  // Apply a quick initial theme based on CSS media query
+  let preferredAppearance: Appearance = getCSSAppearance();
   applyTheme(preferredAppearance);
-});
 
-// Show window after initial theme is applied (window starts hidden to prevent flash)
-getCurrentWebviewWindow().show().catch(console.error);
+  // Then subscribe to accurate OS appearance detection and changes
+  subscribeToPreferredAppearance((a) => {
+    preferredAppearance = a;
+    applyTheme(preferredAppearance);
+  });
+
+  // Show window after initial theme is applied (window starts hidden to prevent flash)
+  getCurrentWebviewWindow().show().catch(console.error);
+}
 
 function applyTheme(appearance: Appearance) {
   const theme = appearance === "dark" ? defaultDarkTheme : defaultLightTheme;

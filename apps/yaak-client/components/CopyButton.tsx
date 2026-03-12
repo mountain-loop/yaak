@@ -1,4 +1,4 @@
-import { useTimedBoolean } from '../hooks/useTimedBoolean';
+import { useTimedBoolean } from '@yaakapp-internal/ui';
 import { copyToClipboard } from '../lib/copy';
 import { showToast } from '../lib/toast';
 import type { ButtonProps } from './core/Button';
