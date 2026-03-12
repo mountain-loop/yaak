@@ -21,6 +21,7 @@ export type { TreeItemProps } from "./components/tree/TreeItem";
 export { isSelectedFamily, selectedIdsFamily } from "./components/tree/atoms";
 export { minPromiseMillis } from "./lib/minPromiseMillis";
 export { ResizeHandle } from "./components/ResizeHandle";
+export { SidebarLayout } from "./components/SidebarLayout";
 export type { ResizeHandleEvent } from "./components/ResizeHandle";
 export { SplitLayout } from "./components/SplitLayout";
 export type { SplitLayoutLayout, SlotProps } from "./components/SplitLayout";

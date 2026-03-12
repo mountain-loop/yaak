@@ -190,17 +190,14 @@ function ItemInner({ item }: { item: SidebarItem }) {
   );
 }
 
-export function Sidebar({ style }: { style?: React.CSSProperties }) {
+export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = SIDEBAR_TREE_ID;
 
   const getItemKey = useCallback((item: SidebarItem) => item.id, []);
 
   return (
-    <aside
-      style={style}
-      className="x-theme-sidebar bg-surface h-full w-full min-w-0 overflow-y-auto border-r border-border-subtle"
-    >
+    <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 overflow-y-auto border-r border-border-subtle">
       <div className="pt-2 text-xs">
         <Tree
           treeId={treeId}

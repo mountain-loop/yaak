@@ -3,8 +3,7 @@ import { settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
-import type { CSSProperties } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
@@ -40,19 +39,16 @@ import { HStack } from './core/Stacks';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
-import { HeaderSize } from '@yaakapp-internal/ui';
+import { HeaderSize, SidebarLayout } from '@yaakapp-internal/ui';
 import { HttpRequestLayout } from './HttpRequestLayout';
 import { Overlay } from './Overlay';
-import { ResizeHandle, type ResizeHandleEvent } from '@yaakapp-internal/ui';
 import Sidebar from './Sidebar';
 import { SidebarActions } from './SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
 
-const side = { gridArea: 'side' };
 const head = { gridArea: 'head' };
 const body = { gridArea: 'body' };
-const drag = { gridArea: 'drag' };
 
 export function Workspace() {
   // First, subscribe to some things applicable to workspaces
@@ -66,50 +62,6 @@ export function Workspace() {
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();
   const activeEnvironment = useAtomValue(activeEnvironmentAtom);
   const floating = useShouldFloatSidebar();
-  const [isResizing, setIsResizing] = useState<boolean>(false);
-  const startWidth = useRef<number | null>(null);
-
-  const handleResizeMove = useCallback(
-    async ({ x, xStart }: ResizeHandleEvent) => {
-      if (width == null || startWidth.current == null) return;
-
-      const newWidth = startWidth.current + (x - xStart);
-      if (newWidth < 50) {
-        if (!sidebarHidden) await setSidebarHidden(true);
-        resetWidth();
-      } else {
-        if (sidebarHidden) await setSidebarHidden(false);
-        setWidth(newWidth);
-      }
-    },
-    [width, sidebarHidden, setSidebarHidden, resetWidth, setWidth],
-  );
-
-  const handleResizeStart = useCallback(() => {
-    startWidth.current = width ?? null;
-    setIsResizing(true);
-  }, [width]);
-
-  const handleResizeEnd = useCallback(() => {
-    setIsResizing(false);
-    startWidth.current = null;
-  }, []);
-
-  const sideWidth = sidebarHidden ? 0 : width;
-  const styles = useMemo<CSSProperties>(
-    () => ({
-      gridTemplate: floating
-        ? `
-        ' ${head.gridArea}' auto
-        ' ${body.gridArea}' minmax(0,1fr)
-        / 1fr`
-        : `
-        ' ${head.gridArea} ${head.gridArea} ${head.gridArea}' auto
-        ' ${side.gridArea} ${drag.gridArea} ${body.gridArea}' minmax(0,1fr)
-        / ${sideWidth}px   0                1fr`,
-    }),
-    [sideWidth, floating],
-  );
 
   const environmentBgStyle = useMemo(() => {
     if (activeEnvironment?.color == null) return undefined;
@@ -122,84 +74,85 @@ export function Workspace() {
     return null;
   }
 
-  return (
-    <div
-      style={styles}
-      className={classNames(
-        'grid w-full h-full',
-        // Animate sidebar width changes but only when not resizing
-        // because it's too slow to animate on mouse move
-        !isResizing && 'transition-grid',
-      )}
+  const header = (
+    <HeaderSize
+      data-tauri-drag-region
+      size="lg"
+      className="relative x-theme-appHeader bg-surface"
+      osType={osType}
+      hideWindowControls={settings.hideWindowControls}
+      useNativeTitlebar={settings.useNativeTitlebar}
+      interfaceScale={settings.interfaceScale}
     >
-      {floating ? (
-        <Overlay
-          open={!floatingSidebarHidden}
-          portalName="sidebar"
-          onClose={() => setFloatingSidebarHidden(true)}
-          zIndex={20}
-        >
-          <m.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className={classNames(
-              'x-theme-sidebar',
-              'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]',
-              'grid grid-rows-[auto_1fr]',
-            )}
-          >
-            <HeaderSize hideControls size="lg" className="border-transparent flex items-center" osType={osType} hideWindowControls={settings.hideWindowControls} useNativeTitlebar={settings.useNativeTitlebar} interfaceScale={settings.interfaceScale}>
-              <SidebarActions />
-            </HeaderSize>
-            <ErrorBoundary name="Sidebar (Floating)">
-              <Sidebar />
-            </ErrorBoundary>
-          </m.div>
-        </Overlay>
-      ) : (
-        <>
-          <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
-            <ErrorBoundary name="Sidebar">
-              <Sidebar className="border-r border-border-subtle" />
-            </ErrorBoundary>
-          </div>
-          <ResizeHandle
-            style={drag}
-            className="-translate-x-[1px]"
-            justify="end"
-            side="right"
-            onResizeStart={handleResizeStart}
-            onResizeEnd={handleResizeEnd}
-            onResizeMove={handleResizeMove}
-            onReset={resetWidth}
-          />
-        </>
-      )}
-      <HeaderSize
-        data-tauri-drag-region
-        size="lg"
-        className="relative x-theme-appHeader bg-surface"
-        style={head}
-        osType={osType}
-        hideWindowControls={settings.hideWindowControls}
-        useNativeTitlebar={settings.useNativeTitlebar}
-        interfaceScale={settings.interfaceScale}
-      >
-        <div className="absolute inset-0 pointer-events-none">
-          <div // Add subtle background
-            style={environmentBgStyle}
-            className="absolute inset-0 opacity-[0.07]"
-          />
-          <div // Add a subtle border bottom
-            style={environmentBgStyle}
-            className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
-          />
-        </div>
-        <WorkspaceHeader className="pointer-events-none" />
-      </HeaderSize>
-      <ErrorBoundary name="Workspace Body">
-        <WorkspaceBody />
+      <div className="absolute inset-0 pointer-events-none">
+        <div
+          style={environmentBgStyle}
+          className="absolute inset-0 opacity-[0.07]"
+        />
+        <div
+          style={environmentBgStyle}
+          className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
+        />
+      </div>
+      <WorkspaceHeader className="pointer-events-none" />
+    </HeaderSize>
+  );
+
+  const workspaceBody = (
+    <ErrorBoundary name="Workspace Body">
+      <WorkspaceBody />
+    </ErrorBoundary>
+  );
+
+  const sidebarContent = (
+    <div className="x-theme-sidebar overflow-hidden bg-surface h-full">
+      <ErrorBoundary name="Sidebar">
+        <Sidebar className="border-r border-border-subtle" />
       </ErrorBoundary>
+    </div>
+  );
+
+  return (
+    <div className="grid w-full h-full grid-rows-[auto_1fr]">
+      {header}
+      {floating ? (
+        <>
+          <Overlay
+            open={!floatingSidebarHidden}
+            portalName="sidebar"
+            onClose={() => setFloatingSidebarHidden(true)}
+            zIndex={20}
+          >
+            <m.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className={classNames(
+                'x-theme-sidebar',
+                'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]',
+                'grid grid-rows-[auto_1fr]',
+              )}
+            >
+              <HeaderSize hideControls size="lg" className="border-transparent flex items-center" osType={osType} hideWindowControls={settings.hideWindowControls} useNativeTitlebar={settings.useNativeTitlebar} interfaceScale={settings.interfaceScale}>
+                <SidebarActions />
+              </HeaderSize>
+              <ErrorBoundary name="Sidebar (Floating)">
+                <Sidebar />
+              </ErrorBoundary>
+            </m.div>
+          </Overlay>
+          {workspaceBody}
+        </>
+      ) : (
+        <SidebarLayout
+          width={width ?? 250}
+          onWidthChange={setWidth}
+          hidden={sidebarHidden ?? false}
+          onHiddenChange={(hidden) => setSidebarHidden(hidden)}
+          sidebar={sidebarContent}
+        >
+          {workspaceBody}
+        </SidebarLayout>
+      )}
     </div>
   );
 }

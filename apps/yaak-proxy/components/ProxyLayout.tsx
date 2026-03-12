@@ -1,6 +1,7 @@
-import { HeaderSize, SplitLayout } from '@yaakapp-internal/ui';
+import { HeaderSize, SidebarLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
+import { useLocalStorage } from 'react-use';
 import { useRpcQueryWithEvent } from '../hooks/useRpcQueryWithEvent';
 import { getOsType } from '../lib/tauri';
 import { ActionIconButton } from './ActionIconButton';
@@ -10,6 +11,7 @@ import { filteredExchangesAtom, Sidebar } from './Sidebar';
 export function ProxyLayout() {
   const os = getOsType();
   const exchanges = useAtomValue(filteredExchangesAtom);
+  const [sidebarWidth, setSidebarWidth] = useLocalStorage('sidebar_width', 250);
   const { data: proxyState } = useRpcQueryWithEvent('get_proxy_state', {}, 'proxy_state_changed');
   const isRunning = proxyState?.state === 'running';
 
@@ -56,13 +58,13 @@ export function ProxyLayout() {
           </div>
         </div>
       </HeaderSize>
-      <SplitLayout
-        storageKey="proxy_sidebar"
-        layout="horizontal"
-        defaultRatio={0.8}
-        firstSlot={({ style }) => <Sidebar style={style} />}
-        secondSlot={({ style }) => <ExchangesTable style={style} exchanges={exchanges} />}
-      />
+      <SidebarLayout
+        width={sidebarWidth ?? 250}
+        onWidthChange={setSidebarWidth}
+        sidebar={<Sidebar />}
+      >
+        <ExchangesTable exchanges={exchanges} className="overflow-auto h-full" />
+      </SidebarLayout>
     </div>
   );
 }
