@@ -32,6 +32,7 @@ export async function getPassword(
     clientId,
     accessTokenUrl,
     authorizationUrl: null,
+    username,
   };
   const token = await getOrRefreshAccessToken(ctx, tokenArgs, {
     accessTokenUrl,
