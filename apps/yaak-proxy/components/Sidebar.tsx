@@ -194,7 +194,7 @@ export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = SIDEBAR_TREE_ID;
 
-  const getItemKey = useCallback((item: SidebarItem) => item.id, []);
+  const getItemKey = useCallback((item: SidebarItem) => `${item.id}:${item.exchangeIds.length}`, []);
 
   return (
     <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 overflow-y-auto border-r border-border-subtle">
