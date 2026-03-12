@@ -6,6 +6,19 @@
       "recommended": true,
       "a11y": {
         "useKeyWithClickEvents": "off"
+      },
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@tauri-apps/api/core": "Use lib/tauri.ts instead of importing @tauri-apps directly",
+              "@tauri-apps/api/event": "Use lib/tauri.ts instead of importing @tauri-apps directly",
+              "@tauri-apps/api/webviewWindow": "Use lib/tauri.ts instead of importing @tauri-apps directly",
+              "@tauri-apps/plugin-os": "Use lib/tauri.ts instead of importing @tauri-apps directly"
+            }
+          }
+        }
       }
     }
   },
@@ -32,6 +45,18 @@
       "semicolons": "always"
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/yaak-proxy/lib/tauri.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ],
   "files": {
     "includes": [
       "**",

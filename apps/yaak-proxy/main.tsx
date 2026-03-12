@@ -6,10 +6,7 @@ import { ProxyLayout } from './components/ProxyLayout';
 import { listen, rpc } from './lib/rpc';
 import { initHotkeys } from './lib/hotkeys';
 import { applyChange, dataAtom, replaceAll } from './lib/store';
-import { initTheme } from './lib/theme';
 import './main.css';
-
-initTheme();
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
