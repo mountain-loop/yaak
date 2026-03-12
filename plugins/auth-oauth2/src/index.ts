@@ -103,6 +103,7 @@ export const plugin: PluginDefinition = {
             authorizationUrl: stringArg(values, 'authorizationUrl'),
             accessTokenUrl: stringArg(values, 'accessTokenUrl'),
             clientId: stringArg(values, 'clientId'),
+            username: stringArgOrNull(values, 'username'),
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
@@ -128,6 +129,7 @@ export const plugin: PluginDefinition = {
             authorizationUrl: stringArg(values, 'authorizationUrl'),
             accessTokenUrl: stringArg(values, 'accessTokenUrl'),
             clientId: stringArg(values, 'clientId'),
+            username: stringArgOrNull(values, 'username'),
           };
           if (await deleteToken(ctx, tokenArgs)) {
             await ctx.toast.show({
@@ -478,6 +480,7 @@ export const plugin: PluginDefinition = {
             authorizationUrl: stringArg(values, 'authorizationUrl'),
             accessTokenUrl: stringArg(values, 'accessTokenUrl'),
             clientId: stringArg(values, 'clientId'),
+            username: stringArgOrNull(values, 'username'),
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
