@@ -3,7 +3,7 @@ import type { UpdateInfo } from "@yaakapp-internal/tauri-client";
 import type { Atom } from "jotai";
 import { atom } from "jotai";
 import { selectAtom } from "jotai/utils";
-import type { SplitLayoutLayout } from "../components/core/SplitLayout";
+import type { SplitLayoutLayout } from "@yaakapp-internal/ui";
 import { atomWithKVStorage } from "./atoms/atomWithKVStorage";
 
 export function deepEqualAtom<T>(a: Atom<T>) {

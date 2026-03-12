@@ -1,11 +1,12 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import type { SlotProps } from '@yaakapp-internal/ui';
+import { SplitLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import type { CSSProperties } from 'react';
 import { useCurrentGraphQLSchema } from '../hooks/useIntrospectGraphQL';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { workspaceLayoutAtom } from '../lib/atoms';
-import type { SlotProps } from './core/SplitLayout';
-import { SplitLayout } from './core/SplitLayout';
 import { GraphQLDocsExplorer } from './graphql/GraphQLDocsExplorer';
 import { showGraphQLDocExplorerAtom } from './graphql/graphqlAtoms';
 import { HttpRequestPane } from './HttpRequestPane';
@@ -20,10 +21,12 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
   const showGraphQLDocExplorer = useAtomValue(showGraphQLDocExplorerAtom);
   const graphQLSchema = useCurrentGraphQLSchema(activeRequest);
   const workspaceLayout = useAtomValue(workspaceLayoutAtom);
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
+  const wsId = activeWorkspace?.id ?? 'n/a';
 
   const requestResponseSplit = ({ style }: Pick<SlotProps, 'style'>) => (
     <SplitLayout
-      name="http_layout"
+      storageKey={`http_layout::${wsId}`}
       className="p-3 gap-1.5"
       style={style}
       layout={workspaceLayout}
@@ -47,7 +50,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
   ) {
     return (
       <SplitLayout
-        name="graphql_layout"
+        storageKey={`graphql_layout::${wsId}`}
         defaultRatio={1 / 3}
         firstSlot={requestResponseSplit}
         secondSlot={({ style, orientation }) => (

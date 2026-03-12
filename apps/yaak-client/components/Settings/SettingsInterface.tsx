@@ -7,7 +7,7 @@ import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { clamp } from '../../lib/clamp';
+import { clamp } from '@yaakapp-internal/ui';
 import { showConfirm } from '../../lib/confirm';
 import { invokeCmd } from '../../lib/tauri';
 import { CargoFeature } from '../CargoFeature';

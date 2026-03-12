@@ -5,13 +5,15 @@ export function Table({
   children,
   className,
   scrollable,
+  style,
 }: {
   children: ReactNode;
   className?: string;
   scrollable?: boolean;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div className={classNames('w-full', scrollable && 'h-full overflow-y-auto')}>
+    <div style={style} className={classNames('w-full', scrollable && 'h-full overflow-y-auto')}>
       <table
         className={classNames(
           className,

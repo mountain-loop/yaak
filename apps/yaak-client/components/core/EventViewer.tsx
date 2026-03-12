@@ -8,7 +8,7 @@ import { AutoScroller } from './AutoScroller';
 import { Banner } from './Banner';
 import { Button } from './Button';
 import { Separator } from './Separator';
-import { SplitLayout } from './SplitLayout';
+import { SplitLayout } from '@yaakapp-internal/ui';
 import { HStack } from './Stacks';
 import { IconButton } from './IconButton';
 import classNames from 'classnames';
@@ -37,8 +37,8 @@ interface EventViewerProps<T> {
   /** Error message to display as a banner */
   error?: string | null;
 
-  /** Name for SplitLayout state persistence */
-  splitLayoutName: string;
+  /** Key for SplitLayout state persistence */
+  splitLayoutStorageKey: string;
 
   /** Default ratio for the split (0.0 - 1.0) */
   defaultRatio?: number;
@@ -66,7 +66,7 @@ export function EventViewer<T>({
   renderDetail,
   header,
   error,
-  splitLayoutName,
+  splitLayoutStorageKey,
   defaultRatio = 0.4,
   enableKeyboardNav = true,
   isLoading = false,
@@ -151,7 +151,7 @@ export function EventViewer<T>({
     <div ref={containerRef} className="h-full">
       <SplitLayout
         layout="vertical"
-        name={splitLayoutName}
+        storageKey={splitLayoutStorageKey}
         defaultRatio={defaultRatio}
         minHeightPx={10}
         firstSlot={({ style }) => (

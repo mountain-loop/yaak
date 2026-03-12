@@ -12,15 +12,16 @@ import classNames from 'classnames';
 
 interface Props {
   exchanges: HttpExchange[];
+  style?: React.CSSProperties;
 }
 
-export function ExchangesTable({ exchanges }: Props) {
+export function ExchangesTable({ exchanges, style }: Props) {
   if (exchanges.length === 0) {
     return <p className="text-text-subtlest text-sm">No traffic yet</p>;
   }
 
   return (
-    <Table scrollable className="px-2">
+    <Table scrollable className="px-2" style={style}>
       <TableHead>
         <TableRow>
           <TableHeaderCell>Method</TableHeaderCell>

@@ -1,4 +1,4 @@
-import { HeaderSize } from '@yaakapp-internal/ui';
+import { HeaderSize, SplitLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useRpcQueryWithEvent } from '../hooks/useRpcQueryWithEvent';
@@ -56,12 +56,13 @@ export function ProxyLayout() {
           </div>
         </div>
       </HeaderSize>
-      <div className="grid grid-cols-[auto_1fr] min-h-0">
-        <Sidebar />
-        <main className="overflow-auto">
-          <ExchangesTable exchanges={exchanges} />
-        </main>
-      </div>
+      <SplitLayout
+        storageKey="proxy_sidebar"
+        layout="horizontal"
+        defaultRatio={0.8}
+        firstSlot={({ style }) => <Sidebar style={style} />}
+        secondSlot={({ style }) => <ExchangesTable style={style} exchanges={exchanges} />}
+      />
     </div>
   );
 }

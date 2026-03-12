@@ -89,7 +89,6 @@ export function ResizeHandle({
       className={classNames(
         className,
         'group z-10 flex select-none transition-colors hover:bg-surface-active rounded-full',
-        // 'bg-info', // For debugging
         vertical ? 'w-full h-1.5 cursor-row-resize' : 'h-full w-1.5 cursor-col-resize',
         justify === 'center' && 'justify-center',
         justify === 'end' && 'justify-end',
@@ -99,11 +98,9 @@ export function ResizeHandle({
         side === 'top' && 'top-0',
       )}
     >
-      {/* Show global overlay with cursor style to ensure cursor remains the same when moving quickly */}
       {isResizing && (
         <div
           className={classNames(
-            // 'bg-[rgba(255,0,0,0.1)]', // For debugging
             'fixed -left-[100vw] -right-[100vw] -top-[100vh] -bottom-[100vh]',
             vertical && 'cursor-row-resize',
             !vertical && 'cursor-col-resize',

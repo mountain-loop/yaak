@@ -3,7 +3,7 @@ import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
-import { useContainerSize } from '../hooks/useContainerQuery';
+import { useContainerSize } from '@yaakapp-internal/ui';
 import type { ReflectResponseService } from '../hooks/useGrpc';
 import { useHeadersTab } from '../hooks/useHeadersTab';
 import { useInheritedHeaders } from '../hooks/useInheritedHeaders';

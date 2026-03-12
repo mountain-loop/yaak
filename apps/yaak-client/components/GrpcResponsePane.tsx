@@ -92,7 +92,7 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
           getEventKey={(event) => event.id}
           error={activeConnection.error}
           header={header}
-          splitLayoutName="grpc_events"
+          splitLayoutStorageKey="grpc_events"
           defaultRatio={0.4}
           renderRow={({ event, isActive, onClick }) => (
             <GrpcEventRow event={event} isActive={isActive} onClick={onClick} />

@@ -24,7 +24,7 @@ import { useAtomValue } from 'jotai';
 import type { CSSProperties, HTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useClickOutside } from '../../hooks/useClickOutside';
-import { useContainerSize } from '../../hooks/useContainerQuery';
+import { useContainerSize } from '@yaakapp-internal/ui';
 import { Icon, useDebouncedValue } from '@yaakapp-internal/ui';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
 import { jotaiStore } from '../../lib/jotai';

@@ -1,13 +1,11 @@
 import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
 import { useLocalStorage } from 'react-use';
-import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { useContainerSize } from '../../hooks/useContainerQuery';
-import { clamp } from '../../lib/clamp';
-import type { ResizeHandleEvent } from '../ResizeHandle';
-import { ResizeHandle } from '../ResizeHandle';
+import { useContainerSize } from '../hooks/useContainerSize';
+import { clamp } from '../lib/clamp';
+import type { ResizeHandleEvent } from './ResizeHandle';
+import { ResizeHandle } from './ResizeHandle';
 
 export type SplitLayoutLayout = 'responsive' | 'horizontal' | 'vertical';
 
@@ -17,7 +15,7 @@ export interface SlotProps {
 }
 
 interface Props {
-  name: string;
+  storageKey: string;
   firstSlot: (props: SlotProps) => ReactNode;
   secondSlot: null | ((props: SlotProps) => ReactNode);
   style?: CSSProperties;
@@ -41,7 +39,7 @@ export function SplitLayout({
   firstSlot,
   secondSlot,
   className,
-  name,
+  storageKey,
   layout = 'responsive',
   resizeHandleClassName,
   defaultRatio = 0.5,
@@ -49,13 +47,8 @@ export function SplitLayout({
   minWidthPx = 10,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
-  const [widthRaw, setWidth] = useLocalStorage<number>(
-    `${name}_width::${activeWorkspace?.id ?? 'n/a'}`,
-  );
-  const [heightRaw, setHeight] = useLocalStorage<number>(
-    `${name}_height::${activeWorkspace?.id ?? 'n/a'}`,
-  );
+  const [widthRaw, setWidth] = useLocalStorage<number>(`${storageKey}_width`);
+  const [heightRaw, setHeight] = useLocalStorage<number>(`${storageKey}_height`);
   const width = widthRaw ?? defaultRatio;
   let height = heightRaw ?? defaultRatio;
 
@@ -76,11 +69,11 @@ export function SplitLayout({
             ' ${areaL.gridArea}' minmax(0,${1 - height}fr)
             ' ${areaD.gridArea}' 0
             ' ${areaR.gridArea}' minmax(${minHeightPx}px,${height}fr)
-            / 1fr            
+            / 1fr
           `
         : `
             ' ${areaL.gridArea} ${areaD.gridArea} ${areaR.gridArea}' minmax(0,1fr)
-            / ${1 - width}fr    0                 ${width}fr           
+            / ${1 - width}fr    0                 ${width}fr
           `,
     };
   }, [style, vertical, height, minHeightPx, width]);
@@ -94,7 +87,6 @@ export function SplitLayout({
     (e: ResizeHandleEvent) => {
       if (containerRef.current === null) return;
 
-      // const containerRect = containerRef.current.getBoundingClientRect();
       const { paddingLeft, paddingRight, paddingTop, paddingBottom } = getComputedStyle(
         containerRef.current,
       );

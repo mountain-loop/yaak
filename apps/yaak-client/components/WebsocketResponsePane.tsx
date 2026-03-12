@@ -69,7 +69,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
         getEventKey={(event) => event.id}
         error={activeConnection.error}
         header={header}
-        splitLayoutName="websocket_events"
+        splitLayoutStorageKey="websocket_events"
         defaultRatio={0.4}
         renderRow={({ event, isActive, onClick }) => (
           <WebsocketEventRow event={event} isActive={isActive} onClick={onClick} />

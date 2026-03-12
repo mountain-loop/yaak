@@ -1,6 +1,9 @@
 import type { Environment, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
+import type { TreeHandle, TreeNode, TreeProps } from '@yaakapp-internal/ui';
+import { Icon, SplitLayout, Tree } from '@yaakapp-internal/ui';
 import { atom, useAtomValue } from 'jotai';
+import { atomFamily } from 'jotai/utils';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
@@ -9,6 +12,7 @@ import {
   useEnvironmentsBreakdown,
 } from '../hooks/useEnvironmentsBreakdown';
 import { useHotKey } from '../hooks/useHotKey';
+import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
@@ -17,15 +21,10 @@ import { showColorPicker } from '../lib/showColorPicker';
 import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
-import { Icon, Tree } from '@yaakapp-internal/ui';
-import type { TreeNode, TreeHandle, TreeProps } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { InlineCode } from './core/InlineCode';
 import type { PairEditorHandle } from './core/PairEditor';
-import { SplitLayout } from './core/SplitLayout';
-import { atomFamily } from 'jotai/utils';
-import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
 import { EnvironmentEditor } from './EnvironmentEditor';
 import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
@@ -55,7 +54,7 @@ export function EnvironmentEditDialog({ initialEnvironmentId, setRef }: Props) {
 
   return (
     <SplitLayout
-      name="env_editor"
+      storageKey="env_editor"
       defaultRatio={0.75}
       layout="horizontal"
       className="gap-0"
@@ -155,24 +154,39 @@ function EnvironmentEditDialogSidebar({
     [],
   );
 
-  const handleDuplicateSelected = useCallback(async (items: TreeModel[]) => {
-    if (items.length === 1 && items[0]) {
-      const newId = await duplicateModel(items[0]);
-      setSelectedEnvironmentId(newId);
-    } else {
-      await Promise.all(items.map(duplicateModel));
-    }
-  }, [setSelectedEnvironmentId]);
+  const handleDuplicateSelected = useCallback(
+    async (items: TreeModel[]) => {
+      if (items.length === 1 && items[0]) {
+        const newId = await duplicateModel(items[0]);
+        setSelectedEnvironmentId(newId);
+      } else {
+        await Promise.all(items.map(duplicateModel));
+      }
+    },
+    [setSelectedEnvironmentId],
+  );
 
-  useHotKey('sidebar.selected.rename', handleRenameSelected, { enable: treeHasFocus, allowDefault: true, priority: 100 });
-  useHotKey('sidebar.selected.delete', useCallback(() => {
-    const items = getSelectedTreeModels();
-    if (items) handleDeleteSelected(items);
-  }, [getSelectedTreeModels, handleDeleteSelected]), { enable: treeHasFocus, priority: 100 });
-  useHotKey('sidebar.selected.duplicate', useCallback(async () => {
-    const items = getSelectedTreeModels();
-    if (items) await handleDuplicateSelected(items);
-  }, [getSelectedTreeModels, handleDuplicateSelected]), { enable: treeHasFocus, priority: 100 });
+  useHotKey('sidebar.selected.rename', handleRenameSelected, {
+    enable: treeHasFocus,
+    allowDefault: true,
+    priority: 100,
+  });
+  useHotKey(
+    'sidebar.selected.delete',
+    useCallback(() => {
+      const items = getSelectedTreeModels();
+      if (items) handleDeleteSelected(items);
+    }, [getSelectedTreeModels, handleDeleteSelected]),
+    { enable: treeHasFocus, priority: 100 },
+  );
+  useHotKey(
+    'sidebar.selected.duplicate',
+    useCallback(async () => {
+      const items = getSelectedTreeModels();
+      if (items) await handleDuplicateSelected(items);
+    }, [getSelectedTreeModels, handleDuplicateSelected]),
+    { enable: treeHasFocus, priority: 100 },
+  );
 
   const getContextMenu = useCallback(
     (items: TreeModel[]): ContextMenuProps['items'] => {
@@ -249,7 +263,12 @@ function EnvironmentEditDialogSidebar({
 
       return menuItems;
     },
-    [baseEnvironments.length, handleDeleteEnvironment, setSelectedEnvironmentId],
+    [
+      baseEnvironments.length,
+      handleDeleteEnvironment,
+      handleDuplicateSelected,
+      handleRenameSelected,
+    ],
   );
 
   const handleDragEnd = useCallback(async function handleDragEnd({

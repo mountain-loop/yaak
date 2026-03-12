@@ -38,7 +38,7 @@ function ActualEventStreamViewer({ response }: Props) {
       events={events.data ?? []}
       getEventKey={(_, index) => String(index)}
       error={events.error ? String(events.error) : null}
-      splitLayoutName="sse_events"
+      splitLayoutStorageKey="sse_events"
       defaultRatio={0.4}
       renderRow={({ event, index, isActive, onClick }) => (
         <EventViewerRow

@@ -23,7 +23,7 @@ import { Icon } from '@yaakapp-internal/ui';
 import { InlineCode } from '../core/InlineCode';
 import { Input } from '../core/Input';
 import { Separator } from '../core/Separator';
-import { SplitLayout } from '../core/SplitLayout';
+import { SplitLayout } from '@yaakapp-internal/ui';
 import { HStack } from '../core/Stacks';
 import { EmptyStateText } from '../EmptyStateText';
 import { gitCallbacks } from './callbacks';
@@ -185,13 +185,13 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   return (
     <div className="h-full px-2 pb-4">
       <SplitLayout
-        name="commit-horizontal"
+        storageKey="commit-horizontal"
         layout="horizontal"
         defaultRatio={0.6}
         firstSlot={({ style }) => (
           <div style={style} className="h-full px-4">
             <SplitLayout
-              name="commit-vertical"
+              storageKey="commit-vertical"
               layout="vertical"
               defaultRatio={0.35}
               firstSlot={({ style: innerStyle }) => (

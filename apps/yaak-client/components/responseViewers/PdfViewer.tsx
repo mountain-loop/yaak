@@ -5,7 +5,7 @@ import './PdfViewer.css';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { useEffect, useRef, useState } from 'react';
 import { Document, Page } from 'react-pdf';
-import { useContainerSize } from '../../hooks/useContainerQuery';
+import { useContainerSize } from '@yaakapp-internal/ui';
 
 import('react-pdf').then(({ pdfjs }) => {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(

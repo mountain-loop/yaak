@@ -55,7 +55,7 @@ function Inner({ response, viewMode }: Props) {
       isLoading={isLoading}
       loadingMessage="Loading events..."
       emptyMessage="No events recorded"
-      splitLayoutName="http_response_events"
+      splitLayoutStorageKey="http_response_events"
       defaultRatio={0.25}
       renderRow={({ event, isActive, onClick }) => {
         const display = getEventDisplay(event.event);

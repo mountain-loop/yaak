@@ -7,10 +7,11 @@ import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
+import { SplitLayout } from '@yaakapp-internal/ui';
+import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { Banner } from './core/Banner';
 import { HotkeyList } from './core/HotkeyList';
-import { SplitLayout } from './core/SplitLayout';
 import { GrpcRequestPane } from './GrpcRequestPane';
 import { GrpcResponsePane } from './GrpcResponsePane';
 
@@ -22,6 +23,8 @@ const emptyArray: string[] = [];
 
 export function GrpcConnectionLayout({ style }: Props) {
   const workspaceLayout = useAtomValue(workspaceLayoutAtom);
+  const activeWorkspace = useAtomValue(activeWorkspaceAtom);
+  const wsId = activeWorkspace?.id ?? 'n/a';
   const activeRequest = useActiveRequest('grpc_request');
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
   const grpcEvents = useGrpcEvents(activeConnection?.id ?? null);
@@ -79,7 +82,7 @@ export function GrpcConnectionLayout({ style }: Props) {
 
   return (
     <SplitLayout
-      name="grpc_layout"
+      storageKey={`grpc_layout::${wsId}`}
       className="p-3 gap-1.5"
       style={style}
       layout={workspaceLayout}
