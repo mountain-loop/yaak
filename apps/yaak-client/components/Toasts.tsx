@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { hideToast, toastsAtom } from '../lib/toast';
 import { Toast, type ToastProps } from './core/Toast';
 import { ErrorBoundary } from './ErrorBoundary';
-import { Portal } from './Portal';
+import { Portal } from '@yaakapp-internal/ui';
 
 export type ToastInstance = {
   id: string;

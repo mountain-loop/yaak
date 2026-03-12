@@ -2,7 +2,7 @@ import classNames from 'classnames';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { generateId } from '../../lib/generateId';
-import { Portal } from '../Portal';
+import { Portal } from '@yaakapp-internal/ui';
 
 export interface TooltipProps {
   children: ReactNode;

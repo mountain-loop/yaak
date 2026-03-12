@@ -1,5 +1,6 @@
 import { type } from '@tauri-apps/plugin-os';
 import { settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
+import { HeaderSize, Overlay, SidebarLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
@@ -39,15 +40,12 @@ import { HStack } from './core/Stacks';
 import { ErrorBoundary } from './ErrorBoundary';
 import { FolderLayout } from './FolderLayout';
 import { GrpcConnectionLayout } from './GrpcConnectionLayout';
-import { HeaderSize, SidebarLayout } from '@yaakapp-internal/ui';
 import { HttpRequestLayout } from './HttpRequestLayout';
-import { Overlay } from './Overlay';
 import Sidebar from './Sidebar';
 import { SidebarActions } from './SidebarActions';
 import { WebsocketRequestLayout } from './WebsocketRequestLayout';
 import { WorkspaceHeader } from './WorkspaceHeader';
 
-const head = { gridArea: 'head' };
 const body = { gridArea: 'body' };
 
 export function Workspace() {
@@ -85,10 +83,7 @@ export function Workspace() {
       interfaceScale={settings.interfaceScale}
     >
       <div className="absolute inset-0 pointer-events-none">
-        <div
-          style={environmentBgStyle}
-          className="absolute inset-0 opacity-[0.07]"
-        />
+        <div style={environmentBgStyle} className="absolute inset-0 opacity-[0.07]" />
         <div
           style={environmentBgStyle}
           className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
@@ -132,7 +127,15 @@ export function Workspace() {
                 'grid grid-rows-[auto_1fr]',
               )}
             >
-              <HeaderSize hideControls size="lg" className="border-transparent flex items-center" osType={osType} hideWindowControls={settings.hideWindowControls} useNativeTitlebar={settings.useNativeTitlebar} interfaceScale={settings.interfaceScale}>
+              <HeaderSize
+                hideControls
+                size="lg"
+                className="border-transparent flex items-center"
+                osType={osType}
+                hideWindowControls={settings.hideWindowControls}
+                useNativeTitlebar={settings.useNativeTitlebar}
+                interfaceScale={settings.interfaceScale}
+              >
                 <SidebarActions />
               </HeaderSize>
               <ErrorBoundary name="Sidebar (Floating)">

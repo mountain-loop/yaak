@@ -28,3 +28,6 @@ export type { SplitLayoutLayout, SlotProps } from "./components/SplitLayout";
 export { Table, TableBody, TableHead, TableRow, TableCell, TruncatedWideTableCell, TableHeaderCell } from "./components/Table";
 export { clamp } from "./lib/clamp";
 export { useContainerSize } from "./hooks/useContainerSize";
+export { Overlay } from "./components/Overlay";
+export { Portal } from "./components/Portal";
+export { usePortal } from "./hooks/usePortal";

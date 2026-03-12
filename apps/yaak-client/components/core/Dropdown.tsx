@@ -32,7 +32,7 @@ import { generateId } from '../../lib/generateId';
 import { getNodeText } from '../../lib/getNodeText';
 import { jotaiStore } from '../../lib/jotai';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { Overlay } from '../Overlay';
+import { Overlay } from '@yaakapp-internal/ui';
 import { Button } from './Button';
 import { Hotkey } from './Hotkey';
 import { Icon, LoadingIcon, type IconProps } from '@yaakapp-internal/ui';

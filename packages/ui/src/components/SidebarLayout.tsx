@@ -13,6 +13,8 @@ interface Props {
   onWidthChange: (width: number) => void;
   hidden?: boolean;
   onHiddenChange?: (hidden: boolean) => void;
+  floating?: boolean;
+  floatingWidth?: number;
   defaultWidth?: number;
   minWidth?: number;
   className?: string;
@@ -25,6 +27,8 @@ export function SidebarLayout({
   onWidthChange,
   hidden = false,
   onHiddenChange,
+  floating = false,
+  floatingWidth = 320,
   defaultWidth = 250,
   minWidth = 50,
   className,
@@ -74,6 +78,28 @@ export function SidebarLayout({
   const handleReset = useCallback(() => {
     onWidthChange(defaultWidth);
   }, [onWidthChange, defaultWidth]);
+
+  if (floating) {
+    return (
+      <div className={classNames(className, 'relative w-full h-full overflow-hidden')}>
+        {children}
+        {!hidden && (
+          <>
+            <div
+              className="absolute inset-0 bg-black/50 z-20 transition-opacity"
+              onClick={() => onHiddenChange?.(true)}
+            />
+            <div
+              style={{ width: floatingWidth }}
+              className="absolute top-0 left-0 bottom-0 z-20 animate-slide-in-left"
+            >
+              {sidebar}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
