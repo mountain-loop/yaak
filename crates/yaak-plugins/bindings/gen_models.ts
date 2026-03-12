@@ -105,4 +105,4 @@ urlParameters: Array<HttpUrlParameter>, };
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingDnsOverrides: Array<DnsOverride>, };
 
-export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, settingSyncDir: string | null, };
+export type WorkspaceMeta = { model: "workspace_meta", id: string, workspaceId: string, createdAt: string, updatedAt: string, encryptionKey: EncryptedKey | null, openapiImportUrl: string | null, openapiLastSyncedAt: string | null, settingSyncDir: string | null, };

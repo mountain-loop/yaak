@@ -426,6 +426,8 @@ pub struct WorkspaceMeta {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub encryption_key: Option<EncryptedKey>,
+    pub openapi_import_url: Option<String>,
+    pub openapi_last_synced_at: Option<NaiveDateTime>,
     pub setting_sync_dir: Option<String>,
 }
 
@@ -460,6 +462,8 @@ impl UpsertModelInfo for WorkspaceMeta {
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (WorkspaceId, self.workspace_id.into()),
             (EncryptionKey, self.encryption_key.map(|e| serde_json::to_string(&e).unwrap()).into()),
+            (OpenapiImportUrl, self.openapi_import_url.into()),
+            (OpenapiLastSyncedAt, self.openapi_last_synced_at.into()),
             (SettingSyncDir, self.setting_sync_dir.into()),
         ])
     }
@@ -468,6 +472,8 @@ impl UpsertModelInfo for WorkspaceMeta {
         vec![
             WorkspaceMetaIden::UpdatedAt,
             WorkspaceMetaIden::EncryptionKey,
+            WorkspaceMetaIden::OpenapiImportUrl,
+            WorkspaceMetaIden::OpenapiLastSyncedAt,
             WorkspaceMetaIden::SettingSyncDir,
         ]
     }
@@ -484,6 +490,8 @@ impl UpsertModelInfo for WorkspaceMeta {
             created_at: row.get("created_at")?,
             updated_at: row.get("updated_at")?,
             encryption_key: encryption_key.map(|e| serde_json::from_str(&e).unwrap()),
+            openapi_import_url: row.get("openapi_import_url")?,
+            openapi_last_synced_at: row.get("openapi_last_synced_at")?,
             setting_sync_dir: row.get("setting_sync_dir")?,
         })
     }

@@ -17,6 +17,7 @@ import { DnsOverridesEditor } from './DnsOverridesEditor';
 import { HeadersEditor } from './HeadersEditor';
 import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { OpenApiSyncSetting } from './OpenApiSyncSetting';
 import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
 import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
 
@@ -156,6 +157,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       </TabContent>
       <TabContent value={TAB_DATA} className="overflow-y-auto h-full px-4">
         <VStack space={4} alignItems="start" className="pb-3 h-full">
+          <OpenApiSyncSetting workspaceId={workspaceId} workspaceMeta={workspaceMeta} />
           <SyncToFilesystemSetting
             value={{ filePath: workspaceMeta.settingSyncDir }}
             onCreateNewWorkspace={hide}
