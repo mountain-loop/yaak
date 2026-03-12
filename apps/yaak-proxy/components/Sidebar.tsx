@@ -199,7 +199,7 @@ export function Sidebar({ style }: { style?: React.CSSProperties }) {
   return (
     <aside
       style={style}
-      className="x-theme-sidebar bg-surface h-full w-[250px] min-w-0 overflow-y-auto border-r border-border-subtle"
+      className="x-theme-sidebar bg-surface h-full w-full min-w-0 overflow-y-auto border-r border-border-subtle"
     >
       <div className="pt-2 text-xs">
         <Tree
