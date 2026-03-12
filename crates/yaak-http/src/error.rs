@@ -9,6 +9,12 @@ pub enum Error {
     #[error(transparent)]
     TlsError(#[from] yaak_tls::error::Error),
 
+    #[error("Native TLS error: {0}")]
+    NativeTlsError(#[from] native_tls::Error),
+
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+
     #[error("Request failed with {0:?}")]
     RequestError(String),
 

@@ -10536,6 +10536,7 @@ dependencies = [
  "hyper-util",
  "log 0.4.29",
  "mime_guess",
+ "native-tls",
  "regex 1.11.1",
  "reqwest",
  "serde",
