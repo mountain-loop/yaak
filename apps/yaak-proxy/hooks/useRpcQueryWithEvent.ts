@@ -10,7 +10,7 @@ import { useRpcQuery } from "./useRpcQuery";
  */
 export function useRpcQueryWithEvent<
   K extends keyof RpcSchema,
-  E extends keyof RpcEventSchema & string,
+  E extends keyof RpcEventSchema,
 >(cmd: K, payload: Req<K>, event: E, opts?: Omit<UseQueryOptions<Res<K>>, "queryKey" | "queryFn">) {
   const queryClient = useQueryClient();
   const query = useRpcQuery(cmd, payload, opts);

@@ -196,7 +196,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
         }
 
         if (result.type === "uncommitted_changes") {
-          callbacks
+          void callbacks
             .promptUncommittedChanges()
             .then(async (strategy) => {
               if (strategy === "cancel") return;
@@ -205,13 +205,13 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
               return invoke<PullResult>("cmd_git_pull", { dir });
             })
             .then(async () => {
-              onSuccess();
+              await onSuccess();
               await callbacks.forceSync();
             }, handleError);
         }
 
         if (result.type === "diverged") {
-          callbacks
+          void callbacks
             .promptDiverged(result)
             .then((strategy) => {
               if (strategy === "cancel") return;
@@ -231,7 +231,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
               });
             })
             .then(async () => {
-              onSuccess();
+              await onSuccess();
               await callbacks.forceSync();
             }, handleError);
         }
