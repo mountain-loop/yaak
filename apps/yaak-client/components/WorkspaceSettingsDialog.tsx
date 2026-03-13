@@ -6,7 +6,7 @@ import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
 import { CopyIconButton } from './CopyIconButton';
-import { Banner } from './core/Banner';
+import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { InlineCode } from './core/InlineCode';

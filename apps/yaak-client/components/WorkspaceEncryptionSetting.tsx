@@ -13,7 +13,7 @@ import { createFastMutation } from '../hooks/useFastMutation';
 import { useStateWithDeps } from '../hooks/useStateWithDeps';
 import { showConfirm } from '../lib/confirm';
 import { CopyIconButton } from './CopyIconButton';
-import { Banner } from './core/Banner';
+import { Banner } from '@yaakapp-internal/ui';
 import type { ButtonProps } from './core/Button';
 import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';

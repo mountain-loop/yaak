@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ColorIndicator } from './ColorIndicator';
-import { Banner } from './core/Banner';
+import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { ColorPickerWithThemeColors } from './core/ColorPicker';
 

@@ -1,8 +1,7 @@
 import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
 import { lazy, Suspense, useMemo } from 'react';
 import { languageFromContentType } from '../../lib/contentType';
-import { Banner } from '../core/Banner';
-import { Icon, LoadingIcon } from '@yaakapp-internal/ui';
+import { Banner, Icon, LoadingIcon } from '@yaakapp-internal/ui';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { AudioViewer } from './AudioViewer';
 import { CsvViewer } from './CsvViewer';

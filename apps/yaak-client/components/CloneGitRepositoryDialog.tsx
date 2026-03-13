@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { appInfo } from '../lib/appInfo';
 import { showErrorToast } from '../lib/toast';
-import { Banner } from './core/Banner';
+import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { IconButton } from './core/IconButton';

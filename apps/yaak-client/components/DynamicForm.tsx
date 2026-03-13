@@ -19,7 +19,7 @@ import { useRandomKey } from '../hooks/useRandomKey';
 import { capitalize } from '../lib/capitalize';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { Banner } from './core/Banner';
+import { Banner } from '@yaakapp-internal/ui';
 import { Checkbox } from './core/Checkbox';
 import { DetailsBanner } from './core/DetailsBanner';
 import { Editor } from './core/Editor/LazyEditor';

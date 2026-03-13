@@ -1,6 +1,6 @@
 import { type } from '@tauri-apps/plugin-os';
 import { settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { HeaderSize, SidebarLayout } from '@yaakapp-internal/ui';
+import { Banner, HeaderSize, SidebarLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import * as m from 'motion/react-m';
@@ -31,7 +31,6 @@ import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFo
 import { importData } from '../lib/importData';
 import { jotaiStore } from '../lib/jotai';
 import { CreateDropdown } from './CreateDropdown';
-import { Banner } from './core/Banner';
 import { Button } from './core/Button';
 import { HotkeyList } from './core/HotkeyList';
 import { FeedbackLink } from './core/Link';

@@ -3,8 +3,8 @@ import { atom, useAtom } from 'jotai';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useMemo } from 'react';
 import { atomWithKVStorage } from '../../lib/atoms/atomWithKVStorage';
-import type { BannerProps } from './Banner';
-import { Banner } from './Banner';
+import type { BannerProps } from '@yaakapp-internal/ui';
+import { Banner } from '@yaakapp-internal/ui';
 
 interface Props extends HTMLAttributes<HTMLDetailsElement> {
   summary: ReactNode;

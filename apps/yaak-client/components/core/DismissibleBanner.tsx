@@ -1,8 +1,8 @@
 import type { Color } from '@yaakapp-internal/plugins';
 import classNames from 'classnames';
 import { useKeyValue } from '../../hooks/useKeyValue';
-import type { BannerProps } from './Banner';
-import { Banner } from './Banner';
+import type { BannerProps } from '@yaakapp-internal/ui';
+import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './Button';
 import { HStack } from './Stacks';
 

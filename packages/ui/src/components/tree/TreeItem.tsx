@@ -10,7 +10,6 @@ import type {
 } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { computeSideForDragMove } from '../../lib/dnd';
-import type { ContextMenuRenderer } from './common';
 import { Icon } from '../Icon';
 import { isLastFocusedFamily, isSelectedFamily } from './atoms';
 import { useCollapsedAtom, useIsAncestorCollapsed, useIsCollapsed, useSetCollapsed } from './context';

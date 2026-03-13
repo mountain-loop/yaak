@@ -3,7 +3,7 @@ import { patchModel } from '@yaakapp-internal/models';
 import type { ReactNode } from 'react';
 import { useToggle } from '../hooks/useToggle';
 import { showConfirm } from '../lib/confirm';
-import { Banner } from './core/Banner';
+import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { InlineCode } from './core/InlineCode';
 import { Link } from './core/Link';

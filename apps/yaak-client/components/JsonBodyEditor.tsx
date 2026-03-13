@@ -1,11 +1,10 @@
 import { linter } from '@codemirror/lint';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import { Icon } from '@yaakapp-internal/ui';
+import { Banner, Icon } from '@yaakapp-internal/ui';
 import { useCallback, useMemo } from 'react';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { textLikelyContainsJsonComments } from '../lib/jsonComments';
-import { Banner } from './core/Banner';
 import type { DropdownItem } from './core/Dropdown';
 import { Dropdown } from './core/Dropdown';
 import type { EditorProps } from './core/Editor/Editor';

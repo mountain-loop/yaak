@@ -1,7 +1,7 @@
 import type { Environment, Workspace } from '@yaakapp-internal/models';
 import { duplicateModel, patchModel } from '@yaakapp-internal/models';
 import type { TreeHandle, TreeNode, TreeProps } from '@yaakapp-internal/ui';
-import { Icon, SplitLayout, Tree } from '@yaakapp-internal/ui';
+import { Banner, Icon, SplitLayout, Tree } from '@yaakapp-internal/ui';
 import { atom, useAtomValue } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
@@ -18,7 +18,6 @@ import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { showColorPicker } from '../lib/showColorPicker';
-import { Banner } from './core/Banner';
 import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
 import { ContextMenu } from './core/Dropdown';
 import { IconButton } from './core/IconButton';

@@ -31,3 +31,5 @@ export { useContainerSize } from "./hooks/useContainerSize";
 export { Overlay } from "./components/Overlay";
 export { Portal } from "./components/Portal";
 export { usePortal } from "./hooks/usePortal";
+export { Banner } from "./components/Banner";
+export type { BannerProps } from "./components/Banner";
