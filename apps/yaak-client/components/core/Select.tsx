@@ -1,4 +1,5 @@
 import { type } from '@tauri-apps/plugin-os';
+import { HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
@@ -7,7 +8,6 @@ import { Button } from './Button';
 import { Label } from './Label';
 import type { RadioDropdownItem } from './RadioDropdown';
 import { RadioDropdown } from './RadioDropdown';
-import { HStack } from './Stacks';
 
 export interface SelectProps<T extends string> {
   name: string;

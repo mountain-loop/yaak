@@ -1,5 +1,6 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { open } from '@tauri-apps/plugin-dialog';
+import { HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import mime from 'mime';
 import type { ReactNode } from 'react';
@@ -9,7 +10,6 @@ import { Button } from './core/Button';
 import { IconButton } from './core/IconButton';
 import { IconTooltip } from './core/IconTooltip';
 import { Label } from './core/Label';
-import { HStack } from './core/Stacks';
 
 type Props = Omit<ButtonProps, 'type'> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;

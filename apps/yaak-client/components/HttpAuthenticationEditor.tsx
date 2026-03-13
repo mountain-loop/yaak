@@ -6,6 +6,7 @@ import type {
   Workspace,
 } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
+import { HStack, Icon, InlineCode } from '@yaakapp-internal/ui';
 import { useCallback } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
@@ -14,12 +15,10 @@ import { useInheritedAuthentication } from '../hooks/useInheritedAuthentication'
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Dropdown, type DropdownItem } from './core/Dropdown';
-import { Icon, InlineCode } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { Input, type InputProps } from './core/Input';
 import { Link } from './core/Link';
 import { SegmentedControl } from './core/SegmentedControl';
-import { HStack } from './core/Stacks';
 import { DynamicForm } from './DynamicForm';
 import { EmptyStateText } from './EmptyStateText';
 

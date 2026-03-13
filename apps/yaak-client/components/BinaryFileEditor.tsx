@@ -1,9 +1,8 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { Banner, HStack, InlineCode, VStack } from '@yaakapp-internal/ui';
 import mime from 'mime';
 import { useKeyValue } from '../hooks/useKeyValue';
-import { Banner, InlineCode } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
-import { HStack, VStack } from './core/Stacks';
 import { SelectFile } from './SelectFile';
 
 type Props = {

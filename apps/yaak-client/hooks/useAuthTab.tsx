@@ -1,11 +1,10 @@
 import type { Folder } from '@yaakapp-internal/models';
 import { modelTypeLabel, patchModel } from '@yaakapp-internal/models';
+import { HStack, Icon, InlineCode } from '@yaakapp-internal/ui';
 import { useMemo } from 'react';
 import { openFolderSettings } from '../commands/openFolderSettings';
 import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { Icon, InlineCode } from '@yaakapp-internal/ui';
 import { IconTooltip } from '../components/core/IconTooltip';
-import { HStack } from '../components/core/Stacks';
 import type { TabItem } from '../components/core/Tabs/Tabs';
 import { capitalize } from '../lib/capitalize';
 import { showConfirm } from '../lib/confirm';

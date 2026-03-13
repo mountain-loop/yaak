@@ -9,10 +9,22 @@ import {
   searchPlugins,
   uninstallPlugin,
 } from '@yaakapp-internal/plugins';
+import {
+  HStack,
+  Icon,
+  InlineCode,
+  LoadingIcon,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  useDebouncedValue,
+} from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
-import { Icon, InlineCode, LoadingIcon, useDebouncedValue } from '@yaakapp-internal/ui';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
@@ -24,8 +36,6 @@ import { CountBadge } from '../core/CountBadge';
 import { IconButton } from '../core/IconButton';
 import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
-import { HStack } from '../core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 import { TabContent, Tabs } from '../core/Tabs/Tabs';
 import { EmptyStateText } from '../EmptyStateText';
 import { SelectFile } from '../SelectFile';

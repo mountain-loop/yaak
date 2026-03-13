@@ -1,14 +1,13 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
+import { Banner, HStack, InlineCode } from '@yaakapp-internal/ui';
 import { type ReactNode, useMemo } from 'react';
 import { getRequestBodyText as getHttpResponseRequestBodyText } from '../hooks/useHttpRequestBody';
 import { useToggle } from '../hooks/useToggle';
 import { isProbablyTextContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
 import { CopyButton } from './CopyButton';
-import { Banner, InlineCode } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { SizeTag } from './core/SizeTag';
-import { HStack } from './core/Stacks';
 
 interface Props {
   children: ReactNode;

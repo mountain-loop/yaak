@@ -1,12 +1,10 @@
 import type { ShowToastRequest } from '@yaakapp-internal/plugins';
+import { Icon, type IconProps, VStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import * as m from 'motion/react-m';
 import type { ReactNode } from 'react';
-
 import { useKey } from 'react-use';
-import { Icon, type IconProps } from '@yaakapp-internal/ui';
 import { IconButton } from './IconButton';
-import { VStack } from './Stacks';
 
 export interface ToastProps {
   children: ReactNode;

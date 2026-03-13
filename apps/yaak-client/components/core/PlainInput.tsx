@@ -1,3 +1,4 @@
+import { HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { FocusEvent, HTMLAttributes, ReactNode } from 'react';
 import {
@@ -14,7 +15,6 @@ import { generateId } from '../../lib/generateId';
 import { IconButton } from './IconButton';
 import type { InputProps } from './Input';
 import { Label } from './Label';
-import { HStack } from './Stacks';
 
 export type PlainInputProps = Omit<
   InputProps,

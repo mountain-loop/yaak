@@ -1,5 +1,6 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { Heading, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
@@ -7,13 +8,11 @@ import { appInfo } from '../../lib/appInfo';
 import { revealInFinderText } from '../../lib/reveal';
 import { CargoFeature } from '../CargoFeature';
 import { Checkbox } from '../core/Checkbox';
-import { Heading } from '../core/Heading';
 import { IconButton } from '../core/IconButton';
 import { KeyValueRow, KeyValueRows } from '../core/KeyValueRow';
 import { PlainInput } from '../core/PlainInput';
 import { Select } from '../core/Select';
 import { Separator } from '../core/Separator';
-import { VStack } from '../core/Stacks';
 
 export function SettingsGeneral() {
   const workspace = useAtomValue(activeWorkspaceAtom);

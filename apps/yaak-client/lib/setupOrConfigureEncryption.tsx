@@ -1,4 +1,4 @@
-import { VStack } from '../components/core/Stacks';
+import { VStack } from '@yaakapp-internal/ui';
 import { WorkspaceEncryptionSetting } from '../components/WorkspaceEncryptionSetting';
 import { activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
 import { showDialog } from './dialog';

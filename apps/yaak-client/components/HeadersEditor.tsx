@@ -1,5 +1,6 @@
 import type { HttpRequestHeader } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
+import { HStack } from '@yaakapp-internal/ui';
 import { charsets } from '../lib/data/charsets';
 import { connections } from '../lib/data/connections';
 import { encodings } from '../lib/data/encodings';
@@ -13,7 +14,6 @@ import type { Pair, PairEditorProps } from './core/PairEditor';
 import { PairEditorRow } from './core/PairEditor';
 import { ensurePairId } from './core/PairEditor.util';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
-import { HStack } from './core/Stacks';
 
 type Props = {
   forceUpdateKey: string;
@@ -41,7 +41,9 @@ export function HeadersEditor({
   const validInheritedHeaders =
     inheritedHeaders?.filter(
       (pair) =>
-        pair.enabled && (pair.name || pair.value) && !currentHeaderNames.has(pair.name.toLowerCase()),
+        pair.enabled &&
+        (pair.name || pair.value) &&
+        !currentHeaderNames.has(pair.name.toLowerCase()),
     ) ?? [];
   const hasInheritedHeaders = validInheritedHeaders.length > 0;
   return (

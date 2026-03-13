@@ -1,7 +1,7 @@
+import { HStack, VStack } from '@yaakapp-internal/ui';
 import { useState } from 'react';
 import { Button } from '../core/Button';
 import { Select } from '../core/Select';
-import { HStack, VStack } from '../core/Stacks';
 
 interface Props {
   branches: string[];

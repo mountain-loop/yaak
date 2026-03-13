@@ -1,14 +1,13 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import { deleteModel } from '@yaakapp-internal/models';
+import { HStack, Icon } from '@yaakapp-internal/ui';
 import { useCopyHttpResponse } from '../hooks/useCopyHttpResponse';
 import { useDeleteHttpResponses } from '../hooks/useDeleteHttpResponses';
 import { useSaveResponse } from '../hooks/useSaveResponse';
 import { pluralize } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
 import { HttpStatusTag } from './core/HttpStatusTag';
-import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
-import { HStack } from './core/Stacks';
 
 interface Props {
   responses: HttpResponse[];

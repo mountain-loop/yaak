@@ -1,8 +1,5 @@
-import {
-  createWorkspaceModel,
-  foldersAtom,
-  patchModel,
-} from '@yaakapp-internal/models';
+import { createWorkspaceModel, foldersAtom, patchModel } from '@yaakapp-internal/models';
+import { HStack, Icon, InlineCode, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { Fragment, useMemo } from 'react';
 import { useAuthTab } from '../hooks/useAuthTab';
@@ -15,10 +12,8 @@ import { hideDialog } from '../lib/dialog';
 import { CopyIconButton } from './CopyIconButton';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
-import { Icon, InlineCode } from '@yaakapp-internal/ui';
 import { Input } from './core/Input';
 import { Link } from './core/Link';
-import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { EmptyStateText } from './EmptyStateText';
@@ -85,11 +80,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           {breadcrumbs.map((item, index) => (
             <Fragment key={item.id}>
               {index > 0 && (
-                <Icon
-                  icon="chevron_right"
-                  size="lg"
-                  className="opacity-50 flex-shrink-0"
-                />
+                <Icon icon="chevron_right" size="lg" className="opacity-50 flex-shrink-0" />
               )}
               <span className="text-text-subtle truncate min-w-0" title={item.name}>
                 {item.name}
@@ -99,10 +90,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           {breadcrumbs.length > 0 && (
             <Icon icon="chevron_right" size="lg" className="opacity-50 flex-shrink-0" />
           )}
-          <span
-            className="whitespace-nowrap"
-            title={folder.name}
-          >
+          <span className="whitespace-nowrap" title={folder.name}>
             {folder.name}
           </span>
         </div>

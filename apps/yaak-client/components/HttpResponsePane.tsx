@@ -1,4 +1,5 @@
 import type { HttpResponse, HttpResponseEvent } from '@yaakapp-internal/models';
+import { Banner, HStack, Icon, LoadingIcon, VStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { ComponentType, CSSProperties } from 'react';
 import { lazy, Suspense, useMemo } from 'react';
@@ -17,10 +18,8 @@ import { CountBadge } from './core/CountBadge';
 import { HotkeyList } from './core/HotkeyList';
 import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
 import { HttpStatusTag } from './core/HttpStatusTag';
-import { Banner, Icon, LoadingIcon } from '@yaakapp-internal/ui';
 import { PillButton } from './core/PillButton';
 import { SizeTag } from './core/SizeTag';
-import { HStack, VStack } from './core/Stacks';
 import type { TabItem } from './core/Tabs/Tabs';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { Tooltip } from './core/Tooltip';

@@ -1,7 +1,7 @@
+import { VStack } from '@yaakapp-internal/ui';
 import { useState } from 'react';
 import { useLocalStorage } from 'react-use';
 import { Button } from './core/Button';
-import { VStack } from './core/Stacks';
 import { SelectFile } from './SelectFile';
 
 interface Props {

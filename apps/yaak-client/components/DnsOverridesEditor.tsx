@@ -1,12 +1,20 @@
 import type { DnsOverride, Workspace } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
+import {
+  HStack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  VStack,
+} from '@yaakapp-internal/ui';
 import { useCallback, useId, useMemo } from 'react';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
-import { HStack, VStack } from './core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 
 interface Props {
   workspace: Workspace;
@@ -66,8 +74,8 @@ export function DnsOverridesEditor({ workspace }: Props) {
     <VStack space={3} className="pb-3">
       <div className="text-text-subtle text-sm">
         Override DNS resolution for specific hostnames. This works like{' '}
-        <code className="text-text-subtlest bg-surface-highlight px-1 rounded">/etc/hosts</code>{' '}
-        but only for requests made from this workspace.
+        <code className="text-text-subtlest bg-surface-highlight px-1 rounded">/etc/hosts</code> but
+        only for requests made from this workspace.
       </div>
 
       {overridesWithIds.length > 0 && (

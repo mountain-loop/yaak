@@ -1,15 +1,14 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { gitClone } from '@yaakapp-internal/git';
+import { Banner, VStack } from '@yaakapp-internal/ui';
 import { useState } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
 import { appInfo } from '../lib/appInfo';
 import { showErrorToast } from '../lib/toast';
-import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
-import { VStack } from './core/Stacks';
 import { promptCredentials } from './git/credentials';
 
 interface Props {

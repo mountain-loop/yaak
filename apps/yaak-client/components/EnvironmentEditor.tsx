@@ -1,6 +1,7 @@
 import type { Environment } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
+import { Heading } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useCallback, useMemo } from 'react';
 import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
@@ -15,7 +16,6 @@ import {
 } from '../lib/setupOrConfigureEncryption';
 import { DismissibleBanner } from './core/DismissibleBanner';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { Heading } from './core/Heading';
 import type { PairEditorHandle, PairWithId } from './core/PairEditor';
 import { ensurePairId } from './core/PairEditor.util';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';

@@ -1,3 +1,4 @@
+import { HStack, Icon, type IconProps, LoadingIcon, Overlay, VStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { atom } from 'jotai';
 import * as m from 'motion/react-m';
@@ -32,12 +33,9 @@ import { generateId } from '../../lib/generateId';
 import { getNodeText } from '../../lib/getNodeText';
 import { jotaiStore } from '../../lib/jotai';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { Overlay } from '@yaakapp-internal/ui';
 import { Button } from './Button';
 import { Hotkey } from './Hotkey';
-import { Icon, LoadingIcon, type IconProps } from '@yaakapp-internal/ui';
 import { Separator } from './Separator';
-import { HStack, VStack } from './Stacks';
 
 export type DropdownItemSeparator = {
   type: 'separator';

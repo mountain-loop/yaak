@@ -1,12 +1,11 @@
 import type { GrpcConnection } from '@yaakapp-internal/models';
 import { deleteModel } from '@yaakapp-internal/models';
+import { HStack, Icon } from '@yaakapp-internal/ui';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useDeleteGrpcConnections } from '../hooks/useDeleteGrpcConnections';
 import { pluralizeCount } from '../lib/pluralize';
 import { Dropdown } from './core/Dropdown';
-import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
-import { HStack } from './core/Stacks';
 
 interface Props {
   connections: GrpcConnection[];

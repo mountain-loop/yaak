@@ -1,10 +1,9 @@
 import type { DivergedStrategy } from '@yaakapp-internal/git';
+import { HStack, InlineCode } from '@yaakapp-internal/ui';
 import { useState } from 'react';
 import { showDialog } from '../../lib/dialog';
-import { InlineCode } from '@yaakapp-internal/ui';
 import { Button } from '../core/Button';
 import { RadioCards } from '../core/RadioCards';
-import { HStack } from '../core/Stacks';
 
 type Resolution = 'force_reset' | 'merge';
 
@@ -40,7 +39,8 @@ function DivergedDialog({ remote, branch, onResult, onHide }: DivergedDialogProp
         Your local branch has diverged from{' '}
         <InlineCode>
           {remote}/{branch}
-        </InlineCode>. How would you like to resolve this?
+        </InlineCode>
+        . How would you like to resolve this?
       </p>
       <RadioCards
         name="diverged-strategy"

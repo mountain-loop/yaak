@@ -1,5 +1,6 @@
 import type { EditorView } from '@codemirror/view';
 import type { Color } from '@yaakapp-internal/plugins';
+import { HStack, Icon, type IconProps } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -22,11 +23,9 @@ import type { DropdownItem } from './Dropdown';
 import { Dropdown } from './Dropdown';
 import type { EditorProps } from './Editor/Editor';
 import { Editor } from './Editor/LazyEditor';
-import { Icon, type IconProps } from '@yaakapp-internal/ui';
 import { IconButton } from './IconButton';
 import { IconTooltip } from './IconTooltip';
 import { Label } from './Label';
-import { HStack } from './Stacks';
 
 export type InputProps = Pick<
   EditorProps,

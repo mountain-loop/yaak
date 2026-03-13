@@ -1,5 +1,6 @@
 import type { HttpResponse } from '@yaakapp-internal/models';
 import type { ServerSentEvent } from '@yaakapp-internal/sse';
+import { HStack, Icon, InlineCode, VStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { Fragment, useMemo, useState } from 'react';
 import { useFormatText } from '../../hooks/useFormatText';
@@ -10,8 +11,6 @@ import type { EditorProps } from '../core/Editor/Editor';
 import { Editor } from '../core/Editor/LazyEditor';
 import { EventDetailHeader, EventViewer } from '../core/EventViewer';
 import { EventViewerRow } from '../core/EventViewerRow';
-import { Icon, InlineCode } from '@yaakapp-internal/ui';
-import { HStack, VStack } from '../core/Stacks';
 
 interface Props {
   response: HttpResponse;

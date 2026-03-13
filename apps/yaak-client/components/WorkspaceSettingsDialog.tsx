@@ -1,4 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
+import { Banner, HStack, InlineCode, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { useAuthTab } from '../hooks/useAuthTab';
 import { useHeadersTab } from '../hooks/useHeadersTab';
@@ -6,11 +7,9 @@ import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
 import { router } from '../lib/router';
 import { CopyIconButton } from './CopyIconButton';
-import { Banner, InlineCode } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { CountBadge } from './core/CountBadge';
 import { PlainInput } from './core/PlainInput';
-import { HStack, VStack } from './core/Stacks';
 import { TabContent, Tabs } from './core/Tabs/Tabs';
 import { DnsOverridesEditor } from './DnsOverridesEditor';
 import { HeadersEditor } from './HeadersEditor';

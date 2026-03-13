@@ -1,13 +1,10 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { Heading, HStack, InlineCode, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
-
 import { Checkbox } from '../core/Checkbox';
-import { Heading } from '../core/Heading';
-import { InlineCode } from '@yaakapp-internal/ui';
 import { PlainInput } from '../core/PlainInput';
 import { Select } from '../core/Select';
 import { Separator } from '../core/Separator';
-import { HStack, VStack } from '../core/Stacks';
 
 export function SettingsProxy() {
   const settings = useAtomValue(settingsAtom);

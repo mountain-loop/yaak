@@ -1,10 +1,9 @@
 import { readDir } from '@tauri-apps/plugin-fs';
+import { Banner, VStack } from '@yaakapp-internal/ui';
 import { useState } from 'react';
 import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
-import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
-import { VStack } from './core/Stacks';
 import { SelectFile } from './SelectFile';
 
 export interface SyncToFilesystemSettingProps {

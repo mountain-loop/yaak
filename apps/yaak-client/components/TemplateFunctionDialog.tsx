@@ -9,10 +9,10 @@ import type {
 import type { TemplateFunction } from '@yaakapp-internal/plugins';
 import type { FnArg, Tokens } from '@yaakapp-internal/templates';
 import { parseTemplate } from '@yaakapp-internal/templates';
+import { HStack, InlineCode, LoadingIcon, useDebouncedValue } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { InlineCode, LoadingIcon, useDebouncedValue } from '@yaakapp-internal/ui';
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { useTemplateFunctionConfig } from '../hooks/useTemplateFunctionConfig';
 import {
@@ -28,7 +28,6 @@ import { Button } from './core/Button';
 import { collectArgumentValues } from './core/Editor/twig/util';
 import { IconButton } from './core/IconButton';
 import { PlainInput } from './core/PlainInput';
-import { HStack } from './core/Stacks';
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from './DynamicForm';
 
 interface Props {

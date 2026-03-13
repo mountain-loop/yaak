@@ -1,14 +1,13 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import type { GrpcRequest } from '@yaakapp-internal/models';
+import { Banner, HStack, Icon, InlineCode, VStack } from '@yaakapp-internal/ui';
 import { useActiveRequest } from '../hooks/useActiveRequest';
 import { useGrpc } from '../hooks/useGrpc';
 import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
 import { pluralizeCount } from '../lib/pluralize';
 import { Button } from './core/Button';
-import { Banner, Icon, InlineCode } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { Link } from './core/Link';
-import { HStack, VStack } from './core/Stacks';
 
 interface Props {
   onDone: () => void;

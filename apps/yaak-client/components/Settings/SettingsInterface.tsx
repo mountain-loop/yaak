@@ -3,21 +3,17 @@ import { useFonts } from '@yaakapp-internal/fonts';
 import { useLicense } from '@yaakapp-internal/license';
 import type { EditorKeymap, Settings } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { clamp, Heading, HStack, Icon, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
-
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { clamp } from '@yaakapp-internal/ui';
 import { showConfirm } from '../../lib/confirm';
 import { invokeCmd } from '../../lib/tauri';
 import { CargoFeature } from '../CargoFeature';
 import { Button } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
-import { Heading } from '../core/Heading';
-import { Icon } from '@yaakapp-internal/ui';
 import { Link } from '../core/Link';
 import { Select } from '../core/Select';
-import { HStack, VStack } from '../core/Stacks';
 
 const NULL_FONT_VALUE = '__NULL_FONT__';
 

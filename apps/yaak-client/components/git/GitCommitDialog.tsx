@@ -1,4 +1,3 @@
-
 import type { GitStatusEntry } from '@yaakapp-internal/git';
 import { useGit } from '@yaakapp-internal/git';
 import type {
@@ -9,6 +8,7 @@ import type {
   WebsocketRequest,
   Workspace,
 } from '@yaakapp-internal/models';
+import { Banner, HStack, Icon, InlineCode, SplitLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
 import { modelToYaml } from '../../lib/diffYaml';
@@ -18,10 +18,8 @@ import { Button } from '../core/Button';
 import type { CheckboxProps } from '../core/Checkbox';
 import { Checkbox } from '../core/Checkbox';
 import { DiffViewer } from '../core/Editor/DiffViewer';
-import { Banner, Icon, InlineCode, SplitLayout } from '@yaakapp-internal/ui';
 import { Input } from '../core/Input';
 import { Separator } from '../core/Separator';
-import { HStack } from '../core/Stacks';
 import { EmptyStateText } from '../EmptyStateText';
 import { gitCallbacks } from './callbacks';
 import { handlePushResult } from './git-util';

@@ -1,7 +1,8 @@
-import { jsoncLanguage } from '@shopify/lang-jsonc';
 import { linter } from '@codemirror/lint';
 import type { EditorView } from '@codemirror/view';
+import { jsoncLanguage } from '@shopify/lang-jsonc';
 import type { GrpcRequest } from '@yaakapp-internal/models';
+import { InlineCode, VStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import {
   handleRefresh,
@@ -19,8 +20,6 @@ import { Button } from './core/Button';
 import type { EditorProps } from './core/Editor/Editor';
 import { Editor } from './core/Editor/LazyEditor';
 import { FormattedError } from './core/FormattedError';
-import { InlineCode } from '@yaakapp-internal/ui';
-import { VStack } from './core/Stacks';
 import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
 
 type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className' | 'forceUpdateKey'> & {

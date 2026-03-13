@@ -1,10 +1,9 @@
 import type { Color } from '@yaakapp-internal/plugins';
+import type { BannerProps } from '@yaakapp-internal/ui';
+import { Banner, HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useKeyValue } from '../../hooks/useKeyValue';
-import type { BannerProps } from '@yaakapp-internal/ui';
-import { Banner } from '@yaakapp-internal/ui';
 import { Button } from './Button';
-import { HStack } from './Stacks';
 
 export function DismissibleBanner({
   children,

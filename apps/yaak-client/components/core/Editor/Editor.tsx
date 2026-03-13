@@ -11,6 +11,7 @@ import { vscodeKeymap } from '@replit/codemirror-vscode-keymap';
 import type { EditorKeymap } from '@yaakapp-internal/models';
 import { settingsAtom } from '@yaakapp-internal/models';
 import type { EditorLanguage, TemplateFunction } from '@yaakapp-internal/plugins';
+import { HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { GraphQLSchema } from 'graphql';
 import { useAtomValue } from 'jotai';
@@ -38,7 +39,6 @@ import { jotaiStore } from '../../../lib/jotai';
 import { withEncryptionEnabled } from '../../../lib/setupOrConfigureEncryption';
 import { TemplateFunctionDialog } from '../../TemplateFunctionDialog';
 import { IconButton } from '../IconButton';
-import { HStack } from '../Stacks';
 import './Editor.css';
 import {
   baseExtensions,

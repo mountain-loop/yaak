@@ -1,9 +1,9 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import { VStack } from '@yaakapp-internal/ui';
 import { useCallback, useRef } from 'react';
 import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
 import type { PairEditorHandle, PairEditorProps } from './core/PairEditor';
 import { PairOrBulkEditor } from './core/PairOrBulkEditor';
-import { VStack } from './core/Stacks';
 
 type Props = {
   forceUpdateKey: string;

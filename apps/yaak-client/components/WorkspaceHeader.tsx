@@ -1,3 +1,4 @@
+import { HStack, Icon } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtom, useAtomValue } from 'jotai';
 import { memo } from 'react';
@@ -6,10 +7,8 @@ import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
 import { workspaceLayoutAtom } from '../lib/atoms';
 import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
 import { CookieDropdown } from './CookieDropdown';
-import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import { PillButton } from './core/PillButton';
-import { HStack } from './core/Stacks';
 import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
 import { ImportCurlButton } from './ImportCurlButton';
 import { LicenseBadge } from './LicenseBadge';
@@ -23,7 +22,10 @@ interface Props {
   floatingSidebar?: boolean;
 }
 
-export const WorkspaceHeader = memo(function WorkspaceHeader({ className, floatingSidebar }: Props) {
+export const WorkspaceHeader = memo(function WorkspaceHeader({
+  className,
+  floatingSidebar,
+}: Props) {
   const togglePalette = useToggleCommandPalette();
   const [workspaceLayout, setWorkspaceLayout] = useAtom(workspaceLayoutAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);

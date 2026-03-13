@@ -1,6 +1,7 @@
 import { save } from '@tauri-apps/plugin-dialog';
 import type { Workspace } from '@yaakapp-internal/models';
 import { workspacesAtom } from '@yaakapp-internal/models';
+import { HStack, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { useCallback, useMemo, useState } from 'react';
 import slugify from 'slugify';
@@ -11,7 +12,6 @@ import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { DetailsBanner } from './core/DetailsBanner';
 import { Link } from './core/Link';
-import { HStack, VStack } from './core/Stacks';
 
 interface Props {
   onHide: () => void;

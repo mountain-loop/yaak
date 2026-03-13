@@ -1,36 +1,47 @@
-export { Button } from "./components/Button";
-export type { ButtonProps } from "./components/Button";
-export { HeaderSize } from "./components/HeaderSize";
-export { Icon } from "./components/Icon";
-export type { IconProps } from "./components/Icon";
-export { IconButton } from "./components/IconButton";
-export type { IconButtonProps } from "./components/IconButton";
-export { LoadingIcon } from "./components/LoadingIcon";
-export { useTimedBoolean } from "./hooks/useTimedBoolean";
-export { WindowControls } from "./components/WindowControls";
-export { useIsFullscreen } from "./hooks/useIsFullscreen";
-export { useDebouncedValue } from "./hooks/useDebouncedValue";
-export { useDebouncedState } from "./hooks/useDebouncedState";
-export { HEADER_SIZE_MD, HEADER_SIZE_LG, WINDOW_CONTROLS_WIDTH } from "./lib/constants";
-export { DropMarker } from "./components/DropMarker";
-export { computeSideForDragMove } from "./lib/dnd";
-export { Tree } from "./components/tree/Tree";
-export type { TreeHandle, TreeProps } from "./components/tree/Tree";
-export type { TreeNode } from "./components/tree/common";
-export type { TreeItemProps } from "./components/tree/TreeItem";
-export { isSelectedFamily, selectedIdsFamily } from "./components/tree/atoms";
-export { minPromiseMillis } from "./lib/minPromiseMillis";
-export { ResizeHandle } from "./components/ResizeHandle";
-export { SidebarLayout } from "./components/SidebarLayout";
-export type { ResizeHandleEvent } from "./components/ResizeHandle";
-export { SplitLayout } from "./components/SplitLayout";
-export type { SplitLayoutLayout, SlotProps } from "./components/SplitLayout";
-export { Table, TableBody, TableHead, TableRow, TableCell, TruncatedWideTableCell, TableHeaderCell } from "./components/Table";
-export { clamp } from "./lib/clamp";
-export { useContainerSize } from "./hooks/useContainerSize";
-export { Overlay } from "./components/Overlay";
-export { Portal } from "./components/Portal";
-export { usePortal } from "./hooks/usePortal";
-export { Banner } from "./components/Banner";
-export type { BannerProps } from "./components/Banner";
-export { InlineCode } from "./components/InlineCode";
+export type { BannerProps } from './components/Banner';
+export { Banner } from './components/Banner';
+export type { ButtonProps } from './components/Button';
+export { Button } from './components/Button';
+export { DropMarker } from './components/DropMarker';
+export { HeaderSize } from './components/HeaderSize';
+export { Heading } from './components/Heading';
+export type { IconProps } from './components/Icon';
+export { Icon } from './components/Icon';
+export type { IconButtonProps } from './components/IconButton';
+export { IconButton } from './components/IconButton';
+export { InlineCode } from './components/InlineCode';
+export { LoadingIcon } from './components/LoadingIcon';
+export { Overlay } from './components/Overlay';
+export { Portal } from './components/Portal';
+export type { ResizeHandleEvent } from './components/ResizeHandle';
+export { ResizeHandle } from './components/ResizeHandle';
+export { SidebarLayout } from './components/SidebarLayout';
+export type { SlotProps, SplitLayoutLayout } from './components/SplitLayout';
+export { SplitLayout } from './components/SplitLayout';
+export type { VStackProps } from './components/Stacks';
+export { HStack, VStack } from './components/Stacks';
+export {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TruncatedWideTableCell,
+} from './components/Table';
+export { isSelectedFamily, selectedIdsFamily } from './components/tree/atoms';
+export type { TreeNode } from './components/tree/common';
+export type { TreeHandle, TreeProps } from './components/tree/Tree';
+export { Tree } from './components/tree/Tree';
+export type { TreeItemProps } from './components/tree/TreeItem';
+export { WindowControls } from './components/WindowControls';
+export { useContainerSize } from './hooks/useContainerSize';
+export { useDebouncedState } from './hooks/useDebouncedState';
+export { useDebouncedValue } from './hooks/useDebouncedValue';
+export { useIsFullscreen } from './hooks/useIsFullscreen';
+export { usePortal } from './hooks/usePortal';
+export { useTimedBoolean } from './hooks/useTimedBoolean';
+export { clamp } from './lib/clamp';
+export { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from './lib/constants';
+export { computeSideForDragMove } from './lib/dnd';
+export { minPromiseMillis } from './lib/minPromiseMillis';

@@ -1,4 +1,16 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import {
+  Heading,
+  HStack,
+  Icon,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  VStack,
+} from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { fuzzyMatch } from 'fuzzbunny';
 import { useAtomValue } from 'jotai';
@@ -16,13 +28,9 @@ import { capitalize } from '../../lib/capitalize';
 import { showDialog } from '../../lib/dialog';
 import { Button } from '../core/Button';
 import { Dropdown, type DropdownItem } from '../core/Dropdown';
-import { Heading } from '../core/Heading';
 import { HotkeyRaw } from '../core/Hotkey';
-import { Icon } from '@yaakapp-internal/ui';
 import { IconButton } from '../core/IconButton';
 import { PlainInput } from '../core/PlainInput';
-import { HStack, VStack } from '../core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
 
 const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
 const LAYOUT_INSENSITIVE_KEYS = [

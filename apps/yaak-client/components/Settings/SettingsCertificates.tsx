@@ -1,17 +1,15 @@
 import type { ClientCertificate } from '@yaakapp-internal/models';
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { Heading, HStack, InlineCode, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { useRef } from 'react';
 import { showConfirmDelete } from '../../lib/confirm';
 import { Button } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
 import { DetailsBanner } from '../core/DetailsBanner';
-import { Heading } from '../core/Heading';
 import { IconButton } from '../core/IconButton';
-import { InlineCode } from '@yaakapp-internal/ui';
 import { PlainInput } from '../core/PlainInput';
 import { Separator } from '../core/Separator';
-import { HStack, VStack } from '../core/Stacks';
 import { SelectFile } from '../SelectFile';
 
 function createEmptyCertificate(): ClientCertificate {

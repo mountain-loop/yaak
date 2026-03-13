@@ -11,6 +11,7 @@ import type {
   FormInputText,
   JsonPrimitive,
 } from '@yaakapp-internal/plugins';
+import { Banner, VStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -19,7 +20,6 @@ import { useRandomKey } from '../hooks/useRandomKey';
 import { capitalize } from '../lib/capitalize';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
-import { Banner } from '@yaakapp-internal/ui';
 import { Checkbox } from './core/Checkbox';
 import { DetailsBanner } from './core/DetailsBanner';
 import { Editor } from './core/Editor/LazyEditor';
@@ -31,7 +31,6 @@ import type { Pair } from './core/PairEditor';
 import { PairEditor } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
 import { Select } from './core/Select';
-import { VStack } from './core/Stacks';
 import { Markdown } from './Markdown';
 import { SelectFile } from './SelectFile';
 

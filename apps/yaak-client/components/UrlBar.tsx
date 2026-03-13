@@ -1,13 +1,13 @@
 import type { HttpRequest } from '@yaakapp-internal/models';
+import type { IconProps } from '@yaakapp-internal/ui';
+import { HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { FormEvent, ReactNode } from 'react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useHotKey } from '../hooks/useHotKey';
-import type { IconProps } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
 import type { InputHandle, InputProps } from './core/Input';
 import { Input } from './core/Input';
-import { HStack } from './core/Stacks';
 
 type Props = Pick<HttpRequest, 'url'> & {
   className?: string;

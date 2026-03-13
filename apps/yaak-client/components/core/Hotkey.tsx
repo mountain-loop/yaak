@@ -1,7 +1,7 @@
+import { HStack } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useFormattedHotkey } from '../../hooks/useHotKey';
-import { HStack } from './Stacks';
 
 interface Props {
   action: HotkeyAction | null;

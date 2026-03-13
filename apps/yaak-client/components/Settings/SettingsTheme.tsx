@@ -1,17 +1,15 @@
 import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { Heading, HStack, Icon, type IconProps, VStack } from '@yaakapp-internal/ui';
 import { useAtomValue } from 'jotai';
 import { lazy, Suspense } from 'react';
 import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
 import { useResolvedAppearance } from '../../hooks/useResolvedAppearance';
 import { useResolvedTheme } from '../../hooks/useResolvedTheme';
 import type { ButtonProps } from '../core/Button';
-import { Heading } from '../core/Heading';
-import { Icon, type IconProps } from '@yaakapp-internal/ui';
 import { IconButton } from '../core/IconButton';
 import { Link } from '../core/Link';
 import type { SelectProps } from '../core/Select';
 import { Select } from '../core/Select';
-import { HStack, VStack } from '../core/Stacks';
 
 const Editor = lazy(() => import('../core/Editor/Editor').then((m) => ({ default: m.Editor })));
 

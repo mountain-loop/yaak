@@ -1,10 +1,10 @@
 import type { Color } from '@yaakapp-internal/plugins';
+import { HStack } from '@yaakapp-internal/ui';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import { CopyIconButton } from '../CopyIconButton';
 import { Button } from './Button';
 import { PlainInput } from './PlainInput';
-import { HStack } from './Stacks';
 
 export interface ConfirmProps {
   onHide: () => void;

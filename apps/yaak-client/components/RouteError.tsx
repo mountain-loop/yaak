@@ -1,8 +1,7 @@
+import { Heading, VStack } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
 import { DetailsBanner } from './core/DetailsBanner';
 import { FormattedError } from './core/FormattedError';
-import { Heading } from './core/Heading';
-import { VStack } from './core/Stacks';
 
 export default function RouteError({ error }: { error: unknown }) {
   console.log('Error', error);

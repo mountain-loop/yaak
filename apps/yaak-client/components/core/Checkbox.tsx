@@ -1,8 +1,7 @@
+import { HStack, Icon } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import type { ReactNode } from 'react';
-import { Icon } from '@yaakapp-internal/ui';
 import { IconTooltip } from './IconTooltip';
-import { HStack } from './Stacks';
 
 export interface CheckboxProps {
   checked: boolean | 'indeterminate';
