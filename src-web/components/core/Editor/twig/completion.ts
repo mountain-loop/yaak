@@ -1,20 +1,20 @@
-import type { Completion, CompletionContext } from '@codemirror/autocomplete';
-import { startCompletion } from '@codemirror/autocomplete';
-import type { TemplateFunction } from '@yaakapp-internal/plugins';
+import type { Completion, CompletionContext } from "@codemirror/autocomplete";
+import { startCompletion } from "@codemirror/autocomplete";
+import type { TemplateFunction } from "@yaakapp-internal/plugins";
 
-const openTag = '${[ ';
-const closeTag = ' ]}';
+const openTag = "${[ ";
+const closeTag = " ]}";
 
 export type TwigCompletionOptionVariable = {
-  type: 'variable';
+  type: "variable";
 };
 
 export type TwigCompletionOptionNamespace = {
-  type: 'namespace';
+  type: "namespace";
 };
 
 export type TwigCompletionOptionFunction = TemplateFunction & {
-  type: 'function';
+  type: "function";
 };
 
 export type TwigCompletionOption = (
@@ -50,17 +50,17 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
 
     const completions: Completion[] = options
       .flatMap((o): Completion[] => {
-        const matchSegments = toMatch.text.replace(/^\$/, '').split('.');
-        const optionSegments = o.name.split('.');
+        const matchSegments = toMatch.text.replace(/^\$/, "").split(".");
+        const optionSegments = o.name.split(".");
 
         // If not on the last segment, only complete the namespace
         if (matchSegments.length < optionSegments.length) {
-          const prefix = optionSegments.slice(0, matchSegments.length).join('.');
+          const prefix = optionSegments.slice(0, matchSegments.length).join(".");
           return [
             {
               label: `${prefix}.*`,
-              type: 'namespace',
-              detail: 'namespace',
+              type: "namespace",
+              detail: "namespace",
               apply: (view, _completion, from, to) => {
                 const insert = `${prefix}.`;
                 view.dispatch({
@@ -75,13 +75,13 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
         }
 
         // If on the last segment, wrap the entire tag
-        const inner = o.type === 'function' ? `${o.name}()` : o.name;
+        const inner = o.type === "function" ? `${o.name}()` : o.name;
         return [
           {
             label: o.name,
             info: o.description,
             detail: o.type,
-            type: o.type === 'variable' ? 'variable' : 'function',
+            type: o.type === "variable" ? "variable" : "function",
             apply: (view, _completion, from, to) => {
               const insert = openTag + inner + closeTag;
               view.dispatch({
@@ -94,7 +94,7 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
       })
       .filter((v) => v != null);
 
-    const uniqueCompletions = uniqueBy(completions, 'label');
+    const uniqueCompletions = uniqueBy(completions, "label");
     const sortedCompletions = uniqueCompletions.sort((a, b) => {
       const boostDiff = defaultBoost(b) - defaultBoost(a);
       if (boostDiff !== 0) return boostDiff;
@@ -119,9 +119,9 @@ export function uniqueBy<T, K extends keyof T>(arr: T[], key: K): T[] {
 }
 
 export function defaultBoost(o: Completion) {
-  if (o.type === 'variable') return 4;
-  if (o.type === 'constant') return 3;
-  if (o.type === 'function') return 2;
-  if (o.type === 'namespace') return 1;
+  if (o.type === "variable") return 4;
+  if (o.type === "constant") return 3;
+  if (o.type === "function") return 2;
+  if (o.type === "namespace") return 1;
   return 0;
 }

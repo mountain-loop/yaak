@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { appInfo } from '../lib/appInfo';
+import type { ReactNode } from "react";
+import { appInfo } from "../lib/appInfo";
 
 interface Props {
   children: ReactNode;

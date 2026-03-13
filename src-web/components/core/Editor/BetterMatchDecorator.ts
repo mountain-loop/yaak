@@ -1,4 +1,4 @@
-import { type DecorationSet, MatchDecorator, type ViewUpdate } from '@codemirror/view';
+import { type DecorationSet, MatchDecorator, type ViewUpdate } from "@codemirror/view";
 
 /**
  * This is a custom MatchDecorator that will not decorate a match if the selection is inside it

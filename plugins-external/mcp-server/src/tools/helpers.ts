@@ -1,4 +1,4 @@
-import type { McpServerContext } from '../types.js';
+import type { McpServerContext } from "../types.js";
 
 export async function getWorkspaceContext(
   ctx: McpServerContext,
@@ -7,7 +7,7 @@ export async function getWorkspaceContext(
   const workspaces = await ctx.yaak.workspace.list();
 
   if (!workspaceId && workspaces.length > 1) {
-    const workspaceList = workspaces.map((w, i) => `${i + 1}. ${w.name} (ID: ${w.id})`).join('\n');
+    const workspaceList = workspaces.map((w, i) => `${i + 1}. ${w.name} (ID: ${w.id})`).join("\n");
     throw new Error(
       `Multiple workspaces are open. Please specify which workspace to use.\n\n` +
         `Currently open workspaces:\n${workspaceList}\n\n` +
@@ -19,7 +19,7 @@ export async function getWorkspaceContext(
 
   const workspace = workspaceId ? workspaces.find((w) => w.id === workspaceId) : workspaces[0];
   if (!workspace) {
-    const workspaceList = workspaces.map((w) => `- ${w.name} (ID: ${w.id})`).join('\n');
+    const workspaceList = workspaces.map((w) => `- ${w.name} (ID: ${w.id})`).join("\n");
     throw new Error(
       `Workspace with ID "${workspaceId}" not found.\n\n` +
         `Available workspaces:\n${workspaceList}`,

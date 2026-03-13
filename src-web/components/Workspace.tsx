@@ -1,58 +1,58 @@
-import { workspacesAtom } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import * as m from 'motion/react-m';
-import type { CSSProperties } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { workspacesAtom } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import * as m from "motion/react-m";
+import type { CSSProperties } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
-} from '../hooks/useActiveCookieJar';
+} from "../hooks/useActiveCookieJar";
 import {
   activeEnvironmentAtom,
   useSubscribeActiveEnvironmentId,
-} from '../hooks/useActiveEnvironment';
-import { activeFolderAtom } from '../hooks/useActiveFolder';
-import { useSubscribeActiveFolderId } from '../hooks/useActiveFolderId';
-import { activeRequestAtom } from '../hooks/useActiveRequest';
-import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
-import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
-import { useHotKey } from '../hooks/useHotKey';
-import { useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
-import { useSubscribeRecentEnvironments } from '../hooks/useRecentEnvironments';
-import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
-import { useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useShouldFloatSidebar } from '../hooks/useShouldFloatSidebar';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { useSidebarWidth } from '../hooks/useSidebarWidth';
-import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
-import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
-import { importData } from '../lib/importData';
-import { jotaiStore } from '../lib/jotai';
-import { CreateDropdown } from './CreateDropdown';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { HotkeyList } from './core/HotkeyList';
-import { FeedbackLink } from './core/Link';
-import { HStack } from './core/Stacks';
-import { ErrorBoundary } from './ErrorBoundary';
-import { FolderLayout } from './FolderLayout';
-import { GrpcConnectionLayout } from './GrpcConnectionLayout';
-import { HeaderSize } from './HeaderSize';
-import { HttpRequestLayout } from './HttpRequestLayout';
-import { Overlay } from './Overlay';
-import type { ResizeHandleEvent } from './ResizeHandle';
-import { ResizeHandle } from './ResizeHandle';
-import Sidebar from './Sidebar';
-import { SidebarActions } from './SidebarActions';
-import { WebsocketRequestLayout } from './WebsocketRequestLayout';
-import { WorkspaceHeader } from './WorkspaceHeader';
+} from "../hooks/useActiveEnvironment";
+import { activeFolderAtom } from "../hooks/useActiveFolder";
+import { useSubscribeActiveFolderId } from "../hooks/useActiveFolderId";
+import { activeRequestAtom } from "../hooks/useActiveRequest";
+import { useSubscribeActiveRequestId } from "../hooks/useActiveRequestId";
+import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
+import { useFloatingSidebarHidden } from "../hooks/useFloatingSidebarHidden";
+import { useHotKey } from "../hooks/useHotKey";
+import { useSubscribeRecentCookieJars } from "../hooks/useRecentCookieJars";
+import { useSubscribeRecentEnvironments } from "../hooks/useRecentEnvironments";
+import { useSubscribeRecentRequests } from "../hooks/useRecentRequests";
+import { useSubscribeRecentWorkspaces } from "../hooks/useRecentWorkspaces";
+import { useShouldFloatSidebar } from "../hooks/useShouldFloatSidebar";
+import { useSidebarHidden } from "../hooks/useSidebarHidden";
+import { useSidebarWidth } from "../hooks/useSidebarWidth";
+import { useSyncWorkspaceRequestTitle } from "../hooks/useSyncWorkspaceRequestTitle";
+import { duplicateRequestOrFolderAndNavigate } from "../lib/duplicateRequestOrFolderAndNavigate";
+import { importData } from "../lib/importData";
+import { jotaiStore } from "../lib/jotai";
+import { CreateDropdown } from "./CreateDropdown";
+import { Banner } from "./core/Banner";
+import { Button } from "./core/Button";
+import { HotkeyList } from "./core/HotkeyList";
+import { FeedbackLink } from "./core/Link";
+import { HStack } from "./core/Stacks";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { FolderLayout } from "./FolderLayout";
+import { GrpcConnectionLayout } from "./GrpcConnectionLayout";
+import { HeaderSize } from "./HeaderSize";
+import { HttpRequestLayout } from "./HttpRequestLayout";
+import { Overlay } from "./Overlay";
+import type { ResizeHandleEvent } from "./ResizeHandle";
+import { ResizeHandle } from "./ResizeHandle";
+import Sidebar from "./Sidebar";
+import { SidebarActions } from "./SidebarActions";
+import { WebsocketRequestLayout } from "./WebsocketRequestLayout";
+import { WorkspaceHeader } from "./WorkspaceHeader";
 
-const side = { gridArea: 'side' };
-const head = { gridArea: 'head' };
-const body = { gridArea: 'body' };
-const drag = { gridArea: 'drag' };
+const side = { gridArea: "side" };
+const head = { gridArea: "head" };
+const body = { gridArea: "body" };
+const drag = { gridArea: "drag" };
 
 export function Workspace() {
   // First, subscribe to some things applicable to workspaces
@@ -124,10 +124,10 @@ export function Workspace() {
     <div
       style={styles}
       className={classNames(
-        'grid w-full h-full',
+        "grid w-full h-full",
         // Animate sidebar width changes but only when not resizing
         // because it's too slow to animate on mouse move
-        !isResizing && 'transition-grid',
+        !isResizing && "transition-grid",
       )}
     >
       {floating ? (
@@ -141,9 +141,9 @@ export function Workspace() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             className={classNames(
-              'x-theme-sidebar',
-              'absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]',
-              'grid grid-rows-[auto_1fr]',
+              "x-theme-sidebar",
+              "absolute top-0 left-0 bottom-0 bg-surface border-r border-border-subtle w-[20rem]",
+              "grid grid-rows-[auto_1fr]",
             )}
           >
             <HeaderSize hideControls size="lg" className="border-transparent flex items-center">
@@ -156,7 +156,7 @@ export function Workspace() {
         </Overlay>
       ) : (
         <>
-          <div style={side} className={classNames('x-theme-sidebar', 'overflow-hidden bg-surface')}>
+          <div style={side} className={classNames("x-theme-sidebar", "overflow-hidden bg-surface")}>
             <ErrorBoundary name="Sidebar">
               <Sidebar className="border-r border-border-subtle" />
             </ErrorBoundary>
@@ -220,13 +220,13 @@ function WorkspaceBody() {
     );
   }
 
-  if (activeRequest?.model === 'grpc_request') {
+  if (activeRequest?.model === "grpc_request") {
     return <GrpcConnectionLayout style={body} />;
   }
-  if (activeRequest?.model === 'websocket_request') {
+  if (activeRequest?.model === "websocket_request") {
     return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
   }
-  if (activeRequest?.model === 'http_request') {
+  if (activeRequest?.model === "http_request") {
     return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
   }
   if (activeFolder != null) {
@@ -235,7 +235,7 @@ function WorkspaceBody() {
 
   return (
     <HotkeyList
-      hotkeys={['model.create', 'sidebar.focus', 'settings.show']}
+      hotkeys={["model.create", "sidebar.focus", "settings.show"]}
       bottomSlot={
         <HStack space={1} justifyContent="center" className="mt-3">
           <Button variant="border" size="sm" onClick={() => importData.mutate()}>
@@ -267,7 +267,7 @@ function useGlobalWorkspaceHooks() {
 
   useSyncWorkspaceRequestTitle();
 
-  useHotKey('model.duplicate', () =>
+  useHotKey("model.duplicate", () =>
     duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),
   );
 }

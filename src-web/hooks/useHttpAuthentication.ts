@@ -1,11 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
-import type { GetHttpAuthenticationSummaryResponse } from '@yaakapp-internal/plugins';
-import { atom, useAtomValue } from 'jotai';
-import { useState } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { invokeCmd } from '../lib/tauri';
-import { showErrorToast } from '../lib/toast';
-import { usePluginsKey } from './usePlugins';
+import { useQuery } from "@tanstack/react-query";
+import type { GetHttpAuthenticationSummaryResponse } from "@yaakapp-internal/plugins";
+import { atom, useAtomValue } from "jotai";
+import { useState } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { invokeCmd } from "../lib/tauri";
+import { showErrorToast } from "../lib/toast";
+import { usePluginsKey } from "./usePlugins";
 
 const httpAuthenticationSummariesAtom = atom<GetHttpAuthenticationSummaryResponse[]>([]);
 const orderedHttpAuthenticationAtom = atom((get) =>
@@ -21,7 +21,7 @@ export function useSubscribeHttpAuthentication() {
   const pluginsKey = usePluginsKey();
 
   useQuery({
-    queryKey: ['http_authentication_summaries', pluginsKey],
+    queryKey: ["http_authentication_summaries", pluginsKey],
     // Fetch periodically until functions are returned
     // NOTE: visibilitychange (refetchOnWindowFocus) does not work on Windows, so we'll rely on this logic
     //  to refetch things until that's working again
@@ -32,15 +32,15 @@ export function useSubscribeHttpAuthentication() {
     queryFn: async () => {
       try {
         const result = await invokeCmd<GetHttpAuthenticationSummaryResponse[]>(
-          'cmd_get_http_authentication_summaries',
+          "cmd_get_http_authentication_summaries",
         );
         setNumResults(result.length);
         jotaiStore.set(httpAuthenticationSummariesAtom, result);
         return result;
       } catch (err) {
         showErrorToast({
-          id: 'http-authentication-error',
-          title: 'HTTP Authentication Error',
+          id: "http-authentication-error",
+          title: "HTTP Authentication Error",
           message: err,
         });
       }

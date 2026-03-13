@@ -1,7 +1,7 @@
-import { changeModelStoreWorkspace } from '@yaakapp-internal/models';
-import { useEffect } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { changeModelStoreWorkspace } from "@yaakapp-internal/models";
+import { useEffect } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
 export function useSyncWorkspaceChildModels() {
   useEffect(() => {

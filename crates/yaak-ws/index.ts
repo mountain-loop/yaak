@@ -1,8 +1,8 @@
-import { invoke } from '@tauri-apps/api/core';
-import { WebsocketConnection } from '@yaakapp-internal/models';
+import { invoke } from "@tauri-apps/api/core";
+import { WebsocketConnection } from "@yaakapp-internal/models";
 
 export function deleteWebsocketConnections(requestId: string) {
-  return invoke('cmd_ws_delete_connections', {
+  return invoke("cmd_ws_delete_connections", {
     requestId,
   });
 }
@@ -16,7 +16,7 @@ export function connectWebsocket({
   environmentId: string | null;
   cookieJarId: string | null;
 }) {
-  return invoke('cmd_ws_connect', {
+  return invoke("cmd_ws_connect", {
     requestId,
     environmentId,
     cookieJarId,
@@ -24,7 +24,7 @@ export function connectWebsocket({
 }
 
 export function closeWebsocket({ connectionId }: { connectionId: string }) {
-  return invoke('cmd_ws_close', {
+  return invoke("cmd_ws_close", {
     connectionId,
   });
 }
@@ -36,7 +36,7 @@ export function sendWebsocket({
   connectionId: string;
   environmentId: string | null;
 }) {
-  return invoke('cmd_ws_send', {
+  return invoke("cmd_ws_send", {
     connectionId,
     environmentId,
   });

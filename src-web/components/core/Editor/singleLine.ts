@@ -1,5 +1,5 @@
-import type { Extension, TransactionSpec } from '@codemirror/state';
-import { EditorSelection, EditorState, Transaction } from '@codemirror/state';
+import type { Extension, TransactionSpec } from "@codemirror/state";
+import { EditorSelection, EditorState, Transaction } from "@codemirror/state";
 
 /**
  * A CodeMirror extension that forces single-line input by stripping
@@ -17,14 +17,14 @@ import { EditorSelection, EditorState, Transaction } from '@codemirror/state';
 export function singleLineExtensions(): Extension {
   return EditorState.transactionFilter.of(
     (tr: Transaction): TransactionSpec | readonly TransactionSpec[] => {
-      if (!tr.isUserEvent('input') || tr.isUserEvent('input.type.compose')) return tr;
+      if (!tr.isUserEvent("input") || tr.isUserEvent("input.type.compose")) return tr;
 
       const changes: { from: number; to: number; insert: string }[] = [];
 
       tr.changes.iterChanges((_fromA, toA, fromB, _toB, inserted) => {
-        let insert = '';
+        let insert = "";
         for (const line of inserted.iterLines()) {
-          insert += line.replace(/\n/g, '');
+          insert += line.replace(/\n/g, "");
         }
 
         if (insert !== inserted.toString()) {

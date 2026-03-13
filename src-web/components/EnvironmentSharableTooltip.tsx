@@ -1,4 +1,4 @@
-import { IconTooltip } from './core/IconTooltip';
+import { IconTooltip } from "./core/IconTooltip";
 
 export function EnvironmentSharableTooltip() {
   return (

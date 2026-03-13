@@ -5,10 +5,10 @@ import type {
   HttpRequestHeader,
   WebsocketRequest,
   Workspace,
-} from '@yaakapp-internal/models';
-import { foldersAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
-import { defaultHeaders } from '../lib/defaultHeaders';
+} from "@yaakapp-internal/models";
+import { foldersAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
+import { defaultHeaders } from "../lib/defaultHeaders";
 
 const ancestorsAtom = atom((get) => [...get(foldersAtom), ...get(workspacesAtom)]);
 
@@ -18,11 +18,11 @@ export function useInheritedHeaders(baseModel: HeaderModel | null) {
   const parents = useAtomValue(ancestorsAtom);
 
   if (baseModel == null) return [];
-  if (baseModel.model === 'workspace') return defaultHeaders;
+  if (baseModel.model === "workspace") return defaultHeaders;
 
   const next = (child: HeaderModel): HttpRequestHeader[] => {
     // Short-circuit at workspace level - return global defaults + workspace headers
-    if (child.model === 'workspace') {
+    if (child.model === "workspace") {
       return [...defaultHeaders, ...child.headers];
     }
 

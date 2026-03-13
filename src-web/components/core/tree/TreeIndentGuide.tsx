@@ -1,7 +1,7 @@
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { memo } from 'react';
-import { hoveredParentDepthFamily, isAncestorHoveredFamily } from './atoms';
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { memo } from "react";
+import { hoveredParentDepthFamily, isAncestorHoveredFamily } from "./atoms";
 
 export const TreeIndentGuide = memo(function TreeIndentGuide({
   treeId,
@@ -22,8 +22,8 @@ export const TreeIndentGuide = memo(function TreeIndentGuide({
           // oxlint-disable-next-line react/no-array-index-key
           key={i}
           className={classNames(
-            'w-[calc(1rem+0.5px)] border-r border-r-text-subtlest',
-            !(parentDepth === i + 1 && isHovered) && 'opacity-30',
+            "w-[calc(1rem+0.5px)] border-r border-r-text-subtlest",
+            !(parentDepth === i + 1 && isHovered) && "opacity-30",
           )}
         />
       ))}

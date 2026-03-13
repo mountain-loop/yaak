@@ -1,27 +1,27 @@
-import type { Environment } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import classNames from 'classnames';
-import { useCallback, useMemo } from 'react';
-import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
-import { useIsEncryptionEnabled } from '../hooks/useIsEncryptionEnabled';
-import { useKeyValue } from '../hooks/useKeyValue';
-import { useRandomKey } from '../hooks/useRandomKey';
-import { analyzeTemplate, convertTemplateToSecure } from '../lib/encryption';
-import { isBaseEnvironment } from '../lib/model_util';
+import type { Environment } from "@yaakapp-internal/models";
+import { patchModel } from "@yaakapp-internal/models";
+import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import classNames from "classnames";
+import { useCallback, useMemo } from "react";
+import { useEnvironmentsBreakdown } from "../hooks/useEnvironmentsBreakdown";
+import { useIsEncryptionEnabled } from "../hooks/useIsEncryptionEnabled";
+import { useKeyValue } from "../hooks/useKeyValue";
+import { useRandomKey } from "../hooks/useRandomKey";
+import { analyzeTemplate, convertTemplateToSecure } from "../lib/encryption";
+import { isBaseEnvironment } from "../lib/model_util";
 import {
   setupOrConfigureEncryption,
   withEncryptionEnabled,
-} from '../lib/setupOrConfigureEncryption';
-import { DismissibleBanner } from './core/DismissibleBanner';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { Heading } from './core/Heading';
-import type { PairEditorHandle, PairWithId } from './core/PairEditor';
-import { ensurePairId } from './core/PairEditor.util';
-import { PairOrBulkEditor } from './core/PairOrBulkEditor';
-import { PillButton } from './core/PillButton';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
-import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
+} from "../lib/setupOrConfigureEncryption";
+import { DismissibleBanner } from "./core/DismissibleBanner";
+import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import { Heading } from "./core/Heading";
+import type { PairEditorHandle, PairWithId } from "./core/PairEditor";
+import { ensurePairId } from "./core/PairEditor.util";
+import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
+import { PillButton } from "./core/PillButton";
+import { EnvironmentColorIndicator } from "./EnvironmentColorIndicator";
+import { EnvironmentSharableTooltip } from "./EnvironmentSharableTooltip";
 
 interface Props {
   environment: Environment;
@@ -34,8 +34,8 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
   const workspaceId = environment.workspaceId;
   const isEncryptionEnabled = useIsEncryptionEnabled();
   const valueVisibility = useKeyValue<boolean>({
-    namespace: 'global',
-    key: ['environmentValueVisibility', workspaceId],
+    namespace: "global",
+    key: ["environmentValueVisibility", workspaceId],
     fallback: false,
   });
   const { allEnvironments } = useEnvironmentsBreakdown();
@@ -64,8 +64,8 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
       }
       options.push({
         label: name,
-        type: 'constant',
-        detail: containingEnvs.map((e) => e.name).join(', '),
+        type: "constant",
+        detail: containingEnvs.map((e) => e.name).join(", "),
       });
     }
     return { options };
@@ -73,14 +73,14 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
 
   const validateName = useCallback((name: string) => {
     // Empty just means the variable doesn't have a name yet and is unusable
-    if (name === '') return true;
+    if (name === "") return true;
     return name.match(/^[a-z_][a-z0-9_.-]*$/i) != null;
   }, []);
 
-  const valueType = !isEncryptionEnabled && valueVisibility.value ? 'text' : 'password';
+  const valueType = !isEncryptionEnabled && valueVisibility.value ? "text" : "password";
   const allVariableAreEncrypted = useMemo(
     () =>
-      environment.variables.every((v) => v.value === '' || analyzeTemplate(v.value) !== 'insecure'),
+      environment.variables.every((v) => v.value === "" || analyzeTemplate(v.value) !== "insecure"),
     [environment.variables],
   );
 
@@ -88,7 +88,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
     withEncryptionEnabled(async () => {
       const encryptedVariables: PairWithId[] = [];
       for (const variable of environment.variables) {
-        const value = variable.value ? await convertTemplateToSecure(variable.value) : '';
+        const value = variable.value ? await convertTemplateToSecure(variable.value) : "";
         encryptedVariables.push(ensurePairId({ ...variable, value }));
       }
       await handleChange(encryptedVariables);
@@ -100,7 +100,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
     <div
       className={classNames(
         className,
-        'h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3',
+        "h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2 pr-3 pb-3",
       )}
     >
       <div className="flex flex-col gap-4">
@@ -123,7 +123,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
             )
           ) : (
             <PillButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
-              {valueVisibility.value ? 'Hide Values' : 'Show Values'}
+              {valueVisibility.value ? "Hide Values" : "Show Values"}
             </PillButton>
           )}
           <PillButton
@@ -133,7 +133,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
               await patchModel(environment, { public: !environment.public });
             }}
           >
-            {environment.public ? 'Sharable' : 'Private'}
+            {environment.public ? "Sharable" : "Private"}
           </PillButton>
         </Heading>
         {environment.public && (!isEncryptionEnabled || !allVariableAreEncrypted) && (
@@ -143,9 +143,9 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
             className="mr-3"
             actions={[
               {
-                label: 'Encrypt Variables',
+                label: "Encrypt Variables",
                 onClick: () => encryptEnvironment(environment),
-                color: 'success',
+                color: "success",
               },
             ]}
           >

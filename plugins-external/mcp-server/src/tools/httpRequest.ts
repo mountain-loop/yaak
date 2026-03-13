@@ -1,7 +1,7 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import * as z from 'zod';
-import type { McpServerContext } from '../types.js';
-import { getWorkspaceContext } from './helpers.js';
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as z from "zod";
+import type { McpServerContext } from "../types.js";
+import { getWorkspaceContext } from "./helpers.js";
 import {
   authenticationSchema,
   authenticationTypeSchema,
@@ -10,14 +10,14 @@ import {
   headersSchema,
   urlParametersSchema,
   workspaceIdSchema,
-} from './schemas.js';
+} from "./schemas.js";
 
 export function registerHttpRequestTools(server: McpServer, ctx: McpServerContext) {
   server.registerTool(
-    'list_http_requests',
+    "list_http_requests",
     {
-      title: 'List HTTP Requests',
-      description: 'List all HTTP requests in a workspace',
+      title: "List HTTP Requests",
+      description: "List all HTTP requests in a workspace",
       inputSchema: {
         workspaceId: workspaceIdSchema,
       },
@@ -29,7 +29,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       return {
         content: [
           {
-            type: 'text' as const,
+            type: "text" as const,
             text: JSON.stringify(requests, null, 2),
           },
         ],
@@ -38,12 +38,12 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
   );
 
   server.registerTool(
-    'get_http_request',
+    "get_http_request",
     {
-      title: 'Get HTTP Request',
-      description: 'Get details of a specific HTTP request by ID',
+      title: "Get HTTP Request",
+      description: "Get details of a specific HTTP request by ID",
       inputSchema: {
-        id: z.string().describe('The HTTP request ID'),
+        id: z.string().describe("The HTTP request ID"),
         workspaceId: workspaceIdSchema,
       },
     },
@@ -54,7 +54,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       return {
         content: [
           {
-            type: 'text' as const,
+            type: "text" as const,
             text: JSON.stringify(request, null, 2),
           },
         ],
@@ -63,13 +63,13 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
   );
 
   server.registerTool(
-    'send_http_request',
+    "send_http_request",
     {
-      title: 'Send HTTP Request',
-      description: 'Send an HTTP request and get the response',
+      title: "Send HTTP Request",
+      description: "Send an HTTP request and get the response",
       inputSchema: {
-        id: z.string().describe('The HTTP request ID to send'),
-        environmentId: z.string().optional().describe('Optional environment ID to use'),
+        id: z.string().describe("The HTTP request ID to send"),
+        environmentId: z.string().optional().describe("Optional environment ID to use"),
         workspaceId: workspaceIdSchema,
       },
     },
@@ -85,7 +85,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       return {
         content: [
           {
-            type: 'text' as const,
+            type: "text" as const,
             text: JSON.stringify(response, null, 2),
           },
         ],
@@ -94,21 +94,21 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
   );
 
   server.registerTool(
-    'create_http_request',
+    "create_http_request",
     {
-      title: 'Create HTTP Request',
-      description: 'Create a new HTTP request',
+      title: "Create HTTP Request",
+      description: "Create a new HTTP request",
       inputSchema: {
         workspaceId: workspaceIdSchema,
         name: z
           .string()
           .optional()
-          .describe('Request name (empty string to auto-generate from URL)'),
-        url: z.string().describe('Request URL'),
-        method: z.string().optional().describe('HTTP method (defaults to GET)'),
-        folderId: z.string().optional().describe('Parent folder ID'),
-        description: z.string().optional().describe('Request description'),
-        headers: headersSchema.describe('Request headers'),
+          .describe("Request name (empty string to auto-generate from URL)"),
+        url: z.string().describe("Request URL"),
+        method: z.string().optional().describe("HTTP method (defaults to GET)"),
+        folderId: z.string().optional().describe("Parent folder ID"),
+        description: z.string().optional().describe("Request description"),
+        headers: headersSchema.describe("Request headers"),
         urlParameters: urlParametersSchema,
         bodyType: bodyTypeSchema,
         body: bodySchema,
@@ -120,7 +120,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       const workspaceCtx = await getWorkspaceContext(ctx, ogWorkspaceId);
       const workspaceId = await workspaceCtx.yaak.window.workspaceId();
       if (!workspaceId) {
-        throw new Error('No workspace is open');
+        throw new Error("No workspace is open");
       }
 
       const httpRequest = await workspaceCtx.yaak.httpRequest.create({
@@ -129,25 +129,25 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       });
 
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(httpRequest, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(httpRequest, null, 2) }],
       };
     },
   );
 
   server.registerTool(
-    'update_http_request',
+    "update_http_request",
     {
-      title: 'Update HTTP Request',
-      description: 'Update an existing HTTP request',
+      title: "Update HTTP Request",
+      description: "Update an existing HTTP request",
       inputSchema: {
-        id: z.string().describe('HTTP request ID to update'),
+        id: z.string().describe("HTTP request ID to update"),
         workspaceId: workspaceIdSchema,
-        name: z.string().optional().describe('Request name'),
-        url: z.string().optional().describe('Request URL'),
-        method: z.string().optional().describe('HTTP method'),
-        folderId: z.string().optional().describe('Parent folder ID'),
-        description: z.string().optional().describe('Request description'),
-        headers: headersSchema.describe('Request headers'),
+        name: z.string().optional().describe("Request name"),
+        url: z.string().optional().describe("Request URL"),
+        method: z.string().optional().describe("HTTP method"),
+        folderId: z.string().optional().describe("Parent folder ID"),
+        description: z.string().optional().describe("Request description"),
+        headers: headersSchema.describe("Request headers"),
         urlParameters: urlParametersSchema,
         bodyType: bodyTypeSchema,
         body: bodySchema,
@@ -169,25 +169,25 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
         id,
       });
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(httpRequest, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(httpRequest, null, 2) }],
       };
     },
   );
 
   server.registerTool(
-    'delete_http_request',
+    "delete_http_request",
     {
-      title: 'Delete HTTP Request',
-      description: 'Delete an HTTP request by ID',
+      title: "Delete HTTP Request",
+      description: "Delete an HTTP request by ID",
       inputSchema: {
-        id: z.string().describe('HTTP request ID to delete'),
+        id: z.string().describe("HTTP request ID to delete"),
       },
     },
     async ({ id }) => {
       const httpRequest = await ctx.yaak.httpRequest.delete({ id });
       return {
         content: [
-          { type: 'text' as const, text: `Deleted: ${httpRequest.name} (${httpRequest.id})` },
+          { type: "text" as const, text: `Deleted: ${httpRequest.name} (${httpRequest.id})` },
         ],
       };
     },

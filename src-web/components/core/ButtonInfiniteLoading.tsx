@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import type { ButtonProps } from './Button';
-import { Button } from './Button';
+import { useState } from "react";
+import type { ButtonProps } from "./Button";
+import { Button } from "./Button";
 
 export function ButtonInfiniteLoading({
   onClick,

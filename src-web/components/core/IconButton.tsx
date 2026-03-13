@@ -1,19 +1,19 @@
-import classNames from 'classnames';
-import type { MouseEvent } from 'react';
-import { forwardRef, useCallback } from 'react';
-import { useTimedBoolean } from '../../hooks/useTimedBoolean';
-import type { ButtonProps } from './Button';
-import { Button } from './Button';
-import type { IconProps } from './Icon';
-import { Icon } from './Icon';
-import { LoadingIcon } from './LoadingIcon';
+import classNames from "classnames";
+import type { MouseEvent } from "react";
+import { forwardRef, useCallback } from "react";
+import { useTimedBoolean } from "../../hooks/useTimedBoolean";
+import type { ButtonProps } from "./Button";
+import { Button } from "./Button";
+import type { IconProps } from "./Icon";
+import { Icon } from "./Icon";
+import { LoadingIcon } from "./LoadingIcon";
 
 export type IconButtonProps = IconProps &
   ButtonProps & {
     showConfirm?: boolean;
     iconClassName?: string;
-    iconSize?: IconProps['size'];
-    iconColor?: IconProps['color'];
+    iconSize?: IconProps["size"];
+    iconColor?: IconProps["color"];
     title: string;
     showBadge?: boolean;
   };
@@ -22,18 +22,18 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   {
     showConfirm,
     icon,
-    color = 'default',
+    color = "default",
     spin,
     onClick,
     className,
     iconClassName,
     tabIndex,
-    size = 'md',
+    size = "md",
     iconSize,
     showBadge,
     iconColor,
     isLoading,
-    type = 'button',
+    type = "button",
     ...props
   }: IconButtonProps,
   ref,
@@ -50,9 +50,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
   return (
     <Button
       ref={ref}
-      aria-hidden={icon === 'empty'}
-      disabled={icon === 'empty'}
-      tabIndex={(tabIndex ?? icon === 'empty') ? -1 : undefined}
+      aria-hidden={icon === "empty"}
+      disabled={icon === "empty"}
+      tabIndex={(tabIndex ?? icon === "empty") ? -1 : undefined}
       onClick={handleClick}
       innerClassName="flex items-center justify-center"
       size={size}
@@ -60,12 +60,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       type={type}
       className={classNames(
         className,
-        'group/button relative flex-shrink-0',
-        '!px-0',
-        size === 'md' && 'w-md',
-        size === 'sm' && 'w-sm',
-        size === 'xs' && 'w-xs',
-        size === '2xs' && 'w-5',
+        "group/button relative flex-shrink-0",
+        "!px-0",
+        size === "md" && "w-md",
+        size === "sm" && "w-sm",
+        size === "xs" && "w-xs",
+        size === "2xs" && "w-5",
       )}
       {...props}
     >
@@ -79,14 +79,14 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       ) : (
         <Icon
           size={iconSize}
-          icon={confirmed ? 'check' : icon}
+          icon={confirmed ? "check" : icon}
           spin={spin}
           color={iconColor}
           className={classNames(
             iconClassName,
-            'group-hover/button:text-text',
-            confirmed && '!text-success', // Don't use Icon.color here because it won't override the hover color
-            props.disabled && 'opacity-70',
+            "group-hover/button:text-text",
+            confirmed && "!text-success", // Don't use Icon.color here because it won't override the hover color
+            props.disabled && "opacity-70",
           )}
         />
       )}

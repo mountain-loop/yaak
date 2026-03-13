@@ -1,14 +1,14 @@
-import { createHash } from 'node:crypto';
-import type { Context } from '@yaakapp/api';
+import { createHash } from "node:crypto";
+import type { Context } from "@yaakapp/api";
 
 export async function storeToken(
   ctx: Context,
   args: TokenStoreArgs,
   response: AccessTokenRawResponse,
-  tokenName: 'access_token' | 'id_token' = 'access_token',
+  tokenName: "access_token" | "id_token" = "access_token",
 ) {
   if (!response[tokenName]) {
-    throw new Error(`${tokenName} not found in response ${Object.keys(response).join(', ')}`);
+    throw new Error(`${tokenName} not found in response ${Object.keys(response).join(", ")}`);
   }
 
   const expiresAt = response.expires_in ? Date.now() + response.expires_in * 1000 : null;
@@ -34,7 +34,7 @@ export async function resetDataDirKey(ctx: Context, contextId: string) {
 }
 
 export async function getDataDirKey(ctx: Context, contextId: string) {
-  const key = (await ctx.store.get<string>(dataDirStoreKey(contextId))) ?? 'default';
+  const key = (await ctx.store.get<string>(dataDirStoreKey(contextId))) ?? "default";
   return `${contextId}::${key}`;
 }
 
@@ -50,17 +50,17 @@ export interface TokenStoreArgs {
  * account for slight variations (like domains with and without a protocol scheme).
  */
 function tokenStoreKey(args: TokenStoreArgs) {
-  const hash = createHash('md5');
+  const hash = createHash("md5");
   if (args.contextId) hash.update(args.contextId.trim());
   if (args.clientId) hash.update(args.clientId.trim());
-  if (args.accessTokenUrl) hash.update(args.accessTokenUrl.trim().replace(/^https?:\/\//, ''));
-  if (args.authorizationUrl) hash.update(args.authorizationUrl.trim().replace(/^https?:\/\//, ''));
-  const key = hash.digest('hex');
-  return ['token', key].join('::');
+  if (args.accessTokenUrl) hash.update(args.accessTokenUrl.trim().replace(/^https?:\/\//, ""));
+  if (args.authorizationUrl) hash.update(args.authorizationUrl.trim().replace(/^https?:\/\//, ""));
+  const key = hash.digest("hex");
+  return ["token", key].join("::");
 }
 
 function dataDirStoreKey(contextId: string) {
-  return ['data_dir', contextId].join('::');
+  return ["data_dir", contextId].join("::");
 }
 
 export interface AccessToken {

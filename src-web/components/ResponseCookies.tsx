@@ -1,11 +1,11 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useMemo } from 'react';
-import type { JSX } from 'react/jsx-runtime';
-import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
-import { CountBadge } from './core/CountBadge';
-import { DetailsBanner } from './core/DetailsBanner';
-import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useMemo } from "react";
+import type { JSX } from "react/jsx-runtime";
+import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
+import { CountBadge } from "./core/CountBadge";
+import { DetailsBanner } from "./core/DetailsBanner";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
 
 interface Props {
   response: HttpResponse;
@@ -26,37 +26,37 @@ interface ParsedCookie {
 
 function parseCookieHeader(cookieHeader: string): Array<{ name: string; value: string }> {
   // Parse "Cookie: name=value; name2=value2" format
-  return cookieHeader.split(';').map((pair) => {
-    const [name = '', ...valueParts] = pair.split('=');
+  return cookieHeader.split(";").map((pair) => {
+    const [name = "", ...valueParts] = pair.split("=");
     return {
       name: name.trim(),
-      value: valueParts.join('=').trim(),
+      value: valueParts.join("=").trim(),
     };
   });
 }
 
 function parseSetCookieHeader(setCookieHeader: string): ParsedCookie {
   // Parse "Set-Cookie: name=value; Domain=...; Path=..." format
-  const parts = setCookieHeader.split(';').map((p) => p.trim());
-  const [nameValue = '', ...attributes] = parts;
-  const [name = '', ...valueParts] = nameValue.split('=');
+  const parts = setCookieHeader.split(";").map((p) => p.trim());
+  const [nameValue = "", ...attributes] = parts;
+  const [name = "", ...valueParts] = nameValue.split("=");
 
   const cookie: ParsedCookie = {
     name: name.trim(),
-    value: valueParts.join('=').trim(),
+    value: valueParts.join("=").trim(),
   };
 
   for (const attr of attributes) {
-    const [key = '', val] = attr.split('=').map((s) => s.trim());
+    const [key = "", val] = attr.split("=").map((s) => s.trim());
     const lowerKey = key.toLowerCase();
 
-    if (lowerKey === 'domain') cookie.domain = val;
-    else if (lowerKey === 'path') cookie.path = val;
-    else if (lowerKey === 'expires') cookie.expires = val;
-    else if (lowerKey === 'max-age') cookie.maxAge = val;
-    else if (lowerKey === 'secure') cookie.secure = true;
-    else if (lowerKey === 'httponly') cookie.httpOnly = true;
-    else if (lowerKey === 'samesite') cookie.sameSite = val;
+    if (lowerKey === "domain") cookie.domain = val;
+    else if (lowerKey === "path") cookie.path = val;
+    else if (lowerKey === "expires") cookie.expires = val;
+    else if (lowerKey === "max-age") cookie.maxAge = val;
+    else if (lowerKey === "secure") cookie.secure = true;
+    else if (lowerKey === "httponly") cookie.httpOnly = true;
+    else if (lowerKey === "samesite") cookie.sameSite = val;
   }
 
   // Detect if cookie is being deleted
@@ -94,7 +94,7 @@ export function ResponseCookies({ response }: Props) {
       const e = event.event;
 
       // Cookie headers sent (header_up with name=cookie)
-      if (e.type === 'header_up' && e.name.toLowerCase() === 'cookie') {
+      if (e.type === "header_up" && e.name.toLowerCase() === "cookie") {
         const cookies = parseCookieHeader(e.value);
         for (const cookie of cookies) {
           sentMap.set(cookie.name, cookie);
@@ -102,7 +102,7 @@ export function ResponseCookies({ response }: Props) {
       }
 
       // Set-Cookie headers received (header_down with name=set-cookie)
-      if (e.type === 'header_down' && e.name.toLowerCase() === 'set-cookie') {
+      if (e.type === "header_down" && e.name.toLowerCase() === "set-cookie") {
         const cookie = parseSetCookieHeader(e.value);
         receivedMap.set(cookie.name, cookie);
       }
@@ -158,8 +158,8 @@ export function ResponseCookies({ response }: Props) {
                 <div className="flex items-center gap-2 my-1">
                   <span
                     className={classNames(
-                      'font-mono text-editor select-auto cursor-auto',
-                      cookie.isDeleted ? 'line-through opacity-60 text-text-subtle' : 'text-text',
+                      "font-mono text-editor select-auto cursor-auto",
+                      cookie.isDeleted ? "line-through opacity-60 text-text-subtle" : "text-text",
                     )}
                   >
                     {cookie.name}

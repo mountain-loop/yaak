@@ -1,1 +1,1 @@
-declare module 'httpntlm';
+declare module "httpntlm";

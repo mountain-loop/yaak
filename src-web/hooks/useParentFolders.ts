@@ -1,7 +1,7 @@
-import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { foldersAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useMemo } from 'react';
+import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
+import { foldersAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useMemo } from "react";
 
 export function useParentFolders(m: Folder | HttpRequest | GrpcRequest | WebsocketRequest | null) {
   const folders = useAtomValue(foldersAtom);

@@ -1,12 +1,12 @@
-import type { HttpUrlParameter } from '@yaakapp-internal/models';
-import { generateId } from './generateId';
+import type { HttpUrlParameter } from "@yaakapp-internal/models";
+import { generateId } from "./generateId";
 
 export function prepareImportQuerystring(
   url: string,
 ): { url: string; urlParameters: HttpUrlParameter[] } | null {
   const split = url.split(/\?(.*)/s);
-  const baseUrl = split[0] ?? '';
-  const querystring = split[1] ?? '';
+  const baseUrl = split[0] ?? "";
+  const querystring = split[1] ?? "";
 
   // No querystring in url
   if (!querystring) {

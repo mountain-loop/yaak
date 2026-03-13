@@ -1,11 +1,11 @@
-import EventEmitter from 'eventemitter3';
-import { atom, useAtom } from 'jotai';
-import type { DependencyList } from 'react';
-import { useCallback, useEffect } from 'react';
+import EventEmitter from "eventemitter3";
+import { atom, useAtom } from "jotai";
+import type { DependencyList } from "react";
+import { useCallback, useEffect } from "react";
 
 type EventDataMap = {
-  'request_params.focus_value': string;
-  'request_pane.focus_tab': undefined;
+  "request_params.focus_value": string;
+  "request_pane.focus_tab": undefined;
 };
 
 export function useRequestEditorEvent<
@@ -28,13 +28,13 @@ export function useRequestEditor() {
   const [urlParametersKey, setUrlParametersKey] = useAtom(urlParamsKeyAtom);
   const [urlKey, setUrlKey] = useAtom(urlKeyAtom);
   const focusParamsTab = useCallback(() => {
-    emitter.emit('request_pane.focus_tab', undefined);
+    emitter.emit("request_pane.focus_tab", undefined);
   }, []);
 
   const focusParamValue = useCallback(
     (name: string) => {
       focusParamsTab();
-      requestAnimationFrame(() => emitter.emit('request_params.focus_value', name));
+      requestAnimationFrame(() => emitter.emit("request_params.focus_value", name));
     },
     [focusParamsTab],
   );

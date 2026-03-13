@@ -1,9 +1,9 @@
-import { useSearch } from '@tanstack/react-router';
-import type { Environment } from '@yaakapp-internal/models';
-import { environmentsAtom } from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
-import { useEffect } from 'react';
-import { jotaiStore } from '../lib/jotai';
+import { useSearch } from "@tanstack/react-router";
+import type { Environment } from "@yaakapp-internal/models";
+import { environmentsAtom } from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
+import { useEffect } from "react";
+import { jotaiStore } from "../lib/jotai";
 
 export const activeEnvironmentIdAtom = atom<string>();
 

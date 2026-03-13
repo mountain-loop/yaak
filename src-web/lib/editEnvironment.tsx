@@ -1,12 +1,12 @@
-import type { Environment, EnvironmentVariable } from '@yaakapp-internal/models';
-import { updateModel } from '@yaakapp-internal/models';
-import { openFolderSettings } from '../commands/openFolderSettings';
-import type { PairEditorHandle } from '../components/core/PairEditor';
-import { ensurePairId } from '../components/core/PairEditor.util';
-import { EnvironmentEditDialog } from '../components/EnvironmentEditDialog';
-import { environmentsBreakdownAtom } from '../hooks/useEnvironmentsBreakdown';
-import { toggleDialog } from './dialog';
-import { jotaiStore } from './jotai';
+import type { Environment, EnvironmentVariable } from "@yaakapp-internal/models";
+import { updateModel } from "@yaakapp-internal/models";
+import { openFolderSettings } from "../commands/openFolderSettings";
+import type { PairEditorHandle } from "../components/core/PairEditor";
+import { ensurePairId } from "../components/core/PairEditor.util";
+import { EnvironmentEditDialog } from "../components/EnvironmentEditDialog";
+import { environmentsBreakdownAtom } from "../hooks/useEnvironmentsBreakdown";
+import { toggleDialog } from "./dialog";
+import { jotaiStore } from "./jotai";
 
 interface Options {
   addOrFocusVariable?: EnvironmentVariable;
@@ -16,8 +16,8 @@ export async function editEnvironment(
   initialEnvironment: Environment | null,
   options: Options = {},
 ) {
-  if (initialEnvironment?.parentModel === 'folder' && initialEnvironment.parentId != null) {
-    openFolderSettings(initialEnvironment.parentId, 'variables');
+  if (initialEnvironment?.parentModel === "folder" && initialEnvironment.parentId != null) {
+    openFolderSettings(initialEnvironment.parentId, "variables");
   } else {
     const { addOrFocusVariable } = options;
     const { baseEnvironment } = jotaiStore.get(environmentsBreakdownAtom);
@@ -42,10 +42,10 @@ export async function editEnvironment(
     let didFocusVariable = false;
 
     toggleDialog({
-      id: 'environment-editor',
+      id: "environment-editor",
       noPadding: true,
-      size: 'lg',
-      className: 'h-[90vh] max-h-[60rem]',
+      size: "lg",
+      className: "h-[90vh] max-h-[60rem]",
       render: () => (
         <EnvironmentEditDialog
           initialEnvironmentId={environment?.id ?? null}

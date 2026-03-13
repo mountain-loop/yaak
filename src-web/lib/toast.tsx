@@ -1,7 +1,7 @@
-import { atom } from 'jotai';
-import type { ToastInstance } from '../components/Toasts';
-import { generateId } from './generateId';
-import { jotaiStore } from './jotai';
+import { atom } from "jotai";
+import type { ToastInstance } from "../components/Toasts";
+import { generateId } from "./generateId";
+import { jotaiStore } from "./jotai";
 
 export const toastsAtom = atom<ToastInstance[]>([]);
 
@@ -9,9 +9,9 @@ export function showToast({
   id,
   timeout = 5000,
   ...props
-}: Omit<ToastInstance, 'id' | 'timeout' | 'uniqueKey'> & {
-  id?: ToastInstance['id'];
-  timeout?: ToastInstance['timeout'];
+}: Omit<ToastInstance, "id" | "timeout" | "uniqueKey"> & {
+  id?: ToastInstance["id"];
+  timeout?: ToastInstance["timeout"];
 }) {
   id = id ?? generateId();
   const uniqueKey = generateId();
@@ -56,7 +56,7 @@ export function showErrorToast<T>({
 }) {
   return showToast({
     id,
-    color: 'danger',
+    color: "danger",
     timeout: null,
     message: (
       <div className="w-full">

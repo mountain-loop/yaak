@@ -1,6 +1,6 @@
 # Yaak CLI
 
-The `yaak` CLI for publishing plugins and creating/updating/sending requests. 
+The `yaak` CLI for publishing plugins and creating/updating/sending requests.
 
 ## Installation
 
@@ -24,8 +24,8 @@ Use the `yaak` CLI with agents like Claude or Codex to do useful things for you.
 Here are some example prompts:
 
 ```text
-Scan my API routes and create a workspace (using yaak cli) with 
-all the requests needed for me to do manual testing?  
+Scan my API routes and create a workspace (using yaak cli) with
+all the requests needed for me to do manual testing?
 ```
 
 ```text

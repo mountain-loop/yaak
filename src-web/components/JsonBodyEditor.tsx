@@ -1,23 +1,23 @@
-import { linter } from '@codemirror/lint';
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
-import { useCallback, useMemo } from 'react';
-import { fireAndForget } from '../lib/fireAndForget';
-import { useKeyValue } from '../hooks/useKeyValue';
-import { textLikelyContainsJsonComments } from '../lib/jsonComments';
-import { Banner } from './core/Banner';
-import type { DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
-import type { EditorProps } from './core/Editor/Editor';
-import { jsonParseLinter } from './core/Editor/json-lint';
-import { Editor } from './core/Editor/LazyEditor';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { IconTooltip } from './core/IconTooltip';
+import { linter } from "@codemirror/lint";
+import type { HttpRequest } from "@yaakapp-internal/models";
+import { patchModel } from "@yaakapp-internal/models";
+import { useCallback, useMemo } from "react";
+import { fireAndForget } from "../lib/fireAndForget";
+import { useKeyValue } from "../hooks/useKeyValue";
+import { textLikelyContainsJsonComments } from "../lib/jsonComments";
+import { Banner } from "./core/Banner";
+import type { DropdownItem } from "./core/Dropdown";
+import { Dropdown } from "./core/Dropdown";
+import type { EditorProps } from "./core/Editor/Editor";
+import { jsonParseLinter } from "./core/Editor/json-lint";
+import { Editor } from "./core/Editor/LazyEditor";
+import { Icon } from "./core/Icon";
+import { IconButton } from "./core/IconButton";
+import { IconTooltip } from "./core/IconTooltip";
 
 interface Props {
   forceUpdateKey: string;
-  heightMode: EditorProps['heightMode'];
+  heightMode: EditorProps["heightMode"];
   request: HttpRequest;
 }
 
@@ -42,13 +42,13 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
   );
 
   const hasComments = useMemo(
-    () => textLikelyContainsJsonComments(request.body?.text ?? ''),
+    () => textLikelyContainsJsonComments(request.body?.text ?? ""),
     [request.body?.text],
   );
 
   const { value: bannerDismissed, set: setBannerDismissed } = useKeyValue<boolean>({
-    namespace: 'no_sync',
-    key: ['json-fix-3', request.workspaceId],
+    namespace: "no_sync",
+    key: ["json-fix-3", request.workspaceId],
     fallback: false,
   });
 
@@ -70,8 +70,8 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
 
   const showBanner = hasComments && autoFix && !bannerDismissed;
 
-  const stripMessage = 'Automatically strip comments and trailing commas before sending';
-  const actions = useMemo<EditorProps['actions']>(
+  const stripMessage = "Automatically strip comments and trailing commas before sending";
+  const actions = useMemo<EditorProps["actions"]>(
     () => [
       showBanner && (
         <Banner color="notice" className="!opacity-100 h-sm !py-0 !px-2 flex items-center text-xs">
@@ -87,12 +87,12 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
           items={
             [
               {
-                label: 'Automatically Fix JSON',
+                label: "Automatically Fix JSON",
                 keepOpenOnSelect: true,
                 onSelect: handleToggleAutoFix,
                 rightSlot: <IconTooltip content={stripMessage} />,
                 leftSlot: (
-                  <Icon icon={autoFix ? 'check_square_checked' : 'check_square_unchecked'} />
+                  <Icon icon={autoFix ? "check_square_checked" : "check_square_unchecked"} />
                 ),
               },
             ] satisfies DropdownItem[]
@@ -112,7 +112,7 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
       autocompleteVariables
       placeholder="..."
       heightMode={heightMode}
-      defaultValue={`${request.body?.text ?? ''}`}
+      defaultValue={`${request.body?.text ?? ""}`}
       language="json"
       onChange={handleChange}
       stateKey={`json.${request.id}`}

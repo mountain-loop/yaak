@@ -1,5 +1,5 @@
-import { jotaiStore } from '../../../lib/jotai';
-import { collapsedFamily, selectedIdsFamily } from './atoms';
+import { jotaiStore } from "../../../lib/jotai";
+import { collapsedFamily, selectedIdsFamily } from "./atoms";
 
 export interface TreeNode<T extends { id: string }> {
   children?: TreeNode<T>[];

@@ -1,5 +1,5 @@
-import type { Folder, HttpRequest } from '@yaakapp-internal/models';
-import { foldersAtom, httpRequestsAtom } from '@yaakapp-internal/models';
+import type { Folder, HttpRequest } from "@yaakapp-internal/models";
+import { foldersAtom, httpRequestsAtom } from "@yaakapp-internal/models";
 import type {
   FormInput,
   FormInputCheckbox,
@@ -10,33 +10,33 @@ import type {
   FormInputSelect,
   FormInputText,
   JsonPrimitive,
-} from '@yaakapp-internal/plugins';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useMemo } from 'react';
-import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useRandomKey } from '../hooks/useRandomKey';
-import { capitalize } from '../lib/capitalize';
-import { showDialog } from '../lib/dialog';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { Banner } from './core/Banner';
-import { Checkbox } from './core/Checkbox';
-import { DetailsBanner } from './core/DetailsBanner';
-import { Editor } from './core/Editor/LazyEditor';
-import { IconButton } from './core/IconButton';
-import type { InputProps } from './core/Input';
-import { Input } from './core/Input';
-import { Label } from './core/Label';
-import type { Pair } from './core/PairEditor';
-import { PairEditor } from './core/PairEditor';
-import { PlainInput } from './core/PlainInput';
-import { Select } from './core/Select';
-import { VStack } from './core/Stacks';
-import { Markdown } from './Markdown';
-import { SelectFile } from './SelectFile';
+} from "@yaakapp-internal/plugins";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { useCallback, useEffect, useMemo } from "react";
+import { useActiveRequest } from "../hooks/useActiveRequest";
+import { useRandomKey } from "../hooks/useRandomKey";
+import { capitalize } from "../lib/capitalize";
+import { showDialog } from "../lib/dialog";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { Banner } from "./core/Banner";
+import { Checkbox } from "./core/Checkbox";
+import { DetailsBanner } from "./core/DetailsBanner";
+import { Editor } from "./core/Editor/LazyEditor";
+import { IconButton } from "./core/IconButton";
+import type { InputProps } from "./core/Input";
+import { Input } from "./core/Input";
+import { Label } from "./core/Label";
+import type { Pair } from "./core/PairEditor";
+import { PairEditor } from "./core/PairEditor";
+import { PlainInput } from "./core/PlainInput";
+import { Select } from "./core/Select";
+import { VStack } from "./core/Stacks";
+import { Markdown } from "./Markdown";
+import { SelectFile } from "./SelectFile";
 
-export const DYNAMIC_FORM_NULL_ARG = '__NULL__';
-const INPUT_SIZE = 'sm';
+export const DYNAMIC_FORM_NULL_ARG = "__NULL__";
+const INPUT_SIZE = "sm";
 
 interface Props<T> {
   inputs: FormInput[] | undefined | null;
@@ -75,7 +75,7 @@ export function DynamicForm<T extends Record<string, JsonPrimitive>>({
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
       data={data}
-      className={classNames(className, 'pb-4')} // Pad the bottom to look nice
+      className={classNames(className, "pb-4")} // Pad the bottom to look nice
     />
   );
 }
@@ -89,8 +89,8 @@ function FormInputsStack<T extends Record<string, JsonPrimitive>>({
       space={3}
       className={classNames(
         className,
-        'h-full overflow-auto',
-        'pr-1', // A bit of space between inputs and scrollbar
+        "h-full overflow-auto",
+        "pr-1", // A bit of space between inputs and scrollbar
       )}
     >
       <FormInputs {...props} />
@@ -100,7 +100,7 @@ function FormInputsStack<T extends Record<string, JsonPrimitive>>({
 
 type FormInputsProps<T> = Pick<
   Props<T>,
-  'inputs' | 'autocompleteFunctions' | 'autocompleteVariables' | 'stateKey' | 'data'
+  "inputs" | "autocompleteFunctions" | "autocompleteVariables" | "stateKey" | "data"
 > & {
   setDataAttr: (name: string, value: JsonPrimitive) => void;
   disabled?: boolean;
@@ -118,16 +118,16 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
   return (
     <>
       {inputs?.map((input, i) => {
-        if ('hidden' in input && input.hidden) {
+        if ("hidden" in input && input.hidden) {
           return null;
         }
 
-        if ('disabled' in input && disabled != null) {
+        if ("disabled" in input && disabled != null) {
           input.disabled = disabled;
         }
 
         switch (input.type) {
-          case 'select':
+          case "select":
             return (
               <SelectArg
                 key={i + stateKey}
@@ -140,7 +140,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 }
               />
             );
-          case 'text':
+          case "text":
             return (
               <TextArg
                 key={i + stateKey}
@@ -150,11 +150,11 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
-                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? "")
                 }
               />
             );
-          case 'editor':
+          case "editor":
             return (
               <EditorArg
                 key={i + stateKey}
@@ -164,11 +164,11 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 autocompleteVariables={autocompleteVariables || false}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
-                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '')
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? "")
                 }
               />
             );
-          case 'checkbox':
+          case "checkbox":
             return (
               <CheckboxArg
                 key={i + stateKey}
@@ -177,7 +177,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 value={data[input.name] != null ? data[input.name] === true : false}
               />
             );
-          case 'http_request':
+          case "http_request":
             return (
               <HttpRequestArg
                 key={i + stateKey}
@@ -186,7 +186,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 value={data[input.name] != null ? String(data[input.name]) : DYNAMIC_FORM_NULL_ARG}
               />
             );
-          case 'file':
+          case "file":
             return (
               <FileArg
                 key={i + stateKey}
@@ -197,7 +197,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 }
               />
             );
-          case 'accordion':
+          case "accordion":
             if (!hasVisibleInputs(input.inputs)) {
               return null;
             }
@@ -205,7 +205,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               <div key={i + stateKey}>
                 <DetailsBanner
                   summary={input.label}
-                  className={classNames('!mb-auto', disabled && 'opacity-disabled')}
+                  className={classNames("!mb-auto", disabled && "opacity-disabled")}
                 >
                   <div className="mt-3">
                     <FormInputsStack
@@ -221,7 +221,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 </DetailsBanner>
               </div>
             );
-          case 'h_stack':
+          case "h_stack":
             if (!hasVisibleInputs(input.inputs)) {
               return null;
             }
@@ -238,7 +238,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 />
               </div>
             );
-          case 'banner':
+          case "banner":
             if (!hasVisibleInputs(input.inputs)) {
               return null;
             }
@@ -246,7 +246,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               <Banner
                 key={i + stateKey}
                 color={input.color}
-                className={classNames(disabled && 'opacity-disabled')}
+                className={classNames(disabled && "opacity-disabled")}
               >
                 <FormInputsStack
                   data={data}
@@ -259,9 +259,9 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 />
               </Banner>
             );
-          case 'markdown':
+          case "markdown":
             return <Markdown key={i + stateKey}>{input.content}</Markdown>;
-          case 'key_value':
+          case "key_value":
             return (
               <KeyValueArg
                 key={i + stateKey}
@@ -269,7 +269,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
                 stateKey={stateKey}
                 onChange={(v) => setDataAttr(input.name, v)}
                 value={
-                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? '[]')
+                  data[input.name] != null ? String(data[input.name]) : (input.defaultValue ?? "[]")
                 }
               />
             );
@@ -301,12 +301,12 @@ function TextArg({
     onChange,
     name: arg.name,
     multiLine: arg.multiLine,
-    className: arg.multiLine ? 'min-h-[4rem]' : undefined,
+    className: arg.multiLine ? "min-h-[4rem]" : undefined,
     defaultValue: value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value,
     required: !arg.optional,
     disabled: arg.disabled,
     help: arg.description,
-    type: arg.password ? 'password' : 'text',
+    type: arg.password ? "password" : "text",
     label: arg.label ?? arg.name,
     size: INPUT_SIZE,
     hideLabel: arg.hideLabel ?? arg.label == null,
@@ -358,9 +358,9 @@ function EditorArg({
       </Label>
       <div
         className={classNames(
-          'border border-border rounded-md overflow-hidden px-2 py-1',
-          'focus-within:border-border-focus',
-          !arg.rows && 'max-h-[10rem]', // So it doesn't take up too much space
+          "border border-border rounded-md overflow-hidden px-2 py-1",
+          "focus-within:border-border-focus",
+          !arg.rows && "max-h-[10rem]", // So it doesn't take up too much space
         )}
         style={arg.rows ? { height: `${arg.rows * 1.4 + 0.75}rem` } : undefined}
       >
@@ -390,10 +390,10 @@ function EditorArg({
                 title="Pop out to large editor"
                 onClick={() => {
                   showDialog({
-                    id: 'id',
-                    size: 'full',
-                    title: arg.readOnly ? 'View Value' : 'Edit Value',
-                    className: '!max-w-[50rem] !max-h-[60rem]',
+                    id: "id",
+                    size: "full",
+                    title: arg.readOnly ? "View Value" : "Edit Value",
+                    className: "!max-w-[50rem] !max-h-[60rem]",
                     description: arg.label && (
                       <Label
                         htmlFor={id}
@@ -496,7 +496,7 @@ function HttpRequestArg({
 }) {
   const folders = useAtomValue(foldersAtom);
   const httpRequests = useAtomValue(httpRequestsAtom);
-  const activeHttpRequest = useActiveRequest('http_request');
+  const activeHttpRequest = useActiveRequest("http_request");
 
   useEffect(() => {
     if (value === DYNAMIC_FORM_NULL_ARG && activeHttpRequest) {
@@ -513,13 +513,13 @@ function HttpRequestArg({
       value={value}
       disabled={arg.disabled}
       options={httpRequests.map((r) => {
-          return {
-            label:
-              buildRequestBreadcrumbs(r, folders).join(' / ') +
-              (r.id === activeHttpRequest?.id ? ' (current)' : ''),
-            value: r.id,
-          };
-        })}
+        return {
+          label:
+            buildRequestBreadcrumbs(r, folders).join(" / ") +
+            (r.id === activeHttpRequest?.id ? " (current)" : ""),
+          value: r.id,
+        };
+      })}
     />
   );
 }
@@ -539,7 +539,7 @@ function buildRequestBreadcrumbs(request: HttpRequest, folders: Folder[]): strin
   };
   next();
 
-  return ancestors.map((a) => (a.model === 'folder' ? a.name : resolvedModelName(a)));
+  return ancestors.map((a) => (a.model === "folder" ? a.name : resolvedModelName(a)));
 }
 
 function CheckboxArg({
@@ -616,7 +616,7 @@ function hasVisibleInputs(inputs: FormInput[] | undefined): boolean {
   if (!inputs) return false;
 
   for (const input of inputs) {
-    if ('inputs' in input && !hasVisibleInputs(input.inputs)) {
+    if ("inputs" in input && !hasVisibleInputs(input.inputs)) {
       // Has children, but none are visible
       return false;
     }

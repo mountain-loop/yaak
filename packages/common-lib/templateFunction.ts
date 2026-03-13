@@ -2,20 +2,20 @@ import type {
   CallTemplateFunctionArgs,
   JsonPrimitive,
   TemplateFunctionArg,
-} from '@yaakapp-internal/plugins';
+} from "@yaakapp-internal/plugins";
 
 export function validateTemplateFunctionArgs(
   fnName: string,
   args: TemplateFunctionArg[],
-  values: CallTemplateFunctionArgs['values'],
+  values: CallTemplateFunctionArgs["values"],
 ): string | null {
   for (const arg of args) {
-    if ('inputs' in arg && arg.inputs) {
+    if ("inputs" in arg && arg.inputs) {
       // Recurse down
       const err = validateTemplateFunctionArgs(fnName, arg.inputs, values);
       if (err) return err;
     }
-    if (!('name' in arg)) continue;
+    if (!("name" in arg)) continue;
     if (arg.optional) continue;
     if (arg.defaultValue != null) continue;
     if (arg.hidden) continue;
@@ -34,14 +34,14 @@ export function applyFormInputDefaults(
 ) {
   let newValues: { [p: string]: JsonPrimitive | undefined } = { ...values };
   for (const input of inputs) {
-    if ('defaultValue' in input && values[input.name] === undefined) {
+    if ("defaultValue" in input && values[input.name] === undefined) {
       newValues[input.name] = input.defaultValue;
     }
-    if (input.type === 'checkbox' && values[input.name] === undefined) {
+    if (input.type === "checkbox" && values[input.name] === undefined) {
       newValues[input.name] = false;
     }
     // Recurse down to all child inputs
-    if ('inputs' in input) {
+    if ("inputs" in input) {
       newValues = applyFormInputDefaults(input.inputs ?? [], newValues);
     }
   }

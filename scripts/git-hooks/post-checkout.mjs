@@ -10,35 +10,35 @@
  *   process.argv[4] - flag (1 = branch checkout, 0 = file checkout)
  */
 
-import fs from 'fs';
-import path from 'path';
-import { execSync, execFileSync } from 'child_process';
-import { fileURLToPath } from 'url';
+import fs from "fs";
+import path from "path";
+import { execSync, execFileSync } from "child_process";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const isBranchCheckout = process.argv[4] === '1';
+const isBranchCheckout = process.argv[4] === "1";
 
 if (!isBranchCheckout) {
   process.exit(0);
 }
 
 // Check if we're in a worktree by looking for .git file (not directory)
-const gitPath = path.join(process.cwd(), '.git');
+const gitPath = path.join(process.cwd(), ".git");
 const isWorktree = fs.existsSync(gitPath) && fs.statSync(gitPath).isFile();
 
 if (!isWorktree) {
   process.exit(0);
 }
 
-const envLocalPath = path.join(process.cwd(), '.env.local');
+const envLocalPath = path.join(process.cwd(), ".env.local");
 
 // Don't overwrite existing .env.local
 if (fs.existsSync(envLocalPath)) {
   process.exit(0);
 }
 
-console.log('Detected new worktree - configuring ports in .env.local');
+console.log("Detected new worktree - configuring ports in .env.local");
 
 // Find the highest ports in use across all worktrees
 // Main worktree (first in list) is assumed to use default ports 1420/64343
@@ -46,19 +46,19 @@ let maxMcpPort = 64343;
 let maxDevPort = 1420;
 
 try {
-  const worktreeList = execSync('git worktree list --porcelain', { encoding: 'utf8' });
+  const worktreeList = execSync("git worktree list --porcelain", { encoding: "utf8" });
   const worktreePaths = worktreeList
-    .split('\n')
-    .filter(line => line.startsWith('worktree '))
-    .map(line => line.replace('worktree ', '').trim());
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.replace("worktree ", "").trim());
 
   // Skip the first worktree (main) since it uses default ports
   for (let i = 1; i < worktreePaths.length; i++) {
     const worktreePath = worktreePaths[i];
-    const envPath = path.join(worktreePath, '.env.local');
+    const envPath = path.join(worktreePath, ".env.local");
 
     if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf8');
+      const content = fs.readFileSync(envPath, "utf8");
 
       const mcpMatch = content.match(/^YAAK_PLUGIN_MCP_SERVER_PORT=(\d+)/m);
       if (mcpMatch) {
@@ -82,7 +82,7 @@ try {
   maxDevPort++;
   maxMcpPort++;
 } catch (err) {
-  console.error('Warning: Could not check other worktrees for port conflicts:', err.message);
+  console.error("Warning: Could not check other worktrees for port conflicts:", err.message);
   // Continue with default ports
 }
 
@@ -100,37 +100,44 @@ YAAK_DEV_PORT=${maxDevPort}
 YAAK_PLUGIN_MCP_SERVER_PORT=${maxMcpPort}
 `;
 
-fs.writeFileSync(envLocalPath, envContent, 'utf8');
-console.log(`Created .env.local with YAAK_DEV_PORT=${maxDevPort} and YAAK_PLUGIN_MCP_SERVER_PORT=${maxMcpPort}`);
+fs.writeFileSync(envLocalPath, envContent, "utf8");
+console.log(
+  `Created .env.local with YAAK_DEV_PORT=${maxDevPort} and YAAK_PLUGIN_MCP_SERVER_PORT=${maxMcpPort}`,
+);
 
 // Create tauri.worktree.conf.json with unique app identifier for complete isolation
 // This gives each worktree its own app data directory, avoiding the need for DB path prefixes
 const tauriWorktreeConfig = {
   identifier: `app.yaak.desktop.dev.${worktreeName}`,
-  productName: `Daak (${worktreeName})`
+  productName: `Daak (${worktreeName})`,
 };
 
-const tauriConfigPath = path.join(process.cwd(), 'crates-tauri', 'yaak-app', 'tauri.worktree.conf.json');
-fs.writeFileSync(tauriConfigPath, JSON.stringify(tauriWorktreeConfig, null, 2) + '\n', 'utf8');
+const tauriConfigPath = path.join(
+  process.cwd(),
+  "crates-tauri",
+  "yaak-app",
+  "tauri.worktree.conf.json",
+);
+fs.writeFileSync(tauriConfigPath, JSON.stringify(tauriWorktreeConfig, null, 2) + "\n", "utf8");
 console.log(`Created tauri.worktree.conf.json with identifier: ${tauriWorktreeConfig.identifier}`);
 
 // Copy gitignored editor config folders from main worktree (.zed, .vscode, .claude, etc.)
 // This ensures your editor settings, tasks, and configurations are available in the new worktree
 // without needing to manually copy them or commit them to git.
 try {
-  const worktreeList = execSync('git worktree list --porcelain', { encoding: 'utf8' });
+  const worktreeList = execSync("git worktree list --porcelain", { encoding: "utf8" });
   const mainWorktreePath = worktreeList
-    .split('\n')
-    .find(line => line.startsWith('worktree '))
-    ?.replace('worktree ', '')
+    .split("\n")
+    .find((line) => line.startsWith("worktree "))
+    ?.replace("worktree ", "")
     .trim();
 
   if (mainWorktreePath) {
     // Find all .* folders in main worktree root that are gitignored
     const entries = fs.readdirSync(mainWorktreePath, { withFileTypes: true });
     const dotFolders = entries
-      .filter(entry => entry.isDirectory() && entry.name.startsWith('.'))
-      .map(entry => entry.name);
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("."))
+      .map((entry) => entry.name);
 
     for (const folder of dotFolders) {
       const sourcePath = path.join(mainWorktreePath, folder);
@@ -138,9 +145,9 @@ try {
 
       try {
         // Check if it's gitignored - run from main worktree directory
-        execFileSync('git', ['check-ignore', '-q', folder], {
-          stdio: 'pipe',
-          cwd: mainWorktreePath
+        execFileSync("git", ["check-ignore", "-q", folder], {
+          stdio: "pipe",
+          cwd: mainWorktreePath,
         });
 
         // It's gitignored, copy it
@@ -152,8 +159,8 @@ try {
     }
   }
 } catch (err) {
-  console.warn('Warning: Could not copy files from main worktree:', err.message);
+  console.warn("Warning: Could not copy files from main worktree:", err.message);
   // Continue anyway
 }
 
-console.log('\n✓ Worktree setup complete! Run `npm run init` to install dependencies.');
+console.log("\n✓ Worktree setup complete! Run `npm run init` to install dependencies.");

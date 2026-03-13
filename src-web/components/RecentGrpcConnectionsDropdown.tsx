@@ -1,12 +1,12 @@
-import type { GrpcConnection } from '@yaakapp-internal/models';
-import { deleteModel } from '@yaakapp-internal/models';
-import { formatDistanceToNowStrict } from 'date-fns';
-import { useDeleteGrpcConnections } from '../hooks/useDeleteGrpcConnections';
-import { pluralizeCount } from '../lib/pluralize';
-import { Dropdown } from './core/Dropdown';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { HStack } from './core/Stacks';
+import type { GrpcConnection } from "@yaakapp-internal/models";
+import { deleteModel } from "@yaakapp-internal/models";
+import { formatDistanceToNowStrict } from "date-fns";
+import { useDeleteGrpcConnections } from "../hooks/useDeleteGrpcConnections";
+import { pluralizeCount } from "../lib/pluralize";
+import { Dropdown } from "./core/Dropdown";
+import { Icon } from "./core/Icon";
+import { IconButton } from "./core/IconButton";
+import { HStack } from "./core/Stacks";
 
 interface Props {
   connections: GrpcConnection[];
@@ -20,27 +20,27 @@ export function RecentGrpcConnectionsDropdown({
   onPinnedConnectionId,
 }: Props) {
   const deleteAllConnections = useDeleteGrpcConnections(activeConnection?.requestId);
-  const latestConnectionId = connections[0]?.id ?? 'n/a';
+  const latestConnectionId = connections[0]?.id ?? "n/a";
 
   return (
     <Dropdown
       items={[
         {
-          label: 'Clear Connection',
+          label: "Clear Connection",
           onSelect: () => deleteModel(activeConnection),
           disabled: connections.length === 0,
         },
         {
-          label: `Clear ${pluralizeCount('Connection', connections.length)}`,
+          label: `Clear ${pluralizeCount("Connection", connections.length)}`,
           onSelect: deleteAllConnections.mutate,
           hidden: connections.length <= 1,
           disabled: connections.length === 0,
         },
-        { type: 'separator', label: 'History' },
+        { type: "separator", label: "History" },
         ...connections.map((c) => ({
           label: (
             <HStack space={2}>
-              {formatDistanceToNowStrict(`${c.createdAt}Z`)} ago &bull;{' '}
+              {formatDistanceToNowStrict(`${c.createdAt}Z`)} ago &bull;{" "}
               <span className="font-mono text-sm">{c.elapsed}ms</span>
             </HStack>
           ),
@@ -51,7 +51,7 @@ export function RecentGrpcConnectionsDropdown({
     >
       <IconButton
         title="Show connection history"
-        icon={activeConnection?.id === latestConnectionId ? 'history' : 'pin'}
+        icon={activeConnection?.id === latestConnectionId ? "history" : "pin"}
         className="m-0.5 text-text-subtle"
         size="sm"
         iconSize="md"

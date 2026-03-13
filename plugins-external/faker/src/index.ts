@@ -1,34 +1,34 @@
-import { faker } from '@faker-js/faker';
-import type { DynamicTemplateFunctionArg, PluginDefinition } from '@yaakapp/api';
+import { faker } from "@faker-js/faker";
+import type { DynamicTemplateFunctionArg, PluginDefinition } from "@yaakapp/api";
 
 const modules = [
-  'airline',
-  'animal',
-  'color',
-  'commerce',
-  'company',
-  'database',
-  'date',
-  'finance',
-  'git',
-  'hacker',
-  'image',
-  'internet',
-  'location',
-  'lorem',
-  'person',
-  'music',
-  'number',
-  'phone',
-  'science',
-  'string',
-  'system',
-  'vehicle',
-  'word',
+  "airline",
+  "animal",
+  "color",
+  "commerce",
+  "company",
+  "database",
+  "date",
+  "finance",
+  "git",
+  "hacker",
+  "image",
+  "internet",
+  "location",
+  "lorem",
+  "person",
+  "music",
+  "number",
+  "phone",
+  "science",
+  "string",
+  "system",
+  "vehicle",
+  "word",
 ];
 
 function normalizeResult(result: unknown): string {
-  if (typeof result === 'string') return result;
+  if (typeof result === "string") return result;
   if (result instanceof Date) return result.toISOString();
   return JSON.stringify(result);
 }
@@ -37,20 +37,20 @@ function normalizeResult(result: unknown): string {
 function args(modName: string, fnName: string): DynamicTemplateFunctionArg[] {
   return [
     {
-      type: 'banner',
-      color: 'info',
+      type: "banner",
+      color: "info",
       inputs: [
         {
-          type: 'markdown',
+          type: "markdown",
           content: `Need help? View documentation for [\`${modName}.${fnName}(…)\`](https://fakerjs.dev/api/${encodeURIComponent(modName)}.html#${encodeURIComponent(fnName)})`,
         },
       ],
     },
     {
-      name: 'options',
-      label: 'Arguments',
-      type: 'editor',
-      language: 'json',
+      name: "options",
+      label: "Arguments",
+      type: "editor",
+      language: "json",
       optional: true,
       placeholder: 'e.g. { "min": 1, "max": 10 } or 10 or ["en","US"]',
     },
@@ -61,22 +61,22 @@ export const plugin: PluginDefinition = {
   templateFunctions: modules.flatMap((modName) => {
     const mod = faker[modName as keyof typeof faker];
     return Object.keys(mod)
-      .filter((n) => n !== 'faker')
+      .filter((n) => n !== "faker")
       .map((fnName) => ({
-        name: ['faker', modName, fnName].join('.'),
+        name: ["faker", modName, fnName].join("."),
         args: args(modName, fnName),
         async onRender(_ctx, args) {
           const fn = mod[fnName as keyof typeof mod] as (...a: unknown[]) => unknown;
           const options = args.values.options;
 
           // No options supplied
-          if (options == null || options === '') {
+          if (options == null || options === "") {
             return normalizeResult(fn());
           }
 
           // Try JSON first
           let parsed: unknown = options;
-          if (typeof options === 'string') {
+          if (typeof options === "string") {
             try {
               parsed = JSON.parse(options);
             } catch {

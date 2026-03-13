@@ -1,37 +1,37 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import type { Plugin } from '@yaakapp-internal/models';
-import { patchModel, pluginsAtom } from '@yaakapp-internal/models';
-import type { PluginVersion } from '@yaakapp-internal/plugins';
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { Plugin } from "@yaakapp-internal/models";
+import { patchModel, pluginsAtom } from "@yaakapp-internal/models";
+import type { PluginVersion } from "@yaakapp-internal/plugins";
 import {
   checkPluginUpdates,
   installPlugin,
   searchPlugins,
   uninstallPlugin,
-} from '@yaakapp-internal/plugins';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { useState } from 'react';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { useInstallPlugin } from '../../hooks/useInstallPlugin';
-import { usePluginInfo } from '../../hooks/usePluginInfo';
-import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
-import { showConfirmDelete } from '../../lib/confirm';
-import { minPromiseMillis } from '../../lib/minPromiseMillis';
-import { Button } from '../core/Button';
-import { Checkbox } from '../core/Checkbox';
-import { CountBadge } from '../core/CountBadge';
-import { Icon } from '../core/Icon';
-import { IconButton } from '../core/IconButton';
-import { InlineCode } from '../core/InlineCode';
-import { Link } from '../core/Link';
-import { LoadingIcon } from '../core/LoadingIcon';
-import { PlainInput } from '../core/PlainInput';
-import { HStack } from '../core/Stacks';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
-import { TabContent, Tabs } from '../core/Tabs/Tabs';
-import { EmptyStateText } from '../EmptyStateText';
-import { SelectFile } from '../SelectFile';
+} from "@yaakapp-internal/plugins";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { useState } from "react";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useInstallPlugin } from "../../hooks/useInstallPlugin";
+import { usePluginInfo } from "../../hooks/usePluginInfo";
+import { usePluginsKey, useRefreshPlugins } from "../../hooks/usePlugins";
+import { showConfirmDelete } from "../../lib/confirm";
+import { minPromiseMillis } from "../../lib/minPromiseMillis";
+import { Button } from "../core/Button";
+import { Checkbox } from "../core/Checkbox";
+import { CountBadge } from "../core/CountBadge";
+import { Icon } from "../core/Icon";
+import { IconButton } from "../core/IconButton";
+import { InlineCode } from "../core/InlineCode";
+import { Link } from "../core/Link";
+import { LoadingIcon } from "../core/LoadingIcon";
+import { PlainInput } from "../core/PlainInput";
+import { HStack } from "../core/Stacks";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../core/Table";
+import { TabContent, Tabs } from "../core/Tabs/Tabs";
+import { EmptyStateText } from "../EmptyStateText";
+import { SelectFile } from "../SelectFile";
 
 interface SettingsPluginsProps {
   defaultSubtab?: string;
@@ -40,8 +40,8 @@ interface SettingsPluginsProps {
 export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
   const [directory, setDirectory] = useState<string | null>(null);
   const plugins = useAtomValue(pluginsAtom);
-  const bundledPlugins = plugins.filter((p) => p.source === 'bundled');
-  const installedPlugins = plugins.filter((p) => p.source !== 'bundled');
+  const bundledPlugins = plugins.filter((p) => p.source === "bundled");
+  const installedPlugins = plugins.filter((p) => p.source !== "bundled");
   const createPlugin = useInstallPlugin();
   const refreshPlugins = useRefreshPlugins();
   return (
@@ -52,15 +52,15 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
         addBorders
         tabListClassName="px-6 pt-2"
         tabs={[
-          { label: 'Discover', value: 'search' },
+          { label: "Discover", value: "search" },
           {
-            label: 'Installed',
-            value: 'installed',
+            label: "Installed",
+            value: "installed",
             rightSlot: <CountBadge count={installedPlugins.length} />,
           },
           {
-            label: 'Bundled',
-            value: 'bundled',
+            label: "Bundled",
+            value: "bundled",
             rightSlot: <CountBadge count={bundledPlugins.length} />,
           },
         ]}
@@ -106,7 +106,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
                   icon="help"
                   title="View documentation"
                   onClick={() =>
-                    openUrl('https://yaak.app/docs/plugin-development/plugins-quick-start')
+                    openUrl("https://yaak.app/docs/plugin-development/plugins-quick-start")
                   }
                 />
               </HStack>
@@ -195,7 +195,7 @@ function PluginTableRow({
   const updates = usePluginUpdates();
   const latestVersion = updates.data?.plugins.find((u) => u.name === name)?.version;
   const installPluginMutation = useMutation({
-    mutationKey: ['install_plugin', name],
+    mutationKey: ["install_plugin", name],
     mutationFn: (name: string) => installPlugin(name, null),
   });
   const uninstall = usePromptUninstall(plugin?.id ?? null, displayName);
@@ -207,7 +207,7 @@ function PluginTableRow({
         <TableCell className="!py-0">
           <Checkbox
             hideLabel
-            title={plugin?.enabled ? 'Disable plugin' : 'Enable plugin'}
+            title={plugin?.enabled ? "Disable plugin" : "Enable plugin"}
             checked={plugin?.enabled ?? false}
             disabled={plugin == null}
             onChange={async (enabled) => {
@@ -285,10 +285,10 @@ function PluginTableRow({
 }
 
 function PluginSearch() {
-  const [query, setQuery] = useState<string>('');
+  const [query, setQuery] = useState<string>("");
   const debouncedQuery = useDebouncedValue(query);
   const results = useQuery({
-    queryKey: ['plugins', debouncedQuery],
+    queryKey: ["plugins", debouncedQuery],
     queryFn: () => searchPlugins(query),
   });
 
@@ -334,7 +334,7 @@ function PluginSearch() {
 
 function InstalledPlugins({ plugins, className }: { plugins: Plugin[]; className?: string }) {
   return plugins.length === 0 ? (
-    <div className={classNames(className, 'pb-4')}>
+    <div className={classNames(className, "pb-4")}>
       <EmptyStateText className="text-center">
         Plugins extend the functionality of Yaak.
         <br />
@@ -388,14 +388,14 @@ function BundledPlugins({ plugins }: { plugins: Plugin[] }) {
 
 function usePromptUninstall(pluginId: string | null, name: string) {
   const mut = useMutation({
-    mutationKey: ['uninstall_plugin', pluginId],
+    mutationKey: ["uninstall_plugin", pluginId],
     mutationFn: async () => {
       if (pluginId == null) return;
 
       const confirmed = await showConfirmDelete({
         id: `uninstall-plugin-${pluginId}`,
-        title: 'Uninstall Plugin',
-        confirmText: 'Uninstall',
+        title: "Uninstall Plugin",
+        confirmText: "Uninstall",
         description: (
           <>
             Permanently uninstall <InlineCode>{name}</InlineCode>?
@@ -413,7 +413,7 @@ function usePromptUninstall(pluginId: string | null, name: string) {
 
 function usePluginUpdates() {
   return useQuery({
-    queryKey: ['plugin_updates', usePluginsKey()],
+    queryKey: ["plugin_updates", usePluginsKey()],
     queryFn: () => checkPluginUpdates(),
   });
 }

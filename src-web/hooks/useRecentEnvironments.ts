@@ -1,18 +1,18 @@
-import { useEffect, useMemo } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
-import { activeEnvironmentAtom } from './useActiveEnvironment';
-import { useEnvironmentsBreakdown } from './useEnvironmentsBreakdown';
-import { useKeyValue } from './useKeyValue';
+import { useEffect, useMemo } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { getKeyValue, setKeyValue } from "../lib/keyValueStore";
+import { activeEnvironmentAtom } from "./useActiveEnvironment";
+import { useEnvironmentsBreakdown } from "./useEnvironmentsBreakdown";
+import { useKeyValue } from "./useKeyValue";
 
 const kvKey = (workspaceId: string) => `recent_environments::${workspaceId}`;
-const namespace = 'global';
+const namespace = "global";
 const fallback: string[] = [];
 
 export function useRecentEnvironments() {
   const { subEnvironments, allEnvironments } = useEnvironmentsBreakdown();
   const kv = useKeyValue<string[]>({
-    key: kvKey(allEnvironments[0]?.workspaceId ?? 'n/a'),
+    key: kvKey(allEnvironments[0]?.workspaceId ?? "n/a"),
     namespace,
     fallback,
   });

@@ -1,5 +1,5 @@
 /* oxlint-disable unbound-method */
-import process from 'node:process';
+import process from "node:process";
 
 export function interceptStdout(intercept: (text: string) => string) {
   const old_stdout_write = process.stdout.write;
@@ -25,5 +25,5 @@ export function interceptStdout(intercept: (text: string) => string) {
 }
 
 function interceptor(text: string, fn: (text: string) => string) {
-  return fn(text).replace(/\n$/, '') + (fn(text) && text.endsWith('\n') ? '\n' : '');
+  return fn(text).replace(/\n$/, "") + (fn(text) && text.endsWith("\n") ? "\n" : "");
 }

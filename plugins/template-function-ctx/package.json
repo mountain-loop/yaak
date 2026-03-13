@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-ctx",
   "displayName": "Window Template Functions",
-  "description": "Template functions for accessing attributes of the current window",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for accessing attributes of the current window",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

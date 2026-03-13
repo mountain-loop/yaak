@@ -1,8 +1,8 @@
-import rehypeStringify from 'rehype-stringify';
-import remarkGfm from 'remark-gfm';
-import remarkParse from 'remark-parse';
-import remarkRehype from 'remark-rehype';
-import { unified } from 'unified';
+import rehypeStringify from "rehype-stringify";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import { unified } from "unified";
 
 const renderer = unified()
   .use(remarkParse)
@@ -21,7 +21,7 @@ export async function renderMarkdown(md: string): Promise<string> {
     const r = await renderer.process(md);
     return r.toString();
   } catch (err) {
-    console.log('FAILED TO RENDER MARKDOWN', err);
-    return 'error';
+    console.log("FAILED TO RENDER MARKDOWN", err);
+    return "error";
   }
 }

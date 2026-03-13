@@ -1,6 +1,6 @@
-import { atom } from 'jotai';
-import type { DialogInstance } from '../components/Dialogs';
-import { jotaiStore } from './jotai';
+import { atom } from "jotai";
+import type { DialogInstance } from "../components/Dialogs";
+import { jotaiStore } from "./jotai";
 
 export const dialogsAtom = atom<DialogInstance[]>([]);
 

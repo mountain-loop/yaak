@@ -1,13 +1,13 @@
-import type { Workspace } from '@yaakapp-internal/models';
-import { patchModel, settingsAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useState } from 'react';
-import { switchWorkspace } from '../commands/switchWorkspace';
-import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
-import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
-import { HStack, VStack } from './core/Stacks';
+import type { Workspace } from "@yaakapp-internal/models";
+import { patchModel, settingsAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useState } from "react";
+import { switchWorkspace } from "../commands/switchWorkspace";
+import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
+import { Icon } from "./core/Icon";
+import { InlineCode } from "./core/InlineCode";
+import { HStack, VStack } from "./core/Stacks";
 
 interface Props {
   hide: () => void;

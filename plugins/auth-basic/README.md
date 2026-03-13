@@ -1,4 +1,4 @@
-# Basic Authentication 
+# Basic Authentication
 
 A simple Basic Authentication plugin that implements HTTP Basic Auth according
 to [RFC 7617](https://datatracker.ietf.org/doc/html/rfc7617), enabling secure

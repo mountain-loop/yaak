@@ -4,25 +4,25 @@ import type {
   HttpRequest,
   WebsocketRequest,
   Workspace,
-} from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
-import { useCallback } from 'react';
-import { openFolderSettings } from '../commands/openFolderSettings';
-import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { useHttpAuthenticationConfig } from '../hooks/useHttpAuthenticationConfig';
-import { useInheritedAuthentication } from '../hooks/useInheritedAuthentication';
-import { useRenderTemplate } from '../hooks/useRenderTemplate';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { Dropdown, type DropdownItem } from './core/Dropdown';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
-import { Input, type InputProps } from './core/Input';
-import { Link } from './core/Link';
-import { SegmentedControl } from './core/SegmentedControl';
-import { HStack } from './core/Stacks';
-import { DynamicForm } from './DynamicForm';
-import { EmptyStateText } from './EmptyStateText';
+} from "@yaakapp-internal/models";
+import { patchModel } from "@yaakapp-internal/models";
+import { useCallback } from "react";
+import { openFolderSettings } from "../commands/openFolderSettings";
+import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
+import { useHttpAuthenticationConfig } from "../hooks/useHttpAuthenticationConfig";
+import { useInheritedAuthentication } from "../hooks/useInheritedAuthentication";
+import { useRenderTemplate } from "../hooks/useRenderTemplate";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { Dropdown, type DropdownItem } from "./core/Dropdown";
+import { Icon } from "./core/Icon";
+import { IconButton } from "./core/IconButton";
+import { InlineCode } from "./core/InlineCode";
+import { Input, type InputProps } from "./core/Input";
+import { Link } from "./core/Link";
+import { SegmentedControl } from "./core/SegmentedControl";
+import { HStack } from "./core/Stacks";
+import { DynamicForm } from "./DynamicForm";
+import { EmptyStateText } from "./EmptyStateText";
 
 interface Props {
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;
@@ -41,7 +41,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
     [model],
   );
 
-  if (model.authenticationType === 'none') {
+  if (model.authenticationType === "none") {
     return <EmptyStateText>No authentication</EmptyStateText>;
   }
 
@@ -56,7 +56,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
   }
 
   if (inheritedAuth == null) {
-    if (model.model === 'workspace' || model.model === 'folder') {
+    if (model.model === "workspace" || model.model === "folder") {
       return (
         <EmptyStateText className="flex-col gap-1">
           <p>
@@ -69,24 +69,24 @@ export function HttpAuthenticationEditor({ model }: Props) {
     return <EmptyStateText>No authentication</EmptyStateText>;
   }
 
-  if (inheritedAuth.authenticationType === 'none') {
+  if (inheritedAuth.authenticationType === "none") {
     return <EmptyStateText>No authentication</EmptyStateText>;
   }
 
   const wasAuthInherited = inheritedAuth?.id !== model.id;
   if (wasAuthInherited) {
     const name = resolvedModelName(inheritedAuth);
-    const cta = inheritedAuth.model === 'workspace' ? 'Workspace' : name;
+    const cta = inheritedAuth.model === "workspace" ? "Workspace" : name;
     return (
       <EmptyStateText>
         <p>
-          Inherited from{' '}
+          Inherited from{" "}
           <button
             type="submit"
             className="underline hover:text-text"
             onClick={() => {
-              if (inheritedAuth.model === 'folder') openFolderSettings(inheritedAuth.id, 'auth');
-              else openWorkspaceSettings('auth');
+              if (inheritedAuth.model === "folder") openFolderSettings(inheritedAuth.id, "auth");
+              else openWorkspaceSettings("auth");
             }}
           >
             {cta}
@@ -106,24 +106,24 @@ export function HttpAuthenticationEditor({ model }: Props) {
             name="enabled"
             value={
               model.authentication.disabled === false || model.authentication.disabled == null
-                ? '__TRUE__'
+                ? "__TRUE__"
                 : model.authentication.disabled === true
-                  ? '__FALSE__'
-                  : '__DYNAMIC__'
+                  ? "__FALSE__"
+                  : "__DYNAMIC__"
             }
             options={[
-              { label: 'Enabled', value: '__TRUE__' },
-              { label: 'Disabled', value: '__FALSE__' },
-              { label: 'Enabled when...', value: '__DYNAMIC__' },
+              { label: "Enabled", value: "__TRUE__" },
+              { label: "Disabled", value: "__FALSE__" },
+              { label: "Enabled when...", value: "__DYNAMIC__" },
             ]}
             onChange={async (enabled) => {
               let disabled: boolean | string;
-              if (enabled === '__TRUE__') {
+              if (enabled === "__TRUE__") {
                 disabled = false;
-              } else if (enabled === '__FALSE__') {
+              } else if (enabled === "__FALSE__") {
                 disabled = true;
               } else {
-                disabled = '';
+                disabled = "";
               }
               await handleChange({ ...model.authentication, disabled });
             }}
@@ -147,7 +147,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
             </Dropdown>
           )}
         </HStack>
-        {typeof model.authentication.disabled === 'string' && (
+        {typeof model.authentication.disabled === "string" && (
           <div className="mt-3">
             <AuthenticationDisabledInput
               className="w-full"
@@ -178,14 +178,14 @@ function AuthenticationDisabledInput({
   className,
 }: {
   value: string;
-  onChange: InputProps['onChange'];
+  onChange: InputProps["onChange"];
   stateKey: string;
   className?: string;
 }) {
   const rendered = useRenderTemplate({
     template: value,
     enabled: true,
-    purpose: 'preview',
+    purpose: "preview",
     refreshKey: value,
   });
 
@@ -200,7 +200,7 @@ function AuthenticationDisabledInput({
       rightSlot={
         <div className="px-1 flex items-center">
           <div className="rounded-full bg-surface-highlight text-xs px-1.5 py-0.5 text-text-subtle whitespace-nowrap">
-            {rendered.isPending ? 'loading' : rendered.data ? 'enabled' : 'disabled'}
+            {rendered.isPending ? "loading" : rendered.data ? "enabled" : "disabled"}
           </div>
         </div>
       }

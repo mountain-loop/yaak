@@ -1,6 +1,6 @@
-import type { Virtualizer } from '@tanstack/react-virtual';
-import { useCallback } from 'react';
-import { useKey } from 'react-use';
+import type { Virtualizer } from "@tanstack/react-virtual";
+import { useCallback } from "react";
+import { useKey } from "react-use";
 
 interface UseEventViewerKeyboardProps {
   totalCount: number;
@@ -28,7 +28,7 @@ export function useEventViewerKeyboard({
 
     const newIndex = activeIndex == null ? 0 : Math.max(0, activeIndex - 1);
     setActiveIndex(newIndex);
-    virtualizer?.scrollToIndex(newIndex, { align: 'auto' });
+    virtualizer?.scrollToIndex(newIndex, { align: "auto" });
   }, [activeIndex, setActiveIndex, totalCount, virtualizer]);
 
   const selectNext = useCallback(() => {
@@ -36,11 +36,11 @@ export function useEventViewerKeyboard({
 
     const newIndex = activeIndex == null ? 0 : Math.min(totalCount - 1, activeIndex + 1);
     setActiveIndex(newIndex);
-    virtualizer?.scrollToIndex(newIndex, { align: 'auto' });
+    virtualizer?.scrollToIndex(newIndex, { align: "auto" });
   }, [activeIndex, setActiveIndex, totalCount, virtualizer]);
 
   useKey(
-    (e) => e.key === 'ArrowUp' || e.key === 'k',
+    (e) => e.key === "ArrowUp" || e.key === "k",
     (e) => {
       if (!enabled || !isContainerFocused()) return;
       e.preventDefault();
@@ -51,7 +51,7 @@ export function useEventViewerKeyboard({
   );
 
   useKey(
-    (e) => e.key === 'ArrowDown' || e.key === 'j',
+    (e) => e.key === "ArrowDown" || e.key === "j",
     (e) => {
       if (!enabled || !isContainerFocused()) return;
       e.preventDefault();
@@ -62,7 +62,7 @@ export function useEventViewerKeyboard({
   );
 
   useKey(
-    (e) => e.key === 'Escape',
+    (e) => e.key === "Escape",
     (e) => {
       if (!enabled || !isContainerFocused()) return;
       e.preventDefault();
@@ -73,7 +73,7 @@ export function useEventViewerKeyboard({
   );
 
   useKey(
-    (e) => e.key === 'Enter' || e.key === ' ',
+    (e) => e.key === "Enter" || e.key === " ",
     (e) => {
       if (!enabled || !isContainerFocused() || activeIndex == null) return;
       e.preventDefault();

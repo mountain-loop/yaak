@@ -1,33 +1,33 @@
-import type { Environment, Workspace } from '@yaakapp-internal/models';
-import { duplicateModel, patchModel } from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
+import type { Environment, Workspace } from "@yaakapp-internal/models";
+import { duplicateModel, patchModel } from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createSubEnvironmentAndActivate } from "../commands/createEnvironment";
+import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import {
   environmentsBreakdownAtom,
   useEnvironmentsBreakdown,
-} from '../hooks/useEnvironmentsBreakdown';
-import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { fireAndForget } from '../lib/fireAndForget';
-import { jotaiStore } from '../lib/jotai';
-import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { showColorPicker } from '../lib/showColorPicker';
-import { Banner } from './core/Banner';
-import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { IconTooltip } from './core/IconTooltip';
-import { InlineCode } from './core/InlineCode';
-import type { PairEditorHandle } from './core/PairEditor';
-import { SplitLayout } from './core/SplitLayout';
-import type { TreeNode } from './core/tree/common';
-import type { TreeHandle, TreeProps } from './core/tree/Tree';
-import { Tree } from './core/tree/Tree';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
-import { EnvironmentEditor } from './EnvironmentEditor';
-import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
+} from "../hooks/useEnvironmentsBreakdown";
+import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { fireAndForget } from "../lib/fireAndForget";
+import { jotaiStore } from "../lib/jotai";
+import { isBaseEnvironment, isSubEnvironment } from "../lib/model_util";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { showColorPicker } from "../lib/showColorPicker";
+import { Banner } from "./core/Banner";
+import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
+import { Icon } from "./core/Icon";
+import { IconButton } from "./core/IconButton";
+import { IconTooltip } from "./core/IconTooltip";
+import { InlineCode } from "./core/InlineCode";
+import type { PairEditorHandle } from "./core/PairEditor";
+import { SplitLayout } from "./core/SplitLayout";
+import type { TreeNode } from "./core/tree/common";
+import type { TreeHandle, TreeProps } from "./core/tree/Tree";
+import { Tree } from "./core/tree/Tree";
+import { EnvironmentColorIndicator } from "./EnvironmentColorIndicator";
+import { EnvironmentEditor } from "./EnvironmentEditor";
+import { EnvironmentSharableTooltip } from "./EnvironmentSharableTooltip";
 
 interface Props {
   initialEnvironmentId: string | null;
@@ -108,7 +108,7 @@ function EnvironmentEditDialogSidebar({
   selectedEnvironmentId: string | null;
   setSelectedEnvironmentId: (id: string | null) => void;
 }) {
-  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom) ?? '';
+  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom) ?? "";
   const treeId = `environment.${activeWorkspaceId}.sidebar`;
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
@@ -134,7 +134,7 @@ function EnvironmentEditDialogSidebar({
     const enable = () => treeRef.current?.hasFocus() ?? false;
 
     const actions = {
-      'sidebar.selected.rename': {
+      "sidebar.selected.rename": {
         enable,
         allowDefault: true,
         priority: 100,
@@ -145,12 +145,12 @@ function EnvironmentEditDialogSidebar({
           }
         },
       },
-      'sidebar.selected.delete': {
+      "sidebar.selected.delete": {
         priority: 100,
         enable,
         cb: (items: TreeModel[]) => deleteModelWithConfirm(items),
       },
-      'sidebar.selected.duplicate': {
+      "sidebar.selected.duplicate": {
         priority: 100,
         enable,
         cb: async (items: TreeModel[]) => {
@@ -167,20 +167,20 @@ function EnvironmentEditDialogSidebar({
     return actions;
   }, [setSelectedEnvironmentId]);
 
-  const hotkeys = useMemo<TreeProps<TreeModel>['hotkeys']>(() => ({ actions }), [actions]);
+  const hotkeys = useMemo<TreeProps<TreeModel>["hotkeys"]>(() => ({ actions }), [actions]);
 
   const getContextMenu = useCallback(
-    (items: TreeModel[]): ContextMenuProps['items'] => {
+    (items: TreeModel[]): ContextMenuProps["items"] => {
       const environment = items[0];
       const addEnvironmentItem: DropdownItem = {
-        label: 'Create Sub Environment',
+        label: "Create Sub Environment",
         leftSlot: <Icon icon="plus" />,
         onSelect: async () => {
           await createSubEnvironment();
         },
       };
 
-      if (environment == null || environment.model !== 'environment') {
+      if (environment == null || environment.model !== "environment") {
         return [addEnvironmentItem];
       }
 
@@ -191,36 +191,36 @@ function EnvironmentEditDialogSidebar({
 
       const menuItems: DropdownItem[] = [
         {
-          label: 'Rename',
+          label: "Rename",
           leftSlot: <Icon icon="pencil" />,
           hidden: isBaseEnvironment(environment) || !singleEnvironment,
-          hotKeyAction: 'sidebar.selected.rename',
+          hotKeyAction: "sidebar.selected.rename",
           hotKeyLabelOnly: true,
           onSelect: async () => {
             // Not sure why this is needed, but without it the
             // edit input blurs immediately after opening.
             requestAnimationFrame(() => {
-              fireAndForget(actions['sidebar.selected.rename'].cb(items));
+              fireAndForget(actions["sidebar.selected.rename"].cb(items));
             });
           },
         },
         {
-          label: 'Duplicate',
+          label: "Duplicate",
           leftSlot: <Icon icon="copy" />,
           hidden: isBaseEnvironment(environment),
-          hotKeyAction: 'sidebar.selected.duplicate',
+          hotKeyAction: "sidebar.selected.duplicate",
           hotKeyLabelOnly: true,
-          onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
+          onSelect: () => actions["sidebar.selected.duplicate"].cb(items),
         },
         {
-          label: environment.color ? 'Change Color' : 'Assign Color',
+          label: environment.color ? "Change Color" : "Assign Color",
           leftSlot: <Icon icon="palette" />,
           hidden: isBaseEnvironment(environment) || !singleEnvironment,
           onSelect: async () => showColorPicker(environment),
         },
         {
-          label: `Make ${environment.public ? 'Private' : 'Sharable'}`,
-          leftSlot: <Icon icon={environment.public ? 'eye_closed' : 'eye'} />,
+          label: `Make ${environment.public ? "Private" : "Sharable"}`,
+          leftSlot: <Icon icon={environment.public ? "eye_closed" : "eye"} />,
           rightSlot: <EnvironmentSharableTooltip />,
           hidden: items.length > 1,
           onSelect: async () => {
@@ -228,9 +228,9 @@ function EnvironmentEditDialogSidebar({
           },
         },
         {
-          color: 'danger',
-          label: 'Delete',
-          hotKeyAction: 'sidebar.selected.delete',
+          color: "danger",
+          label: "Delete",
+          hotKeyAction: "sidebar.selected.delete",
           hotKeyLabelOnly: true,
           hidden: !canDeleteEnvironment,
           leftSlot: <Icon icon="trash" />,
@@ -240,7 +240,7 @@ function EnvironmentEditDialogSidebar({
 
       // Add sub environment to base environment
       if (isBaseEnvironment(environment) && singleEnvironment) {
-        menuItems.push({ type: 'separator' });
+        menuItems.push({ type: "separator" });
         menuItems.push(addEnvironmentItem);
       }
 
@@ -358,7 +358,7 @@ function ItemLeftSlotInner({ item }: { item: TreeModel }) {
   return baseEnvironments.length > 1 ? (
     <Icon icon="alert_triangle" color="notice" />
   ) : (
-    item.model === 'environment' && item.color && <EnvironmentColorIndicator environment={item} />
+    item.model === "environment" && item.color && <EnvironmentColorIndicator environment={item} />
   );
 }
 
@@ -366,7 +366,7 @@ function ItemRightSlot({ item }: { item: TreeModel }) {
   const { baseEnvironments } = useEnvironmentsBreakdown();
   return (
     <>
-      {item.model === 'environment' && baseEnvironments.length <= 1 && isBaseEnvironment(item) && (
+      {item.model === "environment" && baseEnvironments.length <= 1 && isBaseEnvironment(item) && (
         <IconButton
           size="sm"
           color="custom"
@@ -384,7 +384,7 @@ function ItemRightSlot({ item }: { item: TreeModel }) {
 function ItemInner({ item }: { item: TreeModel }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] w-full items-center">
-      {item.model === 'environment' && item.public ? (
+      {item.model === "environment" && item.public ? (
         <div className="mr-2 flex items-center">{sharableTooltip}</div>
       ) : (
         <span aria-hidden />
@@ -402,9 +402,9 @@ async function createSubEnvironment() {
 }
 
 function getEditOptions(item: TreeModel) {
-  const options: ReturnType<NonNullable<TreeProps<TreeModel>['getEditOptions']>> = {
+  const options: ReturnType<NonNullable<TreeProps<TreeModel>["getEditOptions"]>> = {
     defaultValue: item.name,
-    placeholder: 'Name',
+    placeholder: "Name",
     async onChange(item, name) {
       await patchModel(item, { name });
     },

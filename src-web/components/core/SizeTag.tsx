@@ -1,4 +1,4 @@
-import { formatSize } from '@yaakapp-internal/lib/formatSize';
+import { formatSize } from "@yaakapp-internal/lib/formatSize";
 
 interface Props {
   contentLength: number;
@@ -11,7 +11,7 @@ export function SizeTag({ contentLength, contentLengthCompressed }: Props) {
       className="font-mono"
       title={
         `${contentLength} bytes` +
-        (contentLengthCompressed ? `\n${contentLengthCompressed} bytes compressed` : '')
+        (contentLengthCompressed ? `\n${contentLengthCompressed} bytes compressed` : "")
       }
     >
       {formatSize(contentLength)}

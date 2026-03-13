@@ -4,16 +4,16 @@ export function formatSize(bytes: number): string {
 
   if (bytes > 1000 * 1000 * 1000) {
     num = bytes / 1000 / 1000 / 1000;
-    unit = 'GB';
+    unit = "GB";
   } else if (bytes > 1000 * 1000) {
     num = bytes / 1000 / 1000;
-    unit = 'MB';
+    unit = "MB";
   } else if (bytes > 1000) {
     num = bytes / 1000;
-    unit = 'KB';
+    unit = "KB";
   } else {
     num = bytes;
-    unit = 'B';
+    unit = "B";
   }
 
   return `${Math.round(num * 10) / 10} ${unit}`;

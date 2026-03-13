@@ -1,16 +1,16 @@
-import type { CSSProperties } from 'react';
-import { Fragment } from 'react';
-import type { SelectableTreeNode } from './common';
-import type { TreeProps } from './Tree';
-import { TreeDropMarker } from './TreeDropMarker';
-import type { TreeItemHandle, TreeItemProps } from './TreeItem';
-import { TreeItem } from './TreeItem';
+import type { CSSProperties } from "react";
+import { Fragment } from "react";
+import type { SelectableTreeNode } from "./common";
+import type { TreeProps } from "./Tree";
+import { TreeDropMarker } from "./TreeDropMarker";
+import type { TreeItemHandle, TreeItemProps } from "./TreeItem";
+import { TreeItem } from "./TreeItem";
 
 export type TreeItemListProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getItemKey' | 'getEditOptions'
+  "ItemInner" | "ItemLeftSlotInner" | "ItemRightSlot" | "treeId" | "getItemKey" | "getEditOptions"
 > &
-  Pick<TreeItemProps<T>, 'onClick' | 'getContextMenu'> & {
+  Pick<TreeItemProps<T>, "onClick" | "getContextMenu"> & {
     nodes: SelectableTreeNode<T>[];
     style?: CSSProperties;
     className?: string;

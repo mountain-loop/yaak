@@ -1,21 +1,21 @@
-import type { ConfirmProps } from '../components/core/Confirm';
-import { Confirm } from '../components/core/Confirm';
-import type { DialogProps } from '../components/core/Dialog';
-import { showDialog } from './dialog';
+import type { ConfirmProps } from "../components/core/Confirm";
+import { Confirm } from "../components/core/Confirm";
+import type { DialogProps } from "../components/core/Dialog";
+import { showDialog } from "./dialog";
 
 type ConfirmArgs = {
   id: string;
-} & Pick<DialogProps, 'title' | 'description' | 'size'> &
-  Pick<ConfirmProps, 'color' | 'confirmText' | 'requireTyping'>;
+} & Pick<DialogProps, "title" | "description" | "size"> &
+  Pick<ConfirmProps, "color" | "confirmText" | "requireTyping">;
 
 export async function showConfirm({
   color,
   confirmText,
   requireTyping,
-  size = 'sm',
+  size = "sm",
   ...extraProps
 }: ConfirmArgs) {
-  return new Promise((onResult: ConfirmProps['onResult']) => {
+  return new Promise((onResult: ConfirmProps["onResult"]) => {
     showDialog({
       ...extraProps,
       hideX: true,
@@ -28,8 +28,8 @@ export async function showConfirm({
 
 export async function showConfirmDelete({ confirmText, color, ...extraProps }: ConfirmArgs) {
   return showConfirm({
-    color: color ?? 'danger',
-    confirmText: confirmText ?? 'Delete',
+    color: color ?? "danger",
+    confirmText: confirmText ?? "Delete",
     ...extraProps,
   });
 }

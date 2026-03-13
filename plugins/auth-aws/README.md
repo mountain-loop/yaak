@@ -38,7 +38,7 @@ The plugin presents the following fields:
 
 - **Access Key ID** – Your AWS access key identifier
 - **Secret Access Key** – The secret associated with the access key
-- **Session Token** *(optional)* – Used for temporary or assumed-role credentials (treated as secret)
+- **Session Token** _(optional)_ – Used for temporary or assumed-role credentials (treated as secret)
 - **Region** – AWS region (e.g., `us-east-1`)
 - **Service** – AWS service identifier (e.g., `sts`, `s3`, `execute-api`)
 

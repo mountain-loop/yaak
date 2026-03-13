@@ -1,13 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 import type {
   GetTemplateFunctionSummaryResponse,
   TemplateFunction,
-} from '@yaakapp-internal/plugins';
-import { atom, useAtomValue, useSetAtom } from 'jotai';
-import { useMemo, useState } from 'react';
-import type { TwigCompletionOption } from '../components/core/Editor/twig/completion';
-import { invokeCmd } from '../lib/tauri';
-import { usePluginsKey } from './usePlugins';
+} from "@yaakapp-internal/plugins";
+import { atom, useAtomValue, useSetAtom } from "jotai";
+import { useMemo, useState } from "react";
+import type { TwigCompletionOption } from "../components/core/Editor/twig/completion";
+import { invokeCmd } from "../lib/tauri";
+import { usePluginsKey } from "./usePlugins";
 
 const templateFunctionsAtom = atom<TemplateFunction[]>([]);
 
@@ -21,9 +21,9 @@ export function useTemplateFunctionCompletionOptions(
       return [];
     }
     return templateFunctions.map((fn) => {
-      const argsLabel = fn.args.length > 0 ? '…' : '';
+      const argsLabel = fn.args.length > 0 ? "…" : "";
       const fn2: TwigCompletionOption = {
-        type: 'function',
+        type: "function",
         onClick: (rawTag: string, startPos: number) => onClick(fn, rawTag, startPos),
         label: `${fn.name}(${argsLabel})`,
         invalid: false,
@@ -41,7 +41,7 @@ export function useSubscribeTemplateFunctions() {
   const setAtom = useSetAtom(templateFunctionsAtom);
 
   useQuery({
-    queryKey: ['template_functions', pluginsKey],
+    queryKey: ["template_functions", pluginsKey],
     // Fetch periodically until functions are returned
     // NOTE: visibilitychange (refetchOnWindowFocus) does not work on Windows, so we'll rely on this logic
     //  to refetch things until that's working again
@@ -50,7 +50,7 @@ export function useSubscribeTemplateFunctions() {
     refetchOnMount: true,
     queryFn: async () => {
       const result = await invokeCmd<GetTemplateFunctionSummaryResponse[]>(
-        'cmd_template_function_summaries',
+        "cmd_template_function_summaries",
       );
       setNumFns(result.length);
       const functions = result.flatMap((r) => r.functions) ?? [];

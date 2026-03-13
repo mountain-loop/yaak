@@ -1,18 +1,18 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import type { ServerSentEvent } from '@yaakapp-internal/sse';
-import classNames from 'classnames';
-import { Fragment, useMemo, useState } from 'react';
-import { useFormatText } from '../../hooks/useFormatText';
-import { useResponseBodyEventSource } from '../../hooks/useResponseBodyEventSource';
-import { isJSON } from '../../lib/contentType';
-import { Button } from '../core/Button';
-import type { EditorProps } from '../core/Editor/Editor';
-import { Editor } from '../core/Editor/LazyEditor';
-import { EventDetailHeader, EventViewer } from '../core/EventViewer';
-import { EventViewerRow } from '../core/EventViewerRow';
-import { Icon } from '../core/Icon';
-import { InlineCode } from '../core/InlineCode';
-import { HStack, VStack } from '../core/Stacks';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import type { ServerSentEvent } from "@yaakapp-internal/sse";
+import classNames from "classnames";
+import { Fragment, useMemo, useState } from "react";
+import { useFormatText } from "../../hooks/useFormatText";
+import { useResponseBodyEventSource } from "../../hooks/useResponseBodyEventSource";
+import { isJSON } from "../../lib/contentType";
+import { Button } from "../core/Button";
+import type { EditorProps } from "../core/Editor/Editor";
+import { Editor } from "../core/Editor/LazyEditor";
+import { EventDetailHeader, EventViewer } from "../core/EventViewer";
+import { EventViewerRow } from "../core/EventViewerRow";
+import { Icon } from "../core/Icon";
+import { InlineCode } from "../core/InlineCode";
+import { HStack, VStack } from "../core/Stacks";
 
 interface Props {
   response: HttpResponse;
@@ -85,9 +85,9 @@ function EventDetail({
   setShowingLarge: (v: boolean) => void;
   onClose: () => void;
 }) {
-  const language = useMemo<'text' | 'json'>(() => {
-    if (!event?.data) return 'text';
-    return isJSON(event?.data) ? 'json' : 'text';
+  const language = useMemo<"text" | "json">(() => {
+    if (!event?.data) return "text";
+    return isJSON(event?.data) ? "json" : "text";
   }, [event?.data]);
 
   return (
@@ -125,7 +125,7 @@ function EventDetail({
   );
 }
 
-function FormattedEditor({ text, language }: { text: string; language: EditorProps['language'] }) {
+function FormattedEditor({ text, language }: { text: string; language: EditorProps["language"] }) {
   const formatted = useFormatText({ text, language, pretty: true });
   if (formatted == null) return null;
   return <Editor readOnly defaultValue={formatted} language={language} stateKey={null} />;
@@ -144,11 +144,11 @@ function EventLabels({
 }) {
   return (
     <HStack space={1.5} alignItems="center" className={className}>
-      <InlineCode className={classNames('py-0', isActive && 'bg-text-subtlest text-text')}>
+      <InlineCode className={classNames("py-0", isActive && "bg-text-subtlest text-text")}>
         {event.id ?? index}
       </InlineCode>
       {event.eventType && (
-        <InlineCode className={classNames('py-0', isActive && 'bg-text-subtlest text-text')}>
+        <InlineCode className={classNames("py-0", isActive && "bg-text-subtlest text-text")}>
           {event.eventType}
         </InlineCode>
       )}

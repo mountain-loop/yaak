@@ -3,15 +3,15 @@ import {
   closeBrackets,
   closeBracketsKeymap,
   completionKeymap,
-} from '@codemirror/autocomplete';
-import { history, historyKeymap } from '@codemirror/commands';
-import { go } from '@codemirror/lang-go';
-import { java } from '@codemirror/lang-java';
-import { javascript } from '@codemirror/lang-javascript';
-import { markdown } from '@codemirror/lang-markdown';
-import { php } from '@codemirror/lang-php';
-import { python } from '@codemirror/lang-python';
-import { xml } from '@codemirror/lang-xml';
+} from "@codemirror/autocomplete";
+import { history, historyKeymap } from "@codemirror/commands";
+import { go } from "@codemirror/lang-go";
+import { java } from "@codemirror/lang-java";
+import { javascript } from "@codemirror/lang-javascript";
+import { markdown } from "@codemirror/lang-markdown";
+import { php } from "@codemirror/lang-php";
+import { python } from "@codemirror/lang-python";
+import { xml } from "@codemirror/lang-xml";
 import {
   bracketMatching,
   codeFolding,
@@ -22,20 +22,20 @@ import {
   LanguageSupport,
   StreamLanguage,
   syntaxHighlighting,
-} from '@codemirror/language';
-import { c, csharp, kotlin, objectiveC } from '@codemirror/legacy-modes/mode/clike';
-import { clojure } from '@codemirror/legacy-modes/mode/clojure';
-import { http } from '@codemirror/legacy-modes/mode/http';
-import { oCaml } from '@codemirror/legacy-modes/mode/mllike';
-import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
-import { r } from '@codemirror/legacy-modes/mode/r';
-import { ruby } from '@codemirror/legacy-modes/mode/ruby';
-import { shell } from '@codemirror/legacy-modes/mode/shell';
-import { swift } from '@codemirror/legacy-modes/mode/swift';
-import { linter, lintGutter, lintKeymap } from '@codemirror/lint';
-import { search, searchKeymap } from '@codemirror/search';
-import type { Extension } from '@codemirror/state';
-import { EditorState } from '@codemirror/state';
+} from "@codemirror/language";
+import { c, csharp, kotlin, objectiveC } from "@codemirror/legacy-modes/mode/clike";
+import { clojure } from "@codemirror/legacy-modes/mode/clojure";
+import { http } from "@codemirror/legacy-modes/mode/http";
+import { oCaml } from "@codemirror/legacy-modes/mode/mllike";
+import { powerShell } from "@codemirror/legacy-modes/mode/powershell";
+import { r } from "@codemirror/legacy-modes/mode/r";
+import { ruby } from "@codemirror/legacy-modes/mode/ruby";
+import { shell } from "@codemirror/legacy-modes/mode/shell";
+import { swift } from "@codemirror/legacy-modes/mode/swift";
+import { linter, lintGutter, lintKeymap } from "@codemirror/lint";
+import { search, searchKeymap } from "@codemirror/search";
+import type { Extension } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import {
   crosshairCursor,
   drawSelection,
@@ -46,51 +46,51 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
-} from '@codemirror/view';
-import { tags as t } from '@lezer/highlight';
-import { jsonc, jsoncLanguage } from '@shopify/lang-jsonc';
-import { graphql } from 'cm6-graphql';
-import type { GraphQLSchema } from 'graphql';
-import { activeRequestIdAtom } from '../../../hooks/useActiveRequestId';
-import type { WrappedEnvironmentVariable } from '../../../hooks/useEnvironmentVariables';
-import { jotaiStore } from '../../../lib/jotai';
-import { renderMarkdown } from '../../../lib/markdown';
-import { pluralizeCount } from '../../../lib/pluralize';
-import { showGraphQLDocExplorerAtom } from '../../graphql/graphqlAtoms';
-import type { EditorProps } from './Editor';
-import { jsonParseLinter } from './json-lint';
-import { pairs } from './pairs/extension';
-import { searchMatchCount } from './searchMatchCount';
-import { text } from './text/extension';
-import { timeline } from './timeline/extension';
-import type { TwigCompletionOption } from './twig/completion';
-import { twig } from './twig/extension';
-import { pathParametersPlugin } from './twig/pathParameters';
-import { url } from './url/extension';
+} from "@codemirror/view";
+import { tags as t } from "@lezer/highlight";
+import { jsonc, jsoncLanguage } from "@shopify/lang-jsonc";
+import { graphql } from "cm6-graphql";
+import type { GraphQLSchema } from "graphql";
+import { activeRequestIdAtom } from "../../../hooks/useActiveRequestId";
+import type { WrappedEnvironmentVariable } from "../../../hooks/useEnvironmentVariables";
+import { jotaiStore } from "../../../lib/jotai";
+import { renderMarkdown } from "../../../lib/markdown";
+import { pluralizeCount } from "../../../lib/pluralize";
+import { showGraphQLDocExplorerAtom } from "../../graphql/graphqlAtoms";
+import type { EditorProps } from "./Editor";
+import { jsonParseLinter } from "./json-lint";
+import { pairs } from "./pairs/extension";
+import { searchMatchCount } from "./searchMatchCount";
+import { text } from "./text/extension";
+import { timeline } from "./timeline/extension";
+import type { TwigCompletionOption } from "./twig/completion";
+import { twig } from "./twig/extension";
+import { pathParametersPlugin } from "./twig/pathParameters";
+import { url } from "./url/extension";
 
 export const syntaxHighlightStyle = HighlightStyle.define([
   {
     tag: [t.documentMeta, t.blockComment, t.lineComment, t.docComment, t.comment],
-    color: 'var(--textSubtlest)',
+    color: "var(--textSubtlest)",
   },
   {
     tag: [t.emphasis],
-    textDecoration: 'underline',
+    textDecoration: "underline",
   },
   {
     tag: [t.angleBracket, t.paren, t.bracket, t.squareBracket, t.brace, t.separator, t.punctuation],
-    color: 'var(--textSubtle)',
+    color: "var(--textSubtle)",
   },
   {
     tag: [t.link, t.name, t.tagName, t.angleBracket, t.docString, t.number],
-    color: 'var(--info)',
+    color: "var(--info)",
   },
-  { tag: [t.variableName], color: 'var(--success)' },
-  { tag: [t.bool], color: 'var(--warning)' },
-  { tag: [t.attributeName, t.propertyName], color: 'var(--primary)' },
-  { tag: [t.attributeValue], color: 'var(--warning)' },
-  { tag: [t.string], color: 'var(--notice)' },
-  { tag: [t.atom, t.meta, t.operator, t.bool, t.null, t.keyword], color: 'var(--danger)' },
+  { tag: [t.variableName], color: "var(--success)" },
+  { tag: [t.bool], color: "var(--warning)" },
+  { tag: [t.attributeName, t.propertyName], color: "var(--primary)" },
+  { tag: [t.attributeValue], color: "var(--warning)" },
+  { tag: [t.string], color: "var(--notice)" },
+  { tag: [t.atom, t.meta, t.operator, t.bool, t.null, t.keyword], color: "var(--danger)" },
 ]);
 
 const syntaxTheme = EditorView.theme({}, { dark: true });
@@ -102,7 +102,7 @@ const legacyLang = (mode: Parameters<typeof StreamLanguage.define>[0]) => {
 };
 
 const syntaxExtensions: Record<
-  NonNullable<EditorProps['language']>,
+  NonNullable<EditorProps["language"]>,
   null | (() => LanguageSupport)
 > = {
   graphql: null,
@@ -134,11 +134,11 @@ const syntaxExtensions: Record<
   swift: legacyLang(swift),
 };
 
-const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ['json', 'javascript', 'graphql'];
+const closeBracketsFor: (keyof typeof syntaxExtensions)[] = ["json", "javascript", "graphql"];
 
 export function getLanguageExtension({
   useTemplating,
-  language = 'text',
+  language = "text",
   lintExtension,
   environmentVariables,
   autocomplete,
@@ -156,10 +156,10 @@ export function getLanguageExtension({
   onClickPathParameter: (name: string) => void;
   completionOptions: TwigCompletionOption[];
   graphQLSchema: GraphQLSchema | null;
-} & Pick<EditorProps, 'language' | 'autocomplete' | 'hideGutter' | 'lintExtension'>) {
+} & Pick<EditorProps, "language" | "autocomplete" | "hideGutter" | "lintExtension">) {
   const extraExtensions: Extension[] = [];
 
-  if (language === 'url') {
+  if (language === "url") {
     extraExtensions.push(pathParametersPlugin(onClickPathParameter));
   }
 
@@ -169,13 +169,13 @@ export function getLanguageExtension({
   }
 
   // GraphQL is a special exception
-  if (language === 'graphql') {
+  if (language === "graphql") {
     return [
       graphql(graphQLSchema ?? undefined, {
         async onCompletionInfoRender(gqlCompletionItem): Promise<Node | null> {
           if (!gqlCompletionItem.documentation) return null;
           const innerHTML = await renderMarkdown(gqlCompletionItem.documentation);
-          const span = document.createElement('span');
+          const span = document.createElement("span");
           span.innerHTML = innerHTML;
           return span;
         },
@@ -192,11 +192,11 @@ export function getLanguageExtension({
     ];
   }
 
-  if (language === 'json') {
+  if (language === "json") {
     extraExtensions.push(lintExtension ?? linter(jsonParseLinter()));
     extraExtensions.push(
       jsoncLanguage.data.of({
-        commentTokens: { line: '//', block: { open: '/*', close: '*/' } },
+        commentTokens: { line: "//", block: { open: "/*", close: "*/" } },
       }),
     );
     if (!hideGutter) {
@@ -205,7 +205,7 @@ export function getLanguageExtension({
   }
 
   const maybeBase = language ? syntaxExtensions[language] : null;
-  const base = typeof maybeBase === 'function' ? maybeBase() : null;
+  const base = typeof maybeBase === "function" ? maybeBase() : null;
   if (base == null) {
     return [];
   }
@@ -229,10 +229,10 @@ export function getLanguageExtension({
 // Filter out autocomplete start triggers from completionKeymap since we handle it via configurable hotkeys.
 // Keep navigation keys (ArrowUp/Down, Enter, Escape, etc.) but remove startCompletion bindings.
 const filteredCompletionKeymap = completionKeymap.filter((binding) => {
-  const key = binding.key?.toLowerCase() ?? '';
-  const mac = (binding as { mac?: string }).mac?.toLowerCase() ?? '';
+  const key = binding.key?.toLowerCase() ?? "";
+  const mac = (binding as { mac?: string }).mac?.toLowerCase() ?? "";
   // Filter out Ctrl-Space and Mac-specific autocomplete triggers (Alt-`, Alt-i)
-  const isStartTrigger = key.includes('space') || mac.includes('alt-') || mac.includes('`');
+  const isStartTrigger = key.includes("space") || mac.includes("alt-") || mac.includes("`");
   return !isStartTrigger;
 });
 
@@ -242,7 +242,7 @@ export const baseExtensions = [
   dropCursor(),
   drawSelection(),
   autocompletion({
-    tooltipClass: () => 'x-theme-menu',
+    tooltipClass: () => "x-theme-menu",
     closeOnBlur: true, // Set to `false` for debugging in devtools without closing it
     defaultKeymap: false, // We handle the trigger via configurable hotkeys
     compareCompletions: (a, b) => {
@@ -257,7 +257,7 @@ export const baseExtensions = [
 
 export const readonlyExtensions = [
   EditorState.readOnly.of(true),
-  EditorView.contentAttributes.of({ tabindex: '-1' }),
+  EditorView.contentAttributes.of({ tabindex: "-1" }),
 ];
 
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
@@ -269,11 +269,11 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
         lineNumbers(),
         foldGutter({
           markerDOM: (open) => {
-            const el = document.createElement('div');
-            el.classList.add('fold-gutter-icon');
+            const el = document.createElement("div");
+            el.classList.add("fold-gutter-icon");
             el.tabIndex = -1;
             if (open) {
-              el.setAttribute('data-open', '');
+              el.setAttribute("data-open", "");
             }
             return el;
           },
@@ -281,12 +281,12 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
       ],
   codeFolding({
     placeholderDOM(_view, onclick, prepared) {
-      const el = document.createElement('span');
+      const el = document.createElement("span");
       el.onclick = onclick;
-      el.className = 'cm-foldPlaceholder';
-      el.innerText = prepared || '…';
-      el.title = 'unfold';
-      el.ariaLabel = 'folded code';
+      el.className = "cm-foldPlaceholder";
+      el.innerText = prepared || "…";
+      el.title = "unfold";
+      el.ariaLabel = "folded code";
       return el;
     },
     /**
@@ -295,15 +295,15 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
      */
     preparePlaceholder(state, range) {
       let count: number | undefined;
-      let startToken = '{';
-      let endToken = '}';
+      let startToken = "{";
+      let endToken = "}";
 
       const prevLine = state.doc.lineAt(range.from).text;
-      const isArray = prevLine.lastIndexOf('[') > prevLine.lastIndexOf('{');
+      const isArray = prevLine.lastIndexOf("[") > prevLine.lastIndexOf("{");
 
       if (isArray) {
-        startToken = '[';
-        endToken = ']';
+        startToken = "[";
+        endToken = "]";
       }
 
       const internal = state.sliceDoc(range.from, range.to);
@@ -317,7 +317,7 @@ export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) =>
       }
 
       if (count !== undefined) {
-        const label = isArray ? 'item' : 'key';
+        const label = isArray ? "item" : "key";
         return pluralizeCount(label, count);
       }
     },

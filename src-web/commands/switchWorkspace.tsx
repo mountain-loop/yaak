@@ -1,9 +1,9 @@
-import { createFastMutation } from '../hooks/useFastMutation';
-import { getRecentCookieJars } from '../hooks/useRecentCookieJars';
-import { getRecentEnvironments } from '../hooks/useRecentEnvironments';
-import { getRecentRequests } from '../hooks/useRecentRequests';
-import { router } from '../lib/router';
-import { invokeCmd } from '../lib/tauri';
+import { createFastMutation } from "../hooks/useFastMutation";
+import { getRecentCookieJars } from "../hooks/useRecentCookieJars";
+import { getRecentEnvironments } from "../hooks/useRecentEnvironments";
+import { getRecentRequests } from "../hooks/useRecentRequests";
+import { router } from "../lib/router";
+import { invokeCmd } from "../lib/tauri";
 
 export const switchWorkspace = createFastMutation<
   void,
@@ -13,7 +13,7 @@ export const switchWorkspace = createFastMutation<
     inNewWindow: boolean;
   }
 >({
-  mutationKey: ['open_workspace'],
+  mutationKey: ["open_workspace"],
   mutationFn: async ({ workspaceId, inNewWindow }) => {
     const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? undefined;
     const requestId = (await getRecentRequests(workspaceId))[0] ?? undefined;
@@ -26,16 +26,16 @@ export const switchWorkspace = createFastMutation<
 
     if (inNewWindow) {
       const location = router.buildLocation({
-        to: '/workspaces/$workspaceId',
+        to: "/workspaces/$workspaceId",
         params: { workspaceId },
         search,
       });
-      await invokeCmd<void>('cmd_new_main_window', { url: location.href });
+      await invokeCmd<void>("cmd_new_main_window", { url: location.href });
       return;
     }
 
     await router.navigate({
-      to: '/workspaces/$workspaceId',
+      to: "/workspaces/$workspaceId",
       params: { workspaceId },
       search,
     });

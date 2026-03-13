@@ -1,16 +1,16 @@
-import type { FormInput, PromptTextRequest } from '@yaakapp-internal/plugins';
-import type { ReactNode } from 'react';
-import type { DialogProps } from '../components/core/Dialog';
-import { showPromptForm } from './prompt-form';
+import type { FormInput, PromptTextRequest } from "@yaakapp-internal/plugins";
+import type { ReactNode } from "react";
+import type { DialogProps } from "../components/core/Dialog";
+import { showPromptForm } from "./prompt-form";
 
-type PromptProps = Omit<PromptTextRequest, 'id' | 'title' | 'description'> & {
+type PromptProps = Omit<PromptTextRequest, "id" | "title" | "description"> & {
   description?: ReactNode;
   onCancel: () => void;
   onResult: (value: string | null) => void;
 };
 
-type PromptArgs = Pick<DialogProps, 'title' | 'description'> &
-  Omit<PromptProps, 'onClose' | 'onCancel' | 'onResult'> & { id: string };
+type PromptArgs = Pick<DialogProps, "title" | "description"> &
+  Omit<PromptProps, "onClose" | "onCancel" | "onResult"> & { id: string };
 
 export async function showPrompt({
   id,
@@ -25,8 +25,8 @@ export async function showPrompt({
     {
       ...props,
       optional: !required,
-      type: 'text',
-      name: 'value',
+      type: "text",
+      name: "value",
     },
   ];
 
@@ -40,6 +40,6 @@ export async function showPrompt({
   });
 
   if (result == null) return null; // Cancelled
-  if (typeof result.value === 'string') return result.value;
-  return props.defaultValue ?? '';
+  if (typeof result.value === "string") return result.value;
+  return props.defaultValue ?? "";
 }

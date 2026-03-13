@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { Button } from './Button';
-import { HStack, VStack } from './Stacks';
+import type { ReactNode } from "react";
+import { Button } from "./Button";
+import { HStack, VStack } from "./Stacks";
 
 export interface AlertProps {
   onHide: () => void;
