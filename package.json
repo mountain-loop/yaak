@@ -83,9 +83,7 @@
     "vendor:vendor-protoc": "node scripts/vendor-protoc.cjs",
     "vendor:vendor-node": "node scripts/vendor-node.cjs",
     "lint": "run-p lint:*",
-    "lint:biome": "biome lint",
     "lint:extra": "npm run --workspaces --if-present lint",
-    "format": "biome format --write .",
     "replace-version": "node scripts/replace-version.cjs",
     "tauri": "tauri",
     "tauri-before-build": "npm run bootstrap",
@@ -97,15 +95,14 @@
     "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.13",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.5.1",
     "dotenv-cli": "^11.0.0",
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest",
-    "vite-plus": "latest"
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "dependencies": {
     "@codemirror/lang-go": "^6.0.1",
