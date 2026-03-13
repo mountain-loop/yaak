@@ -42,7 +42,7 @@ export default defineConfig(async () => {
     sourcemap: true,
     outDir: '../dist',
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         // Make chunk names readable
         chunkFileNames: 'assets/chunk-[name]-[hash].js',
