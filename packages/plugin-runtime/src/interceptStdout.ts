@@ -24,5 +24,5 @@ export function interceptStdout(intercept: (text: string) => string) {
 }
 
 function interceptor(text: string, fn: (text: string) => string) {
-  return fn(text).replace(/\n$/, '') + (fn(text) && /\n$/.test(text) ? '\n' : '');
+  return fn(text).replace(/\n$/, '') + (fn(text) && text.endsWith('\n') ? '\n' : '');
 }

@@ -56,7 +56,7 @@ export function PdfViewer({ bodyPath, data }: Props) {
         externalLinkTarget="_blank"
         externalLinkRel="noopener noreferrer"
       >
-        {Array.from(new Array(numPages), (_, index) => (
+        {Array.from({ length: numPages }, (_, index) => (
           <Page
             className="mb-6 select-all"
             renderTextLayer

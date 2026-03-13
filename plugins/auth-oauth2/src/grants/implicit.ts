@@ -105,7 +105,7 @@ async function getTokenViaEmbeddedBrowser(
   const authorizationUrlStr = authorizationUrl.toString();
   console.log('[oauth2] Authorizing via embedded browser (implicit)', authorizationUrlStr);
 
-  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: Required for this pattern
+  // oxlint-disable-next-line no-async-promise-executor -- Required for this pattern
   return new Promise<AccessToken>(async (resolve, reject) => {
     let foundAccessToken = false;
     const { close } = await ctx.window.openUrl({

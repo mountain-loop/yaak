@@ -328,7 +328,7 @@ export class PluginInstance {
         payload.values = applyFormInputDefaults(args, payload.values);
         const resolvedArgs = await applyDynamicFormInput(ctx, args, payload);
         const resolvedActions: HttpAuthenticationAction[] = [];
-        for (const { onSelect, ...action } of actions ?? []) {
+        for (const { onSelect: _onSelect, ...action } of actions ?? []) {
           resolvedActions.push(action);
         }
 
@@ -973,7 +973,7 @@ export class PluginInstance {
 function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
   return inputs.map((input) => {
     // biome-ignore lint/suspicious/noExplicitAny: stripping dynamic from union type
-    const { dynamic, ...rest } = input as any;
+    const { dynamic: _dynamic, ...rest } = input as any;
     if ('inputs' in rest && Array.isArray(rest.inputs)) {
       rest.inputs = stripDynamicCallbacks(rest.inputs);
     }
