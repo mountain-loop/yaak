@@ -29,7 +29,11 @@ export default defineConfig(async () => {
       autoCodeSplitting: true,
     }),
     svgr(),
-    react(),
+    react({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
     topLevelAwait(),
     viteStaticCopy({
       targets: [

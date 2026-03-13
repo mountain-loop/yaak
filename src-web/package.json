@@ -88,6 +88,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid": "^10.0.0",
     "@types/whatwg-mimetype": "^3.0.2",
+    "babel-plugin-react-compiler": "^1.0.0",
     "@vitejs/plugin-react": "^6.0.0",
     "autoprefixer": "^10.4.21",
     "decompress": "^4.2.1",
