@@ -11,21 +11,23 @@ begin.
 
 Make sure you have the following tools installed:
 
-- [Node.js](https://nodejs.org/en/download/package-manager)
+- [Node.js](https://nodejs.org/en/download/package-manager) (v24+)
 - [Rust](https://www.rust-lang.org/tools/install)
+- [Vite+](https://vite.dev/guide/vite-plus) (`vp` CLI)
 
 Check the installations with the following commands:
 
 ```shell
 node -v
 npm -v
+vp --version
 rustc --version
 ```
 
 Install the NPM dependencies:
 
 ```shell
-npm install
+vp install
 ```
 
 Run the `bootstrap` command to do some initial setup:
@@ -61,9 +63,9 @@ _Note: For safety, development builds use a separate database location from prod
 lezer-generator components/core/Editor/<LANG>/<LANG>.grammar > components/core/Editor/<LANG>/<LANG>.ts
 ```
 
-## Linting & Formatting
+## Linting and Formatting
 
-This repo uses Biome for linting and formatting (replacing ESLint + Prettier).
+This repo uses [Vite+](https://vite.dev/guide/vite-plus) for linting (oxlint) and formatting (oxfmt).
 
 - Lint the entire repo:
 
@@ -71,18 +73,13 @@ This repo uses Biome for linting and formatting (replacing ESLint + Prettier).
 npm run lint
 ```
 
-- Auto-fix lint issues where possible:
-
-```sh
-npm run lint:fix
-```
-
 - Format code:
 
 ```sh
-npm run format
+vp format
 ```
 
 Notes:
-- Many workspace packages also expose the same scripts (`lint`, `lint:fix`, and `format`).
-- TypeScript type-checking still runs separately via `tsc --noEmit` in relevant packages.
+- A pre-commit hook runs `vp lint` automatically on commit.
+- Some workspace packages also run `tsc --noEmit` for type-checking.
+- VS Code users should install the recommended extensions for format-on-save support.
