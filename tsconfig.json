@@ -17,5 +17,6 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["node"]
-  }
+  },
+  "exclude": ["flatpak", "npm", "crates/yaak-templates/pkg"]
 }

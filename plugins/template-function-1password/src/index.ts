@@ -55,7 +55,8 @@ async function op(
     }
   }
 
-  return { client: _clients[hash], clientHash: hash };
+  // oxlint-disable-next-line no-non-null-assertion
+  return { client: _clients[hash]!, clientHash: hash };
 }
 
 async function getValue(

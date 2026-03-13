@@ -146,7 +146,7 @@ export const GraphQLDocsExplorer = memo(function GraphQLDocsExplorer({
           </div>
         ) : (
           <div
-            key={activeItem.type.name} // Reset scroll position to top
+            key={'name' in activeItem.type ? activeItem.type.name : String(activeItem.type)} // Reset scroll position to top
             className="overflow-y-auto h-full w-full p-3 grid grid-cols-[minmax(0,1fr)]"
           >
             <GqlTypeInfo item={activeItem} setItem={setActiveItem} schema={schema} />
@@ -202,7 +202,7 @@ function GraphQLExplorerHeader({
           })}
         </div>
         <GqlSchemaSearch
-          key={item?.type.name} // Force reset when changing items
+          key={item != null && 'name' in item.type ? item.type.name : 'search'} // Force reset when changing items
           maxHeight={containerHeight}
           currentItem={item}
           schema={schema}
@@ -798,7 +798,7 @@ function GqlSchemaSearch({
         label="search"
         hideLabel
         defaultValue={value}
-        placeholder={focused ? `Search ${currentItem != null ? currentItem.type.name : 'Schema'}` : 'Search'}
+        placeholder={focused ? `Search ${currentItem != null && 'name' in currentItem.type ? currentItem.type.name : 'Schema'}` : 'Search'}
         leftSlot={
           <div className="w-10 flex justify-center items-center">
             <Icon size="sm" icon="search" color="secondary" />
