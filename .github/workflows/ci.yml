@@ -14,17 +14,20 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: '24'
+          cache: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci
           cache-on-failure: true
 
-      - run: npm ci
+      - run: vp install
       - run: npm run bootstrap
       - run: npm run lint
       - name: Run JS Tests
-        run: npm test
+        run: vp test
       - name: Run Rust Tests
         run: cargo test --all
