@@ -1,4 +1,4 @@
-import type { HttpExchange, ProxyHeader } from '@yaakapp-internal/proxy-lib';
+import type { HttpExchange, ProxyHeader } from "@yaakapp-internal/proxy-lib";
 import {
   Table,
   TableBody,
@@ -7,8 +7,8 @@ import {
   TableHeaderCell,
   TableRow,
   TruncatedWideTableCell,
-} from '@yaakapp-internal/ui';
-import classNames from 'classnames';
+} from "@yaakapp-internal/ui";
+import classNames from "classnames";
 
 interface Props {
   exchanges: HttpExchange[];
@@ -59,19 +59,19 @@ function StatusBadge({ status, error }: { status: number | null; error: string |
 
   const color =
     status >= 500
-      ? 'text-danger'
+      ? "text-danger"
       : status >= 400
-        ? 'text-warning'
+        ? "text-warning"
         : status >= 300
-          ? 'text-notice'
-          : 'text-success';
+          ? "text-notice"
+          : "text-success";
 
-  return <span className={classNames('text-xs font-mono', color)}>{status}</span>;
+  return <span className={classNames("text-xs font-mono", color)}>{status}</span>;
 }
 
 function getContentType(headers: ProxyHeader[]): string {
-  const ct = headers.find((h) => h.name.toLowerCase() === 'content-type')?.value;
-  if (ct == null) return '—';
+  const ct = headers.find((h) => h.name.toLowerCase() === "content-type")?.value;
+  if (ct == null) return "—";
   // Strip parameters (e.g. "; charset=utf-8")
-  return ct.split(';')[0]?.trim() ?? ct;
+  return ct.split(";")[0]?.trim() ?? ct;
 }

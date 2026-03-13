@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-json",
   "displayName": "JSON Template Functions",
-  "description": "Template functions for working with JSON data",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for working with JSON data",
   "main": "build/index.js",
   "types": "src/index.ts",
   "scripts": {

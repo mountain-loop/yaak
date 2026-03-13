@@ -23,7 +23,15 @@ for (const name of readdirSync(pluginsDir)) {
     console.log(`Skipping ${name} (external plugin)`);
     continue;
   }
-  const destDir = path.join( __dirname, "..", 'crates-tauri','yaak-app-client','vendored','plugins', name);
+  const destDir = path.join(
+    __dirname,
+    "..",
+    "crates-tauri",
+    "yaak-app-client",
+    "vendored",
+    "plugins",
+    name,
+  );
   mkdirSync(destDir, { recursive: true });
   console.log(`Copying ${name} to ${destDir}`);
   cpSync(path.join(dir, "package.json"), path.join(destDir, "package.json"));

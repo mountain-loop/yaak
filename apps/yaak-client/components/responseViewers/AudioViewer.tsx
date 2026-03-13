@@ -1,5 +1,5 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { useEffect, useState } from 'react';
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
 
 interface Props {
   bodyPath?: string;
@@ -13,7 +13,7 @@ export function AudioViewer({ bodyPath, data }: Props) {
     if (bodyPath) {
       setSrc(convertFileSrc(bodyPath));
     } else if (data) {
-      const blob = new Blob([new Uint8Array(data)], { type: 'audio/mpeg' });
+      const blob = new Blob([new Uint8Array(data)], { type: "audio/mpeg" });
       const url = URL.createObjectURL(blob);
       setSrc(url);
       return () => URL.revokeObjectURL(url);
@@ -22,6 +22,6 @@ export function AudioViewer({ bodyPath, data }: Props) {
     }
   }, [bodyPath, data]);
 
-  // biome-ignore lint/a11y/useMediaCaption: none
+  // oxlint-disable-next-line jsx-a11y/media-has-caption
   return <audio className="w-full" controls src={src} />;
 }

@@ -16,26 +16,26 @@ remembered for next time.
 
 Each language supports one or more libraries:
 
-| Language | Libraries |
-|---|---|
-| C | libcurl |
-| Clojure | clj-http |
-| C# | HttpClient, RestSharp |
-| Go | Native |
-| HTTP | HTTP/1.1 |
-| Java | AsyncHttp, NetHttp, OkHttp, Unirest |
-| JavaScript | Axios, fetch, jQuery, XHR |
-| Kotlin | OkHttp |
-| Node.js | Axios, fetch, HTTP, Request, Unirest |
-| Objective-C | NSURLSession |
-| OCaml | CoHTTP |
-| PHP | cURL, Guzzle, HTTP v1, HTTP v2 |
-| PowerShell | Invoke-WebRequest, RestMethod |
-| Python | http.client, Requests |
-| R | httr |
-| Ruby | Native |
-| Shell | cURL, HTTPie, Wget |
-| Swift | URLSession |
+| Language    | Libraries                            |
+| ----------- | ------------------------------------ |
+| C           | libcurl                              |
+| Clojure     | clj-http                             |
+| C#          | HttpClient, RestSharp                |
+| Go          | Native                               |
+| HTTP        | HTTP/1.1                             |
+| Java        | AsyncHttp, NetHttp, OkHttp, Unirest  |
+| JavaScript  | Axios, fetch, jQuery, XHR            |
+| Kotlin      | OkHttp                               |
+| Node.js     | Axios, fetch, HTTP, Request, Unirest |
+| Objective-C | NSURLSession                         |
+| OCaml       | CoHTTP                               |
+| PHP         | cURL, Guzzle, HTTP v1, HTTP v2       |
+| PowerShell  | Invoke-WebRequest, RestMethod        |
+| Python      | http.client, Requests                |
+| R           | httr                                 |
+| Ruby        | Native                               |
+| Shell       | cURL, HTTPie, Wget                   |
+| Swift       | URLSession                           |
 
 ## Features
 

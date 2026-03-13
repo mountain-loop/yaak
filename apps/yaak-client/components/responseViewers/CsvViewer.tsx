@@ -1,7 +1,14 @@
-import classNames from 'classnames';
-import Papa from 'papaparse';
-import { useMemo } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@yaakapp-internal/ui';
+import classNames from "classnames";
+import Papa from "papaparse";
+import { useMemo } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from "@yaakapp-internal/ui";
 
 interface Props {
   text: string | null;
@@ -26,7 +33,7 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
 
   return (
     <div className="overflow-auto h-full">
-      <Table className={classNames(className, 'text-sm')}>
+      <Table className={classNames(className, "text-sm")}>
         <TableHead>
           <TableRow>
             {parsed.meta.fields?.map((field) => (
@@ -39,7 +46,7 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
             // biome-ignore lint/suspicious/noArrayIndexKey: none
             <TableRow key={i}>
               {parsed.meta.fields?.map((key) => (
-                <TableCell key={key}>{row[key] ?? ''}</TableCell>
+                <TableCell key={key}>{row[key] ?? ""}</TableCell>
               ))}
             </TableRow>
           ))}

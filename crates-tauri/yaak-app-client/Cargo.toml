@@ -35,7 +35,16 @@ r2d2 = "0.8.10"
 r2d2_sqlite = "0.25.0"
 mime_guess = "2.0.5"
 rand = "0.9.0"
-reqwest = { workspace = true, features = ["multipart", "gzip", "brotli", "deflate", "json", "rustls-tls-manual-roots-no-provider", "socks", "http2"] }
+reqwest = { workspace = true, features = [
+  "multipart",
+  "gzip",
+  "brotli",
+  "deflate",
+  "json",
+  "rustls-tls-manual-roots-no-provider",
+  "socks",
+  "http2",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }

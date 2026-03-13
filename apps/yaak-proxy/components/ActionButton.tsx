@@ -1,10 +1,10 @@
-import type { ActionInvocation } from '@yaakapp-internal/proxy-lib';
-import { Button, type ButtonProps } from '@yaakapp-internal/ui';
-import { useCallback } from 'react';
-import { useRpcMutation } from '../hooks/useRpcMutation';
-import { useActionMetadata } from '../hooks/useActionMetadata';
+import type { ActionInvocation } from "@yaakapp-internal/proxy-lib";
+import { Button, type ButtonProps } from "@yaakapp-internal/ui";
+import { useCallback } from "react";
+import { useRpcMutation } from "../hooks/useRpcMutation";
+import { useActionMetadata } from "../hooks/useActionMetadata";
 
-type ActionButtonProps = Omit<ButtonProps, 'onClick' | 'children'> & {
+type ActionButtonProps = Omit<ButtonProps, "onClick" | "children"> & {
   action: ActionInvocation;
   /** Override the label from metadata */
   children?: React.ReactNode;
@@ -12,7 +12,7 @@ type ActionButtonProps = Omit<ButtonProps, 'onClick' | 'children'> & {
 
 export function ActionButton({ action, children, ...props }: ActionButtonProps) {
   const meta = useActionMetadata(action);
-  const { mutate, isPending } = useRpcMutation('execute_action');
+  const { mutate, isPending } = useRpcMutation("execute_action");
 
   const onClick = useCallback(() => {
     mutate(action);
@@ -25,7 +25,7 @@ export function ActionButton({ action, children, ...props }: ActionButtonProps) 
       isLoading={isPending}
       onClick={onClick}
     >
-      {children ?? meta?.label ?? '…'}
+      {children ?? meta?.label ?? "…"}
     </Button>
   );
 }

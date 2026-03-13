@@ -1,49 +1,49 @@
-import { type } from '@tauri-apps/plugin-os';
-import { settingsAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { Banner, HeaderSize, HStack, SidebarLayout } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import * as m from 'motion/react-m';
-import { useMemo, useState } from 'react';
+import { type } from "@tauri-apps/plugin-os";
+import { settingsAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { Banner, HeaderSize, HStack, SidebarLayout } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import * as m from "motion/react-m";
+import { useMemo, useState } from "react";
 import {
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
-} from '../hooks/useActiveCookieJar';
+} from "../hooks/useActiveCookieJar";
 import {
   activeEnvironmentAtom,
   useSubscribeActiveEnvironmentId,
-} from '../hooks/useActiveEnvironment';
-import { activeFolderAtom } from '../hooks/useActiveFolder';
-import { useSubscribeActiveFolderId } from '../hooks/useActiveFolderId';
-import { activeRequestAtom } from '../hooks/useActiveRequest';
-import { useSubscribeActiveRequestId } from '../hooks/useActiveRequestId';
-import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
-import { useHotKey } from '../hooks/useHotKey';
-import { useSubscribeRecentCookieJars } from '../hooks/useRecentCookieJars';
-import { useSubscribeRecentEnvironments } from '../hooks/useRecentEnvironments';
-import { useSubscribeRecentRequests } from '../hooks/useRecentRequests';
-import { useSubscribeRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { useSidebarWidth } from '../hooks/useSidebarWidth';
-import { useSyncWorkspaceRequestTitle } from '../hooks/useSyncWorkspaceRequestTitle';
-import { duplicateRequestOrFolderAndNavigate } from '../lib/duplicateRequestOrFolderAndNavigate';
-import { importData } from '../lib/importData';
-import { jotaiStore } from '../lib/jotai';
-import { CreateDropdown } from './CreateDropdown';
-import { Button } from './core/Button';
-import { HotkeyList } from './core/HotkeyList';
-import { FeedbackLink } from './core/Link';
-import { ErrorBoundary } from './ErrorBoundary';
-import { FolderLayout } from './FolderLayout';
-import { GrpcConnectionLayout } from './GrpcConnectionLayout';
-import { HttpRequestLayout } from './HttpRequestLayout';
-import Sidebar from './Sidebar';
-import { SidebarActions } from './SidebarActions';
-import { WebsocketRequestLayout } from './WebsocketRequestLayout';
-import { WorkspaceHeader } from './WorkspaceHeader';
+} from "../hooks/useActiveEnvironment";
+import { activeFolderAtom } from "../hooks/useActiveFolder";
+import { useSubscribeActiveFolderId } from "../hooks/useActiveFolderId";
+import { activeRequestAtom } from "../hooks/useActiveRequest";
+import { useSubscribeActiveRequestId } from "../hooks/useActiveRequestId";
+import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
+import { useFloatingSidebarHidden } from "../hooks/useFloatingSidebarHidden";
+import { useHotKey } from "../hooks/useHotKey";
+import { useSubscribeRecentCookieJars } from "../hooks/useRecentCookieJars";
+import { useSubscribeRecentEnvironments } from "../hooks/useRecentEnvironments";
+import { useSubscribeRecentRequests } from "../hooks/useRecentRequests";
+import { useSubscribeRecentWorkspaces } from "../hooks/useRecentWorkspaces";
+import { useSidebarHidden } from "../hooks/useSidebarHidden";
+import { useSidebarWidth } from "../hooks/useSidebarWidth";
+import { useSyncWorkspaceRequestTitle } from "../hooks/useSyncWorkspaceRequestTitle";
+import { duplicateRequestOrFolderAndNavigate } from "../lib/duplicateRequestOrFolderAndNavigate";
+import { importData } from "../lib/importData";
+import { jotaiStore } from "../lib/jotai";
+import { CreateDropdown } from "./CreateDropdown";
+import { Button } from "./core/Button";
+import { HotkeyList } from "./core/HotkeyList";
+import { FeedbackLink } from "./core/Link";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { FolderLayout } from "./FolderLayout";
+import { GrpcConnectionLayout } from "./GrpcConnectionLayout";
+import { HttpRequestLayout } from "./HttpRequestLayout";
+import Sidebar from "./Sidebar";
+import { SidebarActions } from "./SidebarActions";
+import { WebsocketRequestLayout } from "./WebsocketRequestLayout";
+import { WorkspaceHeader } from "./WorkspaceHeader";
 
-const body = { gridArea: 'body' };
+const body = { gridArea: "body" };
 
 export function Workspace() {
   // First, subscribe to some things applicable to workspaces
@@ -99,9 +99,9 @@ export function Workspace() {
   const sidebarContent = floating ? (
     <div
       className={classNames(
-        'x-theme-sidebar',
-        'h-full bg-surface border-r border-border-subtle',
-        'grid grid-rows-[auto_1fr]',
+        "x-theme-sidebar",
+        "h-full bg-surface border-r border-border-subtle",
+        "grid grid-rows-[auto_1fr]",
       )}
     >
       <HeaderSize
@@ -168,13 +168,13 @@ function WorkspaceBody() {
     );
   }
 
-  if (activeRequest?.model === 'grpc_request') {
+  if (activeRequest?.model === "grpc_request") {
     return <GrpcConnectionLayout style={body} />;
   }
-  if (activeRequest?.model === 'websocket_request') {
+  if (activeRequest?.model === "websocket_request") {
     return <WebsocketRequestLayout style={body} activeRequest={activeRequest} />;
   }
-  if (activeRequest?.model === 'http_request') {
+  if (activeRequest?.model === "http_request") {
     return <HttpRequestLayout activeRequest={activeRequest} style={body} />;
   }
   if (activeFolder != null) {
@@ -183,7 +183,7 @@ function WorkspaceBody() {
 
   return (
     <HotkeyList
-      hotkeys={['model.create', 'sidebar.focus', 'settings.show']}
+      hotkeys={["model.create", "sidebar.focus", "settings.show"]}
       bottomSlot={
         <HStack space={1} justifyContent="center" className="mt-3">
           <Button variant="border" size="sm" onClick={() => importData.mutate()}>
@@ -215,7 +215,7 @@ function useGlobalWorkspaceHooks() {
 
   useSyncWorkspaceRequestTitle();
 
-  useHotKey('model.duplicate', () =>
+  useHotKey("model.duplicate", () =>
     duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),
   );
 }

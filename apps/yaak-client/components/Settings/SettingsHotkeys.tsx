@@ -1,4 +1,4 @@
-import { patchModel, settingsAtom } from '@yaakapp-internal/models';
+import { patchModel, settingsAtom } from "@yaakapp-internal/models";
 import {
   Heading,
   HStack,
@@ -10,11 +10,11 @@ import {
   TableHeaderCell,
   TableRow,
   VStack,
-} from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { fuzzyMatch } from 'fuzzbunny';
-import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+} from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { fuzzyMatch } from "fuzzbunny";
+import { useAtomValue } from "jotai";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   defaultHotkeys,
   formatHotkeyString,
@@ -23,23 +23,23 @@ import {
   hotkeyActions,
   hotkeysAtom,
   useHotkeyLabel,
-} from '../../hooks/useHotKey';
-import { capitalize } from '../../lib/capitalize';
-import { showDialog } from '../../lib/dialog';
-import { Button } from '../core/Button';
-import { Dropdown, type DropdownItem } from '../core/Dropdown';
-import { HotkeyRaw } from '../core/Hotkey';
-import { IconButton } from '../core/IconButton';
-import { PlainInput } from '../core/PlainInput';
+} from "../../hooks/useHotKey";
+import { capitalize } from "../../lib/capitalize";
+import { showDialog } from "../../lib/dialog";
+import { Button } from "../core/Button";
+import { Dropdown, type DropdownItem } from "../core/Dropdown";
+import { HotkeyRaw } from "../core/Hotkey";
+import { IconButton } from "../core/IconButton";
+import { PlainInput } from "../core/PlainInput";
 
-const HOLD_KEYS = ['Shift', 'Control', 'Alt', 'Meta'];
+const HOLD_KEYS = ["Shift", "Control", "Alt", "Meta"];
 const LAYOUT_INSENSITIVE_KEYS = [
-  'Equal',
-  'Minus',
-  'BracketLeft',
-  'BracketRight',
-  'Backquote',
-  'Space',
+  "Equal",
+  "Minus",
+  "BracketLeft",
+  "BracketRight",
+  "Backquote",
+  "Space",
 ];
 
 /** Convert a KeyboardEvent to a hotkey string like "Meta+Shift+k" or "Control+Shift+k" */
@@ -53,37 +53,37 @@ function eventToHotkeyString(e: KeyboardEvent): string | null {
 
   // Add modifiers in consistent order (Meta, Control, Alt, Shift)
   if (e.metaKey) {
-    parts.push('Meta');
+    parts.push("Meta");
   }
   if (e.ctrlKey) {
-    parts.push('Control');
+    parts.push("Control");
   }
   if (e.altKey) {
-    parts.push('Alt');
+    parts.push("Alt");
   }
   if (e.shiftKey) {
-    parts.push('Shift');
+    parts.push("Shift");
   }
 
   // Get the main key - use the same logic as useHotKey.ts
   const key = LAYOUT_INSENSITIVE_KEYS.includes(e.code) ? e.code : e.key;
   parts.push(key);
 
-  return parts.join('+');
+  return parts.join("+");
 }
 
 export function SettingsHotkeys() {
   const settings = useAtomValue(settingsAtom);
   const hotkeys = useAtomValue(hotkeysAtom);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState("");
 
   const filteredActions = useMemo(() => {
     if (!filter.trim()) {
       return hotkeyActions;
     }
     return hotkeyActions.filter((action) => {
-      const scope = getHotkeyScope(action).replace(/_/g, ' ');
-      const label = action.replace(/[_.]/g, ' ');
+      const scope = getHotkeyScope(action).replace(/_/g, " ");
+      const label = action.replace(/[_.]/g, " ");
       const searchText = `${scope} ${label}`;
       return fuzzyMatch(searchText, filter) != null;
     });
@@ -160,7 +160,7 @@ interface HotkeyRowProps {
 
 function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: HotkeyRowProps) {
   const label = useHotkeyLabel(action);
-  const scope = capitalize(getHotkeyScope(action).replace(/_/g, ' '));
+  const scope = capitalize(getHotkeyScope(action).replace(/_/g, " "));
   const isCustomized = !arraysEqual(currentKeys, defaultKeys);
   const isDisabled = currentKeys.length === 0;
 
@@ -168,7 +168,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
     showDialog({
       id: `record-hotkey-${action}`,
       title: label,
-      size: 'sm',
+      size: "sm",
       render: ({ hide }) => (
         <RecordHotkeyDialog
           label={label}
@@ -197,7 +197,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
   // Build dropdown items dynamically
   const dropdownItems: DropdownItem[] = [
     {
-      label: 'Add Keyboard Shortcut',
+      label: "Add Keyboard Shortcut",
       leftSlot: <Icon icon="plus" />,
       onSelect: handleStartRecording,
     },
@@ -221,10 +221,10 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
     if (currentKeys.length > 1) {
       dropdownItems.push(
         {
-          type: 'separator',
+          type: "separator",
         },
         {
-          label: 'Remove All Shortcuts',
+          label: "Remove All Shortcuts",
           leftSlot: <Icon icon="trash" />,
           onSelect: handleClearAll,
         },
@@ -234,10 +234,10 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
 
   if (isCustomized) {
     dropdownItems.push({
-      type: 'separator',
+      type: "separator",
     });
     dropdownItems.push({
-      label: 'Reset to Default',
+      label: "Reset to Default",
       leftSlot: <Icon icon="refresh" />,
       onSelect: onReset,
     });
@@ -300,7 +300,7 @@ function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps
       e.preventDefault();
       e.stopPropagation();
 
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         onCancel();
         return;
       }
@@ -311,9 +311,9 @@ function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
     };
   }, [isFocused, onCancel]);
 
@@ -340,9 +340,9 @@ function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps
             e.currentTarget.focus();
           }}
           className={classNames(
-            'flex items-center justify-center',
-            'px-4 py-2 rounded-lg bg-surface-highlight border outline-none cursor-default w-full',
-            'border-border-subtle focus:border-border-focus',
+            "flex items-center justify-center",
+            "px-4 py-2 rounded-lg bg-surface-highlight border outline-none cursor-default w-full",
+            "border-border-subtle focus:border-border-focus",
           )}
         >
           {recordedKey ? (

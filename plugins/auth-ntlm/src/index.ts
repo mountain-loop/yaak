@@ -1,11 +1,11 @@
-import type { PluginDefinition } from '@yaakapp/api';
+import type { PluginDefinition } from "@yaakapp/api";
 
-import { ntlm } from 'httpntlm';
+import { ntlm } from "httpntlm";
 
 function extractNtlmChallenge(headers: Array<{ name: string; value: string }>): string | null {
   const authValues = headers
-    .filter((h) => h.name.toLowerCase() === 'www-authenticate')
-    .flatMap((h) => h.value.split(','))
+    .filter((h) => h.name.toLowerCase() === "www-authenticate")
+    .flatMap((h) => h.value.split(","))
     .map((v) => v.trim())
     .filter(Boolean);
 
@@ -14,40 +14,40 @@ function extractNtlmChallenge(headers: Array<{ name: string; value: string }>): 
 
 export const plugin: PluginDefinition = {
   authentication: {
-    name: 'windows',
-    label: 'NTLM Auth',
-    shortLabel: 'NTLM',
+    name: "windows",
+    label: "NTLM Auth",
+    shortLabel: "NTLM",
     args: [
       {
-        type: 'banner',
-        color: 'info',
+        type: "banner",
+        color: "info",
         inputs: [
           {
-            type: 'markdown',
+            type: "markdown",
             content:
-              'NTLM is still in beta. Please submit any issues to [Feedback](https://yaak.app/feedback).',
+              "NTLM is still in beta. Please submit any issues to [Feedback](https://yaak.app/feedback).",
           },
         ],
       },
       {
-        type: 'text',
-        name: 'username',
-        label: 'Username',
+        type: "text",
+        name: "username",
+        label: "Username",
         optional: true,
       },
       {
-        type: 'text',
-        name: 'password',
-        label: 'Password',
+        type: "text",
+        name: "password",
+        label: "Password",
         optional: true,
         password: true,
       },
       {
-        type: 'accordion',
-        label: 'Advanced',
+        type: "accordion",
+        label: "Advanced",
         inputs: [
-          { name: 'domain', label: 'Domain', type: 'text', optional: true },
-          { name: 'workstation', label: 'Workstation', type: 'text', optional: true },
+          { name: "domain", label: "Domain", type: "text", optional: true },
+          { name: "workstation", label: "Workstation", type: "text", optional: true },
         ],
       },
     ],
@@ -72,15 +72,15 @@ export const plugin: PluginDefinition = {
           method,
           url,
           headers: [
-            { name: 'Authorization', value: type1 },
-            { name: 'Connection', value: 'keep-alive' },
+            { name: "Authorization", value: type1 },
+            { name: "Connection", value: "keep-alive" },
           ],
         },
       });
 
       const ntlmChallenge = extractNtlmChallenge(negotiateResponse.headers);
       if (ntlmChallenge == null) {
-        throw new Error('Unable to find NTLM challenge in WWW-Authenticate response headers');
+        throw new Error("Unable to find NTLM challenge in WWW-Authenticate response headers");
       }
 
       const type2 = ntlm.parseType2Message(ntlmChallenge, (err: Error | null) => {
@@ -88,7 +88,7 @@ export const plugin: PluginDefinition = {
       });
       const type3 = ntlm.createType3Message(type2, options);
 
-      return { setHeaders: [{ name: 'Authorization', value: type3 }] };
+      return { setHeaders: [{ name: "Authorization", value: type3 }] };
     },
   },
 };

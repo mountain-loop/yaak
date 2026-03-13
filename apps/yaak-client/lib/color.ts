@@ -1,4 +1,4 @@
-import type { Color } from '@yaakapp-internal/plugins';
+import type { Color } from "@yaakapp-internal/plugins";
 
 const colors: Record<Color, boolean> = {
   primary: true,

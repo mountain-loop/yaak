@@ -1,5 +1,5 @@
-import { atom } from 'jotai';
-import { atomFamily, selectAtom } from 'jotai/utils';
+import { atom } from "jotai";
+import { atomFamily, selectAtom } from "jotai/utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const selectedIdsFamily = atomFamily((_treeId: string) => {
@@ -57,7 +57,7 @@ export const isAncestorHoveredFamily = atomFamily(
       (v) => v.parentId && ancestorIds.includes(v.parentId),
       Object.is,
     ),
-  (a, b) => a.treeId === b.treeId && a.ancestorIds.join(',') === b.ancestorIds.join(','),
+  (a, b) => a.treeId === b.treeId && a.ancestorIds.join(",") === b.ancestorIds.join(","),
 );
 
 export const isIndexHoveredFamily = atomFamily(
@@ -73,4 +73,3 @@ export const hoveredParentDepthFamily = atomFamily((treeId: string) =>
     (a, b) => Object.is(a, b), // prevents re-render unless the value changes
   ),
 );
-

@@ -1,18 +1,18 @@
-import classNames from 'classnames';
-import { useMemo, useRef } from 'react';
-import { useActiveRequest } from '../hooks/useActiveRequest';
-import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { allRequestsAtom } from '../hooks/useAllRequests';
-import { useHotKey } from '../hooks/useHotKey';
-import { useKeyboardEvent } from '../hooks/useKeyboardEvent';
-import { useRecentRequests } from '../hooks/useRecentRequests';
-import { jotaiStore } from '../lib/jotai';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { router } from '../lib/router';
-import { Button } from './core/Button';
-import type { DropdownItem, DropdownRef } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
-import { HttpMethodTag } from './core/HttpMethodTag';
+import classNames from "classnames";
+import { useMemo, useRef } from "react";
+import { useActiveRequest } from "../hooks/useActiveRequest";
+import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import { allRequestsAtom } from "../hooks/useAllRequests";
+import { useHotKey } from "../hooks/useHotKey";
+import { useKeyboardEvent } from "../hooks/useKeyboardEvent";
+import { useRecentRequests } from "../hooks/useRecentRequests";
+import { jotaiStore } from "../lib/jotai";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { router } from "../lib/router";
+import { Button } from "./core/Button";
+import type { DropdownItem, DropdownRef } from "./core/Dropdown";
+import { Dropdown } from "./core/Dropdown";
+import { HttpMethodTag } from "./core/HttpMethodTag";
 
 interface Props {
   className?: string;
@@ -26,13 +26,13 @@ export function RecentRequestsDropdown({ className }: Props) {
   // Handle key-up
   // TODO: Somehow make useHotKey have this functionality. Note: e.key does not work
   //  on Linux, for example, when Control is mapped to CAPS. This will never fire.
-  useKeyboardEvent('keyup', 'Control', () => {
+  useKeyboardEvent("keyup", "Control", () => {
     if (dropdownRef.current?.isOpen) {
       dropdownRef.current?.select?.();
     }
   });
 
-  useHotKey('switcher.prev', () => {
+  useHotKey("switcher.prev", () => {
     if (!dropdownRef.current?.isOpen) {
       // Select the second because the first is the current request
       dropdownRef.current?.open(1);
@@ -41,7 +41,7 @@ export function RecentRequestsDropdown({ className }: Props) {
     }
   });
 
-  useHotKey('switcher.next', () => {
+  useHotKey("switcher.next", () => {
     if (!dropdownRef.current?.isOpen) dropdownRef.current?.open();
     dropdownRef.current?.prev?.();
   });
@@ -61,7 +61,7 @@ export function RecentRequestsDropdown({ className }: Props) {
         leftSlot: <HttpMethodTag short className="text-xs" request={request} />,
         onSelect: async () => {
           await router.navigate({
-            to: '/workspaces/$workspaceId',
+            to: "/workspaces/$workspaceId",
             params: { workspaceId: activeWorkspaceId },
             search: (prev) => ({ ...prev, request_id: request.id }),
           });
@@ -73,8 +73,8 @@ export function RecentRequestsDropdown({ className }: Props) {
     if (recentRequestItems.length === 0) {
       return [
         {
-          key: 'no-recent-requests',
-          label: 'No recent requests',
+          key: "no-recent-requests",
+          label: "No recent requests",
           disabled: true,
         },
       ];
@@ -90,8 +90,8 @@ export function RecentRequestsDropdown({ className }: Props) {
         hotkeyAction="switcher.toggle"
         className={classNames(
           className,
-          'truncate pointer-events-auto',
-          activeRequest == null && 'text-text-subtlest italic',
+          "truncate pointer-events-auto",
+          activeRequest == null && "text-text-subtlest italic",
         )}
       >
         {resolvedModelName(activeRequest)}

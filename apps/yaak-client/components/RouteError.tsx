@@ -1,13 +1,13 @@
-import { Button, FormattedError, Heading, VStack } from '@yaakapp-internal/ui';
-import { DetailsBanner } from './core/DetailsBanner';
+import { Button, FormattedError, Heading, VStack } from "@yaakapp-internal/ui";
+import { DetailsBanner } from "./core/DetailsBanner";
 
 export default function RouteError({ error }: { error: unknown }) {
-  console.log('Error', error);
+  console.log("Error", error);
   const stringified = JSON.stringify(error);
   // biome-ignore lint/suspicious/noExplicitAny: none
   const message = (error as any).message ?? stringified;
   const stack =
-    typeof error === 'object' && error != null && 'stack' in error ? String(error.stack) : null;
+    typeof error === "object" && error != null && "stack" in error ? String(error.stack) : null;
   return (
     <div className="flex items-center justify-center h-full">
       <VStack space={5} className="w-[50rem] !h-auto">
@@ -28,7 +28,7 @@ export default function RouteError({ error }: { error: unknown }) {
           <Button
             color="primary"
             onClick={async () => {
-              window.location.assign('/');
+              window.location.assign("/");
             }}
           >
             Go Home

@@ -14,15 +14,13 @@ export function useLicense() {
   const activate = useMutation<void, string, { licenseKey: string }>({
     mutationKey: ["license.activate"],
     mutationFn: (payload) => invoke("plugin:yaak-license|activate", payload),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }),
   });
 
   const deactivate = useMutation<void, string, void>({
     mutationKey: ["license.deactivate"],
     mutationFn: () => invoke("plugin:yaak-license|deactivate"),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY }),
   });
 
   // Check the license again after a license is activated

@@ -62,15 +62,10 @@ function themeVariables(
   const color = (value: string | undefined) => yc(theme, value);
   const vars: CSSVariables = {
     surface: cmp.surface,
-    surfaceHighlight:
-      cmp.surfaceHighlight ?? color(cmp.surface)?.lift(0.06).css(),
-    surfaceActive:
-      cmp.surfaceActive ??
-      color(cmp.primary)?.lower(0.2).translucify(0.8).css(),
-    backdrop:
-      cmp.backdrop ?? color(cmp.surface)?.lower(0.2).translucify(0.2).css(),
-    selection:
-      cmp.selection ?? color(cmp.primary)?.lower(0.1).translucify(0.7).css(),
+    surfaceHighlight: cmp.surfaceHighlight ?? color(cmp.surface)?.lift(0.06).css(),
+    surfaceActive: cmp.surfaceActive ?? color(cmp.primary)?.lower(0.2).translucify(0.8).css(),
+    backdrop: cmp.backdrop ?? color(cmp.surface)?.lower(0.2).translucify(0.2).css(),
+    selection: cmp.selection ?? color(cmp.primary)?.lower(0.1).translucify(0.7).css(),
     border: cmp.border ?? color(cmp.surface)?.lift(0.11)?.css(),
     borderSubtle: cmp.borderSubtle ?? color(cmp.border)?.lower(0.06)?.css(),
     borderFocus: color(cmp.info)?.translucify(0.5)?.css(),
@@ -100,9 +95,7 @@ function themeVariables(
   return vars;
 }
 
-function templateTagColorVariables(
-  color: YaakColor | null,
-): Partial<CSSVariables> {
+function templateTagColorVariables(color: YaakColor | null): Partial<CSSVariables> {
   if (color == null) return {};
 
   return {
@@ -149,7 +142,6 @@ function _inputCSS(color: YaakColor | null): Partial<CSSVariables> {
 
   return theme;
 }
-
 
 function buttonSolidColorVariables(
   color: YaakColor | null,
@@ -212,10 +204,7 @@ function variablesToCSS(
 
 function componentCSS(theme: Theme, component: ComponentName): string | null {
   if (theme.components == null) return null;
-  return variablesToCSS(
-    `.x-theme-${component}`,
-    themeVariables(theme, component),
-  );
+  return variablesToCSS(`.x-theme-${component}`, themeVariables(theme, component));
 }
 
 function buttonCSS(
@@ -227,14 +216,8 @@ function buttonCSS(
   if (color == null) return null;
 
   return [
-    variablesToCSS(
-      `.x-theme-button--solid--${colorKey}`,
-      buttonSolidColorVariables(color),
-    ),
-    variablesToCSS(
-      `.x-theme-button--border--${colorKey}`,
-      buttonBorderColorVariables(color),
-    ),
+    variablesToCSS(`.x-theme-button--solid--${colorKey}`, buttonSolidColorVariables(color)),
+    variablesToCSS(`.x-theme-button--border--${colorKey}`, buttonBorderColorVariables(color)),
   ].join("\n\n");
 }
 
@@ -246,10 +229,7 @@ function bannerCSS(
   const color = yc(theme, colors?.[colorKey]);
   if (color == null) return null;
 
-  return variablesToCSS(
-    `.x-theme-banner--${colorKey}`,
-    bannerColorVariables(color),
-  );
+  return variablesToCSS(`.x-theme-banner--${colorKey}`, bannerColorVariables(color));
 }
 
 function toastCSS(
@@ -260,10 +240,7 @@ function toastCSS(
   const color = yc(theme, colors?.[colorKey]);
   if (color == null) return null;
 
-  return variablesToCSS(
-    `.x-theme-toast--${colorKey}`,
-    toastColorVariables(color),
-  );
+  return variablesToCSS(`.x-theme-toast--${colorKey}`, toastColorVariables(color));
 }
 
 function templateTagCSS(
@@ -274,16 +251,12 @@ function templateTagCSS(
   const color = yc(theme, colors?.[colorKey]);
   if (color == null) return null;
 
-  return variablesToCSS(
-    `.x-theme-templateTag--${colorKey}`,
-    templateTagColorVariables(color),
-  );
+  return variablesToCSS(`.x-theme-templateTag--${colorKey}`, templateTagColorVariables(color));
 }
 
 export function getThemeCSS(theme: Theme): string {
   theme.components = theme.components ?? {};
-  theme.components.toast =
-    theme.components.toast ?? theme.components.menu ?? {};
+  theme.components.toast = theme.components.toast ?? theme.components.menu ?? {};
   const { components, id, label } = theme;
   const colors = Object.keys(theme.base).reduce((prev, key) => {
     return { ...prev, [key]: theme.base[key as YaakColorKey] };
@@ -294,9 +267,7 @@ export function getThemeCSS(theme: Theme): string {
     const baseCss = variablesToCSS(null, themeVariables(theme));
     themeCSS = [
       baseCss,
-      ...Object.keys(components).map((key) =>
-        componentCSS(theme, key as ComponentName),
-      ),
+      ...Object.keys(components).map((key) => componentCSS(theme, key as ComponentName)),
       variablesToCSS(
         ".x-theme-button--solid--default",
         buttonSolidColorVariables(yc(theme, theme.base.surface), true),
@@ -306,44 +277,23 @@ export function getThemeCSS(theme: Theme): string {
         buttonBorderColorVariables(yc(theme, theme.base.surface), true),
       ),
       ...Object.keys(colors).map((key) =>
-        buttonCSS(
-          theme,
-          key as YaakColorKey,
-          theme.components?.button ?? colors,
-        ),
+        buttonCSS(theme, key as YaakColorKey, theme.components?.button ?? colors),
       ),
       ...Object.keys(colors).map((key) =>
-        bannerCSS(
-          theme,
-          key as YaakColorKey,
-          theme.components?.banner ?? colors,
-        ),
+        bannerCSS(theme, key as YaakColorKey, theme.components?.banner ?? colors),
       ),
       ...Object.keys(colors).map((key) =>
-        toastCSS(
-          theme,
-          key as YaakColorKey,
-          theme.components?.banner ?? colors,
-        ),
+        toastCSS(theme, key as YaakColorKey, theme.components?.banner ?? colors),
       ),
       ...Object.keys(colors).map((key) =>
-        templateTagCSS(
-          theme,
-          key as YaakColorKey,
-          theme.components?.templateTag ?? colors,
-        ),
+        templateTagCSS(theme, key as YaakColorKey, theme.components?.templateTag ?? colors),
       ),
     ].join("\n\n");
   } catch (err) {
     console.error("Failed to generate CSS", err);
   }
 
-  return [
-    `/* ${label} */`,
-    `[data-theme="${id}"] {`,
-    indent(themeCSS),
-    "}",
-  ].join("\n");
+  return [`/* ${label} */`, `[data-theme="${id}"] {`, indent(themeCSS), "}"].join("\n");
 }
 
 export function addThemeStylesToDocument(rawTheme: Theme | null) {
@@ -382,17 +332,14 @@ export function platformFromUserAgent(userAgent: string): DocumentPlatform {
   const normalized = userAgent.toLowerCase();
 
   if (normalized.includes("linux")) return "linux";
-  if (normalized.includes("mac os") || normalized.includes("macintosh"))
-    return "macos";
+  if (normalized.includes("mac os") || normalized.includes("macintosh")) return "macos";
   if (normalized.includes("win")) return "windows";
   return "unknown";
 }
 
 export function setPlatformOnDocument(platform: string | null | undefined) {
   const normalized =
-    platform === "linux" || platform === "macos" || platform === "windows"
-      ? platform
-      : "unknown";
+    platform === "linux" || platform === "macos" || platform === "windows" ? platform : "unknown";
   document.documentElement.setAttribute("data-platform", normalized);
 }
 
@@ -425,10 +372,7 @@ export function completeTheme(theme: Theme): Theme {
 
   theme.base.surface ??= fallback.surface;
   theme.base.surfaceHighlight ??= color(theme.base.surface)?.lift(0.06)?.css();
-  theme.base.surfaceActive ??= color(theme.base.primary)
-    ?.lower(0.2)
-    .translucify(0.8)
-    .css();
+  theme.base.surfaceActive ??= color(theme.base.primary)?.lower(0.2).translucify(0.8).css();
 
   theme.base.border ??= color(theme.base.surface)?.lift(0.12)?.css();
   theme.base.borderSubtle ??= color(theme.base.border)?.lower(0.08)?.css();

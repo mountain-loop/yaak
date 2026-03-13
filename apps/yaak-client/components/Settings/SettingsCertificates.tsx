@@ -1,20 +1,20 @@
-import type { ClientCertificate } from '@yaakapp-internal/models';
-import { patchModel, settingsAtom } from '@yaakapp-internal/models';
-import { Heading, HStack, InlineCode, VStack } from '@yaakapp-internal/ui';
-import { useAtomValue } from 'jotai';
-import { useRef } from 'react';
-import { showConfirmDelete } from '../../lib/confirm';
-import { Button } from '../core/Button';
-import { Checkbox } from '../core/Checkbox';
-import { DetailsBanner } from '../core/DetailsBanner';
-import { IconButton } from '../core/IconButton';
-import { PlainInput } from '../core/PlainInput';
-import { Separator } from '../core/Separator';
-import { SelectFile } from '../SelectFile';
+import type { ClientCertificate } from "@yaakapp-internal/models";
+import { patchModel, settingsAtom } from "@yaakapp-internal/models";
+import { Heading, HStack, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { useAtomValue } from "jotai";
+import { useRef } from "react";
+import { showConfirmDelete } from "../../lib/confirm";
+import { Button } from "../core/Button";
+import { Checkbox } from "../core/Checkbox";
+import { DetailsBanner } from "../core/DetailsBanner";
+import { IconButton } from "../core/IconButton";
+import { PlainInput } from "../core/PlainInput";
+import { Separator } from "../core/Separator";
+import { SelectFile } from "../SelectFile";
 
 function createEmptyCertificate(): ClientCertificate {
   return {
-    host: '',
+    host: "",
     port: null,
     crtFile: null,
     keyFile: null,
@@ -42,11 +42,11 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
   const hasPfx = Boolean(certificate.pfxFile && certificate.pfxFile.length > 0);
   const hasCrtKey = Boolean(
     (certificate.crtFile && certificate.crtFile.length > 0) ||
-      (certificate.keyFile && certificate.keyFile.length > 0),
+    (certificate.keyFile && certificate.keyFile.length > 0),
   );
 
   // Determine certificate type for display
-  const certType = hasPfx ? 'PFX' : hasCrtKey ? 'CERT' : null;
+  const certType = hasPfx ? "PFX" : hasCrtKey ? "CERT" : null;
   const defaultOpen = useRef<boolean>(!certificate.host);
 
   return (
@@ -58,9 +58,9 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             <Checkbox
               className="ml-1"
               checked={certificate.enabled ?? true}
-              title={certificate.enabled ? 'Disable certificate' : 'Enable certificate'}
+              title={certificate.enabled ? "Disable certificate" : "Enable certificate"}
               hideLabel
-              onChange={(enabled) => updateField('enabled', enabled)}
+              onChange={(enabled) => updateField("enabled", enabled)}
             />
 
             {certificate.host ? (
@@ -101,7 +101,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             size="sm"
             required
             defaultValue={certificate.host}
-            onChange={(host) => updateField('host', host)}
+            onChange={(host) => updateField("host", host)}
           />
           <PlainInput
             label="Port"
@@ -119,8 +119,8 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             }
             size="sm"
             className="w-24"
-            defaultValue={certificate.port?.toString() ?? ''}
-            onChange={(port) => updateField('port', port ? parseInt(port, 10) : null)}
+            defaultValue={certificate.port?.toString() ?? ""}
+            onChange={(port) => updateField("port", port ? parseInt(port, 10) : null)}
           />
         </HStack>
 
@@ -133,7 +133,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             filePath={certificate.crtFile ?? null}
             size="sm"
             disabled={hasPfx}
-            onChange={({ filePath }) => updateField('crtFile', filePath)}
+            onChange={({ filePath }) => updateField("crtFile", filePath)}
           />
           <SelectFile
             label="KEY File"
@@ -141,7 +141,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             filePath={certificate.keyFile ?? null}
             size="sm"
             disabled={hasPfx}
-            onChange={({ filePath }) => updateField('keyFile', filePath)}
+            onChange={({ filePath }) => updateField("keyFile", filePath)}
           />
         </VStack>
 
@@ -153,15 +153,15 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
           filePath={certificate.pfxFile ?? null}
           size="sm"
           disabled={hasCrtKey}
-          onChange={({ filePath }) => updateField('pfxFile', filePath)}
+          onChange={({ filePath }) => updateField("pfxFile", filePath)}
         />
 
         <PlainInput
           label="Passphrase"
           size="sm"
           type="password"
-          defaultValue={certificate.passphrase ?? ''}
-          onChange={(passphrase) => updateField('passphrase', passphrase || null)}
+          defaultValue={certificate.passphrase ?? ""}
+          onChange={(passphrase) => updateField("passphrase", passphrase || null)}
         />
       </VStack>
     </DetailsBanner>
@@ -191,15 +191,15 @@ export function SettingsCertificates() {
     const cert = certificates[index];
     if (cert == null) return;
 
-    const host = cert.host || 'this certificate';
-    const port = cert.port != null ? `:${cert.port}` : '';
+    const host = cert.host || "this certificate";
+    const port = cert.port != null ? `:${cert.port}` : "";
 
     const confirmed = await showConfirmDelete({
-      id: 'confirm-remove-certificate',
-      title: 'Delete Certificate',
+      id: "confirm-remove-certificate",
+      title: "Delete Certificate",
       description: (
         <>
-          Permanently delete certificate for{' '}
+          Permanently delete certificate for{" "}
           <InlineCode>
             {host}
             {port}

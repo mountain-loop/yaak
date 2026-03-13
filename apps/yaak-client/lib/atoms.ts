@@ -19,7 +19,4 @@ export const workspaceLayoutAtom = atomWithKVStorage<SplitLayoutLayout>(
   "horizontal",
 );
 
-export const updateAvailableAtom = atom<Omit<
-  UpdateInfo,
-  "replyEventId"
-> | null>(null);
+export const updateAvailableAtom = atom<Omit<UpdateInfo, "replyEventId"> | null>(null);

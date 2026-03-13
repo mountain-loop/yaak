@@ -1,6 +1,6 @@
-import type { Diagnostic } from '@codemirror/lint';
-import type { EditorView } from '@codemirror/view';
-import { parse as jsonLintParse } from '@prantlf/jsonlint';
+import type { Diagnostic } from "@codemirror/lint";
+import type { EditorView } from "@codemirror/view";
+import { parse as jsonLintParse } from "@prantlf/jsonlint";
 
 const TEMPLATE_SYNTAX_REGEX = /\$\{\[[\s\S]*?]}/g;
 
@@ -15,14 +15,14 @@ export function jsonParseLinter(options?: JsonLintOptions) {
       const doc = view.state.doc.toString();
       // We need lint to not break on stuff like {"foo:" ${[ ... ]}} so we'll replace all template
       // syntax with repeating `1` characters, so it's valid JSON and the position is still correct.
-      const escapedDoc = doc.replace(TEMPLATE_SYNTAX_REGEX, (m) => '1'.repeat(m.length));
+      const escapedDoc = doc.replace(TEMPLATE_SYNTAX_REGEX, (m) => "1".repeat(m.length));
       jsonLintParse(escapedDoc, {
-        mode: (options?.allowComments ?? true) ? 'cjson' : 'json',
+        mode: (options?.allowComments ?? true) ? "cjson" : "json",
         ignoreTrailingCommas: options?.allowTrailingCommas ?? false,
       });
-      // biome-ignore lint/suspicious/noExplicitAny: none
+      // oxlint-disable-next-line no-explicit-any
     } catch (err: any) {
-      if (!('location' in err)) {
+      if (!("location" in err)) {
         return [];
       }
 
@@ -33,7 +33,7 @@ export function jsonParseLinter(options?: JsonLintOptions) {
           {
             from: err.location.start.offset,
             to: err.location.start.offset,
-            severity: 'error',
+            severity: "error",
             message: err.message,
           },
         ];

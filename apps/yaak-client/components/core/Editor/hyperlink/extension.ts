@@ -1,9 +1,9 @@
-import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, EditorView, hoverTooltip, MatchDecorator, ViewPlugin } from '@codemirror/view';
-import { activeWorkspaceIdAtom } from '../../../../hooks/useActiveWorkspace';
-import { copyToClipboard } from '../../../../lib/copy';
-import { createRequestAndNavigate } from '../../../../lib/createRequestAndNavigate';
-import { jotaiStore } from '../../../../lib/jotai';
+import type { DecorationSet, ViewUpdate } from "@codemirror/view";
+import { Decoration, EditorView, hoverTooltip, MatchDecorator, ViewPlugin } from "@codemirror/view";
+import { activeWorkspaceIdAtom } from "../../../../hooks/useActiveWorkspace";
+import { copyToClipboard } from "../../../../lib/copy";
+import { createRequestAndNavigate } from "../../../../lib/createRequestAndNavigate";
+import { jotaiStore } from "../../../../lib/jotai";
 
 const REGEX =
   /(https?:\/\/([-a-zA-Z0-9@:%._+*~#=]{1,256})+(\.[a-zA-Z0-9()]{1,6})?\b([-a-zA-Z0-9()@:%_+*.~#?&/={}[\]]*))/g;
@@ -14,7 +14,7 @@ const tooltip = hoverTooltip(
     let match: RegExpExecArray | null;
     let found: { start: number; end: number } | null = null;
 
-    // biome-ignore lint/suspicious/noAssignInExpressions: none
+    // oxlint-disable-next-line no-cond-assign
     while ((match = REGEX.exec(text))) {
       const start = from + match.index;
       const end = start + match[0].length;
@@ -39,26 +39,26 @@ const tooltip = hoverTooltip(
       create() {
         const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
         const link = text.substring(found?.start - from, found?.end - from);
-        const dom = document.createElement('div');
+        const dom = document.createElement("div");
 
-        const $open = document.createElement('a');
-        $open.textContent = 'Open in browser';
+        const $open = document.createElement("a");
+        $open.textContent = "Open in browser";
         $open.href = link;
-        $open.target = '_blank';
-        $open.rel = 'noopener noreferrer';
+        $open.target = "_blank";
+        $open.rel = "noopener noreferrer";
 
-        const $copy = document.createElement('button');
-        $copy.textContent = 'Copy to clipboard';
-        $copy.addEventListener('click', () => {
+        const $copy = document.createElement("button");
+        $copy.textContent = "Copy to clipboard";
+        $copy.addEventListener("click", () => {
           copyToClipboard(link);
         });
 
-        const $create = document.createElement('button');
-        $create.textContent = 'Create new request';
-        $create.addEventListener('click', async () => {
+        const $create = document.createElement("button");
+        $create.textContent = "Create new request";
+        $create.addEventListener("click", async () => {
           await createRequestAndNavigate({
-            model: 'http_request',
-            workspaceId: workspaceId ?? 'n/a',
+            model: "http_request",
+            workspaceId: workspaceId ?? "n/a",
             url: link,
           });
         });
@@ -94,12 +94,12 @@ const decorator = () => {
       const groupMatch = match[1];
       if (groupMatch == null) {
         // Should never happen, but make TS happy
-        console.warn('Group match was empty', match);
+        console.warn("Group match was empty", match);
         return Decoration.replace({});
       }
 
       return Decoration.mark({
-        class: 'hyperlink-widget',
+        class: "hyperlink-widget",
       });
     },
   });

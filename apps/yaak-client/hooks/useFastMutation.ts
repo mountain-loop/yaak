@@ -1,6 +1,6 @@
-import type { MutationKey } from '@tanstack/react-query';
-import { useMemo } from 'react';
-import { showToast } from '../lib/toast';
+import type { MutationKey } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { showToast } from "../lib/toast";
 
 interface MutationOptions<TData, TError, TVariables> {
   mutationKey: MutationKey;
@@ -13,7 +13,7 @@ interface MutationOptions<TData, TError, TVariables> {
 
 type CallbackMutationOptions<TData, TError, TVariables> = Omit<
   MutationOptions<TData, TError, TVariables>,
-  'mutationKey' | 'mutationFn'
+  "mutationKey" | "mutationFn"
 >;
 
 export function createFastMutation<TData = unknown, TError = unknown, TVariables = void>(
@@ -36,14 +36,14 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
       args?.onSettled?.();
       return data;
     } catch (err: unknown) {
-      const stringKey = mutationKey.join('.');
+      const stringKey = mutationKey.join(".");
       const e = err as TError;
-      console.log('mutation error', stringKey, e);
+      console.log("mutation error", stringKey, e);
       if (!disableToastError) {
         showToast({
           id: stringKey,
-          message: `${err}`,
-          color: 'danger',
+          message: err instanceof Error ? err.message : String(err),
+          color: "danger",
           timeout: 5000,
         });
       }
@@ -71,6 +71,6 @@ export function useFastMutation<TData = unknown, TError = unknown, TVariables = 
 ) {
   return useMemo(() => {
     return createFastMutation(defaultArgs);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Force it!
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Force it!
   }, defaultArgs.mutationKey);
 }

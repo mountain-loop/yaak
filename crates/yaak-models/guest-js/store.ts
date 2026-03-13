@@ -62,25 +62,20 @@ export async function changeModelStoreWorkspace(workspaceId: string | null) {
   _activeWorkspaceId = workspaceId;
 }
 
-export function listModels<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(modelType: M | ReadonlyArray<M>): T[] {
+export function listModels<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  modelType: M | ReadonlyArray<M>,
+): T[] {
   let data = mustStore().get(modelStoreDataAtom);
-  const types: ReadonlyArray<M> = Array.isArray(modelType)
-    ? modelType
-    : [modelType];
+  const types: ReadonlyArray<M> = Array.isArray(modelType) ? modelType : [modelType];
   return types.flatMap((t) => Object.values(data[t]) as T[]);
 }
 
-export function getModel<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(modelType: M | ReadonlyArray<M>, id: string): T | null {
+export function getModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  modelType: M | ReadonlyArray<M>,
+  id: string,
+): T | null {
   let data = mustStore().get(modelStoreDataAtom);
-  const types: ReadonlyArray<M> = Array.isArray(modelType)
-    ? modelType
-    : [modelType];
+  const types: ReadonlyArray<M> = Array.isArray(modelType) ? modelType : [modelType];
   for (const t of types) {
     let v = data[t][id];
     if (v?.model === t) return v as T;
@@ -97,31 +92,30 @@ export function getAnyModel(id: string): AnyModel | null {
   return null;
 }
 
-export function patchModelById<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(model: M, id: string, patch: Partial<T> | ((prev: T) => T)): Promise<string> {
+export function patchModelById<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  model: M,
+  id: string,
+  patch: Partial<T> | ((prev: T) => T),
+): Promise<string> {
   let prev = getModel<M, T>(model, id);
   if (prev == null) {
     throw new Error(`Failed to get model to patch id=${id} model=${model}`);
   }
 
-  const newModel =
-    typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
+  const newModel = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
   return updateModel(newModel);
 }
 
-export async function patchModel<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(base: Pick<T, "id" | "model">, patch: Partial<T>): Promise<string> {
+export async function patchModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  base: Pick<T, "id" | "model">,
+  patch: Partial<T>,
+): Promise<string> {
   return patchModelById<M, T>(base.model, base.id, patch);
 }
 
-export async function updateModel<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(model: T): Promise<string> {
+export async function updateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  model: T,
+): Promise<string> {
   return invoke<string>("models_upsert", { model });
 }
 
@@ -133,20 +127,18 @@ export async function deleteModelById<
   await deleteModel(model);
 }
 
-export async function deleteModel<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(model: T | null) {
+export async function deleteModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  model: T | null,
+) {
   if (model == null) {
     throw new Error("Failed to delete null model");
   }
   await invoke<string>("models_delete", { model });
 }
 
-export function duplicateModel<
-  M extends AnyModel["model"],
-  T extends ExtractModel<AnyModel, M>,
->(model: T | null) {
+export function duplicateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  model: T | null,
+) {
   if (model == null) {
     throw new Error("Failed to duplicate null model");
   }
@@ -157,11 +149,7 @@ export function duplicateModel<
     const existingModels = listModels(model.model);
     for (let i = 0; i < 100; i++) {
       const hasConflict = existingModels.some((m) => {
-        if (
-          "folderId" in m &&
-          "folderId" in model &&
-          model.folderId !== m.folderId
-        ) {
+        if ("folderId" in m && "folderId" in model && model.folderId !== m.folderId) {
           return false;
         } else if (resolvedModelName(m) !== name) {
           return false;
@@ -187,15 +175,15 @@ export function duplicateModel<
   return invoke<string>("models_duplicate", { model: { ...model, name } });
 }
 
-export async function createGlobalModel<
-  T extends Exclude<AnyModel, { workspaceId: string }>,
->(patch: Partial<T> & Pick<T, "model">): Promise<string> {
+export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(
+  patch: Partial<T> & Pick<T, "model">,
+): Promise<string> {
   return invoke<string>("models_upsert", { model: patch });
 }
 
-export async function createWorkspaceModel<
-  T extends Extract<AnyModel, { workspaceId: string }>,
->(patch: Partial<T> & Pick<T, "model" | "workspaceId">): Promise<string> {
+export async function createWorkspaceModel<T extends Extract<AnyModel, { workspaceId: string }>>(
+  patch: Partial<T> & Pick<T, "model" | "workspaceId">,
+): Promise<string> {
   return invoke<string>("models_upsert", { model: patch });
 }
 

@@ -1,17 +1,17 @@
-import type { AnyModel } from '@yaakapp-internal/models';
-import { deleteModel, modelTypeLabel } from '@yaakapp-internal/models';
-import { InlineCode } from '@yaakapp-internal/ui';
-import { Prose } from '../components/Prose';
-import { showConfirmDelete } from './confirm';
-import { pluralizeCount } from './pluralize';
-import { resolvedModelName } from './resolvedModelName';
+import type { AnyModel } from "@yaakapp-internal/models";
+import { deleteModel, modelTypeLabel } from "@yaakapp-internal/models";
+import { InlineCode } from "@yaakapp-internal/ui";
+import { Prose } from "../components/Prose";
+import { showConfirmDelete } from "./confirm";
+import { pluralizeCount } from "./pluralize";
+import { resolvedModelName } from "./resolvedModelName";
 
 export async function deleteModelWithConfirm(
   model: AnyModel | AnyModel[] | null,
   options: { confirmName?: string } = {},
 ): Promise<boolean> {
   if (model == null) {
-    console.warn('Tried to delete null model');
+    console.warn("Tried to delete null model");
     return false;
   }
   const models = Array.isArray(model) ? model : [model];
@@ -19,14 +19,14 @@ export async function deleteModelWithConfirm(
   if (firstModel == null) return false;
 
   const descriptor =
-    models.length === 1 ? modelTypeLabel(firstModel) : pluralizeCount('Item', models.length);
+    models.length === 1 ? modelTypeLabel(firstModel) : pluralizeCount("Item", models.length);
   const confirmed = await showConfirmDelete({
-    id: `delete-model-${models.map((m) => m.id).join(',')}`,
+    id: `delete-model-${models.map((m) => m.id).join(",")}`,
     title: `Delete ${descriptor}`,
     requireTyping: options.confirmName,
     description: (
       <>
-        Permanently delete{' '}
+        Permanently delete{" "}
         {models.length === 1 ? (
           <>
             <InlineCode>{resolvedModelName(firstModel)}</InlineCode>?
@@ -45,7 +45,7 @@ export async function deleteModelWithConfirm(
             </Prose>
           </>
         ) : (
-          `all ${pluralizeCount('item', models.length)}?`
+          `all ${pluralizeCount("item", models.length)}?`
         )}
       </>
     ),

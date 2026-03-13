@@ -1,5 +1,5 @@
-import type { Color } from '@yaakapp-internal/plugins';
-import classNames from 'classnames';
+import type { Color } from "@yaakapp-internal/plugins";
+import classNames from "classnames";
 import {
   AlarmClockIcon,
   AlertTriangleIcon,
@@ -137,9 +137,9 @@ import {
   WifiIcon,
   WrenchIcon,
   XIcon,
-} from 'lucide-react';
-import type { CSSProperties, HTMLAttributes } from 'react';
-import { memo } from 'react';
+} from "lucide-react";
+import type { CSSProperties, HTMLAttributes } from "react";
+import { memo } from "react";
 
 const icons = {
   alarm_clock: AlarmClockIcon,
@@ -287,17 +287,17 @@ export interface IconProps {
   icon: keyof typeof icons;
   className?: string;
   style?: CSSProperties;
-  size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  size?: "2xs" | "xs" | "sm" | "md" | "lg" | "xl";
   spin?: boolean;
   title?: string;
-  color?: Color | 'custom' | 'default';
+  color?: Color | "custom" | "default";
 }
 
 export const Icon = memo(function Icon({
   icon,
-  color = 'default',
+  color = "default",
   spin,
-  size = 'md',
+  size = "md",
   style,
   className,
   title,
@@ -309,23 +309,23 @@ export const Icon = memo(function Icon({
       title={title}
       className={classNames(
         className,
-        !spin && 'transform-gpu',
-        spin && 'animate-spin',
-        'flex-shrink-0',
-        size === 'xl' && 'h-6 w-6',
-        size === 'lg' && 'h-5 w-5',
-        size === 'md' && 'h-4 w-4',
-        size === 'sm' && 'h-3.5 w-3.5',
-        size === 'xs' && 'h-3 w-3',
-        size === '2xs' && 'h-2.5 w-2.5',
-        color === 'default' && 'inherit',
-        color === 'danger' && 'text-danger',
-        color === 'warning' && 'text-warning',
-        color === 'notice' && 'text-notice',
-        color === 'info' && 'text-info',
-        color === 'success' && 'text-success',
-        color === 'primary' && 'text-primary',
-        color === 'secondary' && 'text-secondary',
+        !spin && "transform-gpu",
+        spin && "animate-spin",
+        "flex-shrink-0",
+        size === "xl" && "h-6 w-6",
+        size === "lg" && "h-5 w-5",
+        size === "md" && "h-4 w-4",
+        size === "sm" && "h-3.5 w-3.5",
+        size === "xs" && "h-3 w-3",
+        size === "2xs" && "h-2.5 w-2.5",
+        color === "default" && "inherit",
+        color === "danger" && "text-danger",
+        color === "warning" && "text-warning",
+        color === "notice" && "text-notice",
+        color === "info" && "text-info",
+        color === "success" && "text-success",
+        color === "primary" && "text-primary",
+        color === "secondary" && "text-secondary",
       )}
     />
   );

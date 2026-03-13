@@ -1,15 +1,15 @@
-import type { HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import type { GrpcRequest } from '@yaakapp-internal/sync';
-import { useAtomValue } from 'jotai';
-import { useMemo } from 'react';
-import { createFolder } from '../commands/commands';
-import type { DropdownItem } from '../components/core/Dropdown';
-import { Icon } from '@yaakapp-internal/ui';
-import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
-import { generateId } from '../lib/generateId';
-import { BODY_TYPE_GRAPHQL } from '../lib/model_util';
-import { activeRequestAtom } from './useActiveRequest';
-import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import type { HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
+import type { GrpcRequest } from "@yaakapp-internal/sync";
+import { useAtomValue } from "jotai";
+import { useMemo } from "react";
+import { createFolder } from "../commands/commands";
+import type { DropdownItem } from "../components/core/Dropdown";
+import { Icon } from "@yaakapp-internal/ui";
+import { createRequestAndNavigate } from "../lib/createRequestAndNavigate";
+import { generateId } from "../lib/generateId";
+import { BODY_TYPE_GRAPHQL } from "../lib/model_util";
+import { activeRequestAtom } from "./useActiveRequest";
+import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
 export function useCreateDropdownItems({
   hideFolder,
@@ -18,7 +18,7 @@ export function useCreateDropdownItems({
 }: {
   hideFolder?: boolean;
   hideIcons?: boolean;
-  folderId?: string | null | 'active-folder';
+  folderId?: string | null | "active-folder";
 } = {}): DropdownItem[] {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const activeRequest = useAtomValue(activeRequestAtom);
@@ -40,16 +40,16 @@ export function getCreateDropdownItems({
 }: {
   hideFolder?: boolean;
   hideIcons?: boolean;
-  folderId?: string | null | 'active-folder';
+  folderId?: string | null | "active-folder";
   workspaceId: string | null;
   activeRequest: HttpRequest | GrpcRequest | WebsocketRequest | null;
   onCreate?: (
-    model: 'http_request' | 'grpc_request' | 'websocket_request' | 'folder',
+    model: "http_request" | "grpc_request" | "websocket_request" | "folder",
     id: string,
   ) => void;
 }): DropdownItem[] {
   const folderId =
-    (folderIdOption === 'active-folder' ? activeRequest?.folderId : folderIdOption) ?? null;
+    (folderIdOption === "active-folder" ? activeRequest?.folderId : folderIdOption) ?? null;
 
   if (workspaceId == null) {
     return [];
@@ -57,59 +57,59 @@ export function getCreateDropdownItems({
 
   return [
     {
-      label: 'HTTP',
+      label: "HTTP",
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
       onSelect: async () => {
-        const id = await createRequestAndNavigate({ model: 'http_request', workspaceId, folderId });
-        onCreate?.('http_request', id);
+        const id = await createRequestAndNavigate({ model: "http_request", workspaceId, folderId });
+        onCreate?.("http_request", id);
       },
     },
     {
-      label: 'GraphQL',
+      label: "GraphQL",
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
       onSelect: async () => {
         const id = await createRequestAndNavigate({
-          model: 'http_request',
+          model: "http_request",
           workspaceId,
           folderId,
           bodyType: BODY_TYPE_GRAPHQL,
-          method: 'POST',
-          headers: [{ name: 'Content-Type', value: 'application/json', id: generateId() }],
+          method: "POST",
+          headers: [{ name: "Content-Type", value: "application/json", id: generateId() }],
         });
-        onCreate?.('http_request', id);
+        onCreate?.("http_request", id);
       },
     },
     {
-      label: 'gRPC',
+      label: "gRPC",
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
       onSelect: async () => {
-        const id = await createRequestAndNavigate({ model: 'grpc_request', workspaceId, folderId });
-        onCreate?.('grpc_request', id);
+        const id = await createRequestAndNavigate({ model: "grpc_request", workspaceId, folderId });
+        onCreate?.("grpc_request", id);
       },
     },
     {
-      label: 'WebSocket',
+      label: "WebSocket",
       leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
       onSelect: async () => {
         const id = await createRequestAndNavigate({
-          model: 'websocket_request',
+          model: "websocket_request",
           workspaceId,
           folderId,
         });
-        onCreate?.('websocket_request', id);
+        onCreate?.("websocket_request", id);
       },
     },
     ...((hideFolder
       ? []
       : [
-          { type: 'separator' },
+          { type: "separator" },
           {
-            label: 'Folder',
+            label: "Folder",
             leftSlot: hideIcons ? undefined : <Icon icon="plus" />,
             onSelect: async () => {
               const id = await createFolder.mutateAsync({ folderId });
               if (id != null) {
-                onCreate?.('folder', id);
+                onCreate?.("folder", id);
               }
             },
           },

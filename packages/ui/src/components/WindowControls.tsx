@@ -1,8 +1,8 @@
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import classNames from 'classnames';
-import { useState } from 'react';
-import { WINDOW_CONTROLS_WIDTH } from '../lib/constants';
-import { Button } from './Button';
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import classNames from "classnames";
+import { useState } from "react";
+import { WINDOW_CONTROLS_WIDTH } from "../lib/constants";
+import { Button } from "./Button";
 
 interface Props {
   className?: string;
@@ -12,17 +12,26 @@ interface Props {
   useNativeTitlebar: boolean;
 }
 
-export function WindowControls({ className, onlyX, osType, hideWindowControls, useNativeTitlebar }: Props) {
+export function WindowControls({
+  className,
+  onlyX,
+  osType,
+  hideWindowControls,
+  useNativeTitlebar,
+}: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
 
   // Never show controls on macOS or if hideWindowControls is true
-  if (osType === 'macos' || hideWindowControls || useNativeTitlebar) {
+  if (osType === "macos" || hideWindowControls || useNativeTitlebar) {
     return null;
   }
 
   return (
     <div
-      className={classNames(className, 'ml-4 absolute right-0 top-0 bottom-0 flex items-center justify-end')}
+      className={classNames(
+        className,
+        "ml-4 absolute right-0 top-0 bottom-0 flex items-center justify-end",
+      )}
       style={{ width: WINDOW_CONTROLS_WIDTH }}
       data-tauri-drag-region
     >

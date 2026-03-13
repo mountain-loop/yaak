@@ -1,21 +1,21 @@
-import { HStack, Icon } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { useAtom, useAtomValue } from 'jotai';
-import { memo } from 'react';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { useToggleCommandPalette } from '../hooks/useToggleCommandPalette';
-import { workspaceLayoutAtom } from '../lib/atoms';
-import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
-import { CookieDropdown } from './CookieDropdown';
-import { IconButton } from './core/IconButton';
-import { PillButton } from './core/PillButton';
-import { EnvironmentActionsDropdown } from './EnvironmentActionsDropdown';
-import { ImportCurlButton } from './ImportCurlButton';
-import { LicenseBadge } from './LicenseBadge';
-import { RecentRequestsDropdown } from './RecentRequestsDropdown';
-import { SettingsDropdown } from './SettingsDropdown';
-import { SidebarActions } from './SidebarActions';
-import { WorkspaceActionsDropdown } from './WorkspaceActionsDropdown';
+import { HStack, Icon } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { useAtom, useAtomValue } from "jotai";
+import { memo } from "react";
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
+import { useToggleCommandPalette } from "../hooks/useToggleCommandPalette";
+import { workspaceLayoutAtom } from "../lib/atoms";
+import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
+import { CookieDropdown } from "./CookieDropdown";
+import { IconButton } from "./core/IconButton";
+import { PillButton } from "./core/PillButton";
+import { EnvironmentActionsDropdown } from "./EnvironmentActionsDropdown";
+import { ImportCurlButton } from "./ImportCurlButton";
+import { LicenseBadge } from "./LicenseBadge";
+import { RecentRequestsDropdown } from "./RecentRequestsDropdown";
+import { SettingsDropdown } from "./SettingsDropdown";
+import { SidebarActions } from "./SidebarActions";
+import { WorkspaceActionsDropdown } from "./WorkspaceActionsDropdown";
 
 interface Props {
   className?: string;
@@ -40,10 +40,10 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
     <div
       className={classNames(
         className,
-        'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full h-full',
+        "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center w-full h-full",
       )}
     >
-      <HStack space={0.5} className={classNames('flex-1 pointer-events-none')}>
+      <HStack space={0.5} className={classNames("flex-1 pointer-events-none")}>
         <SidebarActions floating={floatingSidebar} />
         <CookieDropdown />
         <HStack className="min-w-0">
@@ -66,17 +66,17 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
         )}
         <IconButton
           icon={
-            workspaceLayout === 'responsive'
-              ? 'magic_wand'
-              : workspaceLayout === 'horizontal'
-                ? 'columns_2'
-                : 'rows_2'
+            workspaceLayout === "responsive"
+              ? "magic_wand"
+              : workspaceLayout === "horizontal"
+                ? "columns_2"
+                : "rows_2"
           }
-          title={`Change to ${workspaceLayout === 'horizontal' ? 'vertical' : 'horizontal'} layout`}
+          title={`Change to ${workspaceLayout === "horizontal" ? "vertical" : "horizontal"} layout`}
           size="sm"
           iconColor="secondary"
           onClick={() =>
-            setWorkspaceLayout((prev) => (prev === 'horizontal' ? 'vertical' : 'horizontal'))
+            setWorkspaceLayout((prev) => (prev === "horizontal" ? "vertical" : "horizontal"))
           }
         />
         <IconButton

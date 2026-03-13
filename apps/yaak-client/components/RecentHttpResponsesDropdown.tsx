@@ -1,13 +1,13 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { deleteModel } from '@yaakapp-internal/models';
-import { HStack, Icon } from '@yaakapp-internal/ui';
-import { useCopyHttpResponse } from '../hooks/useCopyHttpResponse';
-import { useDeleteHttpResponses } from '../hooks/useDeleteHttpResponses';
-import { useSaveResponse } from '../hooks/useSaveResponse';
-import { pluralize } from '../lib/pluralize';
-import { Dropdown } from './core/Dropdown';
-import { HttpStatusTag } from './core/HttpStatusTag';
-import { IconButton } from './core/IconButton';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { deleteModel } from "@yaakapp-internal/models";
+import { HStack, Icon } from "@yaakapp-internal/ui";
+import { useCopyHttpResponse } from "../hooks/useCopyHttpResponse";
+import { useDeleteHttpResponses } from "../hooks/useDeleteHttpResponses";
+import { useSaveResponse } from "../hooks/useSaveResponse";
+import { pluralize } from "../lib/pluralize";
+import { Dropdown } from "./core/Dropdown";
+import { HttpStatusTag } from "./core/HttpStatusTag";
+import { IconButton } from "./core/IconButton";
 
 interface Props {
   responses: HttpResponse[];
@@ -22,7 +22,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
   onPinnedResponseId,
 }: Props) {
   const deleteAllResponses = useDeleteHttpResponses(activeResponse?.requestId);
-  const latestResponseId = responses[0]?.id ?? 'n/a';
+  const latestResponseId = responses[0]?.id ?? "n/a";
   const saveResponse = useSaveResponse(activeResponse);
   const copyResponse = useCopyHttpResponse(activeResponse);
 
@@ -30,45 +30,45 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
     <Dropdown
       items={[
         {
-          label: 'Save to File',
+          label: "Save to File",
           onSelect: saveResponse.mutate,
           leftSlot: <Icon icon="save" />,
           hidden: responses.length === 0 || !!activeResponse.error,
-          disabled: activeResponse.state !== 'closed' && activeResponse.status >= 100,
+          disabled: activeResponse.state !== "closed" && activeResponse.status >= 100,
         },
         {
-          label: 'Copy Body',
+          label: "Copy Body",
           onSelect: copyResponse.mutate,
           leftSlot: <Icon icon="copy" />,
           hidden: responses.length === 0 || !!activeResponse.error,
-          disabled: activeResponse.state !== 'closed' && activeResponse.status >= 100,
+          disabled: activeResponse.state !== "closed" && activeResponse.status >= 100,
         },
         {
-          label: 'Delete',
+          label: "Delete",
           leftSlot: <Icon icon="trash" />,
           onSelect: () => deleteModel(activeResponse),
         },
         {
-          label: 'Unpin Response',
+          label: "Unpin Response",
           onSelect: () => onPinnedResponseId(activeResponse.id),
           leftSlot: <Icon icon="unpin" />,
           hidden: latestResponseId === activeResponse.id,
           disabled: responses.length === 0,
         },
-        { type: 'separator', label: 'History' },
+        { type: "separator", label: "History" },
         {
-          label: `Delete ${responses.length} ${pluralize('Response', responses.length)}`,
+          label: `Delete ${responses.length} ${pluralize("Response", responses.length)}`,
           onSelect: deleteAllResponses.mutate,
           hidden: responses.length === 0,
           disabled: responses.length === 0,
         },
-        { type: 'separator' },
+        { type: "separator" },
         ...responses.map((r: HttpResponse) => ({
           label: (
             <HStack space={2}>
               <HttpStatusTag short className="text-xs" response={r} />
-              <span className="text-text-subtle">&rarr;</span>{' '}
-              <span className="font-mono text-sm">{r.elapsed >= 0 ? `${r.elapsed}ms` : 'n/a'}</span>
+              <span className="text-text-subtle">&rarr;</span>{" "}
+              <span className="font-mono text-sm">{r.elapsed >= 0 ? `${r.elapsed}ms` : "n/a"}</span>
             </HStack>
           ),
           leftSlot: activeResponse?.id === r.id ? <Icon icon="check" /> : <Icon icon="empty" />,
@@ -78,7 +78,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
     >
       <IconButton
         title="Show response history"
-        icon={activeResponse?.id === latestResponseId ? 'history' : 'pin'}
+        icon={activeResponse?.id === latestResponseId ? "history" : "pin"}
         className="m-0.5 text-text-subtle"
         size="sm"
         iconSize="md"

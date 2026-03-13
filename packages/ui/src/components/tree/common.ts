@@ -1,7 +1,7 @@
-import type { createStore } from 'jotai';
-import type { ReactNode } from 'react';
-import type { CollapsedAtom } from './context';
-import { selectedIdsFamily } from './atoms';
+import type { createStore } from "jotai";
+import type { ReactNode } from "react";
+import type { CollapsedAtom } from "./context";
+import { selectedIdsFamily } from "./atoms";
 
 export type JotaiStore = ReturnType<typeof createStore>;
 
@@ -71,7 +71,11 @@ export function hasAncestor<T extends { id: string }>(node: TreeNode<T>, ancesto
   return hasAncestor(node.parent, ancestorId);
 }
 
-export function isVisibleNode<T extends { id: string }>(store: JotaiStore, collapsedAtom: CollapsedAtom, node: TreeNode<T>) {
+export function isVisibleNode<T extends { id: string }>(
+  store: JotaiStore,
+  collapsedAtom: CollapsedAtom,
+  node: TreeNode<T>,
+) {
   const collapsed = store.get(collapsedAtom);
   let p = node.parent;
   while (p) {

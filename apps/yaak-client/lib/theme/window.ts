@@ -1,8 +1,4 @@
-export type {
-  YaakColorKey,
-  YaakColors,
-  YaakTheme,
-} from "@yaakapp-internal/theme";
+export type { YaakColorKey, YaakColors, YaakTheme } from "@yaakapp-internal/theme";
 export {
   addThemeStylesToDocument,
   applyThemeToDocument,

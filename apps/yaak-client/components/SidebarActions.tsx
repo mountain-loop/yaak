@@ -1,9 +1,9 @@
-import { HStack } from '@yaakapp-internal/ui';
-import { useMemo } from 'react';
-import { useFloatingSidebarHidden } from '../hooks/useFloatingSidebarHidden';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { CreateDropdown } from './CreateDropdown';
-import { IconButton } from './core/IconButton';
+import { HStack } from "@yaakapp-internal/ui";
+import { useMemo } from "react";
+import { useFloatingSidebarHidden } from "../hooks/useFloatingSidebarHidden";
+import { useSidebarHidden } from "../hooks/useSidebarHidden";
+import { CreateDropdown } from "./CreateDropdown";
+import { IconButton } from "./core/IconButton";
 
 interface Props {
   floating?: boolean;
@@ -28,7 +28,7 @@ export function SidebarActions({ floating = false }: Props) {
         className="pointer-events-auto"
         size="sm"
         title="Toggle sidebar"
-        icon={hidden ? 'left_panel_hidden' : 'left_panel_visible'}
+        icon={hidden ? "left_panel_hidden" : "left_panel_visible"}
         iconColor="secondary"
       />
       <CreateDropdown hotKeyAction="model.create">

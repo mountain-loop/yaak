@@ -1,5 +1,5 @@
-import type { GitCommit } from '@yaakapp-internal/git';
-import { formatDistanceToNowStrict } from 'date-fns';
+import type { GitCommit } from "@yaakapp-internal/git";
+import { formatDistanceToNowStrict } from "date-fns";
 import {
   Table,
   TableBody,
@@ -8,7 +8,7 @@ import {
   TableHeaderCell,
   TableRow,
   TruncatedWideTableCell,
-} from '@yaakapp-internal/ui';
+} from "@yaakapp-internal/ui";
 
 interface Props {
   log: GitCommit[];
@@ -27,12 +27,12 @@ export function HistoryDialog({ log }: Props) {
         </TableHead>
         <TableBody>
           {log.map((l) => (
-            <TableRow key={l.author + (l.message ?? 'n/a') + l.when}>
+            <TableRow key={l.author + (l.message ?? "n/a") + l.when}>
               <TruncatedWideTableCell>
                 {l.message || <em className="text-text-subtle">No message</em>}
               </TruncatedWideTableCell>
               <TableCell>
-                <span title={`Email: ${l.author.email}`}>{l.author.name || 'Unknown'}</span>
+                <span title={`Email: ${l.author.email}`}>{l.author.name || "Unknown"}</span>
               </TableCell>
               <TableCell className="text-text-subtle">
                 <span title={l.when}>{formatDistanceToNowStrict(l.when)} ago</span>

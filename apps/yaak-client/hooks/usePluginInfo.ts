@@ -1,13 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
-import type { Plugin } from '@yaakapp-internal/models';
-import { pluginsAtom } from '@yaakapp-internal/models';
-import type { PluginMetadata } from '@yaakapp-internal/plugins';
-import { useAtomValue } from 'jotai';
-import { queryClient } from '../lib/queryClient';
-import { invokeCmd } from '../lib/tauri';
+import { useQuery } from "@tanstack/react-query";
+import type { Plugin } from "@yaakapp-internal/models";
+import { pluginsAtom } from "@yaakapp-internal/models";
+import type { PluginMetadata } from "@yaakapp-internal/plugins";
+import { useAtomValue } from "jotai";
+import { queryClient } from "../lib/queryClient";
+import { invokeCmd } from "../lib/tauri";
 
 function pluginInfoKey(id: string | null, plugin: Plugin | null) {
-  return ['plugin_info', id ?? 'n/a', plugin?.updatedAt ?? 'n/a'];
+  return ["plugin_info", id ?? "n/a", plugin?.updatedAt ?? "n/a"];
 }
 
 export function usePluginInfo(id: string | null) {
@@ -19,11 +19,11 @@ export function usePluginInfo(id: string | null) {
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: () => {
       if (id == null) return null;
-      return invokeCmd<PluginMetadata>('cmd_plugin_info', { id });
+      return invokeCmd<PluginMetadata>("cmd_plugin_info", { id });
     },
   });
 }
 
 export function invalidateAllPluginInfo() {
-  queryClient.invalidateQueries({ queryKey: ['plugin_info'] }).catch(console.error);
+  queryClient.invalidateQueries({ queryKey: ["plugin_info"] }).catch(console.error);
 }

@@ -1,6 +1,6 @@
-import type { RpcEventSchema } from '@yaakapp-internal/proxy-lib';
-import { useEffect } from 'react';
-import { listen } from '../lib/rpc';
+import type { RpcEventSchema } from "@yaakapp-internal/proxy-lib";
+import { useEffect } from "react";
+import { listen } from "../lib/rpc";
 
 /**
  * Subscribe to an RPC event. Cleans up automatically on unmount.

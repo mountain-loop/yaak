@@ -1,8 +1,8 @@
-import { Banner, Button, InlineCode } from '@yaakapp-internal/ui';
-import type { ErrorInfo, ReactNode } from 'react';
-import { Component, useEffect } from 'react';
-import { showDialog } from '../lib/dialog';
-import RouteError from './RouteError';
+import { Banner, Button, InlineCode } from "@yaakapp-internal/ui";
+import type { ErrorInfo, ReactNode } from "react";
+import { Component, useEffect } from "react";
+import { showDialog } from "../lib/dialog";
+import RouteError from "./RouteError";
 
 interface ErrorBoundaryProps {
   name: string;
@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.warn('Error caught by ErrorBoundary:', error, info);
+    console.warn("Error caught by ErrorBoundary:", error, info);
   }
 
   render() {
@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             size="2xs"
             onClick={() => {
               showDialog({
-                id: 'error-boundary',
+                id: "error-boundary",
                 render: () => <RouteError error={this.state.error} />,
               });
             }}
@@ -59,7 +59,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
 export function ErrorBoundaryTestThrow() {
   useEffect(() => {
-    throw new Error('test error');
+    throw new Error("test error");
   });
 
   return <div>Hello</div>;

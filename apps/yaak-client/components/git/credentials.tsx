@@ -1,5 +1,5 @@
-import { showPromptForm } from '../../lib/prompt-form';
-import { Banner, InlineCode } from '@yaakapp-internal/ui';
+import { showPromptForm } from "../../lib/prompt-form";
+import { Banner, InlineCode } from "@yaakapp-internal/ui";
 
 export interface GitCredentials {
   username: string;
@@ -14,15 +14,15 @@ export async function promptCredentials({
   error: string | null;
 }): Promise<GitCredentials | null> {
   const isGitHub = /github\.com/i.test(remoteUrl);
-  const userLabel = isGitHub ? 'GitHub Username' : 'Username';
-  const passLabel = isGitHub ? 'GitHub Personal Access Token' : 'Password / Token';
-  const userDescription = isGitHub ? 'Use your GitHub username (not your email).' : undefined;
+  const userLabel = isGitHub ? "GitHub Username" : "Username";
+  const passLabel = isGitHub ? "GitHub Personal Access Token" : "Password / Token";
+  const userDescription = isGitHub ? "Use your GitHub username (not your email)." : undefined;
   const passDescription = isGitHub
-    ? 'GitHub requires a Personal Access Token (PAT) for write operations over HTTPS. Passwords are not supported.'
-    : 'Enter your password or access token for this Git server.';
+    ? "GitHub requires a Personal Access Token (PAT) for write operations over HTTPS. Passwords are not supported."
+    : "Enter your password or access token for this Git server.";
   const r = await showPromptForm({
-    id: 'git-credentials',
-    title: 'Credentials Required',
+    id: "git-credentials",
+    title: "Credentials Required",
     description: error ? (
       <Banner color="danger">{error}</Banner>
     ) : (
@@ -31,10 +31,10 @@ export async function promptCredentials({
       </>
     ),
     inputs: [
-      { type: 'text', name: 'username', label: userLabel, description: userDescription },
+      { type: "text", name: "username", label: userLabel, description: userDescription },
       {
-        type: 'text',
-        name: 'password',
+        type: "text",
+        name: "password",
         label: passLabel,
         description: passDescription,
         password: true,
@@ -43,7 +43,7 @@ export async function promptCredentials({
   });
   if (r == null) return null;
 
-  const username = String(r.username || '');
-  const password = String(r.password || '');
+  const username = String(r.username || "");
+  const password = String(r.password || "");
   return { username, password };
 }

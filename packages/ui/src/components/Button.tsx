@@ -8,10 +8,7 @@ import { LoadingIcon } from "./LoadingIcon";
 type ButtonVariant = "border" | "solid";
 type ButtonSize = "2xs" | "xs" | "sm" | "md" | "auto";
 
-export type ButtonProps = Omit<
-  HTMLAttributes<HTMLButtonElement>,
-  "color" | "onChange"
-> & {
+export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, "color" | "onChange"> & {
   innerClassName?: string;
   color?: Color | "custom" | "default";
   tone?: Color | "default";

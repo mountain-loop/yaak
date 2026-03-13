@@ -1,18 +1,18 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { invoke } from '@tauri-apps/api/core';
-import type { GraphQlIntrospection, HttpRequest } from '@yaakapp-internal/models';
-import type { GraphQLSchema, IntrospectionQuery } from 'graphql';
-import { buildClientSchema, getIntrospectionQuery } from 'graphql';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { minPromiseMillis } from '../lib/minPromiseMillis';
-import { getResponseBodyText } from '../lib/responseBody';
-import { sendEphemeralRequest } from '../lib/sendEphemeralRequest';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useDebouncedValue } from '@yaakapp-internal/ui';
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
+import type { GraphQlIntrospection, HttpRequest } from "@yaakapp-internal/models";
+import type { GraphQLSchema, IntrospectionQuery } from "graphql";
+import { buildClientSchema, getIntrospectionQuery } from "graphql";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { minPromiseMillis } from "../lib/minPromiseMillis";
+import { getResponseBodyText } from "../lib/responseBody";
+import { sendEphemeralRequest } from "../lib/sendEphemeralRequest";
+import { useActiveEnvironment } from "./useActiveEnvironment";
+import { useDebouncedValue } from "@yaakapp-internal/ui";
 
 const introspectionRequestBody = JSON.stringify({
   query: getIntrospectionQuery(),
-  operationName: 'IntrospectionQuery',
+  operationName: "IntrospectionQuery",
 });
 
 export function useIntrospectGraphQL(
@@ -32,17 +32,14 @@ export function useIntrospectGraphQL(
 
   const upsertIntrospection = useCallback(
     async (content: string | null) => {
-      const v = await invoke<GraphQlIntrospection>(
-        'models_upsert_graphql_introspection',
-        {
-          requestId: baseRequest.id,
-          workspaceId: baseRequest.workspaceId,
-          content: content ?? '',
-        },
-      );
+      const v = await invoke<GraphQlIntrospection>("models_upsert_graphql_introspection", {
+        requestId: baseRequest.id,
+        workspaceId: baseRequest.workspaceId,
+        content: content ?? "",
+      });
 
       // Update local introspection
-      queryClient.setQueryData(['introspection', baseRequest.id], v);
+      queryClient.setQueryData(["introspection", baseRequest.id], v);
     },
     [baseRequest.id, baseRequest.workspaceId, queryClient],
   );
@@ -54,7 +51,7 @@ export function useIntrospectGraphQL(
 
       const args = {
         ...baseRequest,
-        bodyType: 'application/json',
+        bodyType: "application/json",
         body: { text: introspectionRequestBody },
       };
       const response = await minPromiseMillis(
@@ -74,7 +71,7 @@ export function useIntrospectGraphQL(
       }
 
       if (bodyText === null) {
-        return setError('Empty body returned in response');
+        return setError("Empty body returned in response");
       }
 
       console.log(`Got introspection response for ${baseRequest.url}`, bodyText);
@@ -97,18 +94,18 @@ export function useIntrospectGraphQL(
   }, [baseRequest.id, debouncedRequest.url, debouncedRequest.method, activeEnvironment?.id]);
 
   const clear = useCallback(async () => {
-    setError('');
+    setError("");
     setSchema(null);
     await upsertIntrospection(null);
   }, [upsertIntrospection]);
 
   useEffect(() => {
-    if (introspection.data?.content == null || introspection.data.content === '') {
+    if (introspection.data?.content == null || introspection.data.content === "") {
       return;
     }
 
     const parseResult = tryParseIntrospectionToSchema(introspection.data.content);
-    if ('error' in parseResult) {
+    if ("error" in parseResult) {
       setError(parseResult.error);
     } else {
       setSchema(parseResult.schema);
@@ -120,9 +117,9 @@ export function useIntrospectGraphQL(
 
 function useIntrospectionResult(request: HttpRequest) {
   return useQuery({
-    queryKey: ['introspection', request.id],
+    queryKey: ["introspection", request.id],
     queryFn: async () =>
-      invoke<GraphQlIntrospection | null>('models_get_graphql_introspection', {
+      invoke<GraphQlIntrospection | null>("models_get_graphql_introspection", {
         requestId: request.id,
       }),
   });
@@ -132,9 +129,9 @@ export function useCurrentGraphQLSchema(request: HttpRequest) {
   const result = useIntrospectionResult(request);
   return useMemo(() => {
     if (result.data == null) return null;
-    if (result.data.content == null || result.data.content === '') return null;
+    if (result.data.content == null || result.data.content === "") return null;
     const r = tryParseIntrospectionToSchema(result.data.content);
-    return 'error' in r ? null : r.schema;
+    return "error" in r ? null : r.schema;
   }, [result.data]);
 }
 
@@ -146,13 +143,13 @@ function tryParseIntrospectionToSchema(
     parsedResponse = JSON.parse(content).data;
     // biome-ignore lint/suspicious/noExplicitAny: none
   } catch (e: any) {
-    return { error: String('message' in e ? e.message : e) };
+    return { error: String("message" in e ? e.message : e) };
   }
 
   try {
     return { schema: buildClientSchema(parsedResponse, {}) };
     // biome-ignore lint/suspicious/noExplicitAny: none
   } catch (e: any) {
-    return { error: String('message' in e ? e.message : e) };
+    return { error: String("message" in e ? e.message : e) };
   }
 }

@@ -1,13 +1,13 @@
 {
   "name": "@yaak/template-function-timestamp",
   "displayName": "Timestamp Template Functions",
-  "description": "Template functions for dealing with timestamps",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for dealing with timestamps",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   },
   "dependencies": {
     "@date-fns/tz": "^1.4.1",

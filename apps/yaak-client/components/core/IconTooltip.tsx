@@ -1,18 +1,18 @@
-import { Icon, type IconProps } from '@yaakapp-internal/ui';
-import type { TooltipProps } from './Tooltip';
-import { Tooltip } from './Tooltip';
+import { Icon, type IconProps } from "@yaakapp-internal/ui";
+import type { TooltipProps } from "./Tooltip";
+import { Tooltip } from "./Tooltip";
 
-type Props = Omit<TooltipProps, 'children'> & {
-  icon?: IconProps['icon'];
-  iconSize?: IconProps['size'];
-  iconColor?: IconProps['color'];
+type Props = Omit<TooltipProps, "children"> & {
+  icon?: IconProps["icon"];
+  iconSize?: IconProps["size"];
+  iconColor?: IconProps["color"];
   className?: string;
   tabIndex?: number;
 };
 
 export function IconTooltip({
   content,
-  icon = 'info',
+  icon = "info",
   iconColor,
   iconSize,
   ...tooltipProps

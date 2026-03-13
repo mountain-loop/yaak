@@ -4,10 +4,7 @@ import { setWindowTheme } from "@yaakapp-internal/mac-window";
 import type { ModelPayload } from "@yaakapp-internal/models";
 import { getSettings } from "./lib/settings";
 import type { Appearance } from "./lib/theme/appearance";
-import {
-  getCSSAppearance,
-  subscribeToPreferredAppearance,
-} from "./lib/theme/appearance";
+import { getCSSAppearance, subscribeToPreferredAppearance } from "./lib/theme/appearance";
 import { getResolvedTheme } from "./lib/theme/themes";
 import { applyThemeToDocument } from "@yaakapp-internal/theme";
 

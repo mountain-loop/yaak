@@ -15,14 +15,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
 
 // Read root package.json to get workspaces
-const rootPkg = JSON.parse(
-  fs.readFileSync(path.join(rootDir, "package.json"), "utf8"),
-);
+const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
 const workspaces = rootPkg.workspaces || [];
 
 const requestedWorkspaces = process.argv.slice(2);
-const workspaceCandidates =
-  requestedWorkspaces.length > 0 ? requestedWorkspaces : workspaces;
+const workspaceCandidates = requestedWorkspaces.length > 0 ? requestedWorkspaces : workspaces;
 
 // Find all candidate workspaces with a dev script
 const workspacesWithDev = workspaceCandidates.filter((ws) => {

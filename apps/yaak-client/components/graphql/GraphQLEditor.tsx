@@ -1,24 +1,24 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
+import type { HttpRequest } from "@yaakapp-internal/models";
 
-import { useAtom } from 'jotai';
-import { useCallback, useMemo } from 'react';
-import { useLocalStorage } from 'react-use';
-import { useIntrospectGraphQL } from '../../hooks/useIntrospectGraphQL';
-import { useStateWithDeps } from '../../hooks/useStateWithDeps';
-import { showDialog } from '../../lib/dialog';
-import { Button } from '../core/Button';
-import type { DropdownItem } from '../core/Dropdown';
-import { Dropdown } from '../core/Dropdown';
-import type { EditorProps } from '../core/Editor/Editor';
-import { Editor } from '../core/Editor/LazyEditor';
-import { Banner, FormattedError, Icon } from '@yaakapp-internal/ui';
-import { Separator } from '../core/Separator';
-import { tryFormatGraphql } from '../../lib/formatters';
-import { showGraphQLDocExplorerAtom } from './graphqlAtoms';
+import { useAtom } from "jotai";
+import { useCallback, useMemo } from "react";
+import { useLocalStorage } from "react-use";
+import { useIntrospectGraphQL } from "../../hooks/useIntrospectGraphQL";
+import { useStateWithDeps } from "../../hooks/useStateWithDeps";
+import { showDialog } from "../../lib/dialog";
+import { Button } from "../core/Button";
+import type { DropdownItem } from "../core/Dropdown";
+import { Dropdown } from "../core/Dropdown";
+import type { EditorProps } from "../core/Editor/Editor";
+import { Editor } from "../core/Editor/LazyEditor";
+import { Banner, FormattedError, Icon } from "@yaakapp-internal/ui";
+import { Separator } from "../core/Separator";
+import { tryFormatGraphql } from "../../lib/formatters";
+import { showGraphQLDocExplorerAtom } from "./graphqlAtoms";
 
-type Props = Pick<EditorProps, 'heightMode' | 'className' | 'forceUpdateKey'> & {
+type Props = Pick<EditorProps, "heightMode" | "className" | "forceUpdateKey"> & {
   baseRequest: HttpRequest;
-  onChange: (body: HttpRequest['body']) => void;
+  onChange: (body: HttpRequest["body"]) => void;
   request: HttpRequest;
 };
 
@@ -31,7 +31,7 @@ export function GraphQLEditor(props: Props) {
 function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProps }: Props) {
   const [autoIntrospectDisabled, setAutoIntrospectDisabled] = useLocalStorage<
     Record<string, boolean>
-  >('graphQLAutoIntrospectDisabled', {});
+  >("graphQLAutoIntrospectDisabled", {});
   const { schema, isLoading, error, refetch, clear } = useIntrospectGraphQL(baseRequest, {
     disabled: autoIntrospectDisabled?.[baseRequest.id],
   });
@@ -41,13 +41,13 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
   }>(() => {
     // Migrate text bodies to GraphQL format
     // NOTE: This is how GraphQL used to be stored
-    if ('text' in request.body) {
+    if ("text" in request.body) {
       const b = tryParseJson(request.body.text, {});
       const variables = JSON.stringify(b.variables || undefined, null, 2);
-      return { query: b.query ?? '', variables };
+      return { query: b.query ?? "", variables };
     }
 
-    return { query: request.body.query ?? '', variables: request.body.variables ?? '' };
+    return { query: request.body.query ?? "", variables: request.body.variables ?? "" };
   }, [extraEditorProps.forceUpdateKey]);
 
   const [isDocOpenRecord, setGraphqlDocStateAtomValue] = useAtom(showGraphQLDocExplorerAtom);
@@ -75,7 +75,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
     [onChange, setCurrentBody],
   );
 
-  const actions = useMemo<EditorProps['actions']>(
+  const actions = useMemo<EditorProps["actions"]>(
     () => [
       <div key="actions" className="flex flex-row !opacity-100 !shadow">
         <div key="introspection" className="!opacity-100">
@@ -85,12 +85,12 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                 ...((schema != null
                   ? [
                       {
-                        label: 'Clear',
+                        label: "Clear",
                         onSelect: clear,
-                        color: 'danger',
+                        color: "danger",
                         leftSlot: <Icon icon="trash" />,
                       },
-                      { type: 'separator' },
+                      { type: "separator" },
                     ]
                   : []) satisfies DropdownItem[]),
                 {
@@ -104,12 +104,12 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                         variant="border"
                         onClick={() => {
                           showDialog({
-                            title: 'Introspection Failed',
-                            size: 'sm',
-                            id: 'introspection-failed',
+                            title: "Introspection Failed",
+                            size: "sm",
+                            id: "introspection-failed",
                             render: ({ hide }) => (
                               <>
-                                <FormattedError>{error ?? 'unknown'}</FormattedError>
+                                <FormattedError>{error ?? "unknown"}</FormattedError>
                                 <div className="w-full my-4">
                                   <Button
                                     onClick={async () => {
@@ -132,11 +132,11 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                       </Button>
                     </Banner>
                   ),
-                  type: 'content',
+                  type: "content",
                 },
                 {
                   hidden: schema == null,
-                  label: `${isDocOpen ? 'Hide' : 'Show'} Documentation`,
+                  label: `${isDocOpen ? "Hide" : "Show"} Documentation`,
                   leftSlot: <Icon icon="book_open_text" />,
                   onSelect: () => {
                     setGraphqlDocStateAtomValue((v) => ({
@@ -146,14 +146,14 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                   },
                 },
                 {
-                  label: 'Introspect Schema',
+                  label: "Introspect Schema",
                   leftSlot: <Icon icon="refresh" spin={isLoading} />,
                   keepOpenOnSelect: true,
                   onSelect: refetch,
                 },
-                { type: 'separator', label: 'Setting' },
+                { type: "separator", label: "Setting" },
                 {
-                  label: 'Automatic Introspection',
+                  label: "Automatic Introspection",
                   keepOpenOnSelect: true,
                   onSelect: () => {
                     setAutoIntrospectDisabled({
@@ -165,8 +165,8 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                     <Icon
                       icon={
                         autoIntrospectDisabled?.[baseRequest.id]
-                          ? 'check_square_unchecked'
-                          : 'check_square_checked'
+                          ? "check_square_unchecked"
+                          : "check_square_checked"
                       }
                     />
                   ),
@@ -178,10 +178,10 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                 variant="border"
                 title="Refetch Schema"
                 isLoading={isLoading}
-                color={error ? 'danger' : 'default'}
+                color={error ? "danger" : "default"}
                 forDropdown
               >
-                {error ? 'Introspection Failed' : schema ? 'Schema' : 'No Schema'}
+                {error ? "Introspection Failed" : schema ? "Schema" : "No Schema"}
               </Button>
             </Dropdown>
           )}

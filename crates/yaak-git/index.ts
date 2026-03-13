@@ -31,24 +31,15 @@ export interface GitCallbacks {
   promptCredentials: (
     result: Extract<PushResult, { type: "needs_credentials" }>,
   ) => Promise<GitCredentials | null>;
-  promptDiverged: (
-    result: Extract<PullResult, { type: "diverged" }>,
-  ) => Promise<DivergedStrategy>;
+  promptDiverged: (result: Extract<PullResult, { type: "diverged" }>) => Promise<DivergedStrategy>;
   promptUncommittedChanges: () => Promise<UncommittedChangesStrategy>;
   forceSync: () => Promise<void>;
 }
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ["git"] });
 
-export function useGit(
-  dir: string,
-  callbacks: GitCallbacks,
-  refreshKey?: string,
-) {
-  const mutations = useMemo(
-    () => gitMutations(dir, callbacks),
-    [dir, callbacks],
-  );
+export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
+  const mutations = useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);
   const fetchAll = useQuery<void, string>({
     queryKey: ["git", "fetch_all", dir, refreshKey],
     queryFn: () => invoke("cmd_git_fetch_all", { dir }),
@@ -132,11 +123,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke("cmd_git_rm_remote", { dir, ...args }),
       onSuccess,
     }),
-    createBranch: createFastMutation<
-      void,
-      string,
-      { branch: string; base?: string }
-    >({
+    createBranch: createFastMutation<void, string, { branch: string; base?: string }>({
       mutationKey: ["git", "branch", dir],
       mutationFn: (args) => invoke("cmd_git_branch", { dir, ...args }),
       onSuccess,
@@ -157,24 +144,15 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     }),
     deleteRemoteBranch: createFastMutation<void, string, { branch: string }>({
       mutationKey: ["git", "delete-remote-branch", dir],
-      mutationFn: (args) =>
-        invoke("cmd_git_delete_remote_branch", { dir, ...args }),
+      mutationFn: (args) => invoke("cmd_git_delete_remote_branch", { dir, ...args }),
       onSuccess,
     }),
-    renameBranch: createFastMutation<
-      void,
-      string,
-      { oldName: string; newName: string }
-    >({
+    renameBranch: createFastMutation<void, string, { oldName: string; newName: string }>({
       mutationKey: ["git", "rename-branch", dir],
       mutationFn: (args) => invoke("cmd_git_rename_branch", { dir, ...args }),
       onSuccess,
     }),
-    checkout: createFastMutation<
-      string,
-      string,
-      { branch: string; force: boolean }
-    >({
+    checkout: createFastMutation<string, string, { branch: string; force: boolean }>({
       mutationKey: ["git", "checkout", dir],
       mutationFn: (args) => invoke("cmd_git_checkout", { dir, ...args }),
       onSuccess,

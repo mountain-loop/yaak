@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
-import type { Context, HttpRequest } from '@yaakapp/api';
-import type { AccessToken, AccessTokenRawResponse, TokenStoreArgs } from './store';
-import { deleteToken, getToken, storeToken } from './store';
-import { isTokenExpired } from './util';
+import { readFileSync } from "node:fs";
+import type { Context, HttpRequest } from "@yaakapp/api";
+import type { AccessToken, AccessTokenRawResponse, TokenStoreArgs } from "./store";
+import { deleteToken, getToken, storeToken } from "./store";
+import { isTokenExpired } from "./util";
 
 export async function getOrRefreshAccessToken(
   ctx: Context,
@@ -42,33 +42,33 @@ export async function getOrRefreshAccessToken(
 
   // Access token is expired, so get a new one
   const httpRequest: Partial<HttpRequest> = {
-    method: 'POST',
+    method: "POST",
     url: accessTokenUrl,
-    bodyType: 'application/x-www-form-urlencoded',
+    bodyType: "application/x-www-form-urlencoded",
     body: {
       form: [
-        { name: 'grant_type', value: 'refresh_token' },
-        { name: 'refresh_token', value: token.response.refresh_token },
+        { name: "grant_type", value: "refresh_token" },
+        { name: "refresh_token", value: token.response.refresh_token },
       ],
     },
     headers: [
-      { name: 'User-Agent', value: 'yaak' },
-      { name: 'Accept', value: 'application/x-www-form-urlencoded, application/json' },
-      { name: 'Content-Type', value: 'application/x-www-form-urlencoded' },
+      { name: "User-Agent", value: "yaak" },
+      { name: "Accept", value: "application/x-www-form-urlencoded, application/json" },
+      { name: "Content-Type", value: "application/x-www-form-urlencoded" },
     ],
   };
 
-  if (scope) httpRequest.body?.form.push({ name: 'scope', value: scope });
+  if (scope) httpRequest.body?.form.push({ name: "scope", value: scope });
 
   if (credentialsInBody) {
-    httpRequest.body?.form.push({ name: 'client_id', value: clientId });
-    httpRequest.body?.form.push({ name: 'client_secret', value: clientSecret });
+    httpRequest.body?.form.push({ name: "client_id", value: clientId });
+    httpRequest.body?.form.push({ name: "client_secret", value: clientSecret });
   } else {
-    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
-    httpRequest.headers?.push({ name: 'Authorization', value });
+    const value = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+    httpRequest.headers?.push({ name: "Authorization", value });
   }
 
-  httpRequest.authenticationType = 'none'; // Don't inherit workspace auth
+  httpRequest.authenticationType = "none"; // Don't inherit workspace auth
   const resp = await ctx.httpRequest.send({ httpRequest });
 
   if (resp.error) {
@@ -78,20 +78,20 @@ export async function getOrRefreshAccessToken(
   if (resp.status >= 400 && resp.status < 500) {
     // Client errors (4xx) indicate the refresh token is invalid, expired, or revoked
     // Delete the token and return null to trigger a fresh authorization flow
-    console.log('[oauth2] Refresh token request failed with client error, deleting token');
+    console.log("[oauth2] Refresh token request failed with client error, deleting token");
     await deleteToken(ctx, tokenArgs);
     return null;
   }
 
-  const body = resp.bodyPath ? readFileSync(resp.bodyPath, 'utf8') : '';
+  const body = resp.bodyPath ? readFileSync(resp.bodyPath, "utf8") : "";
 
-  console.log('[oauth2] Got refresh token response', resp.status);
+  console.log("[oauth2] Got refresh token response", resp.status);
 
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`Failed to refresh access token with status=${resp.status} and body=${body}`);
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   let response: any;
   try {
     response = JSON.parse(body);

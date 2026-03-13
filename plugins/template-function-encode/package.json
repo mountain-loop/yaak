@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-encode",
   "displayName": "Encoding Template Functions",
-  "description": "Template functions for encoding and decoding data",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for encoding and decoding data",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

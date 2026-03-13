@@ -1,10 +1,10 @@
-import type { DialogSize } from '@yaakapp-internal/plugins';
-import { Heading, Overlay } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import * as m from 'motion/react-m';
-import type { ReactNode } from 'react';
-import { useMemo } from 'react';
-import { IconButton } from './IconButton';
+import type { DialogSize } from "@yaakapp-internal/plugins";
+import { Heading, Overlay } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import * as m from "motion/react-m";
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+import { IconButton } from "./IconButton";
 
 export interface DialogProps {
   children: ReactNode;
@@ -18,13 +18,13 @@ export interface DialogProps {
   hideX?: boolean;
   noPadding?: boolean;
   noScroll?: boolean;
-  vAlign?: 'top' | 'center';
+  vAlign?: "top" | "center";
 }
 
 export function Dialog({
   children,
   className,
-  size = 'full',
+  size = "full",
   open,
   onClose,
   disableBackdropClose,
@@ -33,7 +33,7 @@ export function Dialog({
   hideX,
   noPadding,
   noScroll,
-  vAlign = 'center',
+  vAlign = "center",
 }: DialogProps) {
   const titleId = useMemo(() => Math.random().toString(36).slice(2), []);
   const descriptionId = useMemo(
@@ -46,10 +46,10 @@ export function Dialog({
       <div
         role="dialog"
         className={classNames(
-          'py-4 x-theme-dialog absolute inset-0 pointer-events-none',
-          'h-full flex flex-col items-center justify-center',
-          vAlign === 'top' && 'justify-start',
-          vAlign === 'center' && 'justify-center',
+          "py-4 x-theme-dialog absolute inset-0 pointer-events-none",
+          "h-full flex flex-col items-center justify-center",
+          vAlign === "top" && "justify-start",
+          vAlign === "center" && "justify-center",
         )}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
@@ -57,7 +57,7 @@ export function Dialog({
         onKeyDown={(e) => {
           // NOTE: We handle Escape on the element itself so that it doesn't close multiple
           //   dialogs and can be intercepted by children if needed.
-          if (e.key === 'Escape') {
+          if (e.key === "Escape") {
             onClose?.();
             e.stopPropagation();
             e.preventDefault();
@@ -69,18 +69,18 @@ export function Dialog({
           animate={{ top: 0, scale: 1 }}
           className={classNames(
             className,
-            'grid grid-rows-[auto_auto_minmax(0,1fr)]',
-            'grid-cols-1', // must be here for inline code blocks to correctly break words
-            'relative bg-surface pointer-events-auto',
-            'rounded-lg',
-            'border border-border-subtle shadow-lg shadow-[rgba(0,0,0,0.1)]',
-            'min-h-[10rem]',
-            'max-w-[calc(100vw-5rem)] max-h-[calc(100vh-5rem)]',
-            size === 'sm' && 'w-[30rem]',
-            size === 'md' && 'w-[50rem]',
-            size === 'lg' && 'w-[70rem]',
-            size === 'full' && 'w-[100vw] h-[100vh]',
-            size === 'dynamic' && 'min-w-[20rem] max-w-[100vw]',
+            "grid grid-rows-[auto_auto_minmax(0,1fr)]",
+            "grid-cols-1", // must be here for inline code blocks to correctly break words
+            "relative bg-surface pointer-events-auto",
+            "rounded-lg",
+            "border border-border-subtle shadow-lg shadow-[rgba(0,0,0,0.1)]",
+            "min-h-[10rem]",
+            "max-w-[calc(100vw-5rem)] max-h-[calc(100vh-5rem)]",
+            size === "sm" && "w-[30rem]",
+            size === "md" && "w-[50rem]",
+            size === "lg" && "w-[70rem]",
+            size === "full" && "w-[100vw] h-[100vh]",
+            size === "dynamic" && "min-w-[20rem] max-w-[100vw]",
           )}
         >
           {title ? (
@@ -101,9 +101,9 @@ export function Dialog({
 
           <div
             className={classNames(
-              'h-full w-full grid grid-cols-[minmax(0,1fr)] grid-rows-1',
-              !noPadding && 'px-6 py-2',
-              !noScroll && 'overflow-y-auto overflow-x-hidden',
+              "h-full w-full grid grid-cols-[minmax(0,1fr)] grid-rows-1",
+              !noPadding && "px-6 py-2",
+              !noScroll && "overflow-y-auto overflow-x-hidden",
             )}
           >
             {children}

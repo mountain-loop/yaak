@@ -1,12 +1,12 @@
-import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { createWorkspaceModel } from '@yaakapp-internal/models';
-import { activeRequestAtom } from '../hooks/useActiveRequest';
-import { jotaiStore } from './jotai';
-import { router } from './router';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
+import { createWorkspaceModel } from "@yaakapp-internal/models";
+import { activeRequestAtom } from "../hooks/useActiveRequest";
+import { jotaiStore } from "./jotai";
+import { router } from "./router";
 
 export async function createRequestAndNavigate<
   T extends HttpRequest | GrpcRequest | WebsocketRequest,
->(patch: Partial<T> & Pick<T, 'model' | 'workspaceId'>) {
+>(patch: Partial<T> & Pick<T, "model" | "workspaceId">) {
   const activeRequest = jotaiStore.get(activeRequestAtom);
 
   if (patch.sortPriority === undefined) {
@@ -23,7 +23,7 @@ export async function createRequestAndNavigate<
   const newId = await createWorkspaceModel(patch);
 
   await router.navigate({
-    to: '/workspaces/$workspaceId',
+    to: "/workspaces/$workspaceId",
     params: { workspaceId: patch.workspaceId },
     search: (prev) => ({ ...prev, request_id: newId }),
   });

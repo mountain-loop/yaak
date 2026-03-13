@@ -1,61 +1,61 @@
-import { emit } from '@tauri-apps/api/event';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { debounce } from '@yaakapp-internal/lib';
+import { emit } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { debounce } from "@yaakapp-internal/lib";
 import type {
   FormInput,
   InternalEvent,
   JsonPrimitive,
   ShowToastRequest,
-} from '@yaakapp-internal/plugins';
-import { updateAllPlugins } from '@yaakapp-internal/plugins';
+} from "@yaakapp-internal/plugins";
+import { updateAllPlugins } from "@yaakapp-internal/plugins";
 import type {
   PluginUpdateNotification,
   UpdateInfo,
   UpdateResponse,
   YaakNotification,
-} from '@yaakapp-internal/tauri-client';
-import { HStack, Icon, VStack } from '@yaakapp-internal/ui';
-import { openSettings } from '../commands/openSettings';
-import { Button } from '../components/core/Button';
-import { ButtonInfiniteLoading } from '../components/core/ButtonInfiniteLoading';
+} from "@yaakapp-internal/tauri-client";
+import { HStack, Icon, VStack } from "@yaakapp-internal/ui";
+import { openSettings } from "../commands/openSettings";
+import { Button } from "../components/core/Button";
+import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading";
 
 // Listen for toasts
-import { listenToTauriEvent } from '../hooks/useListenToTauriEvent';
-import { updateAvailableAtom } from './atoms';
-import { stringToColor } from './color';
-import { generateId } from './generateId';
-import { jotaiStore } from './jotai';
-import { showPrompt } from './prompt';
-import { showPromptForm } from './prompt-form';
-import { invokeCmd } from './tauri';
-import { showToast } from './toast';
+import { listenToTauriEvent } from "../hooks/useListenToTauriEvent";
+import { updateAvailableAtom } from "./atoms";
+import { stringToColor } from "./color";
+import { generateId } from "./generateId";
+import { jotaiStore } from "./jotai";
+import { showPrompt } from "./prompt";
+import { showPromptForm } from "./prompt-form";
+import { invokeCmd } from "./tauri";
+import { showToast } from "./toast";
 
 export function initGlobalListeners() {
-  listenToTauriEvent<ShowToastRequest>('show_toast', (event) => {
+  listenToTauriEvent<ShowToastRequest>("show_toast", (event) => {
     showToast({ ...event.payload });
   });
 
   // Show errors for any plugins that failed to load during startup
-  invokeCmd<[string, string][]>('cmd_plugin_init_errors').then((errors) => {
+  invokeCmd<[string, string][]>("cmd_plugin_init_errors").then((errors) => {
     for (const [dir, err] of errors) {
       const name = dir.split(/[/\\]/).pop() ?? dir;
       showToast({
         id: `plugin-init-error-${name}`,
-        color: 'danger',
+        color: "danger",
         timeout: null,
         message: `Failed to load plugin "${name}": ${err}`,
       });
     }
   });
 
-  listenToTauriEvent('settings', () => openSettings.mutate(null));
+  listenToTauriEvent("settings", () => openSettings.mutate(null));
 
   // Track active dynamic form dialogs so follow-up input updates can reach them
   const activeForms = new Map<string, (inputs: FormInput[]) => void>();
 
   // Listen for plugin events
-  listenToTauriEvent<InternalEvent>('plugin_event', async ({ payload: event }) => {
-    if (event.payload.type === 'prompt_text_request') {
+  listenToTauriEvent<InternalEvent>("plugin_event", async ({ payload: event }) => {
+    if (event.payload.type === "prompt_text_request") {
       const value = await showPrompt(event.payload);
       const result: InternalEvent = {
         id: generateId(),
@@ -64,12 +64,12 @@ export function initGlobalListeners() {
         pluginRefId: event.pluginRefId,
         context: event.context,
         payload: {
-          type: 'prompt_text_response',
+          type: "prompt_text_response",
           value,
         },
       };
       await emit(event.id, result);
-    } else if (event.payload.type === 'prompt_form_request') {
+    } else if (event.payload.type === "prompt_form_request") {
       if (event.replyId != null) {
         // Follow-up update from plugin runtime — update the active dialog's inputs
         const updateInputs = activeForms.get(event.replyId);
@@ -88,7 +88,7 @@ export function initGlobalListeners() {
           pluginRefId: event.pluginRefId,
           context: event.context,
           payload: {
-            type: 'prompt_form_response',
+            type: "prompt_form_response",
             values,
             done,
           },
@@ -114,35 +114,35 @@ export function initGlobalListeners() {
     }
   });
 
-  listenToTauriEvent<string>('update_installed', async ({ payload: version }) => {
-    console.log('Got update installed event', version);
+  listenToTauriEvent<string>("update_installed", async ({ payload: version }) => {
+    console.log("Got update installed event", version);
     showUpdateInstalledToast(version);
   });
 
   // Listen for update events
-  listenToTauriEvent<UpdateInfo>('update_available', async ({ payload }) => {
-    console.log('Got update available', payload);
+  listenToTauriEvent<UpdateInfo>("update_available", async ({ payload }) => {
+    console.log("Got update available", payload);
     showUpdateAvailableToast(payload);
   });
 
-  listenToTauriEvent<YaakNotification>('notification', ({ payload }) => {
-    console.log('Got notification event', payload);
+  listenToTauriEvent<YaakNotification>("notification", ({ payload }) => {
+    console.log("Got notification event", payload);
     showNotificationToast(payload);
   });
 
   // Listen for plugin update events
-  listenToTauriEvent<PluginUpdateNotification>('plugin_updates_available', ({ payload }) => {
-    console.log('Got plugin updates event', payload);
+  listenToTauriEvent<PluginUpdateNotification>("plugin_updates_available", ({ payload }) => {
+    console.log("Got plugin updates event", payload);
     showPluginUpdatesToast(payload);
   });
 }
 
 function showUpdateInstalledToast(version: string) {
-  const UPDATE_TOAST_ID = 'update-info';
+  const UPDATE_TOAST_ID = "update-info";
 
   showToast({
     id: UPDATE_TOAST_ID,
-    color: 'primary',
+    color: "primary",
     timeout: null,
     message: (
       <VStack>
@@ -158,7 +158,7 @@ function showUpdateInstalledToast(version: string) {
         loadingChildren="Restarting..."
         onClick={() => {
           hide();
-          setTimeout(() => invokeCmd('cmd_restart', {}), 200);
+          setTimeout(() => invokeCmd("cmd_restart", {}), 200);
         }}
       >
         Relaunch Yaak
@@ -168,23 +168,23 @@ function showUpdateInstalledToast(version: string) {
 }
 
 async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
-  const UPDATE_TOAST_ID = 'update-info';
+  const UPDATE_TOAST_ID = "update-info";
   const { version, replyEventId, downloaded } = updateInfo;
 
   jotaiStore.set(updateAvailableAtom, { version, downloaded });
 
   // Acknowledge the event, so we don't time out and try the fallback update logic
-  await emit<UpdateResponse>(replyEventId, { type: 'ack' });
+  await emit<UpdateResponse>(replyEventId, { type: "ack" });
 
   showToast({
     id: UPDATE_TOAST_ID,
-    color: 'info',
+    color: "info",
     timeout: null,
     message: (
       <VStack>
         <h2 className="font-semibold">Yaak {version} is available</h2>
         <p className="text-text-subtle text-sm">
-          {downloaded ? 'Do you want to install' : 'Download and install'} the update?
+          {downloaded ? "Do you want to install" : "Download and install"} the update?
         </p>
       </VStack>
     ),
@@ -194,15 +194,15 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
           size="xs"
           color="info"
           className="min-w-[10rem]"
-          loadingChildren={downloaded ? 'Installing...' : 'Downloading...'}
+          loadingChildren={downloaded ? "Installing..." : "Downloading..."}
           onClick={async () => {
             await emit<UpdateResponse>(replyEventId, {
-              type: 'action',
-              action: 'install',
+              type: "action",
+              action: "install",
             });
           }}
         >
-          {downloaded ? 'Install Now' : 'Download and Install'}
+          {downloaded ? "Install Now" : "Download and Install"}
         </ButtonInfiniteLoading>
         <Button
           size="xs"
@@ -221,23 +221,23 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
 }
 
 function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
-  const PLUGIN_UPDATE_TOAST_ID = 'plugin-updates';
+  const PLUGIN_UPDATE_TOAST_ID = "plugin-updates";
   const count = updateInfo.updateCount;
   const pluginNames = updateInfo.plugins.map((p: { name: string }) => p.name);
 
   showToast({
     id: PLUGIN_UPDATE_TOAST_ID,
-    color: 'info',
+    color: "info",
     timeout: null,
     message: (
       <VStack>
         <h2 className="font-semibold">
-          {count === 1 ? '1 plugin update' : `${count} plugin updates`} available
+          {count === 1 ? "1 plugin update" : `${count} plugin updates`} available
         </h2>
         <p className="text-text-subtle text-sm">
           {count === 1
             ? pluginNames[0]
-            : `${pluginNames.slice(0, 2).join(', ')}${count > 2 ? `, and ${count - 2} more` : ''}`}
+            : `${pluginNames.slice(0, 2).join(", ")}${count > 2 ? `, and ${count - 2} more` : ""}`}
         </p>
       </VStack>
     ),
@@ -253,8 +253,8 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
             hide();
             if (updated.length > 0) {
               showToast({
-                color: 'success',
-                message: `Successfully updated ${updated.length} plugin${updated.length === 1 ? '' : 's'}`,
+                color: "success",
+                message: `Successfully updated ${updated.length} plugin${updated.length === 1 ? "" : "s"}`,
               });
             }
           }}
@@ -267,7 +267,7 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
           variant="border"
           onClick={() => {
             hide();
-            openSettings.mutate('plugins:installed');
+            openSettings.mutate("plugins:installed");
           }}
         >
           View Updates
@@ -291,7 +291,7 @@ function showNotificationToast(n: YaakNotification) {
       </VStack>
     ),
     onClose: () => {
-      invokeCmd('cmd_dismiss_notification', { notificationId: n.id }).catch(console.error);
+      invokeCmd("cmd_dismiss_notification", { notificationId: n.id }).catch(console.error);
     },
     action: ({ hide }) => {
       return actionLabel && actionUrl ? (

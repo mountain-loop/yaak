@@ -1,26 +1,26 @@
-import { gitMutations } from '@yaakapp-internal/git';
-import type { WorkspaceMeta } from '@yaakapp-internal/models';
-import { createGlobalModel, updateModel } from '@yaakapp-internal/models';
-import { VStack } from '@yaakapp-internal/ui';
-import { useState } from 'react';
-import { router } from '../lib/router';
-import { setupOrConfigureEncryption } from '../lib/setupOrConfigureEncryption';
-import { invokeCmd } from '../lib/tauri';
-import { showErrorToast } from '../lib/toast';
-import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
-import { Label } from './core/Label';
-import { PlainInput } from './core/PlainInput';
-import { EncryptionHelp } from './EncryptionHelp';
-import { gitCallbacks } from './git/callbacks';
-import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
+import { gitMutations } from "@yaakapp-internal/git";
+import type { WorkspaceMeta } from "@yaakapp-internal/models";
+import { createGlobalModel, updateModel } from "@yaakapp-internal/models";
+import { VStack } from "@yaakapp-internal/ui";
+import { useState } from "react";
+import { router } from "../lib/router";
+import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
+import { invokeCmd } from "../lib/tauri";
+import { showErrorToast } from "../lib/toast";
+import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
+import { Label } from "./core/Label";
+import { PlainInput } from "./core/PlainInput";
+import { EncryptionHelp } from "./EncryptionHelp";
+import { gitCallbacks } from "./git/callbacks";
+import { SyncToFilesystemSetting } from "./SyncToFilesystemSetting";
 
 interface Props {
   hide: () => void;
 }
 
 export function CreateWorkspaceDialog({ hide }: Props) {
-  const [name, setName] = useState<string>('');
+  const [name, setName] = useState<string>("");
   const [syncConfig, setSyncConfig] = useState<{
     filePath: string | null;
     initGit?: boolean;
@@ -34,12 +34,12 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       className="pb-3"
       onSubmit={async (e) => {
         e.preventDefault();
-        const workspaceId = await createGlobalModel({ model: 'workspace', name });
+        const workspaceId = await createGlobalModel({ model: "workspace", name });
         if (workspaceId == null) return;
 
         // Do getWorkspaceMeta instead of naively creating one because it might have
         // been created already when the store refreshes the workspace meta after
-        const workspaceMeta = await invokeCmd<WorkspaceMeta>('cmd_get_workspace_meta', {
+        const workspaceMeta = await invokeCmd<WorkspaceMeta>("cmd_get_workspace_meta", {
           workspaceId,
         });
         await updateModel({
@@ -52,8 +52,8 @@ export function CreateWorkspaceDialog({ hide }: Props) {
             .init.mutateAsync()
             .catch((err) => {
               showErrorToast({
-                id: 'git-init-error',
-                title: 'Error initializing Git',
+                id: "git-init-error",
+                title: "Error initializing Git",
                 message: String(err),
               });
             });
@@ -61,7 +61,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
 
         // Navigate to workspace
         await router.navigate({
-          to: '/workspaces/$workspaceId',
+          to: "/workspaces/$workspaceId",
           params: { workspaceId },
         });
 

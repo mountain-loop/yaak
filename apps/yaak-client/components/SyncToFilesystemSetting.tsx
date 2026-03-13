@@ -1,10 +1,10 @@
-import { readDir } from '@tauri-apps/plugin-fs';
-import { Banner, VStack } from '@yaakapp-internal/ui';
-import { useState } from 'react';
-import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
-import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
-import { SelectFile } from './SelectFile';
+import { readDir } from "@tauri-apps/plugin-fs";
+import { Banner, VStack } from "@yaakapp-internal/ui";
+import { useState } from "react";
+import { openWorkspaceFromSyncDir } from "../commands/openWorkspaceFromSyncDir";
+import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
+import { SelectFile } from "./SelectFile";
 
 export interface SyncToFilesystemSettingProps {
   onChange: (args: { filePath: string | null; initGit?: boolean }) => void;
@@ -61,7 +61,7 @@ export function SyncToFilesystemSetting({
         }}
       />
 
-      {value.filePath && typeof value.initGit === 'boolean' && (
+      {value.filePath && typeof value.initGit === "boolean" && (
         <Checkbox
           checked={value.initGit}
           onChange={(initGit) => onChange({ ...value, initGit })}

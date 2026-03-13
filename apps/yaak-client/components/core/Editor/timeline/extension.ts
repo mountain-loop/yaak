@@ -1,8 +1,8 @@
-import { LanguageSupport, LRLanguage } from '@codemirror/language';
-import { parser } from './timeline';
+import { LanguageSupport, LRLanguage } from "@codemirror/language";
+import { parser } from "./timeline";
 
 export const timelineLanguage = LRLanguage.define({
-  name: 'timeline',
+  name: "timeline",
   parser,
   languageData: {},
 });

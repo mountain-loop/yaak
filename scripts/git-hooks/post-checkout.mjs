@@ -74,9 +74,7 @@ try {
         }
       }
 
-      const clientDevMatch = content.match(
-        /^(?:YAAK_CLIENT_DEV_PORT|YAAK_DEV_PORT)=(\d+)/m,
-      );
+      const clientDevMatch = content.match(/^(?:YAAK_CLIENT_DEV_PORT|YAAK_DEV_PORT)=(\d+)/m);
       if (clientDevMatch) {
         const port = parseInt(clientDevMatch[1], 10);
         const index = port - CLIENT_PORT_BASE;
@@ -99,10 +97,7 @@ try {
   // Increment MCP to get the next available port
   maxMcpPort++;
 } catch (err) {
-  console.error(
-    "Warning: Could not check other worktrees for port conflicts:",
-    err.message,
-  );
+  console.error("Warning: Could not check other worktrees for port conflicts:", err.message);
   // Continue with default ports
 }
 
@@ -214,13 +209,8 @@ try {
     }
   }
 } catch (err) {
-  console.warn(
-    "Warning: Could not copy files from main worktree:",
-    err.message,
-  );
+  console.warn("Warning: Could not copy files from main worktree:", err.message);
   // Continue anyway
 }
 
-console.log(
-  "\n✓ Worktree setup complete! Run `npm run init` to install dependencies.",
-);
+console.log("\n✓ Worktree setup complete! Run `npm run init` to install dependencies.");

@@ -1,12 +1,12 @@
-import { HStack } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import type { HotkeyAction } from '../../hooks/useHotKey';
-import { useFormattedHotkey } from '../../hooks/useHotKey';
+import { HStack } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import type { HotkeyAction } from "../../hooks/useHotKey";
+import { useFormattedHotkey } from "../../hooks/useHotKey";
 
 interface Props {
   action: HotkeyAction | null;
   className?: string;
-  variant?: 'text' | 'with-bg';
+  variant?: "text" | "with-bg";
 }
 
 export function Hotkey({ action, className, variant }: Props) {
@@ -21,7 +21,7 @@ export function Hotkey({ action, className, variant }: Props) {
 interface HotkeyRawProps {
   labelParts: string[];
   className?: string;
-  variant?: 'text' | 'with-bg';
+  variant?: "text" | "with-bg";
 }
 
 export function HotkeyRaw({ labelParts, className, variant }: HotkeyRawProps) {
@@ -29,9 +29,9 @@ export function HotkeyRaw({ labelParts, className, variant }: HotkeyRawProps) {
     <HStack
       className={classNames(
         className,
-        variant === 'with-bg' &&
-          'rounded bg-surface-highlight px-1 border border-border text-text-subtle',
-        variant === 'text' && 'text-text-subtlest',
+        variant === "with-bg" &&
+          "rounded bg-surface-highlight px-1 border border-border text-text-subtle",
+        variant === "text" && "text-text-subtlest",
       )}
     >
       {labelParts.map((char, index) => (

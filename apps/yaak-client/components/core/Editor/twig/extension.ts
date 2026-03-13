@@ -1,15 +1,15 @@
-import type { LanguageSupport } from '@codemirror/language';
-import { LRLanguage } from '@codemirror/language';
-import type { Extension } from '@codemirror/state';
-import { parseMixed } from '@lezer/common';
-import type { WrappedEnvironmentVariable } from '../../../../hooks/useEnvironmentVariables';
-import type { GenericCompletionConfig } from '../genericCompletion';
-import { genericCompletion } from '../genericCompletion';
-import { textLanguage } from '../text/extension';
-import type { TwigCompletionOption } from './completion';
-import { twigCompletion } from './completion';
-import { templateTagsPlugin } from './templateTags';
-import { parser as twigParser } from './twig';
+import type { LanguageSupport } from "@codemirror/language";
+import { LRLanguage } from "@codemirror/language";
+import type { Extension } from "@codemirror/state";
+import { parseMixed } from "@lezer/common";
+import type { WrappedEnvironmentVariable } from "../../../../hooks/useEnvironmentVariables";
+import type { GenericCompletionConfig } from "../genericCompletion";
+import { genericCompletion } from "../genericCompletion";
+import { textLanguage } from "../text/extension";
+import type { TwigCompletionOption } from "./completion";
+import { twigCompletion } from "./completion";
+import { templateTagsPlugin } from "./templateTags";
+import { parser as twigParser } from "./twig";
 
 export function twig({
   base,
@@ -35,7 +35,7 @@ export function twig({
     environmentVariables.map((v) => ({
       name: v.variable.name,
       value: v.variable.value,
-      type: 'variable',
+      type: "variable",
       label: v.variable.name,
       description: `Inherited from ${v.source}`,
       onClick: (rawTag: string, startPos: number) => onClickVariable(v, rawTag, startPos),
@@ -74,12 +74,12 @@ function mixLanguage(base: LanguageSupport): LRLanguage {
 
       return {
         parser: base.language.parser,
-        overlay: (node) => node.type.name === 'Text',
+        overlay: (node) => node.type.name === "Text",
       };
     }),
   });
 
-  const language = LRLanguage.define({ name: 'twig', parser });
+  const language = LRLanguage.define({ name: "twig", parser });
   mixedLanguagesCache[base.language.name] = language;
   return language;
 }

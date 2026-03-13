@@ -1,6 +1,6 @@
-import type { HttpRequest, HttpResponse } from '@yaakapp-internal/models';
-import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { invokeCmd } from './tauri';
+import type { HttpRequest, HttpResponse } from "@yaakapp-internal/models";
+import { getActiveCookieJar } from "../hooks/useActiveCookieJar";
+import { invokeCmd } from "./tauri";
 
 export async function sendEphemeralRequest(
   request: HttpRequest,
@@ -8,7 +8,7 @@ export async function sendEphemeralRequest(
 ): Promise<HttpResponse> {
   // Remove some things that we don't want to associate
   const newRequest = { ...request };
-  return invokeCmd('cmd_send_ephemeral_request', {
+  return invokeCmd("cmd_send_ephemeral_request", {
     request: newRequest,
     environmentId,
     cookieJarId: getActiveCookieJar()?.id,

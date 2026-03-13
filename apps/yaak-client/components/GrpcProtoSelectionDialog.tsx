@@ -1,13 +1,13 @@
-import { open } from '@tauri-apps/plugin-dialog';
-import type { GrpcRequest } from '@yaakapp-internal/models';
-import { Banner, HStack, Icon, InlineCode, VStack } from '@yaakapp-internal/ui';
-import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useGrpc } from '../hooks/useGrpc';
-import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
-import { pluralizeCount } from '../lib/pluralize';
-import { Button } from './core/Button';
-import { IconButton } from './core/IconButton';
-import { Link } from './core/Link';
+import { open } from "@tauri-apps/plugin-dialog";
+import type { GrpcRequest } from "@yaakapp-internal/models";
+import { Banner, HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { useActiveRequest } from "../hooks/useActiveRequest";
+import { useGrpc } from "../hooks/useGrpc";
+import { useGrpcProtoFiles } from "../hooks/useGrpcProtoFiles";
+import { pluralizeCount } from "../lib/pluralize";
+import { Button } from "./core/Button";
+import { IconButton } from "./core/IconButton";
+import { Link } from "./core/Link";
 
 interface Props {
   onDone: () => void;
@@ -15,7 +15,7 @@ interface Props {
 
 export function GrpcProtoSelectionDialog(props: Props) {
   const request = useActiveRequest();
-  if (request?.model !== 'grpc_request') return null;
+  if (request?.model !== "grpc_request") return null;
 
   return <GrpcProtoSelectionDialogWithRequest request={request} {...props} />;
 }
@@ -46,9 +46,9 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           variant="border"
           onClick={async () => {
             const selected = await open({
-              title: 'Select Proto Files',
+              title: "Select Proto Files",
               multiple: true,
-              filters: [{ name: 'Proto Files', extensions: ['proto'] }],
+              filters: [{ name: "Proto Files", extensions: ["proto"] }],
             });
             if (selected == null) return;
 
@@ -64,7 +64,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           color="primary"
           onClick={async () => {
             const selected = await open({
-              title: 'Select Proto Directory',
+              title: "Select Proto Directory",
               directory: true,
             });
             if (selected == null) return;
@@ -89,7 +89,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
         {reflectError && (
           <Banner color="warning">
             <h1 className="font-bold">
-              Reflection failed on URL <InlineCode>{request.url || 'n/a'}</InlineCode>
+              Reflection failed on URL <InlineCode>{request.url || "n/a"}</InlineCode>
             </h1>
             <p>{reflectError.trim()}</p>
           </Banner>
@@ -97,16 +97,16 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
         {!serverReflection && services != null && services.length > 0 && (
           <Banner className="flex flex-col gap-2">
             <p>
-              Found services{' '}
+              Found services{" "}
               {services?.slice(0, 5).map((s, i) => {
                 return (
-                  <span key={s.name + s.methods.join(',')}>
+                  <span key={s.name + s.methods.join(",")}>
                     <InlineCode>{s.name}</InlineCode>
-                    {i === services.length - 1 ? '' : i === services.length - 2 ? ' and ' : ', '}
+                    {i === services.length - 1 ? "" : i === services.length - 2 ? " and " : ", "}
                   </span>
                 );
               })}
-              {services?.length > 5 && pluralizeCount('other', services?.length - 5)}
+              {services?.length > 5 && pluralizeCount("other", services?.length - 5)}
             </p>
           </Banner>
         )}
@@ -116,13 +116,13 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Server reflection found services
               {services?.map((s, i) => {
                 return (
-                  <span key={s.name + s.methods.join(',')}>
+                  <span key={s.name + s.methods.join(",")}>
                     <InlineCode>{s.name}</InlineCode>
-                    {i === services.length - 1 ? '' : i === services.length - 2 ? ' and ' : ', '}
+                    {i === services.length - 1 ? "" : i === services.length - 2 ? " and " : ", "}
                   </span>
                 );
               })}
-              . You can override this schema by manually selecting <InlineCode>*.proto</InlineCode>{' '}
+              . You can override this schema by manually selecting <InlineCode>*.proto</InlineCode>{" "}
               files.
             </p>
           </Banner>
@@ -139,16 +139,16 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             </thead>
             <tbody className="divide-y divide-surface-highlight">
               {protoFiles.map((f, i) => {
-                const parts = f.split('/');
+                const parts = f.split("/");
                 return (
                   // biome-ignore lint/suspicious/noArrayIndexKey: none
                   <tr key={f + i} className="group">
                     <td>
-                      <Icon icon={f.endsWith('.proto') ? 'file_code' : 'folder_code'} />
+                      <Icon icon={f.endsWith(".proto") ? "file_code" : "folder_code"} />
                     </td>
                     <td className="pl-1 font-mono text-sm" title={f}>
-                      {parts.length > 3 && '.../'}
-                      {parts.slice(-3).join('/')}
+                      {parts.length > 3 && ".../"}
+                      {parts.slice(-3).join("/")}
                     </td>
                     <td className="w-0 py-0.5">
                       <IconButton
@@ -170,10 +170,10 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
         )}
         {reflectionUnimplemented && protoFiles.length === 0 && (
           <Banner>
-            <InlineCode>{request.url}</InlineCode> doesn&apos;t implement{' '}
+            <InlineCode>{request.url}</InlineCode> doesn&apos;t implement{" "}
             <Link href="https://github.com/grpc/grpc/blob/9aa3c5835a4ed6afae9455b63ed45c761d695bca/doc/server-reflection.md">
               Server Reflection
-            </Link>{' '}
+            </Link>{" "}
             . Please manually add the <InlineCode>.proto</InlineCode> file to get started.
           </Banner>
         )}

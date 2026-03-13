@@ -1,9 +1,9 @@
-import type { CSSProperties } from 'react';
-import ReactMarkdown, { type Components } from 'react-markdown';
-import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
-import remarkGfm from 'remark-gfm';
-import { ErrorBoundary } from './ErrorBoundary';
-import { Prose } from './Prose';
+import type { CSSProperties } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import remarkGfm from "remark-gfm";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { Prose } from "./Prose";
 
 interface Props {
   children: string | null;
@@ -30,48 +30,48 @@ const prismTheme = {
   },
 
   // Syntax tokens
-  comment: { color: 'var(--textSubtle)' },
-  prolog: { color: 'var(--textSubtle)' },
-  doctype: { color: 'var(--textSubtle)' },
-  cdata: { color: 'var(--textSubtle)' },
+  comment: { color: "var(--textSubtle)" },
+  prolog: { color: "var(--textSubtle)" },
+  doctype: { color: "var(--textSubtle)" },
+  cdata: { color: "var(--textSubtle)" },
 
-  punctuation: { color: 'var(--textSubtle)' },
+  punctuation: { color: "var(--textSubtle)" },
 
-  property: { color: 'var(--primary)' },
-  'attr-name': { color: 'var(--primary)' },
+  property: { color: "var(--primary)" },
+  "attr-name": { color: "var(--primary)" },
 
-  string: { color: 'var(--notice)' },
-  char: { color: 'var(--notice)' },
+  string: { color: "var(--notice)" },
+  char: { color: "var(--notice)" },
 
-  number: { color: 'var(--info)' },
-  constant: { color: 'var(--info)' },
-  symbol: { color: 'var(--info)' },
+  number: { color: "var(--info)" },
+  constant: { color: "var(--info)" },
+  symbol: { color: "var(--info)" },
 
-  boolean: { color: 'var(--warning)' },
-  'attr-value': { color: 'var(--warning)' },
+  boolean: { color: "var(--warning)" },
+  "attr-value": { color: "var(--warning)" },
 
-  variable: { color: 'var(--success)' },
+  variable: { color: "var(--success)" },
 
-  tag: { color: 'var(--info)' },
-  operator: { color: 'var(--danger)' },
-  keyword: { color: 'var(--danger)' },
-  function: { color: 'var(--success)' },
-  'class-name': { color: 'var(--primary)' },
-  builtin: { color: 'var(--danger)' },
-  selector: { color: 'var(--danger)' },
-  inserted: { color: 'var(--success)' },
-  deleted: { color: 'var(--danger)' },
-  regex: { color: 'var(--warning)' },
+  tag: { color: "var(--info)" },
+  operator: { color: "var(--danger)" },
+  keyword: { color: "var(--danger)" },
+  function: { color: "var(--success)" },
+  "class-name": { color: "var(--primary)" },
+  builtin: { color: "var(--danger)" },
+  selector: { color: "var(--danger)" },
+  inserted: { color: "var(--success)" },
+  deleted: { color: "var(--danger)" },
+  regex: { color: "var(--warning)" },
 
-  important: { color: 'var(--danger)', fontWeight: 'bold' },
-  italic: { fontStyle: 'italic' },
-  bold: { fontWeight: 'bold' },
-  entity: { cursor: 'help' },
+  important: { color: "var(--danger)", fontWeight: "bold" },
+  italic: { fontStyle: "italic" },
+  bold: { fontWeight: "bold" },
+  entity: { cursor: "help" },
 };
 
 const lineStyle: CSSProperties = {
-  paddingRight: '1.5em',
-  paddingLeft: '0',
+  paddingRight: "1.5em",
+  paddingLeft: "0",
   opacity: 0.5,
 };
 
@@ -91,7 +91,7 @@ const markdownComponents: Partial<Components> = {
     const { children, className, ref, ...extraProps } = props;
     extraProps.node = undefined;
 
-    const match = /language-(\w+)/.exec(className || '');
+    const match = /language-(\w+)/.exec(className || "");
     return match ? (
       <SyntaxHighlighter
         {...extraProps}
@@ -102,7 +102,7 @@ const markdownComponents: Partial<Components> = {
         language={match[1]}
         style={prismTheme}
       >
-        {String(children).replace(/\n$/, '')}
+        {String(children as string).replace(/\n$/, "")}
       </SyntaxHighlighter>
     ) : (
       <code {...extraProps} ref={ref} className={className}>

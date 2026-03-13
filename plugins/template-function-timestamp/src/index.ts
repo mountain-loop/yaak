@@ -1,7 +1,7 @@
-import type { PluginDefinition } from '@yaakapp/api';
-import type { TemplateFunctionArg } from '@yaakapp-internal/plugins';
+import type { PluginDefinition } from "@yaakapp/api";
+import type { TemplateFunctionArg } from "@yaakapp-internal/plugins";
 
-import type { ContextFn } from 'date-fns';
+import type { ContextFn } from "date-fns";
 import {
   addDays,
   addHours,
@@ -18,75 +18,75 @@ import {
   subMonths,
   subSeconds,
   subYears,
-} from 'date-fns';
+} from "date-fns";
 
 const dateArg: TemplateFunctionArg = {
-  type: 'text',
-  name: 'date',
-  label: 'Timestamp',
+  type: "text",
+  name: "date",
+  label: "Timestamp",
   optional: true,
   description:
-    'Can be a timestamp in milliseconds, ISO string, or anything parseable by JS `new Date()`',
+    "Can be a timestamp in milliseconds, ISO string, or anything parseable by JS `new Date()`",
   placeholder: new Date().toISOString(),
 };
 
 const expressionArg: TemplateFunctionArg = {
-  type: 'text',
-  name: 'expression',
-  label: 'Expression',
+  type: "text",
+  name: "expression",
+  label: "Expression",
   description: "Modification expression (eg. '-5d +2h 3m'). Available units: y, M, d, h, m, s",
   optional: true,
-  placeholder: '-5d +2h 3m',
+  placeholder: "-5d +2h 3m",
 };
 
 const formatArg: TemplateFunctionArg = {
-  name: 'format',
-  label: 'Format String',
+  name: "format",
+  label: "Format String",
   description: "Format string to describe the output (eg. 'yyyy-MM-dd at HH:mm:ss')",
   optional: true,
-  placeholder: 'yyyy-MM-dd HH:mm:ss',
-  type: 'text',
+  placeholder: "yyyy-MM-dd HH:mm:ss",
+  type: "text",
 };
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
-      name: 'timestamp.unix',
-      description: 'Get the timestamp in seconds',
+      name: "timestamp.unix",
+      description: "Get the timestamp in seconds",
       args: [dateArg],
       onRender: async (_ctx, args) => {
-        const d = parseDateString(String(args.values.date ?? ''));
+        const d = parseDateString(String(args.values.date ?? ""));
         return String(Math.floor(d.getTime() / 1000));
       },
     },
     {
-      name: 'timestamp.unixMillis',
-      description: 'Get the timestamp in milliseconds',
+      name: "timestamp.unixMillis",
+      description: "Get the timestamp in milliseconds",
       args: [dateArg],
       onRender: async (_ctx, args) => {
-        const d = parseDateString(String(args.values.date ?? ''));
+        const d = parseDateString(String(args.values.date ?? ""));
         return String(d.getTime());
       },
     },
     {
-      name: 'timestamp.iso8601',
-      description: 'Get the date in ISO8601 format',
+      name: "timestamp.iso8601",
+      description: "Get the date in ISO8601 format",
       args: [dateArg],
       onRender: async (_ctx, args) => {
-        const d = parseDateString(String(args.values.date ?? ''));
+        const d = parseDateString(String(args.values.date ?? ""));
         return d.toISOString();
       },
     },
     {
-      name: 'timestamp.format',
-      description: 'Format a date using a dayjs-compatible format string',
+      name: "timestamp.format",
+      description: "Format a date using a dayjs-compatible format string",
       args: [dateArg, formatArg],
       previewArgs: [formatArg.name],
       onRender: async (_ctx, args) => formatDatetime(args.values),
     },
     {
-      name: 'timestamp.offset',
-      description: 'Get the offset of a date based on an expression',
+      name: "timestamp.offset",
+      description: "Get the offset of a date based on an expression",
       args: [dateArg, expressionArg],
       previewArgs: [expressionArg.name],
       onRender: async (_ctx, args) => calculateDatetime(args.values),
@@ -96,18 +96,18 @@ export const plugin: PluginDefinition = {
 
 function applyDateOp(d: Date, sign: string, amount: number, unit: string): Date {
   switch (unit) {
-    case 'y':
-      return sign === '-' ? subYears(d, amount) : addYears(d, amount);
-    case 'M':
-      return sign === '-' ? subMonths(d, amount) : addMonths(d, amount);
-    case 'd':
-      return sign === '-' ? subDays(d, amount) : addDays(d, amount);
-    case 'h':
-      return sign === '-' ? subHours(d, amount) : addHours(d, amount);
-    case 'm':
-      return sign === '-' ? subMinutes(d, amount) : addMinutes(d, amount);
-    case 's':
-      return sign === '-' ? subSeconds(d, amount) : addSeconds(d, amount);
+    case "y":
+      return sign === "-" ? subYears(d, amount) : addYears(d, amount);
+    case "M":
+      return sign === "-" ? subMonths(d, amount) : addMonths(d, amount);
+    case "d":
+      return sign === "-" ? subDays(d, amount) : addDays(d, amount);
+    case "h":
+      return sign === "-" ? subHours(d, amount) : addHours(d, amount);
+    case "m":
+      return sign === "-" ? subMinutes(d, amount) : addMinutes(d, amount);
+    case "s":
+      return sign === "-" ? subSeconds(d, amount) : addSeconds(d, amount);
     default:
       throw new Error(`Invalid data calculation unit: ${unit}`);
   }
@@ -120,7 +120,7 @@ function parseOp(op: string): { sign: string; amount: number; unit: string } | n
   }
   const [, sign, amount, unit] = match;
   if (!unit) return null;
-  return { sign: sign ?? '+', amount: Number(amount ?? 0), unit };
+  return { sign: sign ?? "+", amount: Number(amount ?? 0), unit };
 }
 
 function parseDateString(date: string): Date {
@@ -143,11 +143,11 @@ function parseDateString(date: string): Date {
 
 export function calculateDatetime(args: { date?: string; expression?: string }): string {
   const { date, expression } = args;
-  let jsDate = parseDateString(date ?? '');
+  let jsDate = parseDateString(date ?? "");
 
   if (expression) {
     const ops = String(expression)
-      .split(' ')
+      .split(" ")
       .map((s) => s.trim())
       .filter(Boolean);
     for (const op of ops) {
@@ -167,6 +167,6 @@ export function formatDatetime(args: {
   in?: ContextFn<Date>;
 }): string {
   const { date, format } = args;
-  const d = parseDateString(date ?? '');
-  return formatDate(d, String(format || 'yyyy-MM-dd HH:mm:ss'), { in: args.in });
+  const d = parseDateString(date ?? "");
+  return formatDate(d, String(format || "yyyy-MM-dd HH:mm:ss"), { in: args.in });
 }

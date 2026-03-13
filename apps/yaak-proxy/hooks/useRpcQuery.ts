@@ -1,7 +1,7 @@
-import { type UseQueryOptions, useQuery } from '@tanstack/react-query';
-import type { RpcSchema } from '@yaakapp-internal/proxy-lib';
-import type { Req, Res } from '../lib/rpc';
-import { rpc } from '../lib/rpc';
+import { type UseQueryOptions, useQuery } from "@tanstack/react-query";
+import type { RpcSchema } from "@yaakapp-internal/proxy-lib";
+import type { Req, Res } from "../lib/rpc";
+import { rpc } from "../lib/rpc";
 
 /**
  * React Query wrapper for RPC commands.
@@ -10,7 +10,7 @@ import { rpc } from '../lib/rpc';
 export function useRpcQuery<K extends keyof RpcSchema>(
   cmd: K,
   payload: Req<K>,
-  opts?: Omit<UseQueryOptions<Res<K>>, 'queryKey' | 'queryFn'>,
+  opts?: Omit<UseQueryOptions<Res<K>>, "queryKey" | "queryFn">,
 ) {
   return useQuery<Res<K>>({
     queryKey: [cmd, payload],

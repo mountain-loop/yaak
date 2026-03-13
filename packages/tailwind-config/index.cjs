@@ -127,10 +127,7 @@ module.exports = {
     require("@tailwindcss/container-queries"),
     plugin(({ addVariant }) => {
       addVariant("hocus", ["&:hover", "&:focus-visible", "&.focus:focus"]);
-      addVariant("focus-visible-or-class", [
-        "&:focus-visible",
-        "&.focus:focus",
-      ]);
+      addVariant("focus-visible-or-class", ["&:focus-visible", "&.focus:focus"]);
     }),
   ],
 };

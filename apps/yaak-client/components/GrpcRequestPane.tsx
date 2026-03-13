@@ -1,26 +1,26 @@
-import { type GrpcRequest, type HttpRequestHeader, patchModel } from '@yaakapp-internal/models';
-import { HStack, Icon, useContainerSize, VStack } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import type { CSSProperties } from 'react';
-import { useCallback, useMemo, useRef } from 'react';
-import { useAuthTab } from '../hooks/useAuthTab';
-import type { ReflectResponseService } from '../hooks/useGrpc';
-import { useHeadersTab } from '../hooks/useHeadersTab';
-import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { Button } from './core/Button';
-import { CountBadge } from './core/CountBadge';
-import { IconButton } from './core/IconButton';
-import { PlainInput } from './core/PlainInput';
-import { RadioDropdown } from './core/RadioDropdown';
-import type { TabItem } from './core/Tabs/Tabs';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { GrpcEditor } from './GrpcEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { UrlBar } from './UrlBar';
+import { type GrpcRequest, type HttpRequestHeader, patchModel } from "@yaakapp-internal/models";
+import { HStack, Icon, useContainerSize, VStack } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import type { CSSProperties } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { useAuthTab } from "../hooks/useAuthTab";
+import type { ReflectResponseService } from "../hooks/useGrpc";
+import { useHeadersTab } from "../hooks/useHeadersTab";
+import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
+import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { Button } from "./core/Button";
+import { CountBadge } from "./core/CountBadge";
+import { IconButton } from "./core/IconButton";
+import { PlainInput } from "./core/PlainInput";
+import { RadioDropdown } from "./core/RadioDropdown";
+import type { TabItem } from "./core/Tabs/Tabs";
+import { TabContent, Tabs } from "./core/Tabs/Tabs";
+import { GrpcEditor } from "./GrpcEditor";
+import { HeadersEditor } from "./HeadersEditor";
+import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { UrlBar } from "./UrlBar";
 
 interface Props {
   style?: CSSProperties;
@@ -30,12 +30,12 @@ interface Props {
   reflectionError?: string;
   reflectionLoading?: boolean;
   methodType:
-    | 'unary'
-    | 'client_streaming'
-    | 'server_streaming'
-    | 'streaming'
-    | 'no-schema'
-    | 'no-method';
+    | "unary"
+    | "client_streaming"
+    | "server_streaming"
+    | "streaming"
+    | "no-schema"
+    | "no-method";
   isStreaming: boolean;
   onCommit: () => void;
   onCancel: () => void;
@@ -44,10 +44,10 @@ interface Props {
   services: ReflectResponseService[] | null;
 }
 
-const TAB_MESSAGE = 'message';
-const TAB_METADATA = 'metadata';
-const TAB_AUTH = 'auth';
-const TAB_DESCRIPTION = 'description';
+const TAB_MESSAGE = "message";
+const TAB_METADATA = "metadata";
+const TAB_AUTH = "auth";
+const TAB_DESCRIPTION = "description";
 
 export function GrpcRequestPane({
   style,
@@ -64,7 +64,7 @@ export function GrpcRequestPane({
   onSend,
 }: Props) {
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
-  const metadataTab = useHeadersTab(TAB_METADATA, activeRequest, 'Metadata');
+  const metadataTab = useHeadersTab(TAB_METADATA, activeRequest, "Metadata");
   const inheritedHeaders = useInheritedHeaders(activeRequest);
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
 
@@ -85,18 +85,18 @@ export function GrpcRequestPane({
     const options =
       services?.flatMap((s) =>
         s.methods.map((m) => ({
-          label: `${s.name.split('.').pop() ?? s.name}/${m.name}`,
+          label: `${s.name.split(".").pop() ?? s.name}/${m.name}`,
           value: `${s.name}/${m.name}`,
         })),
       ) ?? [];
-    const value = `${activeRequest?.service ?? ''}/${activeRequest?.method ?? ''}`;
+    const value = `${activeRequest?.service ?? ""}/${activeRequest?.method ?? ""}`;
     return { value, options };
   }, [activeRequest?.method, activeRequest?.service, services]);
 
   const handleChangeService = useCallback(
     async (v: string) => {
-      const [serviceName, methodName] = v.split('/', 2);
-      if (serviceName == null || methodName == null) throw new Error('Should never happen');
+      const [serviceName, methodName] = v.split("/", 2);
+      if (serviceName == null || methodName == null) throw new Error("Should never happen");
       await patchModel(activeRequest, {
         service: serviceName,
         method: methodName,
@@ -110,9 +110,9 @@ export function GrpcRequestPane({
 
     if (activeRequest.service == null || activeRequest.method == null) {
       alert({
-        id: 'grpc-invalid-service-method',
-        title: 'Error',
-        body: 'Service or method not selected',
+        id: "grpc-invalid-service-method",
+        title: "Error",
+        body: "Service or method not selected",
       });
     }
     onGo();
@@ -125,12 +125,12 @@ export function GrpcRequestPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
-      { value: TAB_MESSAGE, label: 'Message' },
+      { value: TAB_MESSAGE, label: "Message" },
       ...metadataTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
-        label: 'Info',
+        label: "Info",
         rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
     ],
@@ -152,14 +152,14 @@ export function GrpcRequestPane({
       <div
         ref={urlContainerEl}
         className={classNames(
-          'grid grid-cols-[minmax(0,1fr)_auto] gap-1.5',
-          paneWidth === 0 && 'opacity-0',
-          paneWidth > 0 && paneWidth < 400 && '!grid-cols-1',
+          "grid grid-cols-[minmax(0,1fr)_auto] gap-1.5",
+          paneWidth === 0 && "opacity-0",
+          paneWidth > 0 && paneWidth < 400 && "!grid-cols-1",
         )}
       >
         <UrlBar
           key={forceUpdateKey}
-          url={activeRequest.url ?? ''}
+          url={activeRequest.url ?? ""}
           submitIcon={null}
           forceUpdateKey={forceUpdateKey}
           placeholder="localhost:50051"
@@ -176,13 +176,13 @@ export function GrpcRequestPane({
             items={select.options.map((o) => ({
               label: o.label,
               value: o.value,
-              type: 'default',
+              type: "default",
               shortLabel: o.label,
             }))}
             itemsAfter={[
               {
-                label: 'Refresh',
-                type: 'default',
+                label: "Refresh",
+                type: "default",
                 leftSlot: <Icon size="sm" icon="refresh" />,
               },
             ]}
@@ -193,14 +193,14 @@ export function GrpcRequestPane({
               rightSlot={<Icon size="sm" icon="chevron_down" />}
               disabled={isStreaming || services == null}
               className={classNames(
-                'font-mono text-editor min-w-[5rem] !ring-0',
-                paneWidth < 400 && 'flex-1',
+                "font-mono text-editor min-w-[5rem] !ring-0",
+                paneWidth < 400 && "flex-1",
               )}
             >
-              {select.options.find((o) => o.value === select.value)?.label ?? 'No Schema'}
+              {select.options.find((o) => o.value === select.value)?.label ?? "No Schema"}
             </Button>
           </RadioDropdown>
-          {methodType === 'client_streaming' || methodType === 'streaming' ? (
+          {methodType === "client_streaming" || methodType === "streaming" ? (
             <>
               {isStreaming && (
                 <>
@@ -223,26 +223,26 @@ export function GrpcRequestPane({
               <IconButton
                 size="sm"
                 variant="border"
-                title={isStreaming ? 'Connect' : 'Send'}
+                title={isStreaming ? "Connect" : "Send"}
                 hotkeyAction="request.send"
                 onClick={isStreaming ? handleSend : handleConnect}
-                icon={isStreaming ? 'send_horizontal' : 'arrow_up_down'}
+                icon={isStreaming ? "send_horizontal" : "arrow_up_down"}
               />
             </>
           ) : (
             <IconButton
               size="sm"
               variant="border"
-              title={methodType === 'unary' ? 'Send' : 'Connect'}
+              title={methodType === "unary" ? "Send" : "Connect"}
               hotkeyAction="request.send"
               onClick={isStreaming ? onCancel : handleConnect}
-              disabled={methodType === 'no-schema' || methodType === 'no-method'}
+              disabled={methodType === "no-schema" || methodType === "no-method"}
               icon={
                 isStreaming
-                  ? 'x'
-                  : methodType.includes('streaming')
-                    ? 'arrow_up_down'
-                    : 'send_horizontal'
+                  ? "x"
+                  : methodType.includes("streaming")
+                    ? "arrow_up_down"
+                    : "send_horizontal"
               }
             />
           )}

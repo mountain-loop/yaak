@@ -1,7 +1,7 @@
-import { HStack, Icon, type IconProps, LoadingIcon, Overlay, VStack } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { atom } from 'jotai';
-import * as m from 'motion/react-m';
+import { HStack, Icon, type IconProps, LoadingIcon, Overlay, VStack } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { atom } from "jotai";
+import * as m from "motion/react-m";
 import type {
   CSSProperties,
   HTMLAttributes,
@@ -12,7 +12,7 @@ import type {
   ReactNode,
   RefObject,
   SetStateAction,
-} from 'react';
+} from "react";
 import {
   Children,
   cloneElement,
@@ -23,38 +23,38 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import { useKey, useWindowSize } from 'react-use';
-import { useClickOutside } from '../../hooks/useClickOutside';
-import type { HotkeyAction } from '../../hooks/useHotKey';
-import { useHotKey } from '../../hooks/useHotKey';
-import { useStateWithDeps } from '../../hooks/useStateWithDeps';
-import { generateId } from '../../lib/generateId';
-import { getNodeText } from '../../lib/getNodeText';
-import { jotaiStore } from '../../lib/jotai';
-import { ErrorBoundary } from '../ErrorBoundary';
-import { Button } from './Button';
-import { Hotkey } from './Hotkey';
-import { Separator } from './Separator';
+} from "react";
+import { useKey, useWindowSize } from "react-use";
+import { useClickOutside } from "../../hooks/useClickOutside";
+import type { HotkeyAction } from "../../hooks/useHotKey";
+import { useHotKey } from "../../hooks/useHotKey";
+import { useStateWithDeps } from "../../hooks/useStateWithDeps";
+import { generateId } from "../../lib/generateId";
+import { getNodeText } from "../../lib/getNodeText";
+import { jotaiStore } from "../../lib/jotai";
+import { ErrorBoundary } from "../ErrorBoundary";
+import { Button } from "./Button";
+import { Hotkey } from "./Hotkey";
+import { Separator } from "./Separator";
 
 export type DropdownItemSeparator = {
-  type: 'separator';
+  type: "separator";
   label?: ReactNode;
   hidden?: boolean;
 };
 
 export type DropdownItemContent = {
-  type: 'content';
+  type: "content";
   label?: ReactNode;
   hidden?: boolean;
 };
 
 export type DropdownItemDefault = {
-  type?: 'default';
+  type?: "default";
   label: ReactNode;
   hotKeyAction?: HotkeyAction;
   hotKeyLabelOnly?: boolean;
-  color?: 'default' | 'primary' | 'danger' | 'info' | 'warning' | 'notice' | 'success';
+  color?: "default" | "primary" | "danger" | "info" | "warning" | "notice" | "success";
   disabled?: boolean;
   hidden?: boolean;
   leftSlot?: ReactNode;
@@ -65,7 +65,7 @@ export type DropdownItemDefault = {
   submenu?: DropdownItem[];
   /** If true, submenu opens on click instead of hover */
   submenuOpenOnClick?: boolean;
-  icon?: IconProps['icon'];
+  icon?: IconProps["icon"];
 };
 
 export type DropdownItem = DropdownItemDefault | DropdownItemSeparator | DropdownItemContent;
@@ -113,20 +113,20 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   // const [isOpen, _setIsOpen] = useState<boolean>(false);
   const [defaultSelectedIndex, setDefaultSelectedIndex] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<Omit<DropdownRef, 'open'>>(null);
+  const menuRef = useRef<Omit<DropdownRef, "open">>(null);
 
   const handleSetIsOpen = useCallback(
     (o: SetStateAction<boolean>) => {
       jotaiStore.set(openAtom, (prevId) => {
         const prevIsOpen = prevId === id.current;
-        const newIsOpen = typeof o === 'function' ? o(prevIsOpen) : o;
+        const newIsOpen = typeof o === "function" ? o(prevIsOpen) : o;
         // Persist background color of button until we close the dropdown
         if (newIsOpen) {
           onOpen?.();
           if (buttonRef.current) {
             buttonRef.current.style.backgroundColor = window
               .getComputedStyle(buttonRef.current)
-              .getPropertyValue('background-color');
+              .getPropertyValue("background-color");
           }
         }
         return newIsOpen ? id.current : null; // Set global atom to current ID to signify open state
@@ -140,7 +140,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   useEffect(() => {
     if (!isOpen) {
       // Clear persisted BG
-      if (buttonRef.current) buttonRef.current.style.backgroundColor = '';
+      if (buttonRef.current) buttonRef.current.style.backgroundColor = "";
       // Set to different value when opened and closed to force it to update. This is to force
       // <Menu/> to reset its selected-index state, which it does when this prop changes
       setDefaultSelectedIndex(null);
@@ -183,7 +183,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
       {
         ...existingChild.props,
         ref: buttonRef,
-        'aria-haspopup': 'true',
+        "aria-haspopup": "true",
         onClick: (e: MouseEvent<HTMLButtonElement>) => {
           // Call original onClick first if it exists
           originalOnClick?.(e);
@@ -200,7 +200,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   }, [children, handleSetIsOpen]);
 
   useEffect(() => {
-    buttonRef.current?.setAttribute('aria-expanded', isOpen.toString());
+    buttonRef.current?.setAttribute("aria-expanded", isOpen.toString());
   }, [isOpen]);
 
   const windowSize = useWindowSize();
@@ -213,7 +213,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
   return (
     <>
       {child}
-      <ErrorBoundary name={'Dropdown Menu'}>
+      <ErrorBoundary name={"Dropdown Menu"}>
         <Menu
           ref={menuRef}
           showTriangle
@@ -233,7 +233,7 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
 export interface ContextMenuProps {
   triggerPosition: { x: number; y: number } | null;
   className?: string;
-  items: DropdownProps['items'];
+  items: DropdownProps["items"];
   onClose: () => void;
 }
 
@@ -269,7 +269,7 @@ export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function Co
 interface MenuProps {
   className?: string;
   defaultSelectedIndex: number | null;
-  triggerShape: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'right'> | null;
+  triggerShape: Pick<DOMRect, "top" | "bottom" | "left" | "right"> | null;
   onClose: () => void;
   onCloseAll?: () => void;
   showTriangle?: boolean;
@@ -280,7 +280,7 @@ interface MenuProps {
   isSubmenu?: boolean;
 }
 
-const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'>, MenuProps>(
+const Menu = forwardRef<Omit<DropdownRef, "open" | "isOpen" | "toggle" | "items">, MenuProps>(
   (
     {
       className,
@@ -302,12 +302,12 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
       [defaultSelectedIndex],
     );
 
-    const [filter, setFilter] = useState<string>('');
+    const [filter, setFilter] = useState<string>("");
 
     // Clear filter when menu opens
     useEffect(() => {
       if (isOpen) {
-        setFilter('');
+        setFilter("");
       }
     }, [isOpen]);
 
@@ -353,18 +353,18 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         e.preventDefault();
         setFilter((f) => f + e.key);
         setSelectedIndex(0);
-      } else if (e.key === 'Backspace' && !isSpecial) {
+      } else if (e.key === "Backspace" && !isSpecial) {
         e.preventDefault();
         setFilter((f) => f.slice(0, -1));
       }
     };
 
     useKey(
-      'Escape',
+      "Escape",
       () => {
         if (!isOpen) return;
         if (activeSubmenu) setActiveSubmenu(null);
-        else if (filter !== '') setFilter('');
+        else if (filter !== "") setFilter("");
         else handleClose();
       },
       {},
@@ -377,7 +377,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           let nextIndex = (currIndex ?? 0) - incrBy;
           const maxTries = items.length;
           for (let i = 0; i < maxTries; i++) {
-            if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
+            if (items[nextIndex]?.hidden || items[nextIndex]?.type === "separator") {
               nextIndex--;
             } else if (nextIndex < 0) {
               nextIndex = items.length - 1;
@@ -397,7 +397,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           let nextIndex = (currIndex ?? -1) + incrBy;
           const maxTries = items.length;
           for (let i = 0; i < maxTries; i++) {
-            if (items[nextIndex]?.hidden || items[nextIndex]?.type === 'separator') {
+            if (items[nextIndex]?.hidden || items[nextIndex]?.type === "separator") {
               nextIndex++;
             } else if (nextIndex >= items.length) {
               nextIndex = 0;
@@ -414,13 +414,13 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     // Ensure selection is on a valid item (not hidden/separator/content)
     useEffect(() => {
       const item = items[selectedIndex ?? -1];
-      if (item?.hidden || item?.type === 'separator' || item?.type === 'content') {
+      if (item?.hidden || item?.type === "separator" || item?.type === "content") {
         handleNext();
       }
     }, [selectedIndex, items, handleNext]);
 
     useKey(
-      'ArrowUp',
+      "ArrowUp",
       (e) => {
         if (!isOpen || activeSubmenu) return;
         e.preventDefault();
@@ -431,7 +431,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     useKey(
-      'ArrowDown',
+      "ArrowDown",
       (e) => {
         if (!isOpen || activeSubmenu) return;
         e.preventDefault();
@@ -442,7 +442,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     useKey(
-      'ArrowLeft',
+      "ArrowLeft",
       (e) => {
         if (!isOpen) return;
         // Only handle if this menu doesn't have an open submenu
@@ -461,12 +461,12 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     const handleSelect = useCallback(
       async (item: DropdownItem, parentEl?: HTMLButtonElement) => {
         // Handle click-to-open submenu
-        if ('submenu' in item && item.submenu && item.submenuOpenOnClick && parentEl) {
+        if ("submenu" in item && item.submenu && item.submenuOpenOnClick && parentEl) {
           setActiveSubmenu({ item, parent: parentEl });
           return;
         }
 
-        if (!('onSelect' in item) || !item.onSelect) return;
+        if (!("onSelect" in item) || !item.onSelect) return;
         setSelectedIndex(null);
 
         const promise = item.onSelect();
@@ -550,17 +550,17 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           right: onRight ? docRect.width - triggerShape.right : undefined,
           left: !onRight ? triggerShape.left : undefined,
           minWidth: fullWidth ? triggerWidth : undefined,
-          maxWidth: '40rem',
+          maxWidth: "40rem",
         },
         triangle: {
-          width: '0.4rem',
-          height: '0.4rem',
+          width: "0.4rem",
+          height: "0.4rem",
           ...(onRight
-            ? { right: width / 2, marginRight: '-0.2rem' }
-            : { left: width / 2, marginLeft: '-0.2rem' }),
+            ? { right: width / 2, marginRight: "-0.2rem" }
+            : { left: width / 2, marginLeft: "-0.2rem" }),
           ...(upsideDown
-            ? { bottom: '-0.2rem', rotate: '225deg' }
-            : { top: '-0.2rem', rotate: '45deg' }),
+            ? { bottom: "-0.2rem", rotate: "225deg" }
+            : { top: "-0.2rem", rotate: "45deg" }),
         },
         menu: {
           maxHeight: `${(upsideDown ? heightAbove : heightBelow) - 15}px`,
@@ -582,11 +582,11 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     useKey(
-      'ArrowRight',
+      "ArrowRight",
       (e) => {
         if (!isOpen || activeSubmenu) return;
         const item = filteredItems[selectedIndex ?? -1];
-        if (item?.type !== 'separator' && item?.type !== 'content' && item?.submenu) {
+        if (item?.type !== "separator" && item?.type !== "content" && item?.submenu) {
           e.preventDefault();
           const parent = document.activeElement as HTMLButtonElement;
           if (parent) {
@@ -599,11 +599,11 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     );
 
     useKey(
-      'Enter',
+      "Enter",
       (e) => {
         if (!isOpen || activeSubmenu) return;
         const item = filteredItems[selectedIndex ?? -1];
-        if (!item || item.type === 'separator' || item.type === 'content') return;
+        if (!item || item.type === "separator" || item.type === "content") return;
         e.preventDefault();
         if (item.submenu) {
           const parent = document.activeElement as HTMLButtonElement;
@@ -710,9 +710,9 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
         style={styles.container}
         className={classNames(
           className,
-          'x-theme-menu',
-          'outline-none my-1 pointer-events-auto z-40',
-          'fixed',
+          "x-theme-menu",
+          "outline-none my-1 pointer-events-auto z-40",
+          "fixed",
         )}
       >
         {showTriangle && !isSubmenu && (
@@ -726,8 +726,8 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           style={styles.menu}
           className={classNames(
             className,
-            'h-auto bg-surface rounded-md shadow-lg py-1.5 border',
-            'border-border-subtle overflow-y-auto overflow-x-hidden mx-0.5',
+            "h-auto bg-surface rounded-md shadow-lg py-1.5 border",
+            "border-border-subtle overflow-y-auto overflow-x-hidden mx-0.5",
           )}
         >
           {filter && (
@@ -746,22 +746,22 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
             if (item.hidden) {
               return null;
             }
-            if (item.type === 'separator') {
+            if (item.type === "separator") {
               return (
                 <Separator
                   // biome-ignore lint/suspicious/noArrayIndexKey: Nothing else available
                   key={i}
-                  className={classNames('my-1.5', item.label ? 'ml-2' : null)}
+                  className={classNames("my-1.5", item.label ? "ml-2" : null)}
                 >
                   {item.label}
                 </Separator>
               );
             }
-            if (item.type === 'content') {
+            if (item.type === "content") {
               return (
                 // biome-ignore lint/a11y/noStaticElementInteractions: Needs to be clickable but want to support nested buttons
                 // biome-ignore lint/suspicious/noArrayIndexKey: index is fine
-                <div key={i} className={classNames('my-1 mx-2 max-w-xs')} onClick={onClose}>
+                <div key={i} className={classNames("my-1 mx-2 max-w-xs")} onClick={onClose}>
                   {item.label}
                 </div>
               );
@@ -808,8 +808,8 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
     // Hotkeys must be rendered even when menu is closed (so they work globally)
     const hotKeyElements = items.map(
       (item, i) =>
-        item.type !== 'separator' &&
-        item.type !== 'content' &&
+        item.type !== "separator" &&
+        item.type !== "content" &&
         !item.hotKeyLabelOnly &&
         item.hotKeyAction && (
           <MenuItemHotKey
@@ -911,7 +911,7 @@ function MenuItem({
       justify="start"
       leftSlot={
         (isLoading || item.leftSlot || item.icon) && (
-          <div className={classNames('pr-2 flex justify-start [&_svg]:opacity-70')}>
+          <div className={classNames("pr-2 flex justify-start [&_svg]:opacity-70")}>
             {isLoading ? <LoadingIcon /> : item.icon ? <Icon icon={item.icon} /> : item.leftSlot}
           </div>
         )
@@ -921,28 +921,28 @@ function MenuItem({
       color="custom"
       className={classNames(
         className,
-        'h-xs', // More compact
-        'min-w-[8rem] outline-none px-2 mx-1.5 flex whitespace-nowrap',
-        'focus:bg-surface-highlight focus:text rounded focus:outline-none focus-visible:outline-1',
-        isParentOfActiveSubmenu && 'bg-surface-highlight text rounded',
-        item.color === 'danger' && '!text-danger',
-        item.color === 'primary' && '!text-primary',
-        item.color === 'success' && '!text-success',
-        item.color === 'warning' && '!text-warning',
-        item.color === 'notice' && '!text-notice',
-        item.color === 'info' && '!text-info',
+        "h-xs", // More compact
+        "min-w-[8rem] outline-none px-2 mx-1.5 flex whitespace-nowrap",
+        "focus:bg-surface-highlight focus:text rounded focus:outline-none focus-visible:outline-1",
+        isParentOfActiveSubmenu && "bg-surface-highlight text rounded",
+        item.color === "danger" && "!text-danger",
+        item.color === "primary" && "!text-primary",
+        item.color === "success" && "!text-success",
+        item.color === "warning" && "!text-warning",
+        item.color === "notice" && "!text-notice",
+        item.color === "info" && "!text-info",
       )}
       {...props}
     >
-      <div className={classNames('truncate min-w-[5rem]')}>{item.label}</div>
+      <div className={classNames("truncate min-w-[5rem]")}>{item.label}</div>
     </Button>
   );
 }
 
 interface MenuItemHotKeyProps {
   action: HotkeyAction | undefined;
-  onSelect: MenuItemProps['onSelect'];
-  item: MenuItemProps['item'];
+  onSelect: MenuItemProps["onSelect"];
+  item: MenuItemProps["item"];
 }
 
 function MenuItemHotKey({ action, onSelect, item }: MenuItemHotKeyProps) {

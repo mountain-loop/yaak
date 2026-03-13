@@ -1,18 +1,18 @@
-import type { GitCallbacks } from '@yaakapp-internal/git';
-import { sync } from '../../init/sync';
-import { promptCredentials } from './credentials';
-import { promptDivergedStrategy } from './diverged';
-import { addGitRemote } from './showAddRemoteDialog';
-import { promptUncommittedChangesStrategy } from './uncommitted';
+import type { GitCallbacks } from "@yaakapp-internal/git";
+import { sync } from "../../init/sync";
+import { promptCredentials } from "./credentials";
+import { promptDivergedStrategy } from "./diverged";
+import { addGitRemote } from "./showAddRemoteDialog";
+import { promptUncommittedChangesStrategy } from "./uncommitted";
 
 export function gitCallbacks(dir: string): GitCallbacks {
   return {
     addRemote: async () => {
-      return addGitRemote(dir, 'origin');
+      return addGitRemote(dir, "origin");
     },
     promptCredentials: async ({ url, error }) => {
       const creds = await promptCredentials({ url, error });
-      if (creds == null) throw new Error('Cancelled credentials prompt');
+      if (creds == null) throw new Error("Cancelled credentials prompt");
       return creds;
     },
     promptDiverged: async ({ remote, branch }) => {

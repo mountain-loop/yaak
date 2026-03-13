@@ -1,33 +1,33 @@
-import { HeaderSize, IconButton, SidebarLayout, SplitLayout } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { useState } from 'react';
-import { useLocalStorage } from 'react-use';
-import { useRpcQueryWithEvent } from '../hooks/useRpcQueryWithEvent';
-import { getOsType } from '../lib/tauri';
-import { ActionIconButton } from './ActionIconButton';
-import { ExchangesTable } from './ExchangesTable';
-import { filteredExchangesAtom, Sidebar } from './Sidebar';
+import { HeaderSize, IconButton, SidebarLayout, SplitLayout } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { useState } from "react";
+import { useLocalStorage } from "react-use";
+import { useRpcQueryWithEvent } from "../hooks/useRpcQueryWithEvent";
+import { getOsType } from "../lib/tauri";
+import { ActionIconButton } from "./ActionIconButton";
+import { ExchangesTable } from "./ExchangesTable";
+import { filteredExchangesAtom, Sidebar } from "./Sidebar";
 
 export function ProxyLayout() {
   const os = getOsType();
   const exchanges = useAtomValue(filteredExchangesAtom);
-  const [sidebarWidth, setSidebarWidth] = useLocalStorage('sidebar_width', 250);
-  const [sidebarHidden, setSidebarHidden] = useLocalStorage('sidebar_hidden', false);
+  const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
+  const [sidebarHidden, setSidebarHidden] = useLocalStorage("sidebar_hidden", false);
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useLocalStorage(
-    'floating_sidebar_hidden',
+    "floating_sidebar_hidden",
     true,
   );
   const [floating, setFloating] = useState(false);
-  const { data: proxyState } = useRpcQueryWithEvent('get_proxy_state', {}, 'proxy_state_changed');
-  const isRunning = proxyState?.state === 'running';
+  const { data: proxyState } = useRpcQueryWithEvent("get_proxy_state", {}, "proxy_state_changed");
+  const isRunning = proxyState?.state === "running";
   const isHidden = floating ? (floatingSidebarHidden ?? true) : (sidebarHidden ?? false);
 
   return (
     <div
       className={classNames(
-        'h-full w-full grid grid-rows-[auto_1fr]',
-        os === 'linux' && 'border border-border-subtle',
+        "h-full w-full grid grid-rows-[auto_1fr]",
+        os === "linux" && "border border-border-subtle",
       )}
     >
       <HeaderSize
@@ -44,7 +44,7 @@ export function ProxyLayout() {
             <IconButton
               size="sm"
               title="Toggle sidebar"
-              icon={isHidden ? 'left_panel_hidden' : 'left_panel_visible'}
+              icon={isHidden ? "left_panel_hidden" : "left_panel_visible"}
               iconColor="secondary"
               onClick={() => {
                 if (floating) {
@@ -66,7 +66,7 @@ export function ProxyLayout() {
               <>
                 <span className="text-2xs text-success">Running :9090</span>
                 <ActionIconButton
-                  action={{ scope: 'global', action: 'proxy_stop' }}
+                  action={{ scope: "global", action: "proxy_stop" }}
                   icon="circle_stop"
                   iconColor="secondary"
                   size="sm"
@@ -74,7 +74,7 @@ export function ProxyLayout() {
               </>
             ) : (
               <ActionIconButton
-                action={{ scope: 'global', action: 'proxy_start' }}
+                action={{ scope: "global", action: "proxy_start" }}
                 icon="circle_play"
                 iconColor="secondary"
                 size="sm"
@@ -95,9 +95,9 @@ export function ProxyLayout() {
           floating ? (
             <div
               className={classNames(
-                'x-theme-sidebar',
-                'h-full bg-surface border-r border-border-subtle',
-                'grid grid-rows-[auto_1fr]',
+                "x-theme-sidebar",
+                "h-full bg-surface border-r border-border-subtle",
+                "grid grid-rows-[auto_1fr]",
               )}
             >
               <HeaderSize
@@ -132,7 +132,10 @@ export function ProxyLayout() {
             <ExchangesTable exchanges={exchanges} style={style} className="overflow-auto" />
           )}
           secondSlot={({ style }) => (
-            <div style={style} className="p-3 text-text-subtlest text-sm border-t border-border-subtle">
+            <div
+              style={style}
+              className="p-3 text-text-subtlest text-sm border-t border-border-subtle"
+            >
               Select a request to view details
             </div>
           )}

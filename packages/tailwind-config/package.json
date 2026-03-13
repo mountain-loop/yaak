@@ -1,7 +1,7 @@
 {
   "name": "@yaakapp-internal/tailwind-config",
-  "private": true,
   "version": "1.0.0",
+  "private": true,
   "main": "index.cjs",
   "types": "index.d.ts",
   "dependencies": {

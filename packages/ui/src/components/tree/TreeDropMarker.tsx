@@ -1,10 +1,10 @@
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { memo } from 'react';
-import { DropMarker } from '../DropMarker';
-import { hoveredParentDepthFamily, isIndexHoveredFamily } from './atoms';
-import type { TreeNode } from './common';
-import { useIsCollapsed } from './context';
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { memo } from "react";
+import { DropMarker } from "../DropMarker";
+import { hoveredParentDepthFamily, isIndexHoveredFamily } from "./atoms";
+import type { TreeNode } from "./common";
+import { useIsCollapsed } from "./context";
 
 export const TreeDropMarker = memo(function TreeDropMarker<T extends { id: string }>({
   className,

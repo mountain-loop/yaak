@@ -1,6 +1,6 @@
-import type { CompletionContext } from '@codemirror/autocomplete';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import { defaultBoost } from './twig/completion';
+import type { CompletionContext } from "@codemirror/autocomplete";
+import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import { defaultBoost } from "./twig/completion";
 
 export interface GenericCompletionConfig {
   minMatch?: number;

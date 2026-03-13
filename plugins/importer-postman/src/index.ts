@@ -1,3 +1,4 @@
+/* oxlint-disable no-base-to-string */
 import type {
   Context,
   Environment,
@@ -8,26 +9,26 @@ import type {
   PartialImportResources,
   PluginDefinition,
   Workspace,
-} from '@yaakapp/api';
-import type { ImportPluginResponse } from '@yaakapp/api/lib/plugins/ImporterPlugin';
+} from "@yaakapp/api";
+import type { ImportPluginResponse } from "@yaakapp/api/lib/plugins/ImporterPlugin";
 
-const POSTMAN_2_1_0_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json';
-const POSTMAN_2_0_0_SCHEMA = 'https://schema.getpostman.com/json/collection/v2.0.0/collection.json';
+const POSTMAN_2_1_0_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
+const POSTMAN_2_0_0_SCHEMA = "https://schema.getpostman.com/json/collection/v2.0.0/collection.json";
 const VALID_SCHEMAS = [POSTMAN_2_0_0_SCHEMA, POSTMAN_2_1_0_SCHEMA];
 
 type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 
 interface ExportResources {
-  workspaces: AtLeast<Workspace, 'name' | 'id' | 'model'>[];
-  environments: AtLeast<Environment, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  httpRequests: AtLeast<HttpRequest, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  folders: AtLeast<Folder, 'name' | 'id' | 'model' | 'workspaceId'>[];
+  workspaces: AtLeast<Workspace, "name" | "id" | "model">[];
+  environments: AtLeast<Environment, "name" | "id" | "model" | "workspaceId">[];
+  httpRequests: AtLeast<HttpRequest, "name" | "id" | "model" | "workspaceId">[];
+  folders: AtLeast<Folder, "name" | "id" | "model" | "workspaceId">[];
 }
 
 export const plugin: PluginDefinition = {
   importer: {
-    name: 'Postman',
-    description: 'Import postman collections',
+    name: "Postman",
+    description: "Import postman collections",
     onImport(_ctx: Context, args: { text: string }) {
       return convertPostman(args.text);
     },
@@ -40,7 +41,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
 
   const info = toRecord(root.info);
   const isValidSchema = VALID_SCHEMAS.includes(
-    typeof info.schema === 'string' ? info.schema : 'n/a',
+    typeof info.schema === "string" ? info.schema : "n/a",
   );
   if (!isValidSchema || !Array.isArray(root.item)) {
     return;
@@ -55,22 +56,22 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     folders: [],
   };
 
-  const workspace: ExportResources['workspaces'][0] = {
-    model: 'workspace',
-    id: generateId('workspace'),
-    name: info.name ? String(info.name) : 'Postman Import',
+  const workspace: ExportResources["workspaces"][0] = {
+    model: "workspace",
+    id: generateId("workspace"),
+    name: info.name ? String(info.name) : "Postman Import",
     description: importDescription(info.description),
     ...globalAuth,
   };
   exportResources.workspaces.push(workspace);
 
   // Create the base environment
-  const environment: ExportResources['environments'][0] = {
-    model: 'environment',
-    id: generateId('environment'),
-    name: 'Global Variables',
+  const environment: ExportResources["environments"][0] = {
+    model: "environment",
+    id: generateId("environment"),
+    name: "Global Variables",
     workspaceId: workspace.id,
-    parentModel: 'workspace',
+    parentModel: "workspace",
     parentId: null,
     variables:
       toArray<{ key: string; value: string }>(root.variable).map((v) => ({
@@ -82,12 +83,12 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
 
   let sortPriorityIndex = 0;
   const importItem = (v: Record<string, unknown>, folderId: string | null = null) => {
-    if (typeof v.name === 'string' && Array.isArray(v.item)) {
-      const folder: ExportResources['folders'][0] = {
-        model: 'folder',
+    if (typeof v.name === "string" && Array.isArray(v.item)) {
+      const folder: ExportResources["folders"][0] = {
+        model: "folder",
         sortPriority: sortPriorityIndex++,
         workspaceId: workspace.id,
-        id: generateId('folder'),
+        id: generateId("folder"),
         name: v.name,
         folderId,
       };
@@ -95,7 +96,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
       for (const child of v.item) {
         importItem(child, folder.id);
       }
-    } else if (typeof v.name === 'string' && 'request' in v) {
+    } else if (typeof v.name === "string" && "request" in v) {
       const r = toRecord(v.request);
       const bodyPatch = importBody(r.body);
       const requestAuth = importAuth(r.auth);
@@ -125,14 +126,14 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
 
       const { url, urlParameters } = convertUrl(r.url);
 
-      const request: ExportResources['httpRequests'][0] = {
-        model: 'http_request',
-        id: generateId('http_request'),
+      const request: ExportResources["httpRequests"][0] = {
+        model: "http_request",
+        id: generateId("http_request"),
         workspaceId: workspace.id,
         folderId,
         name: v.name,
         description: importDescription(r.description),
-        method: typeof r.method === 'string' ? r.method : 'GET',
+        method: typeof r.method === "string" ? r.method : "GET",
         url,
         urlParameters,
         body: bodyPatch.body,
@@ -143,7 +144,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
       };
       exportResources.httpRequests.push(request);
     } else {
-      console.log('Unknown item', v, folderId);
+      console.log("Unknown item", v, folderId);
     }
   };
 
@@ -158,53 +159,53 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
   return { resources };
 }
 
-function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlParameters'> {
-  if (typeof rawUrl === 'string') {
+function convertUrl(rawUrl: unknown): Pick<HttpRequest, "url" | "urlParameters"> {
+  if (typeof rawUrl === "string") {
     return { url: rawUrl, urlParameters: [] };
   }
 
   const url = toRecord(rawUrl);
 
-  let v = '';
+  let v = "";
 
-  if ('protocol' in url && typeof url.protocol === 'string') {
+  if ("protocol" in url && typeof url.protocol === "string") {
     v += `${url.protocol}://`;
   }
 
-  if ('host' in url) {
-    v += `${Array.isArray(url.host) ? url.host.join('.') : url.host}`;
+  if ("host" in url) {
+    v += `${Array.isArray(url.host) ? url.host.join(".") : String(url.host)}`;
   }
 
-  if ('port' in url && typeof url.port === 'string') {
+  if ("port" in url && typeof url.port === "string") {
     v += `:${url.port}`;
   }
 
-  if ('path' in url && Array.isArray(url.path) && url.path.length > 0) {
-    v += `/${Array.isArray(url.path) ? url.path.join('/') : url.path}`;
+  if ("path" in url && Array.isArray(url.path) && url.path.length > 0) {
+    v += `/${Array.isArray(url.path) ? url.path.join("/") : url.path}`;
   }
 
   const params: HttpUrlParameter[] = [];
-  if ('query' in url && Array.isArray(url.query) && url.query.length > 0) {
+  if ("query" in url && Array.isArray(url.query) && url.query.length > 0) {
     for (const query of url.query) {
       params.push({
-        name: query.key ?? '',
-        value: query.value ?? '',
+        name: query.key ?? "",
+        value: query.value ?? "",
         enabled: !query.disabled,
       });
     }
   }
 
-  if ('variable' in url && Array.isArray(url.variable) && url.variable.length > 0) {
+  if ("variable" in url && Array.isArray(url.variable) && url.variable.length > 0) {
     for (const v of url.variable) {
       params.push({
-        name: `:${v.key ?? ''}`,
-        value: v.value ?? '',
+        name: `:${v.key ?? ""}`,
+        value: v.value ?? "",
         enabled: !v.disabled,
       });
     }
   }
 
-  if ('hash' in url && typeof url.hash === 'string') {
+  if ("hash" in url && typeof url.hash === "string") {
     v += `#${url.hash}`;
   }
 
@@ -213,7 +214,7 @@ function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlPar
   return { url: v, urlParameters: params };
 }
 
-function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'authenticationType'> {
+function importAuth(rawAuth: unknown): Pick<HttpRequest, "authentication" | "authenticationType"> {
   const auth = toRecord<Record<string, string>>(rawAuth);
 
   // Helper: Postman stores auth params as an array of { key, value, ... }
@@ -222,7 +223,7 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
     const o: Record<string, unknown> = {};
     for (const i of v) {
       const ii = toRecord(i);
-      if (typeof ii.key === 'string') {
+      if (typeof ii.key === "string") {
         o[ii.key] = ii.value;
       }
     }
@@ -231,39 +232,39 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
 
   const authType: string | undefined = auth.type ? String(auth.type) : undefined;
 
-  if (authType === 'noauth') {
+  if (authType === "noauth") {
     return {
-      authenticationType: 'none',
+      authenticationType: "none",
       authentication: {},
     };
   }
 
-  if ('basic' in auth && authType === 'basic') {
+  if ("basic" in auth && authType === "basic") {
     const b = pmArrayToObj(auth.basic);
     return {
-      authenticationType: 'basic',
+      authenticationType: "basic",
       authentication: {
-        username: String(b.username ?? ''),
-        password: String(b.password ?? ''),
+        username: String(b.username ?? ""),
+        password: String(b.password ?? ""),
       },
     };
   }
 
-  if ('bearer' in auth && authType === 'bearer') {
+  if ("bearer" in auth && authType === "bearer") {
     const b = pmArrayToObj(auth.bearer);
     // Postman uses key "token"
     return {
-      authenticationType: 'bearer',
+      authenticationType: "bearer",
       authentication: {
-        token: String(b.token ?? ''),
+        token: String(b.token ?? ""),
       },
     };
   }
 
-  if ('awsv4' in auth && authType === 'awsv4') {
+  if ("awsv4" in auth && authType === "awsv4") {
     const a = pmArrayToObj(auth.awsv4);
     return {
-      authenticationType: 'awsv4',
+      authenticationType: "awsv4",
       authentication: {
         accessKeyId: a.accessKey != null ? String(a.accessKey) : undefined,
         secretAccessKey: a.secretKey != null ? String(a.secretKey) : undefined,
@@ -274,51 +275,51 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
     };
   }
 
-  if ('apikey' in auth && authType === 'apikey') {
+  if ("apikey" in auth && authType === "apikey") {
     const a = pmArrayToObj(auth.apikey);
     return {
-      authenticationType: 'apikey',
+      authenticationType: "apikey",
       authentication: {
-        location: a.in === 'query' ? 'query' : 'header',
+        location: a.in === "query" ? "query" : "header",
         key: a.value != null ? String(a.value) : undefined,
         value: a.key != null ? String(a.key) : undefined,
       },
     };
   }
 
-  if ('jwt' in auth && authType === 'jwt') {
+  if ("jwt" in auth && authType === "jwt") {
     const a = pmArrayToObj(auth.jwt);
     return {
-      authenticationType: 'jwt',
+      authenticationType: "jwt",
       authentication: {
         algorithm: a.algorithm != null ? String(a.algorithm).toUpperCase() : undefined,
         secret: a.secret != null ? String(a.secret) : undefined,
         secretBase64: !!a.isSecretBase64Encoded,
         payload: a.payload != null ? String(a.payload) : undefined,
         headerPrefix: a.headerPrefix != null ? String(a.headerPrefix) : undefined,
-        location: a.addTokenTo === 'header' ? 'header' : 'query',
+        location: a.addTokenTo === "header" ? "header" : "query",
       },
     };
   }
 
-  if ('oauth2' in auth && authType === 'oauth2') {
+  if ("oauth2" in auth && authType === "oauth2") {
     const o = pmArrayToObj(auth.oauth2);
 
-    let grantType = o.grant_type ? String(o.grant_type) : 'authorization_code';
+    let grantType = o.grant_type ? String(o.grant_type) : "authorization_code";
     let pkcePatch: Record<string, unknown> = {};
 
-    if (grantType === 'authorization_code_with_pkce') {
-      grantType = 'authorization_code';
+    if (grantType === "authorization_code_with_pkce") {
+      grantType = "authorization_code";
       pkcePatch =
-        o.grant_type === 'authorization_code_with_pkce'
+        o.grant_type === "authorization_code_with_pkce"
           ? {
               usePkce: true,
               pkceChallengeMethod: o.challengeAlgorithm ?? undefined,
               pkceCodeVerifier: o.code_verifier != null ? String(o.code_verifier) : undefined,
             }
           : {};
-    } else if (grantType === 'password_credentials') {
-      grantType = 'password';
+    } else if (grantType === "password_credentials") {
+      grantType = "password";
     }
 
     const accessTokenUrl = o.accessTokenUrl != null ? String(o.accessTokenUrl) : undefined;
@@ -326,8 +327,8 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
     const authorizationUrl = o.authUrl != null ? String(o.authUrl) : undefined;
     const clientId = o.clientId != null ? String(o.clientId) : undefined;
     const clientSecret = o.clientSecret != null ? String(o.clientSecret) : undefined;
-    const credentials = o.client_authentication === 'body' ? 'body' : undefined;
-    const headerPrefix = o.headerPrefix ?? 'Bearer';
+    const credentials = o.client_authentication === "body" ? "body" : undefined;
+    const headerPrefix = o.headerPrefix ?? "Bearer";
     const password = o.password != null ? String(o.password) : undefined;
     const redirectUri = o.redirect_uri != null ? String(o.redirect_uri) : undefined;
     const scope = o.scope != null ? String(o.scope) : undefined;
@@ -335,7 +336,7 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
     const username = o.username != null ? String(o.username) : undefined;
 
     let grantPatch: Record<string, unknown> = {};
-    if (grantType === 'authorization_code') {
+    if (grantType === "authorization_code") {
       grantPatch = {
         clientSecret,
         authorizationUrl,
@@ -344,16 +345,16 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
         state,
         ...pkcePatch,
       };
-    } else if (grantType === 'implicit') {
+    } else if (grantType === "implicit") {
       grantPatch = { authorizationUrl, redirectUri, state };
-    } else if (grantType === 'password') {
+    } else if (grantType === "password") {
       grantPatch = { clientSecret, accessTokenUrl, username, password };
-    } else if (grantType === 'client_credentials') {
+    } else if (grantType === "client_credentials") {
       grantPatch = { clientSecret, accessTokenUrl };
     }
 
     const authentication = {
-      name: 'oauth2',
+      name: "oauth2",
       grantType,
       audience,
       clientId,
@@ -363,13 +364,13 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, 'authentication' | 'aut
       ...grantPatch,
     } as Record<string, unknown>;
 
-    return { authenticationType: 'oauth2', authentication };
+    return { authenticationType: "oauth2", authentication };
   }
 
   return { authenticationType: null, authentication: {} };
 }
 
-function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | 'headers'> {
+function importBody(rawBody: unknown): Pick<HttpRequest, "body" | "bodyType" | "headers"> {
   const body = toRecord(rawBody) as {
     mode: string;
     graphql: { query?: string; variables?: string };
@@ -385,21 +386,21 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
     options?: { raw?: { language?: string } };
     file?: { src?: string };
   };
-  if (body.mode === 'graphql') {
+  if (body.mode === "graphql") {
     return {
       headers: [
         {
-          name: 'Content-Type',
-          value: 'application/json',
+          name: "Content-Type",
+          value: "application/json",
           enabled: true,
         },
       ],
-      bodyType: 'graphql',
+      bodyType: "graphql",
       body: {
         text: JSON.stringify(
           {
-            query: body.graphql?.query || '',
-            variables: parseJSONToRecord(body.graphql?.variables || '{}'),
+            query: body.graphql?.query || "",
+            variables: parseJSONToRecord(body.graphql?.variables || "{}"),
           },
           null,
           2,
@@ -407,72 +408,72 @@ function importBody(rawBody: unknown): Pick<HttpRequest, 'body' | 'bodyType' | '
       },
     };
   }
-  if (body.mode === 'urlencoded') {
+  if (body.mode === "urlencoded") {
     return {
       headers: [
         {
-          name: 'Content-Type',
-          value: 'application/x-www-form-urlencoded',
+          name: "Content-Type",
+          value: "application/x-www-form-urlencoded",
           enabled: true,
         },
       ],
-      bodyType: 'application/x-www-form-urlencoded',
+      bodyType: "application/x-www-form-urlencoded",
       body: {
         form: toArray<NonNullable<typeof body.urlencoded>[0]>(body.urlencoded).map((f) => ({
           enabled: !f.disabled,
-          name: f.key ?? '',
-          value: f.value ?? '',
+          name: f.key ?? "",
+          value: f.value ?? "",
         })),
       },
     };
   }
-  if (body.mode === 'formdata') {
+  if (body.mode === "formdata") {
     return {
       headers: [
         {
-          name: 'Content-Type',
-          value: 'multipart/form-data',
+          name: "Content-Type",
+          value: "multipart/form-data",
           enabled: true,
         },
       ],
-      bodyType: 'multipart/form-data',
+      bodyType: "multipart/form-data",
       body: {
         form: toArray<NonNullable<typeof body.formdata>[0]>(body.formdata).map((f) =>
           f.src != null
             ? {
                 enabled: !f.disabled,
                 contentType: f.contentType ?? null,
-                name: f.key ?? '',
-                file: f.src ?? '',
+                name: f.key ?? "",
+                file: f.src ?? "",
               }
             : {
                 enabled: !f.disabled,
-                name: f.key ?? '',
-                value: f.value ?? '',
+                name: f.key ?? "",
+                value: f.value ?? "",
               },
         ),
       },
     };
   }
-  if (body.mode === 'raw') {
+  if (body.mode === "raw") {
     return {
       headers: [
         {
-          name: 'Content-Type',
-          value: body.options?.raw?.language === 'json' ? 'application/json' : '',
+          name: "Content-Type",
+          value: body.options?.raw?.language === "json" ? "application/json" : "",
           enabled: true,
         },
       ],
-      bodyType: body.options?.raw?.language === 'json' ? 'application/json' : 'other',
+      bodyType: body.options?.raw?.language === "json" ? "application/json" : "other",
       body: {
-        text: body.raw ?? '',
+        text: body.raw ?? "",
       },
     };
   }
-  if (body.mode === 'file') {
+  if (body.mode === "file") {
     return {
       headers: [],
-      bodyType: 'binary',
+      bodyType: "binary",
       body: {
         filePath: body.file?.src,
       },
@@ -489,15 +490,15 @@ function parseJSONToRecord<T>(jsonStr: string): Record<string, T> | null {
   }
 }
 
-function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+function toRecord<T>(value: unknown): Record<string, T> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, T>;
   }
   return {};
 }
 
 function toArray<T>(value: unknown): T[] {
-  if (Object.prototype.toString.call(value) === '[object Array]') return value as T[];
+  if (Object.prototype.toString.call(value) === "[object Array]") return value as T[];
   return [];
 }
 
@@ -506,13 +507,13 @@ function importDescription(rawDescription: unknown): string | undefined {
     return undefined;
   }
 
-  if (typeof rawDescription === 'string') {
+  if (typeof rawDescription === "string") {
     return rawDescription;
   }
 
-  if (typeof rawDescription === 'object' && !Array.isArray(rawDescription)) {
+  if (typeof rawDescription === "object" && !Array.isArray(rawDescription)) {
     const description = toRecord(rawDescription);
-    if ('content' in description && description.content != null) {
+    if ("content" in description && description.content != null) {
       return String(description.content);
     }
     return undefined;
@@ -523,16 +524,16 @@ function importDescription(rawDescription: unknown): string | undefined {
 
 /** Recursively render all nested object properties */
 function convertTemplateSyntax<T>(obj: T): T {
-  if (typeof obj === 'string') {
+  if (typeof obj === "string") {
     return obj.replace(
       /{{\s*(_\.)?([^}]*)\s*}}/g,
-      (_m, _dot, expr) => `\${[${expr.trim().replace(/^vault:/, '')}]}`,
+      (_m, _dot, expr) => `\${[${expr.trim().replace(/^vault:/, "")}]}`,
     ) as T;
   }
   if (Array.isArray(obj) && obj != null) {
     return obj.map(convertTemplateSyntax) as T;
   }
-  if (typeof obj === 'object' && obj != null) {
+  if (typeof obj === "object" && obj != null) {
     return Object.fromEntries(
       Object.entries(obj).map(([k, v]) => [k, convertTemplateSyntax(v)]),
     ) as T;
@@ -544,7 +545,7 @@ function deleteUndefinedAttrs<T>(obj: T): T {
   if (Array.isArray(obj) && obj != null) {
     return obj.map(deleteUndefinedAttrs) as T;
   }
-  if (typeof obj === 'object' && obj != null) {
+  if (typeof obj === "object" && obj != null) {
     return Object.fromEntries(
       Object.entries(obj)
         .filter(([, v]) => v !== undefined)

@@ -1,18 +1,19 @@
-import { invoke } from '@tauri-apps/api/core';
-import type { GrpcConnection, GrpcEvent } from '@yaakapp-internal/models';
+import { invoke } from "@tauri-apps/api/core";
+import type { GrpcConnection, GrpcEvent } from "@yaakapp-internal/models";
 import {
   grpcConnectionsAtom,
   grpcEventsAtom,
   mergeModelsInStore,
   replaceModelsInStore,
-} from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
-import { useEffect, useMemo } from 'react';
-import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
-import { activeRequestIdAtom } from './useActiveRequestId';
+} from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
+import { useEffect, useMemo } from "react";
+import { fireAndForget } from "../lib/fireAndForget";
+import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
+import { activeRequestIdAtom } from "./useActiveRequestId";
 
 const pinnedGrpcConnectionIdsAtom = atomWithKVStorage<Record<string, string | null>>(
-  'pinned-grpc-connection-ids',
+  "pinned-grpc-connection-ids",
   {},
 );
 
@@ -41,16 +42,16 @@ export const pinnedGrpcConnectionIdAtom = atom(
 );
 
 function recordKey(activeRequestId: string | null, latestConnection: GrpcConnection | null) {
-  return `${activeRequestId}-${latestConnection?.id ?? 'none'}`;
+  return `${activeRequestId}-${latestConnection?.id ?? "none"}`;
 }
 
 export const activeGrpcConnections = atom<GrpcConnection[]>((get) => {
-  const activeRequestId = get(activeRequestIdAtom) ?? 'n/a';
+  const activeRequestId = get(activeRequestIdAtom) ?? "n/a";
   return get(grpcConnectionsAtom).filter((c) => c.requestId === activeRequestId) ?? [];
 });
 
 export const activeGrpcConnectionAtom = atom<GrpcConnection | null>((get) => {
-  const activeRequestId = get(activeRequestIdAtom) ?? 'n/a';
+  const activeRequestId = get(activeRequestIdAtom) ?? "n/a";
   const activeConnections = get(activeGrpcConnections);
   const latestConnection = activeConnections[0] ?? null;
   const pinnedConnectionId = get(pinnedGrpcConnectionIdsAtom)[
@@ -64,13 +65,15 @@ export function useGrpcEvents(connectionId: string | null) {
 
   useEffect(() => {
     if (connectionId == null) {
-      replaceModelsInStore('grpc_event', []);
+      replaceModelsInStore("grpc_event", []);
       return;
     }
 
     // Fetch events from database, filtering out events from other connections and merging atomically
-    invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) =>
-      mergeModelsInStore('grpc_event', events, (e) => e.connectionId === connectionId),
+    fireAndForget(
+      invoke<GrpcEvent[]>("models_grpc_events", { connectionId }).then((events) =>
+        mergeModelsInStore("grpc_event", events, (e) => e.connectionId === connectionId),
+      ),
     );
   }, [connectionId]);
 

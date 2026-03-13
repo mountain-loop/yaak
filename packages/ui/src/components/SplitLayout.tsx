@@ -1,16 +1,16 @@
-import classNames from 'classnames';
-import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useMemo, useRef } from 'react';
-import { useLocalStorage } from 'react-use';
-import { useContainerSize } from '../hooks/useContainerSize';
-import { clamp } from '../lib/clamp';
-import type { ResizeHandleEvent } from './ResizeHandle';
-import { ResizeHandle } from './ResizeHandle';
+import classNames from "classnames";
+import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { useLocalStorage } from "react-use";
+import { useContainerSize } from "../hooks/useContainerSize";
+import { clamp } from "../lib/clamp";
+import type { ResizeHandleEvent } from "./ResizeHandle";
+import { ResizeHandle } from "./ResizeHandle";
 
-export type SplitLayoutLayout = 'responsive' | 'horizontal' | 'vertical';
+export type SplitLayoutLayout = "responsive" | "horizontal" | "vertical";
 
 export interface SlotProps {
-  orientation: 'horizontal' | 'vertical';
+  orientation: "horizontal" | "vertical";
   style: CSSProperties;
 }
 
@@ -28,9 +28,9 @@ interface Props {
 }
 
 const baseProperties = { minWidth: 0 };
-const areaL = { ...baseProperties, gridArea: 'left' };
-const areaR = { ...baseProperties, gridArea: 'right' };
-const areaD = { ...baseProperties, gridArea: 'drag' };
+const areaL = { ...baseProperties, gridArea: "left" };
+const areaR = { ...baseProperties, gridArea: "right" };
+const areaD = { ...baseProperties, gridArea: "drag" };
 
 const STACK_VERTICAL_WIDTH = 500;
 
@@ -40,7 +40,7 @@ export function SplitLayout({
   secondSlot,
   className,
   storageKey,
-  layout = 'responsive',
+  layout = "responsive",
   resizeHandleClassName,
   defaultRatio = 0.5,
   minHeightPx = 10,
@@ -59,7 +59,7 @@ export function SplitLayout({
 
   const size = useContainerSize(containerRef);
   const verticalBasedOnSize = size.width !== 0 && size.width < STACK_VERTICAL_WIDTH;
-  const vertical = layout !== 'horizontal' && (layout === 'vertical' || verticalBasedOnSize);
+  const vertical = layout !== "horizontal" && (layout === "vertical" || verticalBasedOnSize);
 
   const styles = useMemo<CSSProperties>(() => {
     return {
@@ -118,23 +118,23 @@ export function SplitLayout({
     <div
       ref={containerRef}
       style={styles}
-      className={classNames(className, 'grid w-full h-full overflow-hidden')}
+      className={classNames(className, "grid w-full h-full overflow-hidden")}
     >
-      {firstSlot({ style: areaL, orientation: vertical ? 'vertical' : 'horizontal' })}
+      {firstSlot({ style: areaL, orientation: vertical ? "vertical" : "horizontal" })}
       {secondSlot && (
         <>
           <ResizeHandle
             style={areaD}
             className={classNames(
               resizeHandleClassName,
-              vertical ? '-translate-y-1' : '-translate-x-1',
+              vertical ? "-translate-y-1" : "-translate-x-1",
             )}
             onResizeMove={handleResizeMove}
             onReset={handleReset}
-            side={vertical ? 'top' : 'left'}
+            side={vertical ? "top" : "left"}
             justify="center"
           />
-          {secondSlot({ style: areaR, orientation: vertical ? 'vertical' : 'horizontal' })}
+          {secondSlot({ style: areaR, orientation: vertical ? "vertical" : "horizontal" })}
         </>
       )}
     </div>

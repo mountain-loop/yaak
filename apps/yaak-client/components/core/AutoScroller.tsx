@@ -1,7 +1,7 @@
-import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
-import type { ReactElement, ReactNode, UIEvent } from 'react';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { IconButton } from './IconButton';
+import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+import type { ReactElement, ReactNode, UIEvent } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { IconButton } from "./IconButton";
 
 interface Props<T> {
   data: T[];
@@ -54,7 +54,7 @@ export function AutoScroller<T>({
   useLayoutEffect(() => {
     if (!autoScroll) return;
 
-    data.length; // Make linter happy. We want to refresh when length changes
+    void data.length; // Trigger refresh when length changes
 
     const el = containerRef.current;
     if (el == null) return;
@@ -87,8 +87,8 @@ export function AutoScroller<T>({
         <div
           style={{
             height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
+            width: "100%",
+            position: "relative",
           }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualItem) => {
@@ -98,10 +98,10 @@ export function AutoScroller<T>({
                 <div
                   key={virtualItem.key}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 0,
                     left: 0,
-                    width: '100%',
+                    width: "100%",
                     height: `${virtualItem.size}px`,
                     transform: `translateY(${virtualItem.start}px)`,
                   }}

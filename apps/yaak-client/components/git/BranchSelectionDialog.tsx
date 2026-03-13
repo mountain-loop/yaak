@@ -1,7 +1,7 @@
-import { HStack, VStack } from '@yaakapp-internal/ui';
-import { useState } from 'react';
-import { Button } from '../core/Button';
-import { Select } from '../core/Select';
+import { HStack, VStack } from "@yaakapp-internal/ui";
+import { useState } from "react";
+import { Button } from "../core/Button";
+import { Select } from "../core/Select";
 
 interface Props {
   branches: string[];
@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function BranchSelectionDialog({ branches, onCancel, onSelect, selectText }: Props) {
-  const [branch, setBranch] = useState<string>('__NONE__');
+  const [branch, setBranch] = useState<string>("__NONE__");
   return (
     <VStack
       className="mb-4"

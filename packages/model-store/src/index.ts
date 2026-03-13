@@ -19,9 +19,7 @@ function emptyStore<M extends ModelMap>(keys: (keyof M)[]): StoreData<M> {
   return data;
 }
 
-export function createModelStore<M extends ModelMap>(
-  modelTypes: (keyof M & string)[],
-) {
+export function createModelStore<M extends ModelMap>(modelTypes: (keyof M & string)[]) {
   const dataAtom = atom<StoreData<M>>(emptyStore<M>(modelTypes));
 
   /** Apply a single upsert or delete to the store. */

@@ -1,15 +1,15 @@
-import 'react-pdf/dist/Page/TextLayer.css';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import './PdfViewer.css';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { useEffect, useRef, useState } from 'react';
-import { Document, Page } from 'react-pdf';
-import { useContainerSize } from '@yaakapp-internal/ui';
+import "react-pdf/dist/Page/TextLayer.css";
+import "react-pdf/dist/Page/AnnotationLayer.css";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import "./PdfViewer.css";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import { useEffect, useRef, useState } from "react";
+import { Document, Page } from "react-pdf";
+import { useContainerSize } from "@yaakapp-internal/ui";
 
-import('react-pdf').then(({ pdfjs }) => {
+import("react-pdf").then(({ pdfjs }) => {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
+    "pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url,
   ).toString();
 });
@@ -20,8 +20,8 @@ interface Props {
 }
 
 const options = {
-  cMapUrl: '/cmaps/',
-  standardFontDataUrl: '/standard_fonts/',
+  cMapUrl: "/cmaps/",
+  standardFontDataUrl: "/standard_fonts/",
 };
 
 export function PdfViewer({ bodyPath, data }: Props) {

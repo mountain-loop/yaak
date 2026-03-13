@@ -1,15 +1,15 @@
-import { open } from '@tauri-apps/plugin-dialog';
-import { gitClone } from '@yaakapp-internal/git';
-import { Banner, VStack } from '@yaakapp-internal/ui';
-import { useState } from 'react';
-import { openWorkspaceFromSyncDir } from '../commands/openWorkspaceFromSyncDir';
-import { appInfo } from '../lib/appInfo';
-import { showErrorToast } from '../lib/toast';
-import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
-import { IconButton } from './core/IconButton';
-import { PlainInput } from './core/PlainInput';
-import { promptCredentials } from './git/credentials';
+import { open } from "@tauri-apps/plugin-dialog";
+import { gitClone } from "@yaakapp-internal/git";
+import { Banner, VStack } from "@yaakapp-internal/ui";
+import { useState } from "react";
+import { openWorkspaceFromSyncDir } from "../commands/openWorkspaceFromSyncDir";
+import { appInfo } from "../lib/appInfo";
+import { showErrorToast } from "../lib/toast";
+import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
+import { IconButton } from "./core/IconButton";
+import { PlainInput } from "./core/PlainInput";
+import { promptCredentials } from "./git/credentials";
 
 interface Props {
   hide: () => void;
@@ -17,15 +17,15 @@ interface Props {
 
 // Detect path separator from an existing path (defaults to /)
 function getPathSeparator(path: string): string {
-  return path.includes('\\') ? '\\' : '/';
+  return path.includes("\\") ? "\\" : "/";
 }
 
 export function CloneGitRepositoryDialog({ hide }: Props) {
-  const [url, setUrl] = useState<string>('');
+  const [url, setUrl] = useState<string>("");
   const [baseDirectory, setBaseDirectory] = useState<string>(appInfo.defaultProjectDir);
   const [directoryOverride, setDirectoryOverride] = useState<string | null>(null);
   const [hasSubdirectory, setHasSubdirectory] = useState(false);
-  const [subdirectory, setSubdirectory] = useState<string>('');
+  const [subdirectory, setSubdirectory] = useState<string>("");
   const [isCloning, setIsCloning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +38,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
 
   const handleSelectDirectory = async () => {
     const dir = await open({
-      title: 'Select Directory',
+      title: "Select Directory",
       directory: true,
       multiple: false,
     });
@@ -58,9 +58,9 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     try {
       const result = await gitClone(url, directory, promptCredentials);
 
-      if (result.type === 'needs_credentials') {
+      if (result.type === "needs_credentials") {
         setError(
-          result.error ?? 'Authentication failed. Please check your credentials and try again.',
+          result.error ?? "Authentication failed. Please check your credentials and try again.",
         );
         return;
       }
@@ -72,8 +72,8 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     } catch (err) {
       setError(String(err));
       showErrorToast({
-        id: 'git-clone-error',
-        title: 'Clone Failed',
+        id: "git-clone-error",
+        title: "Clone Failed",
         message: String(err),
       });
     } finally {
@@ -136,7 +136,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         disabled={!url || !directory || isCloning}
         isLoading={isCloning}
       >
-        {isCloning ? 'Cloning...' : 'Clone Repository'}
+        {isCloning ? "Cloning..." : "Clone Repository"}
       </Button>
     </VStack>
   );
@@ -156,5 +156,5 @@ function extractRepoName(url: string): string {
   if (sshMatch?.[1]) {
     return sshMatch[1];
   }
-  return '';
+  return "";
 }

@@ -1,10 +1,10 @@
-import type { FormInput, JsonPrimitive } from '@yaakapp-internal/plugins';
-import { HStack } from '@yaakapp-internal/ui';
-import type { FormEvent } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateId } from '../../lib/generateId';
-import { DynamicForm } from '../DynamicForm';
-import { Button } from './Button';
+import type { FormInput, JsonPrimitive } from "@yaakapp-internal/plugins";
+import { HStack } from "@yaakapp-internal/ui";
+import type { FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { generateId } from "../../lib/generateId";
+import { DynamicForm } from "../DynamicForm";
+import { Button } from "./Button";
 
 export interface PromptProps {
   inputs: FormInput[];
@@ -20,8 +20,8 @@ export function Prompt({
   onCancel,
   inputs: initialInputs,
   onResult,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText = "Confirm",
+  cancelText = "Cancel",
   onValuesChange,
   onInputsUpdated,
 }: PromptProps) {
@@ -55,10 +55,10 @@ export function Prompt({
       <DynamicForm inputs={inputs} onChange={setValue} data={value} stateKey={id} />
       <HStack space={2} justifyContent="end">
         <Button onClick={onCancel} variant="border" color="secondary">
-          {cancelText || 'Cancel'}
+          {cancelText || "Cancel"}
         </Button>
         <Button type="submit" color="primary">
-          {confirmText || 'Done'}
+          {confirmText || "Done"}
         </Button>
       </HStack>
     </form>

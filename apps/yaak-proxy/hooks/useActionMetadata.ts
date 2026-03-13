@@ -1,6 +1,6 @@
-import type { ActionInvocation, ActionMetadata } from '@yaakapp-internal/proxy-lib';
-import { useEffect, useState } from 'react';
-import { rpc } from '../lib/rpc';
+import type { ActionInvocation, ActionMetadata } from "@yaakapp-internal/proxy-lib";
+import { useEffect, useState } from "react";
+import { rpc } from "../lib/rpc";
 
 /** Look up metadata for a specific action invocation. */
 export function useActionMetadata(action: ActionInvocation): ActionMetadata | null {
@@ -23,7 +23,7 @@ let cachedActions: [ActionInvocation, ActionMetadata][] | null = null;
 /** Fetch and cache all action metadata. */
 async function getActions(): Promise<[ActionInvocation, ActionMetadata][]> {
   if (!cachedActions) {
-    const { actions } = await rpc('list_actions', {});
+    const { actions } = await rpc("list_actions", {});
     cachedActions = actions;
   }
   return cachedActions;

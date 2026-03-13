@@ -1,14 +1,14 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: too flexible for strict types
-import type { PartialImportResources } from '@yaakapp/api';
-import { convertId, convertTemplateSyntax, isJSObject } from './common';
+/* oxlint-disable no-explicit-any */
+import type { PartialImportResources } from "@yaakapp/api";
+import { convertId, convertTemplateSyntax, isJSObject } from "./common";
 
 export function convertInsomniaV5(parsed: any) {
   // Assert parsed is object
-  if (parsed == null || typeof parsed !== 'object') {
+  if (parsed == null || typeof parsed !== "object") {
     return null;
   }
 
-  if (!('collection' in parsed) || !Array.isArray(parsed.collection)) {
+  if (!("collection" in parsed) || !Array.isArray(parsed.collection)) {
     return null;
   }
 
@@ -22,12 +22,12 @@ export function convertInsomniaV5(parsed: any) {
   };
 
   // Import workspaces
-  const meta = ('meta' in parsed ? parsed.meta : {}) as Record<string, any>;
+  const meta = ("meta" in parsed ? parsed.meta : {}) as Record<string, any>;
   resources.workspaces.push({
-    id: convertId(meta.id ?? 'collection'),
-    createdAt: meta.created ? new Date(meta.created).toISOString().replace('Z', '') : undefined,
-    updatedAt: meta.modified ? new Date(meta.modified).toISOString().replace('Z', '') : undefined,
-    model: 'workspace',
+    id: convertId(meta.id ?? "collection"),
+    createdAt: meta.created ? new Date(meta.created).toISOString().replace("Z", "") : undefined,
+    updatedAt: meta.modified ? new Date(meta.modified).toISOString().replace("Z", "") : undefined,
+    model: "workspace",
     name: parsed.name,
     description: meta.description || undefined,
     ...importHeaders(parsed),
@@ -76,7 +76,7 @@ function importHttpRequest(
   r: any,
   workspaceId: string,
   parentId: string,
-): PartialImportResources['httpRequests'][0] {
+): PartialImportResources["httpRequests"][0] {
   const id = r.meta?.id ?? r._id;
   const created = r.meta?.created ?? r.created;
   const updated = r.meta?.modified ?? r.updated;
@@ -84,51 +84,51 @@ function importHttpRequest(
 
   let bodyType: string | null = null;
   let body = {};
-  if (r.body?.mimeType === 'application/octet-stream') {
-    bodyType = 'binary';
-    body = { filePath: r.body.fileName ?? '' };
-  } else if (r.body?.mimeType === 'application/x-www-form-urlencoded') {
-    bodyType = 'application/x-www-form-urlencoded';
+  if (r.body?.mimeType === "application/octet-stream") {
+    bodyType = "binary";
+    body = { filePath: r.body.fileName ?? "" };
+  } else if (r.body?.mimeType === "application/x-www-form-urlencoded") {
+    bodyType = "application/x-www-form-urlencoded";
     body = {
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
+        name: p.name ?? "",
+        value: p.value ?? "",
       })),
     };
-  } else if (r.body?.mimeType === 'multipart/form-data') {
-    bodyType = 'multipart/form-data';
+  } else if (r.body?.mimeType === "multipart/form-data") {
+    bodyType = "multipart/form-data";
     body = {
       form: (r.body.params ?? []).map((p: any) => ({
         enabled: !p.disabled,
-        name: p.name ?? '',
-        value: p.value ?? '',
+        name: p.name ?? "",
+        value: p.value ?? "",
         file: p.fileName ?? null,
       })),
     };
-  } else if (r.body?.mimeType === 'application/graphql') {
-    bodyType = 'graphql';
-    body = { text: r.body.text ?? '' };
-  } else if (r.body?.mimeType === 'application/json') {
-    bodyType = 'application/json';
-    body = { text: r.body.text ?? '' };
+  } else if (r.body?.mimeType === "application/graphql") {
+    bodyType = "graphql";
+    body = { text: r.body.text ?? "" };
+  } else if (r.body?.mimeType === "application/json") {
+    bodyType = "application/json";
+    body = { text: r.body.text ?? "" };
   }
 
   return {
     id: convertId(id),
     workspaceId: convertId(workspaceId),
-    createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-    updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : undefined,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : undefined,
     folderId: parentId === workspaceId ? null : convertId(parentId),
     sortPriority: sortKey,
-    model: 'http_request',
+    model: "http_request",
     name: r.name,
     description: r.meta?.description || undefined,
     url: r.url,
     urlParameters: (r.parameters ?? []).map((p: any) => ({
       enabled: !p.disabled,
-      name: p.name ?? '',
-      value: p.value ?? '',
+      name: p.name ?? "",
+      value: p.value ?? "",
     })),
     body,
     bodyType,
@@ -142,22 +142,22 @@ function importGrpcRequest(
   r: any,
   workspaceId: string,
   parentId: string,
-): PartialImportResources['grpcRequests'][0] {
+): PartialImportResources["grpcRequests"][0] {
   const id = r.meta?.id ?? r._id;
   const created = r.meta?.created ?? r.created;
   const updated = r.meta?.modified ?? r.updated;
   const sortKey = r.meta?.sortKey ?? r.sortKey;
 
-  const parts = r.protoMethodName.split('/').filter((p: any) => p !== '');
+  const parts = r.protoMethodName.split("/").filter((p: any) => p !== "");
   const service = parts[0] ?? null;
   const method = parts[1] ?? null;
 
   return {
-    model: 'grpc_request',
+    model: "grpc_request",
     id: convertId(id),
     workspaceId: convertId(workspaceId),
-    createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-    updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : undefined,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : undefined,
     folderId: parentId === workspaceId ? null : convertId(parentId),
     sortPriority: sortKey,
     name: r.name,
@@ -165,14 +165,14 @@ function importGrpcRequest(
     url: r.url,
     service,
     method,
-    message: r.body?.text ?? '',
+    message: r.body?.text ?? "",
     metadata: (r.metadata ?? [])
       .map((h: any) => ({
         enabled: !h.disabled,
-        name: h.name ?? '',
-        value: h.value ?? '',
+        name: h.name ?? "",
+        value: h.value ?? "",
       }))
-      .filter(({ name, value }: any) => name !== '' || value !== ''),
+      .filter(({ name, value }: any) => name !== "" || value !== ""),
   };
 }
 
@@ -180,24 +180,24 @@ function importWebsocketRequest(
   r: any,
   workspaceId: string,
   parentId: string,
-): PartialImportResources['websocketRequests'][0] {
+): PartialImportResources["websocketRequests"][0] {
   const id = r.meta?.id ?? r._id;
   const created = r.meta?.created ?? r.created;
   const updated = r.meta?.modified ?? r.updated;
   const sortKey = r.meta?.sortKey ?? r.sortKey;
 
   return {
-    model: 'websocket_request',
+    model: "websocket_request",
     id: convertId(id),
     workspaceId: convertId(workspaceId),
-    createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-    updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : undefined,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : undefined,
     folderId: parentId === workspaceId ? null : convertId(parentId),
     sortPriority: sortKey,
     name: r.name,
     description: r.description || undefined,
     url: r.url,
-    message: r.body?.text ?? '',
+    message: r.body?.text ?? "",
     ...importHeaders(r),
     ...importAuthentication(r),
   };
@@ -207,23 +207,23 @@ function importHeaders(obj: any) {
   const headers = (obj.headers ?? [])
     .map((h: any) => ({
       enabled: !h.disabled,
-      name: h.name ?? '',
-      value: h.value ?? '',
+      name: h.name ?? "",
+      value: h.value ?? "",
     }))
-    .filter(({ name, value }: any) => name !== '' || value !== '');
+    .filter(({ name, value }: any) => name !== "" || value !== "");
   return { headers } as const;
 }
 
 function importAuthentication(obj: any) {
   let authenticationType: string | null = null;
   let authentication = {};
-  if (obj.authentication?.type === 'bearer') {
-    authenticationType = 'bearer';
+  if (obj.authentication?.type === "bearer") {
+    authenticationType = "bearer";
     authentication = {
       token: obj.authentication.token,
     };
-  } else if (obj.authentication?.type === 'basic') {
-    authenticationType = 'basic';
+  } else if (obj.authentication?.type === "basic") {
+    authenticationType = "basic";
     authentication = {
       username: obj.authentication.username,
       password: obj.authentication.password,
@@ -238,40 +238,40 @@ function importFolder(
   workspaceId: string,
   parentId: string,
 ): {
-  folder: PartialImportResources['folders'][0];
-  environment: PartialImportResources['environments'][0] | null;
+  folder: PartialImportResources["folders"][0];
+  environment: PartialImportResources["environments"][0] | null;
 } {
   const id = f.meta?.id ?? f._id;
   const created = f.meta?.created ?? f.created;
   const updated = f.meta?.modified ?? f.updated;
   const sortKey = f.meta?.sortKey ?? f.sortKey;
 
-  let environment: PartialImportResources['environments'][0] | null = null;
+  let environment: PartialImportResources["environments"][0] | null = null;
   if (Object.keys(f.environment ?? {}).length > 0) {
     environment = {
       id: convertId(`${id}folder`),
-      createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-      updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+      createdAt: created ? new Date(created).toISOString().replace("Z", "") : undefined,
+      updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : undefined,
       workspaceId: convertId(workspaceId),
       public: true,
-      parentModel: 'folder',
+      parentModel: "folder",
       parentId: convertId(id),
-      model: 'environment',
-      name: 'Folder Environment',
+      model: "environment",
+      name: "Folder Environment",
       variables: Object.entries(f.environment ?? {}).map(([name, value]) => ({
         enabled: true,
         name,
-        value: `${value}`,
+        value: String(value),
       })),
     };
   }
 
   return {
     folder: {
-      model: 'folder',
+      model: "folder",
       id: convertId(id),
-      createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-      updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+      createdAt: created ? new Date(created).toISOString().replace("Z", "") : undefined,
+      updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : undefined,
       folderId: parentId === workspaceId ? null : convertId(parentId),
       sortPriority: sortKey,
       workspaceId: convertId(workspaceId),
@@ -288,7 +288,7 @@ function importEnvironment(
   e: any,
   workspaceId: string,
   isParent?: boolean,
-): PartialImportResources['environments'][0] {
+): PartialImportResources["environments"][0] {
   const id = e.meta?.id ?? e._id;
   const created = e.meta?.created ?? e.created;
   const updated = e.meta?.modified ?? e.updated;
@@ -296,19 +296,19 @@ function importEnvironment(
 
   return {
     id: convertId(id),
-    createdAt: created ? new Date(created).toISOString().replace('Z', '') : undefined,
-    updatedAt: updated ? new Date(updated).toISOString().replace('Z', '') : undefined,
+    createdAt: created ? new Date(created).toISOString().replace("Z", "") : undefined,
+    updatedAt: updated ? new Date(updated).toISOString().replace("Z", "") : undefined,
     workspaceId: convertId(workspaceId),
     public: !e.isPrivate,
     sortPriority: sortKey,
-    parentModel: isParent ? 'workspace' : 'environment',
+    parentModel: isParent ? "workspace" : "environment",
     parentId: null,
-    model: 'environment',
+    model: "environment",
     name: e.name,
     variables: Object.entries(e.data ?? {}).map(([name, value]) => ({
       enabled: true,
       name,
-      value: `${value}`,
+      value: String(value),
     })),
   };
 }

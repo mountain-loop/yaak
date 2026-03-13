@@ -1,14 +1,14 @@
-import classNames from 'classnames';
-import { atom, useAtom } from 'jotai';
-import type { HTMLAttributes, ReactNode } from 'react';
-import { useMemo } from 'react';
-import { atomWithKVStorage } from '../../lib/atoms/atomWithKVStorage';
-import type { BannerProps } from '@yaakapp-internal/ui';
-import { Banner } from '@yaakapp-internal/ui';
+import classNames from "classnames";
+import { atom, useAtom } from "jotai";
+import type { HTMLAttributes, ReactNode } from "react";
+import { useMemo } from "react";
+import { atomWithKVStorage } from "../../lib/atoms/atomWithKVStorage";
+import type { BannerProps } from "@yaakapp-internal/ui";
+import { Banner } from "@yaakapp-internal/ui";
 
 interface Props extends HTMLAttributes<HTMLDetailsElement> {
   summary: ReactNode;
-  color?: BannerProps['color'];
+  color?: BannerProps["color"];
   defaultOpen?: boolean;
   storageKey?: string;
 }
@@ -26,7 +26,7 @@ export function DetailsBanner({
   const openAtom = useMemo(
     () =>
       storageKey
-        ? atomWithKVStorage<boolean>(['details_banner', storageKey], defaultOpen ?? false)
+        ? atomWithKVStorage<boolean>(["details_banner", storageKey], defaultOpen ?? false)
         : atom(defaultOpen ?? false),
     [storageKey],
   );
@@ -45,10 +45,10 @@ export function DetailsBanner({
         <summary className="!cursor-default !select-none list-none flex items-center gap-3 focus:outline-none opacity-70">
           <div
             className={classNames(
-              'transition-transform',
-              'group-open:rotate-90',
-              'w-0 h-0 border-t-[0.3em] border-b-[0.3em] border-l-[0.5em] border-r-0',
-              'border-t-transparent border-b-transparent border-l-text-subtle',
+              "transition-transform",
+              "group-open:rotate-90",
+              "w-0 h-0 border-t-[0.3em] border-b-[0.3em] border-l-[0.5em] border-r-0",
+              "border-t-transparent border-b-transparent border-l-text-subtle",
             )}
           />
           {summary}

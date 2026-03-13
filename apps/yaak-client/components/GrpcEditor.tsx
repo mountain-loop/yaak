@@ -1,27 +1,27 @@
-import { linter } from '@codemirror/lint';
-import type { EditorView } from '@codemirror/view';
-import { jsoncLanguage } from '@shopify/lang-jsonc';
-import type { GrpcRequest } from '@yaakapp-internal/models';
-import { FormattedError, InlineCode, VStack } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
+import { linter } from "@codemirror/lint";
+import type { EditorView } from "@codemirror/view";
+import { jsoncLanguage } from "@shopify/lang-jsonc";
+import type { GrpcRequest } from "@yaakapp-internal/models";
+import { FormattedError, InlineCode, VStack } from "@yaakapp-internal/ui";
+import classNames from "classnames";
 import {
   handleRefresh,
   jsonCompletion,
   jsonSchemaLinter,
   stateExtensions,
   updateSchema,
-} from 'codemirror-json-schema';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ReflectResponseService } from '../hooks/useGrpc';
-import { showAlert } from '../lib/alert';
-import { showDialog } from '../lib/dialog';
-import { pluralizeCount } from '../lib/pluralize';
-import { Button } from './core/Button';
-import type { EditorProps } from './core/Editor/Editor';
-import { Editor } from './core/Editor/LazyEditor';
-import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
+} from "codemirror-json-schema";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReflectResponseService } from "../hooks/useGrpc";
+import { showAlert } from "../lib/alert";
+import { showDialog } from "../lib/dialog";
+import { pluralizeCount } from "../lib/pluralize";
+import { Button } from "./core/Button";
+import type { EditorProps } from "./core/Editor/Editor";
+import { Editor } from "./core/Editor/LazyEditor";
+import { GrpcProtoSelectionDialog } from "./GrpcProtoSelectionDialog";
 
-type Props = Pick<EditorProps, 'heightMode' | 'onChange' | 'className' | 'forceUpdateKey'> & {
+type Props = Pick<EditorProps, "heightMode" | "onChange" | "className" | "forceUpdateKey"> & {
   services: ReflectResponseService[] | null;
   reflectionError?: string;
   reflectionLoading?: boolean;
@@ -55,9 +55,9 @@ export function GrpcEditor({
 
     const s = services.find((s) => s.name === request.service);
     if (s == null) {
-      console.log('Failed to find service', { service: request.service, services });
+      console.log("Failed to find service", { service: request.service, services });
       showAlert({
-        id: 'grpc-find-service-error',
+        id: "grpc-find-service-error",
         title: "Couldn't Find Service",
         body: (
           <>
@@ -70,13 +70,13 @@ export function GrpcEditor({
 
     const schema = s.methods.find((m) => m.name === request.method)?.schema;
     if (request.method != null && schema == null) {
-      console.log('Failed to find method', { method: request.method, methods: s?.methods });
+      console.log("Failed to find method", { method: request.method, methods: s?.methods });
       showAlert({
-        id: 'grpc-find-schema-error',
+        id: "grpc-find-schema-error",
         title: "Couldn't Find Method",
         body: (
           <>
-            Failed to find method <InlineCode>{request.method}</InlineCode> for{' '}
+            Failed to find method <InlineCode>{request.method}</InlineCode> for{" "}
             <InlineCode>{request.service}</InlineCode> in schema
           </>
         ),
@@ -92,12 +92,12 @@ export function GrpcEditor({
       updateSchema(editorView, JSON.parse(schema));
     } catch (err) {
       showAlert({
-        id: 'grpc-parse-schema-error',
-        title: 'Failed to Parse Schema',
+        id: "grpc-parse-schema-error",
+        title: "Failed to Parse Schema",
         body: (
           <VStack space={4}>
             <p>
-              For service <InlineCode>{request.service}</InlineCode> and method{' '}
+              For service <InlineCode>{request.service}</InlineCode> and method{" "}
               <InlineCode>{request.method}</InlineCode>
             </p>
             <FormattedError>{String(err)}</FormattedError>
@@ -126,39 +126,39 @@ export function GrpcEditor({
 
   const actions = useMemo(
     () => [
-      <div key="reflection" className={classNames(services == null && '!opacity-100')}>
+      <div key="reflection" className={classNames(services == null && "!opacity-100")}>
         <Button
           size="xs"
           color={
             reflectionLoading
-              ? 'secondary'
+              ? "secondary"
               : reflectionUnavailable
-                ? 'info'
+                ? "info"
                 : reflectionError
-                  ? 'danger'
-                  : 'secondary'
+                  ? "danger"
+                  : "secondary"
           }
           isLoading={reflectionLoading}
           onClick={() => {
             showDialog({
-              title: 'Configure Schema',
-              size: 'md',
-              id: 'reflection-failed',
+              title: "Configure Schema",
+              size: "md",
+              id: "reflection-failed",
               render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
             });
           }}
         >
           {reflectionLoading
-            ? 'Inspecting Schema'
+            ? "Inspecting Schema"
             : reflectionUnavailable
-              ? 'Select Proto Files'
+              ? "Select Proto Files"
               : reflectionError
-                ? 'Server Error'
+                ? "Server Error"
                 : protoFiles.length > 0
-                  ? pluralizeCount('File', protoFiles.length)
+                  ? pluralizeCount("File", protoFiles.length)
                   : services != null && protoFiles.length === 0
-                    ? 'Schema Detected'
-                    : 'Select Schema'}
+                    ? "Schema Detected"
+                    : "Select Schema"}
         </Button>
       </div>,
     ],

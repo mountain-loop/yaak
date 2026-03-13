@@ -1,10 +1,10 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { useMemo } from 'react';
-import { CountBadge } from './core/CountBadge';
-import { DetailsBanner } from './core/DetailsBanner';
-import { IconButton } from './core/IconButton';
-import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { useMemo } from "react";
+import { CountBadge } from "./core/CountBadge";
+import { DetailsBanner } from "./core/DetailsBanner";
+import { IconButton } from "./core/IconButton";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
 
 interface Props {
   response: HttpResponse;
@@ -62,7 +62,7 @@ export function ResponseHeaders({ response }: Props) {
         ) : (
           <KeyValueRows>
             {requestHeaders.map((h, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              // oxlint-disable-next-line react/no-array-index-key
               <KeyValueRow labelColor="primary" key={i} label={h.name}>
                 {h.value}
               </KeyValueRow>
@@ -84,7 +84,7 @@ export function ResponseHeaders({ response }: Props) {
         ) : (
           <KeyValueRows>
             {responseHeaders.map((h, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              // oxlint-disable-next-line react/no-array-index-key
               <KeyValueRow labelColor="info" key={i} label={h.name}>
                 {h.value}
               </KeyValueRow>

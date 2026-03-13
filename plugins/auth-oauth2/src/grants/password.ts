@@ -1,8 +1,8 @@
-import type { Context } from '@yaakapp/api';
-import { fetchAccessToken } from '../fetchAccessToken';
-import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
-import type { AccessToken, TokenStoreArgs } from '../store';
-import { storeToken } from '../store';
+import type { Context } from "@yaakapp/api";
+import { fetchAccessToken } from "../fetchAccessToken";
+import { getOrRefreshAccessToken } from "../getOrRefreshAccessToken";
+import type { AccessToken, TokenStoreArgs } from "../store";
+import { storeToken } from "../store";
 
 export async function getPassword(
   ctx: Context,
@@ -50,11 +50,11 @@ export async function getPassword(
     clientSecret,
     scope,
     audience,
-    grantType: 'password',
+    grantType: "password",
     credentialsInBody,
     params: [
-      { name: 'username', value: username },
-      { name: 'password', value: password },
+      { name: "username", value: username },
+      { name: "password", value: password },
     ],
   });
 

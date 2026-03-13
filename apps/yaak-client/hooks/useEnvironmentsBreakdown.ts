@@ -1,13 +1,13 @@
-import { environmentsAtom } from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
+import { environmentsAtom } from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
 
 export const environmentsBreakdownAtom = atom((get) => {
   const allEnvironments = get(environmentsAtom);
-  const baseEnvironments = allEnvironments.filter((e) => e.parentModel === 'workspace') ?? [];
+  const baseEnvironments = allEnvironments.filter((e) => e.parentModel === "workspace") ?? [];
 
   const subEnvironments =
     allEnvironments
-      .filter((e) => e.parentModel === 'environment')
+      .filter((e) => e.parentModel === "environment")
       ?.sort((a, b) => {
         if (a.sortPriority === b.sortPriority) {
           return a.updatedAt > b.updatedAt ? 1 : -1;
@@ -16,7 +16,7 @@ export const environmentsBreakdownAtom = atom((get) => {
       }) ?? [];
 
   const folderEnvironments =
-    allEnvironments.filter((e) => e.parentModel === 'folder' && e.parentId != null) ?? [];
+    allEnvironments.filter((e) => e.parentModel === "folder" && e.parentId != null) ?? [];
 
   const baseEnvironment = baseEnvironments[0] ?? null;
   const otherBaseEnvironments = baseEnvironments.filter((e) => e.id !== baseEnvironment?.id) ?? [];

@@ -1,6 +1,6 @@
-import type { Environment } from '@yaakapp-internal/models';
-import { showColorPicker } from '../lib/showColorPicker';
-import { ColorIndicator } from './ColorIndicator';
+import type { Environment } from "@yaakapp-internal/models";
+import { showColorPicker } from "../lib/showColorPicker";
+import { ColorIndicator } from "./ColorIndicator";
 
 export function EnvironmentColorIndicator({
   environment,

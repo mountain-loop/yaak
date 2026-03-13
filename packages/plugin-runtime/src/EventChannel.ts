@@ -1,4 +1,4 @@
-import type { InternalEvent } from '@yaakapp/api';
+import type { InternalEvent } from "@yaakapp/api";
 
 export class EventChannel {
   #listeners = new Set<(event: InternalEvent) => void>();

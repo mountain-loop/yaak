@@ -1,22 +1,27 @@
-import type { DragMoveEvent } from '@dnd-kit/core';
-import { useDndContext, useDndMonitor, useDraggable, useDroppable } from '@dnd-kit/core';
-import classNames from 'classnames';
-import { useAtomValue, useStore } from 'jotai';
+import type { DragMoveEvent } from "@dnd-kit/core";
+import { useDndContext, useDndMonitor, useDraggable, useDroppable } from "@dnd-kit/core";
+import classNames from "classnames";
+import { useAtomValue, useStore } from "jotai";
 import type {
   MouseEvent,
   PointerEvent,
   FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeSideForDragMove } from '../../lib/dnd';
-import { Icon } from '../Icon';
-import { isLastFocusedFamily, isSelectedFamily } from './atoms';
-import { useCollapsedAtom, useIsAncestorCollapsed, useIsCollapsed, useSetCollapsed } from './context';
-import type { TreeNode } from './common';
-import { getNodeKey } from './common';
-import type { TreeProps } from './Tree';
-import { TreeIndentGuide } from './TreeIndentGuide';
+} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { computeSideForDragMove } from "../../lib/dnd";
+import { Icon } from "../Icon";
+import { isLastFocusedFamily, isSelectedFamily } from "./atoms";
+import {
+  useCollapsedAtom,
+  useIsAncestorCollapsed,
+  useIsCollapsed,
+  useSetCollapsed,
+} from "./context";
+import type { TreeNode } from "./common";
+import { getNodeKey } from "./common";
+import type { TreeProps } from "./Tree";
+import { TreeIndentGuide } from "./TreeIndentGuide";
 
 export interface TreeItemClickEvent {
   shiftKey: boolean;
@@ -26,7 +31,13 @@ export interface TreeItemClickEvent {
 
 export type TreeItemProps<T extends { id: string }> = Pick<
   TreeProps<T>,
-  'ItemInner' | 'ItemLeftSlotInner' | 'ItemRightSlot' | 'treeId' | 'getEditOptions' | 'getItemKey' | 'renderContextMenu'
+  | "ItemInner"
+  | "ItemLeftSlotInner"
+  | "ItemRightSlot"
+  | "treeId"
+  | "getEditOptions"
+  | "getItemKey"
+  | "renderContextMenu"
 > & {
   node: TreeNode<T>;
   className?: string;
@@ -69,7 +80,7 @@ function TreeItem_<T extends { id: string }>({
   const setCollapsed = useSetCollapsed(node.item.id);
   const isLastSelected = useAtomValue(isLastFocusedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
-  const [dropHover, setDropHover] = useState<null | 'drop' | 'animate'>(null);
+  const [dropHover, setDropHover] = useState<null | "drop" | "animate">(null);
   const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
   const handle = useMemo<TreeItemHandle>(
     () => ({
@@ -89,7 +100,7 @@ function TreeItem_<T extends { id: string }>({
         return listItemRef.current.getBoundingClientRect();
       },
       scrollIntoView: () => {
-        listItemRef.current?.scrollIntoView({ block: 'nearest' });
+        listItemRef.current?.scrollIntoView({ block: "nearest" });
       },
     }),
     [editing, getEditOptions],
@@ -154,13 +165,13 @@ function TreeItem_<T extends { id: string }>({
     async (e: ReactKeyboardEvent<HTMLInputElement>) => {
       e.stopPropagation(); // Don't trigger other tree keys (like arrows)
       switch (e.key) {
-        case 'Enter':
+        case "Enter":
           if (editing) {
             e.preventDefault();
             await handleSubmitNameEdit(e.currentTarget);
           }
           break;
-        case 'Escape':
+        case "Escape":
           if (editing) {
             e.preventDefault();
             setEditing(false);
@@ -201,8 +212,8 @@ function TreeItem_<T extends { id: string }>({
       const hasChildren = (node.children?.length ?? 0) > 0;
       const collapsedMap = store.get(collapsedAtom);
       const itemCollapsed = !!collapsedMap[node.item.id];
-      if (itemCollapsed && isFolder && hasChildren && side === 'after') {
-        setDropHover('animate');
+      if (itemCollapsed && isFolder && hasChildren && side === "after") {
+        setDropHover("animate");
         clearTimeout(startedHoverTimeout.current);
         startedHoverTimeout.current = setTimeout(() => {
           store.set(collapsedAtom, { ...store.get(collapsedAtom), [node.item.id]: false });
@@ -214,8 +225,8 @@ function TreeItem_<T extends { id: string }>({
             );
           });
         }, HOVER_CLOSED_FOLDER_DELAY);
-      } else if (isFolder && !hasChildren && side === 'after') {
-        setDropHover('drop');
+      } else if (isFolder && !hasChildren && side === "after") {
+        setDropHover("drop");
       } else {
         clearDropHover();
       }
@@ -231,7 +242,7 @@ function TreeItem_<T extends { id: string }>({
 
       // Set data attribute on the list item to preserve active state
       if (listItemRef.current) {
-        listItemRef.current.setAttribute('data-context-menu-open', 'true');
+        listItemRef.current.setAttribute("data-context-menu-open", "true");
       }
 
       const items = await getContextMenu(node.item);
@@ -243,7 +254,7 @@ function TreeItem_<T extends { id: string }>({
   const handleCloseContextMenu = useCallback(() => {
     // Remove data attribute when context menu closes
     if (listItemRef.current) {
-      listItemRef.current.removeAttribute('data-context-menu-open');
+      listItemRef.current.removeAttribute("data-context-menu-open");
     }
     setShowContextMenu(null);
   }, []);
@@ -283,20 +294,20 @@ function TreeItem_<T extends { id: string }>({
       onContextMenu={handleContextMenu}
       className={classNames(
         className,
-        'tree-item',
-        'h-sm',
-        'grid grid-cols-[auto_minmax(0,1fr)]',
-        editing && 'ring-1 focus-within:ring-focus',
-        dropHover != null && 'relative z-10 ring-2 ring-primary',
-        dropHover === 'animate' && 'animate-blinkRing',
-        isSelected && 'selected',
+        "tree-item",
+        "h-sm",
+        "grid grid-cols-[auto_minmax(0,1fr)]",
+        editing && "ring-1 focus-within:ring-focus",
+        dropHover != null && "relative z-10 ring-2 ring-primary",
+        dropHover === "animate" && "animate-blinkRing",
+        isSelected && "selected",
       )}
     >
       <TreeIndentGuide treeId={treeId} depth={depth} ancestorIds={ancestorIds} />
       <div
         className={classNames(
-          'text-text-subtle',
-          'grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 items-center rounded-md',
+          "text-text-subtle",
+          "grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2 items-center rounded-md",
         )}
       >
         {showContextMenu &&
@@ -313,12 +324,12 @@ function TreeItem_<T extends { id: string }>({
             onClick={toggleCollapsed}
           >
             <Icon
-              icon={node.children.length === 0 ? 'dot' : 'chevron_right'}
+              icon={node.children.length === 0 ? "dot" : "chevron_right"}
               className={classNames(
-                'transition-transform text-text-subtlest',
-                'ml-auto',
-                'w-[1rem] h-[1rem]',
-                !isCollapsed && node.children.length > 0 && 'rotate-90',
+                "transition-transform text-text-subtlest",
+                "ml-auto",
+                "w-[1rem] h-[1rem]",
+                !isCollapsed && node.children.length > 0 && "rotate-90",
               )}
             />
           </button>

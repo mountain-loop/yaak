@@ -96,16 +96,12 @@ export class YaakColor {
   }
 
   css(): string {
-    const [r, g, b] = parseColor(
-      `hsl(${this.hue},${this.saturation}%,${this.lightness}%)`,
-    ).rgb;
+    const [r, g, b] = parseColor(`hsl(${this.hue},${this.saturation}%,${this.lightness}%)`).rgb;
     return rgbaToHex(r, g, b, this.alpha);
   }
 
   hexNoAlpha(): string {
-    const [r, g, b] = parseColor(
-      `hsl(${this.hue},${this.saturation}%,${this.lightness}%)`,
-    ).rgb;
+    const [r, g, b] = parseColor(`hsl(${this.hue},${this.saturation}%,${this.lightness}%)`).rgb;
     return rgbaToHexNoAlpha(r, g, b);
   }
 

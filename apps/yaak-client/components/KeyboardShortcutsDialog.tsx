@@ -1,5 +1,5 @@
-import { hotkeyActions } from '../hooks/useHotKey';
-import { HotkeyList } from './core/HotkeyList';
+import { hotkeyActions } from "../hooks/useHotKey";
+import { HotkeyList } from "./core/HotkeyList";
 
 export function KeyboardShortcutsDialog() {
   return (

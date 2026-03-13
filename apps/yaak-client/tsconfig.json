@@ -9,7 +9,7 @@
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
@@ -19,10 +19,10 @@
       "@yaakapp-internal/theme": ["../../packages/theme/src/index.ts"],
       "@yaakapp-internal/theme/*": ["../../packages/theme/src/*"],
       "@yaakapp-internal/ui": ["../../packages/ui/src/index.ts"],
-      "@yaakapp-internal/ui/*": ["../../packages/ui/src/*"],
-    },
+      "@yaakapp-internal/ui/*": ["../../packages/ui/src/*"]
+    }
   },
   "include": ["."],
   "exclude": ["vite.config.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }],
+  "references": [{ "path": "./tsconfig.node.json" }]
 }

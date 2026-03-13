@@ -1,4 +1,4 @@
-import { VStack } from '@yaakapp-internal/ui';
+import { VStack } from "@yaakapp-internal/ui";
 
 export function EncryptionHelp() {
   return (

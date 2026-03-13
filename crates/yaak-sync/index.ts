@@ -17,11 +17,7 @@ export async function calculateSyncFsOnly(dir: string) {
   return invoke<SyncOp[]>("cmd_sync_calculate_fs", { dir });
 }
 
-export async function applySync(
-  workspaceId: string,
-  syncDir: string,
-  syncOps: SyncOp[],
-) {
+export async function applySync(workspaceId: string, syncDir: string, syncOps: SyncOp[]) {
   return invoke<void>("cmd_sync_apply", {
     workspaceId,
     syncDir,
@@ -63,12 +59,7 @@ function unlistenToWatcher(unlistenEvent: string) {
 }
 
 function getWatchKeys() {
-  return (
-    sessionStorage
-      .getItem("workspace-file-watchers")
-      ?.split(",")
-      .filter(Boolean) ?? []
-  );
+  return sessionStorage.getItem("workspace-file-watchers")?.split(",").filter(Boolean) ?? [];
 }
 
 function setWatchKeys(keys: string[]) {

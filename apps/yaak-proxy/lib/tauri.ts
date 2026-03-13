@@ -1,7 +1,7 @@
-import { invoke } from '@tauri-apps/api/core';
-import { listen as tauriListen } from '@tauri-apps/api/event';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { type as tauriOsType } from '@tauri-apps/plugin-os';
+import { invoke } from "@tauri-apps/api/core";
+import { listen as tauriListen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { type as tauriOsType } from "@tauri-apps/plugin-os";
 
 /** Call a Tauri command. */
 export function command<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

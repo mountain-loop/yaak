@@ -1,18 +1,18 @@
-import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { patchModel, settingsAtom } from '@yaakapp-internal/models';
-import { Heading, VStack } from '@yaakapp-internal/ui';
-import { useAtomValue } from 'jotai';
-import { activeWorkspaceAtom } from '../../hooks/useActiveWorkspace';
-import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
-import { appInfo } from '../../lib/appInfo';
-import { revealInFinderText } from '../../lib/reveal';
-import { CargoFeature } from '../CargoFeature';
-import { Checkbox } from '../core/Checkbox';
-import { IconButton } from '../core/IconButton';
-import { KeyValueRow, KeyValueRows } from '../core/KeyValueRow';
-import { PlainInput } from '../core/PlainInput';
-import { Select } from '../core/Select';
-import { Separator } from '../core/Separator';
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { patchModel, settingsAtom } from "@yaakapp-internal/models";
+import { Heading, VStack } from "@yaakapp-internal/ui";
+import { useAtomValue } from "jotai";
+import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
+import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
+import { appInfo } from "../../lib/appInfo";
+import { revealInFinderText } from "../../lib/reveal";
+import { CargoFeature } from "../CargoFeature";
+import { Checkbox } from "../core/Checkbox";
+import { IconButton } from "../core/IconButton";
+import { KeyValueRow, KeyValueRows } from "../core/KeyValueRow";
+import { PlainInput } from "../core/PlainInput";
+import { Select } from "../core/Select";
+import { Separator } from "../core/Separator";
 
 export function SettingsGeneral() {
   const workspace = useAtomValue(activeWorkspaceAtom);
@@ -40,8 +40,8 @@ export function SettingsGeneral() {
             value={settings.updateChannel}
             onChange={(updateChannel) => patchModel(settings, { updateChannel })}
             options={[
-              { label: 'Stable', value: 'stable' },
-              { label: 'Beta (more frequent)', value: 'beta' },
+              { label: "Stable", value: "stable" },
+              { label: "Beta (more frequent)", value: "beta" },
             ]}
           />
           <IconButton
@@ -56,15 +56,15 @@ export function SettingsGeneral() {
 
         <Select
           name="autoupdate"
-          value={settings.autoupdate ? 'auto' : 'manual'}
+          value={settings.autoupdate ? "auto" : "manual"}
           label="Update Behavior"
           labelPosition="left"
           size="sm"
           labelClassName="w-[14rem]"
-          onChange={(v) => patchModel(settings, { autoupdate: v === 'auto' })}
+          onChange={(v) => patchModel(settings, { autoupdate: v === "auto" })}
           options={[
-            { label: 'Automatic', value: 'auto' },
-            { label: 'Manual', value: 'manual' },
+            { label: "Automatic", value: "auto" },
+            { label: "Manual", value: "manual" },
           ]}
         />
         <Checkbox
@@ -96,7 +96,7 @@ export function SettingsGeneral() {
       <Separator className="my-4" />
 
       <Heading level={2}>
-        Workspace{' '}
+        Workspace{" "}
         <div className="inline-block ml-1 bg-surface-highlight px-2 py-0.5 rounded text text-shrink">
           {workspace.name}
         </div>

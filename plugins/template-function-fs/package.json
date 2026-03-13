@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-fs",
   "displayName": "File System Template Functions",
-  "description": "Template functions for working with the file system",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for working with the file system",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

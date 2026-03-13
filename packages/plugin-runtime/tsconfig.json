@@ -10,11 +10,7 @@
     "moduleResolution": "node16",
     "resolveJsonModule": true,
     "sourceMap": true,
-    "outDir": "build",
-    "baseUrl": ".",
-    "paths": {
-      "*": ["node_modules/*", "src/types/*"]
-    }
+    "outDir": "build"
   },
   "include": ["src"]
 }

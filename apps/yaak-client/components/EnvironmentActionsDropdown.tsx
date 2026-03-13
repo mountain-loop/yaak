@@ -1,19 +1,19 @@
-import classNames from 'classnames';
-import { memo, useMemo } from 'react';
-import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
-import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
-import { editEnvironment } from '../lib/editEnvironment';
-import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import type { ButtonProps } from './core/Button';
-import { Button } from './core/Button';
-import type { DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
-import { Icon } from '@yaakapp-internal/ui';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
+import classNames from "classnames";
+import { memo, useMemo } from "react";
+import { useActiveEnvironment } from "../hooks/useActiveEnvironment";
+import { useEnvironmentsBreakdown } from "../hooks/useEnvironmentsBreakdown";
+import { editEnvironment } from "../lib/editEnvironment";
+import { setWorkspaceSearchParams } from "../lib/setWorkspaceSearchParams";
+import type { ButtonProps } from "./core/Button";
+import { Button } from "./core/Button";
+import type { DropdownItem } from "./core/Dropdown";
+import { Dropdown } from "./core/Dropdown";
+import { Icon } from "@yaakapp-internal/ui";
+import { EnvironmentColorIndicator } from "./EnvironmentColorIndicator";
 
 type Props = {
   className?: string;
-} & Pick<ButtonProps, 'forDropdown' | 'leftSlot'>;
+} & Pick<ButtonProps, "forDropdown" | "leftSlot">;
 
 export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdown({
   className,
@@ -41,11 +41,11 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         [activeEnvironment?.id],
       ),
       ...((subEnvironments.length > 0
-        ? [{ type: 'separator', label: 'Environments' }]
+        ? [{ type: "separator", label: "Environments" }]
         : []) as DropdownItem[]),
       {
-        label: 'Manage Environments',
-        hotKeyAction: 'environment_editor.toggle',
+        label: "Manage Environments",
+        hotKeyAction: "environment_editor.toggle",
         leftSlot: <Icon icon="box" />,
         onSelect: () => editEnvironment(activeEnvironment),
       },
@@ -62,8 +62,8 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         size="sm"
         className={classNames(
           className,
-          'text !px-2 truncate',
-          !activeEnvironment && !hasBaseVars && 'text-text-subtlest italic',
+          "text !px-2 truncate",
+          !activeEnvironment && !hasBaseVars && "text-text-subtlest italic",
         )}
         // If no environments, the button simply opens the dialog.
         // NOTE: We don't create a new button because we want to reuse the hotkey from the menu items
@@ -71,7 +71,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         {...buttonProps}
       >
         <EnvironmentColorIndicator environment={activeEnvironment ?? null} />
-        {activeEnvironment?.name ?? (hasBaseVars ? 'Environment' : 'No Environment')}
+        {activeEnvironment?.name ?? (hasBaseVars ? "Environment" : "No Environment")}
       </Button>
     </Dropdown>
   );

@@ -1,18 +1,18 @@
-import { useAtomValue } from 'jotai';
-import { AnimatePresence } from 'motion/react';
-import type { ReactNode } from 'react';
-import { hideToast, toastsAtom } from '../lib/toast';
-import { Toast, type ToastProps } from './core/Toast';
-import { ErrorBoundary } from './ErrorBoundary';
-import { Portal } from '@yaakapp-internal/ui';
+import { useAtomValue } from "jotai";
+import { AnimatePresence } from "motion/react";
+import type { ReactNode } from "react";
+import { hideToast, toastsAtom } from "../lib/toast";
+import { Toast, type ToastProps } from "./core/Toast";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { Portal } from "@yaakapp-internal/ui";
 
 export type ToastInstance = {
   id: string;
   uniqueKey: string;
   message: ReactNode;
   timeout: 3000 | 5000 | 8000 | (number & {}) | null;
-  onClose?: ToastProps['onClose'];
-} & Omit<ToastProps, 'onClose' | 'open' | 'children' | 'timeout'>;
+  onClose?: ToastProps["onClose"];
+} & Omit<ToastProps, "onClose" | "open" | "children" | "timeout">;
 
 export const Toasts = () => {
   const toasts = useAtomValue(toastsAtom);

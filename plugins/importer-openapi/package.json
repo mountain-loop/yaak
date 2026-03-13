@@ -1,13 +1,13 @@
 {
   "name": "@yaak/importer-openapi",
   "displayName": "OpenAPI Importer",
-  "description": "Import API specifications from OpenAPI/Swagger format",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Import API specifications from OpenAPI/Swagger format",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   },
   "dependencies": {
     "openapi-to-postmanv2": "^5.8.0",

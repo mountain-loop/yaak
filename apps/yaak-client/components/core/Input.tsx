@@ -1,45 +1,45 @@
-import type { EditorView } from '@codemirror/view';
-import type { Color } from '@yaakapp-internal/plugins';
-import { HStack, Icon, type IconProps } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createFastMutation } from '../../hooks/useFastMutation';
-import { useIsEncryptionEnabled } from '../../hooks/useIsEncryptionEnabled';
-import { useStateWithDeps } from '../../hooks/useStateWithDeps';
-import { copyToClipboard } from '../../lib/copy';
+import type { EditorView } from "@codemirror/view";
+import type { Color } from "@yaakapp-internal/plugins";
+import { HStack, Icon, type IconProps } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createFastMutation } from "../../hooks/useFastMutation";
+import { useIsEncryptionEnabled } from "../../hooks/useIsEncryptionEnabled";
+import { useStateWithDeps } from "../../hooks/useStateWithDeps";
+import { copyToClipboard } from "../../lib/copy";
 import {
   analyzeTemplate,
   convertTemplateToInsecure,
   convertTemplateToSecure,
-} from '../../lib/encryption';
-import { generateId } from '../../lib/generateId';
+} from "../../lib/encryption";
+import { generateId } from "../../lib/generateId";
 import {
   setupOrConfigureEncryption,
   withEncryptionEnabled,
-} from '../../lib/setupOrConfigureEncryption';
-import { Button } from './Button';
-import type { DropdownItem } from './Dropdown';
-import { Dropdown } from './Dropdown';
-import type { EditorProps } from './Editor/Editor';
-import { Editor } from './Editor/LazyEditor';
-import { IconButton } from './IconButton';
-import { IconTooltip } from './IconTooltip';
-import { Label } from './Label';
+} from "../../lib/setupOrConfigureEncryption";
+import { Button } from "./Button";
+import type { DropdownItem } from "./Dropdown";
+import { Dropdown } from "./Dropdown";
+import type { EditorProps } from "./Editor/Editor";
+import { Editor } from "./Editor/LazyEditor";
+import { IconButton } from "./IconButton";
+import { IconTooltip } from "./IconTooltip";
+import { Label } from "./Label";
 
 export type InputProps = Pick<
   EditorProps,
-  | 'language'
-  | 'autocomplete'
-  | 'forcedEnvironmentId'
-  | 'forceUpdateKey'
-  | 'disabled'
-  | 'autoFocus'
-  | 'autoSelect'
-  | 'autocompleteVariables'
-  | 'autocompleteFunctions'
-  | 'onKeyDown'
-  | 'readOnly'
+  | "language"
+  | "autocomplete"
+  | "forcedEnvironmentId"
+  | "forceUpdateKey"
+  | "disabled"
+  | "autoFocus"
+  | "autoSelect"
+  | "autocompleteVariables"
+  | "autocompleteFunctions"
+  | "onKeyDown"
+  | "readOnly"
 > & {
   className?: string;
   containerClassName?: string;
@@ -51,7 +51,7 @@ export type InputProps = Pick<
   help?: ReactNode;
   label: ReactNode;
   labelClassName?: string;
-  labelPosition?: 'top' | 'left';
+  labelPosition?: "top" | "left";
   leftSlot?: ReactNode;
   multiLine?: boolean;
   name?: string;
@@ -59,15 +59,15 @@ export type InputProps = Pick<
   onChange?: (value: string) => void;
   onFocus?: () => void;
   onPaste?: (value: string) => void;
-  onPasteOverwrite?: EditorProps['onPasteOverwrite'];
+  onPasteOverwrite?: EditorProps["onPasteOverwrite"];
   placeholder?: string;
   required?: boolean;
   rightSlot?: ReactNode;
-  size?: '2xs' | 'xs' | 'sm' | 'md' | 'auto';
-  stateKey: EditorProps['stateKey'];
-  extraExtensions?: EditorProps['extraExtensions'];
+  size?: "2xs" | "xs" | "sm" | "md" | "auto";
+  stateKey: EditorProps["stateKey"];
+  extraExtensions?: EditorProps["extraExtensions"];
   tint?: Color;
-  type?: 'text' | 'password';
+  type?: "text" | "password";
   validate?: boolean | ((v: string) => boolean);
   wrapLines?: boolean;
   setRef?: (h: InputHandle | null) => void;
@@ -78,13 +78,13 @@ export interface InputHandle {
   isFocused: () => boolean;
   value: () => string;
   selectAll: () => void;
-  dispatch: EditorView['dispatch'];
+  dispatch: EditorView["dispatch"];
 }
 
 export function Input({ type, ...props }: InputProps) {
   // If it's a password and template functions are supported (ie. secure(...)) then
   // use the encrypted input component.
-  if (type === 'password' && props.autocompleteFunctions) {
+  if (type === "password" && props.autocompleteFunctions) {
     return <EncryptionInput {...props} />;
   }
   return <BaseInput type={type} {...props} />;
@@ -103,7 +103,7 @@ function BaseInput({
   inputWrapperClassName,
   label,
   labelClassName,
-  labelPosition = 'top',
+  labelPosition = "top",
   leftSlot,
   multiLine,
   onBlur,
@@ -115,17 +115,17 @@ function BaseInput({
   readOnly,
   required,
   rightSlot,
-  size = 'md',
+  size = "md",
   stateKey,
   tint,
-  type = 'text',
+  type = "text",
   validate,
   wrapLines,
   setRef,
   ...props
 }: InputProps) {
   const [focused, setFocused] = useState(false);
-  const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
+  const [obscured, setObscured] = useStateWithDeps(type === "password", [type]);
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
   const editorRef = useRef<EditorView | null>(null);
   const skipNextFocus = useRef<boolean>(false);
@@ -140,7 +140,7 @@ function BaseInput({
         editorRef.current.dispatch({ selection: { anchor, head: anchor }, scrollIntoView: true });
       },
       isFocused: () => editorRef.current?.hasFocus ?? false,
-      value: () => editorRef.current?.state.doc.toString() ?? '',
+      value: () => editorRef.current?.state.doc.toString() ?? "",
       dispatch: (...args) => {
         // biome-ignore lint/suspicious/noExplicitAny: none
         editorRef.current?.dispatch(...(args as any));
@@ -168,9 +168,9 @@ function BaseInput({
     const fn = () => {
       skipNextFocus.current = true;
     };
-    window.addEventListener('focus', fn);
+    window.addEventListener("focus", fn);
     return () => {
-      window.removeEventListener('focus', fn);
+      window.removeEventListener("focus", fn);
     };
   }, []);
 
@@ -201,13 +201,13 @@ function BaseInput({
   const id = useRef(`input-${generateId()}`);
   const editorClassName = classNames(
     className,
-    '!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder',
+    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder",
   );
 
   const isValid = useMemo(() => {
-    if (required && !validateRequire(defaultValue ?? '')) return false;
-    if (typeof validate === 'boolean') return validate;
-    if (typeof validate === 'function' && !validate(defaultValue ?? '')) return false;
+    if (required && !validateRequire(defaultValue ?? "")) return false;
+    if (typeof validate === "boolean") return validate;
+    if (typeof validate === "function" && !validate(defaultValue ?? "")) return false;
     return true;
   }, [required, defaultValue, validate]);
 
@@ -224,12 +224,12 @@ function BaseInput({
   // Submit the nearest form on Enter key press
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key !== 'Enter') return;
+      if (e.key !== "Enter") return;
 
-      const form = wrapperRef.current?.closest('form');
+      const form = wrapperRef.current?.closest("form");
       if (!isValid || form == null) return;
 
-      form?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      form?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
     },
     [isValid],
   );
@@ -238,11 +238,11 @@ function BaseInput({
     <div
       ref={wrapperRef}
       className={classNames(
-        'pointer-events-auto', // Just in case we're placing in disabled parent
-        'w-full',
-        fullHeight && 'h-full',
-        labelPosition === 'left' && 'flex items-center gap-2',
-        labelPosition === 'top' && 'flex-row gap-0.5',
+        "pointer-events-auto", // Just in case we're placing in disabled parent
+        "w-full",
+        fullHeight && "h-full",
+        labelPosition === "left" && "flex items-center gap-2",
+        labelPosition === "top" && "flex-row gap-0.5",
       )}
     >
       <Label
@@ -258,31 +258,31 @@ function BaseInput({
         alignItems="stretch"
         className={classNames(
           containerClassName,
-          fullHeight && 'h-full',
-          'x-theme-input',
-          'relative w-full rounded-md text overflow-hidden',
-          'border',
-          focused && !disabled ? 'border-border-focus' : 'border-border',
-          disabled && 'border-dotted',
-          !isValid && hasChanged && '!border-danger',
-          size === 'md' && 'min-h-md',
-          size === 'sm' && 'min-h-sm',
-          size === 'xs' && 'min-h-xs',
-          size === '2xs' && 'min-h-2xs',
+          fullHeight && "h-full",
+          "x-theme-input",
+          "relative w-full rounded-md text overflow-hidden",
+          "border",
+          focused && !disabled ? "border-border-focus" : "border-border",
+          disabled && "border-dotted",
+          !isValid && hasChanged && "!border-danger",
+          size === "md" && "min-h-md",
+          size === "sm" && "min-h-sm",
+          size === "xs" && "min-h-xs",
+          size === "2xs" && "min-h-2xs",
         )}
       >
         {tint != null && (
           <div
             aria-hidden
             className={classNames(
-              'absolute inset-0 opacity-5 pointer-events-none',
-              tint === 'primary' && 'bg-primary',
-              tint === 'secondary' && 'bg-secondary',
-              tint === 'info' && 'bg-info',
-              tint === 'success' && 'bg-success',
-              tint === 'notice' && 'bg-notice',
-              tint === 'warning' && 'bg-warning',
-              tint === 'danger' && 'bg-danger',
+              "absolute inset-0 opacity-5 pointer-events-none",
+              tint === "primary" && "bg-primary",
+              tint === "secondary" && "bg-secondary",
+              tint === "info" && "bg-info",
+              tint === "success" && "bg-success",
+              tint === "notice" && "bg-notice",
+              tint === "warning" && "bg-warning",
+              tint === "danger" && "bg-danger",
             )}
           />
         )}
@@ -290,10 +290,10 @@ function BaseInput({
         <HStack
           className={classNames(
             inputWrapperClassName,
-            'w-full min-w-0 px-2',
-            fullHeight && 'h-full',
-            leftSlot ? 'pl-0.5 -ml-2' : null,
-            rightSlot ? 'pr-0.5 -mr-2' : null,
+            "w-full min-w-0 px-2",
+            fullHeight && "h-full",
+            leftSlot ? "pl-0.5 -ml-2" : null,
+            rightSlot ? "pr-0.5 -mr-2" : null,
           )}
         >
           <Editor
@@ -306,7 +306,7 @@ function BaseInput({
             wrapLines={wrapLines}
             heightMode="auto"
             onKeyDown={handleKeyDown}
-            type={type === 'password' && !obscured ? 'text' : type}
+            type={type === "password" && !obscured ? "text" : type}
             defaultValue={defaultValue}
             forceUpdateKey={forceUpdateKey}
             placeholder={placeholder}
@@ -316,8 +316,8 @@ function BaseInput({
             disabled={disabled}
             className={classNames(
               editorClassName,
-              multiLine && size === 'md' && 'py-1.5',
-              multiLine && size === 'sm' && 'py-1',
+              multiLine && size === "md" && "py-1.5",
+              multiLine && size === "sm" && "py-1",
             )}
             onFocus={handleFocus}
             onBlur={handleBlur}
@@ -325,11 +325,11 @@ function BaseInput({
             {...props}
           />
         </HStack>
-        {type === 'password' && !disableObscureToggle && (
+        {type === "password" && !disableObscureToggle && (
           <IconButton
             title={obscured ? `Show ${label}` : `Obscure ${label}`}
             size="xs"
-            className={classNames('mr-0.5 !h-auto my-0.5', disabled && 'opacity-disabled')}
+            className={classNames("mr-0.5 !h-auto my-0.5", disabled && "opacity-disabled")}
             color={tint}
             // iconClassName={classNames(
             //   tint === 'primary' && 'text-primary',
@@ -341,7 +341,7 @@ function BaseInput({
             //   tint === 'danger' && 'text-danger',
             // )}
             iconSize="sm"
-            icon={obscured ? 'eye' : 'eye_closed'}
+            icon={obscured ? "eye" : "eye_closed"}
             onClick={() => setObscured((o) => !o)}
           />
         )}
@@ -355,7 +355,7 @@ function validateRequire(v: string) {
   return v.length > 0;
 }
 
-type PasswordFieldType = 'text' | 'encrypted';
+type PasswordFieldType = "text" | "encrypted";
 
 function EncryptionInput({
   defaultValue,
@@ -375,7 +375,7 @@ function EncryptionInput({
     error: string | null;
   }>(
     {
-      fieldType: isEncryptionEnabled ? 'encrypted' : 'text',
+      fieldType: isEncryptionEnabled ? "encrypted" : "text",
       value: null,
       security: null,
       obscured: true,
@@ -393,19 +393,19 @@ function EncryptionInput({
       return;
     }
 
-    const security = analyzeTemplate(defaultValue ?? '');
-    if (analyzeTemplate(defaultValue ?? '') === 'global_secured') {
+    const security = analyzeTemplate(defaultValue ?? "");
+    if (analyzeTemplate(defaultValue ?? "") === "global_secured") {
       // Lazily update value to decrypted representation
-      templateToInsecure.mutate(defaultValue ?? '', {
+      templateToInsecure.mutate(defaultValue ?? "", {
         onSuccess: (value) => {
-          setState({ fieldType: 'encrypted', security, value, obscured: true, error: null });
+          setState({ fieldType: "encrypted", security, value, obscured: true, error: null });
           // We're calling this here because we want the input to be fully initialized so the caller
           // can do stuff like change the selection.
           requestAnimationFrame(() => setRef?.(inputRef.current));
         },
         onError: (value) => {
           setState({
-            fieldType: 'encrypted',
+            fieldType: "encrypted",
             security,
             value: null,
             error: String(value),
@@ -415,14 +415,14 @@ function EncryptionInput({
       });
     } else if (isEncryptionEnabled && !defaultValue) {
       // Default to encrypted field for new encrypted inputs
-      setState({ fieldType: 'encrypted', security, value: '', obscured: true, error: null });
+      setState({ fieldType: "encrypted", security, value: "", obscured: true, error: null });
       requestAnimationFrame(() => setRef?.(inputRef.current));
     } else if (isEncryptionEnabled) {
       // Don't obscure plain text when encryption is enabled
       setState({
-        fieldType: 'text',
+        fieldType: "text",
         security,
-        value: defaultValue ?? '',
+        value: defaultValue ?? "",
         obscured: false,
         error: null,
       });
@@ -430,9 +430,9 @@ function EncryptionInput({
     } else {
       // Don't obscure plain text when encryption is disabled
       setState({
-        fieldType: 'text',
+        fieldType: "text",
         security,
-        value: defaultValue ?? '',
+        value: defaultValue ?? "",
         obscured: true,
         error: null,
       });
@@ -442,16 +442,16 @@ function EncryptionInput({
 
   const handleChange = useCallback(
     (value: string, fieldType: PasswordFieldType) => {
-      if (fieldType === 'encrypted') {
+      if (fieldType === "encrypted") {
         templateToSecure.mutate(value, { onSuccess: (value) => onChange?.(value) });
       } else {
         onChange?.(value);
       }
       setState((s) => {
         // We can't analyze when encrypted because we don't have the raw value, so assume it's secured
-        const security = fieldType === 'encrypted' ? 'global_secured' : analyzeTemplate(value);
+        const security = fieldType === "encrypted" ? "global_secured" : analyzeTemplate(value);
         // Reset obscured value when the field type is being changed
-        const obscured = fieldType === s.fieldType ? s.obscured : fieldType !== 'text';
+        const obscured = fieldType === s.fieldType ? s.obscured : fieldType !== "text";
         return { fieldType, value, security, obscured, error: s.error };
       });
     },
@@ -489,22 +489,22 @@ function EncryptionInput({
   const dropdownItems = useMemo<DropdownItem[]>(
     () => [
       {
-        label: state.obscured ? 'Show' : 'Hide',
-        disabled: isEncryptionEnabled && state.fieldType === 'text',
-        leftSlot: <Icon icon={state.obscured ? 'eye' : 'eye_closed'} />,
+        label: state.obscured ? "Show" : "Hide",
+        disabled: isEncryptionEnabled && state.fieldType === "text",
+        leftSlot: <Icon icon={state.obscured ? "eye" : "eye_closed"} />,
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
       {
-        label: 'Copy',
+        label: "Copy",
         leftSlot: <Icon icon="copy" />,
         hidden: !state.value,
-        onSelect: () => copyToClipboard(state.value ?? ''),
+        onSelect: () => copyToClipboard(state.value ?? ""),
       },
-      { type: 'separator' },
+      { type: "separator" },
       {
-        label: state.fieldType === 'text' ? 'Encrypt Field' : 'Decrypt Field',
-        leftSlot: <Icon icon={state.fieldType === 'text' ? 'lock' : 'lock_open'} />,
-        onSelect: () => handleFieldTypeChange(state.fieldType === 'text' ? 'encrypted' : 'text'),
+        label: state.fieldType === "text" ? "Encrypt Field" : "Decrypt Field",
+        leftSlot: <Icon icon={state.fieldType === "text" ? "lock" : "lock_open"} />,
+        onSelect: () => handleFieldTypeChange(state.fieldType === "text" ? "encrypted" : "text"),
       },
     ],
     [
@@ -517,23 +517,23 @@ function EncryptionInput({
     ],
   );
 
-  let tint: InputProps['tint'];
+  let tint: InputProps["tint"];
   if (!isEncryptionEnabled) {
     tint = undefined;
-  } else if (state.fieldType === 'encrypted') {
-    tint = 'info';
-  } else if (state.security === 'local_secured') {
-    tint = 'secondary';
-  } else if (state.security === 'insecure') {
-    tint = 'notice';
+  } else if (state.fieldType === "encrypted") {
+    tint = "info";
+  } else if (state.security === "local_secured") {
+    tint = "secondary";
+  } else if (state.security === "insecure") {
+    tint = "notice";
   }
 
   const rightSlot = useMemo(() => {
-    let icon: IconProps['icon'];
+    let icon: IconProps["icon"];
     if (isEncryptionEnabled) {
-      icon = state.security === 'insecure' ? 'shield_off' : 'shield_check';
+      icon = state.security === "insecure" ? "shield_off" : "shield_check";
     } else {
-      icon = state.obscured ? 'eye_closed' : 'eye';
+      icon = state.obscured ? "eye_closed" : "eye";
     }
     return (
       <HStack className="h-auto m-0.5">
@@ -544,9 +544,9 @@ function EncryptionInput({
             color={tint}
             aria-label="Configure encryption"
             className={classNames(
-              'flex items-center justify-center !h-full !px-1',
-              'opacity-70', // Makes it a bit subtler
-              props.disabled && '!opacity-disabled',
+              "flex items-center justify-center !h-full !px-1",
+              "opacity-70", // Makes it a bit subtler
+              props.disabled && "!opacity-disabled",
             )}
           >
             <HStack space={0.5}>
@@ -559,7 +559,7 @@ function EncryptionInput({
     );
   }, [dropdownItems, isEncryptionEnabled, props.disabled, state.obscured, state.security, tint]);
 
-  const type = state.obscured ? 'password' : 'text';
+  const type = state.obscured ? "password" : "text";
 
   if (state.error) {
     return (
@@ -573,7 +573,7 @@ function EncryptionInput({
           setupOrConfigureEncryption();
         }}
       >
-        {state.error.replace(/^Render Error: /i, '')}
+        {state.error.replace(/^Render Error: /i, "")}
       </Button>
     );
   }
@@ -584,7 +584,7 @@ function EncryptionInput({
       disableObscureToggle
       autocompleteFunctions={autocompleteFunctions}
       autocompleteVariables={autocompleteVariables}
-      defaultValue={state.value ?? ''}
+      defaultValue={state.value ?? ""}
       forceUpdateKey={forceUpdateKey}
       onChange={handleInputChange}
       tint={tint}
@@ -598,12 +598,12 @@ function EncryptionInput({
 }
 
 const templateToSecure = createFastMutation({
-  mutationKey: ['template-to-secure'],
+  mutationKey: ["template-to-secure"],
   mutationFn: convertTemplateToSecure,
 });
 
 const templateToInsecure = createFastMutation({
-  mutationKey: ['template-to-insecure'],
+  mutationKey: ["template-to-insecure"],
   mutationFn: convertTemplateToInsecure,
   disableToastError: true,
 });

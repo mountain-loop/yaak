@@ -1,6 +1,6 @@
-import { createWorkspaceModel, type Folder, modelTypeLabel } from '@yaakapp-internal/models';
-import { applySync, calculateSync } from '@yaakapp-internal/sync';
-import { Button } from '../components/core/Button';
+import { createWorkspaceModel, type Folder, modelTypeLabel } from "@yaakapp-internal/models";
+import { applySync, calculateSync } from "@yaakapp-internal/sync";
+import { Button } from "../components/core/Button";
 import {
   Banner,
   InlineCode,
@@ -11,21 +11,21 @@ import {
   TableHeaderCell,
   TableRow,
   TruncatedWideTableCell,
-} from '@yaakapp-internal/ui';
-import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { createFastMutation } from '../hooks/useFastMutation';
-import { showDialog } from '../lib/dialog';
-import { jotaiStore } from '../lib/jotai';
-import { pluralizeCount } from '../lib/pluralize';
-import { showPrompt } from '../lib/prompt';
-import { resolvedModelNameWithFolders } from '../lib/resolvedModelName';
+} from "@yaakapp-internal/ui";
+import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import { createFastMutation } from "../hooks/useFastMutation";
+import { showDialog } from "../lib/dialog";
+import { jotaiStore } from "../lib/jotai";
+import { pluralizeCount } from "../lib/pluralize";
+import { showPrompt } from "../lib/prompt";
+import { resolvedModelNameWithFolders } from "../lib/resolvedModelName";
 
 export const createFolder = createFastMutation<
   string | null,
   void,
-  Partial<Pick<Folder, 'name' | 'sortPriority' | 'folderId'>>
+  Partial<Pick<Folder, "name" | "sortPriority" | "folderId">>
 >({
-  mutationKey: ['create_folder'],
+  mutationKey: ["create_folder"],
   mutationFn: async (patch) => {
     const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (workspaceId == null) {
@@ -34,12 +34,12 @@ export const createFolder = createFastMutation<
 
     if (!patch.name) {
       const name = await showPrompt({
-        id: 'new-folder',
-        label: 'Name',
-        defaultValue: 'Folder',
-        title: 'New Folder',
-        confirmText: 'Create',
-        placeholder: 'Name',
+        id: "new-folder",
+        label: "Name",
+        defaultValue: "Folder",
+        title: "New Folder",
+        confirmText: "Create",
+        placeholder: "Name",
       });
       if (name == null) return null;
 
@@ -47,7 +47,7 @@ export const createFolder = createFastMutation<
     }
 
     patch.sortPriority = patch.sortPriority || -Date.now();
-    const id = await createWorkspaceModel({ model: 'folder', workspaceId, ...patch });
+    const id = await createWorkspaceModel({ model: "folder", workspaceId, ...patch });
     return id;
   },
 });
@@ -61,12 +61,12 @@ export const syncWorkspace = createFastMutation<
   mutationFn: async ({ workspaceId, syncDir, force }) => {
     const ops = (await calculateSync(workspaceId, syncDir)) ?? [];
     if (ops.length === 0) {
-      console.log('Nothing to sync', workspaceId, syncDir);
+      console.log("Nothing to sync", workspaceId, syncDir);
       return;
     }
-    console.log('Syncing workspace', workspaceId, syncDir, ops);
+    console.log("Syncing workspace", workspaceId, syncDir, ops);
 
-    const dbOps = ops.filter((o) => o.type.startsWith('db'));
+    const dbOps = ops.filter((o) => o.type.startsWith("db"));
 
     if (dbOps.length === 0) {
       await applySync(workspaceId, syncDir, ops);
@@ -74,10 +74,10 @@ export const syncWorkspace = createFastMutation<
     }
 
     const isDeletingWorkspace = ops.some(
-      (o) => o.type === 'dbDelete' && o.model.model === 'workspace',
+      (o) => o.type === "dbDelete" && o.model.model === "workspace",
     );
 
-    console.log('Directory changes detected', { dbOps, ops });
+    console.log("Directory changes detected", { dbOps, ops });
 
     if (force) {
       await applySync(workspaceId, syncDir, ops);
@@ -85,9 +85,9 @@ export const syncWorkspace = createFastMutation<
     }
 
     showDialog({
-      id: 'commit-sync',
-      title: 'Changes Detected',
-      size: 'md',
+      id: "commit-sync",
+      title: "Changes Detected",
+      size: "md",
       render: ({ hide }) => (
         <form
           className="h-full grid grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3"
@@ -105,8 +105,8 @@ export const syncWorkspace = createFastMutation<
             <span />
           )}
           <p>
-            {pluralizeCount('file', dbOps.length)} in the directory{' '}
-            {dbOps.length === 1 ? 'has' : 'have'} changed. Do you want to update your workspace?
+            {pluralizeCount("file", dbOps.length)} in the directory{" "}
+            {dbOps.length === 1 ? "has" : "have"} changed. Do you want to update your workspace?
           </p>
           <Table scrollable className="my-4">
             <TableHead>
@@ -123,20 +123,20 @@ export const syncWorkspace = createFastMutation<
                 let color: string;
                 let model: string;
 
-                if (op.type === 'dbCreate') {
-                  label = 'create';
+                if (op.type === "dbCreate") {
+                  label = "create";
                   name = resolvedModelNameWithFolders(op.fs.model);
-                  color = 'text-success';
+                  color = "text-success";
                   model = modelTypeLabel(op.fs.model);
-                } else if (op.type === 'dbUpdate') {
-                  label = 'update';
+                } else if (op.type === "dbUpdate") {
+                  label = "update";
                   name = resolvedModelNameWithFolders(op.fs.model);
-                  color = 'text-info';
+                  color = "text-info";
                   model = modelTypeLabel(op.fs.model);
-                } else if (op.type === 'dbDelete') {
-                  label = 'delete';
+                } else if (op.type === "dbDelete") {
+                  label = "delete";
                   name = resolvedModelNameWithFolders(op.model);
-                  color = 'text-danger';
+                  color = "text-danger";
                   model = modelTypeLabel(op.model);
                 } else {
                   return null;

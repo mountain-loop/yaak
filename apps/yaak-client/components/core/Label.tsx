@@ -1,6 +1,6 @@
-import classNames from 'classnames';
-import type { HTMLAttributes, ReactNode } from 'react';
-import { IconTooltip } from './IconTooltip';
+import classNames from "classnames";
+import type { HTMLAttributes, ReactNode } from "react";
+import { IconTooltip } from "./IconTooltip";
 
 export function Label({
   htmlFor,
@@ -26,9 +26,9 @@ export function Label({
       htmlFor={htmlFor ?? undefined}
       className={classNames(
         className,
-        visuallyHidden && 'sr-only',
-        'flex-shrink-0 text-sm',
-        'text-text-subtle whitespace-nowrap flex items-center gap-1 mb-0.5',
+        visuallyHidden && "sr-only",
+        "flex-shrink-0 text-sm",
+        "text-text-subtle whitespace-nowrap flex items-center gap-1 mb-0.5",
       )}
       {...props}
     >
@@ -37,7 +37,7 @@ export function Label({
         {required === true && <span className="text-text-subtlest">*</span>}
       </span>
       {tags.map((tag, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: none
+        // oxlint-disable-next-line react/no-array-index-key
         <span key={i} className="text-xs text-text-subtlest">
           ({tag})
         </span>

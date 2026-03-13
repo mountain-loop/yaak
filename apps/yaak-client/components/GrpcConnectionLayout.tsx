@@ -1,18 +1,18 @@
-import { patchModel } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import type { CSSProperties } from 'react';
-import { useEffect, useMemo } from 'react';
-import { useActiveRequest } from '../hooks/useActiveRequest';
-import { useGrpc } from '../hooks/useGrpc';
-import { useGrpcProtoFiles } from '../hooks/useGrpcProtoFiles';
-import { activeGrpcConnectionAtom, useGrpcEvents } from '../hooks/usePinnedGrpcConnection';
-import { Banner, SplitLayout } from '@yaakapp-internal/ui';
-import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { workspaceLayoutAtom } from '../lib/atoms';
-import { HotkeyList } from './core/HotkeyList';
-import { GrpcRequestPane } from './GrpcRequestPane';
-import { GrpcResponsePane } from './GrpcResponsePane';
+import { patchModel } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import type { CSSProperties } from "react";
+import { useEffect, useMemo } from "react";
+import { useActiveRequest } from "../hooks/useActiveRequest";
+import { useGrpc } from "../hooks/useGrpc";
+import { useGrpcProtoFiles } from "../hooks/useGrpcProtoFiles";
+import { activeGrpcConnectionAtom, useGrpcEvents } from "../hooks/usePinnedGrpcConnection";
+import { Banner, SplitLayout } from "@yaakapp-internal/ui";
+import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
+import { workspaceLayoutAtom } from "../lib/atoms";
+import { HotkeyList } from "./core/HotkeyList";
+import { GrpcRequestPane } from "./GrpcRequestPane";
+import { GrpcResponsePane } from "./GrpcResponsePane";
 
 interface Props {
   style: CSSProperties;
@@ -23,8 +23,8 @@ const emptyArray: string[] = [];
 export function GrpcConnectionLayout({ style }: Props) {
   const workspaceLayout = useAtomValue(workspaceLayoutAtom);
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
-  const wsId = activeWorkspace?.id ?? 'n/a';
-  const activeRequest = useActiveRequest('grpc_request');
+  const wsId = activeWorkspace?.id ?? "n/a";
+  const activeRequest = useActiveRequest("grpc_request");
   const activeConnection = useAtomValue(activeGrpcConnectionAtom);
   const grpcEvents = useGrpcEvents(activeConnection?.id ?? null);
   const protoFilesKv = useGrpcProtoFiles(activeRequest?.id ?? null);
@@ -61,18 +61,18 @@ export function GrpcConnectionLayout({ style }: Props) {
   }, [activeRequest, services]);
 
   const methodType:
-    | 'unary'
-    | 'server_streaming'
-    | 'client_streaming'
-    | 'streaming'
-    | 'no-schema'
-    | 'no-method' = useMemo(() => {
-    if (services == null) return 'no-schema';
-    if (activeMethod == null) return 'no-method';
-    if (activeMethod.clientStreaming && activeMethod.serverStreaming) return 'streaming';
-    if (activeMethod.clientStreaming) return 'client_streaming';
-    if (activeMethod.serverStreaming) return 'server_streaming';
-    return 'unary';
+    | "unary"
+    | "server_streaming"
+    | "client_streaming"
+    | "streaming"
+    | "no-schema"
+    | "no-method" = useMemo(() => {
+    if (services == null) return "no-schema";
+    if (activeMethod == null) return "no-method";
+    if (activeMethod.clientStreaming && activeMethod.serverStreaming) return "streaming";
+    if (activeMethod.clientStreaming) return "client_streaming";
+    if (activeMethod.serverStreaming) return "server_streaming";
+    return "unary";
   }, [activeMethod, services]);
 
   if (activeRequest == null) {
@@ -106,10 +106,10 @@ export function GrpcConnectionLayout({ style }: Props) {
           <div
             style={style}
             className={classNames(
-              'x-theme-responsePane',
-              'max-h-full h-full grid grid-rows-[minmax(0,1fr)] grid-cols-1',
-              'bg-surface rounded-md border border-border-subtle',
-              'shadow relative',
+              "x-theme-responsePane",
+              "max-h-full h-full grid grid-rows-[minmax(0,1fr)] grid-cols-1",
+              "bg-surface rounded-md border border-border-subtle",
+              "shadow relative",
             )}
           >
             {grpc.go.error ? (
@@ -119,7 +119,7 @@ export function GrpcConnectionLayout({ style }: Props) {
             ) : grpcEvents.length >= 0 ? (
               <GrpcResponsePane activeRequest={activeRequest} methodType={methodType} />
             ) : (
-              <HotkeyList hotkeys={['request.send', 'sidebar.focus', 'url_bar.focus']} />
+              <HotkeyList hotkeys={["request.send", "sidebar.focus", "url_bar.focus"]} />
             )}
           </div>
         )

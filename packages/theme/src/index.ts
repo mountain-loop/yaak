@@ -8,12 +8,7 @@ export {
 } from "./appearance";
 export { defaultDarkTheme, defaultLightTheme } from "./defaultThemes";
 export { YaakColor } from "./yaakColor";
-export type {
-  DocumentPlatform,
-  YaakColorKey,
-  YaakColors,
-  YaakTheme,
-} from "./window";
+export type { DocumentPlatform, YaakColorKey, YaakColors, YaakTheme } from "./window";
 export {
   addThemeStylesToDocument,
   applyThemeToDocument,

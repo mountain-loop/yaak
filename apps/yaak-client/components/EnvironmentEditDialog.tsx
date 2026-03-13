@@ -1,34 +1,34 @@
-import type { Environment, Workspace } from '@yaakapp-internal/models';
-import { duplicateModel, patchModel } from '@yaakapp-internal/models';
-import type { TreeHandle, TreeNode, TreeProps } from '@yaakapp-internal/ui';
-import { Banner, Icon, InlineCode, SplitLayout, Tree } from '@yaakapp-internal/ui';
-import { atom, useAtomValue } from 'jotai';
-import { atomFamily } from 'jotai/utils';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
+import type { Environment, Workspace } from "@yaakapp-internal/models";
+import { duplicateModel, patchModel } from "@yaakapp-internal/models";
+import type { TreeHandle, TreeNode, TreeProps } from "@yaakapp-internal/ui";
+import { Banner, Icon, InlineCode, SplitLayout, Tree } from "@yaakapp-internal/ui";
+import { atom, useAtomValue } from "jotai";
+import { atomFamily } from "jotai/utils";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { createSubEnvironmentAndActivate } from "../commands/createEnvironment";
+import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import {
   environmentsBreakdownAtom,
   useEnvironmentsBreakdown,
-} from '../hooks/useEnvironmentsBreakdown';
-import { useHotKey } from '../hooks/useHotKey';
-import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
-import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { jotaiStore } from '../lib/jotai';
-import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { showColorPicker } from '../lib/showColorPicker';
-import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
-import { ContextMenu } from './core/Dropdown';
-import { IconButton } from './core/IconButton';
-import { IconTooltip } from './core/IconTooltip';
-import type { PairEditorHandle } from './core/PairEditor';
-import { EnvironmentColorIndicator } from './EnvironmentColorIndicator';
-import { EnvironmentEditor } from './EnvironmentEditor';
-import { EnvironmentSharableTooltip } from './EnvironmentSharableTooltip';
+} from "../hooks/useEnvironmentsBreakdown";
+import { useHotKey } from "../hooks/useHotKey";
+import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
+import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { jotaiStore } from "../lib/jotai";
+import { isBaseEnvironment, isSubEnvironment } from "../lib/model_util";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { showColorPicker } from "../lib/showColorPicker";
+import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
+import { ContextMenu } from "./core/Dropdown";
+import { IconButton } from "./core/IconButton";
+import { IconTooltip } from "./core/IconTooltip";
+import type { PairEditorHandle } from "./core/PairEditor";
+import { EnvironmentColorIndicator } from "./EnvironmentColorIndicator";
+import { EnvironmentEditor } from "./EnvironmentEditor";
+import { EnvironmentSharableTooltip } from "./EnvironmentSharableTooltip";
 
 const collapsedFamily = atomFamily((treeId: string) => {
-  const key = ['env_collapsed', treeId ?? 'n/a'];
+  const key = ["env_collapsed", treeId ?? "n/a"];
   return atomWithKVStorage<Record<string, boolean>>(key, {});
 });
 
@@ -111,7 +111,7 @@ function EnvironmentEditDialogSidebar({
   selectedEnvironmentId: string | null;
   setSelectedEnvironmentId: (id: string | null) => void;
 }) {
-  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom) ?? '';
+  const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom) ?? "";
   const treeId = `environment.${activeWorkspaceId}.sidebar`;
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
@@ -164,13 +164,13 @@ function EnvironmentEditDialogSidebar({
     [setSelectedEnvironmentId],
   );
 
-  useHotKey('sidebar.selected.rename', handleRenameSelected, {
+  useHotKey("sidebar.selected.rename", handleRenameSelected, {
     enable: treeHasFocus,
     allowDefault: true,
     priority: 100,
   });
   useHotKey(
-    'sidebar.selected.delete',
+    "sidebar.selected.delete",
     useCallback(() => {
       const items = getSelectedTreeModels();
       if (items) handleDeleteSelected(items);
@@ -178,7 +178,7 @@ function EnvironmentEditDialogSidebar({
     { enable: treeHasFocus, priority: 100 },
   );
   useHotKey(
-    'sidebar.selected.duplicate',
+    "sidebar.selected.duplicate",
     useCallback(async () => {
       const items = getSelectedTreeModels();
       if (items) await handleDuplicateSelected(items);
@@ -187,17 +187,17 @@ function EnvironmentEditDialogSidebar({
   );
 
   const getContextMenu = useCallback(
-    (items: TreeModel[]): ContextMenuProps['items'] => {
+    (items: TreeModel[]): ContextMenuProps["items"] => {
       const environment = items[0];
       const addEnvironmentItem: DropdownItem = {
-        label: 'Create Sub Environment',
+        label: "Create Sub Environment",
         leftSlot: <Icon icon="plus" />,
         onSelect: async () => {
           await createSubEnvironment();
         },
       };
 
-      if (environment == null || environment.model !== 'environment') {
+      if (environment == null || environment.model !== "environment") {
         return [addEnvironmentItem];
       }
 
@@ -208,10 +208,10 @@ function EnvironmentEditDialogSidebar({
 
       const menuItems: DropdownItem[] = [
         {
-          label: 'Rename',
+          label: "Rename",
           leftSlot: <Icon icon="pencil" />,
           hidden: isBaseEnvironment(environment) || !singleEnvironment,
-          hotKeyAction: 'sidebar.selected.rename',
+          hotKeyAction: "sidebar.selected.rename",
           hotKeyLabelOnly: true,
           onSelect: () => {
             // Not sure why this is needed, but without it the
@@ -220,22 +220,22 @@ function EnvironmentEditDialogSidebar({
           },
         },
         {
-          label: 'Duplicate',
+          label: "Duplicate",
           leftSlot: <Icon icon="copy" />,
           hidden: isBaseEnvironment(environment),
-          hotKeyAction: 'sidebar.selected.duplicate',
+          hotKeyAction: "sidebar.selected.duplicate",
           hotKeyLabelOnly: true,
           onSelect: () => handleDuplicateSelected(items),
         },
         {
-          label: environment.color ? 'Change Color' : 'Assign Color',
+          label: environment.color ? "Change Color" : "Assign Color",
           leftSlot: <Icon icon="palette" />,
           hidden: isBaseEnvironment(environment) || !singleEnvironment,
           onSelect: async () => showColorPicker(environment),
         },
         {
-          label: `Make ${environment.public ? 'Private' : 'Sharable'}`,
-          leftSlot: <Icon icon={environment.public ? 'eye_closed' : 'eye'} />,
+          label: `Make ${environment.public ? "Private" : "Sharable"}`,
+          leftSlot: <Icon icon={environment.public ? "eye_closed" : "eye"} />,
           rightSlot: <EnvironmentSharableTooltip />,
           hidden: items.length > 1,
           onSelect: async () => {
@@ -243,9 +243,9 @@ function EnvironmentEditDialogSidebar({
           },
         },
         {
-          color: 'danger',
-          label: 'Delete',
-          hotKeyAction: 'sidebar.selected.delete',
+          color: "danger",
+          label: "Delete",
+          hotKeyAction: "sidebar.selected.delete",
           hotKeyLabelOnly: true,
           hidden: !canDeleteEnvironment,
           leftSlot: <Icon icon="trash" />,
@@ -255,7 +255,7 @@ function EnvironmentEditDialogSidebar({
 
       // Add sub environment to base environment
       if (isBaseEnvironment(environment) && singleEnvironment) {
-        menuItems.push({ type: 'separator' });
+        menuItems.push({ type: "separator" });
         menuItems.push(addEnvironmentItem);
       }
 
@@ -313,7 +313,7 @@ function EnvironmentEditDialogSidebar({
     [setSelectedEnvironmentId],
   );
 
-  const renderContextMenuFn = useCallback<NonNullable<TreeProps<TreeModel>['renderContextMenu']>>(
+  const renderContextMenuFn = useCallback<NonNullable<TreeProps<TreeModel>["renderContextMenu"]>>(
     ({ items, position, onClose }) => (
       <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
     ),
@@ -386,7 +386,7 @@ function ItemLeftSlotInner({ item }: { item: TreeModel }) {
   return baseEnvironments.length > 1 ? (
     <Icon icon="alert_triangle" color="notice" />
   ) : (
-    item.model === 'environment' && item.color && <EnvironmentColorIndicator environment={item} />
+    item.model === "environment" && item.color && <EnvironmentColorIndicator environment={item} />
   );
 }
 
@@ -394,7 +394,7 @@ function ItemRightSlot({ item }: { item: TreeModel }) {
   const { baseEnvironments } = useEnvironmentsBreakdown();
   return (
     <>
-      {item.model === 'environment' && baseEnvironments.length <= 1 && isBaseEnvironment(item) && (
+      {item.model === "environment" && baseEnvironments.length <= 1 && isBaseEnvironment(item) && (
         <IconButton
           size="sm"
           color="custom"
@@ -412,7 +412,7 @@ function ItemRightSlot({ item }: { item: TreeModel }) {
 function ItemInner({ item }: { item: TreeModel }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] w-full items-center">
-      {item.model === 'environment' && item.public ? (
+      {item.model === "environment" && item.public ? (
         <div className="mr-2 flex items-center">{sharableTooltip}</div>
       ) : (
         <span aria-hidden />
@@ -430,9 +430,9 @@ async function createSubEnvironment() {
 }
 
 function getEditOptions(item: TreeModel) {
-  const options: ReturnType<NonNullable<TreeProps<TreeModel>['getEditOptions']>> = {
+  const options: ReturnType<NonNullable<TreeProps<TreeModel>["getEditOptions"]>> = {
     defaultValue: item.name,
-    placeholder: 'Name',
+    placeholder: "Name",
     async onChange(item, name) {
       await patchModel(item, { name });
     },

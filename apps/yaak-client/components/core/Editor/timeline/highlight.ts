@@ -1,4 +1,4 @@
-import { styleTags, tags as t } from '@lezer/highlight';
+import { styleTags, tags as t } from "@lezer/highlight";
 
 export const highlight = styleTags({
   OutgoingText: t.propertyName, // > lines - primary color (matches timeline icons)

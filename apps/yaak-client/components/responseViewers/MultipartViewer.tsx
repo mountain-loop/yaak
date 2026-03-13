@@ -1,17 +1,17 @@
-import { type MultipartPart, parseMultipart } from '@mjackson/multipart-parser';
-import { lazy, Suspense, useMemo } from 'react';
-import { languageFromContentType } from '../../lib/contentType';
-import { Banner, Icon, LoadingIcon } from '@yaakapp-internal/ui';
-import { TabContent, Tabs } from '../core/Tabs/Tabs';
-import { AudioViewer } from './AudioViewer';
-import { CsvViewer } from './CsvViewer';
-import { ImageViewer } from './ImageViewer';
-import { SvgViewer } from './SvgViewer';
-import { TextViewer } from './TextViewer';
-import { VideoViewer } from './VideoViewer';
-import { WebPageViewer } from './WebPageViewer';
+import { type MultipartPart, parseMultipart } from "@mjackson/multipart-parser";
+import { lazy, Suspense, useMemo } from "react";
+import { languageFromContentType } from "../../lib/contentType";
+import { Banner, Icon, LoadingIcon } from "@yaakapp-internal/ui";
+import { TabContent, Tabs } from "../core/Tabs/Tabs";
+import { AudioViewer } from "./AudioViewer";
+import { CsvViewer } from "./CsvViewer";
+import { ImageViewer } from "./ImageViewer";
+import { SvgViewer } from "./SvgViewer";
+import { TextViewer } from "./TextViewer";
+import { VideoViewer } from "./VideoViewer";
+import { WebPageViewer } from "./WebPageViewer";
 
-const PdfViewer = lazy(() => import('./PdfViewer').then((m) => ({ default: m.PdfViewer })));
+const PdfViewer = lazy(() => import("./PdfViewer").then((m) => ({ default: m.PdfViewer })));
 
 interface Props {
   data: Uint8Array;
@@ -19,7 +19,7 @@ interface Props {
   idPrefix?: string;
 }
 
-export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Props) {
+export function MultipartViewer({ data, boundary, idPrefix = "multipart" }: Props) {
   const parseResult = useMemo(() => {
     try {
       const maxFileSize = 1024 * 1024 * 10; // 10MB
@@ -56,10 +56,10 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
       layout="horizontal"
       tabListClassName="border-r border-r-border -ml-3"
       tabs={parts.map((part, i) => ({
-        label: part.name ?? '',
+        label: part.name ?? "",
         value: tabValue(part, i),
         rightSlot:
-          part.filename && part.headers.contentType.mediaType?.startsWith('image/') ? (
+          part.filename && part.headers.contentType.mediaType?.startsWith("image/") ? (
             <div className="h-5 w-5 overflow-auto flex items-center justify-end">
               <ImageViewer
                 data={part.arrayBuffer}
@@ -87,7 +87,7 @@ export function MultipartViewer({ data, boundary, idPrefix = 'multipart' }: Prop
 
 function Part({ part }: { part: MultipartPart }) {
   const mimeType = part.headers.contentType.mediaType ?? null;
-  const contentTypeHeader = part.headers.get('content-type');
+  const contentTypeHeader = part.headers.get("content-type");
 
   const { uint8Array, content, detectedLanguage } = useMemo(() => {
     const uint8Array = new Uint8Array(part.arrayBuffer);
@@ -116,7 +116,7 @@ function Part({ part }: { part: MultipartPart }) {
     return <CsvViewer text={content} className="bg-primary h-10 w-10" />;
   }
 
-  if (mimeType?.match(/^text\/html/i) || detectedLanguage === 'html') {
+  if (mimeType?.match(/^text\/html/i) || detectedLanguage === "html") {
     return <WebPageViewer html={content} />;
   }
 
@@ -132,5 +132,5 @@ function Part({ part }: { part: MultipartPart }) {
 }
 
 function tabValue(part: MultipartPart, i: number) {
-  return `${part.name ?? ''}::${i}`;
+  return `${part.name ?? ""}::${i}`;
 }

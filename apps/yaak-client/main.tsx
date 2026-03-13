@@ -1,10 +1,7 @@
 import "./main.css";
 import { RouterProvider } from "@tanstack/react-router";
 import { type } from "@tauri-apps/plugin-os";
-import {
-  changeModelStoreWorkspace,
-  initModelStore,
-} from "@yaakapp-internal/models";
+import { changeModelStoreWorkspace, initModelStore } from "@yaakapp-internal/models";
 import { setPlatformOnDocument } from "@yaakapp-internal/theme";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

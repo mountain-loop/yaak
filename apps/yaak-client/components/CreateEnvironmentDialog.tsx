@@ -1,12 +1,12 @@
-import { createWorkspaceModel } from '@yaakapp-internal/models';
-import { useState } from 'react';
-import { useToggle } from '../hooks/useToggle';
-import { ColorIndicator } from './ColorIndicator';
-import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
-import { ColorPickerWithThemeColors } from './core/ColorPicker';
-import { Label } from './core/Label';
-import { PlainInput } from './core/PlainInput';
+import { createWorkspaceModel } from "@yaakapp-internal/models";
+import { useState } from "react";
+import { useToggle } from "../hooks/useToggle";
+import { ColorIndicator } from "./ColorIndicator";
+import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
+import { ColorPickerWithThemeColors } from "./core/ColorPicker";
+import { Label } from "./core/Label";
+import { PlainInput } from "./core/PlainInput";
 
 interface Props {
   onCreate: (id: string) => void;
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) {
-  const [name, setName] = useState<string>('');
+  const [name, setName] = useState<string>("");
   const [color, setColor] = useState<string | null>(null);
   const [sharable, toggleSharable] = useToggle(false);
   return (
@@ -24,13 +24,13 @@ export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) 
       onSubmit={async (e) => {
         e.preventDefault();
         const id = await createWorkspaceModel({
-          model: 'environment',
+          model: "environment",
           name,
           color,
           variables: [],
           public: sharable,
           workspaceId,
-          parentModel: 'environment',
+          parentModel: "environment",
         });
         hide();
         onCreate(id);

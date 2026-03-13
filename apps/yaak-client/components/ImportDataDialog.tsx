@@ -1,8 +1,8 @@
-import { VStack } from '@yaakapp-internal/ui';
-import { useState } from 'react';
-import { useLocalStorage } from 'react-use';
-import { Button } from './core/Button';
-import { SelectFile } from './SelectFile';
+import { VStack } from "@yaakapp-internal/ui";
+import { useState } from "react";
+import { useLocalStorage } from "react-use";
+import { Button } from "./core/Button";
+import { SelectFile } from "./SelectFile";
 
 interface Props {
   importData: (filePath: string) => Promise<void>;
@@ -10,7 +10,7 @@ interface Props {
 
 export function ImportDataDialog({ importData }: Props) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [filePath, setFilePath] = useLocalStorage<string | null>('importFilePath', null);
+  const [filePath, setFilePath] = useLocalStorage<string | null>("importFilePath", null);
 
   return (
     <VStack space={5} className="pb-4">
@@ -45,7 +45,7 @@ export function ImportDataDialog({ importData }: Props) {
               }
             }}
           >
-            {isLoading ? 'Importing' : 'Import'}
+            {isLoading ? "Importing" : "Import"}
           </Button>
         )}
       </VStack>

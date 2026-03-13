@@ -1,19 +1,19 @@
-import type { HttpRequestHeader } from '@yaakapp-internal/models';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import { HStack } from '@yaakapp-internal/ui';
-import { charsets } from '../lib/data/charsets';
-import { connections } from '../lib/data/connections';
-import { encodings } from '../lib/data/encodings';
-import { headerNames } from '../lib/data/headerNames';
-import { mimeTypes } from '../lib/data/mimetypes';
-import { CountBadge } from './core/CountBadge';
-import { DetailsBanner } from './core/DetailsBanner';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import type { InputProps } from './core/Input';
-import type { Pair, PairEditorProps } from './core/PairEditor';
-import { PairEditorRow } from './core/PairEditor';
-import { ensurePairId } from './core/PairEditor.util';
-import { PairOrBulkEditor } from './core/PairOrBulkEditor';
+import type { HttpRequestHeader } from "@yaakapp-internal/models";
+import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import { HStack } from "@yaakapp-internal/ui";
+import { charsets } from "../lib/data/charsets";
+import { connections } from "../lib/data/connections";
+import { encodings } from "../lib/data/encodings";
+import { headerNames } from "../lib/data/headerNames";
+import { mimeTypes } from "../lib/data/mimetypes";
+import { CountBadge } from "./core/CountBadge";
+import { DetailsBanner } from "./core/DetailsBanner";
+import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import type { InputProps } from "./core/Input";
+import type { Pair, PairEditorProps } from "./core/PairEditor";
+import { PairEditorRow } from "./core/PairEditor";
+import { ensurePairId } from "./core/PairEditor.util";
+import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
 
 type Props = {
   forceUpdateKey: string;
@@ -29,7 +29,7 @@ export function HeadersEditor({
   stateKey,
   headers,
   inheritedHeaders,
-  inheritedHeadersLabel = 'Inherited',
+  inheritedHeadersLabel = "Inherited",
   onChange,
   forceUpdateKey,
 }: Props) {
@@ -50,8 +50,8 @@ export function HeadersEditor({
     <div
       className={
         hasInheritedHeaders
-          ? '@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5'
-          : '@container w-full h-full'
+          ? "@container w-full h-full grid grid-rows-[auto_minmax(0,1fr)] gap-y-1.5"
+          : "@container w-full h-full"
       }
     >
       {hasInheritedHeaders && (
@@ -106,28 +106,28 @@ export function HeadersEditor({
 const MIN_MATCH = 3;
 
 const headerOptionsMap: Record<string, string[]> = {
-  'content-type': mimeTypes,
-  accept: ['*/*', ...mimeTypes],
-  'accept-encoding': encodings,
+  "content-type": mimeTypes,
+  accept: ["*/*", ...mimeTypes],
+  "accept-encoding": encodings,
   connection: connections,
-  'accept-charset': charsets,
+  "accept-charset": charsets,
 };
 
-const valueType = (pair: Pair): InputProps['type'] => {
+const valueType = (pair: Pair): InputProps["type"] => {
   const name = pair.name.toLowerCase().trim();
   if (
-    name.includes('authorization') ||
-    name.includes('api-key') ||
-    name.includes('access-token') ||
-    name.includes('auth') ||
-    name.includes('secret') ||
-    name.includes('token') ||
-    name === 'cookie' ||
-    name === 'set-cookie'
+    name.includes("authorization") ||
+    name.includes("api-key") ||
+    name.includes("access-token") ||
+    name.includes("auth") ||
+    name.includes("secret") ||
+    name.includes("token") ||
+    name === "cookie" ||
+    name === "set-cookie"
   ) {
-    return 'password';
+    return "password";
   }
-  return 'text';
+  return "text";
 };
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {
@@ -135,19 +135,19 @@ const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefi
   const options: GenericCompletionOption[] =
     headerOptionsMap[name]?.map((o) => ({
       label: o,
-      type: 'constant',
+      type: "constant",
       boost: 1, // Put above other completions
     })) ?? [];
   return { minMatch: MIN_MATCH, options };
 };
 
-const nameAutocomplete: PairEditorProps['nameAutocomplete'] = {
+const nameAutocomplete: PairEditorProps["nameAutocomplete"] = {
   minMatch: MIN_MATCH,
   options: headerNames.map((t) =>
-    typeof t === 'string'
+    typeof t === "string"
       ? {
           label: t,
-          type: 'constant',
+          type: "constant",
           boost: 1, // Put above other completions
         }
       : {
@@ -158,11 +158,11 @@ const nameAutocomplete: PairEditorProps['nameAutocomplete'] = {
 };
 
 const validateHttpHeader = (v: string) => {
-  if (v === '') {
+  if (v === "") {
     return true;
   }
 
   // Template strings are not allowed so we replace them with a valid example string
-  const withoutTemplateStrings = v.replace(/\$\{\[\s*[^\]\s]+\s*]}/gi, '123');
+  const withoutTemplateStrings = v.replace(/\$\{\[\s*[^\]\s]+\s*]}/gi, "123");
   return withoutTemplateStrings.match(/^[a-zA-Z0-9-_]+$/) !== null;
 };

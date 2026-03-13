@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect } from "react";
 
 export function useKeyboardEvent(
-  event: 'keyup' | 'keydown',
-  key: KeyboardEvent['key'],
+  event: "keyup" | "keydown",
+  key: KeyboardEvent["key"],
   cb: () => void,
 ) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Don't have `cb` as a dep for caller convenience
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Don't have `cb` as a dep for caller convenience
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if (e.key === key) cb();

@@ -14,10 +14,7 @@ const cMapsDir = normalizePath(
   path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "cmaps"),
 );
 const standardFontsDir = normalizePath(
-  path.join(
-    path.dirname(require.resolve("pdfjs-dist/package.json")),
-    "standard_fonts",
-  ),
+  path.join(path.dirname(require.resolve("pdfjs-dist/package.json")), "standard_fonts"),
 );
 
 // https://vitejs.dev/config/
@@ -56,10 +53,7 @@ export default defineConfig(async () => {
     },
     clearScreen: false,
     server: {
-      port: parseInt(
-        process.env.YAAK_CLIENT_DEV_PORT ?? process.env.YAAK_DEV_PORT ?? "1420",
-        10,
-      ),
+      port: parseInt(process.env.YAAK_CLIENT_DEV_PORT ?? process.env.YAAK_DEV_PORT ?? "1420", 10),
       strictPort: true,
     },
     envPrefix: ["VITE_", "TAURI_"],

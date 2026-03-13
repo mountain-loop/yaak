@@ -3,27 +3,27 @@ import {
   enableEncryption,
   revealWorkspaceKey,
   setWorkspaceKey,
-} from '@yaakapp-internal/crypto';
-import type { WorkspaceMeta } from '@yaakapp-internal/models';
-import { Banner, HStack, VStack } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { useEffect, useState } from 'react';
-import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { createFastMutation } from '../hooks/useFastMutation';
-import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { showConfirm } from '../lib/confirm';
-import { CopyIconButton } from './CopyIconButton';
-import type { ButtonProps } from './core/Button';
-import { Button } from './core/Button';
-import { IconButton } from './core/IconButton';
-import { IconTooltip } from './core/IconTooltip';
-import { Label } from './core/Label';
-import { PlainInput } from './core/PlainInput';
-import { EncryptionHelp } from './EncryptionHelp';
+} from "@yaakapp-internal/crypto";
+import type { WorkspaceMeta } from "@yaakapp-internal/models";
+import { Banner, HStack, VStack } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
+import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
+import { createFastMutation } from "../hooks/useFastMutation";
+import { useStateWithDeps } from "../hooks/useStateWithDeps";
+import { showConfirm } from "../lib/confirm";
+import { CopyIconButton } from "./CopyIconButton";
+import type { ButtonProps } from "./core/Button";
+import { Button } from "./core/Button";
+import { IconButton } from "./core/IconButton";
+import { IconTooltip } from "./core/IconTooltip";
+import { Label } from "./core/Label";
+import { PlainInput } from "./core/PlainInput";
+import { EncryptionHelp } from "./EncryptionHelp";
 
 interface Props {
-  size?: ButtonProps['size'];
+  size?: ButtonProps["size"];
   expanded?: boolean;
   onDone?: () => void;
   onEnabledEncryption?: () => void;
@@ -118,7 +118,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
     <div className="mb-auto flex flex-col-reverse">
       <Button
         className="mt-3"
-        color={expanded ? 'info' : 'secondary'}
+        color={expanded ? "info" : "secondary"}
         size={size}
         onClick={async () => {
           setError(null);
@@ -151,7 +151,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
 }
 
 const setWorkspaceKeyMut = createFastMutation({
-  mutationKey: ['set-workspace-key'],
+  mutationKey: ["set-workspace-key"],
   mutationFn: setWorkspaceKey,
 });
 
@@ -166,14 +166,14 @@ function EnterWorkspaceKey({
   onDisabled?: () => void;
   error?: string | null;
 }) {
-  const [key, setKey] = useState<string>('');
+  const [key, setKey] = useState<string>("");
 
   const handleForgotKey = async () => {
     const confirmed = await showConfirm({
-      id: 'disable-encryption',
-      title: 'Disable Encryption',
-      color: 'danger',
-      confirmText: 'Disable Encryption',
+      id: "disable-encryption",
+      title: "Disable Encryption",
+      color: "danger",
+      confirmText: "Disable Encryption",
       description: (
         <>
           This will disable encryption for this workspace. Any previously encrypted values will fail
@@ -252,14 +252,14 @@ function KeyRevealer({
   return (
     <div
       className={classNames(
-        'w-full border border-border rounded-md pl-3 py-2 p-1',
-        'grid gap-1 grid-cols-[minmax(0,1fr)_auto] items-center',
+        "w-full border border-border rounded-md pl-3 py-2 p-1",
+        "grid gap-1 grid-cols-[minmax(0,1fr)_auto] items-center",
       )}
     >
       <VStack space={0.5}>
         {!disableLabel && (
           <span className="text-sm text-primary flex items-center gap-1">
-            Workspace encryption key{' '}
+            Workspace encryption key{" "}
             <IconTooltip iconSize="sm" size="lg" content={helpAfterEncryption} />
           </span>
         )}
@@ -268,8 +268,8 @@ function KeyRevealer({
       <HStack>
         {encryptionKey && <CopyIconButton text={encryptionKey} title="Copy workspace key" />}
         <IconButton
-          title={show ? 'Hide' : 'Reveal' + 'workspace key'}
-          icon={show ? 'eye_closed' : 'eye'}
+          title={show ? "Hide" : "Reveal" + "workspace key"}
+          icon={show ? "eye_closed" : "eye"}
           onClick={() => setShow((v) => !v)}
         />
       </HStack>
@@ -281,14 +281,14 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
   return (
     <span className="text-xs font-mono [&_*]:cursor-auto [&_*]:select-text">
       {show ? (
-        keyText.split('').map((c, i) => {
+        keyText.split("").map((c, i) => {
           return (
             <span
               // biome-ignore lint/suspicious/noArrayIndexKey: it's fine
               key={i}
               className={classNames(
-                c.match(/[0-9]/) && 'text-info',
-                c === '-' && 'text-text-subtle',
+                c.match(/[0-9]/) && "text-info",
+                c === "-" && "text-text-subtle",
               )}
             >
               {c}

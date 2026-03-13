@@ -1,7 +1,7 @@
-import type { AnyModel, Folder, Workspace } from '@yaakapp-internal/models';
-import { foldersAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useMemo } from 'react';
+import type { AnyModel, Folder, Workspace } from "@yaakapp-internal/models";
+import { foldersAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useMemo } from "react";
 
 type ModelAncestor = Folder | Workspace;
 
@@ -20,7 +20,7 @@ export function getModelAncestors(
   if (currentModel == null) return [];
 
   const parentFolder =
-    'folderId' in currentModel && currentModel.folderId
+    "folderId" in currentModel && currentModel.folderId
       ? folders.find((f) => f.id === currentModel.folderId)
       : null;
 
@@ -29,7 +29,7 @@ export function getModelAncestors(
   }
 
   const parentWorkspace =
-    'workspaceId' in currentModel && currentModel.workspaceId
+    "workspaceId" in currentModel && currentModel.workspaceId
       ? workspaces.find((w) => w.id === currentModel.workspaceId)
       : null;
 

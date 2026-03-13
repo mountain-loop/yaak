@@ -1,15 +1,15 @@
-import type { Virtualizer } from '@tanstack/react-virtual';
-import { Banner, HStack, SplitLayout } from '@yaakapp-internal/ui';
-import classNames from 'classnames';
-import { format } from 'date-fns';
-import type { ReactNode } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useEventViewerKeyboard } from '../../hooks/useEventViewerKeyboard';
-import { CopyIconButton } from '../CopyIconButton';
-import { AutoScroller } from './AutoScroller';
-import { Button } from './Button';
-import { IconButton } from './IconButton';
-import { Separator } from './Separator';
+import type { Virtualizer } from "@tanstack/react-virtual";
+import { Banner, HStack, SplitLayout } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { format } from "date-fns";
+import type { ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useEventViewerKeyboard } from "../../hooks/useEventViewerKeyboard";
+import { CopyIconButton } from "../CopyIconButton";
+import { AutoScroller } from "./AutoScroller";
+import { Button } from "./Button";
+import { IconButton } from "./IconButton";
+import { Separator } from "./Separator";
 
 interface EventViewerProps<T> {
   /** Array of events to display */
@@ -68,8 +68,8 @@ export function EventViewer<T>({
   defaultRatio = 0.4,
   enableKeyboardNav = true,
   isLoading = false,
-  loadingMessage = 'Loading events...',
-  emptyMessage = 'No events recorded',
+  loadingMessage = "Loading events...",
+  emptyMessage = "No events recorded",
   onActiveIndexChange,
 }: EventViewerProps<T>) {
   const [activeIndex, setActiveIndexInternal] = useState<number | null>(null);
@@ -80,7 +80,7 @@ export function EventViewer<T>({
     (indexOrUpdater: number | null | ((prev: number | null) => number | null)) => {
       setActiveIndexInternal((prev) => {
         const newIndex =
-          typeof indexOrUpdater === 'function' ? indexOrUpdater(prev) : indexOrUpdater;
+          typeof indexOrUpdater === "function" ? indexOrUpdater(prev) : indexOrUpdater;
         onActiveIndexChange?.(newIndex);
         return newIndex;
       });
@@ -127,7 +127,7 @@ export function EventViewer<T>({
       setIsPanelOpen(true);
       // Scroll to ensure selected item is visible after panel opens
       requestAnimationFrame(() => {
-        virtualizerRef.current?.scrollToIndex(index, { align: 'auto' });
+        virtualizerRef.current?.scrollToIndex(index, { align: "auto" });
       });
     },
     [setActiveIndex],
@@ -230,7 +230,7 @@ export function EventDetailHeader({
   copyText,
   onClose,
 }: EventDetailHeaderProps) {
-  const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), 'HH:mm:ss.SSS') : null;
+  const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), "HH:mm:ss.SSS") : null;
 
   return (
     <div className="flex items-center justify-between gap-2 mb-2 h-xs">
@@ -255,7 +255,7 @@ export function EventDetailHeader({
           className={classNames(
             copyText != null ||
               formattedTime ||
-              ((actions ?? []).length > 0 && 'border-l border-l-surface-highlight ml-2 pl-3'),
+              ((actions ?? []).length > 0 && "border-l border-l-surface-highlight ml-2 pl-3"),
           )}
         >
           <IconButton

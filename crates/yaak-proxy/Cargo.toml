@@ -10,7 +10,14 @@ hyper-util = { version = "0.1", features = ["tokio", "server-auto", "client-lega
 http-body-util = "0.1"
 http = "1"
 bytes = "1"
-tokio = { workspace = true, features = ["rt-multi-thread", "net", "sync", "macros", "time", "io-util"] }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "net",
+  "sync",
+  "macros",
+  "time",
+  "io-util",
+] }
 rcgen = "0.13"
 rustls = { workspace = true, features = ["ring"] }
 rustls-native-certs = "0.8"

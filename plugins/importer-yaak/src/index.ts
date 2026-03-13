@@ -1,9 +1,9 @@
-import type { Environment, PluginDefinition } from '@yaakapp/api';
+import type { Environment, PluginDefinition } from "@yaakapp/api";
 
 export const plugin: PluginDefinition = {
   importer: {
-    name: 'Yaak',
-    description: 'Yaak official format',
+    name: "Yaak",
+    description: "Yaak official format",
     onImport(_ctx, args) {
       return migrateImport(args.text);
     },
@@ -11,7 +11,7 @@ export const plugin: PluginDefinition = {
 };
 
 export function migrateImport(contents: string) {
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   let parsed: any;
   try {
     parsed = JSON.parse(contents);
@@ -23,24 +23,24 @@ export function migrateImport(contents: string) {
     return undefined;
   }
 
-  const isYaakExport = 'yaakSchema' in parsed;
+  const isYaakExport = "yaakSchema" in parsed;
   if (!isYaakExport) {
     return;
   }
 
   // Migrate v1 to v2 -- changes requests to httpRequests
-  if ('requests' in parsed.resources) {
+  if ("requests" in parsed.resources) {
     parsed.resources.httpRequests = parsed.resources.requests;
     parsed.resources.requests = undefined;
   }
 
   // Migrate v2 to v3
   for (const workspace of parsed.resources.workspaces ?? []) {
-    if ('variables' in workspace) {
+    if ("variables" in workspace) {
       // Create the base environment
       const baseEnvironment: Partial<Environment> = {
         id: `GENERATE_ID::base_env_${workspace.id}`,
-        name: 'Global Variables',
+        name: "Global Variables",
         variables: workspace.variables,
         workspaceId: workspace.id,
       };
@@ -61,7 +61,7 @@ export function migrateImport(contents: string) {
 
   // Migrate v3 to v4
   for (const environment of parsed.resources.environments ?? []) {
-    if ('environmentId' in environment) {
+    if ("environmentId" in environment) {
       environment.base = environment.environmentId == null;
       environment.environmentId = undefined;
     }
@@ -69,12 +69,12 @@ export function migrateImport(contents: string) {
 
   // Migrate v4 to v5
   for (const environment of parsed.resources.environments ?? []) {
-    if ('base' in environment && environment.base && environment.parentModel == null) {
-      environment.parentModel = 'workspace';
+    if ("base" in environment && environment.base && environment.parentModel == null) {
+      environment.parentModel = "workspace";
       environment.parentId = null;
       environment.base = undefined;
-    } else if ('base' in environment && !environment.base && environment.parentModel == null) {
-      environment.parentModel = 'environment';
+    } else if ("base" in environment && !environment.base && environment.parentModel == null) {
+      environment.parentModel = "environment";
       environment.parentId = null;
       environment.base = undefined;
     }
@@ -84,5 +84,5 @@ export function migrateImport(contents: string) {
 }
 
 function isJSObject(obj: unknown) {
-  return Object.prototype.toString.call(obj) === '[object Object]';
+  return Object.prototype.toString.call(obj) === "[object Object]";
 }

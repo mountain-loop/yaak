@@ -58,9 +58,7 @@ if (appConfig == null) {
 
 const port =
   process.env[appConfig.devPortEnv] ||
-  (appConfig.fallbackDevPortEnv
-    ? process.env[appConfig.fallbackDevPortEnv]
-    : undefined) ||
+  (appConfig.fallbackDevPortEnv ? process.env[appConfig.fallbackDevPortEnv] : undefined) ||
   appConfig.defaultPort;
 const config = JSON.stringify({
   build: { devUrl: `http://localhost:${port}` },
@@ -76,9 +74,7 @@ for (let i = 0; i < additionalArgs.length; i++) {
     const isInlineJson = value.trimStart().startsWith("{");
     normalizedAdditionalArgs.push("--config");
     normalizedAdditionalArgs.push(
-      !isInlineJson && !path.isAbsolute(value)
-        ? path.join(rootDir, value)
-        : value,
+      !isInlineJson && !path.isAbsolute(value) ? path.join(rootDir, value) : value,
     );
     i++;
     continue;
@@ -99,13 +95,7 @@ const args = [
 ];
 
 // Invoke the tauri CLI JS entry point directly via node to avoid shell escaping issues on Windows
-const tauriJs = path.join(
-  rootDir,
-  "node_modules",
-  "@tauri-apps",
-  "cli",
-  "tauri.js",
-);
+const tauriJs = path.join(rootDir, "node_modules", "@tauri-apps", "cli", "tauri.js");
 
 const result = spawnSync(process.execPath, [tauriJs, ...args], {
   cwd: path.join(rootDir, appConfig.appDir),

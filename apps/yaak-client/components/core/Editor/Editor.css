@@ -438,7 +438,7 @@
   }
 
   input.cm-textfield {
-      @apply cursor-text;
+    @apply cursor-text;
   }
 
   .cm-search label {
