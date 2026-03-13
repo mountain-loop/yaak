@@ -132,5 +132,3 @@ function generateId(model: string): string {
   idCount[model] = (idCount[model] ?? -1) + 1;
   return `GENERATE_ID::${model.toUpperCase()}_${idCount[model]}`;
 }
-
-export default plugin;
