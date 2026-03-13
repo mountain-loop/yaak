@@ -110,7 +110,7 @@ export function Tooltip({ children, className, content, tabIndex, size = 'md' }:
           />
         </div>
       </Portal>
-      {/** biome-ignore lint/a11y/useSemanticElements: Needs to be usable in other buttons */}
+      {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- Needs to be usable in other buttons */}
       <span
         ref={triggerRef}
         role="button"

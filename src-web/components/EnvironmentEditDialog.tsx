@@ -113,7 +113,7 @@ function EnvironmentEditDialogSidebar({
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: none
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     if (selectedEnvironmentId == null) return;
     treeRef.current?.selectItem(selectedEnvironmentId);

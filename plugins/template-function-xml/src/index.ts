@@ -69,7 +69,7 @@ export function filterXPath(
   result: XPathResult,
   join: string | null,
 ): string {
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   const doc: any = new DOMParser().parseFromString(body, 'text/xml');
   const items = xpath.select(path, doc, false);
 

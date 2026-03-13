@@ -8,7 +8,7 @@ export const plugin: PluginDefinition = {
     name: 'XPath',
     description: 'Filter XPath',
     onFilter(_ctx, args) {
-      // biome-ignore lint/suspicious/noExplicitAny: none
+      // oxlint-disable-next-line no-explicit-any
       const doc: any = new DOMParser().parseFromString(args.payload, 'text/xml');
       try {
         const result = xpath.select(args.filter, doc, false);

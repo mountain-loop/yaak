@@ -195,7 +195,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             key={forceUpdateKey}
             type={type === 'password' && !obscured ? 'text' : type}
             name={name}
-            // biome-ignore lint/a11y/noAutofocus: Who cares
+            // oxlint-disable-next-line jsx-a11y/no-autofocus
             autoFocus={autoFocus}
             defaultValue={defaultValue ?? undefined}
             autoComplete="off"

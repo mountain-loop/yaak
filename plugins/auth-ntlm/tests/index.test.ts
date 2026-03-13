@@ -17,6 +17,7 @@ describe('auth-ntlm', () => {
     ntlmMock.parseType2Message.mockReset();
     ntlmMock.createType3Message.mockReset();
     ntlmMock.createType1Message.mockReturnValue('NTLM TYPE1');
+    // oxlint-disable-next-line no-explicit-any
     ntlmMock.parseType2Message.mockReturnValue({} as any);
     ntlmMock.createType3Message.mockReturnValue('NTLM TYPE3');
   });

@@ -22,7 +22,7 @@ export function DetailsBanner({
   storageKey,
   ...extraProps
 }: Props) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: We only want to recompute the atom when storageKey changes
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- We only want to recompute the atom when storageKey changes
   const openAtom = useMemo(
     () =>
       storageKey

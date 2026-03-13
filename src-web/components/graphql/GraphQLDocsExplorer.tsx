@@ -45,7 +45,7 @@ interface Props {
 
 type ExplorerItem =
   | { kind: 'type'; type: GraphQLType; from: ExplorerItem }
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   | { kind: 'field'; type: GraphQLField<any, any>; from: ExplorerItem }
   | { kind: 'input_field'; type: GraphQLInputField; from: ExplorerItem }
   | null;
@@ -182,14 +182,14 @@ function GraphQLExplorerHeader({
           <Icon icon="book_open_text" />
           {crumbs.map((crumb, i) => {
             return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              // oxlint-disable-next-line react/no-array-index-key
               <Fragment key={i}>
                 {i > 0 && <Icon icon="chevron_right" className="text-text-subtlest" />}
                 {crumb === item || item == null ? (
                   <GqlTypeLabel noTruncate item={item} />
                 ) : crumb === item ? null : (
                   <GqlTypeLink
-                    // biome-ignore lint/suspicious/noArrayIndexKey: none
+                    // oxlint-disable-next-line react/no-array-index-key
                     key={i}
                     noTruncate
                     item={crumb}
@@ -674,7 +674,7 @@ function Subheading({ children, count }: { children: ReactNode; count?: number }
 
 interface SearchResult {
   name: string;
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField;
   score: number;
   from: GraphQLNamedType | null;
@@ -897,10 +897,10 @@ function DocMarkdown({ children, className }: { children: string | null; classNa
 
 function walkTypeGraph(
   schema: GraphQLSchema,
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   start: GraphQLType | GraphQLField<any, any> | GraphQLInputField | null,
   cb: (
-    // biome-ignore lint/suspicious/noExplicitAny: none
+    // oxlint-disable-next-line no-explicit-any
     type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField,
     from: GraphQLNamedType | null,
     path: string[],
@@ -908,7 +908,7 @@ function walkTypeGraph(
 ) {
   const visited = new Set<string>();
   const queue: Array<{
-    // biome-ignore lint/suspicious/noExplicitAny: none
+    // oxlint-disable-next-line no-explicit-any
     current: GraphQLType | GraphQLField<any, any> | GraphQLInputField;
     from: GraphQLNamedType | null;
     path: string[];
@@ -928,7 +928,7 @@ function walkTypeGraph(
   }
 
   while (queue.length > 0) {
-    // biome-ignore lint/style/noNonNullAssertion: none
+    // oxlint-disable-next-line no-non-null-assertion
     const { current, from, path } = queue.shift()!;
     if (!isNamedType(current)) continue;
 
@@ -981,7 +981,7 @@ function walkTypeGraph(
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: none
+// oxlint-disable-next-line no-explicit-any
 function toExplorerItem(t: any, from: ExplorerItem | null): ExplorerItem | null {
   if (t == null) return null;
 

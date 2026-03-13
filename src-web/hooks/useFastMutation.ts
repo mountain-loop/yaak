@@ -71,6 +71,6 @@ export function useFastMutation<TData = unknown, TError = unknown, TVariables = 
 ) {
   return useMemo(() => {
     return createFastMutation(defaultArgs);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Force it!
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Force it!
   }, defaultArgs.mutationKey);
 }

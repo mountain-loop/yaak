@@ -111,7 +111,7 @@ function TreeInner<T extends { id: string }>(
   }, []);
 
   // Select the first item on first render
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only used for initial render
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only used for initial render
   useEffect(() => {
     const ids = jotaiStore.get(selectedIdsFamily(treeId));
     const fallback = selectableItems[0];
@@ -736,7 +736,7 @@ function DropRegionAfterList({
   onContextMenu?: (e: MouseEvent<HTMLDivElement>) => void;
 }) {
   const { setNodeRef } = useDroppable({ id });
-  // biome-ignore lint/a11y/noStaticElementInteractions: Meh
+  // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
   return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
 }
 

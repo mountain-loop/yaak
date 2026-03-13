@@ -144,7 +144,7 @@ function BaseInput({
       isFocused: () => editorRef.current?.hasFocus ?? false,
       value: () => editorRef.current?.state.doc.toString() ?? '',
       dispatch: (...args) => {
-        // biome-ignore lint/suspicious/noExplicitAny: none
+        // oxlint-disable-next-line no-explicit-any
         editorRef.current?.dispatch(...(args as any));
       },
       selectAll() {

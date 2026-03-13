@@ -910,7 +910,7 @@ export class PluginInstance {
         render: async (args: TemplateRenderRequest) => {
           const payload = { type: 'template_render_request', ...args } as const;
           const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
-          // biome-ignore lint/suspicious/noExplicitAny: That's okay
+          // oxlint-disable-next-line no-explicit-any -- That's okay
           return result.data as any;
         },
       },
@@ -973,7 +973,7 @@ export class PluginInstance {
 
 function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
   return inputs.map((input) => {
-    // biome-ignore lint/suspicious/noExplicitAny: stripping dynamic from union type
+    // oxlint-disable-next-line no-explicit-any -- stripping dynamic from union type
     const { dynamic: _dynamic, ...rest } = input as any;
     if ('inputs' in rest && Array.isArray(rest.inputs)) {
       rest.inputs = stripDynamicCallbacks(rest.inputs);

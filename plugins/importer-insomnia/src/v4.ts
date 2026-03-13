@@ -1,4 +1,4 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: too flexible for strict types
+/* oxlint-disable no-explicit-any */
 import type { PartialImportResources } from '@yaakapp/api';
 import { convertId, convertTemplateSyntax, isJSObject } from './common';
 

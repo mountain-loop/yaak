@@ -53,6 +53,7 @@ function buildClientAssertionJwt(params: {
     signingKey = secret;
   } else if (trimmed.startsWith('{')) {
     // Looks like JSON - treat as JWK. There is surely a better way to detect JWK vs a raw secret, but this should work in most cases.
+    // oxlint-disable-next-line no-explicit-any
     let jwk: any;
     try {
       jwk = JSON.parse(trimmed);

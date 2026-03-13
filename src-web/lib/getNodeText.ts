@@ -14,7 +14,7 @@ export function getNodeText(node: ReactNode): string {
   }
 
   if (typeof node === 'object' && node) {
-    // biome-ignore lint/suspicious/noExplicitAny: none
+    // oxlint-disable-next-line no-explicit-any
     return getNodeText((node as any).props.children);
   }
 

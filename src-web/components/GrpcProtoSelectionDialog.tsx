@@ -144,7 +144,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               {protoFiles.map((f, i) => {
                 const parts = f.split('/');
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: none
+                  // oxlint-disable-next-line react/no-array-index-key
                   <tr key={f + i} className="group">
                     <td>
                       <Icon icon={f.endsWith('.proto') ? 'file_code' : 'folder_code'} />

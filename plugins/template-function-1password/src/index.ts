@@ -123,7 +123,7 @@ export const plugin: PluginDefinition = {
             {
               name: 'token',
               type: 'text',
-              // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
+              // oxlint-disable-next-line no-template-curly-in-string -- Yaak template syntax
               defaultValue: '${[1PASSWORD_TOKEN]}',
               dynamic(_ctx, args) {
                 switch (args.values.authMethod) {

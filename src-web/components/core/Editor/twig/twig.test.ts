@@ -1,4 +1,4 @@
-// biome-ignore-all lint/suspicious/noTemplateCurlyInString: We're testing this, specifically
+/* oxlint-disable no-template-curly-in-string */
 
 import { describe, expect, test } from 'vite-plus/test';
 import { parser } from './twig';

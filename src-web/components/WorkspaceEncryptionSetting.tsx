@@ -285,7 +285,7 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
         keyText.split('').map((c, i) => {
           return (
             <span
-              // biome-ignore lint/suspicious/noArrayIndexKey: it's fine
+              // oxlint-disable-next-line react/no-array-index-key
               key={i}
               className={classNames(
                 c.match(/[0-9]/) && 'text-info',
