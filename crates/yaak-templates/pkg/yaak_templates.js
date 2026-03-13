@@ -1,6 +1,5 @@
-import init from "./yaak_templates_bg.wasm?init";
+import * as wasm from "./yaak_templates_bg.wasm";
 export * from "./yaak_templates_bg.js";
-import * as bg from "./yaak_templates_bg.js";
-const instance = await init({ "./yaak_templates_bg.js": bg });
-bg.__wbg_set_wasm(instance.exports);
-instance.exports.__wbindgen_start();
+import { __wbg_set_wasm } from "./yaak_templates_bg.js";
+__wbg_set_wasm(wasm);
+wasm.__wbindgen_start();
