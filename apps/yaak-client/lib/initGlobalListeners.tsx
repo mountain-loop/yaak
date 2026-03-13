@@ -36,7 +36,7 @@ export function initGlobalListeners() {
   });
 
   // Show errors for any plugins that failed to load during startup
-  invokeCmd<[string, string][]>("cmd_plugin_init_errors").then((errors) => {
+  void invokeCmd<[string, string][]>("cmd_plugin_init_errors").then((errors) => {
     for (const [dir, err] of errors) {
       const name = dir.split(/[/\\]/).pop() ?? dir;
       showToast({
@@ -93,7 +93,7 @@ export function initGlobalListeners() {
             done,
           },
         };
-        emit(event.id, result);
+        void emit(event.id, result);
       };
 
       const values = await showPromptForm({
@@ -122,7 +122,7 @@ export function initGlobalListeners() {
   // Listen for update events
   listenToTauriEvent<UpdateInfo>("update_available", async ({ payload }) => {
     console.log("Got update available", payload);
-    showUpdateAvailableToast(payload);
+    void showUpdateAvailableToast(payload);
   });
 
   listenToTauriEvent<YaakNotification>("notification", ({ payload }) => {

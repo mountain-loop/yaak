@@ -4,6 +4,7 @@ import { patchModel } from "@yaakapp-internal/models";
 import { Banner, Icon } from "@yaakapp-internal/ui";
 import { useCallback, useMemo } from "react";
 import { useKeyValue } from "../hooks/useKeyValue";
+import { fireAndForget } from "../lib/fireAndForget";
 import { textLikelyContainsJsonComments } from "../lib/jsonComments";
 import type { DropdownItem } from "./core/Dropdown";
 import { Dropdown } from "./core/Dropdown";
@@ -57,12 +58,12 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
     } else {
       delete newBody.sendJsonComments;
     }
-    patchModel(request, { body: newBody });
+    fireAndForget(patchModel(request, { body: newBody }));
   }, [request, autoFix]);
 
   const handleDropdownOpen = useCallback(() => {
     if (!bannerDismissed) {
-      setBannerDismissed(true);
+      fireAndForget(setBannerDismissed(true));
     }
   }, [bannerDismissed, setBannerDismissed]);
 

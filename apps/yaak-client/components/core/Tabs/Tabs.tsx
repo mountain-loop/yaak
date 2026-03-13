@@ -23,6 +23,7 @@ import {
 } from "react";
 import { useKeyValue } from "../../../hooks/useKeyValue";
 import { computeSideForDragMove, DropMarker } from "@yaakapp-internal/ui";
+import { fireAndForget } from "../../../lib/fireAndForget";
 import { ErrorBoundary } from "../../ErrorBoundary";
 import type { ButtonProps } from "../Button";
 import { Button } from "../Button";
@@ -142,7 +143,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
     forwardedRef,
     () => ({
       setActiveTab: (value: string) => {
-        onChangeValue(value);
+        fireAndForget(onChangeValue(value));
       },
     }),
     [onChangeValue],

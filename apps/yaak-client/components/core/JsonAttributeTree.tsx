@@ -5,7 +5,7 @@ import { Icon } from "@yaakapp-internal/ui";
 
 interface Props {
   depth?: number;
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any -- none
   attrValue: any;
   attrKey?: string | number;
   attrKeyJsonPath?: string;
@@ -54,10 +54,10 @@ export const JsonAttributeTree = ({
     if (jsonType === "[object Array]") {
       return {
         children: isExpanded
-          ? // biome-ignore lint/suspicious/noExplicitAny: none
+          ? // oxlint-disable-next-line no-explicit-any -- none
             attrValue.flatMap((v: any, i: number) => (
               <JsonAttributeTree
-                // biome-ignore lint/suspicious/noArrayIndexKey: none
+                // oxlint-disable-next-line no-array-index-key -- none
                 key={i}
                 depth={depth + 1}
                 attrValue={v}

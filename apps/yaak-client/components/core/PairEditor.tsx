@@ -144,7 +144,7 @@ export function PairEditor({
     [handle, pairs, setRef],
   );
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only care about forceUpdateKey
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only care about forceUpdateKey
   useEffect(() => {
     // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't use to have IDs)
     const newPairs: PairWithId[] = [];

@@ -13,15 +13,15 @@ const queryClient = new QueryClient();
 const jotaiStore = createStore();
 
 // Load initial models from the database
-rpc("list_models", {}).then((res) => {
+void rpc("list_models", {}).then((res) => {
   jotaiStore.set(dataAtom, (prev) => replaceAll(prev, "http_exchange", res.httpExchanges));
 });
 
 // Register hotkeys from action metadata
-initHotkeys();
+void initHotkeys();
 
 // Subscribe to model change events from the backend
-listen("model_write", (payload) => {
+void listen("model_write", (payload) => {
   jotaiStore.set(dataAtom, (prev) =>
     applyChange(prev, "http_exchange", payload.model, payload.change),
   );

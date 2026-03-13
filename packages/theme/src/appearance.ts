@@ -18,7 +18,7 @@ export function subscribeToWindowAppearanceChange(
     unsubscribe: () => {},
   };
 
-  getCurrentWebviewWindow()
+  void getCurrentWebviewWindow()
     .onThemeChanged((theme) => {
       cb(theme.payload);
     })
@@ -39,6 +39,6 @@ export function resolveAppearance(
 
 export function subscribeToPreferredAppearance(cb: (appearance: Appearance) => void) {
   cb(getCSSAppearance());
-  getWindowAppearance().then(cb);
+  void getWindowAppearance().then(cb);
   subscribeToWindowAppearanceChange(cb);
 }

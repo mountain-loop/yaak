@@ -39,7 +39,7 @@ export function watchWorkspaceFiles(
     channel,
   });
 
-  unlistenPromise.then(({ unlistenEvent }) => {
+  void unlistenPromise.then(({ unlistenEvent }) => {
     addWatchKey(unlistenEvent);
   });
 
@@ -53,7 +53,7 @@ export function watchWorkspaceFiles(
 }
 
 function unlistenToWatcher(unlistenEvent: string) {
-  emit(unlistenEvent).then(() => {
+  void emit(unlistenEvent).then(() => {
     removeWatchKey(unlistenEvent);
   });
 }

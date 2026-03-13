@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
 
 /** Look up metadata for a specific action invocation. */
+// oxlint-disable-next-line no-redundant-type-constituents -- ActionMetadata resolves at runtime
 export function useActionMetadata(action: ActionInvocation): ActionMetadata | null {
+  // oxlint-disable-next-line no-redundant-type-constituents -- ActionMetadata resolves at runtime
   const [meta, setMeta] = useState<ActionMetadata | null>(null);
 
   useEffect(() => {
-    getActions().then((actions) => {
+    void getActions().then((actions) => {
       const match = actions.find(
         ([inv]) => inv.scope === action.scope && inv.action === action.action,
       );

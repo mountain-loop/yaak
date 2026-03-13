@@ -187,11 +187,7 @@ impl PluginManager {
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {
             for (dir, err) in &init_errors {
-<<<<<<< HEAD
-                error!("Failed to initialize plugin {dir}: {err}");
-=======
                 warn!("Plugin failed to initialize: {dir}: {err}");
->>>>>>> main
             }
             *plugin_manager.init_errors.lock().await = init_errors;
         }
@@ -199,13 +195,8 @@ impl PluginManager {
         Ok(plugin_manager)
     }
 
-<<<<<<< HEAD
-    /// Take and clear any plugin initialization errors.
-    /// Returns the errors only once — subsequent calls return an empty list.
-=======
     /// Take any initialization errors, clearing them from the manager.
     /// Returns a list of `(plugin_directory, error_message)` pairs.
->>>>>>> main
     pub async fn take_init_errors(&self) -> Vec<(String, String)> {
         std::mem::take(&mut *self.init_errors.lock().await)
     }

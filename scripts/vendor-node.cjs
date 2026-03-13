@@ -107,7 +107,7 @@ rmSync(tmpDir, { recursive: true, force: true });
 function tryExecSync(cmd) {
   try {
     return execSync(cmd, { stdio: "pipe" }).toString("utf-8");
-  } catch (_) {
+  } catch {
     return "";
   }
 }

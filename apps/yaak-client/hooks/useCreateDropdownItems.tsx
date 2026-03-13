@@ -18,7 +18,7 @@ export function useCreateDropdownItems({
 }: {
   hideFolder?: boolean;
   hideIcons?: boolean;
-  folderId?: string | null | "active-folder";
+  folderId?: string | null;
 } = {}): DropdownItem[] {
   const workspaceId = useAtomValue(activeWorkspaceIdAtom);
   const activeRequest = useAtomValue(activeRequestAtom);
@@ -40,7 +40,7 @@ export function getCreateDropdownItems({
 }: {
   hideFolder?: boolean;
   hideIcons?: boolean;
-  folderId?: string | null | "active-folder";
+  folderId?: string | null;
   workspaceId: string | null;
   activeRequest: HttpRequest | GrpcRequest | WebsocketRequest | null;
   onCreate?: (

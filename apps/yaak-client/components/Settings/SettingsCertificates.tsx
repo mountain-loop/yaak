@@ -236,7 +236,7 @@ export function SettingsCertificates() {
         <VStack space={3}>
           {certificates.map((cert, index) => (
             <CertificateEditor
-              // biome-ignore lint/suspicious/noArrayIndexKey: Index is fine here
+              // oxlint-disable-next-line react/no-array-index-key
               key={index}
               certificate={cert}
               index={index}

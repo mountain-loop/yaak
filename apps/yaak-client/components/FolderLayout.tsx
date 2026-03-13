@@ -42,7 +42,7 @@ export function FolderLayout({ folder, style }: Props) {
   }, [folder.id, folders, requests]);
 
   const handleSendAll = useCallback(() => {
-    sendAllAction?.call(folder);
+    void sendAllAction?.call(folder);
   }, [sendAllAction, folder]);
 
   return (

@@ -73,7 +73,7 @@ export function MultipartViewer({ data, boundary, idPrefix = "multipart" }: Prop
     >
       {parts.map((part, i) => (
         <TabContent
-          // biome-ignore lint/suspicious/noArrayIndexKey: Nothing else to key on
+          // oxlint-disable-next-line react/no-array-index-key -- Nothing else to key on
           key={idPrefix + part.name + i}
           value={tabValue(part, i)}
           className="pl-3 !pt-0"

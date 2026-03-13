@@ -16,7 +16,7 @@ export function useRpcQueryWithEvent<
   const query = useRpcQuery(cmd, payload, opts);
 
   useRpcEvent(event, () => {
-    queryClient.invalidateQueries({ queryKey: [cmd, payload] });
+    void queryClient.invalidateQueries({ queryKey: [cmd, payload] });
   });
 
   return query;

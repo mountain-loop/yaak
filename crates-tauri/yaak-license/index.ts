@@ -29,7 +29,7 @@ export function useLicense() {
       await queryClient.invalidateQueries({ queryKey: CHECK_QUERY_KEY });
     });
     return () => {
-      unlisten.then((fn) => fn());
+      void unlisten.then((fn) => fn());
     };
   }, []);
 

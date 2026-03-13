@@ -95,8 +95,8 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
 
   const handleError = (err: unknown) => {
     showToast({
-      id: `${err}`,
-      message: `${err}`,
+      id: String(err),
+      message: String(err),
       color: "danger",
       timeout: 5000,
     });

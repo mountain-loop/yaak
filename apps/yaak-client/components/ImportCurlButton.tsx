@@ -13,9 +13,9 @@ export function ImportCurlButton() {
   const importCurl = useImportCurl();
   const [isLoading, setIsLoading] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: none
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- none
   useEffect(() => {
-    readText().then(setClipboardText);
+    void readText().then(setClipboardText);
   }, [focused]);
 
   if (!clipboardText?.trim().startsWith("curl ")) {

@@ -125,6 +125,7 @@ module.exports = {
   },
   plugins: [
     require("@tailwindcss/container-queries"),
+    // oxlint-disable-next-line unbound-method -- destructured from plugin API
     plugin(({ addVariant }) => {
       addVariant("hocus", ["&:hover", "&:focus-visible", "&.focus:focus"]);
       addVariant("focus-visible-or-class", ["&:focus-visible", "&.focus:focus"]);

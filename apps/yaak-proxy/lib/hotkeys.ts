@@ -38,6 +38,7 @@ export async function initHotkeys(): Promise<() => void> {
 
   const bindings: ActionBinding[] = actions
     .filter(
+      // oxlint-disable-next-line no-redundant-type-constituents -- ActionMetadata resolves at runtime
       (entry): entry is [ActionInvocation, ActionMetadata & { defaultHotkey: string }] =>
         entry[1].defaultHotkey != null,
     )
@@ -51,7 +52,7 @@ export async function initHotkeys(): Promise<() => void> {
     for (const binding of bindings) {
       if (matchesEvent(binding.keys, e)) {
         e.preventDefault();
-        rpc("execute_action", binding.invocation);
+        void rpc("execute_action", binding.invocation);
         return;
       }
     }

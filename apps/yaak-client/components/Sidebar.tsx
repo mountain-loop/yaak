@@ -317,7 +317,7 @@ function Sidebar({ className }: { className?: string }) {
     "sidebar.selected.delete",
     useCallback(() => {
       const items = getSelectedTreeModels();
-      if (items) handleDeleteSelected(items);
+      if (items) void handleDeleteSelected(items);
     }, [getSelectedTreeModels, handleDeleteSelected]),
     { enable: treeHasFocus },
   );

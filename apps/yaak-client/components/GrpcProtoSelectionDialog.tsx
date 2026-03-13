@@ -27,7 +27,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
   const services = grpc.reflect.data;
   const serverReflection = protoFiles.length === 0 && services != null;
   let reflectError = grpc.reflect.error ?? null;
-  const reflectionUnimplemented = `${reflectError}`.match(/unimplemented/i);
+  const reflectionUnimplemented = String(reflectError).match(/unimplemented/i);
 
   if (reflectionUnimplemented) {
     reflectError = null;
@@ -100,7 +100,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Found services{" "}
               {services?.slice(0, 5).map((s, i) => {
                 return (
-                  <span key={s.name + s.methods.join(",")}>
+                  <span key={s.name + s.methods.map((m) => m.name).join(",")}>
                     <InlineCode>{s.name}</InlineCode>
                     {i === services.length - 1 ? "" : i === services.length - 2 ? " and " : ", "}
                   </span>
@@ -116,7 +116,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Server reflection found services
               {services?.map((s, i) => {
                 return (
-                  <span key={s.name + s.methods.join(",")}>
+                  <span key={s.name + s.methods.map((m) => m.name).join(",")}>
                     <InlineCode>{s.name}</InlineCode>
                     {i === services.length - 1 ? "" : i === services.length - 2 ? " and " : ", "}
                   </span>
@@ -140,8 +140,8 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             <tbody className="divide-y divide-surface-highlight">
               {protoFiles.map((f, i) => {
                 const parts = f.split("/");
+                // oxlint-disable-next-line no-array-index-key -- none
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: none
                   <tr key={f + i} className="group">
                     <td>
                       <Icon icon={f.endsWith(".proto") ? "file_code" : "folder_code"} />

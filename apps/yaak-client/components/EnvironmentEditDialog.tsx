@@ -14,6 +14,7 @@ import {
 import { useHotKey } from "../hooks/useHotKey";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { fireAndForget } from "../lib/fireAndForget";
 import { jotaiStore } from "../lib/jotai";
 import { isBaseEnvironment, isSubEnvironment } from "../lib/model_util";
 import { resolvedModelName } from "../lib/resolvedModelName";
@@ -116,7 +117,7 @@ function EnvironmentEditDialogSidebar({
   const treeRef = useRef<TreeHandle>(null);
   const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: none
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- none
   useLayoutEffect(() => {
     if (selectedEnvironmentId == null) return;
     treeRef.current?.selectItem(selectedEnvironmentId);
@@ -173,7 +174,9 @@ function EnvironmentEditDialogSidebar({
     "sidebar.selected.delete",
     useCallback(() => {
       const items = getSelectedTreeModels();
-      if (items) handleDeleteSelected(items);
+      if (items) {
+        fireAndForget(handleDeleteSelected(items));
+      }
     }, [getSelectedTreeModels, handleDeleteSelected]),
     { enable: treeHasFocus, priority: 100 },
   );

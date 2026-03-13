@@ -6,13 +6,14 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useEffect, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import { useContainerSize } from "@yaakapp-internal/ui";
+import { fireAndForget } from "../../lib/fireAndForget";
 
-import("react-pdf").then(({ pdfjs }) => {
+fireAndForget(import("react-pdf").then(({ pdfjs }) => {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     "pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url,
   ).toString();
-});
+}));
 
 interface Props {
   bodyPath?: string;
@@ -56,7 +57,7 @@ export function PdfViewer({ bodyPath, data }: Props) {
         externalLinkTarget="_blank"
         externalLinkRel="noopener noreferrer"
       >
-        {Array.from(new Array(numPages), (_, index) => (
+        {Array.from({ length: numPages ?? 0 }, (_, index) => (
           <Page
             className="mb-6 select-all"
             renderTextLayer

@@ -1,5 +1,6 @@
 import type { DnsOverride, Workspace } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
+import { fireAndForget } from "../lib/fireAndForget";
 import {
   HStack,
   Table,
@@ -37,7 +38,7 @@ export function DnsOverridesEditor({ workspace }: Props) {
 
   const handleChange = useCallback(
     (overrides: DnsOverride[]) => {
-      patchModel(workspace, { settingDnsOverrides: overrides });
+      fireAndForget(patchModel(workspace, { settingDnsOverrides: overrides }));
     },
     [workspace],
   );

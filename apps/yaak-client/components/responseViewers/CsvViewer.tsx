@@ -43,7 +43,7 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
         </TableHead>
         <TableBody>
           {parsed.data.map((row, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: none
+            // oxlint-disable-next-line react/no-array-index-key
             <TableRow key={i}>
               {parsed.meta.fields?.map((key) => (
                 <TableCell key={key}>{row[key] ?? ""}</TableCell>
