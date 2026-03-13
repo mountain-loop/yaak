@@ -3,7 +3,7 @@ import type { HttpResponse } from '@yaakapp-internal/models';
 import { getModel } from '@yaakapp-internal/models';
 import mime from 'mime';
 import slugify from 'slugify';
-import { InlineCode } from '../components/core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { getContentTypeFromHeaders } from '../lib/model_util';
 import { invokeCmd } from '../lib/tauri';
 import { showToast } from '../lib/toast';

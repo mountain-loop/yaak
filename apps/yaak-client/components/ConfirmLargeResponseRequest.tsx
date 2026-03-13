@@ -5,9 +5,8 @@ import { useToggle } from '../hooks/useToggle';
 import { isProbablyTextContentType } from '../lib/contentType';
 import { getContentTypeFromHeaders } from '../lib/model_util';
 import { CopyButton } from './CopyButton';
-import { Banner } from '@yaakapp-internal/ui';
+import { Banner, InlineCode } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
 import { SizeTag } from './core/SizeTag';
 import { HStack } from './core/Stacks';
 

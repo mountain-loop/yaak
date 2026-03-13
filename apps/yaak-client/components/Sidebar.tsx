@@ -60,10 +60,10 @@ import {
   Tree,
   isSelectedFamily,
   selectedIdsFamily,
+  InlineCode,
 } from '@yaakapp-internal/ui';
 import type { TreeNode, TreeHandle, TreeProps, TreeItemProps } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
 import type { InputHandle } from './core/Input';
 import { Input } from './core/Input';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';

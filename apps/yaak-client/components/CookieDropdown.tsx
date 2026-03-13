@@ -9,9 +9,8 @@ import { showPrompt } from '../lib/prompt';
 import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
 import { CookieDialog } from './CookieDialog';
 import { Dropdown, type DropdownItem } from './core/Dropdown';
-import { Icon } from '@yaakapp-internal/ui';
+import { Icon, InlineCode } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
 
 export const CookieDropdown = memo(function CookieDropdown() {
   const activeCookieJar = useActiveCookieJar();

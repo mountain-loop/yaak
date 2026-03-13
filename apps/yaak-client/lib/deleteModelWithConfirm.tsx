@@ -1,6 +1,6 @@
 import type { AnyModel } from '@yaakapp-internal/models';
 import { deleteModel, modelTypeLabel } from '@yaakapp-internal/models';
-import { InlineCode } from '../components/core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { Prose } from '../components/Prose';
 import { showConfirmDelete } from './confirm';
 import { pluralizeCount } from './pluralize';

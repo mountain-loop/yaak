@@ -8,7 +8,7 @@ import { Checkbox } from '../core/Checkbox';
 import { DetailsBanner } from '../core/DetailsBanner';
 import { Heading } from '../core/Heading';
 import { IconButton } from '../core/IconButton';
-import { InlineCode } from '../core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { PlainInput } from '../core/PlainInput';
 import { Separator } from '../core/Separator';
 import { HStack, VStack } from '../core/Stacks';

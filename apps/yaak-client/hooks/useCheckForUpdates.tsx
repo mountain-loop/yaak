@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { InlineCode } from '../components/core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { showAlert } from '../lib/alert';
 import { appInfo } from '../lib/appInfo';
 import { minPromiseMillis } from '../lib/minPromiseMillis';

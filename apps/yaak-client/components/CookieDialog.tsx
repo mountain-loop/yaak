@@ -2,9 +2,8 @@ import type { Cookie } from '@yaakapp-internal/models';
 import { cookieJarsAtom, patchModel } from '@yaakapp-internal/models';
 import { useAtomValue } from 'jotai';
 import { cookieDomain } from '../lib/model_util';
-import { Banner } from '@yaakapp-internal/ui';
+import { Banner, InlineCode } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
 
 interface Props {
   cookieJarId: string | null;

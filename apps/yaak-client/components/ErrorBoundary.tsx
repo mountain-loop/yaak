@@ -1,9 +1,8 @@
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, useEffect } from 'react';
 import { showDialog } from '../lib/dialog';
-import { Banner } from '@yaakapp-internal/ui';
+import { Banner, InlineCode } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
 import RouteError from './RouteError';
 
 interface ErrorBoundaryProps {

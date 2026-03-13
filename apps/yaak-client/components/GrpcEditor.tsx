@@ -19,7 +19,7 @@ import { Button } from './core/Button';
 import type { EditorProps } from './core/Editor/Editor';
 import { Editor } from './core/Editor/LazyEditor';
 import { FormattedError } from './core/FormattedError';
-import { InlineCode } from './core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { VStack } from './core/Stacks';
 import { GrpcProtoSelectionDialog } from './GrpcProtoSelectionDialog';
 

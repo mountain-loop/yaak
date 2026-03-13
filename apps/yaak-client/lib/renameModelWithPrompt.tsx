@@ -1,6 +1,6 @@
 import type { AnyModel } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
-import { InlineCode } from '../components/core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { showPrompt } from './prompt';
 
 export async function renameModelWithPrompt(model: Extract<AnyModel, { name: string }> | null) {

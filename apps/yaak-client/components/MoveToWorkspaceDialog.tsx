@@ -6,8 +6,8 @@ import { pluralizeCount } from '../lib/pluralize';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
 import { showToast } from '../lib/toast';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
 import { Select } from './core/Select';
 import { VStack } from './core/Stacks';
 

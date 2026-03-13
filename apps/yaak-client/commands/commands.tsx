@@ -1,9 +1,9 @@
 import { createWorkspaceModel, type Folder, modelTypeLabel } from '@yaakapp-internal/models';
 import { applySync, calculateSync } from '@yaakapp-internal/sync';
 import { Button } from '../components/core/Button';
-import { InlineCode } from '../components/core/InlineCode';
 import {
   Banner,
+  InlineCode,
   Table,
   TableBody,
   TableCell,

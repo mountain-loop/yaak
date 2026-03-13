@@ -38,7 +38,7 @@ import { ConfirmLargeRequestBody } from './ConfirmLargeRequestBody';
 import { CountBadge } from './core/CountBadge';
 import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
 import { Editor } from './core/Editor/LazyEditor';
-import { InlineCode } from './core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import type { Pair } from './core/PairEditor';
 import { PlainInput } from './core/PlainInput';
 import type { TabItem, TabsRef } from './core/Tabs/Tabs';

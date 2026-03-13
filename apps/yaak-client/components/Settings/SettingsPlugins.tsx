@@ -12,7 +12,7 @@ import {
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
-import { Icon, LoadingIcon, useDebouncedValue } from '@yaakapp-internal/ui';
+import { Icon, InlineCode, LoadingIcon, useDebouncedValue } from '@yaakapp-internal/ui';
 import { useInstallPlugin } from '../../hooks/useInstallPlugin';
 import { usePluginInfo } from '../../hooks/usePluginInfo';
 import { usePluginsKey, useRefreshPlugins } from '../../hooks/usePlugins';
@@ -22,7 +22,6 @@ import { Button } from '../core/Button';
 import { Checkbox } from '../core/Checkbox';
 import { CountBadge } from '../core/CountBadge';
 import { IconButton } from '../core/IconButton';
-import { InlineCode } from '../core/InlineCode';
 import { Link } from '../core/Link';
 import { PlainInput } from '../core/PlainInput';
 import { HStack } from '../core/Stacks';

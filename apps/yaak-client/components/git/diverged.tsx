@@ -1,8 +1,8 @@
 import type { DivergedStrategy } from '@yaakapp-internal/git';
 import { useState } from 'react';
 import { showDialog } from '../../lib/dialog';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { Button } from '../core/Button';
-import { InlineCode } from '../core/InlineCode';
 import { RadioCards } from '../core/RadioCards';
 import { HStack } from '../core/Stacks';
 

@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai';
 
 import { Checkbox } from '../core/Checkbox';
 import { Heading } from '../core/Heading';
-import { InlineCode } from '../core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { PlainInput } from '../core/PlainInput';
 import { Select } from '../core/Select';
 import { Separator } from '../core/Separator';

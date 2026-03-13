@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai';
 import { useEffect, useState } from 'react';
-import { InlineCode } from '../components/core/InlineCode';
+import { InlineCode } from '@yaakapp-internal/ui';
 import { showToast } from '../lib/toast';
 import { activeWorkspaceAtom } from './useActiveWorkspace';
 

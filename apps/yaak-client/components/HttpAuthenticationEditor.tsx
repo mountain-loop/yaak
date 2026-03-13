@@ -14,9 +14,8 @@ import { useInheritedAuthentication } from '../hooks/useInheritedAuthentication'
 import { useRenderTemplate } from '../hooks/useRenderTemplate';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { Dropdown, type DropdownItem } from './core/Dropdown';
-import { Icon } from '@yaakapp-internal/ui';
+import { Icon, InlineCode } from '@yaakapp-internal/ui';
 import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
 import { Input, type InputProps } from './core/Input';
 import { Link } from './core/Link';
 import { SegmentedControl } from './core/SegmentedControl';

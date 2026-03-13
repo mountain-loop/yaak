@@ -1,6 +1,5 @@
 import { showPromptForm } from '../../lib/prompt-form';
-import { Banner } from '@yaakapp-internal/ui';
-import { InlineCode } from '../core/InlineCode';
+import { Banner, InlineCode } from '@yaakapp-internal/ui';
 
 export interface GitCredentials {
   username: string;
