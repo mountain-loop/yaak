@@ -18,7 +18,7 @@ export const plugin: PluginDefinition = {
         // Not sure what cases this happens in (?)
         return { content: String(result) };
       } catch (err) {
-        return { content: '', error: `Invalid filter: ${err}` };
+        return { content: '', error: `Invalid filter: ${err instanceof Error ? err.message : String(err)}` };
       }
     },
   },

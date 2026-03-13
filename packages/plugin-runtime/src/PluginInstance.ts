@@ -91,7 +91,7 @@ export class PluginInstance {
         );
       } catch (err: unknown) {
         await ctx.toast.show({
-          message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err}`,
+          message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err instanceof Error ? err.message : String(err)}`,
           color: 'notice',
           icon: 'alert_triangle',
           timeout: 30000,
@@ -328,6 +328,7 @@ export class PluginInstance {
         payload.values = applyFormInputDefaults(args, payload.values);
         const resolvedArgs = await applyDynamicFormInput(ctx, args, payload);
         const resolvedActions: HttpAuthenticationAction[] = [];
+        // oxlint-disable-next-line unbound-method
         for (const { onSelect: _onSelect, ...action } of actions ?? []) {
           resolvedActions.push(action);
         }
@@ -474,7 +475,7 @@ export class PluginInstance {
               {
                 type: 'call_template_function_response',
                 value: null,
-                error: `${err}`.replace(/^Error:\s*/g, ''),
+                error: (err instanceof Error ? err.message : String(err)).replace(/^Error:\s*/g, ''),
               },
               replyId,
             );
@@ -483,7 +484,7 @@ export class PluginInstance {
         }
       }
     } catch (err) {
-      const error = `${err}`.replace(/^Error:\s*/g, '');
+      const error = (err instanceof Error ? err.message : String(err)).replace(/^Error:\s*/g, '');
       console.log('Plugin call threw exception', payload.type, '→', error);
       this.#sendPayload(context, { type: 'error_response', error }, replyId);
       return;

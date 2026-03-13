@@ -1,3 +1,4 @@
+/* oxlint-disable unbound-method */
 import process from 'node:process';
 
 export function interceptStdout(intercept: (text: string) => string) {

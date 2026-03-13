@@ -270,7 +270,7 @@ function GqlTypeInfo({
         {Object.entries(fields).map(([fieldName, field]) => {
           const fieldItem: ExplorerItem = toExplorerItem(field, item);
           return (
-            <div key={`${field.type}::${field.name}`} className="my-4">
+            <div key={`${String(field.type)}::${field.name}`} className="my-4">
               <GqlTypeRow
                 item={fieldItem}
                 setItem={setItem}
@@ -363,7 +363,7 @@ function GqlTypeInfo({
             <Subheading>Arguments</Subheading>
             {item.type.args.map((a) => {
               return (
-                <div key={`${a.type}::${a.name}`} className="my-4">
+                <div key={`${String(a.type)}::${a.name}`} className="my-4">
                   <GqlTypeRow
                     name={{ value: a.name, color: 'info' }}
                     item={{ kind: 'type', type: a.type, from: item }}
@@ -393,7 +393,7 @@ function GqlTypeInfo({
             from: item,
           };
           return (
-            <div key={`${field.type}::${field.name}`} className="my-4">
+            <div key={`${String(field.type)}::${field.name}`} className="my-4">
               <GqlTypeRow
                 item={fieldItem}
                 setItem={setItem}
@@ -431,7 +431,7 @@ function GqlTypeInfo({
           if (field == null) return null;
           const fieldItem: ExplorerItem = { kind: 'field', type: field, from: item };
           return (
-            <div key={`${field.type}::${field.name}`} className="my-4">
+            <div key={`${String(field.type)}::${field.name}`} className="my-4">
               <GqlTypeRow
                 item={fieldItem}
                 setItem={setItem}
@@ -512,7 +512,7 @@ function GqlTypeRow({
               <span className="text-text-subtle">(</span>
               {item.type.args.map((arg) => (
                 <div
-                  key={`${arg.type}::${arg.name}`}
+                  key={`${String(arg.type)}::${arg.name}`}
                   className={classNames(item.type.args.length === 1 && 'inline-flex')}
                 >
                   {item.type.args.length > 1 && <>&nbsp;&nbsp;</>}

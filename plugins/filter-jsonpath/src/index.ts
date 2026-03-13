@@ -11,7 +11,7 @@ export const plugin: PluginDefinition = {
         const filtered = JSONPath({ path: args.filter, json: parsed });
         return { content: JSON.stringify(filtered, null, 2) };
       } catch (err) {
-        return { content: '', error: `Invalid filter: ${err}` };
+        return { content: '', error: `Invalid filter: ${err instanceof Error ? err.message : String(err)}` };
       }
     },
   },

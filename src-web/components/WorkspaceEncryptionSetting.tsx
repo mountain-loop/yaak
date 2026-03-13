@@ -127,7 +127,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
             await enableEncryption(workspaceMeta.workspaceId);
             setJustEnabledEncryption(true);
           } catch (err) {
-            setError(`Failed to enable encryption: ${err}`);
+            setError(`Failed to enable encryption: ${err instanceof Error ? err.message : String(err)}`);
           }
         }}
       >

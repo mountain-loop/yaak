@@ -1,6 +1,7 @@
 import { clear, readText } from '@tauri-apps/plugin-clipboard-manager';
 import * as m from 'motion/react-m';
 import { useEffect, useState } from 'react';
+import { fireAndForget } from '../lib/fireAndForget';
 import { useImportCurl } from '../hooks/useImportCurl';
 import { useWindowFocus } from '../hooks/useWindowFocus';
 import { Button } from './core/Button';
@@ -15,7 +16,7 @@ export function ImportCurlButton() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: none
   useEffect(() => {
-    readText().then(setClipboardText);
+    fireAndForget(readText().then(setClipboardText));
   }, [focused]);
 
   if (!clipboardText?.trim().startsWith('curl ')) {

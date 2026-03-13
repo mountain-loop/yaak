@@ -42,7 +42,7 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
       if (!disableToastError) {
         showToast({
           id: stringKey,
-          message: `${err}`,
+          message: err instanceof Error ? err.message : String(err),
           color: 'danger',
           timeout: 5000,
         });

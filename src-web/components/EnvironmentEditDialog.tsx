@@ -9,6 +9,7 @@ import {
   useEnvironmentsBreakdown,
 } from '../hooks/useEnvironmentsBreakdown';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { fireAndForget } from '../lib/fireAndForget';
 import { jotaiStore } from '../lib/jotai';
 import { isBaseEnvironment, isSubEnvironment } from '../lib/model_util';
 import { resolvedModelName } from '../lib/resolvedModelName';
@@ -199,7 +200,7 @@ function EnvironmentEditDialogSidebar({
             // Not sure why this is needed, but without it the
             // edit input blurs immediately after opening.
             requestAnimationFrame(() => {
-              actions['sidebar.selected.rename'].cb(items);
+              fireAndForget(actions['sidebar.selected.rename'].cb(items));
             });
           },
         },

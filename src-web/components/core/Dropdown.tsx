@@ -25,6 +25,7 @@ import {
 } from 'react';
 import { useKey, useWindowSize } from 'react-use';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import { fireAndForget } from '../../lib/fireAndForget';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -614,7 +615,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
             setActiveSubmenu({ item, parent, viaKeyboard: true });
           }
         } else if (item.onSelect) {
-          handleSelect(item);
+          fireAndForget(handleSelect(item));
         }
       },
       {},

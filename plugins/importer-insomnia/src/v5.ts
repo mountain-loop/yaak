@@ -261,7 +261,7 @@ function importFolder(
       variables: Object.entries(f.environment ?? {}).map(([name, value]) => ({
         enabled: true,
         name,
-        value: `${value}`,
+        value: String(value),
       })),
     };
   }
@@ -308,7 +308,7 @@ function importEnvironment(
     variables: Object.entries(e.data ?? {}).map(([name, value]) => ({
       enabled: true,
       name,
-      value: `${value}`,
+      value: String(value),
     })),
   };
 }

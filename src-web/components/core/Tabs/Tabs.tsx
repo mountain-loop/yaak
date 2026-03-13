@@ -22,6 +22,7 @@ import {
   useState,
 } from 'react';
 import { useKeyValue } from '../../../hooks/useKeyValue';
+import { fireAndForget } from '../../../lib/fireAndForget';
 import { computeSideForDragMove } from '../../../lib/dnd';
 import { DropMarker } from '../../DropMarker';
 import { ErrorBoundary } from '../../ErrorBoundary';
@@ -143,7 +144,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
     forwardedRef,
     () => ({
       setActiveTab: (value: string) => {
-        onChangeValue(value);
+        fireAndForget(onChangeValue(value));
       },
     }),
     [onChangeValue],
