@@ -27,7 +27,7 @@ rustc --version
 Install the NPM dependencies:
 
 ```shell
-vp install
+npm install
 ```
 
 Run the `bootstrap` command to do some initial setup:
