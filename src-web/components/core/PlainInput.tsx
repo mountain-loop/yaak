@@ -213,7 +213,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
         </HStack>
         {type === 'password' && !hideObscureToggle && (
           <IconButton
-            title={obscured ? `Show ${label}` : `Obscure ${label}`}
+            title={obscured ? `Show ${typeof label === 'string' ? label : 'field'}` : `Obscure ${typeof label === 'string' ? label : 'field'}`}
             size="xs"
             className="mr-0.5 group/obscure !h-auto my-0.5"
             iconClassName="group-hover/obscure:text"

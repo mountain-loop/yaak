@@ -1,3 +1,4 @@
+/* oxlint-disable no-base-to-string */
 import type {
   Context,
   Environment,

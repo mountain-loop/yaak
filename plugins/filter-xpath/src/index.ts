@@ -1,3 +1,4 @@
+/* oxlint-disable no-base-to-string */
 import { DOMParser } from '@xmldom/xmldom';
 import type { PluginDefinition } from '@yaakapp/api';
 import xpath from 'xpath';

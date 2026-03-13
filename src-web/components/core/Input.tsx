@@ -329,7 +329,7 @@ function BaseInput({
         </HStack>
         {type === 'password' && !disableObscureToggle && (
           <IconButton
-            title={obscured ? `Show ${label}` : `Obscure ${label}`}
+            title={obscured ? `Show ${typeof label === 'string' ? label : 'field'}` : `Obscure ${typeof label === 'string' ? label : 'field'}`}
             size="xs"
             className={classNames('mr-0.5 !h-auto my-0.5', disabled && 'opacity-disabled')}
             color={tint}
