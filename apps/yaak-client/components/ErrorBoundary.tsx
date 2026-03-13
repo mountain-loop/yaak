@@ -1,8 +1,7 @@
+import { Banner, Button, InlineCode } from '@yaakapp-internal/ui';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component, useEffect } from 'react';
 import { showDialog } from '../lib/dialog';
-import { Banner, InlineCode } from '@yaakapp-internal/ui';
-import { Button } from './core/Button';
 import RouteError from './RouteError';
 
 interface ErrorBoundaryProps {

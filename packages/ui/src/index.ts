@@ -9,6 +9,7 @@ export type { IconProps } from './components/Icon';
 export { Icon } from './components/Icon';
 export type { IconButtonProps } from './components/IconButton';
 export { IconButton } from './components/IconButton';
+export { FormattedError } from './components/FormattedError';
 export { InlineCode } from './components/InlineCode';
 export { LoadingIcon } from './components/LoadingIcon';
 export { Overlay } from './components/Overlay';
