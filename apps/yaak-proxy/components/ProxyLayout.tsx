@@ -1,4 +1,4 @@
-import { HeaderSize, IconButton, SidebarLayout } from '@yaakapp-internal/ui';
+import { HeaderSize, IconButton, SidebarLayout, SplitLayout } from '@yaakapp-internal/ui';
 import classNames from 'classnames';
 import { useAtomValue } from 'jotai';
 import { useState } from 'react';
@@ -124,7 +124,19 @@ export function ProxyLayout() {
           )
         }
       >
-        <ExchangesTable exchanges={exchanges} className="overflow-auto h-full" />
+        <SplitLayout
+          storageKey="proxy_detail"
+          layout="vertical"
+          defaultRatio={0.4}
+          firstSlot={({ style }) => (
+            <ExchangesTable exchanges={exchanges} style={style} className="overflow-auto" />
+          )}
+          secondSlot={({ style }) => (
+            <div style={style} className="p-3 text-text-subtlest text-sm border-t border-border-subtle">
+              Select a request to view details
+            </div>
+          )}
+        />
       </SidebarLayout>
     </div>
   );
