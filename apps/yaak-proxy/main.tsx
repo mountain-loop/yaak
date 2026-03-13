@@ -7,24 +7,21 @@ import { ProxyLayout } from "./components/ProxyLayout";
 import { listen, rpc } from "./lib/rpc";
 import { initHotkeys } from "./lib/hotkeys";
 import { applyChange, dataAtom, replaceAll } from "./lib/store";
-import { fireAndForget } from "./lib/fireAndForget";
 import "./main.css";
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
 
 // Load initial models from the database
-fireAndForget(
-  rpc("list_models", {}).then((res) => {
-    jotaiStore.set(dataAtom, (prev) => replaceAll(prev, "http_exchange", res.httpExchanges));
-  }),
-);
+void rpc("list_models", {}).then((res) => {
+  jotaiStore.set(dataAtom, (prev) => replaceAll(prev, "http_exchange", res.httpExchanges));
+});
 
 // Register hotkeys from action metadata
-fireAndForget(initHotkeys());
+void initHotkeys();
 
 // Subscribe to model change events from the backend
-listen("model_write", (payload) => {
+void listen("model_write", (payload) => {
   jotaiStore.set(dataAtom, (prev) =>
     applyChange(prev, "http_exchange", payload.model, payload.change),
   );

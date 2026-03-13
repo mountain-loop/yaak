@@ -512,13 +512,13 @@ function HttpRequestArg({
       value={value}
       disabled={arg.disabled}
       options={httpRequests.map((r) => {
-          return {
-            label:
-              buildRequestBreadcrumbs(r, folders).join(" / ") +
-              (r.id === activeHttpRequest?.id ? " (current)" : ""),
-            value: r.id,
-          };
-        })}
+        return {
+          label:
+            buildRequestBreadcrumbs(r, folders).join(" / ") +
+            (r.id === activeHttpRequest?.id ? " (current)" : ""),
+          value: r.id,
+        };
+      })}
     />
   );
 }

@@ -70,7 +70,7 @@
     "apps/yaak-proxy"
   ],
   "scripts": {
-    "prepare": "husky",
+    "prepare": "vp config",
     "init": "npm install && npm run bootstrap",
     "start": "npm run client:dev",
     "client:build": "tauri build --config crates-tauri/yaak-app-client/tauri.conf.json",
@@ -92,10 +92,10 @@
     "vendor:vendor-protoc": "node scripts/vendor-protoc.cjs",
     "vendor:vendor-node": "node scripts/vendor-node.cjs",
     "lint": "run-p lint:*",
-    "lint:biome": "biome lint",
-    "lint:extra": "npm run --workspaces --if-present lint",
-    "format": "biome format --write .",
+    "lint:vp": "vp lint",
+    "lint:workspaces": "npm run --workspaces --if-present lint",
     "replace-version": "node scripts/replace-version.cjs",
+    "format": "vp fmt --ignore-path .oxfmtignore",
     "tauri": "tauri",
     "client:tauri-before-build": "npm run bootstrap",
     "client:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-client",
@@ -110,17 +110,19 @@
     "@codemirror/legacy-modes": "^6.5.2"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.6",
     "@tauri-apps/cli": "^2.9.6",
     "@yaakapp/cli": "^0.5.1",
     "dotenv-cli": "^11.0.0",
-    "husky": "^9.1.7",
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vite-plus": "latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "overrides": {
-    "js-yaml": "^4.1.1"
-  }
+    "js-yaml": "^4.1.1",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  },
+  "packageManager": "npm@11.11.1"
 }
