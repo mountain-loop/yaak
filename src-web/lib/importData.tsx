@@ -29,9 +29,9 @@ export const importData = createFastMutation({
         title: 'Import Data',
         size: 'sm',
         render: ({ hide }) => {
-          const importAndHide = async (filePath: string) => {
+          const importAndHide = async (filePaths: string[]) => {
             try {
-              const didImport = await performImport(filePath);
+              const didImport = await performImport(filePaths);
               if (!didImport) {
                 return;
               }
@@ -49,14 +49,32 @@ export const importData = createFastMutation({
   },
 });
 
-async function performImport(filePath: string): Promise<boolean> {
+async function performImport(filePaths: string[]): Promise<boolean> {
   const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
-  const imported = await invokeCmd<BatchUpsertResult>('cmd_import_data', {
-    filePath,
-    workspaceId: activeWorkspace?.id,
-  });
 
-  const importedWorkspace = imported.workspaces[0];
+  const combined: BatchUpsertResult = {
+    workspaces: [],
+    environments: [],
+    folders: [],
+    httpRequests: [],
+    grpcRequests: [],
+    websocketRequests: [],
+  };
+
+  for (const filePath of filePaths) {
+    const imported = await invokeCmd<BatchUpsertResult>('cmd_import_data', {
+      filePath,
+      workspaceId: activeWorkspace?.id,
+    });
+    combined.workspaces.push(...imported.workspaces);
+    combined.environments.push(...imported.environments);
+    combined.folders.push(...imported.folders);
+    combined.httpRequests.push(...imported.httpRequests);
+    combined.grpcRequests.push(...imported.grpcRequests);
+    combined.websocketRequests.push(...imported.websocketRequests);
+  }
+
+  const importedWorkspace = combined.workspaces[0];
 
   showDialog({
     id: 'import-complete',
@@ -67,23 +85,23 @@ async function performImport(filePath: string): Promise<boolean> {
       return (
         <VStack space={3} className="pb-4">
           <ul className="list-disc pl-6">
-            {imported.workspaces.length > 0 && (
-              <li>{pluralizeCount('Workspace', imported.workspaces.length)}</li>
+            {combined.workspaces.length > 0 && (
+              <li>{pluralizeCount('Workspace', combined.workspaces.length)}</li>
             )}
-            {imported.environments.length > 0 && (
-              <li>{pluralizeCount('Environment', imported.environments.length)}</li>
+            {combined.environments.length > 0 && (
+              <li>{pluralizeCount('Environment', combined.environments.length)}</li>
             )}
-            {imported.folders.length > 0 && (
-              <li>{pluralizeCount('Folder', imported.folders.length)}</li>
+            {combined.folders.length > 0 && (
+              <li>{pluralizeCount('Folder', combined.folders.length)}</li>
             )}
-            {imported.httpRequests.length > 0 && (
-              <li>{pluralizeCount('HTTP Request', imported.httpRequests.length)}</li>
+            {combined.httpRequests.length > 0 && (
+              <li>{pluralizeCount('HTTP Request', combined.httpRequests.length)}</li>
             )}
-            {imported.grpcRequests.length > 0 && (
-              <li>{pluralizeCount('GRPC Request', imported.grpcRequests.length)}</li>
+            {combined.grpcRequests.length > 0 && (
+              <li>{pluralizeCount('GRPC Request', combined.grpcRequests.length)}</li>
             )}
-            {imported.websocketRequests.length > 0 && (
-              <li>{pluralizeCount('Websocket Request', imported.websocketRequests.length)}</li>
+            {combined.websocketRequests.length > 0 && (
+              <li>{pluralizeCount('Websocket Request', combined.websocketRequests.length)}</li>
             )}
           </ul>
           <div>
@@ -97,7 +115,7 @@ async function performImport(filePath: string): Promise<boolean> {
   });
 
   if (importedWorkspace != null) {
-    const environmentId = imported.environments[0]?.id ?? null;
+    const environmentId = combined.environments[0]?.id ?? null;
     await router.navigate({
       to: '/workspaces/$workspaceId',
       params: { workspaceId: importedWorkspace.id },
