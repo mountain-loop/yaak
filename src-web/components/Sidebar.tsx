@@ -1,6 +1,6 @@
-import type { Extension } from '@codemirror/state';
-import { Compartment } from '@codemirror/state';
-import { debounce } from '@yaakapp-internal/lib';
+import type { Extension } from "@codemirror/state";
+import { Compartment } from "@codemirror/state";
+import { debounce } from "@yaakapp-internal/lib";
 import type {
   AnyModel,
   Folder,
@@ -9,7 +9,7 @@ import type {
   ModelPayload,
   WebsocketRequest,
   Workspace,
-} from '@yaakapp-internal/models';
+} from "@yaakapp-internal/models";
 import {
   duplicateModel,
   foldersAtom,
@@ -20,57 +20,57 @@ import {
   patchModel,
   websocketConnectionsAtom,
   workspacesAtom,
-} from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { atom, useAtomValue } from 'jotai';
-import { selectAtom } from 'jotai/utils';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { moveToWorkspace } from '../commands/moveToWorkspace';
-import { openFolderSettings } from '../commands/openFolderSettings';
-import { activeFolderIdAtom } from '../hooks/useActiveFolderId';
-import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { allRequestsAtom } from '../hooks/useAllRequests';
-import { getCreateDropdownItems } from '../hooks/useCreateDropdownItems';
-import { getFolderActions } from '../hooks/useFolderActions';
-import { getGrpcRequestActions } from '../hooks/useGrpcRequestActions';
-import { useHotKey } from '../hooks/useHotKey';
-import { getHttpRequestActions } from '../hooks/useHttpRequestActions';
-import { useListenToTauriEvent } from '../hooks/useListenToTauriEvent';
-import { getModelAncestors } from '../hooks/useModelAncestors';
-import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { getWebsocketRequestActions } from '../hooks/useWebsocketRequestActions';
-import { deepEqualAtom } from '../lib/atoms';
-import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { fireAndForget } from '../lib/fireAndForget';
-import { jotaiStore } from '../lib/jotai';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { isSidebarFocused } from '../lib/scopes';
-import { navigateToRequestOrFolderOrWorkspace } from '../lib/setWorkspaceSearchParams';
-import type { ContextMenuProps, DropdownItem } from './core/Dropdown';
-import { Dropdown } from './core/Dropdown';
-import type { FieldDef } from './core/Editor/filter/extension';
-import { filter } from './core/Editor/filter/extension';
-import { evaluate, parseQuery } from './core/Editor/filter/query';
-import { HttpMethodTag } from './core/HttpMethodTag';
-import { HttpStatusTag } from './core/HttpStatusTag';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
-import type { InputHandle } from './core/Input';
-import { Input } from './core/Input';
-import { LoadingIcon } from './core/LoadingIcon';
-import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from './core/tree/atoms';
-import type { TreeNode } from './core/tree/common';
-import type { TreeHandle, TreeProps } from './core/tree/Tree';
-import { Tree } from './core/tree/Tree';
-import type { TreeItemProps } from './core/tree/TreeItem';
-import { GitDropdown } from './git/GitDropdown';
+} from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { atom, useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { moveToWorkspace } from "../commands/moveToWorkspace";
+import { openFolderSettings } from "../commands/openFolderSettings";
+import { activeFolderIdAtom } from "../hooks/useActiveFolderId";
+import { activeRequestIdAtom } from "../hooks/useActiveRequestId";
+import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import { allRequestsAtom } from "../hooks/useAllRequests";
+import { getCreateDropdownItems } from "../hooks/useCreateDropdownItems";
+import { getFolderActions } from "../hooks/useFolderActions";
+import { getGrpcRequestActions } from "../hooks/useGrpcRequestActions";
+import { useHotKey } from "../hooks/useHotKey";
+import { getHttpRequestActions } from "../hooks/useHttpRequestActions";
+import { useListenToTauriEvent } from "../hooks/useListenToTauriEvent";
+import { getModelAncestors } from "../hooks/useModelAncestors";
+import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
+import { useSidebarHidden } from "../hooks/useSidebarHidden";
+import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
+import { deepEqualAtom } from "../lib/atoms";
+import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { fireAndForget } from "../lib/fireAndForget";
+import { jotaiStore } from "../lib/jotai";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { isSidebarFocused } from "../lib/scopes";
+import { navigateToRequestOrFolderOrWorkspace } from "../lib/setWorkspaceSearchParams";
+import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
+import { Dropdown } from "./core/Dropdown";
+import type { FieldDef } from "./core/Editor/filter/extension";
+import { filter } from "./core/Editor/filter/extension";
+import { evaluate, parseQuery } from "./core/Editor/filter/query";
+import { HttpMethodTag } from "./core/HttpMethodTag";
+import { HttpStatusTag } from "./core/HttpStatusTag";
+import { Icon } from "./core/Icon";
+import { IconButton } from "./core/IconButton";
+import { InlineCode } from "./core/InlineCode";
+import type { InputHandle } from "./core/Input";
+import { Input } from "./core/Input";
+import { LoadingIcon } from "./core/LoadingIcon";
+import { collapsedFamily, isSelectedFamily, selectedIdsFamily } from "./core/tree/atoms";
+import type { TreeNode } from "./core/tree/common";
+import type { TreeHandle, TreeProps } from "./core/tree/Tree";
+import { Tree } from "./core/tree/Tree";
+import type { TreeItemProps } from "./core/tree/TreeItem";
+import { GitDropdown } from "./git/GitDropdown";
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
 function isSidebarLeafModel(m: AnyModel): boolean {
-  const modelMap: Record<Exclude<SidebarModel['model'], 'workspace'>, null> = {
+  const modelMap: Record<Exclude<SidebarModel["model"], "workspace">, null> = {
     http_request: null,
     grpc_request: null,
     websocket_request: null,
@@ -79,12 +79,12 @@ function isSidebarLeafModel(m: AnyModel): boolean {
   return m.model in modelMap;
 }
 
-const OPACITY_SUBTLE = 'opacity-80';
+const OPACITY_SUBTLE = "opacity-80";
 
 function Sidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
   const activeWorkspaceId = useAtomValue(activeWorkspaceAtom)?.id;
-  const treeId = `tree.${activeWorkspaceId ?? 'unknown'}`;
+  const treeId = `tree.${activeWorkspaceId ?? "unknown"}`;
   const filterText = useAtomValue(sidebarFilterAtom);
   const [tree, allFields] = useAtomValue(sidebarTreeAtom) ?? [];
   const wrapperRef = useRef<HTMLElement>(null);
@@ -106,9 +106,9 @@ function Sidebar({ className }: { className?: string }) {
   }, []);
 
   // Focus any new sidebar models when created
-  useListenToTauriEvent<ModelPayload>('model_write', ({ payload }) => {
+  useListenToTauriEvent<ModelPayload>("model_write", ({ payload }) => {
     if (!isSidebarLeafModel(payload.model)) return;
-    if (!(payload.change.type === 'upsert' && payload.change.created)) return;
+    if (!(payload.change.type === "upsert" && payload.change.created)) return;
     treeRef.current?.selectItem(payload.model.id, true);
   });
 
@@ -122,7 +122,7 @@ function Sidebar({ className }: { className?: string }) {
   }, []);
 
   useHotKey(
-    'sidebar.filter',
+    "sidebar.filter",
     () => {
       filterRef.current?.focus();
     },
@@ -131,7 +131,7 @@ function Sidebar({ className }: { className?: string }) {
     },
   );
 
-  useHotKey('sidebar.focus', async function focusHotkey() {
+  useHotKey("sidebar.focus", async function focusHotkey() {
     // Hide the sidebar if it's already focused
     if (!hidden && isSidebarFocused()) {
       await setHidden(true);
@@ -160,7 +160,7 @@ function Sidebar({ className }: { className?: string }) {
   }) {
     const prev = children[insertAt - 1] as Exclude<SidebarModel, Workspace>;
     const next = children[insertAt] as Exclude<SidebarModel, Workspace>;
-    const folderId = parent.model === 'folder' ? parent.id : null;
+    const folderId = parent.model === "folder" ? parent.id : null;
 
     const beforePriority = prev?.sortPriority ?? 0;
     const afterPriority = next?.sortPriority ?? 0;
@@ -205,7 +205,7 @@ function Sidebar({ className }: { className?: string }) {
   );
 
   const clearFilterText = useCallback(() => {
-    jotaiStore.set(sidebarFilterAtom, { text: '', key: `${Math.random()}` });
+    jotaiStore.set(sidebarFilterAtom, { text: "", key: `${Math.random()}` });
     requestAnimationFrame(() => {
       filterRef.current?.focus();
     });
@@ -214,7 +214,7 @@ function Sidebar({ className }: { className?: string }) {
   const handleFilterKeyDown = useCallback(
     (e: KeyboardEvent) => {
       e.stopPropagation(); // Don't trigger tree navigation hotkeys
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         clearFilterText();
       }
@@ -234,17 +234,17 @@ function Sidebar({ className }: { className?: string }) {
     const enable = () => treeRef.current?.hasFocus() ?? false;
 
     const actions = {
-      'sidebar.context_menu': {
+      "sidebar.context_menu": {
         enable,
         cb: () => treeRef.current?.showContextMenu(),
       },
-      'sidebar.expand_all': {
+      "sidebar.expand_all": {
         enable: isSidebarFocused,
         cb: () => {
           jotaiStore.set(collapsedFamily(treeId), {});
         },
       },
-      'sidebar.collapse_all': {
+      "sidebar.collapse_all": {
         enable: isSidebarFocused,
         cb: () => {
           if (tree == null) return;
@@ -252,7 +252,7 @@ function Sidebar({ className }: { className?: string }) {
           const next = (node: TreeNode<SidebarModel>, collapsed: Record<string, boolean>) => {
             let newCollapsed = { ...collapsed };
             for (const n of node.children ?? []) {
-              if (n.item.model !== 'folder') continue;
+              if (n.item.model !== "folder") continue;
               newCollapsed[n.item.id] = true;
               newCollapsed = next(n, newCollapsed);
             }
@@ -262,13 +262,13 @@ function Sidebar({ className }: { className?: string }) {
           jotaiStore.set(collapsedFamily(treeId), collapsed);
         },
       },
-      'sidebar.selected.delete': {
+      "sidebar.selected.delete": {
         enable,
         cb: async (items: SidebarModel[]) => {
           await deleteModelWithConfirm(items);
         },
       },
-      'sidebar.selected.rename': {
+      "sidebar.selected.rename": {
         enable,
         allowDefault: true,
         cb: async (items: SidebarModel[]) => {
@@ -278,7 +278,7 @@ function Sidebar({ className }: { className?: string }) {
           }
         },
       },
-      'sidebar.selected.duplicate': {
+      "sidebar.selected.duplicate": {
         // Higher priority so this takes precedence over model.duplicate (same Meta+d binding)
         priority: 10,
         enable,
@@ -292,24 +292,26 @@ function Sidebar({ className }: { className?: string }) {
           }
         },
       },
-      'sidebar.selected.move': {
+      "sidebar.selected.move": {
         enable,
         cb: async (items: SidebarModel[]) => {
           const requests = items.filter(
             (i): i is HttpRequest | GrpcRequest | WebsocketRequest =>
-              i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request'
+              i.model === "http_request" ||
+              i.model === "grpc_request" ||
+              i.model === "websocket_request",
           );
           if (requests.length > 0) {
             moveToWorkspace.mutate(requests);
           }
         },
       },
-      'request.send': {
+      "request.send": {
         enable,
         cb: async (items: SidebarModel[]) => {
           await Promise.all(
             items
-              .filter((i) => i.model === 'http_request')
+              .filter((i) => i.model === "http_request")
               .map((i) => sendAnyHttpRequest.mutate(i.id)),
           );
         },
@@ -333,76 +335,78 @@ function Sidebar({ className }: { className?: string }) {
       }
 
       const workspaces = jotaiStore.get(workspacesAtom);
-      const onlyHttpRequests = items.every((i) => i.model === 'http_request');
+      const onlyHttpRequests = items.every((i) => i.model === "http_request");
       const requestItems = items.filter(
         (i) =>
-          i.model === 'http_request' || i.model === 'grpc_request' || i.model === 'websocket_request',
+          i.model === "http_request" ||
+          i.model === "grpc_request" ||
+          i.model === "websocket_request",
       );
 
-      const initialItems: ContextMenuProps['items'] = [
+      const initialItems: ContextMenuProps["items"] = [
         {
-          label: 'Folder Settings',
-          hidden: !(items.length === 1 && child.model === 'folder'),
+          label: "Folder Settings",
+          hidden: !(items.length === 1 && child.model === "folder"),
           leftSlot: <Icon icon="folder_cog" />,
           onSelect: () => openFolderSettings(child.id),
         },
         {
-          label: 'Send',
-          hotKeyAction: 'request.send',
+          label: "Send",
+          hotKeyAction: "request.send",
           hotKeyLabelOnly: true,
           hidden: !onlyHttpRequests,
           leftSlot: <Icon icon="send_horizontal" />,
-          onSelect: () => actions['request.send'].cb(items),
+          onSelect: () => actions["request.send"].cb(items),
         },
-        ...(items.length === 1 && child.model === 'http_request'
+        ...(items.length === 1 && child.model === "http_request"
           ? await getHttpRequestActions()
           : []
         ).map((a) => ({
           label: a.label,
-          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+          leftSlot: <Icon icon={a.icon ?? "empty"} />,
           onSelect: async () => {
-            const request = getModel('http_request', child.id);
+            const request = getModel("http_request", child.id);
             if (request != null) await a.call(request);
           },
         })),
-        ...(items.length === 1 && child.model === 'grpc_request'
+        ...(items.length === 1 && child.model === "grpc_request"
           ? await getGrpcRequestActions()
           : []
         ).map((a) => ({
           label: a.label,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+          leftSlot: <Icon icon={a.icon ?? "empty"} />,
           onSelect: async () => {
-            const request = getModel('grpc_request', child.id);
+            const request = getModel("grpc_request", child.id);
             if (request != null) await a.call(request);
           },
         })),
-        ...(items.length === 1 && child.model === 'websocket_request'
+        ...(items.length === 1 && child.model === "websocket_request"
           ? await getWebsocketRequestActions()
           : []
         ).map((a) => ({
           label: a.label,
-          leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+          leftSlot: <Icon icon={a.icon ?? "empty"} />,
           onSelect: async () => {
-            const request = getModel('websocket_request', child.id);
+            const request = getModel("websocket_request", child.id);
             if (request != null) await a.call(request);
           },
         })),
-        ...(items.length === 1 && child.model === 'folder' ? await getFolderActions() : []).map(
+        ...(items.length === 1 && child.model === "folder" ? await getFolderActions() : []).map(
           (a) => ({
             label: a.label,
-            leftSlot: <Icon icon={a.icon ?? 'empty'} />,
+            leftSlot: <Icon icon={a.icon ?? "empty"} />,
             onSelect: async () => {
-              const model = getModel('folder', child.id);
+              const model = getModel("folder", child.id);
               if (model != null) await a.call(model);
             },
           }),
         ),
       ];
       const modelCreationItems: DropdownItem[] =
-        items.length === 1 && child.model === 'folder'
+        items.length === 1 && child.model === "folder"
           ? [
-              { type: 'separator' },
+              { type: "separator" },
               ...getCreateDropdownItems({
                 workspaceId,
                 activeRequest: null,
@@ -410,46 +414,49 @@ function Sidebar({ className }: { className?: string }) {
               }),
             ]
           : [];
-      const menuItems: ContextMenuProps['items'] = [
+      const menuItems: ContextMenuProps["items"] = [
         ...initialItems,
         {
-          type: 'separator',
+          type: "separator",
           hidden: initialItems.filter((v) => !v.hidden).length === 0,
         },
         {
-          label: 'Rename',
+          label: "Rename",
           leftSlot: <Icon icon="pencil" />,
           hidden: items.length > 1,
-          hotKeyAction: 'sidebar.selected.rename',
+          hotKeyAction: "sidebar.selected.rename",
           hotKeyLabelOnly: true,
           onSelect: () => {
             treeRef.current?.renameItem(child.id);
           },
         },
         {
-          label: 'Duplicate',
-          hotKeyAction: 'model.duplicate',
+          label: "Duplicate",
+          hotKeyAction: "model.duplicate",
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
           leftSlot: <Icon icon="copy" />,
-          onSelect: () => actions['sidebar.selected.duplicate'].cb(items),
+          onSelect: () => actions["sidebar.selected.duplicate"].cb(items),
         },
         {
-          label: items.length <= 1 ? 'Move' : `Move ${requestItems.length} Requests`,
-          hotKeyAction: 'sidebar.selected.move',
+          label: items.length <= 1 ? "Move" : `Move ${requestItems.length} Requests`,
+          hotKeyAction: "sidebar.selected.move",
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="arrow_right_circle" />,
-          hidden: workspaces.length <= 1 || requestItems.length === 0 || requestItems.length !== items.length,
+          hidden:
+            workspaces.length <= 1 ||
+            requestItems.length === 0 ||
+            requestItems.length !== items.length,
           onSelect: () => {
-            fireAndForget(actions['sidebar.selected.move'].cb(items));
+            fireAndForget(actions["sidebar.selected.move"].cb(items));
           },
         },
         {
-          color: 'danger',
-          label: 'Delete',
-          hotKeyAction: 'sidebar.selected.delete',
+          color: "danger",
+          label: "Delete",
+          hotKeyAction: "sidebar.selected.delete",
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="trash" />,
-          onSelect: () => actions['sidebar.selected.delete'].cb(items),
+          onSelect: () => actions["sidebar.selected.delete"].cb(items),
         },
         ...modelCreationItems,
       ];
@@ -458,7 +465,7 @@ function Sidebar({ className }: { className?: string }) {
     [actions],
   );
 
-  const hotkeys = useMemo<TreeProps<SidebarModel>['hotkeys']>(() => ({ actions }), [actions]);
+  const hotkeys = useMemo<TreeProps<SidebarModel>["hotkeys"]>(() => ({ actions }), [actions]);
 
   // Use a language compartment for the filter so we can reconfigure it when the autocompletion changes
   const filterLanguageCompartmentRef = useRef(new Compartment());
@@ -486,7 +493,7 @@ function Sidebar({ className }: { className?: string }) {
     <aside
       ref={wrapperRef}
       aria-hidden={hidden ?? undefined}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)_auto]')}
+      className={classNames(className, "h-full grid grid-rows-[auto_minmax(0,1fr)_auto]")}
     >
       <div className="w-full pl-3 pr-0.5 pt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center">
         {(tree.children?.length ?? 0) > 0 && (
@@ -519,7 +526,7 @@ function Sidebar({ className }: { className?: string }) {
             <Dropdown
               items={[
                 {
-                  label: 'Focus Active Request',
+                  label: "Focus Active Request",
                   leftSlot: <Icon icon="crosshair" />,
                   onSelect: () => {
                     const activeId = jotaiStore.get(activeIdAtom);
@@ -532,7 +539,7 @@ function Sidebar({ className }: { className?: string }) {
                     jotaiStore.set(collapsedFamily(treeId), (prev) => {
                       const n = { ...prev };
                       for (const ancestor of ancestors) {
-                        if (ancestor.model === 'folder') {
+                        if (ancestor.model === "folder") {
                           delete n[ancestor.id];
                         }
                       }
@@ -543,17 +550,17 @@ function Sidebar({ className }: { className?: string }) {
                   },
                 },
                 {
-                  label: 'Expand All Folders',
+                  label: "Expand All Folders",
                   leftSlot: <Icon icon="chevrons_up_down" />,
-                  onSelect: actions['sidebar.expand_all'].cb,
-                  hotKeyAction: 'sidebar.expand_all',
+                  onSelect: actions["sidebar.expand_all"].cb,
+                  hotKeyAction: "sidebar.expand_all",
                   hotKeyLabelOnly: true,
                 },
                 {
-                  label: 'Collapse All Folders',
+                  label: "Collapse All Folders",
                   leftSlot: <Icon icon="chevrons_down_up" />,
-                  onSelect: actions['sidebar.collapse_all'].cb,
-                  hotKeyAction: 'sidebar.collapse_all',
+                  onSelect: actions["sidebar.collapse_all"].cb,
+                  hotKeyAction: "sidebar.collapse_all",
                   hotKeyLabelOnly: true,
                 },
               ]}
@@ -601,7 +608,7 @@ const activeIdAtom = atom<string | null>((get) => {
 
 function getEditOptions(
   item: SidebarModel,
-): ReturnType<NonNullable<TreeItemProps<SidebarModel>['getEditOptions']>> {
+): ReturnType<NonNullable<TreeItemProps<SidebarModel>["getEditOptions"]>> {
   return {
     onChange: handleSubmitEdit,
     defaultValue: resolvedModelName(item),
@@ -615,7 +622,7 @@ async function handleSubmitEdit(item: SidebarModel, text: string) {
 
 function handleActivate(item: SidebarModel) {
   // TODO: Add folder layout support
-  if (item.model !== 'folder' && item.model !== 'workspace') {
+  if (item.model !== "folder" && item.model !== "workspace") {
     navigateToRequestOrFolderOrWorkspace(item.id, item.model);
   }
 }
@@ -629,8 +636,8 @@ const allPotentialChildrenAtom = atom<SidebarModel[]>((get) => {
 const memoAllPotentialChildrenAtom = deepEqualAtom(allPotentialChildrenAtom);
 
 const sidebarFilterAtom = atom<{ text: string; key: string }>({
-  text: '',
-  key: '',
+  text: "",
+  key: "",
 });
 
 const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) => {
@@ -640,10 +647,10 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 
   const childrenMap: Record<string, Exclude<SidebarModel, Workspace>[]> = {};
   for (const item of allModels) {
-    if ('folderId' in item && item.folderId == null) {
+    if ("folderId" in item && item.folderId == null) {
       childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
       childrenMap[item.workspaceId]?.push(item);
-    } else if ('folderId' in item && item.folderId != null) {
+    } else if ("folderId" in item && item.folderId != null) {
       childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
       childrenMap[item.folderId]?.push(item);
     }
@@ -662,7 +669,7 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
     let matchesSelf = true;
     const fields = getItemFields(node);
     const model = node.item.model;
-    const isLeafNode = !(model === 'folder' || model === 'workspace');
+    const isLeafNode = !(model === "folder" || model === "workspace");
 
     for (const [field, value] of Object.entries(fields)) {
       if (!value) continue;
@@ -727,9 +734,9 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 function getItemKey(item: SidebarModel) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
-  const url = 'url' in item ? item.url : 'n/a';
-  const method = 'method' in item ? item.method : 'n/a';
-  const service = 'service' in item ? item.service : 'n/a';
+  const url = "url" in item ? item.url : "n/a";
+  const method = "method" in item ? item.method : "n/a";
+  const service = "service" in item ? item.service : "n/a";
   return [
     item.id,
     item.name,
@@ -737,8 +744,8 @@ function getItemKey(item: SidebarModel) {
     method,
     service,
     latestResponse?.elapsed,
-    latestResponse?.id ?? 'n/a',
-  ].join('::');
+    latestResponse?.id ?? "n/a",
+  ].join("::");
 }
 
 const SidebarLeftSlot = memo(function SidebarLeftSlot({
@@ -748,17 +755,17 @@ const SidebarLeftSlot = memo(function SidebarLeftSlot({
   treeId: string;
   item: SidebarModel;
 }) {
-  if (item.model === 'folder') {
+  if (item.model === "folder") {
     return <Icon icon="folder" />;
   }
-  if (item.model === 'workspace') {
+  if (item.model === "workspace") {
     return null;
   }
   const isSelected = jotaiStore.get(isSelectedFamily({ treeId, itemId: item.id }));
   return (
     <HttpMethodTag
       short
-      className={classNames('text-xs pl-1.5', !isSelected && OPACITY_SUBTLE)}
+      className={classNames("text-xs pl-1.5", !isSelected && OPACITY_SUBTLE)}
       request={item}
     />
   );
@@ -791,9 +798,9 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
       <div className="truncate">{resolvedModelName(item)}</div>
       {response != null && (
         <div className="ml-auto">
-          {response.state !== 'closed' ? (
+          {response.state !== "closed" ? (
             <LoadingIcon size="sm" className="text-text-subtlest" />
-          ) : response.model === 'http_response' ? (
+          ) : response.model === "http_response" ? (
             <HttpStatusTag short className="text-xs" response={response} />
           ) : null}
         </div>
@@ -805,26 +812,26 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
 function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
   const item = node.item;
 
-  if (item.model === 'workspace') return {};
+  if (item.model === "workspace") return {};
 
   const fields: Record<string, string> = {};
-  if (item.model === 'http_request') {
+  if (item.model === "http_request") {
     fields.method = item.method.toUpperCase();
   }
 
-  if (item.model === 'grpc_request') {
-    fields.grpc_method = item.method ?? '';
-    fields.grpc_service = item.service ?? '';
+  if (item.model === "grpc_request") {
+    fields.grpc_method = item.method ?? "";
+    fields.grpc_service = item.service ?? "";
   }
 
-  if ('url' in item) fields.url = item.url;
+  if ("url" in item) fields.url = item.url;
   fields.name = resolvedModelName(item);
 
-  fields.type = 'http';
-  if (item.model === 'grpc_request') fields.type = 'grpc';
-  else if (item.model === 'websocket_request') fields.type = 'ws';
+  fields.type = "http";
+  if (item.model === "grpc_request") fields.type = "grpc";
+  else if (item.model === "websocket_request") fields.type = "ws";
 
-  if (node.parent?.item.model === 'folder') {
+  if (node.parent?.item.model === "folder") {
     fields.folder = node.parent.item.name;
   }
 
@@ -833,11 +840,11 @@ function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
 
 function getItemText(item: SidebarModel): string {
   const segments = [];
-  if (item.model === 'http_request') {
+  if (item.model === "http_request") {
     segments.push(item.method);
   }
 
   segments.push(resolvedModelName(item));
 
-  return segments.join(' ');
+  return segments.join(" ");
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo } from "react";
 
 interface Props {
   html: string;
@@ -7,7 +7,7 @@ interface Props {
 
 export function WebPageViewer({ html, baseUrl }: Props) {
   const contentForIframe: string | undefined = useMemo(() => {
-    if (baseUrl && html.includes('<head>')) {
+    if (baseUrl && html.includes("<head>")) {
       return html.replace(/<head>/gi, `<head><base href="${baseUrl}"/>`);
     }
     return html;
@@ -16,7 +16,7 @@ export function WebPageViewer({ html, baseUrl }: Props) {
   return (
     <div className="h-full pb-3">
       <iframe
-        key={html ? 'has-body' : 'no-body'}
+        key={html ? "has-body" : "no-body"}
         title="Yaak response preview"
         srcDoc={contentForIframe}
         sandbox="allow-scripts allow-forms"

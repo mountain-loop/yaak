@@ -1,41 +1,41 @@
-import type { WebsocketRequest } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import { closeWebsocket, connectWebsocket, sendWebsocket } from '@yaakapp-internal/ws';
-import classNames from 'classnames';
-import { atom, useAtomValue } from 'jotai';
-import type { CSSProperties } from 'react';
-import { useCallback, useMemo, useRef } from 'react';
-import { getActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { getActiveEnvironment } from '../hooks/useActiveEnvironment';
-import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
-import { allRequestsAtom } from '../hooks/useAllRequests';
-import { useAuthTab } from '../hooks/useAuthTab';
-import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { useHeadersTab } from '../hooks/useHeadersTab';
-import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
-import { activeWebsocketConnectionAtom } from '../hooks/usePinnedWebsocketConnection';
-import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { deepEqualAtom } from '../lib/atoms';
-import { languageFromContentType } from '../lib/contentType';
-import { generateId } from '../lib/generateId';
-import { prepareImportQuerystring } from '../lib/prepareImportQuerystring';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { CountBadge } from './core/CountBadge';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { Editor } from './core/Editor/LazyEditor';
-import { IconButton } from './core/IconButton';
-import type { Pair } from './core/PairEditor';
-import { PlainInput } from './core/PlainInput';
-import type { TabItem, TabsRef } from './core/Tabs/Tabs';
-import { setActiveTab, TabContent, Tabs } from './core/Tabs/Tabs';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { UrlBar } from './UrlBar';
-import { UrlParametersEditor } from './UrlParameterEditor';
+import type { WebsocketRequest } from "@yaakapp-internal/models";
+import { patchModel } from "@yaakapp-internal/models";
+import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import { closeWebsocket, connectWebsocket, sendWebsocket } from "@yaakapp-internal/ws";
+import classNames from "classnames";
+import { atom, useAtomValue } from "jotai";
+import type { CSSProperties } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import { getActiveCookieJar } from "../hooks/useActiveCookieJar";
+import { getActiveEnvironment } from "../hooks/useActiveEnvironment";
+import { activeRequestIdAtom } from "../hooks/useActiveRequestId";
+import { allRequestsAtom } from "../hooks/useAllRequests";
+import { useAuthTab } from "../hooks/useAuthTab";
+import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
+import { useHeadersTab } from "../hooks/useHeadersTab";
+import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
+import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
+import { activeWebsocketConnectionAtom } from "../hooks/usePinnedWebsocketConnection";
+import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
+import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
+import { deepEqualAtom } from "../lib/atoms";
+import { languageFromContentType } from "../lib/contentType";
+import { generateId } from "../lib/generateId";
+import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { CountBadge } from "./core/CountBadge";
+import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import { Editor } from "./core/Editor/LazyEditor";
+import { IconButton } from "./core/IconButton";
+import type { Pair } from "./core/PairEditor";
+import { PlainInput } from "./core/PlainInput";
+import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
+import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
+import { HeadersEditor } from "./HeadersEditor";
+import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { UrlBar } from "./UrlBar";
+import { UrlParametersEditor } from "./UrlParameterEditor";
 
 interface Props {
   style: CSSProperties;
@@ -44,19 +44,19 @@ interface Props {
   activeRequest: WebsocketRequest;
 }
 
-const TAB_MESSAGE = 'message';
-const TAB_PARAMS = 'params';
-const TAB_HEADERS = 'headers';
-const TAB_AUTH = 'auth';
-const TAB_DESCRIPTION = 'description';
-const TABS_STORAGE_KEY = 'websocket_request_tabs';
+const TAB_MESSAGE = "message";
+const TAB_PARAMS = "params";
+const TAB_HEADERS = "headers";
+const TAB_AUTH = "auth";
+const TAB_DESCRIPTION = "description";
+const TABS_STORAGE_KEY = "websocket_request_tabs";
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
   const requests = get(allRequestsAtom);
   return requests
     .filter((r) => r.id !== activeRequestId)
-    .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
+    .map((r): GenericCompletionOption => ({ type: "constant", label: r.url }));
 });
 
 const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
@@ -71,13 +71,17 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const inheritedHeaders = useInheritedHeaders(activeRequest);
 
   // Listen for event to focus the params tab (e.g., when clicking a :param in the URL)
-  useRequestEditorEvent('request_pane.focus_tab', () => {
-    tabsRef.current?.setActiveTab(TAB_PARAMS);
-  }, []);
+  useRequestEditorEvent(
+    "request_pane.focus_tab",
+    () => {
+      tabsRef.current?.setActiveTab(TAB_PARAMS);
+    },
+    [],
+  );
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
     const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
-      (m) => m[1] ?? '',
+      (m) => m[1] ?? "",
     );
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
@@ -86,28 +90,28 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
       if (item) {
         item.readOnlyName = true;
       } else {
-        items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
+        items.push({ name, value: "", enabled: true, readOnlyName: true, id: generateId() });
       }
     }
-    return { urlParameterPairs: items, urlParametersKey: placeholderNames.join(',') };
+    return { urlParameterPairs: items, urlParametersKey: placeholderNames.join(",") };
   }, [activeRequest.url, activeRequest.urlParameters]);
 
   const tabs = useMemo<TabItem[]>(() => {
     return [
       {
         value: TAB_MESSAGE,
-        label: 'Message',
+        label: "Message",
       } as TabItem,
       {
         value: TAB_PARAMS,
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
-        label: 'Params',
+        label: "Params",
       },
       ...headersTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
-        label: 'Info',
+        label: "Info",
       },
     ];
   }, [authTab, headersTab, urlParameterPairs.length]);
@@ -125,8 +129,8 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
         autocompleteUrls.length > 0
           ? autocompleteUrls
           : [
-              { label: 'http://', type: 'constant' },
-              { label: 'https://', type: 'constant' },
+              { label: "http://", type: "constant" },
+              { label: "https://", type: "constant" },
             ],
     }),
     [autocompleteUrls],
@@ -184,12 +188,12 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
 
   const messageLanguage = languageFromContentType(null, activeRequest.message);
 
-  const isLoading = connection !== null && connection.state !== 'closed';
+  const isLoading = connection !== null && connection.state !== "closed";
 
   return (
     <div
       style={style}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1')}
+      className={classNames(className, "h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1")}
     >
       {activeRequest && (
         <>
@@ -198,7 +202,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               stateKey={`url.${activeRequest.id}`}
               key={forceUpdateKey + urlKey}
               url={activeRequest.url}
-              submitIcon={isLoading ? 'send_horizontal' : 'arrow_up_down'}
+              submitIcon={isLoading ? "send_horizontal" : "arrow_up_down"}
               rightSlot={
                 isLoading && (
                   <IconButton
@@ -218,7 +222,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
               onCancel={cancelResponse}
               onUrlChange={handleUrlChange}
               forceUpdateKey={forceUpdateKey}
-              isLoading={activeResponse != null && activeResponse.state !== 'closed'}
+              isLoading={activeResponse != null && activeResponse.state !== "closed"}
             />
           </div>
           <Tabs
@@ -255,7 +259,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 autocompleteFunctions
                 autocompleteVariables
                 placeholder="..."
-                heightMode={fullHeight ? 'full' : 'auto'}
+                heightMode={fullHeight ? "full" : "auto"}
                 defaultValue={activeRequest.message}
                 language={messageLanguage}
                 onChange={(message) => patchModel(activeRequest, { message })}

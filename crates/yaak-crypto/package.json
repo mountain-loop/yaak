@@ -1,6 +1,6 @@
 {
   "name": "@yaakapp-internal/crypto",
-  "private": true,
   "version": "1.0.0",
+  "private": true,
   "main": "index.ts"
 }

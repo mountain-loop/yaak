@@ -29,7 +29,14 @@ schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util", "net", "signal", "time"] }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "io-util",
+  "net",
+  "signal",
+  "time",
+] }
 walkdir = "2"
 webbrowser = "1"
 zip = "4"

@@ -1,15 +1,15 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import type { CSSProperties } from 'react';
-import { useCurrentGraphQLSchema } from '../hooks/useIntrospectGraphQL';
-import { workspaceLayoutAtom } from '../lib/atoms';
-import type { SlotProps } from './core/SplitLayout';
-import { SplitLayout } from './core/SplitLayout';
-import { GraphQLDocsExplorer } from './graphql/GraphQLDocsExplorer';
-import { showGraphQLDocExplorerAtom } from './graphql/graphqlAtoms';
-import { HttpRequestPane } from './HttpRequestPane';
-import { HttpResponsePane } from './HttpResponsePane';
+import type { HttpRequest } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import type { CSSProperties } from "react";
+import { useCurrentGraphQLSchema } from "../hooks/useIntrospectGraphQL";
+import { workspaceLayoutAtom } from "../lib/atoms";
+import type { SlotProps } from "./core/SplitLayout";
+import { SplitLayout } from "./core/SplitLayout";
+import { GraphQLDocsExplorer } from "./graphql/GraphQLDocsExplorer";
+import { showGraphQLDocExplorerAtom } from "./graphql/graphqlAtoms";
+import { HttpRequestPane } from "./HttpRequestPane";
+import { HttpResponsePane } from "./HttpResponsePane";
 
 interface Props {
   activeRequest: HttpRequest;
@@ -21,7 +21,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
   const graphQLSchema = useCurrentGraphQLSchema(activeRequest);
   const workspaceLayout = useAtomValue(workspaceLayoutAtom);
 
-  const requestResponseSplit = ({ style }: Pick<SlotProps, 'style'>) => (
+  const requestResponseSplit = ({ style }: Pick<SlotProps, "style">) => (
     <SplitLayout
       name="http_layout"
       className="p-3 gap-1.5"
@@ -31,7 +31,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
         <HttpRequestPane
           style={style}
           activeRequest={activeRequest}
-          fullHeight={orientation === 'horizontal'}
+          fullHeight={orientation === "horizontal"}
         />
       )}
       secondSlot={({ style }) => (
@@ -41,7 +41,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
   );
 
   if (
-    activeRequest.bodyType === 'graphql' &&
+    activeRequest.bodyType === "graphql" &&
     showGraphQLDocExplorer[activeRequest.id] !== undefined &&
     graphQLSchema != null
   ) {
@@ -54,7 +54,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
           <GraphQLDocsExplorer
             requestId={activeRequest.id}
             schema={graphQLSchema}
-            className={classNames(orientation === 'horizontal' && '!ml-0')}
+            className={classNames(orientation === "horizontal" && "!ml-0")}
             style={style}
           />
         )}

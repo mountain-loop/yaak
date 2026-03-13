@@ -1,6 +1,6 @@
-import classNames from 'classnames';
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import { useCallback, useRef, useState } from 'react';
+import classNames from "classnames";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useRef, useState } from "react";
 
 const START_DISTANCE = 7;
 
@@ -18,8 +18,8 @@ interface Props {
   onResizeEnd?: () => void;
   onResizeMove?: (e: ResizeHandleEvent) => void;
   onReset?: () => void;
-  side: 'left' | 'right' | 'top';
-  justify: 'center' | 'end' | 'start';
+  side: "left" | "right" | "top";
+  justify: "center" | "end" | "start";
 }
 
 export function ResizeHandle({
@@ -32,7 +32,7 @@ export function ResizeHandle({
   onReset,
   side,
 }: Props) {
-  const vertical = side === 'top';
+  const vertical = side === "top";
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const moveState = useRef<{
     move: (e: MouseEvent) => void;
@@ -67,15 +67,15 @@ export function ResizeHandle({
       function up() {
         setIsResizing(false);
         moveState.current = null;
-        document.documentElement.removeEventListener('mousemove', move);
-        document.documentElement.removeEventListener('mouseup', up);
+        document.documentElement.removeEventListener("mousemove", move);
+        document.documentElement.removeEventListener("mouseup", up);
         onResizeEnd?.();
       }
 
       moveState.current = { calledStart: false, xStart: e.clientX, yStart: e.clientY, move, up };
 
-      document.documentElement.addEventListener('mousemove', move);
-      document.documentElement.addEventListener('mouseup', up);
+      document.documentElement.addEventListener("mousemove", move);
+      document.documentElement.addEventListener("mouseup", up);
     },
     [onResizeEnd, onResizeMove, onResizeStart, vertical],
   );
@@ -88,15 +88,15 @@ export function ResizeHandle({
       onPointerDown={handlePointerDown}
       className={classNames(
         className,
-        'group z-10 flex select-none transition-colors hover:bg-surface-active rounded-full',
+        "group z-10 flex select-none transition-colors hover:bg-surface-active rounded-full",
         // 'bg-info', // For debugging
-        vertical ? 'w-full h-1.5 cursor-row-resize' : 'h-full w-1.5 cursor-col-resize',
-        justify === 'center' && 'justify-center',
-        justify === 'end' && 'justify-end',
-        justify === 'start' && 'justify-start',
-        side === 'right' && 'right-0',
-        side === 'left' && 'left-0',
-        side === 'top' && 'top-0',
+        vertical ? "w-full h-1.5 cursor-row-resize" : "h-full w-1.5 cursor-col-resize",
+        justify === "center" && "justify-center",
+        justify === "end" && "justify-end",
+        justify === "start" && "justify-start",
+        side === "right" && "right-0",
+        side === "left" && "left-0",
+        side === "top" && "top-0",
       )}
     >
       {/* Show global overlay with cursor style to ensure cursor remains the same when moving quickly */}
@@ -104,9 +104,9 @@ export function ResizeHandle({
         <div
           className={classNames(
             // 'bg-[rgba(255,0,0,0.1)]', // For debugging
-            'fixed -left-[100vw] -right-[100vw] -top-[100vh] -bottom-[100vh]',
-            vertical && 'cursor-row-resize',
-            !vertical && 'cursor-col-resize',
+            "fixed -left-[100vw] -right-[100vw] -top-[100vh] -bottom-[100vh]",
+            vertical && "cursor-row-resize",
+            !vertical && "cursor-col-resize",
           )}
         />
       )}

@@ -1,7 +1,7 @@
-import { useSearch } from '@tanstack/react-router';
-import { atom } from 'jotai';
-import { useEffect } from 'react';
-import { jotaiStore } from '../lib/jotai';
+import { useSearch } from "@tanstack/react-router";
+import { atom } from "jotai";
+import { useEffect } from "react";
+import { jotaiStore } from "../lib/jotai";
 
 export const activeRequestIdAtom = atom<string | null>(null);
 

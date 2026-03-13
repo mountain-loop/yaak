@@ -1,4 +1,4 @@
-import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragMoveEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   DndContext,
   DragOverlay,
@@ -8,33 +8,33 @@ import {
   useDroppable,
   useSensor,
   useSensors,
-} from '@dnd-kit/core';
-import { basename } from '@tauri-apps/api/path';
-import classNames from 'classnames';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WrappedEnvironmentVariable } from '../../hooks/useEnvironmentVariables';
-import { useRandomKey } from '../../hooks/useRandomKey';
-import { useToggle } from '../../hooks/useToggle';
-import { languageFromContentType } from '../../lib/contentType';
-import { showDialog } from '../../lib/dialog';
-import { computeSideForDragMove } from '../../lib/dnd';
-import { showPrompt } from '../../lib/prompt';
-import { DropMarker } from '../DropMarker';
-import { SelectFile } from '../SelectFile';
-import { Button } from './Button';
-import { Checkbox } from './Checkbox';
-import type { DropdownItem } from './Dropdown';
-import { Dropdown } from './Dropdown';
-import type { EditorProps } from './Editor/Editor';
-import type { GenericCompletionConfig } from './Editor/genericCompletion';
-import { Editor } from './Editor/LazyEditor';
-import { Icon } from './Icon';
-import { IconButton } from './IconButton';
-import type { InputHandle, InputProps } from './Input';
-import { Input } from './Input';
-import { ensurePairId } from './PairEditor.util';
-import type { RadioDropdownItem } from './RadioDropdown';
-import { RadioDropdown } from './RadioDropdown';
+} from "@dnd-kit/core";
+import { basename } from "@tauri-apps/api/path";
+import classNames from "classnames";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { WrappedEnvironmentVariable } from "../../hooks/useEnvironmentVariables";
+import { useRandomKey } from "../../hooks/useRandomKey";
+import { useToggle } from "../../hooks/useToggle";
+import { languageFromContentType } from "../../lib/contentType";
+import { showDialog } from "../../lib/dialog";
+import { computeSideForDragMove } from "../../lib/dnd";
+import { showPrompt } from "../../lib/prompt";
+import { DropMarker } from "../DropMarker";
+import { SelectFile } from "../SelectFile";
+import { Button } from "./Button";
+import { Checkbox } from "./Checkbox";
+import type { DropdownItem } from "./Dropdown";
+import { Dropdown } from "./Dropdown";
+import type { EditorProps } from "./Editor/Editor";
+import type { GenericCompletionConfig } from "./Editor/genericCompletion";
+import { Editor } from "./Editor/LazyEditor";
+import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
+import type { InputHandle, InputProps } from "./Input";
+import { Input } from "./Input";
+import { ensurePairId } from "./PairEditor.util";
+import type { RadioDropdownItem } from "./RadioDropdown";
+import { RadioDropdown } from "./RadioDropdown";
 
 export interface PairEditorHandle {
   focusName(id: string): void;
@@ -51,18 +51,18 @@ export type PairEditorProps = {
   nameAutocompleteFunctions?: boolean;
   nameAutocompleteVariables?: boolean;
   namePlaceholder?: string;
-  nameValidate?: InputProps['validate'];
+  nameValidate?: InputProps["validate"];
   noScroll?: boolean;
   onChange: (pairs: PairWithId[]) => void;
   pairs: Pair[];
-  stateKey: InputProps['stateKey'];
+  stateKey: InputProps["stateKey"];
   setRef?: (n: PairEditorHandle) => void;
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
   valueAutocompleteFunctions?: boolean;
-  valueAutocompleteVariables?: boolean | 'environment';
+  valueAutocompleteVariables?: boolean | "environment";
   valuePlaceholder?: string;
-  valueType?: InputProps['type'] | ((pair: Pair) => InputProps['type']);
-  valueValidate?: InputProps['validate'];
+  valueType?: InputProps["type"] | ((pair: Pair) => InputProps["type"]);
+  valueValidate?: InputProps["validate"];
 };
 
 export type Pair = {
@@ -188,7 +188,7 @@ export function PairEditor({
       if (focusPrevious) {
         const index = pairs.findIndex((p) => p.id === pair.id);
         const id = pairs[index - 1]?.id ?? null;
-        rowsRef.current[id ?? 'n/a']?.focusName();
+        rowsRef.current[id ?? "n/a"]?.focusName();
       }
       return setPairsAndSave((oldPairs) => oldPairs.filter((p) => p.id !== pair.id));
     },
@@ -224,7 +224,7 @@ export function PairEditor({
 
       const side = computeSideForDragMove(overPair.id, e);
       const overIndex = pairs.findIndex((p) => p.id === overId);
-      const hoveredIndex = overIndex + (side === 'before' ? 0 : 1);
+      const hoveredIndex = overIndex + (side === "before" ? 0 : 1);
 
       setHoveredIndex(hoveredIndex);
     },
@@ -270,14 +270,14 @@ export function PairEditor({
     <div
       className={classNames(
         className,
-        '@container relative',
-        'pb-2 mb-auto h-full',
-        !noScroll && 'overflow-y-auto max-h-full',
+        "@container relative",
+        "pb-2 mb-auto h-full",
+        !noScroll && "overflow-y-auto max-h-full",
         // Move over the width of the drag handle
-        '-mr-2 pr-2',
+        "-mr-2 pr-2",
         // Pad to make room for the drag divider
-        'pt-0.5',
-        'grid grid-rows-[auto_1fr]',
+        "pt-0.5",
+        "grid grid-rows-[auto_1fr]",
       )}
     >
       <div>
@@ -379,22 +379,22 @@ type PairEditorRowProps = {
   setRef?: (id: string, n: RowHandle | null) => void;
 } & Pick<
   PairEditorProps,
-  | 'allowFileValues'
-  | 'allowMultilineValues'
-  | 'forcedEnvironmentId'
-  | 'forceUpdateKey'
-  | 'nameAutocomplete'
-  | 'nameAutocompleteVariables'
-  | 'namePlaceholder'
-  | 'nameValidate'
-  | 'nameAutocompleteFunctions'
-  | 'stateKey'
-  | 'valueAutocomplete'
-  | 'valueAutocompleteFunctions'
-  | 'valueAutocompleteVariables'
-  | 'valuePlaceholder'
-  | 'valueType'
-  | 'valueValidate'
+  | "allowFileValues"
+  | "allowMultilineValues"
+  | "forcedEnvironmentId"
+  | "forceUpdateKey"
+  | "nameAutocomplete"
+  | "nameAutocompleteVariables"
+  | "namePlaceholder"
+  | "nameValidate"
+  | "nameAutocompleteFunctions"
+  | "stateKey"
+  | "valueAutocomplete"
+  | "valueAutocompleteFunctions"
+  | "valueAutocompleteVariables"
+  | "valuePlaceholder"
+  | "valueType"
+  | "valueValidate"
 >;
 
 interface RowHandle {
@@ -485,7 +485,7 @@ export function PairEditorRow({
   const handleChangeValueFile = useMemo(
     () =>
       ({ filePath }: { filePath: string | null }) =>
-        onChange?.({ ...pair, value: filePath ?? '', isFile: true }),
+        onChange?.({ ...pair, value: filePath ?? "", isFile: true }),
     [onChange, pair],
   );
 
@@ -502,8 +502,8 @@ export function PairEditorRow({
   const handleEditMultiLineValue = useCallback(
     () =>
       showDialog({
-        id: 'pair-edit-multiline',
-        size: 'dynamic',
+        id: "pair-edit-multiline",
+        size: "dynamic",
         title: <>Edit {pair.name}</>,
         render: ({ hide }) => (
           <MultilineEditDialog
@@ -520,14 +520,14 @@ export function PairEditorRow({
   const defaultItems = useMemo(
     (): DropdownItem[] => [
       {
-        label: 'Edit Multi-line',
+        label: "Edit Multi-line",
         onSelect: handleEditMultiLineValue,
         hidden: !allowMultilineValues,
       },
       {
-        label: 'Delete',
+        label: "Delete",
         onSelect: handleDelete,
-        color: 'danger',
+        color: "danger",
       },
     ],
     [allowMultilineValues, handleDelete, handleEditMultiLineValue],
@@ -537,8 +537,8 @@ export function PairEditorRow({
   const { setNodeRef: setDroppableRef } = useDroppable({ id: pair.id });
 
   // Filter out the current pair name
-  const valueAutocompleteVariablesFiltered = useMemo<EditorProps['autocompleteVariables']>(() => {
-    if (valueAutocompleteVariables === 'environment') {
+  const valueAutocompleteVariablesFiltered = useMemo<EditorProps["autocompleteVariables"]>(() => {
+    if (valueAutocompleteVariables === "environment") {
       return (v: WrappedEnvironmentVariable): boolean => v.variable.name !== pair.name;
     }
     return valueAutocompleteVariables;
@@ -557,17 +557,17 @@ export function PairEditorRow({
       ref={handleSetRef}
       className={classNames(
         className,
-        'group/pair-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto]',
-        'grid-rows-1 items-center',
-        !pair.enabled && 'opacity-60',
+        "group/pair-row grid grid-cols-[auto_auto_minmax(0,1fr)_auto]",
+        "grid-rows-1 items-center",
+        !pair.enabled && "opacity-60",
       )}
     >
       <Checkbox
         hideLabel
-        title={pair.enabled ? 'Disable item' : 'Enable item'}
+        title={pair.enabled ? "Disable item" : "Enable item"}
         disabled={isLast || disabled}
         checked={isLast ? false : !!pair.enabled}
-        className={classNames(isLast && '!opacity-disabled')}
+        className={classNames(isLast && "!opacity-disabled")}
         onChange={handleChangeEnabled}
       />
       {!isLast && !disableDrag ? (
@@ -575,8 +575,8 @@ export function PairEditorRow({
           {...attributes}
           {...listeners}
           className={classNames(
-            'py-2 h-7 w-4 flex items-center',
-            'justify-center opacity-0 group-hover/pair-row:opacity-70',
+            "py-2 h-7 w-4 flex items-center",
+            "justify-center opacity-0 group-hover/pair-row:opacity-70",
           )}
         >
           <Icon size="sm" icon="grip_vertical" className="pointer-events-none" />
@@ -586,9 +586,9 @@ export function PairEditorRow({
       )}
       <div
         className={classNames(
-          'grid items-center',
-          '@xs:gap-2 @xs:!grid-rows-1 @xs:!grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
-          'gap-0.5 grid-cols-1 grid-rows-2',
+          "grid items-center",
+          "@xs:gap-2 @xs:!grid-rows-1 @xs:!grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
+          "gap-0.5 grid-cols-1 grid-rows-2",
         )}
       >
         <Input
@@ -603,13 +603,13 @@ export function PairEditorRow({
           validate={nameValidate}
           forcedEnvironmentId={forcedEnvironmentId}
           forceUpdateKey={forceUpdateKey}
-          containerClassName={classNames('bg-surface', isLast && 'border-dashed')}
+          containerClassName={classNames("bg-surface", isLast && "border-dashed")}
           defaultValue={pair.name}
           label="Name"
           name={`name[${index}]`}
           onChange={handleChangeName}
           onFocus={handleFocusName}
-          placeholder={namePlaceholder ?? 'name'}
+          placeholder={namePlaceholder ?? "name"}
           autocomplete={nameAutocomplete}
           autocompleteVariables={nameAutocompleteVariables}
           autocompleteFunctions={nameAutocompleteFunctions}
@@ -624,7 +624,7 @@ export function PairEditorRow({
               nameOverride={pair.filename || null}
               onChange={handleChangeValueFile}
             />
-          ) : pair.value.includes('\n') ? (
+          ) : pair.value.includes("\n") ? (
             <Button
               color="secondary"
               size="sm"
@@ -632,7 +632,7 @@ export function PairEditorRow({
               title={pair.value}
               className="text-xs font-mono"
             >
-              {pair.value.split('\n').join(' ')}
+              {pair.value.split("\n").join(" ")}
             </Button>
           ) : (
             <Input
@@ -643,7 +643,7 @@ export function PairEditorRow({
               size="sm"
               disabled={disabled}
               readOnly={isDraggingGlobal}
-              containerClassName={classNames('bg-surface', isLast && 'border-dashed')}
+              containerClassName={classNames("bg-surface", isLast && "border-dashed")}
               validate={valueValidate}
               forcedEnvironmentId={forcedEnvironmentId}
               forceUpdateKey={forceUpdateKey}
@@ -652,8 +652,8 @@ export function PairEditorRow({
               name={`value[${index}]`}
               onChange={handleChangeValueText}
               onFocus={handleFocusValue}
-              type={isLast ? 'text' : typeof valueType === 'function' ? valueType(pair) : valueType}
-              placeholder={valuePlaceholder ?? 'value'}
+              type={isLast ? "text" : typeof valueType === "function" ? valueType(pair) : valueType}
+              placeholder={valuePlaceholder ?? "value"}
               autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariablesFiltered}
@@ -676,7 +676,7 @@ export function PairEditorRow({
           <IconButton
             iconSize="sm"
             size="xs"
-            icon={isLast || disabled ? 'empty' : 'chevron_down'}
+            icon={isLast || disabled ? "empty" : "chevron_down"}
             title="Select form data type"
             className="text-text-subtlest"
           />
@@ -687,8 +687,8 @@ export function PairEditorRow({
 }
 
 const fileItems: RadioDropdownItem<string>[] = [
-  { label: 'Text', value: 'text' },
-  { label: 'File', value: 'file' },
+  { label: "Text", value: "text" },
+  { label: "File", value: "file" },
 ];
 
 function FileActionsDropdown({
@@ -710,8 +710,8 @@ function FileActionsDropdown({
 }) {
   const onChange = useCallback(
     (v: string) => {
-      if (v === 'file') onChangeFile({ filePath: '' });
-      else onChangeText('');
+      if (v === "file") onChangeFile({ filePath: "" });
+      else onChangeText("");
     },
     [onChangeFile, onChangeText],
   );
@@ -719,51 +719,51 @@ function FileActionsDropdown({
   const itemsAfter = useMemo<DropdownItem[]>(
     () => [
       {
-        label: 'Edit Multi-Line',
+        label: "Edit Multi-Line",
         leftSlot: <Icon icon="file_code" />,
         hidden: pair.isFile,
         onSelect: editMultiLine,
       },
       {
-        label: 'Set Content-Type',
+        label: "Set Content-Type",
         leftSlot: <Icon icon="pencil" />,
         onSelect: async () => {
           const contentType = await showPrompt({
-            id: 'content-type',
-            title: 'Override Content-Type',
-            label: 'Content-Type',
+            id: "content-type",
+            title: "Override Content-Type",
+            label: "Content-Type",
             required: false,
-            placeholder: 'text/plain',
-            defaultValue: pair.contentType ?? '',
-            confirmText: 'Set',
-            description: 'Leave blank to auto-detect',
+            placeholder: "text/plain",
+            defaultValue: pair.contentType ?? "",
+            confirmText: "Set",
+            description: "Leave blank to auto-detect",
           });
           if (contentType == null) return;
           onChangeContentType(contentType);
         },
       },
       {
-        label: 'Set File Name',
+        label: "Set File Name",
         leftSlot: <Icon icon="file_code" />,
         onSelect: async () => {
-          console.log('PAIR', pair);
-          const defaultFilename = await basename(pair.value ?? '');
+          console.log("PAIR", pair);
+          const defaultFilename = await basename(pair.value ?? "");
           const filename = await showPrompt({
-            id: 'filename',
-            title: 'Override Filename',
-            label: 'Filename',
+            id: "filename",
+            title: "Override Filename",
+            label: "Filename",
             required: false,
-            placeholder: defaultFilename ?? 'myfile.png',
+            placeholder: defaultFilename ?? "myfile.png",
             defaultValue: pair.filename,
-            confirmText: 'Set',
-            description: 'Leave blank to use the name of the selected file',
+            confirmText: "Set",
+            description: "Leave blank to use the name of the selected file",
           });
           if (filename == null) return;
           onChangeFilename(filename);
         },
       },
       {
-        label: 'Unset File',
+        label: "Unset File",
         leftSlot: <Icon icon="x" />,
         hidden: pair.isFile,
         onSelect: async () => {
@@ -771,11 +771,11 @@ function FileActionsDropdown({
         },
       },
       {
-        label: 'Delete',
+        label: "Delete",
         onSelect: onDelete,
-        variant: 'danger',
+        variant: "danger",
         leftSlot: <Icon icon="trash" />,
-        color: 'danger',
+        color: "danger",
       },
     ],
     [
@@ -793,7 +793,7 @@ function FileActionsDropdown({
 
   return (
     <RadioDropdown
-      value={pair.isFile ? 'file' : 'text'}
+      value={pair.isFile ? "file" : "text"}
       onChange={onChange}
       items={fileItems}
       itemsAfter={itemsAfter}
@@ -810,7 +810,7 @@ function FileActionsDropdown({
 }
 
 function emptyPair(): PairWithId {
-  return ensurePairId({ enabled: true, name: '', value: '' });
+  return ensurePairId({ enabled: true, name: "", value: "" });
 }
 
 function isPairEmpty(pair: Pair): boolean {

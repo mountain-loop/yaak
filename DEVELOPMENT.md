@@ -1,10 +1,10 @@
 # Developer Setup
 
-Yaak is a combined Node.js and Rust monorepo. It is a [Tauri](https://tauri.app) project, so 
+Yaak is a combined Node.js and Rust monorepo. It is a [Tauri](https://tauri.app) project, so
 uses Rust and HTML/CSS/JS for the main application but there is also a plugin system powered
 by a Node.js sidecar that communicates to the app over gRPC.
 
-Because of the moving parts, there are a few setup steps required before development can 
+Because of the moving parts, there are a few setup steps required before development can
 begin.
 
 ## Prerequisites
@@ -47,12 +47,12 @@ npm start
 ## SQLite Migrations
 
 New migrations can be created from the `src-tauri/` directory:
-   
+
 ```shell
 npm run migration
 ```
 
-Rerun the app to apply the migrations. 
+Rerun the app to apply the migrations.
 
 _Note: For safety, development builds use a separate database location from production builds._
 
@@ -76,10 +76,11 @@ npm run lint
 - Format code:
 
 ```sh
-vp format
+npm run format
 ```
 
 Notes:
+
 - A pre-commit hook runs `vp lint` automatically on commit.
 - Some workspace packages also run `tsc --noEmit` for type-checking.
 - VS Code users should install the recommended extensions for format-on-save support.

@@ -1,12 +1,12 @@
-import type { WebsocketRequest } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import type { CSSProperties } from 'react';
+import type { WebsocketRequest } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import type { CSSProperties } from "react";
 
-import { workspaceLayoutAtom } from '../lib/atoms';
-import { SplitLayout } from './core/SplitLayout';
-import { WebsocketRequestPane } from './WebsocketRequestPane';
-import { WebsocketResponsePane } from './WebsocketResponsePane';
+import { workspaceLayoutAtom } from "../lib/atoms";
+import { SplitLayout } from "./core/SplitLayout";
+import { WebsocketRequestPane } from "./WebsocketRequestPane";
+import { WebsocketResponsePane } from "./WebsocketResponsePane";
 
 interface Props {
   activeRequest: WebsocketRequest;
@@ -25,17 +25,17 @@ export function WebsocketRequestLayout({ activeRequest, style }: Props) {
         <WebsocketRequestPane
           style={style}
           activeRequest={activeRequest}
-          fullHeight={orientation === 'horizontal'}
+          fullHeight={orientation === "horizontal"}
         />
       )}
       secondSlot={({ style }) => (
         <div
           style={style}
           className={classNames(
-            'x-theme-responsePane',
-            'max-h-full h-full grid grid-rows-[minmax(0,1fr)] grid-cols-1',
-            'bg-surface rounded-md border border-border-subtle',
-            'shadow relative',
+            "x-theme-responsePane",
+            "max-h-full h-full grid grid-rows-[minmax(0,1fr)] grid-cols-1",
+            "bg-surface rounded-md border border-border-subtle",
+            "shadow relative",
           )}
         >
           <WebsocketResponsePane activeRequest={activeRequest} />

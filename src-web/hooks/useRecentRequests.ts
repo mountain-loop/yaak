@@ -1,19 +1,19 @@
-import { useEffect, useMemo } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
-import { activeRequestAtom } from './useActiveRequest';
-import { useAllRequests } from './useAllRequests';
-import { useKeyValue } from './useKeyValue';
+import { useEffect, useMemo } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { getKeyValue, setKeyValue } from "../lib/keyValueStore";
+import { activeRequestAtom } from "./useActiveRequest";
+import { useAllRequests } from "./useAllRequests";
+import { useKeyValue } from "./useKeyValue";
 
 const kvKey = (workspaceId: string) => `recent_requests::${workspaceId}`;
-const namespace = 'global';
+const namespace = "global";
 const fallback: string[] = [];
 
 export function useRecentRequests() {
   const requests = useAllRequests();
 
   const { set: setRecentRequests, value: recentRequests } = useKeyValue<string[]>({
-    key: kvKey(requests[0]?.workspaceId ?? 'n/a'),
+    key: kvKey(requests[0]?.workspaceId ?? "n/a"),
     namespace,
     fallback,
   });

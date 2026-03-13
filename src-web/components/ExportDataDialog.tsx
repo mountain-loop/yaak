@@ -1,17 +1,17 @@
-import { save } from '@tauri-apps/plugin-dialog';
-import type { Workspace } from '@yaakapp-internal/models';
-import { workspacesAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useCallback, useMemo, useState } from 'react';
-import slugify from 'slugify';
-import { activeWorkspaceAtom } from '../hooks/useActiveWorkspace';
-import { pluralizeCount } from '../lib/pluralize';
-import { invokeCmd } from '../lib/tauri';
-import { Button } from './core/Button';
-import { Checkbox } from './core/Checkbox';
-import { DetailsBanner } from './core/DetailsBanner';
-import { Link } from './core/Link';
-import { HStack, VStack } from './core/Stacks';
+import { save } from "@tauri-apps/plugin-dialog";
+import type { Workspace } from "@yaakapp-internal/models";
+import { workspacesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useCallback, useMemo, useState } from "react";
+import slugify from "slugify";
+import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
+import { pluralizeCount } from "../lib/pluralize";
+import { invokeCmd } from "../lib/tauri";
+import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
+import { DetailsBanner } from "./core/DetailsBanner";
+import { Link } from "./core/Link";
+import { HStack, VStack } from "./core/Stacks";
 
 interface Props {
   onHide: () => void;
@@ -63,16 +63,16 @@ function ExportDataDialogContent({
   const handleExport = useCallback(async () => {
     const ids = Object.keys(selectedWorkspaces).filter((k) => selectedWorkspaces[k]);
     const workspace = ids.length === 1 ? workspaces.find((w) => w.id === ids[0]) : undefined;
-    const slug = workspace ? slugify(workspace.name, { lower: true }) : 'workspaces';
+    const slug = workspace ? slugify(workspace.name, { lower: true }) : "workspaces";
     const exportPath = await save({
-      title: 'Export Data',
+      title: "Export Data",
       defaultPath: `yaak.${slug}.json`,
     });
     if (exportPath == null) {
       return;
     }
 
-    await invokeCmd('cmd_export_data', {
+    await invokeCmd("cmd_export_data", {
       workspaceIds: ids,
       exportPath,
       includePrivateEnvironments: includePrivateEnvironments,
@@ -92,7 +92,7 @@ function ExportDataDialogContent({
             <tr>
               <th className="w-6 min-w-0 py-2 text-left pl-1">
                 <Checkbox
-                  checked={!allSelected && !noneSelected ? 'indeterminate' : allSelected}
+                  checked={!allSelected && !noneSelected ? "indeterminate" : allSelected}
                   hideLabel
                   title="All workspaces"
                   onChange={handleToggleAll}
@@ -122,7 +122,7 @@ function ExportDataDialogContent({
                     setSelectedWorkspaces((prev) => ({ ...prev, [w.id]: !prev[w.id] }))
                   }
                 >
-                  {w.name} {w.id === activeWorkspace.id ? '(current workspace)' : ''}
+                  {w.name} {w.id === activeWorkspace.id ? "(current workspace)" : ""}
                 </td>
               </tr>
             ))}
@@ -155,8 +155,8 @@ function ExportDataDialogContent({
             disabled={noneSelected}
             onClick={() => handleExport()}
           >
-            Export{' '}
-            {pluralizeCount('Workspace', numSelected, { omitSingle: true, noneWord: 'Nothing' })}
+            Export{" "}
+            {pluralizeCount("Workspace", numSelected, { omitSingle: true, noneWord: "Nothing" })}
           </Button>
         </HStack>
       </footer>

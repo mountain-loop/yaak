@@ -1,10 +1,10 @@
-import type { Cookie } from '@yaakapp-internal/models';
-import { cookieJarsAtom, patchModel } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { cookieDomain } from '../lib/model_util';
-import { Banner } from './core/Banner';
-import { IconButton } from './core/IconButton';
-import { InlineCode } from './core/InlineCode';
+import type { Cookie } from "@yaakapp-internal/models";
+import { cookieJarsAtom, patchModel } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { cookieDomain } from "../lib/model_util";
+import { Banner } from "./core/Banner";
+import { IconButton } from "./core/IconButton";
+import { InlineCode } from "./core/InlineCode";
 
 interface Props {
   cookieJarId: string | null;

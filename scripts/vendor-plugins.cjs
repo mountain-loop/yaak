@@ -1,31 +1,31 @@
-const { readdirSync, cpSync, existsSync, mkdirSync } = require('node:fs');
-const path = require('node:path');
+const { readdirSync, cpSync, existsSync, mkdirSync } = require("node:fs");
+const path = require("node:path");
 
-const pluginsDir = path.join(__dirname, '..', 'plugins');
-const externalPluginsDir = path.join(__dirname, '..', 'plugins-external');
+const pluginsDir = path.join(__dirname, "..", "plugins");
+const externalPluginsDir = path.join(__dirname, "..", "plugins-external");
 
 // Get list of external (non-bundled) plugins
 const externalPlugins = new Set();
 if (existsSync(externalPluginsDir)) {
   for (const name of readdirSync(externalPluginsDir)) {
-    if (!name.startsWith('.')) {
+    if (!name.startsWith(".")) {
       externalPlugins.add(name);
     }
   }
 }
 
-console.log('Copying Yaak plugins to', pluginsDir);
+console.log("Copying Yaak plugins to", pluginsDir);
 
 for (const name of readdirSync(pluginsDir)) {
   const dir = path.join(pluginsDir, name);
-  if (name.startsWith('.')) continue;
+  if (name.startsWith(".")) continue;
   if (externalPlugins.has(name)) {
     console.log(`Skipping ${name} (external plugin)`);
     continue;
   }
-  const destDir = path.join(__dirname, '../crates-tauri/yaak-app/vendored/plugins/', name);
+  const destDir = path.join(__dirname, "../crates-tauri/yaak-app/vendored/plugins/", name);
   mkdirSync(destDir, { recursive: true });
   console.log(`Copying ${name} to ${destDir}`);
-  cpSync(path.join(dir, 'package.json'), path.join(destDir, 'package.json'));
-  cpSync(path.join(dir, 'build'), path.join(destDir, 'build'), { recursive: true });
+  cpSync(path.join(dir, "package.json"), path.join(destDir, "package.json"));
+  cpSync(path.join(dir, "build"), path.join(destDir, "build"), { recursive: true });
 }

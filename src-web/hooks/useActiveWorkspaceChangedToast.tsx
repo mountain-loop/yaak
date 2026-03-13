@@ -1,8 +1,8 @@
-import { useAtomValue } from 'jotai';
-import { useEffect, useState } from 'react';
-import { InlineCode } from '../components/core/InlineCode';
-import { showToast } from '../lib/toast';
-import { activeWorkspaceAtom } from './useActiveWorkspace';
+import { useAtomValue } from "jotai";
+import { useEffect, useState } from "react";
+import { InlineCode } from "../components/core/InlineCode";
+import { showToast } from "../lib/toast";
+import { activeWorkspaceAtom } from "./useActiveWorkspace";
 
 export function useActiveWorkspaceChangedToast() {
   const activeWorkspace = useAtomValue(activeWorkspaceAtom);
@@ -22,7 +22,7 @@ export function useActiveWorkspaceChangedToast() {
       timeout: 3000,
       message: (
         <>
-          Activated workspace{' '}
+          Activated workspace{" "}
           <InlineCode className="whitespace-nowrap">{activeWorkspace.name}</InlineCode>
         </>
       ),

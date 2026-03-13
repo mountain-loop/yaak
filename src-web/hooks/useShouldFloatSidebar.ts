@@ -1,4 +1,4 @@
-import { useWindowSize } from 'react-use';
+import { useWindowSize } from "react-use";
 
 const WINDOW_FLOATING_SIDEBAR_WIDTH = 600;
 

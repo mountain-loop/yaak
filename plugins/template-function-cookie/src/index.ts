@@ -1,16 +1,16 @@
-import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from "@yaakapp/api";
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
-      name: 'cookie.value',
-      description: 'Read the value of a cookie in the jar, by name',
-      previewArgs: ['name'],
+      name: "cookie.value",
+      description: "Read the value of a cookie in the jar, by name",
+      previewArgs: ["name"],
       args: [
         {
-          type: 'text',
-          name: 'name',
-          label: 'Cookie Name',
+          type: "text",
+          name: "name",
+          label: "Cookie Name",
         },
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {

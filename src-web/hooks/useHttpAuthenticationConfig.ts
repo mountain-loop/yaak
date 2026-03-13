@@ -1,19 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 import type {
   Folder,
   GrpcRequest,
   HttpRequest,
   WebsocketRequest,
   Workspace,
-} from '@yaakapp-internal/models';
-import { httpResponsesAtom } from '@yaakapp-internal/models';
-import type { GetHttpAuthenticationConfigResponse, JsonPrimitive } from '@yaakapp-internal/plugins';
-import { useAtomValue } from 'jotai';
-import { md5 } from 'js-md5';
-import { useState } from 'react';
-import { invokeCmd } from '../lib/tauri';
-import { activeEnvironmentIdAtom } from './useActiveEnvironment';
-import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+} from "@yaakapp-internal/models";
+import { httpResponsesAtom } from "@yaakapp-internal/models";
+import type { GetHttpAuthenticationConfigResponse, JsonPrimitive } from "@yaakapp-internal/plugins";
+import { useAtomValue } from "jotai";
+import { md5 } from "js-md5";
+import { useState } from "react";
+import { invokeCmd } from "../lib/tauri";
+import { activeEnvironmentIdAtom } from "./useActiveEnvironment";
+import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
 export function useHttpAuthenticationConfig(
   authName: string | null,
@@ -29,14 +29,14 @@ export function useHttpAuthenticationConfig(
   // handle that, we'll force the auth to re-fetch after each new response closes
   const responseKey = md5(
     responses
-      .filter((r) => r.state === 'closed')
+      .filter((r) => r.state === "closed")
       .map((r) => r.id)
-      .join(':'),
+      .join(":"),
   );
 
   return useQuery({
     queryKey: [
-      'http_authentication_config',
+      "http_authentication_config",
       model,
       authName,
       values,
@@ -47,9 +47,9 @@ export function useHttpAuthenticationConfig(
     ],
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
-      if (authName == null || authName === 'inherit') return null;
+      if (authName == null || authName === "inherit") return null;
       const config = await invokeCmd<GetHttpAuthenticationConfigResponse>(
-        'cmd_get_http_authentication_config',
+        "cmd_get_http_authentication_config",
         {
           authName,
           values,
@@ -65,7 +65,7 @@ export function useHttpAuthenticationConfig(
           call: async (
             model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
           ) => {
-            await invokeCmd('cmd_call_http_authentication_action', {
+            await invokeCmd("cmd_call_http_authentication_action", {
               pluginRefId: config.pluginRefId,
               actionIndex: i,
               authName,

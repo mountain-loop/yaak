@@ -1,5 +1,5 @@
-import classNames from 'classnames';
-import { JsonAttributeTree } from '../core/JsonAttributeTree';
+import classNames from "classnames";
+import { JsonAttributeTree } from "../core/JsonAttributeTree";
 
 interface Props {
   text: string;
@@ -15,7 +15,7 @@ export function JsonViewer({ text, className }: Props) {
   }
 
   return (
-    <div className={classNames(className, 'overflow-x-auto h-full')}>
+    <div className={classNames(className, "overflow-x-auto h-full")}>
       <JsonAttributeTree attrValue={parsed} />
     </div>
   );

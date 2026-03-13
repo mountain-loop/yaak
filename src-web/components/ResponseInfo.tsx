@@ -1,7 +1,7 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { IconButton } from './core/IconButton';
-import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { IconButton } from "./core/IconButton";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
 
 interface Props {
   response: HttpResponse;

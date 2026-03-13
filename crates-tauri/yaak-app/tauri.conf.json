@@ -14,10 +14,7 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": [
-            "$APPDATA/responses/*",
-            "$RESOURCE/static/*"
-          ]
+          "allow": ["$APPDATA/responses/*", "$RESOURCE/static/*"]
         }
       }
     }
@@ -25,9 +22,7 @@
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "yaak"
-        ]
+        "schemes": ["yaak"]
       }
     }
   },

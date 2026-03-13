@@ -5,6 +5,10 @@
     "type": "git",
     "url": "git+https://github.com/mountain-loop/yaak.git"
   },
-  "os": ["win32"],
-  "cpu": ["arm64"]
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ]
 }

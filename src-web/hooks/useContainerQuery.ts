@@ -1,5 +1,5 @@
-import type { RefObject } from 'react';
-import { useLayoutEffect, useState } from 'react';
+import type { RefObject } from "react";
+import { useLayoutEffect, useState } from "react";
 
 export function useContainerSize(ref: RefObject<HTMLElement | null>) {
   const [size, setSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });

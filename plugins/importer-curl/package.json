@@ -1,9 +1,9 @@
 {
   "name": "@yaak/importer-curl",
   "displayName": "cURL Importer",
-  "description": "Import requests from cURL commands",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Import requests from cURL commands",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",

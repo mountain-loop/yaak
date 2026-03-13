@@ -1,7 +1,7 @@
-import { syntaxTree } from '@codemirror/language';
-import type { Range } from '@codemirror/state';
-import type { DecorationSet, ViewUpdate } from '@codemirror/view';
-import { Decoration, EditorView, ViewPlugin, WidgetType } from '@codemirror/view';
+import { syntaxTree } from "@codemirror/language";
+import type { Range } from "@codemirror/state";
+import type { DecorationSet, ViewUpdate } from "@codemirror/view";
+import { Decoration, EditorView, ViewPlugin, WidgetType } from "@codemirror/view";
 
 class PathPlaceholderWidget extends WidgetType {
   readonly #clickListenerCallback: () => void;
@@ -22,15 +22,15 @@ class PathPlaceholderWidget extends WidgetType {
   }
 
   toDOM() {
-    const elt = document.createElement('span');
-    elt.className = 'x-theme-templateTag x-theme-templateTag--secondary template-tag';
+    const elt = document.createElement("span");
+    elt.className = "x-theme-templateTag x-theme-templateTag--secondary template-tag";
     elt.textContent = this.rawText;
-    elt.addEventListener('click', this.#clickListenerCallback);
+    elt.addEventListener("click", this.#clickListenerCallback);
     return elt;
   }
 
   destroy(dom: HTMLElement) {
-    dom.removeEventListener('click', this.#clickListenerCallback);
+    dom.removeEventListener("click", this.#clickListenerCallback);
     super.destroy(dom);
   }
 
@@ -50,14 +50,14 @@ function pathParameters(
       from,
       to,
       enter(node) {
-        if (node.name === 'Text') {
+        if (node.name === "Text") {
           // Find the `url` node and then jump into it to find the placeholders
           for (let i = node.from; i < node.to; i++) {
             const innerTree = syntaxTree(view.state).resolveInner(i);
-            if (innerTree.node.name === 'url') {
+            if (innerTree.node.name === "url") {
               innerTree.toTree().iterate({
                 enter(node) {
-                  if (node.name !== 'Placeholder') return;
+                  if (node.name !== "Placeholder") return;
                   const globalFrom = innerTree.node.from + node.from;
                   const globalTo = innerTree.node.from + node.to;
                   const rawText = view.state.doc.sliceString(globalFrom, globalTo);

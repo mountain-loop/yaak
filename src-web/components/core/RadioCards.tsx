@@ -1,5 +1,5 @@
-import classNames from 'classnames';
-import type { ReactNode } from 'react';
+import classNames from "classnames";
+import type { ReactNode } from "react";
 
 export interface RadioCardOption<T extends string> {
   value: T;
@@ -28,11 +28,9 @@ export function RadioCards<T extends string>({
           <label
             key={option.value}
             className={classNames(
-              'flex items-start gap-3 p-3 rounded-lg border cursor-pointer',
-              'transition-colors',
-              selected
-                ? 'border-border-focus'
-                : 'border-border-subtle hocus:border-text-subtlest',
+              "flex items-start gap-3 p-3 rounded-lg border cursor-pointer",
+              "transition-colors",
+              selected ? "border-border-focus" : "border-border-subtle hocus:border-text-subtlest",
             )}
           >
             <input
@@ -45,9 +43,9 @@ export function RadioCards<T extends string>({
             />
             <div
               className={classNames(
-                'mt-1 w-4 h-4 flex-shrink-0 rounded-full border',
-                'flex items-center justify-center',
-                selected ? 'border-focus' : 'border-border',
+                "mt-1 w-4 h-4 flex-shrink-0 rounded-full border",
+                "flex items-center justify-center",
+                selected ? "border-focus" : "border-border",
               )}
             >
               {selected && <div className="w-2 h-2 rounded-full bg-text" />}

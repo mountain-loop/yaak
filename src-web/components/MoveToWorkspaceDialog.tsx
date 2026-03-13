@@ -1,15 +1,15 @@
-import type { GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { patchModel, workspacesAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useState } from 'react';
-import { pluralizeCount } from '../lib/pluralize';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { router } from '../lib/router';
-import { showToast } from '../lib/toast';
-import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
-import { Select } from './core/Select';
-import { VStack } from './core/Stacks';
+import type { GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
+import { patchModel, workspacesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useState } from "react";
+import { pluralizeCount } from "../lib/pluralize";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { router } from "../lib/router";
+import { showToast } from "../lib/toast";
+import { Button } from "./core/Button";
+import { InlineCode } from "./core/InlineCode";
+import { Select } from "./core/Select";
+import { VStack } from "./core/Stacks";
 
 interface Props {
   activeWorkspaceId: string;
@@ -50,17 +50,17 @@ export function MoveToWorkspaceDialog({ onDone, requests, activeWorkspaceId }: P
           // Hide after a moment, to give time for requests to disappear
           setTimeout(onDone, 100);
           showToast({
-            id: 'workspace-moved',
+            id: "workspace-moved",
             message:
               requests.length === 1 && requests[0] != null ? (
                 <>
-                  <InlineCode>{resolvedModelName(requests[0])}</InlineCode> moved to{' '}
-                  <InlineCode>{targetWorkspace?.name ?? 'unknown'}</InlineCode>
+                  <InlineCode>{resolvedModelName(requests[0])}</InlineCode> moved to{" "}
+                  <InlineCode>{targetWorkspace?.name ?? "unknown"}</InlineCode>
                 </>
               ) : (
                 <>
-                  {pluralizeCount('request', requests.length)} moved to{' '}
-                  <InlineCode>{targetWorkspace?.name ?? 'unknown'}</InlineCode>
+                  {pluralizeCount("request", requests.length)} moved to{" "}
+                  <InlineCode>{targetWorkspace?.name ?? "unknown"}</InlineCode>
                 </>
               ),
             action: ({ hide }) => (
@@ -70,7 +70,7 @@ export function MoveToWorkspaceDialog({ onDone, requests, activeWorkspaceId }: P
                 className="mr-auto min-w-[5rem]"
                 onClick={async () => {
                   await router.navigate({
-                    to: '/workspaces/$workspaceId',
+                    to: "/workspaces/$workspaceId",
                     params: { workspaceId: selectedWorkspaceId },
                   });
                   hide();
@@ -82,7 +82,7 @@ export function MoveToWorkspaceDialog({ onDone, requests, activeWorkspaceId }: P
           });
         }}
       >
-        {requests.length === 1 ? 'Move' : `Move ${pluralizeCount('Request', requests.length)}`}
+        {requests.length === 1 ? "Move" : `Move ${pluralizeCount("Request", requests.length)}`}
       </Button>
     </VStack>
   );

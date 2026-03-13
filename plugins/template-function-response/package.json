@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-response",
   "displayName": "Response Template Functions",
-  "description": "Template functions for request chaining",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for request chaining",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

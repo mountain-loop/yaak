@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 interface Props {
   text: string;
@@ -13,7 +13,7 @@ export function SvgViewer({ text, className }: Props) {
       return setSrc(null);
     }
 
-    const blob = new Blob([text], { type: 'image/svg+xml;charset=utf-8' });
+    const blob = new Blob([text], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     setSrc(url);
 
@@ -25,6 +25,6 @@ export function SvgViewer({ text, className }: Props) {
   }
 
   return (
-    <img src={src} alt="Response preview" className={className ?? 'max-w-full max-h-full pb-2'} />
+    <img src={src} alt="Response preview" className={className ?? "max-w-full max-h-full pb-2"} />
   );
 }

@@ -1,15 +1,15 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { type ReactNode, useMemo } from 'react';
-import { getRequestBodyText as getHttpResponseRequestBodyText } from '../hooks/useHttpRequestBody';
-import { useToggle } from '../hooks/useToggle';
-import { isProbablyTextContentType } from '../lib/contentType';
-import { getContentTypeFromHeaders } from '../lib/model_util';
-import { CopyButton } from './CopyButton';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
-import { SizeTag } from './core/SizeTag';
-import { HStack } from './core/Stacks';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { type ReactNode, useMemo } from "react";
+import { getRequestBodyText as getHttpResponseRequestBodyText } from "../hooks/useHttpRequestBody";
+import { useToggle } from "../hooks/useToggle";
+import { isProbablyTextContentType } from "../lib/contentType";
+import { getContentTypeFromHeaders } from "../lib/model_util";
+import { CopyButton } from "./CopyButton";
+import { Banner } from "./core/Banner";
+import { Button } from "./core/Button";
+import { InlineCode } from "./core/InlineCode";
+import { SizeTag } from "./core/SizeTag";
+import { HStack } from "./core/Stacks";
 
 interface Props {
   children: ReactNode;
@@ -31,10 +31,10 @@ export function ConfirmLargeResponseRequest({ children, response }: Props) {
     return (
       <Banner color="primary" className="flex flex-col gap-3">
         <p>
-          Showing content over{' '}
+          Showing content over{" "}
           <InlineCode>
             <SizeTag contentLength={LARGE_BYTES} />
-          </InlineCode>{' '}
+          </InlineCode>{" "}
           may impact performance
         </p>
         <HStack wrap space={2}>
@@ -46,7 +46,7 @@ export function ConfirmLargeResponseRequest({ children, response }: Props) {
               color="secondary"
               variant="border"
               size="xs"
-              text={() => getHttpResponseRequestBodyText(response).then((d) => d?.bodyText ?? '')}
+              text={() => getHttpResponseRequestBodyText(response).then((d) => d?.bodyText ?? "")}
             />
           )}
         </HStack>

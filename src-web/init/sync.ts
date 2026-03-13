@@ -1,10 +1,10 @@
-import { debounce } from '@yaakapp-internal/lib';
-import type { AnyModel, ModelPayload } from '@yaakapp-internal/models';
-import { watchWorkspaceFiles } from '@yaakapp-internal/sync';
-import { syncWorkspace } from '../commands/commands';
-import { activeWorkspaceIdAtom, activeWorkspaceMetaAtom } from '../hooks/useActiveWorkspace';
-import { listenToTauriEvent } from '../hooks/useListenToTauriEvent';
-import { jotaiStore } from '../lib/jotai';
+import { debounce } from "@yaakapp-internal/lib";
+import type { AnyModel, ModelPayload } from "@yaakapp-internal/models";
+import { watchWorkspaceFiles } from "@yaakapp-internal/sync";
+import { syncWorkspace } from "../commands/commands";
+import { activeWorkspaceIdAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
+import { listenToTauriEvent } from "../hooks/useListenToTauriEvent";
+import { jotaiStore } from "../lib/jotai";
 
 export function initSync() {
   initModelListeners();
@@ -34,7 +34,7 @@ const debouncedSync = debounce(async () => {
  * simply add long-lived subscribers for the lifetime of the app.
  */
 function initModelListeners() {
-  listenToTauriEvent<ModelPayload>('model_write', (p) => {
+  listenToTauriEvent<ModelPayload>("model_write", (p) => {
     if (isModelRelevant(p.payload.model)) debouncedSync();
   });
 }
@@ -63,16 +63,16 @@ function isModelRelevant(m: AnyModel) {
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
 
   if (
-    m.model !== 'workspace' &&
-    m.model !== 'folder' &&
-    m.model !== 'environment' &&
-    m.model !== 'http_request' &&
-    m.model !== 'grpc_request' &&
-    m.model !== 'websocket_request'
+    m.model !== "workspace" &&
+    m.model !== "folder" &&
+    m.model !== "environment" &&
+    m.model !== "http_request" &&
+    m.model !== "grpc_request" &&
+    m.model !== "websocket_request"
   ) {
     return false;
   }
-  if (m.model === 'workspace') {
+  if (m.model === "workspace") {
     return m.id === workspaceId;
   }
   return m.workspaceId === workspaceId;

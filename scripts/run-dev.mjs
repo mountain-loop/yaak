@@ -5,23 +5,23 @@
  * Loads port from .env.local if present, otherwise uses default port 1420.
  */
 
-import { spawnSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { spawnSync } from "child_process";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.join(__dirname, '..');
+const rootDir = path.join(__dirname, "..");
 
 // Load .env.local if it exists
-const envLocalPath = path.join(rootDir, '.env.local');
+const envLocalPath = path.join(rootDir, ".env.local");
 if (fs.existsSync(envLocalPath)) {
-  const envContent = fs.readFileSync(envLocalPath, 'utf8');
+  const envContent = fs.readFileSync(envLocalPath, "utf8");
   const envVars = envContent
-    .split('\n')
-    .filter(line => line && !line.startsWith('#'))
+    .split("\n")
+    .filter((line) => line && !line.startsWith("#"))
     .reduce((acc, line) => {
-      const [key, value] = line.split('=');
+      const [key, value] = line.split("=");
       if (key && value) {
         acc[key.trim()] = value.trim();
       }
@@ -31,23 +31,28 @@ if (fs.existsSync(envLocalPath)) {
   Object.assign(process.env, envVars);
 }
 
-const port = process.env.YAAK_DEV_PORT || '1420';
+const port = process.env.YAAK_DEV_PORT || "1420";
 const config = JSON.stringify({ build: { devUrl: `http://localhost:${port}` } });
 
 // Get additional arguments passed after npm run app-dev --
 const additionalArgs = process.argv.slice(2);
 
 const args = [
-  'dev',
-  '--no-watch',
-  '--config', 'crates-tauri/yaak-app/tauri.development.conf.json',
-  '--config', config,
-  ...additionalArgs
+  "dev",
+  "--no-watch",
+  "--config",
+  "crates-tauri/yaak-app/tauri.development.conf.json",
+  "--config",
+  config,
+  ...additionalArgs,
 ];
 
 // Invoke the tauri CLI JS entry point directly via node to avoid shell escaping issues on Windows
-const tauriJs = path.join(rootDir, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
+const tauriJs = path.join(rootDir, "node_modules", "@tauri-apps", "cli", "tauri.js");
 
-const result = spawnSync(process.execPath, [tauriJs, ...args], { stdio: 'inherit', env: process.env });
+const result = spawnSync(process.execPath, [tauriJs, ...args], {
+  stdio: "inherit",
+  env: process.env,
+});
 
 process.exit(result.status || 0);

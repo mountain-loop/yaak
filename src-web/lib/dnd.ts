@@ -1,10 +1,10 @@
-import type { DragMoveEvent } from '@dnd-kit/core';
+import type { DragMoveEvent } from "@dnd-kit/core";
 
 export function computeSideForDragMove(
   id: string,
   e: DragMoveEvent,
-  orientation: 'vertical' | 'horizontal' = 'vertical',
-): 'before' | 'after' | null {
+  orientation: "vertical" | "horizontal" = "vertical",
+): "before" | "after" | null {
   if (e.over == null || e.over.id !== id) {
     return null;
   }
@@ -12,7 +12,7 @@ export function computeSideForDragMove(
 
   const overRect = e.over.rect;
 
-  if (orientation === 'horizontal') {
+  if (orientation === "horizontal") {
     // For horizontal layouts (tabs side-by-side), use left/right logic
     const activeLeft =
       e.active.rect.current.translated?.left ?? e.active.rect.current.initial.left + e.delta.x;
@@ -22,7 +22,7 @@ export function computeSideForDragMove(
     const hoverRight = overRect.right;
     const hoverMiddleX = hoverLeft + (hoverRight - hoverLeft) / 2;
 
-    return pointerX < hoverMiddleX ? 'before' : 'after'; // 'before' = left, 'after' = right
+    return pointerX < hoverMiddleX ? "before" : "after"; // 'before' = left, 'after' = right
   } else {
     // For vertical layouts, use top/bottom logic
     const activeTop =
@@ -34,6 +34,6 @@ export function computeSideForDragMove(
     const hoverMiddleY = (hoverBottom - hoverTop) / 2;
     const hoverClientY = pointerY - hoverTop;
 
-    return hoverClientY < hoverMiddleY ? 'before' : 'after';
+    return hoverClientY < hoverMiddleY ? "before" : "after";
   }
 }

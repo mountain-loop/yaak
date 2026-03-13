@@ -1,15 +1,15 @@
-import { useQuery } from '@tanstack/react-query';
-import type { Workspace } from '@yaakapp-internal/models';
+import { useQuery } from "@tanstack/react-query";
+import type { Workspace } from "@yaakapp-internal/models";
 import type {
   CallWorkspaceActionRequest,
   GetWorkspaceActionsResponse,
   WorkspaceAction,
-} from '@yaakapp-internal/plugins';
-import { useMemo } from 'react';
-import { invokeCmd } from '../lib/tauri';
-import { usePluginsKey } from './usePlugins';
+} from "@yaakapp-internal/plugins";
+import { useMemo } from "react";
+import { invokeCmd } from "../lib/tauri";
+import { usePluginsKey } from "./usePlugins";
 
-export type CallableWorkspaceAction = Pick<WorkspaceAction, 'label' | 'icon'> & {
+export type CallableWorkspaceAction = Pick<WorkspaceAction, "label" | "icon"> & {
   call: (workspace: Workspace) => Promise<void>;
 };
 
@@ -17,7 +17,7 @@ export function useWorkspaceActions() {
   const pluginsKey = usePluginsKey();
 
   const actionsResult = useQuery<CallableWorkspaceAction[]>({
-    queryKey: ['workspace_actions', pluginsKey],
+    queryKey: ["workspace_actions", pluginsKey],
     queryFn: () => getWorkspaceActions(),
   });
 
@@ -30,7 +30,7 @@ export function useWorkspaceActions() {
 }
 
 export async function getWorkspaceActions() {
-  const responses = await invokeCmd<GetWorkspaceActionsResponse[]>('cmd_workspace_actions');
+  const responses = await invokeCmd<GetWorkspaceActionsResponse[]>("cmd_workspace_actions");
   const actions = responses.flatMap((r) =>
     r.actions.map((a, i) => ({
       label: a.label,
@@ -41,7 +41,7 @@ export async function getWorkspaceActions() {
           pluginRefId: r.pluginRefId,
           args: { workspace },
         };
-        await invokeCmd('cmd_call_workspace_action', { req: payload });
+        await invokeCmd("cmd_call_workspace_action", { req: payload });
       },
     })),
   );

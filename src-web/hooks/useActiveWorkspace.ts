@@ -1,8 +1,8 @@
-import { useParams } from '@tanstack/react-router';
-import { workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { atom } from 'jotai';
-import { useEffect } from 'react';
-import { jotaiStore } from '../lib/jotai';
+import { useParams } from "@tanstack/react-router";
+import { workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { atom } from "jotai";
+import { useEffect } from "react";
+import { jotaiStore } from "../lib/jotai";
 
 export const activeWorkspaceIdAtom = atom<string | null>(null);
 

@@ -1,6 +1,6 @@
-import { atom } from 'jotai';
-import { atomFamily, selectAtom } from 'jotai/utils';
-import { atomWithKVStorage } from '../../../lib/atoms/atomWithKVStorage';
+import { atom } from "jotai";
+import { atomFamily, selectAtom } from "jotai/utils";
+import { atomWithKVStorage } from "../../../lib/atoms/atomWithKVStorage";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const selectedIdsFamily = atomFamily((_treeId: string) => {
@@ -58,7 +58,7 @@ export const isAncestorHoveredFamily = atomFamily(
       (v) => v.parentId && ancestorIds.includes(v.parentId),
       Object.is,
     ),
-  (a, b) => a.treeId === b.treeId && a.ancestorIds.join(',') === b.ancestorIds.join(','),
+  (a, b) => a.treeId === b.treeId && a.ancestorIds.join(",") === b.ancestorIds.join(","),
 );
 
 export const isIndexHoveredFamily = atomFamily(
@@ -76,12 +76,12 @@ export const hoveredParentDepthFamily = atomFamily((treeId: string) =>
 );
 
 export const collapsedFamily = atomFamily((workspaceId: string) => {
-  const key = ['sidebar_collapsed', workspaceId ?? 'n/a'];
+  const key = ["sidebar_collapsed", workspaceId ?? "n/a"];
   return atomWithKVStorage<Record<string, boolean>>(key, {});
 });
 
 export const isCollapsedFamily = atomFamily(
-  ({ treeId, itemId = 'n/a' }: { treeId: string; itemId: string | undefined }) =>
+  ({ treeId, itemId = "n/a" }: { treeId: string; itemId: string | undefined }) =>
     atom(
       // --- getter ---
       (get) => !!get(collapsedFamily(treeId))[itemId],
@@ -91,7 +91,7 @@ export const isCollapsedFamily = atomFamily(
         const a = collapsedFamily(treeId);
         const prevMap = get(a);
         const prevValue = !!prevMap[itemId];
-        const value = typeof next === 'function' ? next(prevValue) : next;
+        const value = typeof next === "function" ? next(prevValue) : next;
 
         if (value === prevValue) return; // no-op
 

@@ -1,17 +1,17 @@
-import type { Virtualizer } from '@tanstack/react-virtual';
-import { format } from 'date-fns';
-import type { ReactNode } from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useEventViewerKeyboard } from '../../hooks/useEventViewerKeyboard';
-import { CopyIconButton } from '../CopyIconButton';
-import { AutoScroller } from './AutoScroller';
-import { Banner } from './Banner';
-import { Button } from './Button';
-import { Separator } from './Separator';
-import { SplitLayout } from './SplitLayout';
-import { HStack } from './Stacks';
-import { IconButton } from './IconButton';
-import classNames from 'classnames';
+import type { Virtualizer } from "@tanstack/react-virtual";
+import { format } from "date-fns";
+import type { ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useEventViewerKeyboard } from "../../hooks/useEventViewerKeyboard";
+import { CopyIconButton } from "../CopyIconButton";
+import { AutoScroller } from "./AutoScroller";
+import { Banner } from "./Banner";
+import { Button } from "./Button";
+import { Separator } from "./Separator";
+import { SplitLayout } from "./SplitLayout";
+import { HStack } from "./Stacks";
+import { IconButton } from "./IconButton";
+import classNames from "classnames";
 
 interface EventViewerProps<T> {
   /** Array of events to display */
@@ -70,8 +70,8 @@ export function EventViewer<T>({
   defaultRatio = 0.4,
   enableKeyboardNav = true,
   isLoading = false,
-  loadingMessage = 'Loading events...',
-  emptyMessage = 'No events recorded',
+  loadingMessage = "Loading events...",
+  emptyMessage = "No events recorded",
   onActiveIndexChange,
 }: EventViewerProps<T>) {
   const [activeIndex, setActiveIndexInternal] = useState<number | null>(null);
@@ -82,7 +82,7 @@ export function EventViewer<T>({
     (indexOrUpdater: number | null | ((prev: number | null) => number | null)) => {
       setActiveIndexInternal((prev) => {
         const newIndex =
-          typeof indexOrUpdater === 'function' ? indexOrUpdater(prev) : indexOrUpdater;
+          typeof indexOrUpdater === "function" ? indexOrUpdater(prev) : indexOrUpdater;
         onActiveIndexChange?.(newIndex);
         return newIndex;
       });
@@ -129,7 +129,7 @@ export function EventViewer<T>({
       setIsPanelOpen(true);
       // Scroll to ensure selected item is visible after panel opens
       requestAnimationFrame(() => {
-        virtualizerRef.current?.scrollToIndex(index, { align: 'auto' });
+        virtualizerRef.current?.scrollToIndex(index, { align: "auto" });
       });
     },
     [setActiveIndex],
@@ -189,7 +189,11 @@ export function EventViewer<T>({
                     <Separator />
                   </div>
                   <div className="mx-2 overflow-y-auto">
-                    {renderDetail({ event: activeEvent, index: activeIndex ?? 0, onClose: handleClose })}
+                    {renderDetail({
+                      event: activeEvent,
+                      index: activeIndex ?? 0,
+                      onClose: handleClose,
+                    })}
                   </div>
                 </div>
               )
@@ -228,7 +232,7 @@ export function EventDetailHeader({
   copyText,
   onClose,
 }: EventDetailHeaderProps) {
-  const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), 'HH:mm:ss.SSS') : null;
+  const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), "HH:mm:ss.SSS") : null;
 
   return (
     <div className="flex items-center justify-between gap-2 mb-2 h-xs">
@@ -249,8 +253,21 @@ export function EventDetailHeader({
         {formattedTime && (
           <span className="text-text-subtlest font-mono text-editor ml-2">{formattedTime}</span>
         )}
-        <div className={classNames(copyText != null || formattedTime || (actions ?? []).length > 0 && "border-l border-l-surface-highlight ml-2 pl-3")}>
-        <IconButton color="custom" className="text-text-subtle -mr-3" size="xs" icon="x" title="Close event panel" onClick={onClose} />
+        <div
+          className={classNames(
+            copyText != null ||
+              formattedTime ||
+              ((actions ?? []).length > 0 && "border-l border-l-surface-highlight ml-2 pl-3"),
+          )}
+        >
+          <IconButton
+            color="custom"
+            className="text-text-subtle -mr-3"
+            size="xs"
+            icon="x"
+            title="Close event panel"
+            onClick={onClose}
+          />
         </div>
       </HStack>
     </div>

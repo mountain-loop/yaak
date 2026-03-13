@@ -1,28 +1,28 @@
-import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from '@yaakapp-internal/models';
-import { foldersAtom } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useMemo } from 'react';
-import { allRequestsAtom } from '../hooks/useAllRequests';
-import { useFolderActions } from '../hooks/useFolderActions';
-import { useLatestHttpResponse } from '../hooks/useLatestHttpResponse';
-import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { fireAndForget } from '../lib/fireAndForget';
-import { showDialog } from '../lib/dialog';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { router } from '../lib/router';
-import { Button } from './core/Button';
-import { Heading } from './core/Heading';
-import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
-import { HttpStatusTag } from './core/HttpStatusTag';
-import { Icon } from './core/Icon';
-import { IconButton } from './core/IconButton';
-import { LoadingIcon } from './core/LoadingIcon';
-import { Separator } from './core/Separator';
-import { SizeTag } from './core/SizeTag';
-import { HStack } from './core/Stacks';
-import { HttpResponsePane } from './HttpResponsePane';
+import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
+import { foldersAtom } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useMemo } from "react";
+import { allRequestsAtom } from "../hooks/useAllRequests";
+import { useFolderActions } from "../hooks/useFolderActions";
+import { useLatestHttpResponse } from "../hooks/useLatestHttpResponse";
+import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
+import { fireAndForget } from "../lib/fireAndForget";
+import { showDialog } from "../lib/dialog";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { router } from "../lib/router";
+import { Button } from "./core/Button";
+import { Heading } from "./core/Heading";
+import { HttpResponseDurationTag } from "./core/HttpResponseDurationTag";
+import { HttpStatusTag } from "./core/HttpStatusTag";
+import { Icon } from "./core/Icon";
+import { IconButton } from "./core/IconButton";
+import { LoadingIcon } from "./core/LoadingIcon";
+import { Separator } from "./core/Separator";
+import { SizeTag } from "./core/SizeTag";
+import { HStack } from "./core/Stacks";
+import { HttpResponsePane } from "./HttpResponsePane";
 
 interface Props {
   folder: Folder;
@@ -34,7 +34,7 @@ export function FolderLayout({ folder, style }: Props) {
   const requests = useAtomValue(allRequestsAtom);
   const folderActions = useFolderActions();
   const sendAllAction = useMemo(
-    () => folderActions.find((a) => a.label === 'Send All'),
+    () => folderActions.find((a) => a.label === "Send All"),
     [folderActions],
   );
 
@@ -79,13 +79,13 @@ export function FolderLayout({ folder, style }: Props) {
 
 function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | WebsocketRequest }) {
   let card: ReactNode;
-  if (child.model === 'folder') {
+  if (child.model === "folder") {
     card = <FolderCard folder={child} />;
-  } else if (child.model === 'http_request') {
+  } else if (child.model === "http_request") {
     card = <HttpRequestCard request={child} />;
-  } else if (child.model === 'grpc_request') {
+  } else if (child.model === "grpc_request") {
     card = <RequestCard request={child} />;
-  } else if (child.model === 'websocket_request') {
+  } else if (child.model === "websocket_request") {
     card = <RequestCard request={child} />;
   } else {
     card = <div>Unknown model</div>;
@@ -93,7 +93,7 @@ function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | Webs
 
   const navigate = useCallback(async () => {
     await router.navigate({
-      to: '/workspaces/$workspaceId',
+      to: "/workspaces/$workspaceId",
       params: { workspaceId: child.workspaceId },
       search: (prev) => ({ ...prev, request_id: child.id }),
     });
@@ -102,12 +102,12 @@ function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | Webs
   return (
     <div
       className={classNames(
-        'rounded-lg bg-surface-highlight p-3 pt-1 border border-border',
-        'flex flex-col gap-3',
+        "rounded-lg bg-surface-highlight p-3 pt-1 border border-border",
+        "flex flex-col gap-3",
       )}
     >
       <HStack space={2}>
-        {child.model === 'folder' && <Icon icon="folder" size="lg" />}
+        {child.model === "folder" && <Icon icon="folder" size="lg" />}
         <Heading className="truncate" level={2}>
           {resolvedModelName(child)}
         </Heading>
@@ -144,7 +144,7 @@ function FolderCard({ folder }: { folder: Folder }) {
         color="primary"
         onClick={async () => {
           await router.navigate({
-            to: '/workspaces/$workspaceId',
+            to: "/workspaces/$workspaceId",
             params: { workspaceId: folder.workspaceId },
             search: (prev) => {
               return { ...prev, request_id: null, folder_id: folder.id };
@@ -178,10 +178,10 @@ function HttpRequestCard({ request }: { request: HttpRequest }) {
           onClick={(e) => {
             e.stopPropagation();
             showDialog({
-              id: 'response-preview',
-              title: 'Response Preview',
-              size: 'md',
-              className: 'h-full',
+              id: "response-preview",
+              title: "Response Preview",
+              size: "md",
+              className: "h-full",
               render: () => {
                 return <HttpResponsePane activeRequestId={request.id} />;
               },
@@ -192,12 +192,12 @@ function HttpRequestCard({ request }: { request: HttpRequest }) {
             space={2}
             alignItems="center"
             className={classNames(
-              'cursor-default select-none',
-              'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars',
-              'font-mono text-editor border rounded px-1.5 py-0.5 truncate w-full',
+              "cursor-default select-none",
+              "whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars",
+              "font-mono text-editor border rounded px-1.5 py-0.5 truncate w-full",
             )}
           >
-            {latestResponse.state !== 'closed' && <LoadingIcon size="sm" />}
+            {latestResponse.state !== "closed" && <LoadingIcon size="sm" />}
             <HttpStatusTag showReason response={latestResponse} />
             <span>&bull;</span>
             <HttpResponseDurationTag response={latestResponse} />

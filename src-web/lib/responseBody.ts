@@ -1,8 +1,8 @@
-import { readFile } from '@tauri-apps/plugin-fs';
-import type { HttpResponse } from '@yaakapp-internal/models';
-import type { FilterResponse } from '@yaakapp-internal/plugins';
-import type { ServerSentEvent } from '@yaakapp-internal/sse';
-import { invokeCmd } from './tauri';
+import { readFile } from "@tauri-apps/plugin-fs";
+import type { HttpResponse } from "@yaakapp-internal/models";
+import type { FilterResponse } from "@yaakapp-internal/plugins";
+import type { ServerSentEvent } from "@yaakapp-internal/sse";
+import { invokeCmd } from "./tauri";
 
 export async function getResponseBodyText({
   response,
@@ -11,7 +11,7 @@ export async function getResponseBodyText({
   response: HttpResponse;
   filter: string | null;
 }): Promise<string | null> {
-  const result = await invokeCmd<FilterResponse>('cmd_http_response_body', {
+  const result = await invokeCmd<FilterResponse>("cmd_http_response_body", {
     response,
     filter,
   });
@@ -27,7 +27,7 @@ export async function getResponseBodyEventSource(
   response: HttpResponse,
 ): Promise<ServerSentEvent[]> {
   if (!response.bodyPath) return [];
-  return invokeCmd<ServerSentEvent[]>('cmd_get_sse_events', {
+  return invokeCmd<ServerSentEvent[]>("cmd_get_sse_events", {
     filePath: response.bodyPath,
   });
 }

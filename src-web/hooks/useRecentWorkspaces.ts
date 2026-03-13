@@ -1,13 +1,13 @@
-import { workspacesAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useEffect, useMemo } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
-import { activeWorkspaceIdAtom } from './useActiveWorkspace';
-import { useKeyValue } from './useKeyValue';
+import { workspacesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useEffect, useMemo } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { getKeyValue, setKeyValue } from "../lib/keyValueStore";
+import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
+import { useKeyValue } from "./useKeyValue";
 
-const kvKey = () => 'recent_workspaces';
-const namespace = 'global';
+const kvKey = () => "recent_workspaces";
+const namespace = "global";
 const fallback: string[] = [];
 
 export function useRecentWorkspaces() {
@@ -43,6 +43,6 @@ async function updateRecentWorkspaces() {
 
   const withoutActiveId = recentIds.filter((id) => id !== activeWorkspaceId);
   const value = [activeWorkspaceId, ...withoutActiveId];
-  console.log('Recent workspaces update', activeWorkspaceId);
+  console.log("Recent workspaces update", activeWorkspaceId);
   await setKeyValue({ namespace, key, value });
 }
