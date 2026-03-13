@@ -1,5 +1,5 @@
 import type { Context } from '@yaakapp/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 const ntlmMock = vi.hoisted(() => ({
   createType1Message: vi.fn(),
@@ -17,6 +17,7 @@ describe('auth-ntlm', () => {
     ntlmMock.parseType2Message.mockReset();
     ntlmMock.createType3Message.mockReset();
     ntlmMock.createType1Message.mockReturnValue('NTLM TYPE1');
+    // oxlint-disable-next-line no-explicit-any
     ntlmMock.parseType2Message.mockReturnValue({} as any);
     ntlmMock.createType3Message.mockReturnValue('NTLM TYPE3');
   });

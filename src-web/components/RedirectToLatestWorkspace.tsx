@@ -5,6 +5,7 @@ import { getRecentCookieJars } from '../hooks/useRecentCookieJars';
 import { getRecentEnvironments } from '../hooks/useRecentEnvironments';
 import { getRecentRequests } from '../hooks/useRecentRequests';
 import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
+import { fireAndForget } from '../lib/fireAndForget';
 import { router } from '../lib/router';
 
 export function RedirectToLatestWorkspace() {
@@ -20,7 +21,7 @@ export function RedirectToLatestWorkspace() {
       return;
     }
 
-    (async () => {
+    fireAndForget((async () => {
       const workspaceId = recentWorkspaces[0] ?? workspaces[0]?.id ?? 'n/a';
       const environmentId = (await getRecentEnvironments(workspaceId))[0] ?? null;
       const cookieJarId = (await getRecentCookieJars(workspaceId))[0] ?? null;
@@ -34,7 +35,7 @@ export function RedirectToLatestWorkspace() {
 
       console.log('Redirecting to workspace', params, search);
       await router.navigate({ to: '/workspaces/$workspaceId', params, search });
-    })();
+    })());
   }, [recentWorkspaces, workspaces, workspaces.length]);
 
   return null;

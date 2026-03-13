@@ -17,7 +17,7 @@ export function useRequestEditorEvent<
     return () => {
       emitter.off(event, fn);
     };
-    // biome-ignore lint/correctness/useExhaustiveDependencies: We're handing deps manually
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- We're handing deps manually
   }, deps);
 }
 

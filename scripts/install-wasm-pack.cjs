@@ -12,7 +12,7 @@ execSync('cargo install wasm-pack --locked', { stdio: 'inherit' });
 function tryExecSync(cmd) {
   try {
     return execSync(cmd, { stdio: 'pipe' }).toString('utf-8');
-  } catch (_) {
+  } catch {
     return '';
   }
 }

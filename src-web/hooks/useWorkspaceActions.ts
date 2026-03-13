@@ -21,7 +21,7 @@ export function useWorkspaceActions() {
     queryFn: () => getWorkspaceActions(),
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: none
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   const actions = useMemo(() => {
     return actionsResult.data ?? [];
   }, [JSON.stringify(actionsResult.data)]);

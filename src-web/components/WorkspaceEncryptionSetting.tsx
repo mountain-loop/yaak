@@ -127,7 +127,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
             await enableEncryption(workspaceMeta.workspaceId);
             setJustEnabledEncryption(true);
           } catch (err) {
-            setError(`Failed to enable encryption: ${err}`);
+            setError(`Failed to enable encryption: ${err instanceof Error ? err.message : String(err)}`);
           }
         }}
       >
@@ -285,7 +285,7 @@ function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
         keyText.split('').map((c, i) => {
           return (
             <span
-              // biome-ignore lint/suspicious/noArrayIndexKey: it's fine
+              // oxlint-disable-next-line react/no-array-index-key
               key={i}
               className={classNames(
                 c.match(/[0-9]/) && 'text-info',

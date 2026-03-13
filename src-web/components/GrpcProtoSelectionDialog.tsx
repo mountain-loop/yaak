@@ -103,7 +103,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Found services{' '}
               {services?.slice(0, 5).map((s, i) => {
                 return (
-                  <span key={s.name + s.methods.join(',')}>
+                  <span key={s.name + s.methods.map((m) => m.name).join(',')}>
                     <InlineCode>{s.name}</InlineCode>
                     {i === services.length - 1 ? '' : i === services.length - 2 ? ' and ' : ', '}
                   </span>
@@ -119,7 +119,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               Server reflection found services
               {services?.map((s, i) => {
                 return (
-                  <span key={s.name + s.methods.join(',')}>
+                  <span key={s.name + s.methods.map((m) => m.name).join(',')}>
                     <InlineCode>{s.name}</InlineCode>
                     {i === services.length - 1 ? '' : i === services.length - 2 ? ' and ' : ', '}
                   </span>
@@ -144,7 +144,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
               {protoFiles.map((f, i) => {
                 const parts = f.split('/');
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: none
+                  // oxlint-disable-next-line react/no-array-index-key
                   <tr key={f + i} className="group">
                     <td>
                       <Icon icon={f.endsWith('.proto') ? 'file_code' : 'folder_code'} />

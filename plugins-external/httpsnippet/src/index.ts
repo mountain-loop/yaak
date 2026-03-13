@@ -173,7 +173,7 @@ function toHarRequest(request: Partial<HttpRequest>) {
   return har;
 }
 
-function maybeParseJSON<T>(v: unknown, fallback: T): T | unknown {
+function maybeParseJSON<T>(v: unknown, fallback: T): unknown {
   if (typeof v !== 'string') return fallback;
   try {
     return JSON.parse(v);
@@ -305,7 +305,7 @@ export const plugin: PluginDefinition = {
             });
           } catch (err) {
             await ctx.toast.show({
-              message: `Failed to generate snippet: ${err}`,
+              message: `Failed to generate snippet: ${err instanceof Error ? err.message : String(err)}`,
               icon: 'alert_triangle',
               color: 'danger',
             });

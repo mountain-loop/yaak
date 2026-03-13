@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite dev --force",
-    "build": "vite build",
+    "dev": "vp dev --force",
+    "build": "vp build",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -77,9 +77,11 @@
   },
   "devDependencies": {
     "@lezer/generator": "^1.8.0",
+    "@rolldown/plugin-babel": "^0.2.1",
     "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/nesting": "^0.0.0-insiders.565cd3e",
     "@tanstack/router-plugin": "^1.127.5",
+    "@types/babel__core": "^7.20.5",
     "@types/node": "^24.0.13",
     "@types/papaparse": "^5.3.16",
     "@types/parse-color": "^1.0.3",
@@ -88,18 +90,17 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid": "^10.0.0",
     "@types/whatwg-mimetype": "^3.0.2",
-    "babel-plugin-react-compiler": "^1.0.0",
     "@vitejs/plugin-react": "^6.0.0",
     "autoprefixer": "^10.4.21",
+    "babel-plugin-react-compiler": "^1.0.0",
     "decompress": "^4.2.1",
     "internal-ip": "^8.0.0",
     "postcss": "^8.5.6",
     "postcss-nesting": "^13.0.2",
     "tailwindcss": "^3.4.17",
-    "vite": "^8.0.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "vite-plugin-static-copy": "^3.3.0",
     "vite-plugin-svgr": "^4.5.0",
-    "vite-plugin-top-level-await": "^1.6.0",
-    "vite-plugin-wasm": "^3.5.0"
+    "vite-plus": "latest"
   }
 }

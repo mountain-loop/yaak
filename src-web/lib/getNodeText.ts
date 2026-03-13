@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
  * https://stackoverflow.com/questions/50428910/get-text-content-from-node-in-react
  */
 export function getNodeText(node: ReactNode): string {
-  if (['string', 'number'].includes(typeof node)) {
+  if (typeof node === 'string' || typeof node === 'number') {
     return String(node);
   }
 
@@ -14,7 +14,7 @@ export function getNodeText(node: ReactNode): string {
   }
 
   if (typeof node === 'object' && node) {
-    // biome-ignore lint/suspicious/noExplicitAny: none
+    // oxlint-disable-next-line no-explicit-any
     return getNodeText((node as any).props.children);
   }
 

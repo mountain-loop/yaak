@@ -148,7 +148,7 @@ async function getCodeViaEmbeddedBrowser(
   const authorizationUrlStr = authorizationUrl.toString();
   console.log('[oauth2] Authorizing via embedded browser', authorizationUrlStr);
 
-  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: Required for this pattern
+  // oxlint-disable-next-line no-async-promise-executor -- Required for this pattern
   return new Promise<string>(async (resolve, reject) => {
     let foundCode = false;
     const { close } = await ctx.window.openUrl({

@@ -89,8 +89,8 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
 
   const handleError = (err: unknown) => {
     showToast({
-      id: `${err}`,
-      message: `${err}`,
+      id: err instanceof Error ? err.message : String(err),
+      message: err instanceof Error ? err.message : String(err),
       color: 'danger',
       timeout: 5000,
     });
@@ -186,16 +186,16 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
         }
 
         if (result.type === 'uncommitted_changes') {
-          callbacks.promptUncommittedChanges().then(async (strategy) => {
+          void callbacks.promptUncommittedChanges().then(async (strategy) => {
             if (strategy === 'cancel') return;
 
             await invoke('cmd_git_reset_changes', { dir });
             return invoke<PullResult>('cmd_git_pull', { dir });
-          }).then(async () => { onSuccess(); await callbacks.forceSync(); }, handleError);
+          }).then(async () => { await onSuccess(); await callbacks.forceSync(); }, handleError);
         }
 
         if (result.type === 'diverged') {
-          callbacks.promptDiverged(result).then((strategy) => {
+          void callbacks.promptDiverged(result).then((strategy) => {
             if (strategy === 'cancel') return;
 
             if (strategy === 'force_reset') {
@@ -211,7 +211,7 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
               remote: result.remote,
               branch: result.branch,
             });
-          }).then(async () => { onSuccess(); await callbacks.forceSync(); }, handleError);
+          }).then(async () => { await onSuccess(); await callbacks.forceSync(); }, handleError);
         }
 
         return result;

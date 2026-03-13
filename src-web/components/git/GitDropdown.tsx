@@ -11,6 +11,7 @@ import { useRandomKey } from '../../hooks/useRandomKey';
 import { sync } from '../../init/sync';
 import { showConfirm, showConfirmDelete } from '../../lib/confirm';
 import { showDialog } from '../../lib/dialog';
+import { fireAndForget } from '../../lib/fireAndForget';
 import { showPrompt } from '../../lib/prompt';
 import { showErrorToast, showToast } from '../../lib/toast';
 import { Banner } from '../core/Banner';
@@ -246,7 +247,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
               message: 'Changes have been reset',
               color: 'success',
             });
-            sync({ force: true });
+            fireAndForget(sync({ force: true }));
           },
           onError(err) {
             showErrorToast({
@@ -293,7 +294,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                         </>
                       ),
                     });
-                    sync({ force: true });
+                    fireAndForget(sync({ force: true }));
                   },
                   onError(err) {
                     showErrorToast({

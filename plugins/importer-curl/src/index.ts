@@ -48,7 +48,7 @@ export const plugin: PluginDefinition = {
     name: 'cURL',
     description: 'Import cURL commands',
     onImport(_ctx: Context, args: { text: string }) {
-      // biome-ignore lint/suspicious/noExplicitAny: none
+      // oxlint-disable-next-line no-explicit-any
       return convertCurl(args.text) as any;
     },
   },

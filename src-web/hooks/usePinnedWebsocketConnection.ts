@@ -8,6 +8,7 @@ import {
 } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
+import { fireAndForget } from '../lib/fireAndForget';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { jotaiStore } from '../lib/jotai';
 import { activeRequestIdAtom } from './useActiveRequestId';
@@ -56,9 +57,9 @@ export function useWebsocketEvents(connectionId: string | null) {
     }
 
     // Fetch events from database, filtering out events from other connections and merging atomically
-    invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then((events) =>
+    fireAndForget(invoke<WebsocketEvent[]>('models_websocket_events', { connectionId }).then((events) =>
       mergeModelsInStore('websocket_event', events, (e) => e.connectionId === connectionId),
-    );
+    ));
   }, [connectionId]);
 
   return useMemo(

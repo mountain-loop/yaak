@@ -35,7 +35,7 @@ export function HotkeyRaw({ labelParts, className, variant }: HotkeyRawProps) {
       )}
     >
       {labelParts.map((char, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: none
+        // oxlint-disable-next-line react/no-array-index-key
         <div key={index} className="min-w-[1em] text-center">
           {char}
         </div>

@@ -43,6 +43,7 @@ import { useSidebarHidden } from '../hooks/useSidebarHidden';
 import { getWebsocketRequestActions } from '../hooks/useWebsocketRequestActions';
 import { deepEqualAtom } from '../lib/atoms';
 import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
+import { fireAndForget } from '../lib/fireAndForget';
 import { jotaiStore } from '../lib/jotai';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { isSidebarFocused } from '../lib/scopes';
@@ -439,7 +440,7 @@ function Sidebar({ className }: { className?: string }) {
           leftSlot: <Icon icon="arrow_right_circle" />,
           hidden: workspaces.length <= 1 || requestItems.length === 0 || requestItems.length !== items.length,
           onSelect: () => {
-            actions['sidebar.selected.move'].cb(items);
+            fireAndForget(actions['sidebar.selected.move'].cb(items));
           },
         },
         {

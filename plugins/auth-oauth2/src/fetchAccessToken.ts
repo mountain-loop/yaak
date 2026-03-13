@@ -71,7 +71,7 @@ export async function fetchAccessToken(
     throw new Error(`Failed to fetch access token with status=${resp.status} and body=${body}`);
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   let response: any;
   try {
     response = JSON.parse(body);

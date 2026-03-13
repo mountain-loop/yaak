@@ -62,13 +62,13 @@ export function SegmentedControl<T extends string>({
           if (e.key === 'ArrowRight') {
             e.preventDefault();
             const newIndex = Math.abs((selectedIndex + 1) % options.length);
-            options[newIndex] && setSelectedValue(options[newIndex].value);
+            if (options[newIndex]) setSelectedValue(options[newIndex].value);
             const child = containerRef.current?.children[newIndex] as HTMLButtonElement;
             child.focus();
           } else if (e.key === 'ArrowLeft') {
             e.preventDefault();
             const newIndex = Math.abs((selectedIndex - 1) % options.length);
-            options[newIndex] && setSelectedValue(options[newIndex].value);
+            if (options[newIndex]) setSelectedValue(options[newIndex].value);
             const child = containerRef.current?.children[newIndex] as HTMLButtonElement;
             child.focus();
           }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 
 describe('template-function-faker', () => {
   it('exports all expected template functions', async () => {
@@ -13,6 +13,7 @@ describe('template-function-faker', () => {
   it('renders date results as unquoted ISO strings', async () => {
     const { plugin } = await import('../src/index');
     const fn = plugin.templateFunctions?.find((fn) => fn.name === 'faker.date.future');
+    // oxlint-disable-next-line unbound-method
     const onRender = fn?.onRender;
 
     expect(onRender).toBeTypeOf('function');
