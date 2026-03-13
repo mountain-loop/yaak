@@ -27,7 +27,7 @@ export function HistoryDialog({ log }: Props) {
         </TableHead>
         <TableBody>
           {log.map((l) => (
-            <TableRow key={l.author + (l.message ?? 'n/a') + l.when}>
+            <TableRow key={(l.author.name ?? '') + (l.author.email ?? '') + (l.message ?? 'n/a') + l.when}>
               <TruncatedWideTableCell>
                 {l.message || <em className="text-text-subtle">No message</em>}
               </TruncatedWideTableCell>

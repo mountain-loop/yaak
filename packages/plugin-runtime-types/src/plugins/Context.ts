@@ -42,7 +42,7 @@ type AddDynamicMethod<T> = {
   ) => MaybePromise<Partial<T> | null | undefined>;
 };
 
-// biome-ignore lint/suspicious/noExplicitAny: distributive conditional type pattern
+// oxlint-disable-next-line no-explicit-any -- distributive conditional type pattern
 type AddDynamic<T> = T extends any
   ? T extends { inputs?: FormInput[] }
     ? Omit<T, 'inputs'> & {

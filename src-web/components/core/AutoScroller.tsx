@@ -54,7 +54,7 @@ export function AutoScroller<T>({
   useLayoutEffect(() => {
     if (!autoScroll) return;
 
-    data.length; // Make linter happy. We want to refresh when length changes
+    void data.length; // Trigger refresh when length changes
 
     const el = containerRef.current;
     if (el == null) return;

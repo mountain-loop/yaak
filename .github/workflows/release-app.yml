@@ -50,8 +50,11 @@ jobs:
       - name: Checkout yaakapp/app
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: '24'
+          cache: true
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -87,13 +90,13 @@ jobs:
           echo $dir >> $env:GITHUB_PATH
           & $exe --version
 
-      - run: npm ci
+      - run: vp install
       - run: npm run bootstrap
         env:
           YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
       - run: npm run lint
       - name: Run JS Tests
-        run: npm test
+        run: vp test
       - name: Run Rust Tests
         run: cargo test --all --exclude yaak-cli
 

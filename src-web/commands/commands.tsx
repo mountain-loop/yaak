@@ -143,7 +143,7 @@ export const syncWorkspace = createFastMutation<
                 }
 
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: none
+                  // oxlint-disable-next-line react/no-array-index-key
                   <TableRow key={i}>
                     <TableCell className="text-text-subtle">{model}</TableCell>
                     <TruncatedWideTableCell>{name}</TruncatedWideTableCell>

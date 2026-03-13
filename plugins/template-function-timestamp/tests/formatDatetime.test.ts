@@ -1,5 +1,5 @@
 import { tz } from '@date-fns/tz';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { calculateDatetime, formatDatetime } from '../src';
 
 describe('formatDatetime', () => {

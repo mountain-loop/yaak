@@ -13,7 +13,7 @@ export function KeyValueRows({ children }: Props) {
     <table className="text-editor font-mono min-w-0 w-full mb-auto">
       <tbody className="divide-y divide-surface-highlight">
         {childArray.map((child, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: none
+          // oxlint-disable-next-line react/no-array-index-key
           <tr key={i}>{child}</tr>
         ))}
       </tbody>

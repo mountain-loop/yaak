@@ -102,7 +102,7 @@ const markdownComponents: Partial<Components> = {
         language={match[1]}
         style={prismTheme}
       >
-        {String(children).replace(/\n$/, '')}
+        {String(children as string).replace(/\n$/, '')}
       </SyntaxHighlighter>
     ) : (
       <code {...extraProps} ref={ref} className={className}>

@@ -1,6 +1,7 @@
 import type { DnsOverride, Workspace } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import { useCallback, useId, useMemo } from 'react';
+import { fireAndForget } from '../lib/fireAndForget';
 import { Button } from './core/Button';
 import { Checkbox } from './core/Checkbox';
 import { IconButton } from './core/IconButton';
@@ -29,7 +30,7 @@ export function DnsOverridesEditor({ workspace }: Props) {
 
   const handleChange = useCallback(
     (overrides: DnsOverride[]) => {
-      patchModel(workspace, { settingDnsOverrides: overrides });
+      fireAndForget(patchModel(workspace, { settingDnsOverrides: overrides }));
     },
     [workspace],
   );

@@ -12,7 +12,7 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   },
   "dependencies": {
     "@faker-js/faker": "^10.1.0"

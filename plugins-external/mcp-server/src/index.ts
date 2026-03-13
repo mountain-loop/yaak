@@ -15,7 +15,7 @@ export const plugin: PluginDefinition = {
         mcpServer = createMcpServer({ yaak: ctx }, serverPort);
       } catch (err) {
         console.error('Failed to start MCP server:', err);
-        ctx.toast.show({
+        void ctx.toast.show({
           message: `Failed to start MCP Server: ${err instanceof Error ? err.message : String(err)}`,
           icon: 'alert_triangle',
           color: 'danger',

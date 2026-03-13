@@ -53,7 +53,7 @@ export const plugin: PluginDefinition = {
               type: 'text',
               name: 'namespace',
               label: 'Namespace',
-              // biome-ignore lint/suspicious/noTemplateCurlyInString: Yaak template syntax
+              // oxlint-disable-next-line no-template-curly-in-string -- Yaak template syntax
               defaultValue: '${[ctx.workspace()]}',
               optional: true,
             },

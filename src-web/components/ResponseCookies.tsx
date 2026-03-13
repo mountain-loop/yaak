@@ -130,7 +130,7 @@ export function ResponseCookies({ response }: Props) {
         ) : (
           <KeyValueRows>
             {sentCookies.map((cookie, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              // oxlint-disable-next-line react/no-array-index-key
               <KeyValueRow labelColor="primary" key={i} label={cookie.name}>
                 {cookie.value}
               </KeyValueRow>
@@ -153,7 +153,7 @@ export function ResponseCookies({ response }: Props) {
         ) : (
           <div className="flex flex-col gap-4">
             {receivedCookies.map((cookie, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              // oxlint-disable-next-line react/no-array-index-key
               <div key={i} className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 my-1">
                   <span

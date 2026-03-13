@@ -20,7 +20,7 @@ export function jsonParseLinter(options?: JsonLintOptions) {
         mode: (options?.allowComments ?? true) ? 'cjson' : 'json',
         ignoreTrailingCommas: options?.allowTrailingCommas ?? false,
       });
-      // biome-ignore lint/suspicious/noExplicitAny: none
+      // oxlint-disable-next-line no-explicit-any
     } catch (err: any) {
       if (!('location' in err)) {
         return [];

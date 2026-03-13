@@ -2,6 +2,7 @@ import { linter } from '@codemirror/lint';
 import type { HttpRequest } from '@yaakapp-internal/models';
 import { patchModel } from '@yaakapp-internal/models';
 import { useCallback, useMemo } from 'react';
+import { fireAndForget } from '../lib/fireAndForget';
 import { useKeyValue } from '../hooks/useKeyValue';
 import { textLikelyContainsJsonComments } from '../lib/jsonComments';
 import { Banner } from './core/Banner';
@@ -58,12 +59,12 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
     } else {
       delete newBody.sendJsonComments;
     }
-    patchModel(request, { body: newBody });
+    fireAndForget(patchModel(request, { body: newBody }));
   }, [request, autoFix]);
 
   const handleDropdownOpen = useCallback(() => {
     if (!bannerDismissed) {
-      setBannerDismissed(true);
+      fireAndForget(setBannerDismissed(true));
     }
   }, [bannerDismissed, setBannerDismissed]);
 

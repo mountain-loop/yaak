@@ -1,3 +1,4 @@
+/* oxlint-disable no-base-to-string */
 import type {
   Context,
   Environment,
@@ -158,7 +159,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
   return { resources };
 }
 
-function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlParameters'> {
+function convertUrl(rawUrl: unknown): Pick<HttpRequest, 'url' | 'urlParameters'> {
   if (typeof rawUrl === 'string') {
     return { url: rawUrl, urlParameters: [] };
   }
@@ -172,7 +173,7 @@ function convertUrl(rawUrl: string | unknown): Pick<HttpRequest, 'url' | 'urlPar
   }
 
   if ('host' in url) {
-    v += `${Array.isArray(url.host) ? url.host.join('.') : url.host}`;
+    v += `${Array.isArray(url.host) ? url.host.join('.') : String(url.host)}`;
   }
 
   if ('port' in url && typeof url.port === 'string') {
@@ -489,7 +490,7 @@ function parseJSONToRecord<T>(jsonStr: string): Record<string, T> | null {
   }
 }
 
-function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
+function toRecord<T>(value: unknown): Record<string, T> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, T>;
   }

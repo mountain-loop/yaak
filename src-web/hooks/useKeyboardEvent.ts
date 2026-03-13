@@ -5,7 +5,7 @@ export function useKeyboardEvent(
   key: KeyboardEvent['key'],
   cb: () => void,
 ) {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Don't have `cb` as a dep for caller convenience
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Don't have `cb` as a dep for caller convenience
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
       if (e.key === key) cb();

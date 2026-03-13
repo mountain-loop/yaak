@@ -7,7 +7,7 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   },
   "dependencies": {
     "openapi-to-postmanv2": "^5.8.0",

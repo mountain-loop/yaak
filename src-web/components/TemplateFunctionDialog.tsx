@@ -141,7 +141,7 @@ function InitializedTemplateFunctionDialog({
   });
 
   const tooLarge = rendered.data ? rendered.data.length > 10000 : false;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Only update this on rendered data change to keep secrets hidden on input change
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only update this on rendered data change to keep secrets hidden on input change
   const dataContainsSecrets = useMemo(() => {
     for (const [name, value] of Object.entries(argValues)) {
       const arg = templateFunction.data?.args.find((a) => 'name' in a && a.name === name);

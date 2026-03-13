@@ -22,6 +22,7 @@ import { HStack, VStack } from '../components/core/Stacks';
 
 // Listen for toasts
 import { listenToTauriEvent } from '../hooks/useListenToTauriEvent';
+import { fireAndForget } from './fireAndForget';
 import { updateAvailableAtom } from './atoms';
 import { stringToColor } from './color';
 import { generateId } from './generateId';
@@ -81,7 +82,7 @@ export function initGlobalListeners() {
             done,
           },
         };
-        emit(event.id, result);
+        fireAndForget(emit(event.id, result));
       };
 
       const values = await showPromptForm({
@@ -110,7 +111,7 @@ export function initGlobalListeners() {
   // Listen for update events
   listenToTauriEvent<UpdateInfo>('update_available', async ({ payload }) => {
     console.log('Got update available', payload);
-    showUpdateAvailableToast(payload);
+    fireAndForget(showUpdateAvailableToast(payload));
   });
 
   listenToTauriEvent<YaakNotification>('notification', ({ payload }) => {
@@ -125,7 +126,7 @@ export function initGlobalListeners() {
   });
 
   // Check for plugin initialization errors
-  invokeCmd<[string, string][]>('cmd_plugin_init_errors').then((errors) => {
+  fireAndForget(invokeCmd<[string, string][]>('cmd_plugin_init_errors').then((errors) => {
     for (const [dir, message] of errors) {
       const dirBasename = dir.split('/').pop() ?? dir;
       showToast({
@@ -155,7 +156,7 @@ export function initGlobalListeners() {
         ),
       });
     }
-  });
+  }));
 }
 
 function showUpdateInstalledToast(version: string) {

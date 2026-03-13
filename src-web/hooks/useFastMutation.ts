@@ -42,7 +42,7 @@ export function createFastMutation<TData = unknown, TError = unknown, TVariables
       if (!disableToastError) {
         showToast({
           id: stringKey,
-          message: `${err}`,
+          message: err instanceof Error ? err.message : String(err),
           color: 'danger',
           timeout: 5000,
         });
@@ -71,6 +71,6 @@ export function useFastMutation<TData = unknown, TError = unknown, TVariables = 
 ) {
   return useMemo(() => {
     return createFastMutation(defaultArgs);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Force it!
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Force it!
   }, defaultArgs.mutationKey);
 }

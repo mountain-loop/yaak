@@ -8,6 +8,7 @@ import {
 } from '@yaakapp-internal/models';
 import { atom, useAtomValue } from 'jotai';
 import { useEffect, useMemo } from 'react';
+import { fireAndForget } from '../lib/fireAndForget';
 import { atomWithKVStorage } from '../lib/atoms/atomWithKVStorage';
 import { activeRequestIdAtom } from './useActiveRequestId';
 
@@ -69,9 +70,9 @@ export function useGrpcEvents(connectionId: string | null) {
     }
 
     // Fetch events from database, filtering out events from other connections and merging atomically
-    invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) =>
+    fireAndForget(invoke<GrpcEvent[]>('models_grpc_events', { connectionId }).then((events) =>
       mergeModelsInStore('grpc_event', events, (e) => e.connectionId === connectionId),
-    );
+    ));
   }, [connectionId]);
 
   return useMemo(

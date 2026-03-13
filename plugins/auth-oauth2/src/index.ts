@@ -590,11 +590,11 @@ export const plugin: PluginDefinition = {
           credentialsInBody,
         });
       } else {
-        throw new Error(`Invalid grant type ${grantType}`);
+        throw new Error(`Invalid grant type ${String(grantType)}`);
       }
 
       const headerName = stringArg(values, 'headerName') || 'Authorization';
-      const headerValue = `${headerPrefix} ${token.response[tokenName]}`.trim();
+      const headerValue = `${headerPrefix} ${token.response[tokenName] ?? ''}`.trim();
       return { setHeaders: [{ name: headerName, value: headerValue }] };
     },
   },

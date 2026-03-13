@@ -45,7 +45,7 @@ interface Props {
 
 type ExplorerItem =
   | { kind: 'type'; type: GraphQLType; from: ExplorerItem }
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   | { kind: 'field'; type: GraphQLField<any, any>; from: ExplorerItem }
   | { kind: 'input_field'; type: GraphQLInputField; from: ExplorerItem }
   | null;
@@ -146,7 +146,7 @@ export const GraphQLDocsExplorer = memo(function GraphQLDocsExplorer({
           </div>
         ) : (
           <div
-            key={activeItem.type.toString()} // Reset scroll position to top
+            key={'name' in activeItem.type ? activeItem.type.name : String(activeItem.type)} // Reset scroll position to top
             className="overflow-y-auto h-full w-full p-3 grid grid-cols-[minmax(0,1fr)]"
           >
             <GqlTypeInfo item={activeItem} setItem={setActiveItem} schema={schema} />
@@ -182,14 +182,14 @@ function GraphQLExplorerHeader({
           <Icon icon="book_open_text" />
           {crumbs.map((crumb, i) => {
             return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: none
+              // oxlint-disable-next-line react/no-array-index-key
               <Fragment key={i}>
                 {i > 0 && <Icon icon="chevron_right" className="text-text-subtlest" />}
                 {crumb === item || item == null ? (
                   <GqlTypeLabel noTruncate item={item} />
                 ) : crumb === item ? null : (
                   <GqlTypeLink
-                    // biome-ignore lint/suspicious/noArrayIndexKey: none
+                    // oxlint-disable-next-line react/no-array-index-key
                     key={i}
                     noTruncate
                     item={crumb}
@@ -202,7 +202,7 @@ function GraphQLExplorerHeader({
           })}
         </div>
         <GqlSchemaSearch
-          key={item?.type.toString()} // Force reset when changing items
+          key={item != null && 'name' in item.type ? item.type.name : 'search'} // Force reset when changing items
           maxHeight={containerHeight}
           currentItem={item}
           schema={schema}
@@ -270,7 +270,7 @@ function GqlTypeInfo({
         {Object.entries(fields).map(([fieldName, field]) => {
           const fieldItem: ExplorerItem = toExplorerItem(field, item);
           return (
-            <div key={`${field.type}::${field.name}`} className="my-4">
+            <div key={`${String(field.type)}::${field.name}`} className="my-4">
               <GqlTypeRow
                 item={fieldItem}
                 setItem={setItem}
@@ -363,7 +363,7 @@ function GqlTypeInfo({
             <Subheading>Arguments</Subheading>
             {item.type.args.map((a) => {
               return (
-                <div key={`${a.type}::${a.name}`} className="my-4">
+                <div key={`${String(a.type)}::${a.name}`} className="my-4">
                   <GqlTypeRow
                     name={{ value: a.name, color: 'info' }}
                     item={{ kind: 'type', type: a.type, from: item }}
@@ -393,7 +393,7 @@ function GqlTypeInfo({
             from: item,
           };
           return (
-            <div key={`${field.type}::${field.name}`} className="my-4">
+            <div key={`${String(field.type)}::${field.name}`} className="my-4">
               <GqlTypeRow
                 item={fieldItem}
                 setItem={setItem}
@@ -431,7 +431,7 @@ function GqlTypeInfo({
           if (field == null) return null;
           const fieldItem: ExplorerItem = { kind: 'field', type: field, from: item };
           return (
-            <div key={`${field.type}::${field.name}`} className="my-4">
+            <div key={`${String(field.type)}::${field.name}`} className="my-4">
               <GqlTypeRow
                 item={fieldItem}
                 setItem={setItem}
@@ -512,7 +512,7 @@ function GqlTypeRow({
               <span className="text-text-subtle">(</span>
               {item.type.args.map((arg) => (
                 <div
-                  key={`${arg.type}::${arg.name}`}
+                  key={`${String(arg.type)}::${arg.name}`}
                   className={classNames(item.type.args.length === 1 && 'inline-flex')}
                 >
                   {item.type.args.length > 1 && <>&nbsp;&nbsp;</>}
@@ -674,7 +674,7 @@ function Subheading({ children, count }: { children: ReactNode; count?: number }
 
 interface SearchResult {
   name: string;
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField;
   score: number;
   from: GraphQLNamedType | null;
@@ -798,7 +798,7 @@ function GqlSchemaSearch({
         label="search"
         hideLabel
         defaultValue={value}
-        placeholder={focused ? `Search ${currentItem?.type.toString() ?? 'Schema'}` : 'Search'}
+        placeholder={focused ? `Search ${currentItem != null && 'name' in currentItem.type ? currentItem.type.name : 'Schema'}` : 'Search'}
         leftSlot={
           <div className="w-10 flex justify-center items-center">
             <Icon size="sm" icon="search" color="secondary" />
@@ -897,10 +897,10 @@ function DocMarkdown({ children, className }: { children: string | null; classNa
 
 function walkTypeGraph(
   schema: GraphQLSchema,
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   start: GraphQLType | GraphQLField<any, any> | GraphQLInputField | null,
   cb: (
-    // biome-ignore lint/suspicious/noExplicitAny: none
+    // oxlint-disable-next-line no-explicit-any
     type: GraphQLNamedType | GraphQLField<any, any> | GraphQLInputField,
     from: GraphQLNamedType | null,
     path: string[],
@@ -908,7 +908,7 @@ function walkTypeGraph(
 ) {
   const visited = new Set<string>();
   const queue: Array<{
-    // biome-ignore lint/suspicious/noExplicitAny: none
+    // oxlint-disable-next-line no-explicit-any
     current: GraphQLType | GraphQLField<any, any> | GraphQLInputField;
     from: GraphQLNamedType | null;
     path: string[];
@@ -928,7 +928,7 @@ function walkTypeGraph(
   }
 
   while (queue.length > 0) {
-    // biome-ignore lint/style/noNonNullAssertion: none
+    // oxlint-disable-next-line no-non-null-assertion
     const { current, from, path } = queue.shift()!;
     if (!isNamedType(current)) continue;
 
@@ -981,7 +981,7 @@ function walkTypeGraph(
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: none
+// oxlint-disable-next-line no-explicit-any
 function toExplorerItem(t: any, from: ExplorerItem | null): ExplorerItem | null {
   if (t == null) return null;
 

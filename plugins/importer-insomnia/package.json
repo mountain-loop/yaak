@@ -7,7 +7,7 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   },
   "dependencies": {
     "yaml": "^2.4.2"

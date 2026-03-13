@@ -91,7 +91,7 @@ export class PluginInstance {
         );
       } catch (err: unknown) {
         await ctx.toast.show({
-          message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err}`,
+          message: `Failed to initialize plugin ${this.#workerData.bootRequest.dir.split('/').pop()}: ${err instanceof Error ? err.message : String(err)}`,
           color: 'notice',
           icon: 'alert_triangle',
           timeout: 30000,
@@ -328,7 +328,8 @@ export class PluginInstance {
         payload.values = applyFormInputDefaults(args, payload.values);
         const resolvedArgs = await applyDynamicFormInput(ctx, args, payload);
         const resolvedActions: HttpAuthenticationAction[] = [];
-        for (const { onSelect, ...action } of actions ?? []) {
+        // oxlint-disable-next-line unbound-method
+        for (const { onSelect: _onSelect, ...action } of actions ?? []) {
           resolvedActions.push(action);
         }
 
@@ -474,7 +475,7 @@ export class PluginInstance {
               {
                 type: 'call_template_function_response',
                 value: null,
-                error: `${err}`.replace(/^Error:\s*/g, ''),
+                error: (err instanceof Error ? err.message : String(err)).replace(/^Error:\s*/g, ''),
               },
               replyId,
             );
@@ -483,7 +484,7 @@ export class PluginInstance {
         }
       }
     } catch (err) {
-      const error = `${err}`.replace(/^Error:\s*/g, '');
+      const error = (err instanceof Error ? err.message : String(err)).replace(/^Error:\s*/g, '');
       console.log('Plugin call threw exception', payload.type, '→', error);
       this.#sendPayload(context, { type: 'error_response', error }, replyId);
       return;
@@ -909,7 +910,7 @@ export class PluginInstance {
         render: async (args: TemplateRenderRequest) => {
           const payload = { type: 'template_render_request', ...args } as const;
           const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
-          // biome-ignore lint/suspicious/noExplicitAny: That's okay
+          // oxlint-disable-next-line no-explicit-any -- That's okay
           return result.data as any;
         },
       },
@@ -972,8 +973,8 @@ export class PluginInstance {
 
 function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
   return inputs.map((input) => {
-    // biome-ignore lint/suspicious/noExplicitAny: stripping dynamic from union type
-    const { dynamic, ...rest } = input as any;
+    // oxlint-disable-next-line no-explicit-any -- stripping dynamic from union type
+    const { dynamic: _dynamic, ...rest } = input as any;
     if ('inputs' in rest && Array.isArray(rest.inputs)) {
       rest.inputs = stripDynamicCallbacks(rest.inputs);
     }

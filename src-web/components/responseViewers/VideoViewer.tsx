@@ -22,6 +22,6 @@ export function VideoViewer({ bodyPath, data }: Props) {
     }
   }, [bodyPath, data]);
 
-  // biome-ignore lint/a11y/useMediaCaption: none
+  // oxlint-disable-next-line jsx-a11y/media-has-caption
   return <video className="w-full" controls src={src} />;
 }

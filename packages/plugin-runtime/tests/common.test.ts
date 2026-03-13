@@ -1,7 +1,7 @@
 import { applyFormInputDefaults } from '@yaakapp-internal/lib/templateFunction';
 import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
 import type { Context, DynamicTemplateFunctionArg } from '@yaakapp/api';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { applyDynamicFormInput } from '../src/common';
 
 describe('applyFormInputDefaults', () => {

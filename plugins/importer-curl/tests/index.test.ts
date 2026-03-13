@@ -1,5 +1,5 @@
 import type { HttpRequest, Workspace } from '@yaakapp/api';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { convertCurl } from '../src';
 
 describe('importer-curl', () => {

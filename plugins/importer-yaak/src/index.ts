@@ -11,7 +11,7 @@ export const plugin: PluginDefinition = {
 };
 
 export function migrateImport(contents: string) {
-  // biome-ignore lint/suspicious/noExplicitAny: none
+  // oxlint-disable-next-line no-explicit-any
   let parsed: any;
   try {
     parsed = JSON.parse(contents);

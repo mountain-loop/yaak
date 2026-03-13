@@ -16,7 +16,7 @@ interface TypeMap {
 }
 
 export function useActiveRequest<T extends keyof TypeMap>(
-  model?: T | undefined,
+  model?: T,
 ): TypeMap[T] | null {
   const activeRequest = useAtomValue(activeRequestAtom);
   if (model == null) return activeRequest as TypeMap[T];

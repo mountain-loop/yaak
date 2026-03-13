@@ -25,6 +25,7 @@ import {
 } from 'react';
 import { useKey, useWindowSize } from 'react-use';
 import { useClickOutside } from '../../hooks/useClickOutside';
+import { fireAndForget } from '../../lib/fireAndForget';
 import type { HotkeyAction } from '../../hooks/useHotKey';
 import { useHotKey } from '../../hooks/useHotKey';
 import { useStateWithDeps } from '../../hooks/useStateWithDeps';
@@ -614,7 +615,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
             setActiveSubmenu({ item, parent, viaKeyboard: true });
           }
         } else if (item.onSelect) {
-          handleSelect(item);
+          fireAndForget(handleSelect(item));
         }
       },
       {},
@@ -752,7 +753,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
             if (item.type === 'separator') {
               return (
                 <Separator
-                  // biome-ignore lint/suspicious/noArrayIndexKey: Nothing else available
+                  // oxlint-disable-next-line react/no-array-index-key -- Nothing else available
                   key={i}
                   className={classNames('my-1.5', item.label ? 'ml-2' : null)}
                 >
@@ -762,8 +763,8 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
             }
             if (item.type === 'content') {
               return (
-                // biome-ignore lint/a11y/noStaticElementInteractions: Needs to be clickable but want to support nested buttons
-                // biome-ignore lint/suspicious/noArrayIndexKey: index is fine
+                // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
+                // oxlint-disable-next-line react/no-array-index-key
                 <div key={i} className={classNames('my-1 mx-2 max-w-xs')} onClick={onClose}>
                   {item.label}
                 </div>
@@ -777,7 +778,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
                 onFocus={handleFocus}
                 onSelect={handleSelect}
                 onHover={handleItemHover}
-                // biome-ignore lint/suspicious/noArrayIndexKey: It's fine
+                // oxlint-disable-next-line react/no-array-index-key
                 key={i}
                 item={item}
               />
@@ -785,7 +786,7 @@ const Menu = forwardRef<Omit<DropdownRef, 'open' | 'isOpen' | 'toggle' | 'items'
           })}
         </VStack>
         {activeSubmenu && (
-          // biome-ignore lint/a11y/noStaticElementInteractions: Container div that cancels hover timeout
+          // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- Container div that cancels hover timeout
           <div
             ref={submenuRef}
             onMouseEnter={() => {

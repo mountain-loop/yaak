@@ -1,13 +1,12 @@
 // @ts-ignore
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
-import react from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { defineConfig, normalizePath } from 'vite';
+import { defineConfig, normalizePath } from 'vite-plus';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import svgr from 'vite-plugin-svgr';
-import topLevelAwait from 'vite-plugin-top-level-await';
-import wasm from 'vite-plugin-wasm';
 
 const require = createRequire(import.meta.url);
 const cMapsDir = normalizePath(
@@ -18,10 +17,9 @@ const standardFontsDir = normalizePath(
 );
 
 // https://vitejs.dev/config/
-export default defineConfig(async () => {
-  return {
+export default defineConfig(
+  {
   plugins: [
-    wasm(),
     tanstackRouter({
       target: 'react',
       routesDirectory: './routes',
@@ -29,12 +27,10 @@ export default defineConfig(async () => {
       autoCodeSplitting: true,
     }),
     svgr(),
-    react({
-      babel: {
-        plugins: ['babel-plugin-react-compiler'],
-      },
+    react(),
+    babel({
+      presets: [reactCompilerPreset()],
     }),
-    topLevelAwait(),
     viteStaticCopy({
       targets: [
         { src: cMapsDir, dest: '' },
@@ -61,5 +57,4 @@ export default defineConfig(async () => {
     strictPort: true,
   },
   envPrefix: ['VITE_', 'TAURI_'],
-};
 });

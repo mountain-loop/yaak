@@ -11,7 +11,7 @@ type WorkspaceSearchSchema = {
   | {
       folder_id: string;
     }
-  // biome-ignore lint/complexity/noBannedTypes: Needed to support empty
+  // oxlint-disable-next-line no-restricted-types -- Needed to support empty
   | {}
 );
 

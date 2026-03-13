@@ -19,7 +19,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   fallback: T;
 }) {
   const { value, isLoading } = useAtomValue(
-    // biome-ignore lint/correctness/useExhaustiveDependencies: Only create a new atom when the key changes. Fallback might not be a stable reference, so we don't want to refresh on that.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only create a new atom when the key changes. Fallback might not be a stable reference, so we don't want to refresh on that.
     useMemo(
       () =>
         selectAtom(
@@ -42,7 +42,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
     mutationFn: (value) => setKeyValue<T>({ namespace, key, value }),
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: none
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   const set = useCallback(
     async (valueOrUpdate: ((v: T) => T) | T) => {
       if (typeof valueOrUpdate === 'function') {

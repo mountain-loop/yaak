@@ -8,6 +8,7 @@ import { allRequestsAtom } from '../hooks/useAllRequests';
 import { useFolderActions } from '../hooks/useFolderActions';
 import { useLatestHttpResponse } from '../hooks/useLatestHttpResponse';
 import { sendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
+import { fireAndForget } from '../lib/fireAndForget';
 import { showDialog } from '../lib/dialog';
 import { resolvedModelName } from '../lib/resolvedModelName';
 import { router } from '../lib/router';
@@ -45,7 +46,7 @@ export function FolderLayout({ folder, style }: Props) {
   }, [folder.id, folders, requests]);
 
   const handleSendAll = useCallback(() => {
-    sendAllAction?.call(folder);
+    if (sendAllAction) fireAndForget(sendAllAction.call(folder));
   }, [sendAllAction, folder]);
 
   return (

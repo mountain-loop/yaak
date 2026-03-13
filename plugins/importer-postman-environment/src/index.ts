@@ -1,3 +1,4 @@
+/* oxlint-disable no-base-to-string */
 import type {
   Context,
   Environment,
@@ -84,7 +85,7 @@ function parseJSONToRecord<T>(jsonStr: string): Record<string, T> | null {
   }
 }
 
-function toRecord<T>(value: Record<string, T> | unknown): Record<string, T> {
+function toRecord<T>(value: unknown): Record<string, T> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, T>;
   }

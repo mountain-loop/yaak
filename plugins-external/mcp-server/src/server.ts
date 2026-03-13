@@ -30,7 +30,7 @@ export function createMcpServer(ctx: McpServerContext, port: number) {
     if (!mcpServer.isConnected()) {
       // Connect the mcp with the transport
       await mcpServer.connect(transport);
-      ctx.yaak.toast.show({
+      void ctx.yaak.toast.show({
         message: `MCP Server connected`,
         icon: 'info',
         color: 'info',
@@ -48,7 +48,7 @@ export function createMcpServer(ctx: McpServerContext, port: number) {
     },
     (info) => {
       console.log('Started MCP server on ', info.address);
-      ctx.yaak.toast.show({
+      void ctx.yaak.toast.show({
         message: `MCP Server running on http://127.0.0.1:${info.port}`,
         icon: 'info',
         color: 'secondary',

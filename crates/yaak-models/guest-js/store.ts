@@ -88,6 +88,7 @@ export function getAnyModel(
 ): AnyModel | null {
   let data = mustStore().get(modelStoreDataAtom);
   for (const t of Object.keys(data)) {
+    // oxlint-disable-next-line no-explicit-any
     let v = (data as any)[t]?.[id];
     if (v?.model === t) return v;
   }

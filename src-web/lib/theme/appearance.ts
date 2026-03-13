@@ -1,4 +1,5 @@
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { fireAndForget } from '../fireAndForget';
 
 export type Appearance = 'light' | 'dark';
 
@@ -22,13 +23,13 @@ export function subscribeToWindowAppearanceChange(
     unsubscribe: () => {},
   };
 
-  getCurrentWebviewWindow()
+  fireAndForget(getCurrentWebviewWindow()
     .onThemeChanged((t) => {
       cb(t.payload);
     })
     .then((l) => {
       container.unsubscribe = l;
-    });
+    }));
 
   return () => container.unsubscribe();
 }
@@ -43,6 +44,6 @@ export function resolveAppearance(
 
 export function subscribeToPreferredAppearance(cb: (a: Appearance) => void) {
   cb(getCSSAppearance());
-  getWindowAppearance().then(cb);
+  fireAndForget(getWindowAppearance().then(cb));
   subscribeToWindowAppearanceChange(cb);
 }

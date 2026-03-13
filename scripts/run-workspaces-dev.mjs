@@ -52,7 +52,7 @@ for (const ws of workspacesWithDev) {
 
 // Cleanup function to kill all children
 function cleanup() {
-  for (const { ws, child } of children) {
+  for (const { child } of children) {
     if (child.exitCode === null) {
       // Process still running
       if (process.platform === 'win32') {

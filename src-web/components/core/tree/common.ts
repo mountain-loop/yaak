@@ -41,7 +41,7 @@ export function equalSubtree<T extends { id: string }>(
   }
 
   for (let i = 0; i < ak.length; i++) {
-    // biome-ignore lint/style/noNonNullAssertion: none
+    // oxlint-disable-next-line no-non-null-assertion
     if (!equalSubtree(ak[i]!, bk[i]!, getItemKey)) return false;
   }
 
