@@ -1,5 +1,5 @@
 import type { Context } from '@yaakapp/api';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { plugin } from '../src';
 
 describe('regex.match', () => {

@@ -1,5 +1,5 @@
 import type { Context } from '@yaakapp/api';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { plugin } from '../src';
 
 const ctx = {} as Context;

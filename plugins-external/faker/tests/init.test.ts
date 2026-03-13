@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 
 describe('template-function-faker', () => {
   it('exports all expected template functions', async () => {

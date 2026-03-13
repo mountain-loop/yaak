@@ -1,5 +1,5 @@
 import type { HttpResponseEvent } from '@yaakapp-internal/models';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { getCookieCounts } from './model_util';
 
 function makeEvent(

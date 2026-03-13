@@ -1,5 +1,5 @@
 import type { Context } from '@yaakapp/api';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 const ntlmMock = vi.hoisted(() => ({
   createType1Message: vi.fn(),
