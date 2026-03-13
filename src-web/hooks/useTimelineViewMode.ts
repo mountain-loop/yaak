@@ -1,12 +1,12 @@
-import type { TimelineViewMode } from '../components/HttpResponsePane';
-import { useKeyValue } from './useKeyValue';
+import type { TimelineViewMode } from "../components/HttpResponsePane";
+import { useKeyValue } from "./useKeyValue";
 
-const DEFAULT_VIEW_MODE: TimelineViewMode = 'timeline';
+const DEFAULT_VIEW_MODE: TimelineViewMode = "timeline";
 
 export function useTimelineViewMode() {
   const { set, value } = useKeyValue<TimelineViewMode>({
-    namespace: 'no_sync',
-    key: 'timeline_view_mode',
+    namespace: "no_sync",
+    key: "timeline_view_mode",
     fallback: DEFAULT_VIEW_MODE,
   });
 

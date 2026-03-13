@@ -5,7 +5,7 @@ const https = require("node:https");
 const {
   BINARY_DISTRIBUTION_VERSION,
   BINARY_NAME,
-  PLATFORM_SPECIFIC_PACKAGE_NAME
+  PLATFORM_SPECIFIC_PACKAGE_NAME,
 } = require("./common");
 
 const fallbackBinaryPath = path.join(__dirname, BINARY_NAME);
@@ -27,8 +27,8 @@ function makeRequest(url) {
         } else {
           reject(
             new Error(
-              `npm responded with status code ${response.statusCode} when downloading package ${url}`
-            )
+              `npm responded with status code ${response.statusCode} when downloading package ${url}`,
+            ),
           );
         }
       })

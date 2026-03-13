@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react';
-import { useMemo } from 'react';
-import type { DropdownItem, DropdownItemSeparator, DropdownProps } from './Dropdown';
-import { Dropdown } from './Dropdown';
-import { Icon } from './Icon';
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+import type { DropdownItem, DropdownItemSeparator, DropdownProps } from "./Dropdown";
+import { Dropdown } from "./Dropdown";
+import { Icon } from "./Icon";
 
 export type RadioDropdownItem<T = string | null> =
   | {
-      type?: 'default';
+      type?: "default";
       label: ReactNode;
       shortLabel?: ReactNode;
       value: T;
@@ -20,7 +20,7 @@ export interface RadioDropdownProps<T = string | null> {
   itemsBefore?: DropdownItem[];
   items: RadioDropdownItem<T>[];
   itemsAfter?: DropdownItem[];
-  children: DropdownProps['children'];
+  children: DropdownProps["children"];
 }
 
 export function RadioDropdown<T = string | null>({
@@ -37,13 +37,13 @@ export function RadioDropdown<T = string | null>({
         ? [
             ...itemsBefore,
             {
-              type: 'separator',
-              hidden: itemsBefore[itemsBefore.length - 1]?.type === 'separator',
+              type: "separator",
+              hidden: itemsBefore[itemsBefore.length - 1]?.type === "separator",
             },
           ]
         : []) as DropdownItem[]),
       ...items.map((item) => {
-        if (item.type === 'separator') {
+        if (item.type === "separator") {
           return item;
         }
         return {
@@ -51,11 +51,11 @@ export function RadioDropdown<T = string | null>({
           label: item.label,
           rightSlot: item.rightSlot,
           onSelect: () => onChange(item.value),
-          leftSlot: <Icon icon={value === item.value ? 'check' : 'empty'} />,
+          leftSlot: <Icon icon={value === item.value ? "check" : "empty"} />,
         } as DropdownItem;
       }),
       ...((itemsAfter
-        ? [{ type: 'separator', hidden: itemsAfter[0]?.type === 'separator' }, ...itemsAfter]
+        ? [{ type: "separator", hidden: itemsAfter[0]?.type === "separator" }, ...itemsAfter]
         : []) as DropdownItem[]),
     ],
     [itemsBefore, items, itemsAfter, value, onChange],

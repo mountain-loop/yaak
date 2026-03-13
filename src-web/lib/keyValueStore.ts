@@ -1,9 +1,9 @@
-import type { KeyValue } from '@yaakapp-internal/models';
-import { createGlobalModel, keyValuesAtom, patchModel } from '@yaakapp-internal/models';
-import { jotaiStore } from './jotai';
+import type { KeyValue } from "@yaakapp-internal/models";
+import { createGlobalModel, keyValuesAtom, patchModel } from "@yaakapp-internal/models";
+import { jotaiStore } from "./jotai";
 
 export async function setKeyValue<T>({
-  namespace = 'global',
+  namespace = "global",
   key: keyOrKeys,
   value: rawValue,
 }: {
@@ -18,12 +18,12 @@ export async function setKeyValue<T>({
   if (kv) {
     await patchModel(kv, { namespace, key, value });
   } else {
-    await createGlobalModel({ model: 'key_value', namespace, key, value });
+    await createGlobalModel({ model: "key_value", namespace, key, value });
   }
 }
 
 export function getKeyValueRaw({
-  namespace = 'global',
+  namespace = "global",
   key: keyOrKeys,
 }: {
   namespace?: string;
@@ -36,7 +36,7 @@ export function getKeyValueRaw({
 }
 
 export function getKeyValue<T>({
-  namespace = 'global',
+  namespace = "global",
   key,
   fallback,
 }: {
@@ -53,7 +53,7 @@ export function extractKeyValue<T>(kv: KeyValue | null): T | undefined {
   try {
     return JSON.parse(kv.value) as T;
   } catch (err) {
-    console.log('Failed to parse kv value', kv.value, err);
+    console.log("Failed to parse kv value", kv.value, err);
     return undefined;
   }
 }
@@ -65,6 +65,6 @@ export function extractKeyValueOrFallback<T>(kv: KeyValue | null, fallback: T): 
 }
 
 export function buildKeyValueKey(key: string | string[]): string {
-  if (typeof key === 'string') return key;
-  return key.join('::');
+  if (typeof key === "string") return key;
+  return key.join("::");
 }

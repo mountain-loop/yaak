@@ -10,7 +10,7 @@ export function textLikelyContainsJsonComments(text: string): boolean {
     if (inString) {
       if (ch === '"') {
         inString = false;
-      } else if (ch === '\\') {
+      } else if (ch === "\\") {
         i++; // skip escaped char
       }
       continue;
@@ -19,9 +19,9 @@ export function textLikelyContainsJsonComments(text: string): boolean {
       inString = true;
       continue;
     }
-    if (ch === '/' && i + 1 < text.length) {
+    if (ch === "/" && i + 1 < text.length) {
       const next = text[i + 1];
-      if (next === '/' || next === '*') {
+      if (next === "/" || next === "*") {
         return true;
       }
     }

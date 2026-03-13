@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { useUnmount } from 'react-use';
+import { useRef, useState } from "react";
+import { useUnmount } from "react-use";
 
 /** Returns a boolean that is true for a given number of milliseconds. */
 export function useTimedBoolean(millis = 1500): [boolean, () => void] {

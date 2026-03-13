@@ -1,12 +1,12 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { useMemo, useState } from 'react';
-import { useResponseBodyText } from '../../hooks/useResponseBodyText';
-import { languageFromContentType } from '../../lib/contentType';
-import { getContentTypeFromHeaders } from '../../lib/model_util';
-import type { EditorProps } from '../core/Editor/Editor';
-import { EmptyStateText } from '../EmptyStateText';
-import { TextViewer } from './TextViewer';
-import { WebPageViewer } from './WebPageViewer';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { useMemo, useState } from "react";
+import { useResponseBodyText } from "../../hooks/useResponseBodyText";
+import { languageFromContentType } from "../../lib/contentType";
+import { getContentTypeFromHeaders } from "../../lib/model_util";
+import type { EditorProps } from "../core/Editor/Editor";
+import { EmptyStateText } from "../EmptyStateText";
+import { TextViewer } from "./TextViewer";
+import { WebPageViewer } from "./WebPageViewer";
 
 interface Props {
   response: HttpResponse;
@@ -17,14 +17,14 @@ interface Props {
 export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Props) {
   const rawTextBody = useResponseBodyText({ response, filter: null });
   const contentType = getContentTypeFromHeaders(response.headers);
-  const language = languageFromContentType(contentType, rawTextBody.data ?? '');
+  const language = languageFromContentType(contentType, rawTextBody.data ?? "");
 
-  if (rawTextBody.isLoading || response.state === 'initialized') {
+  if (rawTextBody.isLoading || response.state === "initialized") {
     return null;
   }
 
-  if (language === 'html' && pretty) {
-    return <WebPageViewer html={rawTextBody.data ?? ''} baseUrl={response.url} />;
+  if (language === "html" && pretty) {
+    return <WebPageViewer html={rawTextBody.data ?? ""} baseUrl={response.url} />;
   }
   if (rawTextBody.data == null) {
     return <EmptyStateText>Empty response</EmptyStateText>;
@@ -43,7 +43,7 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
 interface HttpTextViewerProps {
   response: HttpResponse;
   text: string;
-  language: EditorProps['language'];
+  language: EditorProps["language"];
   pretty: boolean;
   className?: string;
 }

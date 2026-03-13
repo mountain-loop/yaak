@@ -1,10 +1,10 @@
-import deepEqual from '@gilbarbara/deep-equal';
-import type { UpdateInfo } from '@yaakapp-internal/tauri';
-import type { Atom } from 'jotai';
-import { atom } from 'jotai';
-import { selectAtom } from 'jotai/utils';
-import type { SplitLayoutLayout } from '../components/core/SplitLayout';
-import { atomWithKVStorage } from './atoms/atomWithKVStorage';
+import deepEqual from "@gilbarbara/deep-equal";
+import type { UpdateInfo } from "@yaakapp-internal/tauri";
+import type { Atom } from "jotai";
+import { atom } from "jotai";
+import { selectAtom } from "jotai/utils";
+import type { SplitLayoutLayout } from "../components/core/SplitLayout";
+import { atomWithKVStorage } from "./atoms/atomWithKVStorage";
 
 export function deepEqualAtom<T>(a: Atom<T>) {
   return selectAtom(
@@ -15,8 +15,8 @@ export function deepEqualAtom<T>(a: Atom<T>) {
 }
 
 export const workspaceLayoutAtom = atomWithKVStorage<SplitLayoutLayout>(
-  'workspace_layout',
-  'horizontal',
+  "workspace_layout",
+  "horizontal",
 );
 
-export const updateAvailableAtom = atom<Omit<UpdateInfo, 'replyEventId'> | null>(null);
+export const updateAvailableAtom = atom<Omit<UpdateInfo, "replyEventId"> | null>(null);

@@ -1,10 +1,10 @@
-import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { resolvedModelName } from '@yaakapp/app/lib/resolvedModelName';
-import { AnyModel, ModelPayload } from '../bindings/gen_models';
-import { modelStoreDataAtom } from './atoms';
-import { ExtractModel, JotaiStore, ModelStoreData } from './types';
-import { newStoreData } from './util';
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { resolvedModelName } from "@yaakapp/app/lib/resolvedModelName";
+import { AnyModel, ModelPayload } from "../bindings/gen_models";
+import { modelStoreDataAtom } from "./atoms";
+import { ExtractModel, JotaiStore, ModelStoreData } from "./types";
+import { newStoreData } from "./util";
 
 let _store: JotaiStore | null = null;
 
@@ -12,11 +12,11 @@ export function initModelStore(store: JotaiStore) {
   _store = store;
 
   getCurrentWebviewWindow()
-    .listen<ModelPayload>('model_write', ({ payload }) => {
+    .listen<ModelPayload>("model_write", ({ payload }) => {
       if (shouldIgnoreModel(payload)) return;
 
       mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
-        if (payload.change.type === 'upsert') {
+        if (payload.change.type === "upsert") {
           return {
             ...prev,
             [payload.model.model]: {
@@ -36,7 +36,7 @@ export function initModelStore(store: JotaiStore) {
 
 function mustStore(): JotaiStore {
   if (_store == null) {
-    throw new Error('Model store was not initialized');
+    throw new Error("Model store was not initialized");
   }
 
   return _store;
@@ -45,8 +45,8 @@ function mustStore(): JotaiStore {
 let _activeWorkspaceId: string | null = null;
 
 export async function changeModelStoreWorkspace(workspaceId: string | null) {
-  console.log('Syncing models with new workspace', workspaceId);
-  const workspaceModelsStr = await invoke<string>('models_workspace_models', {
+  console.log("Syncing models with new workspace", workspaceId);
+  const workspaceModelsStr = await invoke<string>("models_workspace_models", {
     workspaceId, // NOTE: if no workspace id provided, it will just fetch global models
   });
   const workspaceModels = JSON.parse(workspaceModelsStr) as AnyModel[];
@@ -57,12 +57,12 @@ export async function changeModelStoreWorkspace(workspaceId: string | null) {
 
   mustStore().set(modelStoreDataAtom, data);
 
-  console.log('Synced model store with workspace', workspaceId, data);
+  console.log("Synced model store with workspace", workspaceId, data);
 
   _activeWorkspaceId = workspaceId;
 }
 
-export function listModels<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+export function listModels<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   modelType: M | ReadonlyArray<M>,
 ): T[] {
   let data = mustStore().get(modelStoreDataAtom);
@@ -70,7 +70,7 @@ export function listModels<M extends AnyModel['model'], T extends ExtractModel<A
   return types.flatMap((t) => Object.values(data[t]) as T[]);
 }
 
-export function getModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+export function getModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   modelType: M | ReadonlyArray<M>,
   id: string,
 ): T | null {
@@ -83,9 +83,7 @@ export function getModel<M extends AnyModel['model'], T extends ExtractModel<Any
   return null;
 }
 
-export function getAnyModel(
-  id: string,
-): AnyModel | null {
+export function getAnyModel(id: string): AnyModel | null {
   let data = mustStore().get(modelStoreDataAtom);
   for (const t of Object.keys(data)) {
     // oxlint-disable-next-line no-explicit-any
@@ -95,7 +93,7 @@ export function getAnyModel(
   return null;
 }
 
-export function patchModelById<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+export function patchModelById<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   model: M,
   id: string,
   patch: Partial<T> | ((prev: T) => T),
@@ -105,54 +103,54 @@ export function patchModelById<M extends AnyModel['model'], T extends ExtractMod
     throw new Error(`Failed to get model to patch id=${id} model=${model}`);
   }
 
-  const newModel = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch };
+  const newModel = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
   return updateModel(newModel);
 }
 
-export async function patchModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
-  base: Pick<T, 'id' | 'model'>,
+export async function patchModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
+  base: Pick<T, "id" | "model">,
   patch: Partial<T>,
 ): Promise<string> {
   return patchModelById<M, T>(base.model, base.id, patch);
 }
 
-export async function updateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+export async function updateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   model: T,
 ): Promise<string> {
-  return invoke<string>('models_upsert', { model });
+  return invoke<string>("models_upsert", { model });
 }
 
 export async function deleteModelById<
-  M extends AnyModel['model'],
+  M extends AnyModel["model"],
   T extends ExtractModel<AnyModel, M>,
 >(modelType: M | M[], id: string) {
   let model = getModel<M, T>(modelType, id);
   await deleteModel(model);
 }
 
-export async function deleteModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+export async function deleteModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   model: T | null,
 ) {
   if (model == null) {
-    throw new Error('Failed to delete null model');
+    throw new Error("Failed to delete null model");
   }
-  await invoke<string>('models_delete', { model });
+  await invoke<string>("models_delete", { model });
 }
 
-export function duplicateModel<M extends AnyModel['model'], T extends ExtractModel<AnyModel, M>>(
+export function duplicateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   model: T | null,
 ) {
   if (model == null) {
-    throw new Error('Failed to duplicate null model');
+    throw new Error("Failed to duplicate null model");
   }
 
   // If the model has a name, try to duplicate it with a name that doesn't conflict
-  let name = 'name' in model ? resolvedModelName(model) : undefined;
+  let name = "name" in model ? resolvedModelName(model) : undefined;
   if (name != null) {
     const existingModels = listModels(model.model);
     for (let i = 0; i < 100; i++) {
       const hasConflict = existingModels.some((m) => {
-        if ('folderId' in m && 'folderId' in model && model.folderId !== m.folderId) {
+        if ("folderId" in m && "folderId" in model && model.folderId !== m.folderId) {
           return false;
         } else if (resolvedModelName(m) !== name) {
           return false;
@@ -166,7 +164,7 @@ export function duplicateModel<M extends AnyModel['model'], T extends ExtractMod
       // Name conflict. Try another one
       const m: RegExpMatchArray | null = name.match(/ Copy( (?<n>\d+))?$/);
       if (m != null && m.groups?.n == null) {
-        name = name.substring(0, m.index) + ' Copy 2';
+        name = name.substring(0, m.index) + " Copy 2";
       } else if (m != null && m.groups?.n != null) {
         name = name.substring(0, m.index) + ` Copy ${parseInt(m.groups.n) + 1}`;
       } else {
@@ -175,23 +173,23 @@ export function duplicateModel<M extends AnyModel['model'], T extends ExtractMod
     }
   }
 
-  return invoke<string>('models_duplicate', { model: { ...model, name } });
+  return invoke<string>("models_duplicate", { model: { ...model, name } });
 }
 
 export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(
-  patch: Partial<T> & Pick<T, 'model'>,
+  patch: Partial<T> & Pick<T, "model">,
 ): Promise<string> {
-  return invoke<string>('models_upsert', { model: patch });
+  return invoke<string>("models_upsert", { model: patch });
 }
 
 export async function createWorkspaceModel<T extends Extract<AnyModel, { workspaceId: string }>>(
-  patch: Partial<T> & Pick<T, 'model' | 'workspaceId'>,
+  patch: Partial<T> & Pick<T, "model" | "workspaceId">,
 ): Promise<string> {
-  return invoke<string>('models_upsert', { model: patch });
+  return invoke<string>("models_upsert", { model: patch });
 }
 
 export function replaceModelsInStore<
-  M extends AnyModel['model'],
+  M extends AnyModel["model"],
   T extends Extract<AnyModel, { model: M }>,
 >(model: M, models: T[]) {
   const newModels: Record<string, T> = {};
@@ -208,7 +206,7 @@ export function replaceModelsInStore<
 }
 
 export function mergeModelsInStore<
-  M extends AnyModel['model'],
+  M extends AnyModel["model"],
   T extends Extract<AnyModel, { model: M }>,
 >(model: M, models: T[], filter?: (model: T) => boolean) {
   mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
@@ -237,7 +235,7 @@ export function mergeModelsInStore<
 
 function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
   // Never ignore updates from non-user sources
-  if (updateSource.type !== 'window') {
+  if (updateSource.type !== "window") {
     return false;
   }
 
@@ -247,11 +245,11 @@ function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
   }
 
   // Only sync models that belong to this workspace, if a workspace ID is present
-  if ('workspaceId' in model && model.workspaceId !== _activeWorkspaceId) {
+  if ("workspaceId" in model && model.workspaceId !== _activeWorkspaceId) {
     return true;
   }
 
-  if (model.model === 'key_value' && model.namespace === 'no_sync') {
+  if (model.model === "key_value" && model.namespace === "no_sync") {
     return true;
   }
 

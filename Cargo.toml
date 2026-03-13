@@ -1,30 +1,30 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/yaak",
-    # Shared crates (no Tauri dependency)
-    "crates/yaak-core",
-    "crates/yaak-common",
-    "crates/yaak-crypto",
-    "crates/yaak-git",
-    "crates/yaak-grpc",
-    "crates/yaak-http",
-    "crates/yaak-models",
-    "crates/yaak-plugins",
-    "crates/yaak-sse",
-    "crates/yaak-sync",
-    "crates/yaak-templates",
-    "crates/yaak-tls",
-    "crates/yaak-ws",
-    "crates/yaak-api",
-    # CLI crates
-    "crates-cli/yaak-cli",
-    # Tauri-specific crates
-    "crates-tauri/yaak-app",
-    "crates-tauri/yaak-fonts",
-    "crates-tauri/yaak-license",
-    "crates-tauri/yaak-mac-window",
-    "crates-tauri/yaak-tauri-utils",
+  "crates/yaak",
+  # Shared crates (no Tauri dependency)
+  "crates/yaak-core",
+  "crates/yaak-common",
+  "crates/yaak-crypto",
+  "crates/yaak-git",
+  "crates/yaak-grpc",
+  "crates/yaak-http",
+  "crates/yaak-models",
+  "crates/yaak-plugins",
+  "crates/yaak-sse",
+  "crates/yaak-sync",
+  "crates/yaak-templates",
+  "crates/yaak-tls",
+  "crates/yaak-ws",
+  "crates/yaak-api",
+  # CLI crates
+  "crates-cli/yaak-cli",
+  # Tauri-specific crates
+  "crates-tauri/yaak-app",
+  "crates-tauri/yaak-fonts",
+  "crates-tauri/yaak-license",
+  "crates-tauri/yaak-mac-window",
+  "crates-tauri/yaak-tauri-utils",
 ]
 
 [workspace.dependencies]

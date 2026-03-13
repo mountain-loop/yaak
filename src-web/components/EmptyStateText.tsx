@@ -1,5 +1,5 @@
-import classNames from 'classnames';
-import type { ReactNode } from 'react';
+import classNames from "classnames";
+import type { ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -12,8 +12,8 @@ export function EmptyStateText({ children, className }: Props) {
       <div
         className={classNames(
           className,
-          'rounded-lg border border-dashed border-border-subtle',
-          'h-full py-2 text-text-subtlest flex items-center justify-center italic',
+          "rounded-lg border border-dashed border-border-subtle",
+          "h-full py-2 text-text-subtlest flex items-center justify-center italic",
         )}
       >
         {children}

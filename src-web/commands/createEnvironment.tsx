@@ -1,33 +1,33 @@
-import type { Environment } from '@yaakapp-internal/models';
-import { CreateEnvironmentDialog } from '../components/CreateEnvironmentDialog';
-import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { createFastMutation } from '../hooks/useFastMutation';
-import { showDialog } from '../lib/dialog';
-import { jotaiStore } from '../lib/jotai';
-import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
+import type { Environment } from "@yaakapp-internal/models";
+import { CreateEnvironmentDialog } from "../components/CreateEnvironmentDialog";
+import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import { createFastMutation } from "../hooks/useFastMutation";
+import { showDialog } from "../lib/dialog";
+import { jotaiStore } from "../lib/jotai";
+import { setWorkspaceSearchParams } from "../lib/setWorkspaceSearchParams";
 
 export const createSubEnvironmentAndActivate = createFastMutation<
   string | null,
   unknown,
   Environment | null
 >({
-  mutationKey: ['create_environment'],
+  mutationKey: ["create_environment"],
   mutationFn: async (baseEnvironment) => {
     if (baseEnvironment == null) {
-      throw new Error('No base environment passed');
+      throw new Error("No base environment passed");
     }
 
     const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
     if (workspaceId == null) {
-      throw new Error('Cannot create environment when no active workspace');
+      throw new Error("Cannot create environment when no active workspace");
     }
 
     return new Promise<string | null>((resolve) => {
       showDialog({
-        id: 'new-environment',
-        title: 'New Environment',
-        description: 'Create multiple environments with different sets of variables',
-        size: 'sm',
+        id: "new-environment",
+        title: "New Environment",
+        description: "Create multiple environments with different sets of variables",
+        size: "sm",
         onClose: () => resolve(null),
         render: ({ hide }) => (
           <CreateEnvironmentDialog

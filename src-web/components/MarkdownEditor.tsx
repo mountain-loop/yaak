@@ -1,13 +1,13 @@
-import classNames from 'classnames';
-import { useRef, useState } from 'react';
-import type { EditorProps } from './core/Editor/Editor';
-import { Editor } from './core/Editor/LazyEditor';
-import { SegmentedControl } from './core/SegmentedControl';
-import { Markdown } from './Markdown';
+import classNames from "classnames";
+import { useRef, useState } from "react";
+import type { EditorProps } from "./core/Editor/Editor";
+import { Editor } from "./core/Editor/LazyEditor";
+import { SegmentedControl } from "./core/SegmentedControl";
+import { Markdown } from "./Markdown";
 
-type ViewMode = 'edit' | 'preview';
+type ViewMode = "edit" | "preview";
 
-interface Props extends Pick<EditorProps, 'heightMode' | 'stateKey' | 'forceUpdateKey'> {
+interface Props extends Pick<EditorProps, "heightMode" | "stateKey" | "forceUpdateKey"> {
   placeholder: string;
   className?: string;
   editorClassName?: string;
@@ -25,7 +25,7 @@ export function MarkdownEditor({
   forceUpdateKey,
   ...editorProps
 }: Props) {
-  const [viewMode, setViewMode] = useState<ViewMode>(defaultValue ? 'preview' : 'edit');
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultValue ? "preview" : "edit");
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -33,7 +33,7 @@ export function MarkdownEditor({
     <Editor
       hideGutter
       wrapLines
-      className={classNames(editorClassName, '[&_.cm-line]:!max-w-lg max-h-full')}
+      className={classNames(editorClassName, "[&_.cm-line]:!max-w-lg max-h-full")}
       language="markdown"
       defaultValue={defaultValue}
       onChange={onChange}
@@ -51,15 +51,15 @@ export function MarkdownEditor({
       </div>
     );
 
-  const contents = viewMode === 'preview' ? preview : editor;
+  const contents = viewMode === "preview" ? preview : editor;
 
   return (
     <div
       ref={containerRef}
       className={classNames(
-        'group/markdown',
-        'relative w-full h-full pt-1.5 rounded-md gap-x-1.5',
-        'min-w-0', // Not sure why this is needed
+        "group/markdown",
+        "relative w-full h-full pt-1.5 rounded-md gap-x-1.5",
+        "min-w-0", // Not sure why this is needed
         className,
       )}
     >
@@ -73,8 +73,8 @@ export function MarkdownEditor({
           value={viewMode}
           className="opacity-0 group-focus-within/markdown:opacity-100 group-hover/markdown:opacity-100"
           options={[
-            { icon: 'eye', label: 'Preview mode', value: 'preview' },
-            { icon: 'pencil', label: 'Edit mode', value: 'edit' },
+            { icon: "eye", label: "Preview mode", value: "preview" },
+            { icon: "pencil", label: "Edit mode", value: "edit" },
           ]}
         />
       </div>

@@ -1,12 +1,12 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { useCallback, useMemo } from 'react';
-import type { Pair, PairEditorProps } from './core/PairEditor';
-import { PairOrBulkEditor } from './core/PairOrBulkEditor';
+import type { HttpRequest } from "@yaakapp-internal/models";
+import { useCallback, useMemo } from "react";
+import type { Pair, PairEditorProps } from "./core/PairEditor";
+import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
 
 type Props = {
   forceUpdateKey: string;
   request: HttpRequest;
-  onChange: (headers: HttpRequest['body']) => void;
+  onChange: (headers: HttpRequest["body"]) => void;
 };
 
 export function FormUrlencodedEditor({ request, forceUpdateKey, onChange }: Props) {
@@ -14,14 +14,14 @@ export function FormUrlencodedEditor({ request, forceUpdateKey, onChange }: Prop
     () =>
       (Array.isArray(request.body.form) ? request.body.form : []).map((p) => ({
         enabled: !!p.enabled,
-        name: p.name || '',
-        value: p.value || '',
+        name: p.name || "",
+        value: p.value || "",
         id: p.id,
       })),
     [request.body.form],
   );
 
-  const handleChange = useCallback<PairEditorProps['onChange']>(
+  const handleChange = useCallback<PairEditorProps["onChange"]>(
     (pairs) =>
       onChange({ form: pairs.map((p) => ({ enabled: p.enabled, name: p.name, value: p.value })) }),
     [onChange],

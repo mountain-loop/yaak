@@ -1,39 +1,39 @@
-import { useSearch } from '@tanstack/react-router';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { type } from '@tauri-apps/plugin-os';
-import { useLicense } from '@yaakapp-internal/license';
-import { pluginsAtom, settingsAtom } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { useAtomValue } from 'jotai';
-import { useKeyPressEvent } from 'react-use';
-import { appInfo } from '../../lib/appInfo';
-import { capitalize } from '../../lib/capitalize';
-import { CountBadge } from '../core/CountBadge';
-import { Icon } from '../core/Icon';
-import { HStack } from '../core/Stacks';
-import { TabContent, type TabItem, Tabs } from '../core/Tabs/Tabs';
-import { HeaderSize } from '../HeaderSize';
-import { SettingsCertificates } from './SettingsCertificates';
-import { SettingsGeneral } from './SettingsGeneral';
-import { SettingsHotkeys } from './SettingsHotkeys';
-import { SettingsInterface } from './SettingsInterface';
-import { SettingsLicense } from './SettingsLicense';
-import { SettingsPlugins } from './SettingsPlugins';
-import { SettingsProxy } from './SettingsProxy';
-import { SettingsTheme } from './SettingsTheme';
+import { useSearch } from "@tanstack/react-router";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { type } from "@tauri-apps/plugin-os";
+import { useLicense } from "@yaakapp-internal/license";
+import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { useAtomValue } from "jotai";
+import { useKeyPressEvent } from "react-use";
+import { appInfo } from "../../lib/appInfo";
+import { capitalize } from "../../lib/capitalize";
+import { CountBadge } from "../core/CountBadge";
+import { Icon } from "../core/Icon";
+import { HStack } from "../core/Stacks";
+import { TabContent, type TabItem, Tabs } from "../core/Tabs/Tabs";
+import { HeaderSize } from "../HeaderSize";
+import { SettingsCertificates } from "./SettingsCertificates";
+import { SettingsGeneral } from "./SettingsGeneral";
+import { SettingsHotkeys } from "./SettingsHotkeys";
+import { SettingsInterface } from "./SettingsInterface";
+import { SettingsLicense } from "./SettingsLicense";
+import { SettingsPlugins } from "./SettingsPlugins";
+import { SettingsProxy } from "./SettingsProxy";
+import { SettingsTheme } from "./SettingsTheme";
 
 interface Props {
   hide?: () => void;
 }
 
-const TAB_GENERAL = 'general';
-const TAB_INTERFACE = 'interface';
-const TAB_THEME = 'theme';
-const TAB_SHORTCUTS = 'shortcuts';
-const TAB_PROXY = 'proxy';
-const TAB_CERTIFICATES = 'certificates';
-const TAB_PLUGINS = 'plugins';
-const TAB_LICENSE = 'license';
+const TAB_GENERAL = "general";
+const TAB_INTERFACE = "interface";
+const TAB_THEME = "theme";
+const TAB_SHORTCUTS = "shortcuts";
+const TAB_PROXY = "proxy";
+const TAB_CERTIFICATES = "certificates";
+const TAB_PLUGINS = "plugins";
+const TAB_LICENSE = "license";
 const tabs = [
   TAB_GENERAL,
   TAB_THEME,
@@ -47,16 +47,16 @@ const tabs = [
 export type SettingsTab = (typeof tabs)[number];
 
 export default function Settings({ hide }: Props) {
-  const { tab: tabFromQuery } = useSearch({ from: '/workspaces/$workspaceId/settings' });
+  const { tab: tabFromQuery } = useSearch({ from: "/workspaces/$workspaceId/settings" });
   // Parse tab and subtab (e.g., "plugins:installed")
-  const [mainTab, subtab] = tabFromQuery?.split(':') ?? [];
+  const [mainTab, subtab] = tabFromQuery?.split(":") ?? [];
   const settings = useAtomValue(settingsAtom);
   const plugins = useAtomValue(pluginsAtom);
   const licenseCheck = useLicense();
 
   // Close settings window on escape
   // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window
-  useKeyPressEvent('Escape', async () => {
+  useKeyPressEvent("Escape", async () => {
     if (hide != null) {
       // It's being shown in a dialog, so close the dialog
       hide();
@@ -67,7 +67,7 @@ export default function Settings({ hide }: Props) {
   });
 
   return (
-    <div className={classNames('grid grid-rows-[auto_minmax(0,1fr)] h-full')}>
+    <div className={classNames("grid grid-rows-[auto_minmax(0,1fr)] h-full")}>
       {hide ? (
         <span />
       ) : (
@@ -83,7 +83,7 @@ export default function Settings({ hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(type() === 'macos' ? 'text-center' : 'pl-2')}>Settings</div>
+            <div className={classNames(type() === "macos" ? "text-center" : "pl-2")}>Settings</div>
           </HStack>
         </HeaderSize>
       )}
@@ -120,10 +120,10 @@ export default function Settings({ hide }: Props) {
               value === TAB_CERTIFICATES ? (
                 <CountBadge count={settings.clientCertificates.length} />
               ) : value === TAB_PLUGINS ? (
-                <CountBadge count={plugins.filter((p) => p.source !== 'bundled').length} />
-              ) : value === TAB_PROXY && settings.proxy?.type === 'enabled' ? (
+                <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
+              ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
                 <CountBadge count />
-              ) : value === TAB_LICENSE && licenseCheck.check.data?.status === 'personal_use' ? (
+              ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (
                 <CountBadge count color="notice" />
               ) : null,
           }),

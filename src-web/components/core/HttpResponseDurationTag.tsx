@@ -1,5 +1,5 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { useEffect, useRef, useState } from 'react';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   response: HttpResponse;
@@ -12,17 +12,17 @@ export function HttpResponseDurationTag({ response }: Props) {
   // Calculate the duration of the response for use when the response hasn't finished yet
   useEffect(() => {
     clearInterval(timeout.current);
-    if (response.state === 'closed') return;
+    if (response.state === "closed") return;
     timeout.current = setInterval(() => {
       setFallbackElapsed(Date.now() - new Date(`${response.createdAt}Z`).getTime());
     }, 100);
     return () => clearInterval(timeout.current);
   }, [response.createdAt, response.state]);
 
-  const dnsValue = response.elapsedDns > 0 ? formatMillis(response.elapsedDns) : '--';
+  const dnsValue = response.elapsedDns > 0 ? formatMillis(response.elapsedDns) : "--";
   const title = `DNS: ${dnsValue}\nHEADER: ${formatMillis(response.elapsedHeaders)}\nTOTAL: ${formatMillis(response.elapsed)}`;
 
-  const elapsed = response.state === 'closed' ? response.elapsed : fallbackElapsed;
+  const elapsed = response.state === "closed" ? response.elapsed : fallbackElapsed;
 
   return (
     <span className="font-mono" title={title}>

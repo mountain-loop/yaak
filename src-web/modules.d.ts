@@ -1,1 +1,1 @@
-declare module 'vkbeautify';
+declare module "vkbeautify";

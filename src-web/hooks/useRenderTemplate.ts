@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import type { RenderPurpose } from '@yaakapp-internal/plugins';
-import { useAtomValue } from 'jotai';
-import { minPromiseMillis } from '../lib/minPromiseMillis';
-import { invokeCmd } from '../lib/tauri';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { activeWorkspaceIdAtom } from './useActiveWorkspace';
+import { useQuery } from "@tanstack/react-query";
+import type { RenderPurpose } from "@yaakapp-internal/plugins";
+import { useAtomValue } from "jotai";
+import { minPromiseMillis } from "../lib/minPromiseMillis";
+import { invokeCmd } from "../lib/tauri";
+import { useActiveEnvironment } from "./useActiveEnvironment";
+import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
 export function useRenderTemplate({
   template,
@@ -21,13 +21,13 @@ export function useRenderTemplate({
   ignoreError?: boolean;
   preservePreviousValue?: boolean;
 }) {
-  const workspaceId = useAtomValue(activeWorkspaceIdAtom) ?? 'n/a';
+  const workspaceId = useAtomValue(activeWorkspaceIdAtom) ?? "n/a";
   const environmentId = useActiveEnvironment()?.id ?? null;
   return useQuery<string>({
     refetchOnWindowFocus: false,
     enabled,
     placeholderData: preservePreviousValue ? (prev) => prev : undefined,
-    queryKey: ['render_template', workspaceId, environmentId, refreshKey, purpose, ignoreError],
+    queryKey: ["render_template", workspaceId, environmentId, refreshKey, purpose, ignoreError],
     queryFn: () =>
       minPromiseMillis(
         renderTemplate({ template, workspaceId, environmentId, purpose, ignoreError }),
@@ -49,7 +49,7 @@ export async function renderTemplate({
   purpose: RenderPurpose;
   ignoreError?: boolean;
 }): Promise<string> {
-  return invokeCmd('cmd_render_template', {
+  return invokeCmd("cmd_render_template", {
     template,
     workspaceId,
     environmentId,
@@ -67,5 +67,5 @@ export async function decryptTemplate({
   workspaceId: string;
   environmentId: string | null;
 }): Promise<string> {
-  return invokeCmd('cmd_decrypt_template', { template, workspaceId, environmentId });
+  return invokeCmd("cmd_decrypt_template", { template, workspaceId, environmentId });
 }

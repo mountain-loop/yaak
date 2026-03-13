@@ -1,16 +1,16 @@
-import type { AlertProps } from '../components/core/Alert';
-import { Alert } from '../components/core/Alert';
-import type { DialogProps } from '../components/core/Dialog';
-import { showDialog } from './dialog';
+import type { AlertProps } from "../components/core/Alert";
+import { Alert } from "../components/core/Alert";
+import type { DialogProps } from "../components/core/Dialog";
+import { showDialog } from "./dialog";
 
 interface AlertArgs {
   id: string;
-  title: DialogProps['title'];
-  body: AlertProps['body'];
-  size?: DialogProps['size'];
+  title: DialogProps["title"];
+  body: AlertProps["body"];
+  size?: DialogProps["size"];
 }
 
-export function showAlert({ id, title, body, size = 'sm' }: AlertArgs) {
+export function showAlert({ id, title, body, size = "sm" }: AlertArgs) {
   showDialog({
     id,
     title,
@@ -23,7 +23,7 @@ export function showAlert({ id, title, body, size = 'sm' }: AlertArgs) {
 
 export function showSimpleAlert(title: string, message: string) {
   showAlert({
-    id: 'simple-alert',
+    id: "simple-alert",
     body: message,
     title: title,
   });

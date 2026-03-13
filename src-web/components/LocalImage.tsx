@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
-import { convertFileSrc } from '@tauri-apps/api/core';
-import { resolveResource } from '@tauri-apps/api/path';
-import classNames from 'classnames';
+import { useQuery } from "@tanstack/react-query";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { resolveResource } from "@tauri-apps/api/path";
+import classNames from "classnames";
 
 interface Props {
   src: string;
@@ -10,7 +10,7 @@ interface Props {
 
 export function LocalImage({ src: srcPath, className }: Props) {
   const src = useQuery({
-    queryKey: ['local-image', srcPath],
+    queryKey: ["local-image", srcPath],
     queryFn: async () => {
       const p = await resolveResource(srcPath);
       return convertFileSrc(p);
@@ -23,8 +23,8 @@ export function LocalImage({ src: srcPath, className }: Props) {
       alt="Response preview"
       className={classNames(
         className,
-        'transition-opacity',
-        src.data == null ? 'opacity-0' : 'opacity-100',
+        "transition-opacity",
+        src.data == null ? "opacity-0" : "opacity-100",
       )}
     />
   );

@@ -1,8 +1,8 @@
-import crypto from 'node:crypto';
-import type { Client } from '@1password/sdk';
-import { createClient, DesktopAuth } from '@1password/sdk';
-import type { JsonPrimitive, PluginDefinition } from '@yaakapp/api';
-import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
+import crypto from "node:crypto";
+import type { Client } from "@1password/sdk";
+import { createClient, DesktopAuth } from "@1password/sdk";
+import type { JsonPrimitive, PluginDefinition } from "@yaakapp/api";
+import type { CallTemplateFunctionArgs } from "@yaakapp-internal/plugins";
 
 const _clients: Record<string, Client> = {};
 
@@ -23,32 +23,32 @@ async function op(
   let authMethod: string | DesktopAuth;
   let hash: string;
   switch (args.values.authMethod) {
-    case 'desktop': {
+    case "desktop": {
       const account = args.values.token;
-      if (typeof account !== 'string' || !account) return { error: 'Missing account name' };
+      if (typeof account !== "string" || !account) return { error: "Missing account name" };
 
-      hash = crypto.createHash('sha256').update(`desktop:${account}`).digest('hex');
+      hash = crypto.createHash("sha256").update(`desktop:${account}`).digest("hex");
       authMethod = new DesktopAuth(account);
       break;
     }
-    case 'token': {
+    case "token": {
       const token = args.values.token;
-      if (typeof token !== 'string' || !token) return { error: 'Missing service token' };
+      if (typeof token !== "string" || !token) return { error: "Missing service token" };
 
-      hash = crypto.createHash('sha256').update(`token:${token}`).digest('hex');
+      hash = crypto.createHash("sha256").update(`token:${token}`).digest("hex");
       authMethod = token;
       break;
     }
     default:
-      return { error: 'Invalid authentication method' };
+      return { error: "Invalid authentication method" };
   }
 
   if (!_clients[hash]) {
     try {
       _clients[hash] = await createClient({
         auth: authMethod,
-        integrationName: 'Yaak 1Password Plugin',
-        integrationVersion: 'v1.0.0',
+        integrationName: "Yaak 1Password Plugin",
+        integrationVersion: "v1.0.0",
       });
     } catch (e) {
       return { error: e };
@@ -66,18 +66,18 @@ async function getValue(
   fieldId?: JsonPrimitive,
 ): Promise<Result<{ value: string }>> {
   const res = await op(args);
-  if ('error' in res) return { error: res.error };
+  if ("error" in res) return { error: res.error };
   const clientHash = res.clientHash;
   const client = res.client;
 
-  if (!vaultId || typeof vaultId !== 'string') {
-    return { error: 'No vault specified' };
+  if (!vaultId || typeof vaultId !== "string") {
+    return { error: "No vault specified" };
   }
-  if (!itemId || typeof itemId !== 'string') {
-    return { error: 'No item specified' };
+  if (!itemId || typeof itemId !== "string") {
+    return { error: "No item specified" };
   }
-  if (!fieldId || typeof fieldId !== 'string') {
-    return { error: 'No field specified' };
+  if (!fieldId || typeof fieldId !== "string") {
+    return { error: "No field specified" };
   }
 
   try {
@@ -98,47 +98,47 @@ async function getValue(
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
-      name: '1password.item',
-      description: 'Get a secret',
-      previewArgs: ['field'],
+      name: "1password.item",
+      description: "Get a secret",
+      previewArgs: ["field"],
       args: [
         {
-          type: 'h_stack',
+          type: "h_stack",
           inputs: [
             {
-              name: 'authMethod',
-              type: 'select',
-              label: 'Authentication Method',
-              defaultValue: 'token',
+              name: "authMethod",
+              type: "select",
+              label: "Authentication Method",
+              defaultValue: "token",
               options: [
                 {
-                  label: 'Service Account',
-                  value: 'token',
+                  label: "Service Account",
+                  value: "token",
                 },
                 {
-                  label: 'Desktop App',
-                  value: 'desktop',
+                  label: "Desktop App",
+                  value: "desktop",
                 },
               ],
             },
             {
-              name: 'token',
-              type: 'text',
+              name: "token",
+              type: "text",
               // oxlint-disable-next-line no-template-curly-in-string -- Yaak template syntax
-              defaultValue: '${[1PASSWORD_TOKEN]}',
+              defaultValue: "${[1PASSWORD_TOKEN]}",
               dynamic(_ctx, args) {
                 switch (args.values.authMethod) {
-                  case 'desktop':
+                  case "desktop":
                     return {
-                      label: 'Account Name',
+                      label: "Account Name",
                       description:
                         'Account name can be taken from the sidebar of the 1Password App. Make sure you\'re on the BETA version of the 1Password app and have "Integrate with other apps" enabled in Settings > Developer.',
                     };
-                  case 'token':
+                  case "token":
                     return {
-                      label: 'Token',
+                      label: "Token",
                       description:
-                        'Token can be generated from the 1Password website by visiting Developer > Service Accounts',
+                        "Token can be generated from the 1Password website by visiting Developer > Service Accounts",
                       password: true,
                     };
                 }
@@ -149,13 +149,13 @@ export const plugin: PluginDefinition = {
           ],
         },
         {
-          name: 'vault',
-          label: 'Vault',
-          type: 'select',
+          name: "vault",
+          label: "Vault",
+          type: "select",
           options: [],
           async dynamic(_ctx, args) {
             const res = await op(args);
-            if ('error' in res) return { hidden: true };
+            if ("error" in res) return { hidden: true };
             const clientHash = res.clientHash;
             const client = res.client;
 
@@ -169,9 +169,9 @@ export const plugin: PluginDefinition = {
             return {
               options: vaults.map((vault) => {
                 let title = vault.id;
-                if ('title' in vault) {
+                if ("title" in vault) {
                   title = vault.title;
-                } else if ('name' in vault) {
+                } else if ("name" in vault) {
                   // The SDK returns 'name' instead of 'title' but the bindings still use 'title'
                   title = (vault as { name: string }).name;
                 }
@@ -185,18 +185,18 @@ export const plugin: PluginDefinition = {
           },
         },
         {
-          name: 'item',
-          label: 'Item',
-          type: 'select',
+          name: "item",
+          label: "Item",
+          type: "select",
           options: [],
           async dynamic(_ctx, args) {
             const res = await op(args);
-            if ('error' in res) return { hidden: true };
+            if ("error" in res) return { hidden: true };
             const clientHash = res.clientHash;
             const client = res.client;
 
             const vaultId = args.values.vault;
-            if (typeof vaultId !== 'string') return { hidden: true };
+            if (typeof vaultId !== "string") return { hidden: true };
 
             try {
               const cacheKey = `${clientHash}:items:${vaultId}`;
@@ -216,19 +216,19 @@ export const plugin: PluginDefinition = {
           },
         },
         {
-          name: 'field',
-          label: 'Field',
-          type: 'select',
+          name: "field",
+          label: "Field",
+          type: "select",
           options: [],
           async dynamic(_ctx, args) {
             const res = await op(args);
-            if ('error' in res) return { hidden: true };
+            if ("error" in res) return { hidden: true };
             const clientHash = res.clientHash;
             const client = res.client;
 
             const vaultId = args.values.vault;
             const itemId = args.values.item;
-            if (typeof vaultId !== 'string' || typeof itemId !== 'string') {
+            if (typeof vaultId !== "string" || typeof itemId !== "string") {
               return { hidden: true };
             }
 
@@ -252,7 +252,7 @@ export const plugin: PluginDefinition = {
         const itemId = args.values.item;
         const fieldId = args.values.field;
         const res = await getValue(args, vaultId, itemId, fieldId);
-        if ('error' in res) {
+        if ("error" in res) {
           throw res.error;
         }
 

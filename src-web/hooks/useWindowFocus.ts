@@ -1,6 +1,6 @@
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { useEffect, useState } from 'react';
-import { fireAndForget } from '../lib/fireAndForget';
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { useEffect, useState } from "react";
+import { fireAndForget } from "../lib/fireAndForget";
 
 export function useWindowFocus() {
   const [visible, setVisible] = useState(true);

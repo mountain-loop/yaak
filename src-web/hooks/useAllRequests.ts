@@ -2,8 +2,8 @@ import {
   grpcRequestsAtom,
   httpRequestsAtom,
   websocketRequestsAtom,
-} from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
+} from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
 
 export const allRequestsAtom = atom((get) => [
   ...get(httpRequestsAtom),

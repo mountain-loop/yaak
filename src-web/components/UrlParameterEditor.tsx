@@ -1,15 +1,15 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { useCallback, useRef } from 'react';
-import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import type { PairEditorHandle, PairEditorProps } from './core/PairEditor';
-import { PairOrBulkEditor } from './core/PairOrBulkEditor';
-import { VStack } from './core/Stacks';
+import type { HttpRequest } from "@yaakapp-internal/models";
+import { useCallback, useRef } from "react";
+import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
+import type { PairEditorHandle, PairEditorProps } from "./core/PairEditor";
+import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
+import { VStack } from "./core/Stacks";
 
 type Props = {
   forceUpdateKey: string;
-  pairs: HttpRequest['headers'];
-  stateKey: PairEditorProps['stateKey'];
-  onChange: (headers: HttpRequest['urlParameters']) => void;
+  pairs: HttpRequest["headers"];
+  stateKey: PairEditorProps["stateKey"];
+  onChange: (headers: HttpRequest["urlParameters"]) => void;
 };
 
 export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey }: Props) {
@@ -21,7 +21,7 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey 
   const [{ urlParametersKey }] = useRequestEditor();
 
   useRequestEditorEvent(
-    'request_params.focus_value',
+    "request_params.focus_value",
     (name) => {
       const pair = pairs.find((p) => p.name === name);
       if (pair?.id != null) {

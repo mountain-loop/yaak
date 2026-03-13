@@ -2,16 +2,16 @@ import type {
   HttpResponse,
   HttpResponseEvent,
   HttpResponseEventData,
-} from '@yaakapp-internal/models';
-import { type ReactNode, useMemo, useState } from 'react';
-import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
-import { Editor } from './core/Editor/LazyEditor';
-import { type EventDetailAction, EventDetailHeader, EventViewer } from './core/EventViewer';
-import { EventViewerRow } from './core/EventViewerRow';
-import { HttpStatusTagRaw } from './core/HttpStatusTag';
-import { Icon, type IconProps } from './core/Icon';
-import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
-import type { TimelineViewMode } from './HttpResponsePane';
+} from "@yaakapp-internal/models";
+import { type ReactNode, useMemo, useState } from "react";
+import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
+import { Editor } from "./core/Editor/LazyEditor";
+import { type EventDetailAction, EventDetailHeader, EventViewer } from "./core/EventViewer";
+import { EventViewerRow } from "./core/EventViewerRow";
+import { HttpStatusTagRaw } from "./core/HttpStatusTag";
+import { Icon, type IconProps } from "./core/Icon";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import type { TimelineViewMode } from "./HttpResponsePane";
 
 interface Props {
   response: HttpResponse;
@@ -28,12 +28,12 @@ function Inner({ response, viewMode }: Props) {
 
   // Generate plain text representation of all events (with prefixes for timeline view)
   const plainText = useMemo(() => {
-    if (!events || events.length === 0) return '';
-    return events.map((event) => formatEventText(event.event, true)).join('\n');
+    if (!events || events.length === 0) return "";
+    return events.map((event) => formatEventText(event.event, true)).join("\n");
   }, [events]);
 
   // Plain text view - show all events as text in an editor
-  if (viewMode === 'text') {
+  if (viewMode === "text") {
     if (isLoading) {
       return <div className="p-4 text-text-subtlest">Loading events...</div>;
     } else if (error) {
@@ -98,8 +98,8 @@ function EventDetails({
 
   const actions: EventDetailAction[] = [
     {
-      key: 'toggle-raw',
-      label: showRaw ? 'Formatted' : 'Text',
+      key: "toggle-raw",
+      label: showRaw ? "Formatted" : "Text",
       onClick: () => setShowRaw(!showRaw),
     },
   ];
@@ -107,24 +107,24 @@ function EventDetails({
   // Determine the title based on event type
   const title = (() => {
     switch (e.type) {
-      case 'header_up':
-        return 'Header Sent';
-      case 'header_down':
-        return 'Header Received';
-      case 'send_url':
-        return 'Request';
-      case 'receive_url':
-        return 'Response';
-      case 'redirect':
-        return 'Redirect';
-      case 'setting':
-        return 'Apply Setting';
-      case 'chunk_sent':
-        return 'Data Sent';
-      case 'chunk_received':
-        return 'Data Received';
-      case 'dns_resolved':
-        return e.overridden ? 'DNS Override' : 'DNS Resolution';
+      case "header_up":
+        return "Header Sent";
+      case "header_down":
+        return "Header Received";
+      case "send_url":
+        return "Request";
+      case "receive_url":
+        return "Response";
+      case "redirect":
+        return "Redirect";
+      case "setting":
+        return "Apply Setting";
+      case "chunk_sent":
+        return "Data Sent";
+      case "chunk_received":
+        return "Data Received";
+      case "dns_resolved":
+        return e.overridden ? "DNS Override" : "DNS Resolution";
       default:
         return label;
     }
@@ -139,7 +139,7 @@ function EventDetails({
     }
 
     // Headers - show name and value
-    if (e.type === 'header_up' || e.type === 'header_down') {
+    if (e.type === "header_up" || e.type === "header_down") {
       return (
         <KeyValueRows>
           <KeyValueRow label="Header">{e.name}</KeyValueRow>
@@ -149,13 +149,13 @@ function EventDetails({
     }
 
     // Request URL - show all URL parts separately
-    if (e.type === 'send_url') {
-      const auth = e.username || e.password ? `${e.username}:${e.password}@` : '';
+    if (e.type === "send_url") {
+      const auth = e.username || e.password ? `${e.username}:${e.password}@` : "";
       const isDefaultPort =
-        (e.scheme === 'http' && e.port === 80) || (e.scheme === 'https' && e.port === 443);
-      const portStr = isDefaultPort ? '' : `:${e.port}`;
-      const query = e.query ? `?${e.query}` : '';
-      const fragment = e.fragment ? `#${e.fragment}` : '';
+        (e.scheme === "http" && e.port === 80) || (e.scheme === "https" && e.port === 443);
+      const portStr = isDefaultPort ? "" : `:${e.port}`;
+      const query = e.query ? `?${e.query}` : "";
+      const fragment = e.fragment ? `#${e.fragment}` : "";
       const fullUrl = `${e.scheme}://${auth}${e.host}${portStr}${e.path}${query}${fragment}`;
       return (
         <KeyValueRows>
@@ -174,7 +174,7 @@ function EventDetails({
     }
 
     // Response status - show version and status separately
-    if (e.type === 'receive_url') {
+    if (e.type === "receive_url") {
       return (
         <KeyValueRows>
           <KeyValueRow label="HTTP Version">{e.version}</KeyValueRow>
@@ -186,7 +186,7 @@ function EventDetails({
     }
 
     // Redirect - show status, URL, and behavior
-    if (e.type === 'redirect') {
+    if (e.type === "redirect") {
       const droppedHeaders = e.dropped_headers ?? [];
       return (
         <KeyValueRows>
@@ -195,18 +195,18 @@ function EventDetails({
           </KeyValueRow>
           <KeyValueRow label="Location">{e.url}</KeyValueRow>
           <KeyValueRow label="Behavior">
-            {e.behavior === 'drop_body' ? 'Drop body, change to GET' : 'Preserve method and body'}
+            {e.behavior === "drop_body" ? "Drop body, change to GET" : "Preserve method and body"}
           </KeyValueRow>
-          <KeyValueRow label="Body Dropped">{e.dropped_body ? 'Yes' : 'No'}</KeyValueRow>
+          <KeyValueRow label="Body Dropped">{e.dropped_body ? "Yes" : "No"}</KeyValueRow>
           <KeyValueRow label="Headers Dropped">
-            {droppedHeaders.length > 0 ? droppedHeaders.join(', ') : '--'}
+            {droppedHeaders.length > 0 ? droppedHeaders.join(", ") : "--"}
           </KeyValueRow>
         </KeyValueRows>
       );
     }
 
     // Settings - show as key/value
-    if (e.type === 'setting') {
+    if (e.type === "setting") {
       return (
         <KeyValueRows>
           <KeyValueRow label="Setting">{e.name}</KeyValueRow>
@@ -216,16 +216,16 @@ function EventDetails({
     }
 
     // Chunks - show formatted bytes
-    if (e.type === 'chunk_sent' || e.type === 'chunk_received') {
+    if (e.type === "chunk_sent" || e.type === "chunk_received") {
       return <div className="font-mono text-editor">{formatBytes(e.bytes)}</div>;
     }
 
     // DNS Resolution - show hostname, addresses, and timing
-    if (e.type === 'dns_resolved') {
+    if (e.type === "dns_resolved") {
       return (
         <KeyValueRows>
           <KeyValueRow label="Hostname">{e.hostname}</KeyValueRow>
-          <KeyValueRow label="Addresses">{e.addresses.join(', ')}</KeyValueRow>
+          <KeyValueRow label="Addresses">{e.addresses.join(", ")}</KeyValueRow>
           <KeyValueRow label="Duration">
             {e.overridden ? (
               <span className="text-text-subtlest">--</span>
@@ -255,57 +255,57 @@ function EventDetails({
   );
 }
 
-type EventTextParts = { prefix: '>' | '<' | '*'; text: string };
+type EventTextParts = { prefix: ">" | "<" | "*"; text: string };
 
 /** Get the prefix and text for an event */
 function getEventTextParts(event: HttpResponseEventData): EventTextParts {
   switch (event.type) {
-    case 'send_url':
+    case "send_url":
       return {
-        prefix: '>',
-        text: `${event.method} ${event.path}${event.query ? `?${event.query}` : ''}${event.fragment ? `#${event.fragment}` : ''}`,
+        prefix: ">",
+        text: `${event.method} ${event.path}${event.query ? `?${event.query}` : ""}${event.fragment ? `#${event.fragment}` : ""}`,
       };
-    case 'receive_url':
-      return { prefix: '<', text: `${event.version} ${event.status}` };
-    case 'header_up':
-      return { prefix: '>', text: `${event.name}: ${event.value}` };
-    case 'header_down':
-      return { prefix: '<', text: `${event.name}: ${event.value}` };
-    case 'redirect': {
-      const behavior = event.behavior === 'drop_body' ? 'drop body' : 'preserve';
+    case "receive_url":
+      return { prefix: "<", text: `${event.version} ${event.status}` };
+    case "header_up":
+      return { prefix: ">", text: `${event.name}: ${event.value}` };
+    case "header_down":
+      return { prefix: "<", text: `${event.name}: ${event.value}` };
+    case "redirect": {
+      const behavior = event.behavior === "drop_body" ? "drop body" : "preserve";
       const droppedHeaders = event.dropped_headers ?? [];
       const dropped = [
-        event.dropped_body ? 'body dropped' : null,
-        droppedHeaders.length > 0 ? `headers dropped: ${droppedHeaders.join(', ')}` : null,
+        event.dropped_body ? "body dropped" : null,
+        droppedHeaders.length > 0 ? `headers dropped: ${droppedHeaders.join(", ")}` : null,
       ]
         .filter(Boolean)
-        .join(', ');
+        .join(", ");
       return {
-        prefix: '*',
-        text: `Redirect ${event.status} -> ${event.url} (${behavior}${dropped ? `, ${dropped}` : ''})`,
+        prefix: "*",
+        text: `Redirect ${event.status} -> ${event.url} (${behavior}${dropped ? `, ${dropped}` : ""})`,
       };
     }
-    case 'setting':
-      return { prefix: '*', text: `Setting ${event.name}=${event.value}` };
-    case 'info':
-      return { prefix: '*', text: event.message };
-    case 'chunk_sent':
-      return { prefix: '*', text: `[${formatBytes(event.bytes)} sent]` };
-    case 'chunk_received':
-      return { prefix: '*', text: `[${formatBytes(event.bytes)} received]` };
-    case 'dns_resolved':
+    case "setting":
+      return { prefix: "*", text: `Setting ${event.name}=${event.value}` };
+    case "info":
+      return { prefix: "*", text: event.message };
+    case "chunk_sent":
+      return { prefix: "*", text: `[${formatBytes(event.bytes)} sent]` };
+    case "chunk_received":
+      return { prefix: "*", text: `[${formatBytes(event.bytes)} received]` };
+    case "dns_resolved":
       if (event.overridden) {
         return {
-          prefix: '*',
-          text: `DNS override ${event.hostname} -> ${event.addresses.join(', ')}`,
+          prefix: "*",
+          text: `DNS override ${event.hostname} -> ${event.addresses.join(", ")}`,
         };
       }
       return {
-        prefix: '*',
-        text: `DNS resolved ${event.hostname} to ${event.addresses.join(', ')} (${event.duration}ms)`,
+        prefix: "*",
+        text: `DNS resolved ${event.hostname} to ${event.addresses.join(", ")} (${event.duration}ms)`,
       };
     default:
-      return { prefix: '*', text: '[unknown event]' };
+      return { prefix: "*", text: "[unknown event]" };
   }
 }
 
@@ -316,103 +316,103 @@ function formatEventText(event: HttpResponseEventData, includePrefix: boolean): 
 }
 
 type EventDisplay = {
-  icon: IconProps['icon'];
-  color: IconProps['color'];
+  icon: IconProps["icon"];
+  color: IconProps["color"];
   label: string;
   summary: ReactNode;
 };
 
 function getEventDisplay(event: HttpResponseEventData): EventDisplay {
   switch (event.type) {
-    case 'setting':
+    case "setting":
       return {
-        icon: 'settings',
-        color: 'secondary',
-        label: 'Setting',
+        icon: "settings",
+        color: "secondary",
+        label: "Setting",
         summary: `${event.name} = ${event.value}`,
       };
-    case 'info':
+    case "info":
       return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'Info',
+        icon: "info",
+        color: "secondary",
+        label: "Info",
         summary: event.message,
       };
-    case 'redirect': {
+    case "redirect": {
       const droppedHeaders = event.dropped_headers ?? [];
       const dropped = [
-        event.dropped_body ? 'drop body' : null,
+        event.dropped_body ? "drop body" : null,
         droppedHeaders.length > 0
-          ? `drop ${droppedHeaders.length} ${droppedHeaders.length === 1 ? 'header' : 'headers'}`
+          ? `drop ${droppedHeaders.length} ${droppedHeaders.length === 1 ? "header" : "headers"}`
           : null,
       ]
         .filter(Boolean)
-        .join(', ');
+        .join(", ");
       return {
-        icon: 'arrow_big_right_dash',
-        color: 'success',
-        label: 'Redirect',
-        summary: `Redirecting ${event.status} ${event.url}${dropped ? ` (${dropped})` : ''}`,
+        icon: "arrow_big_right_dash",
+        color: "success",
+        label: "Redirect",
+        summary: `Redirecting ${event.status} ${event.url}${dropped ? ` (${dropped})` : ""}`,
       };
     }
-    case 'send_url':
+    case "send_url":
       return {
-        icon: 'arrow_big_up_dash',
-        color: 'primary',
-        label: 'Request',
-        summary: `${event.method} ${event.path}${event.query ? `?${event.query}` : ''}${event.fragment ? `#${event.fragment}` : ''}`,
+        icon: "arrow_big_up_dash",
+        color: "primary",
+        label: "Request",
+        summary: `${event.method} ${event.path}${event.query ? `?${event.query}` : ""}${event.fragment ? `#${event.fragment}` : ""}`,
       };
-    case 'receive_url':
+    case "receive_url":
       return {
-        icon: 'arrow_big_down_dash',
-        color: 'info',
-        label: 'Response',
+        icon: "arrow_big_down_dash",
+        color: "info",
+        label: "Response",
         summary: `${event.version} ${event.status}`,
       };
-    case 'header_up':
+    case "header_up":
       return {
-        icon: 'arrow_big_up_dash',
-        color: 'primary',
-        label: 'Header',
+        icon: "arrow_big_up_dash",
+        color: "primary",
+        label: "Header",
         summary: `${event.name}: ${event.value}`,
       };
-    case 'header_down':
+    case "header_down":
       return {
-        icon: 'arrow_big_down_dash',
-        color: 'info',
-        label: 'Header',
+        icon: "arrow_big_down_dash",
+        color: "info",
+        label: "Header",
         summary: `${event.name}: ${event.value}`,
       };
 
-    case 'chunk_sent':
+    case "chunk_sent":
       return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'Chunk',
+        icon: "info",
+        color: "secondary",
+        label: "Chunk",
         summary: `${formatBytes(event.bytes)} chunk sent`,
       };
-    case 'chunk_received':
+    case "chunk_received":
       return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'Chunk',
+        icon: "info",
+        color: "secondary",
+        label: "Chunk",
         summary: `${formatBytes(event.bytes)} chunk received`,
       };
-    case 'dns_resolved':
+    case "dns_resolved":
       return {
-        icon: 'globe',
-        color: event.overridden ? 'success' : 'secondary',
-        label: event.overridden ? 'DNS Override' : 'DNS',
+        icon: "globe",
+        color: event.overridden ? "success" : "secondary",
+        label: event.overridden ? "DNS Override" : "DNS",
         summary: event.overridden
-          ? `${event.hostname} → ${event.addresses.join(', ')} (overridden)`
-          : `${event.hostname} → ${event.addresses.join(', ')} (${event.duration}ms)`,
+          ? `${event.hostname} → ${event.addresses.join(", ")} (overridden)`
+          : `${event.hostname} → ${event.addresses.join(", ")} (${event.duration}ms)`,
       };
     default:
       return {
-        icon: 'info',
-        color: 'secondary',
-        label: 'Unknown',
-        summary: 'Unknown event',
+        icon: "info",
+        color: "secondary",
+        label: "Unknown",
+        summary: "Unknown event",
       };
   }
 }

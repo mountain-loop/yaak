@@ -1,6 +1,6 @@
-import { getSearchQuery, searchPanelOpen } from '@codemirror/search';
-import type { Extension } from '@codemirror/state';
-import { type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
+import { getSearchQuery, searchPanelOpen } from "@codemirror/search";
+import type { Extension } from "@codemirror/state";
+import { type EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 
 /**
  * A CodeMirror extension that displays the total number of search matches
@@ -41,7 +41,7 @@ export function searchMatchCount(): Extension {
 
         if (!query.search) {
           if (this.countEl) {
-            this.countEl.textContent = '0/0';
+            this.countEl.textContent = "0/0";
           }
           return;
         }
@@ -64,7 +64,7 @@ export function searchMatchCount(): Extension {
           if (count > MAX_COUNT) {
             this.countEl.textContent = `${MAX_COUNT}+`;
           } else if (count === 0) {
-            this.countEl.textContent = '0/0';
+            this.countEl.textContent = "0/0";
           } else if (currentIndex > 0) {
             this.countEl.textContent = `${currentIndex}/${count}`;
           } else {
@@ -75,7 +75,7 @@ export function searchMatchCount(): Extension {
 
       private ensureCountEl() {
         // Find the search panel in the editor DOM
-        const panel = this.view.dom.querySelector('.cm-search');
+        const panel = this.view.dom.querySelector(".cm-search");
         if (!panel) {
           this.countEl = null;
           return;
@@ -85,11 +85,11 @@ export function searchMatchCount(): Extension {
           return; // Already attached
         }
 
-        this.countEl = document.createElement('span');
-        this.countEl.className = 'cm-search-match-count';
+        this.countEl = document.createElement("span");
+        this.countEl.className = "cm-search-match-count";
 
         // Reorder: insert prev button, then next button, then count after the search input
-        const searchInput = panel.querySelector('input');
+        const searchInput = panel.querySelector("input");
         const prevBtn = panel.querySelector('button[name="prev"]');
         const nextBtn = panel.querySelector('button[name="next"]');
         if (searchInput && searchInput.parentElement === panel) {

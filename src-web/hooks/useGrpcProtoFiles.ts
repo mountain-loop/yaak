@@ -1,10 +1,10 @@
-import { getKeyValue } from '../lib/keyValueStore';
-import { useKeyValue } from './useKeyValue';
+import { getKeyValue } from "../lib/keyValueStore";
+import { useKeyValue } from "./useKeyValue";
 
 export function protoFilesArgs(requestId: string | null) {
   return {
-    namespace: 'global' as const,
-    key: ['proto_files', requestId ?? 'n/a'],
+    namespace: "global" as const,
+    key: ["proto_files", requestId ?? "n/a"],
   };
 }
 

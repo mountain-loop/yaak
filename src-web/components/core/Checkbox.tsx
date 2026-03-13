@@ -1,11 +1,11 @@
-import classNames from 'classnames';
-import type { ReactNode } from 'react';
-import { Icon } from './Icon';
-import { IconTooltip } from './IconTooltip';
-import { HStack } from './Stacks';
+import classNames from "classnames";
+import type { ReactNode } from "react";
+import { Icon } from "./Icon";
+import { IconTooltip } from "./IconTooltip";
+import { HStack } from "./Stacks";
 
 export interface CheckboxProps {
-  checked: boolean | 'indeterminate';
+  checked: boolean | "indeterminate";
   title: ReactNode;
   onChange: (checked: boolean) => void;
   className?: string;
@@ -32,34 +32,34 @@ export function Checkbox({
       as="label"
       alignItems="center"
       space={2}
-      className={classNames(className, 'text-text mr-auto')}
+      className={classNames(className, "text-text mr-auto")}
     >
-      <div className={classNames(inputWrapperClassName, 'x-theme-input', 'relative flex mr-0.5')}>
+      <div className={classNames(inputWrapperClassName, "x-theme-input", "relative flex mr-0.5")}>
         <input
           aria-hidden
           className={classNames(
-            'appearance-none w-4 h-4 flex-shrink-0 border border-border',
-            'rounded outline-none ring-0',
-            !disabled && 'hocus:border-border-focus hocus:bg-focus/[5%]',
-            disabled && 'border-dotted',
+            "appearance-none w-4 h-4 flex-shrink-0 border border-border",
+            "rounded outline-none ring-0",
+            !disabled && "hocus:border-border-focus hocus:bg-focus/[5%]",
+            disabled && "border-dotted",
           )}
           type="checkbox"
           disabled={disabled}
           onChange={() => {
-            onChange(checked === 'indeterminate' ? true : !checked);
+            onChange(checked === "indeterminate" ? true : !checked);
           }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
           <Icon
             size="sm"
-            className={classNames(disabled && 'opacity-disabled')}
-            icon={checked === 'indeterminate' ? 'minus' : checked ? 'check' : 'empty'}
+            className={classNames(disabled && "opacity-disabled")}
+            icon={checked === "indeterminate" ? "minus" : checked ? "check" : "empty"}
           />
         </div>
       </div>
       {!hideLabel && (
         <div
-          className={classNames('text-sm', fullWidth && 'w-full', disabled && 'opacity-disabled')}
+          className={classNames("text-sm", fullWidth && "w-full", disabled && "opacity-disabled")}
         >
           {title}
         </div>

@@ -1,11 +1,11 @@
-import { yaml } from '@codemirror/lang-yaml';
-import { syntaxHighlighting } from '@codemirror/language';
-import { MergeView } from '@codemirror/merge';
-import { EditorView } from '@codemirror/view';
-import classNames from 'classnames';
-import { useEffect, useRef } from 'react';
-import './DiffViewer.css';
-import { readonlyExtensions, syntaxHighlightStyle } from './extensions';
+import { yaml } from "@codemirror/lang-yaml";
+import { syntaxHighlighting } from "@codemirror/language";
+import { MergeView } from "@codemirror/merge";
+import { EditorView } from "@codemirror/view";
+import classNames from "classnames";
+import { useEffect, useRef } from "react";
+import "./DiffViewer.css";
+import { readonlyExtensions, syntaxHighlightStyle } from "./extensions";
 
 interface Props {
   /** Original/previous version (left side) */
@@ -45,7 +45,7 @@ export function DiffViewer({ original, modified, className }: Props) {
       collapseUnchanged: { margin: 2, minSize: 3 },
       highlightChanges: false,
       gutter: true,
-      orientation: 'a-b',
+      orientation: "a-b",
       revertControls: undefined,
     });
 
@@ -58,7 +58,7 @@ export function DiffViewer({ original, modified, className }: Props) {
   return (
     <div
       ref={containerRef}
-      className={classNames('cm-wrapper cm-multiline h-full w-full', className)}
+      className={classNames("cm-wrapper cm-multiline h-full w-full", className)}
     />
   );
 }

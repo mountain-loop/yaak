@@ -1,7 +1,7 @@
-import classNames from 'classnames';
-import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
-import { Icon } from './Icon';
+import classNames from "classnames";
+import type { ReactNode } from "react";
+import { useMemo, useState } from "react";
+import { Icon } from "./Icon";
 
 interface Props {
   depth?: number;
@@ -31,7 +31,7 @@ export const JsonAttributeTree = ({
     labelClassName?: string;
   }>(() => {
     const jsonType = Object.prototype.toString.call(attrValue);
-    if (jsonType === '[object Object]') {
+    if (jsonType === "[object Object]") {
       return {
         children: isExpanded
           ? Object.keys(attrValue)
@@ -47,11 +47,11 @@ export const JsonAttributeTree = ({
               ))
           : null,
         isExpandable: Object.keys(attrValue).length > 0,
-        label: isExpanded ? `{${Object.keys(attrValue).length || ' '}}` : '{⋯}',
-        labelClassName: 'text-text-subtlest',
+        label: isExpanded ? `{${Object.keys(attrValue).length || " "}}` : "{⋯}",
+        labelClassName: "text-text-subtlest",
       };
     }
-    if (jsonType === '[object Array]') {
+    if (jsonType === "[object Array]") {
       return {
         children: isExpanded
           ? // oxlint-disable-next-line no-explicit-any
@@ -67,26 +67,26 @@ export const JsonAttributeTree = ({
             ))
           : null,
         isExpandable: attrValue.length > 0,
-        label: isExpanded ? `[${attrValue.length || ' '}]` : '[⋯]',
-        labelClassName: 'text-text-subtlest',
+        label: isExpanded ? `[${attrValue.length || " "}]` : "[⋯]",
+        labelClassName: "text-text-subtlest",
       };
     }
     return {
       children: null,
       isExpandable: false,
-      label: jsonType === '[object String]' ? `"${attrValue}"` : `${attrValue}`,
+      label: jsonType === "[object String]" ? `"${attrValue}"` : `${attrValue}`,
       labelClassName: classNames(
-        jsonType === '[object Boolean]' && 'text-primary',
-        jsonType === '[object Number]' && 'text-info',
-        jsonType === '[object String]' && 'text-notice',
-        jsonType === '[object Null]' && 'text-danger',
+        jsonType === "[object Boolean]" && "text-primary",
+        jsonType === "[object Number]" && "text-info",
+        jsonType === "[object String]" && "text-notice",
+        jsonType === "[object Null]" && "text-danger",
       ),
     };
   }, [attrValue, attrKeyJsonPath, isExpanded, depth]);
 
   const labelEl = (
     <span
-      className={classNames(labelClassName, 'cursor-text select-text group-hover:text-text-subtle')}
+      className={classNames(labelClassName, "cursor-text select-text group-hover:text-text-subtle")}
     >
       {label}
     </span>
@@ -95,8 +95,8 @@ export const JsonAttributeTree = ({
     <div
       className={classNames(
         className,
-        /*depth === 0 && '-ml-4',*/ 'font-mono text-xs',
-        depth === 0 && 'h-full overflow-y-auto pb-2',
+        /*depth === 0 && '-ml-4',*/ "font-mono text-xs",
+        depth === 0 && "h-full overflow-y-auto pb-2",
       )}
     >
       <div className="flex items-center">
@@ -110,13 +110,13 @@ export const JsonAttributeTree = ({
               size="xs"
               icon="chevron_right"
               className={classNames(
-                'left-0 absolute transition-transform flex items-center',
-                'group-hover:text-text-subtle',
-                isExpanded ? 'rotate-90' : '',
+                "left-0 absolute transition-transform flex items-center",
+                "group-hover:text-text-subtle",
+                isExpanded ? "rotate-90" : "",
               )}
             />
             <span className="text-primary group-hover:text-primary mr-1.5 whitespace-nowrap">
-              {attrKey === undefined ? '$' : attrKey}:
+              {attrKey === undefined ? "$" : attrKey}:
             </span>
             {labelEl}
           </button>
@@ -142,5 +142,5 @@ function joinObjectKey(baseKey: string | undefined, key: string): string {
 }
 
 function joinArrayKey(baseKey: string | undefined, index: number): string {
-  return `${baseKey ?? ''}[${index}]`;
+  return `${baseKey ?? ""}[${index}]`;
 }

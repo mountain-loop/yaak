@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import type { EditorProps } from '../components/core/Editor/Editor';
-import { tryFormatJson, tryFormatXml } from '../lib/formatters';
+import { useQuery } from "@tanstack/react-query";
+import type { EditorProps } from "../components/core/Editor/Editor";
+import { tryFormatJson, tryFormatXml } from "../lib/formatters";
 
 export function useFormatText({
   text,
@@ -8,20 +8,20 @@ export function useFormatText({
   pretty,
 }: {
   text: string;
-  language: EditorProps['language'];
+  language: EditorProps["language"];
   pretty: boolean;
 }) {
   return useQuery({
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryKey: [text, language, pretty],
     queryFn: async () => {
-      if (text === '' || !pretty) {
+      if (text === "" || !pretty) {
         return text;
       }
-      if (language === 'json') {
+      if (language === "json") {
         return tryFormatJson(text);
       }
-      if (language === 'xml' || language === 'html') {
+      if (language === "xml" || language === "html") {
         return tryFormatXml(text);
       }
       return text;

@@ -1,9 +1,9 @@
 {
   "name": "@yaak/importer-insomnia",
   "displayName": "Insomnia Importer",
-  "description": "Import data from Insomnia",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Import data from Insomnia",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",

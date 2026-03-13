@@ -1,24 +1,24 @@
-import { patchModel, workspaceMetasAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useAuthTab } from '../hooks/useAuthTab';
-import { useHeadersTab } from '../hooks/useHeadersTab';
-import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { router } from '../lib/router';
-import { CopyIconButton } from './CopyIconButton';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { CountBadge } from './core/CountBadge';
-import { InlineCode } from './core/InlineCode';
-import { PlainInput } from './core/PlainInput';
-import { HStack, VStack } from './core/Stacks';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { DnsOverridesEditor } from './DnsOverridesEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { SyncToFilesystemSetting } from './SyncToFilesystemSetting';
-import { WorkspaceEncryptionSetting } from './WorkspaceEncryptionSetting';
+import { patchModel, workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useAuthTab } from "../hooks/useAuthTab";
+import { useHeadersTab } from "../hooks/useHeadersTab";
+import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
+import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { router } from "../lib/router";
+import { CopyIconButton } from "./CopyIconButton";
+import { Banner } from "./core/Banner";
+import { Button } from "./core/Button";
+import { CountBadge } from "./core/CountBadge";
+import { InlineCode } from "./core/InlineCode";
+import { PlainInput } from "./core/PlainInput";
+import { HStack, VStack } from "./core/Stacks";
+import { TabContent, Tabs } from "./core/Tabs/Tabs";
+import { DnsOverridesEditor } from "./DnsOverridesEditor";
+import { HeadersEditor } from "./HeadersEditor";
+import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { SyncToFilesystemSetting } from "./SyncToFilesystemSetting";
+import { WorkspaceEncryptionSetting } from "./WorkspaceEncryptionSetting";
 
 interface Props {
   workspaceId: string;
@@ -26,11 +26,11 @@ interface Props {
   tab?: WorkspaceSettingsTab;
 }
 
-const TAB_AUTH = 'auth';
-const TAB_DATA = 'data';
-const TAB_DNS = 'dns';
-const TAB_HEADERS = 'headers';
-const TAB_GENERAL = 'general';
+const TAB_AUTH = "auth";
+const TAB_DATA = "data";
+const TAB_DNS = "dns";
+const TAB_HEADERS = "headers";
+const TAB_GENERAL = "general";
 
 export type WorkspaceSettingsTab =
   | typeof TAB_AUTH
@@ -71,16 +71,16 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       tabListClassName="pl-4"
       addBorders
       tabs={[
-        { value: TAB_GENERAL, label: 'Workspace' },
+        { value: TAB_GENERAL, label: "Workspace" },
         {
           value: TAB_DATA,
-          label: 'Storage',
+          label: "Storage",
         },
         ...headersTab,
         ...authTab,
         {
           value: TAB_DNS,
-          label: 'DNS',
+          label: "DNS",
           rightSlot:
             workspace.settingDnsOverrides.length > 0 ? (
               <CountBadge count={workspace.settingDnsOverrides.length} />
@@ -132,7 +132,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
                 });
                 if (didDelete) {
                   hide(); // Only hide if actually deleted workspace
-                  await router.navigate({ to: '/' });
+                  await router.navigate({ to: "/" });
                 }
               }}
               color="danger"

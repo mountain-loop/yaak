@@ -1,7 +1,7 @@
-import { workspacesAtom } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import { fuzzyFilter } from 'fuzzbunny';
-import { useAtomValue } from 'jotai';
+import { workspacesAtom } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import { fuzzyFilter } from "fuzzbunny";
+import { useAtomValue } from "jotai";
 import {
   Fragment,
   type KeyboardEvent,
@@ -10,48 +10,48 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import { createFolder } from '../commands/commands';
-import { createSubEnvironmentAndActivate } from '../commands/createEnvironment';
-import { openSettings } from '../commands/openSettings';
-import { switchWorkspace } from '../commands/switchWorkspace';
-import { useActiveCookieJar } from '../hooks/useActiveCookieJar';
-import { useActiveEnvironment } from '../hooks/useActiveEnvironment';
-import { useActiveRequest } from '../hooks/useActiveRequest';
-import { activeWorkspaceIdAtom } from '../hooks/useActiveWorkspace';
-import { useAllRequests } from '../hooks/useAllRequests';
-import { useCreateWorkspace } from '../hooks/useCreateWorkspace';
-import { useDebouncedState } from '../hooks/useDebouncedState';
-import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
-import { useGrpcRequestActions } from '../hooks/useGrpcRequestActions';
-import type { HotkeyAction } from '../hooks/useHotKey';
-import { useHttpRequestActions } from '../hooks/useHttpRequestActions';
-import { useRecentEnvironments } from '../hooks/useRecentEnvironments';
-import { useRecentRequests } from '../hooks/useRecentRequests';
-import { useRecentWorkspaces } from '../hooks/useRecentWorkspaces';
-import { useScrollIntoView } from '../hooks/useScrollIntoView';
-import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { useSidebarHidden } from '../hooks/useSidebarHidden';
-import { appInfo } from '../lib/appInfo';
-import { copyToClipboard } from '../lib/copy';
-import { createRequestAndNavigate } from '../lib/createRequestAndNavigate';
-import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { showDialog } from '../lib/dialog';
-import { editEnvironment } from '../lib/editEnvironment';
-import { renameModelWithPrompt } from '../lib/renameModelWithPrompt';
+} from "react";
+import { createFolder } from "../commands/commands";
+import { createSubEnvironmentAndActivate } from "../commands/createEnvironment";
+import { openSettings } from "../commands/openSettings";
+import { switchWorkspace } from "../commands/switchWorkspace";
+import { useActiveCookieJar } from "../hooks/useActiveCookieJar";
+import { useActiveEnvironment } from "../hooks/useActiveEnvironment";
+import { useActiveRequest } from "../hooks/useActiveRequest";
+import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import { useAllRequests } from "../hooks/useAllRequests";
+import { useCreateWorkspace } from "../hooks/useCreateWorkspace";
+import { useDebouncedState } from "../hooks/useDebouncedState";
+import { useEnvironmentsBreakdown } from "../hooks/useEnvironmentsBreakdown";
+import { useGrpcRequestActions } from "../hooks/useGrpcRequestActions";
+import type { HotkeyAction } from "../hooks/useHotKey";
+import { useHttpRequestActions } from "../hooks/useHttpRequestActions";
+import { useRecentEnvironments } from "../hooks/useRecentEnvironments";
+import { useRecentRequests } from "../hooks/useRecentRequests";
+import { useRecentWorkspaces } from "../hooks/useRecentWorkspaces";
+import { useScrollIntoView } from "../hooks/useScrollIntoView";
+import { useSendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
+import { useSidebarHidden } from "../hooks/useSidebarHidden";
+import { appInfo } from "../lib/appInfo";
+import { copyToClipboard } from "../lib/copy";
+import { createRequestAndNavigate } from "../lib/createRequestAndNavigate";
+import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { showDialog } from "../lib/dialog";
+import { editEnvironment } from "../lib/editEnvironment";
+import { renameModelWithPrompt } from "../lib/renameModelWithPrompt";
 import {
   resolvedModelNameWithFolders,
   resolvedModelNameWithFoldersArray,
-} from '../lib/resolvedModelName';
-import { router } from '../lib/router';
-import { setWorkspaceSearchParams } from '../lib/setWorkspaceSearchParams';
-import { CookieDialog } from './CookieDialog';
-import { Button } from './core/Button';
-import { Heading } from './core/Heading';
-import { Hotkey } from './core/Hotkey';
-import { HttpMethodTag } from './core/HttpMethodTag';
-import { Icon } from './core/Icon';
-import { PlainInput } from './core/PlainInput';
+} from "../lib/resolvedModelName";
+import { router } from "../lib/router";
+import { setWorkspaceSearchParams } from "../lib/setWorkspaceSearchParams";
+import { CookieDialog } from "./CookieDialog";
+import { Button } from "./core/Button";
+import { Heading } from "./core/Heading";
+import { Hotkey } from "./core/Hotkey";
+import { HttpMethodTag } from "./core/HttpMethodTag";
+import { Icon } from "./core/Icon";
+import { PlainInput } from "./core/PlainInput";
 
 interface CommandPaletteGroup {
   key: string;
@@ -68,7 +68,7 @@ type CommandPaletteItem = {
 const MAX_PER_GROUP = 8;
 
 export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
-  const [command, setCommand] = useDebouncedState<string>('', 150);
+  const [command, setCommand] = useDebouncedState<string>("", 150);
   const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
   const activeEnvironment = useActiveEnvironment();
   const httpRequestActions = useHttpRequestActions();
@@ -96,79 +96,79 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const commands: CommandPaletteItem[] = [
       {
-        key: 'settings.open',
-        label: 'Open Settings',
-        action: 'settings.show',
+        key: "settings.open",
+        label: "Open Settings",
+        action: "settings.show",
         onSelect: () => openSettings.mutate(null),
       },
       {
-        key: 'app.create',
-        label: 'Create Workspace',
+        key: "app.create",
+        label: "Create Workspace",
         onSelect: createWorkspace,
       },
       {
-        key: 'model.create',
-        label: 'Create HTTP Request',
-        onSelect: () => createRequestAndNavigate({ model: 'http_request', workspaceId }),
+        key: "model.create",
+        label: "Create HTTP Request",
+        onSelect: () => createRequestAndNavigate({ model: "http_request", workspaceId }),
       },
       {
-        key: 'grpc_request.create',
-        label: 'Create GRPC Request',
-        onSelect: () => createRequestAndNavigate({ model: 'grpc_request', workspaceId }),
+        key: "grpc_request.create",
+        label: "Create GRPC Request",
+        onSelect: () => createRequestAndNavigate({ model: "grpc_request", workspaceId }),
       },
       {
-        key: 'websocket_request.create',
-        label: 'Create Websocket Request',
-        onSelect: () => createRequestAndNavigate({ model: 'websocket_request', workspaceId }),
+        key: "websocket_request.create",
+        label: "Create Websocket Request",
+        onSelect: () => createRequestAndNavigate({ model: "websocket_request", workspaceId }),
       },
       {
-        key: 'folder.create',
-        label: 'Create Folder',
+        key: "folder.create",
+        label: "Create Folder",
         onSelect: () => createFolder.mutate({}),
       },
       {
-        key: 'cookies.show',
-        label: 'Show Cookies',
+        key: "cookies.show",
+        label: "Show Cookies",
         onSelect: async () => {
           showDialog({
-            id: 'cookies',
-            title: 'Manage Cookies',
-            size: 'full',
+            id: "cookies",
+            title: "Manage Cookies",
+            size: "full",
             render: () => <CookieDialog cookieJarId={activeCookieJar?.id ?? null} />,
           });
         },
       },
       {
-        key: 'environment.edit',
-        label: 'Edit Environment',
-        action: 'environment_editor.toggle',
+        key: "environment.edit",
+        label: "Edit Environment",
+        action: "environment_editor.toggle",
         onSelect: () => editEnvironment(activeEnvironment),
       },
       {
-        key: 'environment.create',
-        label: 'Create Environment',
+        key: "environment.create",
+        label: "Create Environment",
         onSelect: () => createSubEnvironmentAndActivate.mutate(baseEnvironment),
       },
       {
-        key: 'sidebar.toggle',
-        label: 'Toggle Sidebar',
-        action: 'sidebar.focus',
+        key: "sidebar.toggle",
+        label: "Toggle Sidebar",
+        action: "sidebar.focus",
         onSelect: () => setSidebarHidden((h) => !h),
       },
     ];
 
-    if (activeRequest?.model === 'http_request') {
+    if (activeRequest?.model === "http_request") {
       commands.push({
-        key: 'request.send',
-        action: 'request.send',
-        label: 'Send Request',
+        key: "request.send",
+        action: "request.send",
+        label: "Send Request",
         onSelect: () => sendRequest(activeRequest.id),
       });
       if (appInfo.cliVersion != null) {
         commands.push({
-          key: 'request.copy_cli_send',
+          key: "request.copy_cli_send",
           searchText: `copy cli send yaak request send ${activeRequest.id}`,
-          label: 'Copy CLI Send Command',
+          label: "Copy CLI Send Command",
           onSelect: () => copyToClipboard(`yaak request send ${activeRequest.id}`),
         });
       }
@@ -181,7 +181,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       });
     }
 
-    if (activeRequest?.model === 'grpc_request') {
+    if (activeRequest?.model === "grpc_request") {
       grpcRequestActions.forEach((a, i) => {
         commands.push({
           key: `grpc_request_action.${i}`,
@@ -193,21 +193,21 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     if (activeRequest != null) {
       commands.push({
-        key: 'http_request.rename',
-        label: 'Rename Request',
+        key: "http_request.rename",
+        label: "Rename Request",
         onSelect: () => renameModelWithPrompt(activeRequest),
       });
 
       commands.push({
-        key: 'sidebar.selected.delete',
-        label: 'Delete Request',
+        key: "sidebar.selected.delete",
+        label: "Delete Request",
         onSelect: () => deleteModelWithConfirm(activeRequest),
       });
     }
 
     return commands.sort((a, b) =>
-      ('searchText' in a ? a.searchText : a.label).localeCompare(
-        'searchText' in b ? b.searchText : b.label,
+      ("searchText" in a ? a.searchText : a.label).localeCompare(
+        "searchText" in b ? b.searchText : b.label,
       ),
     );
   }, [
@@ -284,14 +284,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
   const groups = useMemo<CommandPaletteGroup[]>(() => {
     const actionsGroup: CommandPaletteGroup = {
-      key: 'actions',
-      label: 'Actions',
+      key: "actions",
+      label: "Actions",
       items: workspaceCommands,
     };
 
     const requestGroup: CommandPaletteGroup = {
-      key: 'requests',
-      label: 'Switch Request',
+      key: "requests",
+      label: "Switch Request",
       items: [],
     };
 
@@ -305,14 +305,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
             {resolvedModelNameWithFoldersArray(r).map((name, i, all) => (
               <Fragment key={name}>
                 {i !== 0 && <Icon icon="chevron_right" className="opacity-80" />}
-                <div className={classNames(i < all.length - 1 && 'truncate')}>{name}</div>
+                <div className={classNames(i < all.length - 1 && "truncate")}>{name}</div>
               </Fragment>
             ))}
           </div>
         ),
         onSelect: async () => {
           await router.navigate({
-            to: '/workspaces/$workspaceId',
+            to: "/workspaces/$workspaceId",
             params: { workspaceId: r.workspaceId },
             search: (prev) => ({ ...prev, request_id: r.id }),
           });
@@ -321,8 +321,8 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     }
 
     const environmentGroup: CommandPaletteGroup = {
-      key: 'environments',
-      label: 'Switch Environment',
+      key: "environments",
+      label: "Switch Environment",
       items: [],
     };
 
@@ -338,8 +338,8 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     }
 
     const workspaceGroup: CommandPaletteGroup = {
-      key: 'workspaces',
-      label: 'Switch Workspace',
+      key: "workspaces",
+      label: "Switch Workspace",
       items: [],
     };
 
@@ -367,10 +367,10 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       ? fuzzyFilter(
           allItems.map((i) => ({
             ...i,
-            filterBy: 'searchText' in i ? i.searchText : i.label,
+            filterBy: "searchText" in i ? i.searchText : i.label,
           })),
           command,
-          { fields: ['filterBy'] },
+          { fields: ["filterBy"] },
         )
           .sort((a, b) => b.score - a.score)
           .map((v) => v.item)
@@ -408,13 +408,13 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       const index = filteredAllItems.findIndex((v) => v.key === selectedItem?.key);
-      if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
+      if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) {
         const next = filteredAllItems[index + 1] ?? filteredAllItems[0];
         setSelectedItemKey(next?.key ?? null);
-      } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
+      } else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "k")) {
         const prev = filteredAllItems[index - 1] ?? filteredAllItems[filteredAllItems.length - 1];
         setSelectedItemKey(prev?.key ?? null);
-      } else if (e.key === 'Enter') {
+      } else if (e.key === "Enter") {
         const selected = filteredAllItems[index];
         setSelectedItemKey(selected?.key ?? null);
         if (selected) {
@@ -491,10 +491,10 @@ function CommandPaletteItem({
       color="custom"
       justify="start"
       className={classNames(
-        'w-full h-sm flex items-center rounded px-1.5',
-        'hover:text-text',
-        active && 'bg-surface-highlight',
-        !active && 'text-text-subtle',
+        "w-full h-sm flex items-center rounded px-1.5",
+        "hover:text-text",
+        active && "bg-surface-highlight",
+        !active && "text-text-subtle",
       )}
     >
       <span className="truncate">{children}</span>

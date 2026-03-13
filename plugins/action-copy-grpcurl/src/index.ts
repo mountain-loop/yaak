@@ -1,24 +1,24 @@
-import path from 'node:path';
-import type { GrpcRequest, PluginDefinition } from '@yaakapp/api';
+import path from "node:path";
+import type { GrpcRequest, PluginDefinition } from "@yaakapp/api";
 
-const NEWLINE = '\\\n ';
+const NEWLINE = "\\\n ";
 
 export const plugin: PluginDefinition = {
   grpcRequestActions: [
     {
-      label: 'Copy as gRPCurl',
-      icon: 'copy',
+      label: "Copy as gRPCurl",
+      icon: "copy",
       async onSelect(ctx, args) {
         const rendered_request = await ctx.grpcRequest.render({
           grpcRequest: args.grpcRequest,
-          purpose: 'send',
+          purpose: "send",
         });
         const data = await convert(rendered_request, args.protoFiles);
         await ctx.clipboard.copyText(data);
         await ctx.toast.show({
-          message: 'Command copied to clipboard',
-          icon: 'copy',
-          color: 'success',
+          message: "Command copied to clipboard",
+          icon: "copy",
+          color: "success",
         });
       },
     },
@@ -26,14 +26,14 @@ export const plugin: PluginDefinition = {
 };
 
 export async function convert(request: Partial<GrpcRequest>, allProtoFiles: string[]) {
-  const xs = ['grpcurl'];
+  const xs = ["grpcurl"];
 
-  if (request.url?.startsWith('http://')) {
-    xs.push('-plaintext');
+  if (request.url?.startsWith("http://")) {
+    xs.push("-plaintext");
   }
 
-  const protoIncludes = allProtoFiles.filter((f) => !f.endsWith('.proto'));
-  const protoFiles = allProtoFiles.filter((f) => f.endsWith('.proto'));
+  const protoIncludes = allProtoFiles.filter((f) => !f.endsWith(".proto"));
+  const protoFiles = allProtoFiles.filter((f) => f.endsWith(".proto"));
 
   const inferredIncludes = new Set<string>();
   for (const f of protoFiles) {
@@ -41,59 +41,59 @@ export async function convert(request: Partial<GrpcRequest>, allProtoFiles: stri
     if (protoDir) {
       inferredIncludes.add(protoDir);
     } else {
-      inferredIncludes.add(path.posix.join(f, '..'));
-      inferredIncludes.add(path.posix.join(f, '..', '..'));
+      inferredIncludes.add(path.posix.join(f, ".."));
+      inferredIncludes.add(path.posix.join(f, "..", ".."));
     }
   }
 
   for (const f of protoIncludes) {
-    xs.push('-import-path', quote(f));
+    xs.push("-import-path", quote(f));
     xs.push(NEWLINE);
   }
 
   for (const f of inferredIncludes.values()) {
-    xs.push('-import-path', quote(f));
+    xs.push("-import-path", quote(f));
     xs.push(NEWLINE);
   }
 
   for (const f of protoFiles) {
-    xs.push('-proto', quote(f));
+    xs.push("-proto", quote(f));
     xs.push(NEWLINE);
   }
 
   // Add headers
   for (const h of (request.metadata ?? []).filter(onlyEnabled)) {
-    xs.push('-H', quote(`${h.name}: ${h.value}`));
+    xs.push("-H", quote(`${h.name}: ${h.value}`));
     xs.push(NEWLINE);
   }
 
   // Add basic authentication
   if (request.authentication?.disabled !== true) {
-    if (request.authenticationType === 'basic') {
-      const user = request.authentication?.username ?? '';
-      const pass = request.authentication?.password ?? '';
+    if (request.authenticationType === "basic") {
+      const user = request.authentication?.username ?? "";
+      const pass = request.authentication?.password ?? "";
       const encoded = btoa(`${user}:${pass}`);
-      xs.push('-H', quote(`Authorization: Basic ${encoded}`));
+      xs.push("-H", quote(`Authorization: Basic ${encoded}`));
       xs.push(NEWLINE);
-    } else if (request.authenticationType === 'bearer') {
+    } else if (request.authenticationType === "bearer") {
       // Add bearer authentication
-      xs.push('-H', quote(`Authorization: Bearer ${request.authentication?.token ?? ''}`));
+      xs.push("-H", quote(`Authorization: Bearer ${request.authentication?.token ?? ""}`));
       xs.push(NEWLINE);
-    } else if (request.authenticationType === 'apikey') {
-      if (request.authentication?.location === 'query') {
-        const sep = request.url?.includes('?') ? '&' : '?';
+    } else if (request.authenticationType === "apikey") {
+      if (request.authentication?.location === "query") {
+        const sep = request.url?.includes("?") ? "&" : "?";
         request.url = [
           request.url,
           sep,
-          encodeURIComponent(request.authentication?.key ?? 'token'),
-          '=',
-          encodeURIComponent(request.authentication?.value ?? ''),
-        ].join('');
+          encodeURIComponent(request.authentication?.key ?? "token"),
+          "=",
+          encodeURIComponent(request.authentication?.value ?? ""),
+        ].join("");
       } else {
         xs.push(
-          '-H',
+          "-H",
           quote(
-            `${request.authentication?.key ?? 'X-Api-Key'}: ${request.authentication?.value ?? ''}`,
+            `${request.authentication?.key ?? "X-Api-Key"}: ${request.authentication?.value ?? ""}`,
           ),
         );
       }
@@ -103,13 +103,13 @@ export async function convert(request: Partial<GrpcRequest>, allProtoFiles: stri
 
   // Add form params
   if (request.message) {
-    xs.push('-d', quote(request.message));
+    xs.push("-d", quote(request.message));
     xs.push(NEWLINE);
   }
 
   // Add the server address
   if (request.url) {
-    const server = request.url.replace(/^https?:\/\//, ''); // remove protocol
+    const server = request.url.replace(/^https?:\/\//, ""); // remove protocol
     xs.push(server);
     xs.push(NEWLINE);
   }
@@ -125,7 +125,7 @@ export async function convert(request: Partial<GrpcRequest>, allProtoFiles: stri
     xs.splice(xs.length - 1, 1);
   }
 
-  return xs.join(' ');
+  return xs.join(" ");
 }
 
 function quote(arg: string): string {
@@ -141,7 +141,7 @@ function findParentProtoDir(startPath: string): string | null {
   let dir = path.resolve(startPath);
 
   while (true) {
-    if (path.basename(dir) === 'proto') {
+    if (path.basename(dir) === "proto") {
       return dir;
     }
 

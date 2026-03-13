@@ -1,38 +1,38 @@
-import type { GrpcEvent, GrpcRequest } from '@yaakapp-internal/models';
-import { useAtomValue, useSetAtom } from 'jotai';
-import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import type { GrpcEvent, GrpcRequest } from "@yaakapp-internal/models";
+import { useAtomValue, useSetAtom } from "jotai";
+import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   activeGrpcConnectionAtom,
   activeGrpcConnections,
   pinnedGrpcConnectionIdAtom,
   useGrpcEvents,
-} from '../hooks/usePinnedGrpcConnection';
-import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { Button } from './core/Button';
-import { Editor } from './core/Editor/LazyEditor';
-import { EventDetailHeader, EventViewer } from './core/EventViewer';
-import { EventViewerRow } from './core/EventViewerRow';
-import { HotkeyList } from './core/HotkeyList';
-import { Icon, type IconProps } from './core/Icon';
-import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
-import { LoadingIcon } from './core/LoadingIcon';
-import { HStack, VStack } from './core/Stacks';
-import { EmptyStateText } from './EmptyStateText';
-import { ErrorBoundary } from './ErrorBoundary';
-import { RecentGrpcConnectionsDropdown } from './RecentGrpcConnectionsDropdown';
+} from "../hooks/usePinnedGrpcConnection";
+import { useStateWithDeps } from "../hooks/useStateWithDeps";
+import { Button } from "./core/Button";
+import { Editor } from "./core/Editor/LazyEditor";
+import { EventDetailHeader, EventViewer } from "./core/EventViewer";
+import { EventViewerRow } from "./core/EventViewerRow";
+import { HotkeyList } from "./core/HotkeyList";
+import { Icon, type IconProps } from "./core/Icon";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { LoadingIcon } from "./core/LoadingIcon";
+import { HStack, VStack } from "./core/Stacks";
+import { EmptyStateText } from "./EmptyStateText";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { RecentGrpcConnectionsDropdown } from "./RecentGrpcConnectionsDropdown";
 
 interface Props {
   style?: CSSProperties;
   className?: string;
   activeRequest: GrpcRequest;
   methodType:
-    | 'unary'
-    | 'client_streaming'
-    | 'server_streaming'
-    | 'streaming'
-    | 'no-schema'
-    | 'no-method';
+    | "unary"
+    | "client_streaming"
+    | "server_streaming"
+    | "streaming"
+    | "no-schema"
+    | "no-method";
 }
 
 export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
@@ -52,10 +52,10 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
   // Set the active message to the first message received if unary
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (events.length === 0 || activeEvent != null || methodType !== 'unary') {
+    if (events.length === 0 || activeEvent != null || methodType !== "unary") {
       return;
     }
-    const firstServerMessageIndex = events.findIndex((m) => m.eventType === 'server_message');
+    const firstServerMessageIndex = events.findIndex((m) => m.eventType === "server_message");
     if (firstServerMessageIndex !== -1) {
       setActiveEventIndex(firstServerMessageIndex);
     }
@@ -63,7 +63,7 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
 
   if (activeConnection == null) {
     return (
-      <HotkeyList hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']} />
+      <HotkeyList hotkeys={["request.send", "model.create", "sidebar.focus", "url_bar.focus"]} />
     );
   }
 
@@ -71,7 +71,7 @@ export function GrpcResponsePane({ style, methodType, activeRequest }: Props) {
     <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle overflow-x-auto hide-scrollbars">
       <HStack space={2}>
         <span className="whitespace-nowrap">{events.length} Messages</span>
-        {activeConnection.state !== 'closed' && (
+        {activeConnection.state !== "closed" && (
           <LoadingIcon size="sm" className="text-text-subtlest" />
         )}
       </HStack>
@@ -157,8 +157,8 @@ function GrpcEventDetail({
   setShowingLarge: (v: boolean) => void;
   onClose: () => void;
 }) {
-  if (event.eventType === 'client_message' || event.eventType === 'server_message') {
-    const title = `Message ${event.eventType === 'client_message' ? 'Sent' : 'Received'}`;
+  if (event.eventType === "client_message" || event.eventType === "server_message") {
+    const title = `Message ${event.eventType === "client_message" ? "Sent" : "Received"}`;
 
     return (
       <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
@@ -192,7 +192,7 @@ function GrpcEventDetail({
         ) : (
           <Editor
             language="json"
-            defaultValue={event.content ?? ''}
+            defaultValue={event.content ?? ""}
             wrapLines={false}
             readOnly={true}
             stateKey={null}
@@ -214,7 +214,7 @@ function GrpcEventDetail({
       <div className="py-2 h-full">
         {Object.keys(event.metadata).length === 0 ? (
           <EmptyStateText>
-            No {event.eventType === 'connection_end' ? 'trailers' : 'metadata'}
+            No {event.eventType === "connection_end" ? "trailers" : "metadata"}
           </EmptyStateText>
         ) : (
           <KeyValueRows>
@@ -231,20 +231,20 @@ function GrpcEventDetail({
 }
 
 function getEventDisplay(
-  eventType: GrpcEvent['eventType'],
-  status: GrpcEvent['status'],
-): { icon: IconProps['icon']; color: IconProps['color']; title: string } {
-  if (eventType === 'server_message') {
-    return { icon: 'arrow_big_down_dash', color: 'info', title: 'Server message' };
+  eventType: GrpcEvent["eventType"],
+  status: GrpcEvent["status"],
+): { icon: IconProps["icon"]; color: IconProps["color"]; title: string } {
+  if (eventType === "server_message") {
+    return { icon: "arrow_big_down_dash", color: "info", title: "Server message" };
   }
-  if (eventType === 'client_message') {
-    return { icon: 'arrow_big_up_dash', color: 'primary', title: 'Client message' };
+  if (eventType === "client_message") {
+    return { icon: "arrow_big_up_dash", color: "primary", title: "Client message" };
   }
-  if (eventType === 'error' || (status != null && status > 0)) {
-    return { icon: 'alert_triangle', color: 'danger', title: 'Error' };
+  if (eventType === "error" || (status != null && status > 0)) {
+    return { icon: "alert_triangle", color: "danger", title: "Error" };
   }
-  if (eventType === 'connection_end') {
-    return { icon: 'check', color: 'success', title: 'Connection response' };
+  if (eventType === "connection_end") {
+    return { icon: "check", color: "success", title: "Connection response" };
   }
-  return { icon: 'info', color: undefined, title: 'Event' };
+  return { icon: "info", color: undefined, title: "Event" };
 }

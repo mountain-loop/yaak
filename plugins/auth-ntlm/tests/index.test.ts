@@ -1,5 +1,5 @@
-import type { Context } from '@yaakapp/api';
-import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
+import type { Context } from "@yaakapp/api";
+import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 const ntlmMock = vi.hoisted(() => ({
   createType1Message: vi.fn(),
@@ -7,26 +7,26 @@ const ntlmMock = vi.hoisted(() => ({
   createType3Message: vi.fn(),
 }));
 
-vi.mock('httpntlm', () => ({ ntlm: ntlmMock }));
+vi.mock("httpntlm", () => ({ ntlm: ntlmMock }));
 
-import { plugin } from '../src';
+import { plugin } from "../src";
 
-describe('auth-ntlm', () => {
+describe("auth-ntlm", () => {
   beforeEach(() => {
     ntlmMock.createType1Message.mockReset();
     ntlmMock.parseType2Message.mockReset();
     ntlmMock.createType3Message.mockReset();
-    ntlmMock.createType1Message.mockReturnValue('NTLM TYPE1');
+    ntlmMock.createType1Message.mockReturnValue("NTLM TYPE1");
     // oxlint-disable-next-line no-explicit-any
     ntlmMock.parseType2Message.mockReturnValue({} as any);
-    ntlmMock.createType3Message.mockReturnValue('NTLM TYPE3');
+    ntlmMock.createType3Message.mockReturnValue("NTLM TYPE3");
   });
 
-  test('uses NTLM challenge when Negotiate and NTLM headers are separate', async () => {
+  test("uses NTLM challenge when Negotiate and NTLM headers are separate", async () => {
     const send = vi.fn().mockResolvedValue({
       headers: [
-        { name: 'WWW-Authenticate', value: 'Negotiate' },
-        { name: 'WWW-Authenticate', value: 'NTLM TlRMTVNTUAACAAAAAA==' },
+        { name: "WWW-Authenticate", value: "Negotiate" },
+        { name: "WWW-Authenticate", value: "NTLM TlRMTVNTUAACAAAAAA==" },
       ],
     });
     const ctx = { httpRequest: { send } } as unknown as Context;
@@ -34,41 +34,41 @@ describe('auth-ntlm', () => {
     const result = await plugin.authentication?.onApply(ctx, {
       values: {},
       headers: [],
-      url: 'https://example.local/resource',
-      method: 'GET',
-      contextId: 'ctx',
+      url: "https://example.local/resource",
+      method: "GET",
+      contextId: "ctx",
     });
 
     expect(ntlmMock.parseType2Message).toHaveBeenCalledWith(
-      'NTLM TlRMTVNTUAACAAAAAA==',
+      "NTLM TlRMTVNTUAACAAAAAA==",
       expect.any(Function),
     );
-    expect(result).toEqual({ setHeaders: [{ name: 'Authorization', value: 'NTLM TYPE3' }] });
+    expect(result).toEqual({ setHeaders: [{ name: "Authorization", value: "NTLM TYPE3" }] });
   });
 
-  test('uses NTLM challenge when auth schemes are comma-separated in one header', async () => {
+  test("uses NTLM challenge when auth schemes are comma-separated in one header", async () => {
     const send = vi.fn().mockResolvedValue({
-      headers: [{ name: 'www-authenticate', value: 'Negotiate, NTLM TlRMTVNTUAACAAAAAA==' }],
+      headers: [{ name: "www-authenticate", value: "Negotiate, NTLM TlRMTVNTUAACAAAAAA==" }],
     });
     const ctx = { httpRequest: { send } } as unknown as Context;
 
     await plugin.authentication?.onApply(ctx, {
       values: {},
       headers: [],
-      url: 'https://example.local/resource',
-      method: 'GET',
-      contextId: 'ctx',
+      url: "https://example.local/resource",
+      method: "GET",
+      contextId: "ctx",
     });
 
     expect(ntlmMock.parseType2Message).toHaveBeenCalledWith(
-      'NTLM TlRMTVNTUAACAAAAAA==',
+      "NTLM TlRMTVNTUAACAAAAAA==",
       expect.any(Function),
     );
   });
 
-  test('throws a clear error when NTLM challenge is missing', async () => {
+  test("throws a clear error when NTLM challenge is missing", async () => {
     const send = vi.fn().mockResolvedValue({
-      headers: [{ name: 'WWW-Authenticate', value: 'Negotiate' }],
+      headers: [{ name: "WWW-Authenticate", value: "Negotiate" }],
     });
     const ctx = { httpRequest: { send } } as unknown as Context;
 
@@ -76,10 +76,10 @@ describe('auth-ntlm', () => {
       plugin.authentication?.onApply(ctx, {
         values: {},
         headers: [],
-        url: 'https://example.local/resource',
-        method: 'GET',
-        contextId: 'ctx',
+        url: "https://example.local/resource",
+        method: "GET",
+        contextId: "ctx",
       }),
-    ).rejects.toThrow('Unable to find NTLM challenge in WWW-Authenticate response headers');
+    ).rejects.toThrow("Unable to find NTLM challenge in WWW-Authenticate response headers");
   });
 });

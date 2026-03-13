@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-xml",
   "displayName": "XML Template Functions",
-  "description": "Template functions for working with XML data",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for working with XML data",
   "main": "build/index.js",
   "types": "src/index.ts",
   "scripts": {

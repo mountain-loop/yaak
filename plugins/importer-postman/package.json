@@ -1,9 +1,9 @@
 {
   "name": "@yaak/importer-postman",
   "displayName": "Postman Importer",
-  "description": "Import collections from Postman",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Import collections from Postman",
   "main": "./build/index.js",
   "scripts": {
     "build": "yaakcli build",

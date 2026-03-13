@@ -1,28 +1,28 @@
-import type { WebsocketEvent, WebsocketRequest } from '@yaakapp-internal/models';
-import { hexy } from 'hexy';
-import { useAtomValue } from 'jotai';
-import { useMemo, useState } from 'react';
-import { useFormatText } from '../hooks/useFormatText';
+import type { WebsocketEvent, WebsocketRequest } from "@yaakapp-internal/models";
+import { hexy } from "hexy";
+import { useAtomValue } from "jotai";
+import { useMemo, useState } from "react";
+import { useFormatText } from "../hooks/useFormatText";
 import {
   activeWebsocketConnectionAtom,
   activeWebsocketConnectionsAtom,
   setPinnedWebsocketConnectionId,
   useWebsocketEvents,
-} from '../hooks/usePinnedWebsocketConnection';
-import { useStateWithDeps } from '../hooks/useStateWithDeps';
-import { languageFromContentType } from '../lib/contentType';
-import { Button } from './core/Button';
-import { Editor } from './core/Editor/LazyEditor';
-import { type EventDetailAction, EventDetailHeader, EventViewer } from './core/EventViewer';
-import { EventViewerRow } from './core/EventViewerRow';
-import { HotkeyList } from './core/HotkeyList';
-import { Icon } from './core/Icon';
-import { LoadingIcon } from './core/LoadingIcon';
-import { HStack, VStack } from './core/Stacks';
-import { WebsocketStatusTag } from './core/WebsocketStatusTag';
-import { EmptyStateText } from './EmptyStateText';
-import { ErrorBoundary } from './ErrorBoundary';
-import { RecentWebsocketConnectionsDropdown } from './RecentWebsocketConnectionsDropdown';
+} from "../hooks/usePinnedWebsocketConnection";
+import { useStateWithDeps } from "../hooks/useStateWithDeps";
+import { languageFromContentType } from "../lib/contentType";
+import { Button } from "./core/Button";
+import { Editor } from "./core/Editor/LazyEditor";
+import { type EventDetailAction, EventDetailHeader, EventViewer } from "./core/EventViewer";
+import { EventViewerRow } from "./core/EventViewerRow";
+import { HotkeyList } from "./core/HotkeyList";
+import { Icon } from "./core/Icon";
+import { LoadingIcon } from "./core/LoadingIcon";
+import { HStack, VStack } from "./core/Stacks";
+import { WebsocketStatusTag } from "./core/WebsocketStatusTag";
+import { EmptyStateText } from "./EmptyStateText";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { RecentWebsocketConnectionsDropdown } from "./RecentWebsocketConnectionsDropdown";
 
 interface Props {
   activeRequest: WebsocketRequest;
@@ -39,14 +39,14 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
 
   if (activeConnection == null) {
     return (
-      <HotkeyList hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']} />
+      <HotkeyList hotkeys={["request.send", "model.create", "sidebar.focus", "url_bar.focus"]} />
     );
   }
 
   const header = (
     <HStack className="pl-3 mb-1 font-mono text-sm text-text-subtle">
       <HStack space={2}>
-        {activeConnection.state !== 'closed' && (
+        {activeConnection.state !== "closed" && (
           <LoadingIcon size="sm" className="text-text-subtlest" />
         )}
         <WebsocketStatusTag connection={activeConnection} />
@@ -78,7 +78,7 @@ export function WebsocketResponsePane({ activeRequest }: Props) {
         renderDetail={({ event, index, onClose }) => (
           <WebsocketEventDetail
             event={event}
-            hexDump={hexDumps[index] ?? event.messageType === 'binary'}
+            hexDump={hexDumps[index] ?? event.messageType === "binary"}
             setHexDump={(v) => setHexDumps({ ...hexDumps, [index]: v })}
             showLarge={showLarge}
             showingLarge={showingLarge}
@@ -103,25 +103,25 @@ function WebsocketEventRow({
 }) {
   const { message: messageBytes, isServer, messageType } = event;
   const message = messageBytes
-    ? new TextDecoder('utf-8').decode(Uint8Array.from(messageBytes))
-    : '';
+    ? new TextDecoder("utf-8").decode(Uint8Array.from(messageBytes))
+    : "";
 
   const iconColor =
-    messageType === 'close' || messageType === 'open' ? 'secondary' : isServer ? 'info' : 'primary';
+    messageType === "close" || messageType === "open" ? "secondary" : isServer ? "info" : "primary";
 
   const icon =
-    messageType === 'close' || messageType === 'open'
-      ? 'info'
+    messageType === "close" || messageType === "open"
+      ? "info"
       : isServer
-        ? 'arrow_big_down_dash'
-        : 'arrow_big_up_dash';
+        ? "arrow_big_down_dash"
+        : "arrow_big_up_dash";
 
   const content =
-    messageType === 'close' ? (
-      'Disconnected from server'
-    ) : messageType === 'open' ? (
-      'Connected to server'
-    ) : message === '' ? (
+    messageType === "close" ? (
+      "Disconnected from server"
+    ) : messageType === "open" ? (
+      "Connected to server"
+    ) : message === "" ? (
       <em className="italic text-text-subtlest">No content</em>
     ) : (
       <span className="text-xs">{message.slice(0, 1000)}</span>
@@ -159,27 +159,27 @@ function WebsocketEventDetail({
 }) {
   const message = useMemo(() => {
     if (hexDump) {
-      return event.message ? hexy(event.message) : '';
+      return event.message ? hexy(event.message) : "";
     }
-    return event.message ? new TextDecoder('utf-8').decode(Uint8Array.from(event.message)) : '';
+    return event.message ? new TextDecoder("utf-8").decode(Uint8Array.from(event.message)) : "";
   }, [event.message, hexDump]);
 
   const language = languageFromContentType(null, message);
   const formattedMessage = useFormatText({ language, text: message, pretty: true });
 
   const title =
-    event.messageType === 'close'
-      ? 'Connection Closed'
-      : event.messageType === 'open'
-        ? 'Connection Open'
-        : `Message ${event.isServer ? 'Received' : 'Sent'}`;
+    event.messageType === "close"
+      ? "Connection Closed"
+      : event.messageType === "open"
+        ? "Connection Open"
+        : `Message ${event.isServer ? "Received" : "Sent"}`;
 
   const actions: EventDetailAction[] =
-    message !== ''
+    message !== ""
       ? [
           {
-            key: 'toggle-hexdump',
-            label: hexDump ? 'Show Message' : 'Show Hexdump',
+            key: "toggle-hexdump",
+            label: hexDump ? "Show Message" : "Show Hexdump",
             onClick: () => setHexDump(!hexDump),
           },
         ]
@@ -220,7 +220,7 @@ function WebsocketEventDetail({
       ) : (
         <Editor
           language={language}
-          defaultValue={formattedMessage ?? ''}
+          defaultValue={formattedMessage ?? ""}
           wrapLines={false}
           readOnly={true}
           stateKey={null}

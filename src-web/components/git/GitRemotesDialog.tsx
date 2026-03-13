@@ -1,10 +1,10 @@
-import { useGit } from '@yaakapp-internal/git';
-import { showDialog } from '../../lib/dialog';
-import { Button } from '../core/Button';
-import { IconButton } from '../core/IconButton';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
-import { gitCallbacks } from './callbacks';
-import { addGitRemote } from './showAddRemoteDialog';
+import { useGit } from "@yaakapp-internal/git";
+import { showDialog } from "../../lib/dialog";
+import { Button } from "../core/Button";
+import { IconButton } from "../core/IconButton";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../core/Table";
+import { gitCallbacks } from "./callbacks";
+import { addGitRemote } from "./showAddRemoteDialog";
 
 interface Props {
   dir: string;
@@ -57,9 +57,9 @@ export function GitRemotesDialog({ dir }: Props) {
 
 GitRemotesDialog.show = (dir: string) => {
   showDialog({
-    id: 'git-remotes',
-    title: 'Manage Remotes',
-    size: 'md',
+    id: "git-remotes",
+    title: "Manage Remotes",
+    size: "md",
     render: ({ hide }) => <GitRemotesDialog onDone={hide} dir={dir} />,
   });
 };

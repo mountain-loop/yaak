@@ -1,20 +1,20 @@
-import deepEqual from '@gilbarbara/deep-equal';
-import { useMutation } from '@tanstack/react-query';
-import { keyValuesAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { selectAtom } from 'jotai/utils';
-import { useCallback, useMemo } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from '../lib/keyValueStore';
+import deepEqual from "@gilbarbara/deep-equal";
+import { useMutation } from "@tanstack/react-query";
+import { keyValuesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { selectAtom } from "jotai/utils";
+import { useCallback, useMemo } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { buildKeyValueKey, extractKeyValueOrFallback, setKeyValue } from "../lib/keyValueStore";
 
-const DEFAULT_NAMESPACE = 'global';
+const DEFAULT_NAMESPACE = "global";
 
 export function useKeyValue<T extends object | boolean | number | string | null>({
   namespace = DEFAULT_NAMESPACE,
   key,
   fallback,
 }: {
-  namespace?: 'global' | 'no_sync' | 'license';
+  namespace?: "global" | "no_sync" | "license";
   key: string | string[];
   fallback: T;
 }) {
@@ -38,14 +38,14 @@ export function useKeyValue<T extends object | boolean | number | string | null>
   );
 
   const { mutateAsync } = useMutation<void, unknown, T>({
-    mutationKey: ['set_key_value', namespace, key],
+    mutationKey: ["set_key_value", namespace, key],
     mutationFn: (value) => setKeyValue<T>({ namespace, key, value }),
   });
 
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   const set = useCallback(
     async (valueOrUpdate: ((v: T) => T) | T) => {
-      if (typeof valueOrUpdate === 'function') {
+      if (typeof valueOrUpdate === "function") {
         const newV = valueOrUpdate(value ?? fallback);
         if (newV === value) return;
         await mutateAsync(newV);
@@ -55,7 +55,7 @@ export function useKeyValue<T extends object | boolean | number | string | null>
         await mutateAsync(valueOrUpdate);
       }
     },
-    [typeof key === 'string' ? key : key.join('::'), namespace, value],
+    [typeof key === "string" ? key : key.join("::"), namespace, value],
   );
 
   const reset = useCallback(async () => mutateAsync(fallback), [fallback, mutateAsync]);
@@ -76,7 +76,7 @@ export function getKeyValue<T extends object | boolean | number | string | null>
   key,
   fallback,
 }: {
-  namespace?: 'global' | 'no_sync' | 'license';
+  namespace?: "global" | "no_sync" | "license";
   key: string | string[];
   fallback: T;
 }) {

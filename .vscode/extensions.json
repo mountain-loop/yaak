@@ -1,3 +1,7 @@
 {
-  "recommendations": ["rust-lang.rust-analyzer", "bradlc.vscode-tailwindcss", "VoidZero.vite-plus-extension-pack"]
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "bradlc.vscode-tailwindcss",
+    "VoidZero.vite-plus-extension-pack"
+  ]
 }

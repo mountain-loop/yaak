@@ -1,8 +1,8 @@
-import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
-import { autocompletion, startCompletion } from '@codemirror/autocomplete';
-import { LanguageSupport, LRLanguage, syntaxTree } from '@codemirror/language';
-import type { SyntaxNode } from '@lezer/common';
-import { parser } from './filter';
+import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
+import { autocompletion, startCompletion } from "@codemirror/autocomplete";
+import { LanguageSupport, LRLanguage, syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
+import { parser } from "./filter";
 
 export interface FieldDef {
   name: string;
@@ -43,7 +43,7 @@ function inPhrase(ctx: CompletionContext): boolean {
   // Lezer node names from your grammar: Phrase is the quoted token
   let n: SyntaxNode | null = syntaxTree(ctx.state).resolveInner(ctx.pos, -1);
   while (n) {
-    if (n.name === 'Phrase') return true;
+    if (n.name === "Phrase") return true;
     n = n.parent;
   }
   return false;
@@ -53,7 +53,7 @@ function inPhrase(ctx: CompletionContext): boolean {
 function inUnclosedQuote(doc: string, pos: number): boolean {
   let quotes = 0;
   for (let i = 0; i < pos; i++) {
-    if (doc[i] === '"' && doc[i - 1] !== '\\') quotes++;
+    if (doc[i] === '"' && doc[i - 1] !== "\\") quotes++;
   }
   return quotes % 2 === 1; // odd = inside an open quote
 }
@@ -64,13 +64,13 @@ function inUnclosedQuote(doc: string, pos: number): boolean {
  * - Otherwise, we're in a field name or bare term position.
  */
 function contextInfo(stateDoc: string, pos: number) {
-  const lastColon = stateDoc.lastIndexOf(':', pos - 1);
+  const lastColon = stateDoc.lastIndexOf(":", pos - 1);
   const lastBoundary = Math.max(
-    stateDoc.lastIndexOf(' ', pos - 1),
-    stateDoc.lastIndexOf('\t', pos - 1),
-    stateDoc.lastIndexOf('\n', pos - 1),
-    stateDoc.lastIndexOf('(', pos - 1),
-    stateDoc.lastIndexOf(')', pos - 1),
+    stateDoc.lastIndexOf(" ", pos - 1),
+    stateDoc.lastIndexOf("\t", pos - 1),
+    stateDoc.lastIndexOf("\n", pos - 1),
+    stateDoc.lastIndexOf("(", pos - 1),
+    stateDoc.lastIndexOf(")", pos - 1),
   );
 
   const inValue = lastColon > lastBoundary;
@@ -96,7 +96,7 @@ function contextInfo(stateDoc: string, pos: number) {
 function fieldNameCompletions(fieldNames: string[]): Completion[] {
   return fieldNames.map((name) => ({
     label: name,
-    type: 'property',
+    type: "property",
     apply: (view, _completion, from, to) => {
       // Insert "name:" (leave cursor right after colon)
       view.dispatch({
@@ -117,7 +117,7 @@ function fieldValueCompletions(
   return vals.map((v) => ({
     label: v.match(IDENT_ONLY) ? v : `"${v}"`,
     displayLabel: v,
-    type: 'constant',
+    type: "constant",
   }));
 }
 
@@ -169,7 +169,7 @@ function makeCompletionSource(opts: FilterOptions) {
 }
 
 const language = LRLanguage.define({
-  name: 'filter',
+  name: "filter",
   parser,
   languageData: {
     autocompletion: {},

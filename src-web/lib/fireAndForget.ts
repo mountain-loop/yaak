@@ -1,4 +1,4 @@
-import { showErrorToast } from './toast';
+import { showErrorToast } from "./toast";
 
 /**
  * Handles a fire-and-forget promise by catching and reporting errors
@@ -6,10 +6,10 @@ import { showErrorToast } from './toast';
  */
 export function fireAndForget(promise: Promise<unknown>) {
   promise.catch((err: unknown) => {
-    console.error('Unhandled async error:', err);
+    console.error("Unhandled async error:", err);
     showErrorToast({
-      id: 'async-error',
-      title: 'Unexpected Error',
+      id: "async-error",
+      title: "Unexpected Error",
       message: err instanceof Error ? err.message : String(err),
     });
   });

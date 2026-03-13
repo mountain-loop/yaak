@@ -1,16 +1,16 @@
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { type ReactNode, useMemo } from 'react';
-import { useSaveResponse } from '../hooks/useSaveResponse';
-import { useToggle } from '../hooks/useToggle';
-import { isProbablyTextContentType } from '../lib/contentType';
-import { getContentTypeFromHeaders } from '../lib/model_util';
-import { getResponseBodyText } from '../lib/responseBody';
-import { CopyButton } from './CopyButton';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
-import { SizeTag } from './core/SizeTag';
-import { HStack } from './core/Stacks';
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { type ReactNode, useMemo } from "react";
+import { useSaveResponse } from "../hooks/useSaveResponse";
+import { useToggle } from "../hooks/useToggle";
+import { isProbablyTextContentType } from "../lib/contentType";
+import { getContentTypeFromHeaders } from "../lib/model_util";
+import { getResponseBodyText } from "../lib/responseBody";
+import { CopyButton } from "./CopyButton";
+import { Banner } from "./core/Banner";
+import { Button } from "./core/Button";
+import { InlineCode } from "./core/InlineCode";
+import { SizeTag } from "./core/SizeTag";
+import { HStack } from "./core/Stacks";
 
 interface Props {
   children: ReactNode;
@@ -33,10 +33,10 @@ export function ConfirmLargeResponse({ children, response }: Props) {
     return (
       <Banner color="primary" className="flex flex-col gap-3">
         <p>
-          Showing responses over{' '}
+          Showing responses over{" "}
           <InlineCode>
             <SizeTag contentLength={LARGE_BYTES} />
-          </InlineCode>{' '}
+          </InlineCode>{" "}
           may impact performance
         </p>
         <HStack wrap space={2}>

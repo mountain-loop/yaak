@@ -1,5 +1,5 @@
-import type { DependencyList } from 'react';
-import { useEffect, useState } from 'react';
+import type { DependencyList } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Like useState, except it will update the value when the default value changes

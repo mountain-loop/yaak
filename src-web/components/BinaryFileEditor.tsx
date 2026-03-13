@@ -1,17 +1,17 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import mime from 'mime';
-import { useKeyValue } from '../hooks/useKeyValue';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { InlineCode } from './core/InlineCode';
-import { HStack, VStack } from './core/Stacks';
-import { SelectFile } from './SelectFile';
+import type { HttpRequest } from "@yaakapp-internal/models";
+import mime from "mime";
+import { useKeyValue } from "../hooks/useKeyValue";
+import { Banner } from "./core/Banner";
+import { Button } from "./core/Button";
+import { InlineCode } from "./core/InlineCode";
+import { HStack, VStack } from "./core/Stacks";
+import { SelectFile } from "./SelectFile";
 
 type Props = {
   requestId: string;
   contentType: string | null;
-  body: HttpRequest['body'];
-  onChange: (body: HttpRequest['body']) => void;
+  body: HttpRequest["body"];
+  onChange: (body: HttpRequest["body"]) => void;
   onChangeContentType: (contentType: string | null) => void;
 };
 
@@ -23,8 +23,8 @@ export function BinaryFileEditor({
   requestId,
 }: Props) {
   const ignoreContentType = useKeyValue<boolean>({
-    namespace: 'global',
-    key: ['ignore_content_type', requestId],
+    namespace: "global",
+    key: ["ignore_content_type", requestId],
     fallback: false,
   });
 
@@ -33,8 +33,8 @@ export function BinaryFileEditor({
     onChange({ filePath: filePath ?? undefined });
   };
 
-  const filePath = typeof body.filePath === 'string' ? body.filePath : null;
-  const mimeType = mime.getType(filePath ?? '') ?? 'application/octet-stream';
+  const filePath = typeof body.filePath === "string" ? body.filePath : null;
+  const mimeType = mime.getType(filePath ?? "") ?? "application/octet-stream";
 
   return (
     <VStack space={2}>

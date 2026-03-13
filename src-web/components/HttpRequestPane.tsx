@@ -1,24 +1,24 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { patchModel } from '@yaakapp-internal/models';
-import type { GenericCompletionOption } from '@yaakapp-internal/plugins';
-import classNames from 'classnames';
-import { atom, useAtomValue } from 'jotai';
-import type { CSSProperties } from 'react';
-import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
-import { activeRequestIdAtom } from '../hooks/useActiveRequestId';
-import { allRequestsAtom } from '../hooks/useAllRequests';
-import { useAuthTab } from '../hooks/useAuthTab';
-import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { useHeadersTab } from '../hooks/useHeadersTab';
-import { useImportCurl } from '../hooks/useImportCurl';
-import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
-import { useRequestEditor, useRequestEditorEvent } from '../hooks/useRequestEditor';
-import { useRequestUpdateKey } from '../hooks/useRequestUpdateKey';
-import { useSendAnyHttpRequest } from '../hooks/useSendAnyHttpRequest';
-import { deepEqualAtom } from '../lib/atoms';
-import { languageFromContentType } from '../lib/contentType';
-import { generateId } from '../lib/generateId';
+import type { HttpRequest } from "@yaakapp-internal/models";
+import { patchModel } from "@yaakapp-internal/models";
+import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import classNames from "classnames";
+import { atom, useAtomValue } from "jotai";
+import type { CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { activeRequestIdAtom } from "../hooks/useActiveRequestId";
+import { allRequestsAtom } from "../hooks/useAllRequests";
+import { useAuthTab } from "../hooks/useAuthTab";
+import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
+import { useHeadersTab } from "../hooks/useHeadersTab";
+import { useImportCurl } from "../hooks/useImportCurl";
+import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
+import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
+import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
+import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
+import { useSendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
+import { deepEqualAtom } from "../lib/atoms";
+import { languageFromContentType } from "../lib/contentType";
+import { generateId } from "../lib/generateId";
 import {
   BODY_TYPE_BINARY,
   BODY_TYPE_FORM_MULTIPART,
@@ -29,33 +29,33 @@ import {
   BODY_TYPE_OTHER,
   BODY_TYPE_XML,
   getContentTypeFromHeaders,
-} from '../lib/model_util';
-import { prepareImportQuerystring } from '../lib/prepareImportQuerystring';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { showToast } from '../lib/toast';
-import { BinaryFileEditor } from './BinaryFileEditor';
-import { ConfirmLargeRequestBody } from './ConfirmLargeRequestBody';
-import { CountBadge } from './core/CountBadge';
-import type { GenericCompletionConfig } from './core/Editor/genericCompletion';
-import { Editor } from './core/Editor/LazyEditor';
-import { InlineCode } from './core/InlineCode';
-import type { Pair } from './core/PairEditor';
-import { PlainInput } from './core/PlainInput';
-import type { TabItem, TabsRef } from './core/Tabs/Tabs';
-import { setActiveTab, TabContent, Tabs } from './core/Tabs/Tabs';
-import { EmptyStateText } from './EmptyStateText';
-import { FormMultipartEditor } from './FormMultipartEditor';
-import { FormUrlencodedEditor } from './FormUrlencodedEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { JsonBodyEditor } from './JsonBodyEditor';
-import { MarkdownEditor } from './MarkdownEditor';
-import { RequestMethodDropdown } from './RequestMethodDropdown';
-import { UrlBar } from './UrlBar';
-import { UrlParametersEditor } from './UrlParameterEditor';
+} from "../lib/model_util";
+import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { showToast } from "../lib/toast";
+import { BinaryFileEditor } from "./BinaryFileEditor";
+import { ConfirmLargeRequestBody } from "./ConfirmLargeRequestBody";
+import { CountBadge } from "./core/CountBadge";
+import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import { Editor } from "./core/Editor/LazyEditor";
+import { InlineCode } from "./core/InlineCode";
+import type { Pair } from "./core/PairEditor";
+import { PlainInput } from "./core/PlainInput";
+import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
+import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
+import { EmptyStateText } from "./EmptyStateText";
+import { FormMultipartEditor } from "./FormMultipartEditor";
+import { FormUrlencodedEditor } from "./FormUrlencodedEditor";
+import { HeadersEditor } from "./HeadersEditor";
+import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
+import { JsonBodyEditor } from "./JsonBodyEditor";
+import { MarkdownEditor } from "./MarkdownEditor";
+import { RequestMethodDropdown } from "./RequestMethodDropdown";
+import { UrlBar } from "./UrlBar";
+import { UrlParametersEditor } from "./UrlParameterEditor";
 
 const GraphQLEditor = lazy(() =>
-  import('./graphql/GraphQLEditor').then((m) => ({ default: m.GraphQLEditor })),
+  import("./graphql/GraphQLEditor").then((m) => ({ default: m.GraphQLEditor })),
 );
 
 interface Props {
@@ -65,19 +65,19 @@ interface Props {
   activeRequest: HttpRequest;
 }
 
-const TAB_BODY = 'body';
-const TAB_PARAMS = 'params';
-const TAB_HEADERS = 'headers';
-const TAB_AUTH = 'auth';
-const TAB_DESCRIPTION = 'description';
-const TABS_STORAGE_KEY = 'http_request_tabs';
+const TAB_BODY = "body";
+const TAB_PARAMS = "params";
+const TAB_HEADERS = "headers";
+const TAB_AUTH = "auth";
+const TAB_DESCRIPTION = "description";
+const TABS_STORAGE_KEY = "http_request_tabs";
 
 const nonActiveRequestUrlsAtom = atom((get) => {
   const activeRequestId = get(activeRequestIdAtom);
   const requests = get(allRequestsAtom);
   return requests
     .filter((r) => r.id !== activeRequestId)
-    .map((r): GenericCompletionOption => ({ type: 'constant', label: r.url }));
+    .map((r): GenericCompletionOption => ({ type: "constant", label: r.url }));
 });
 
 const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
@@ -94,22 +94,26 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const inheritedHeaders = useInheritedHeaders(activeRequest);
 
   // Listen for event to focus the params tab (e.g., when clicking a :param in the URL)
-  useRequestEditorEvent('request_pane.focus_tab', () => {
-    tabsRef.current?.setActiveTab(TAB_PARAMS);
-  }, []);
+  useRequestEditorEvent(
+    "request_pane.focus_tab",
+    () => {
+      tabsRef.current?.setActiveTab(TAB_PARAMS);
+    },
+    [],
+  );
 
   const handleContentTypeChange = useCallback(
-    async (contentType: string | null, patch: Partial<Omit<HttpRequest, 'headers'>> = {}) => {
+    async (contentType: string | null, patch: Partial<Omit<HttpRequest, "headers">> = {}) => {
       if (activeRequest == null) {
-        console.error('Failed to get active request to update', activeRequest);
+        console.error("Failed to get active request to update", activeRequest);
         return;
       }
 
-      const headers = activeRequest.headers.filter((h) => h.name.toLowerCase() !== 'content-type');
+      const headers = activeRequest.headers.filter((h) => h.name.toLowerCase() !== "content-type");
 
       if (contentType != null) {
         headers.push({
-          name: 'Content-Type',
+          name: "Content-Type",
           value: contentType,
           enabled: true,
           id: generateId(),
@@ -125,7 +129,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
     const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
-      (m) => m[1] ?? '',
+      (m) => m[1] ?? "",
     );
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
@@ -134,10 +138,10 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       if (item) {
         item.readOnlyName = true;
       } else {
-        items.push({ name, value: '', enabled: true, readOnlyName: true, id: generateId() });
+        items.push({ name, value: "", enabled: true, readOnlyName: true, id: generateId() });
       }
     }
-    return { urlParameterPairs: items, urlParametersKey: placeholderNames.join(',') };
+    return { urlParameterPairs: items, urlParametersKey: placeholderNames.join(",") };
   }, [activeRequest.url, activeRequest.urlParameters]);
 
   let numParams = 0;
@@ -158,21 +162,21 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         options: {
           value: activeRequest.bodyType,
           items: [
-            { type: 'separator', label: 'Form Data' },
-            { label: 'Url Encoded', value: BODY_TYPE_FORM_URLENCODED },
-            { label: 'Multi-Part', value: BODY_TYPE_FORM_MULTIPART },
-            { type: 'separator', label: 'Text Content' },
-            { label: 'GraphQL', value: BODY_TYPE_GRAPHQL },
-            { label: 'JSON', value: BODY_TYPE_JSON },
-            { label: 'XML', value: BODY_TYPE_XML },
+            { type: "separator", label: "Form Data" },
+            { label: "Url Encoded", value: BODY_TYPE_FORM_URLENCODED },
+            { label: "Multi-Part", value: BODY_TYPE_FORM_MULTIPART },
+            { type: "separator", label: "Text Content" },
+            { label: "GraphQL", value: BODY_TYPE_GRAPHQL },
+            { label: "JSON", value: BODY_TYPE_JSON },
+            { label: "XML", value: BODY_TYPE_XML },
             {
-              label: 'Other',
+              label: "Other",
               value: BODY_TYPE_OTHER,
-              shortLabel: nameOfContentTypeOr(contentType, 'Other'),
+              shortLabel: nameOfContentTypeOr(contentType, "Other"),
             },
-            { type: 'separator', label: 'Other' },
-            { label: 'Binary File', value: BODY_TYPE_BINARY },
-            { label: 'No Body', shortLabel: 'Body', value: BODY_TYPE_NONE },
+            { type: "separator", label: "Other" },
+            { label: "Binary File", value: BODY_TYPE_BINARY },
+            { label: "No Body", shortLabel: "Body", value: BODY_TYPE_NONE },
           ],
           onChange: async (bodyType) => {
             if (bodyType === activeRequest.bodyType) return;
@@ -180,7 +184,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             const showMethodToast = (newMethod: string) => {
               if (activeRequest.method.toLowerCase() === newMethod.toLowerCase()) return;
               showToast({
-                id: 'switched-method',
+                id: "switched-method",
                 message: (
                   <>
                     Request method switched to <InlineCode>POST</InlineCode>
@@ -202,16 +206,16 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             ) {
               const isDefaultishRequest =
                 activeRequest.bodyType === BODY_TYPE_NONE &&
-                activeRequest.method.toLowerCase() === 'get';
+                activeRequest.method.toLowerCase() === "get";
               const requiresPost = bodyType === BODY_TYPE_FORM_MULTIPART;
               if (isDefaultishRequest || requiresPost) {
-                patch.method = 'POST';
+                patch.method = "POST";
                 showMethodToast(patch.method);
               }
-              newContentType = bodyType === BODY_TYPE_OTHER ? 'text/plain' : bodyType;
+              newContentType = bodyType === BODY_TYPE_OTHER ? "text/plain" : bodyType;
             } else if (bodyType === BODY_TYPE_GRAPHQL) {
-              patch.method = 'POST';
-              newContentType = 'application/json';
+              patch.method = "POST";
+              newContentType = "application/json";
               showMethodToast(patch.method);
             }
 
@@ -226,13 +230,13 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       {
         value: TAB_PARAMS,
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
-        label: 'Params',
+        label: "Params",
       },
       ...headersTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
-        label: 'Info',
+        label: "Info",
       },
     ],
     [
@@ -253,7 +257,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const { mutate: importCurl } = useImportCurl();
 
   const handleBodyChange = useCallback(
-    (body: HttpRequest['body']) => patchModel(activeRequest, { body }),
+    (body: HttpRequest["body"]) => patchModel(activeRequest, { body }),
     [activeRequest],
   );
 
@@ -271,8 +275,8 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         autocompleteUrls.length > 0
           ? autocompleteUrls
           : [
-              { label: 'http://', type: 'constant' },
-              { label: 'https://', type: 'constant' },
+              { label: "http://", type: "constant" },
+              { label: "https://", type: "constant" },
             ],
     }),
     [autocompleteUrls],
@@ -280,7 +284,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
 
   const handlePaste = useCallback(
     async (e: ClipboardEvent, text: string) => {
-      if (text.startsWith('curl ')) {
+      if (text.startsWith("curl ")) {
         importCurl({ overwriteRequestId: activeRequestId, command: text });
       } else {
         const patch = prepareImportQuerystring(text);
@@ -318,7 +322,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   return (
     <div
       style={style}
-      className={classNames(className, 'h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1')}
+      className={classNames(className, "h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1")}
     >
       {activeRequest && (
         <>
@@ -338,7 +342,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               </div>
             }
             forceUpdateKey={updateKey}
-            isLoading={activeResponse != null && activeResponse.state !== 'closed'}
+            isLoading={activeResponse != null && activeResponse.state !== "closed"}
           />
           <Tabs
             ref={tabsRef}
@@ -373,7 +377,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 {activeRequest.bodyType === BODY_TYPE_JSON ? (
                   <JsonBodyEditor
                     forceUpdateKey={forceUpdateKey}
-                    heightMode={fullHeight ? 'full' : 'auto'}
+                    heightMode={fullHeight ? "full" : "auto"}
                     request={activeRequest}
                   />
                 ) : activeRequest.bodyType === BODY_TYPE_XML ? (
@@ -382,8 +386,8 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                     autocompleteFunctions
                     autocompleteVariables
                     placeholder="..."
-                    heightMode={fullHeight ? 'full' : 'auto'}
-                    defaultValue={`${activeRequest.body?.text ?? ''}`}
+                    heightMode={fullHeight ? "full" : "auto"}
+                    defaultValue={`${activeRequest.body?.text ?? ""}`}
                     language="xml"
                     onChange={handleBodyTextChange}
                     stateKey={`xml.${activeRequest.id}`}
@@ -417,15 +421,15 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                     onChange={(body) => patchModel(activeRequest, { body })}
                     onChangeContentType={handleContentTypeChange}
                   />
-                ) : typeof activeRequest.bodyType === 'string' ? (
+                ) : typeof activeRequest.bodyType === "string" ? (
                   <Editor
                     forceUpdateKey={forceUpdateKey}
                     autocompleteFunctions
                     autocompleteVariables
                     language={languageFromContentType(contentType)}
                     placeholder="..."
-                    heightMode={fullHeight ? 'full' : 'auto'}
-                    defaultValue={`${activeRequest.body?.text ?? ''}`}
+                    heightMode={fullHeight ? "full" : "auto"}
+                    defaultValue={`${activeRequest.body?.text ?? ""}`}
                     onChange={handleBodyTextChange}
                     stateKey={`other.${activeRequest.id}`}
                   />
@@ -465,8 +469,8 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
 
 function nameOfContentTypeOr(contentType: string | null, fallback: string) {
   const language = languageFromContentType(contentType);
-  if (language === 'markdown') {
-    return 'Markdown';
+  if (language === "markdown") {
+    return "Markdown";
   }
   return fallback;
 }

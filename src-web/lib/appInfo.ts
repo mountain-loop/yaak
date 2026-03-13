@@ -1,5 +1,5 @@
-import { getIdentifier } from '@tauri-apps/api/app';
-import { invokeCmd } from './tauri';
+import { getIdentifier } from "@tauri-apps/api/app";
+import { invokeCmd } from "./tauri";
 
 export interface AppInfo {
   isDev: boolean;
@@ -16,8 +16,8 @@ export interface AppInfo {
 }
 
 export const appInfo = {
-  ...(await invokeCmd('cmd_metadata')),
+  ...(await invokeCmd("cmd_metadata")),
   identifier: await getIdentifier(),
 } as AppInfo;
 
-console.log('App info', appInfo);
+console.log("App info", appInfo);

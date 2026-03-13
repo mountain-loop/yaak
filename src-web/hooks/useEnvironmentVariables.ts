@@ -1,13 +1,13 @@
-import type { Environment, EnvironmentVariable } from '@yaakapp-internal/models';
-import { foldersAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useMemo } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { isBaseEnvironment, isFolderEnvironment } from '../lib/model_util';
-import { useActiveEnvironment } from './useActiveEnvironment';
-import { useActiveRequest } from './useActiveRequest';
-import { useEnvironmentsBreakdown } from './useEnvironmentsBreakdown';
-import { useParentFolders } from './useParentFolders';
+import type { Environment, EnvironmentVariable } from "@yaakapp-internal/models";
+import { foldersAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useMemo } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { isBaseEnvironment, isFolderEnvironment } from "../lib/model_util";
+import { useActiveEnvironment } from "./useActiveEnvironment";
+import { useActiveRequest } from "./useActiveRequest";
+import { useEnvironmentsBreakdown } from "./useEnvironmentsBreakdown";
+import { useParentFolders } from "./useParentFolders";
 
 export function useEnvironmentVariables(targetEnvironmentId: string | null) {
   const { baseEnvironment, folderEnvironments, allEnvironments } = useEnvironmentsBreakdown();
@@ -59,7 +59,7 @@ function wrapVariables(e: Environment | null): WrappedEnvironmentVariable[] {
   if (e == null) return [];
   const folders = jotaiStore.get(foldersAtom);
   return e.variables.map((v) => {
-    const folder = e.parentModel === 'folder' ? folders.find((f) => f.id === e.parentId) : null;
+    const folder = e.parentModel === "folder" ? folders.find((f) => f.id === e.parentId) : null;
     const source = folder?.name ?? e.name;
     return { variable: v, environment: e, source };
   });

@@ -1,10 +1,10 @@
-import { openUrl } from '@tauri-apps/plugin-opener';
-import type { HttpResponse } from '@yaakapp-internal/models';
-import { useMemo } from 'react';
-import { CountBadge } from './core/CountBadge';
-import { DetailsBanner } from './core/DetailsBanner';
-import { IconButton } from './core/IconButton';
-import { KeyValueRow, KeyValueRows } from './core/KeyValueRow';
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { HttpResponse } from "@yaakapp-internal/models";
+import { useMemo } from "react";
+import { CountBadge } from "./core/CountBadge";
+import { DetailsBanner } from "./core/DetailsBanner";
+import { IconButton } from "./core/IconButton";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
 
 interface Props {
   response: HttpResponse;

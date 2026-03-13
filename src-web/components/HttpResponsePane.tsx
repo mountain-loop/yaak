@@ -1,49 +1,49 @@
-import type { HttpResponse, HttpResponseEvent } from '@yaakapp-internal/models';
-import classNames from 'classnames';
-import type { ComponentType, CSSProperties } from 'react';
-import { lazy, Suspense, useMemo } from 'react';
-import { useCancelHttpResponse } from '../hooks/useCancelHttpResponse';
-import { useHttpResponseEvents } from '../hooks/useHttpResponseEvents';
-import { usePinnedHttpResponse } from '../hooks/usePinnedHttpResponse';
-import { useResponseBodyBytes, useResponseBodyText } from '../hooks/useResponseBodyText';
-import { useResponseViewMode } from '../hooks/useResponseViewMode';
-import { useTimelineViewMode } from '../hooks/useTimelineViewMode';
-import { getMimeTypeFromContentType } from '../lib/contentType';
-import { getContentTypeFromHeaders, getCookieCounts } from '../lib/model_util';
-import { ConfirmLargeResponse } from './ConfirmLargeResponse';
-import { ConfirmLargeResponseRequest } from './ConfirmLargeResponseRequest';
-import { Banner } from './core/Banner';
-import { Button } from './core/Button';
-import { CountBadge } from './core/CountBadge';
-import { HotkeyList } from './core/HotkeyList';
-import { HttpResponseDurationTag } from './core/HttpResponseDurationTag';
-import { HttpStatusTag } from './core/HttpStatusTag';
-import { Icon } from './core/Icon';
-import { LoadingIcon } from './core/LoadingIcon';
-import { PillButton } from './core/PillButton';
-import { SizeTag } from './core/SizeTag';
-import { HStack, VStack } from './core/Stacks';
-import type { TabItem } from './core/Tabs/Tabs';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { Tooltip } from './core/Tooltip';
-import { EmptyStateText } from './EmptyStateText';
-import { ErrorBoundary } from './ErrorBoundary';
-import { HttpResponseTimeline } from './HttpResponseTimeline';
-import { RecentHttpResponsesDropdown } from './RecentHttpResponsesDropdown';
-import { RequestBodyViewer } from './RequestBodyViewer';
-import { ResponseCookies } from './ResponseCookies';
-import { ResponseHeaders } from './ResponseHeaders';
-import { AudioViewer } from './responseViewers/AudioViewer';
-import { CsvViewer } from './responseViewers/CsvViewer';
-import { EventStreamViewer } from './responseViewers/EventStreamViewer';
-import { HTMLOrTextViewer } from './responseViewers/HTMLOrTextViewer';
-import { ImageViewer } from './responseViewers/ImageViewer';
-import { MultipartViewer } from './responseViewers/MultipartViewer';
-import { SvgViewer } from './responseViewers/SvgViewer';
-import { VideoViewer } from './responseViewers/VideoViewer';
+import type { HttpResponse, HttpResponseEvent } from "@yaakapp-internal/models";
+import classNames from "classnames";
+import type { ComponentType, CSSProperties } from "react";
+import { lazy, Suspense, useMemo } from "react";
+import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
+import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
+import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
+import { useResponseBodyBytes, useResponseBodyText } from "../hooks/useResponseBodyText";
+import { useResponseViewMode } from "../hooks/useResponseViewMode";
+import { useTimelineViewMode } from "../hooks/useTimelineViewMode";
+import { getMimeTypeFromContentType } from "../lib/contentType";
+import { getContentTypeFromHeaders, getCookieCounts } from "../lib/model_util";
+import { ConfirmLargeResponse } from "./ConfirmLargeResponse";
+import { ConfirmLargeResponseRequest } from "./ConfirmLargeResponseRequest";
+import { Banner } from "./core/Banner";
+import { Button } from "./core/Button";
+import { CountBadge } from "./core/CountBadge";
+import { HotkeyList } from "./core/HotkeyList";
+import { HttpResponseDurationTag } from "./core/HttpResponseDurationTag";
+import { HttpStatusTag } from "./core/HttpStatusTag";
+import { Icon } from "./core/Icon";
+import { LoadingIcon } from "./core/LoadingIcon";
+import { PillButton } from "./core/PillButton";
+import { SizeTag } from "./core/SizeTag";
+import { HStack, VStack } from "./core/Stacks";
+import type { TabItem } from "./core/Tabs/Tabs";
+import { TabContent, Tabs } from "./core/Tabs/Tabs";
+import { Tooltip } from "./core/Tooltip";
+import { EmptyStateText } from "./EmptyStateText";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { HttpResponseTimeline } from "./HttpResponseTimeline";
+import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";
+import { RequestBodyViewer } from "./RequestBodyViewer";
+import { ResponseCookies } from "./ResponseCookies";
+import { ResponseHeaders } from "./ResponseHeaders";
+import { AudioViewer } from "./responseViewers/AudioViewer";
+import { CsvViewer } from "./responseViewers/CsvViewer";
+import { EventStreamViewer } from "./responseViewers/EventStreamViewer";
+import { HTMLOrTextViewer } from "./responseViewers/HTMLOrTextViewer";
+import { ImageViewer } from "./responseViewers/ImageViewer";
+import { MultipartViewer } from "./responseViewers/MultipartViewer";
+import { SvgViewer } from "./responseViewers/SvgViewer";
+import { VideoViewer } from "./responseViewers/VideoViewer";
 
 const PdfViewer = lazy(() =>
-  import('./responseViewers/PdfViewer').then((m) => ({ default: m.PdfViewer })),
+  import("./responseViewers/PdfViewer").then((m) => ({ default: m.PdfViewer })),
 );
 
 interface Props {
@@ -52,13 +52,13 @@ interface Props {
   activeRequestId: string;
 }
 
-const TAB_BODY = 'body';
-const TAB_REQUEST = 'request';
-const TAB_HEADERS = 'headers';
-const TAB_COOKIES = 'cookies';
-const TAB_TIMELINE = 'timeline';
+const TAB_BODY = "body";
+const TAB_REQUEST = "request";
+const TAB_HEADERS = "headers";
+const TAB_COOKIES = "cookies";
+const TAB_TIMELINE = "timeline";
 
-export type TimelineViewMode = 'timeline' | 'text';
+export type TimelineViewMode = "timeline" | "text";
 
 interface RedirectDropWarning {
   droppedBodyCount: number;
@@ -78,7 +78,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     [responseEvents.data],
   );
   const shouldShowRedirectDropWarning =
-    activeResponse?.state === 'closed' && redirectDropWarning != null;
+    activeResponse?.state === "closed" && redirectDropWarning != null;
 
   const cookieCounts = useMemo(() => getCookieCounts(responseEvents.data), [responseEvents.data]);
 
@@ -86,27 +86,27 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     () => [
       {
         value: TAB_BODY,
-        label: 'Response',
+        label: "Response",
         options: {
           value: viewMode,
           onChange: setViewMode,
           items: [
-            { label: 'Response', value: 'pretty' },
-            ...(mimeType?.startsWith('image')
+            { label: "Response", value: "pretty" },
+            ...(mimeType?.startsWith("image")
               ? []
-              : [{ label: 'Response (Raw)', shortLabel: 'Raw', value: 'raw' }]),
+              : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
           ],
         },
       },
       {
         value: TAB_REQUEST,
-        label: 'Request',
+        label: "Request",
         rightSlot:
           (activeResponse?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
       },
       {
         value: TAB_HEADERS,
-        label: 'Headers',
+        label: "Headers",
         rightSlot: (
           <CountBadge
             count={activeResponse?.requestHeaders.length ?? 0}
@@ -117,7 +117,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       },
       {
         value: TAB_COOKIES,
-        label: 'Cookies',
+        label: "Cookies",
         rightSlot:
           cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
             <CountBadge count={cookieCounts.sent} count2={cookieCounts.received} showZero />
@@ -128,10 +128,10 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
         options: {
           value: timelineViewMode,
-          onChange: (v) => setTimelineViewMode((v as TimelineViewMode) ?? 'timeline'),
+          onChange: (v) => setTimelineViewMode((v as TimelineViewMode) ?? "timeline"),
           items: [
-            { label: 'Timeline', value: 'timeline' },
-            { label: 'Timeline (Text)', shortLabel: 'Timeline', value: 'text' },
+            { label: "Timeline", value: "timeline" },
+            { label: "Timeline (Text)", shortLabel: "Timeline", value: "text" },
           ],
         },
       },
@@ -158,33 +158,33 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       style={style}
       className={classNames(
         className,
-        'x-theme-responsePane',
-        'max-h-full h-full',
-        'bg-surface rounded-md border border-border-subtle overflow-hidden',
-        'relative',
+        "x-theme-responsePane",
+        "max-h-full h-full",
+        "bg-surface rounded-md border border-border-subtle overflow-hidden",
+        "relative",
       )}
     >
       {activeResponse == null ? (
-        <HotkeyList hotkeys={['request.send', 'model.create', 'sidebar.focus', 'url_bar.focus']} />
+        <HotkeyList hotkeys={["request.send", "model.create", "sidebar.focus", "url_bar.focus"]} />
       ) : (
         <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
           <HStack
             className={classNames(
-              'text-text-subtle w-full flex-shrink-0',
+              "text-text-subtle w-full flex-shrink-0",
               // Remove a bit of space because the tabs have lots too
-              '-mb-1.5',
+              "-mb-1.5",
             )}
           >
             {activeResponse && (
               <div
                 className={classNames(
-                  'grid grid-cols-[auto_minmax(4rem,1fr)_auto]',
-                  'cursor-default select-none',
-                  'whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars',
+                  "grid grid-cols-[auto_minmax(4rem,1fr)_auto]",
+                  "cursor-default select-none",
+                  "whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars",
                 )}
               >
                 <HStack space={2} className="w-full flex-shrink-0">
-                  {activeResponse.state !== 'closed' && <LoadingIcon size="sm" />}
+                  {activeResponse.state !== "closed" && <LoadingIcon size="sm" />}
                   <HttpStatusTag showReason response={activeResponse} />
                   <span>&bull;</span>
                   <HttpResponseDurationTag response={activeResponse} />
@@ -205,17 +205,17 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                         </span>
                         {redirectDropWarning.droppedBodyCount > 0 && (
                           <span>
-                            Body dropped on {redirectDropWarning.droppedBodyCount}{' '}
+                            Body dropped on {redirectDropWarning.droppedBodyCount}{" "}
                             {redirectDropWarning.droppedBodyCount === 1
-                              ? 'redirect hop'
-                              : 'redirect hops'}
+                              ? "redirect hop"
+                              : "redirect hops"}
                           </span>
                         )}
                         {redirectDropWarning.droppedHeaders.length > 0 && (
                           <span>
-                            Headers dropped:{' '}
+                            Headers dropped:{" "}
                             <span className="font-mono">
-                              {redirectDropWarning.droppedHeaders.join(', ')}
+                              {redirectDropWarning.droppedHeaders.join(", ")}
                             </span>
                           </span>
                         )}
@@ -269,7 +269,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 <ErrorBoundary name="Http Response Viewer">
                   <Suspense>
                     <ConfirmLargeResponse response={activeResponse}>
-                      {activeResponse.state === 'initialized' ? (
+                      {activeResponse.state === "initialized" ? (
                         <EmptyStateText>
                           <VStack space={3}>
                             <HStack space={3}>
@@ -281,10 +281,10 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                             </Button>
                           </VStack>
                         </EmptyStateText>
-                      ) : activeResponse.state === 'closed' &&
+                      ) : activeResponse.state === "closed" &&
                         (activeResponse.contentLength ?? 0) === 0 ? (
                         <EmptyStateText>Empty</EmptyStateText>
-                      ) : mimeType?.match(/^text\/event-stream/i) && viewMode === 'pretty' ? (
+                      ) : mimeType?.match(/^text\/event-stream/i) && viewMode === "pretty" ? (
                         <EventStreamViewer response={activeResponse} />
                       ) : mimeType?.match(/^image\/svg/) ? (
                         <HttpSvgViewer response={activeResponse} />
@@ -294,17 +294,17 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                         <EnsureCompleteResponse response={activeResponse} Component={AudioViewer} />
                       ) : mimeType?.match(/^video/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={VideoViewer} />
-                      ) : mimeType?.match(/^multipart/i) && viewMode === 'pretty' ? (
+                      ) : mimeType?.match(/^multipart/i) && viewMode === "pretty" ? (
                         <HttpMultipartViewer response={activeResponse} />
                       ) : mimeType?.match(/pdf/i) ? (
                         <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
-                      ) : mimeType?.match(/csv|tab-separated/i) && viewMode === 'pretty' ? (
+                      ) : mimeType?.match(/csv|tab-separated/i) && viewMode === "pretty" ? (
                         <HttpCsvViewer className="pb-2" response={activeResponse} />
                       ) : (
                         <HTMLOrTextViewer
                           textViewerClassName="-mr-2 bg-surface" // Pull to the right
                           response={activeResponse}
-                          pretty={viewMode === 'pretty'}
+                          pretty={viewMode === "pretty"}
                         />
                       )}
                     </ConfirmLargeResponse>
@@ -342,7 +342,7 @@ function getRedirectDropWarning(
   const droppedHeaders = new Set<string>();
   for (const e of events) {
     const event = e.event;
-    if (event.type !== 'redirect') {
+    if (event.type !== "redirect") {
       continue;
     }
 
@@ -373,12 +373,12 @@ function pushHeaderName(headers: Set<string>, headerName: string): void {
 
 function getRedirectWarningLabel(warning: RedirectDropWarning): string {
   if (warning.droppedBodyCount > 0 && warning.droppedHeaders.length > 0) {
-    return 'Dropped body and headers';
+    return "Dropped body and headers";
   }
   if (warning.droppedBodyCount > 0) {
-    return 'Dropped body';
+    return "Dropped body";
   }
-  return 'Dropped headers';
+  return "Dropped headers";
 }
 
 function EnsureCompleteResponse({
@@ -393,7 +393,7 @@ function EnsureCompleteResponse({
   }
 
   // Wait until the response has been fully-downloaded
-  if (response.state !== 'closed') {
+  if (response.state !== "closed") {
     return (
       <EmptyStateText>
         <LoadingIcon />
@@ -424,7 +424,7 @@ function HttpMultipartViewer({ response }: { response: HttpResponse }) {
   if (body.data == null) return null;
 
   const contentTypeHeader = getContentTypeFromHeaders(response.headers);
-  const boundary = contentTypeHeader?.split('boundary=')[1] ?? 'unknown';
+  const boundary = contentTypeHeader?.split("boundary=")[1] ?? "unknown";
 
   return <MultipartViewer data={body.data} boundary={boundary} idPrefix={response.id} />;
 }

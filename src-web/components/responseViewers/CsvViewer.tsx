@@ -1,7 +1,7 @@
-import classNames from 'classnames';
-import Papa from 'papaparse';
-import { useMemo } from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../core/Table';
+import classNames from "classnames";
+import Papa from "papaparse";
+import { useMemo } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from "../core/Table";
 
 interface Props {
   text: string | null;
@@ -26,7 +26,7 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
 
   return (
     <div className="overflow-auto h-full">
-      <Table className={classNames(className, 'text-sm')}>
+      <Table className={classNames(className, "text-sm")}>
         <TableHead>
           <TableRow>
             {parsed.meta.fields?.map((field) => (
@@ -39,7 +39,7 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
             // oxlint-disable-next-line react/no-array-index-key
             <TableRow key={i}>
               {parsed.meta.fields?.map((key) => (
-                <TableCell key={key}>{row[key] ?? ''}</TableCell>
+                <TableCell key={key}>{row[key] ?? ""}</TableCell>
               ))}
             </TableRow>
           ))}

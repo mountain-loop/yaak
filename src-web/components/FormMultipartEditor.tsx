@@ -1,12 +1,12 @@
-import type { HttpRequest } from '@yaakapp-internal/models';
-import { useCallback, useMemo } from 'react';
-import type { Pair, PairEditorProps } from './core/PairEditor';
-import { PairEditor } from './core/PairEditor';
+import type { HttpRequest } from "@yaakapp-internal/models";
+import { useCallback, useMemo } from "react";
+import type { Pair, PairEditorProps } from "./core/PairEditor";
+import { PairEditor } from "./core/PairEditor";
 
 type Props = {
   forceUpdateKey: string;
   request: HttpRequest;
-  onChange: (body: HttpRequest['body']) => void;
+  onChange: (body: HttpRequest["body"]) => void;
 };
 
 export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props) {
@@ -24,7 +24,7 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
     [request.body.form],
   );
 
-  const handleChange = useCallback<PairEditorProps['onChange']>(
+  const handleChange = useCallback<PairEditorProps["onChange"]>(
     (pairs) =>
       onChange({
         form: pairs.map((p) => ({

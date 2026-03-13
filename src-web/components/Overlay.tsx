@@ -1,9 +1,9 @@
-import classNames from 'classnames';
-import { FocusTrap } from 'focus-trap-react';
-import * as m from 'motion/react-m';
-import type { ReactNode } from 'react';
-import { useRef } from 'react';
-import { Portal } from './Portal';
+import classNames from "classnames";
+import { FocusTrap } from "focus-trap-react";
+import * as m from "motion/react-m";
+import type { ReactNode } from "react";
+import { useRef } from "react";
+import { Portal } from "./Portal";
 
 interface Props {
   children: ReactNode;
@@ -11,20 +11,20 @@ interface Props {
   open: boolean;
   onClose?: () => void;
   zIndex?: keyof typeof zIndexes;
-  variant?: 'default' | 'transparent';
+  variant?: "default" | "transparent";
   noBackdrop?: boolean;
 }
 
 const zIndexes: Record<number, string> = {
-  10: 'z-10',
-  20: 'z-20',
-  30: 'z-30',
-  40: 'z-40',
-  50: 'z-50',
+  10: "z-10",
+  20: "z-20",
+  30: "z-30",
+  40: "z-40",
+  50: "z-50",
 };
 
 export function Overlay({
-  variant = 'default',
+  variant = "default",
   zIndex = 30,
   open,
   onClose,
@@ -63,7 +63,7 @@ export function Overlay({
         >
           <m.div
             ref={containerRef}
-            className={classNames('fixed inset-0', zIndexes[zIndex])}
+            className={classNames("fixed inset-0", zIndexes[zIndex])}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -71,14 +71,14 @@ export function Overlay({
               aria-hidden
               onClick={onClose}
               className={classNames(
-                'absolute inset-0',
-                variant === 'default' && 'bg-backdrop backdrop-blur-sm',
+                "absolute inset-0",
+                variant === "default" && "bg-backdrop backdrop-blur-sm",
               )}
             />
 
             {/* Show the draggable region at the top */}
             {/* TODO: Figure out tauri drag region and also make clickable still */}
-            {variant === 'default' && (
+            {variant === "default" && (
               <div data-tauri-drag-region className="absolute top-0 left-0 h-md right-0" />
             )}
             {children}

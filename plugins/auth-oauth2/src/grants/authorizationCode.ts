@@ -1,17 +1,17 @@
-import { createHash, randomBytes } from 'node:crypto';
-import type { Context } from '@yaakapp/api';
-import { getRedirectUrlViaExternalBrowser } from '../callbackServer';
-import { fetchAccessToken } from '../fetchAccessToken';
-import { getOrRefreshAccessToken } from '../getOrRefreshAccessToken';
-import type { AccessToken, TokenStoreArgs } from '../store';
-import { getDataDirKey, storeToken } from '../store';
-import { extractCode } from '../util';
+import { createHash, randomBytes } from "node:crypto";
+import type { Context } from "@yaakapp/api";
+import { getRedirectUrlViaExternalBrowser } from "../callbackServer";
+import { fetchAccessToken } from "../fetchAccessToken";
+import { getOrRefreshAccessToken } from "../getOrRefreshAccessToken";
+import type { AccessToken, TokenStoreArgs } from "../store";
+import { getDataDirKey, storeToken } from "../store";
+import { extractCode } from "../util";
 
-export const PKCE_SHA256 = 'S256';
-export const PKCE_PLAIN = 'plain';
+export const PKCE_SHA256 = "S256";
+export const PKCE_PLAIN = "plain";
 export const DEFAULT_PKCE_METHOD = PKCE_SHA256;
 
-export type CallbackType = 'localhost' | 'hosted';
+export type CallbackType = "localhost" | "hosted";
 
 export interface ExternalBrowserOptions {
   useExternalBrowser: boolean;
@@ -50,7 +50,7 @@ export async function getAuthorizationCode(
       challengeMethod: string;
       codeVerifier: string;
     } | null;
-    tokenName: 'access_token' | 'id_token';
+    tokenName: "access_token" | "id_token";
     externalBrowser?: ExternalBrowserOptions;
   },
 ): Promise<AccessToken> {
@@ -74,21 +74,21 @@ export async function getAuthorizationCode(
 
   let authorizationUrl: URL;
   try {
-    authorizationUrl = new URL(`${authorizationUrlRaw ?? ''}`);
+    authorizationUrl = new URL(`${authorizationUrlRaw ?? ""}`);
   } catch {
     throw new Error(`Invalid authorization URL "${authorizationUrlRaw}"`);
   }
-  authorizationUrl.searchParams.set('response_type', 'code');
-  authorizationUrl.searchParams.set('client_id', clientId);
-  if (scope) authorizationUrl.searchParams.set('scope', scope);
-  if (state) authorizationUrl.searchParams.set('state', state);
-  if (audience) authorizationUrl.searchParams.set('audience', audience);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("client_id", clientId);
+  if (scope) authorizationUrl.searchParams.set("scope", scope);
+  if (state) authorizationUrl.searchParams.set("state", state);
+  if (audience) authorizationUrl.searchParams.set("audience", audience);
   if (pkce) {
     authorizationUrl.searchParams.set(
-      'code_challenge',
+      "code_challenge",
       pkceCodeChallenge(pkce.codeVerifier, pkce.challengeMethod),
     );
-    authorizationUrl.searchParams.set('code_challenge_method', pkce.challengeMethod);
+    authorizationUrl.searchParams.set("code_challenge_method", pkce.challengeMethod);
   }
 
   let code: string;
@@ -103,21 +103,21 @@ export async function getAuthorizationCode(
     // Pass null to skip redirect URI matching — the callback came from our own local server
     const extractedCode = extractCode(result.callbackUrl, null);
     if (!extractedCode) {
-      throw new Error('No authorization code found in callback URL');
+      throw new Error("No authorization code found in callback URL");
     }
     code = extractedCode;
     actualRedirectUri = result.redirectUri;
   } else {
     // Use embedded browser flow (original behavior)
     if (redirectUri) {
-      authorizationUrl.searchParams.set('redirect_uri', redirectUri);
+      authorizationUrl.searchParams.set("redirect_uri", redirectUri);
     }
     code = await getCodeViaEmbeddedBrowser(ctx, contextId, authorizationUrl, redirectUri);
   }
 
-  console.log('[oauth2] Code found');
+  console.log("[oauth2] Code found");
   const response = await fetchAccessToken(ctx, {
-    grantType: 'authorization_code',
+    grantType: "authorization_code",
     accessTokenUrl,
     clientId,
     clientSecret,
@@ -125,9 +125,9 @@ export async function getAuthorizationCode(
     audience,
     credentialsInBody,
     params: [
-      { name: 'code', value: code },
-      ...(pkce ? [{ name: 'code_verifier', value: pkce.codeVerifier }] : []),
-      ...(actualRedirectUri ? [{ name: 'redirect_uri', value: actualRedirectUri }] : []),
+      { name: "code", value: code },
+      ...(pkce ? [{ name: "code_verifier", value: pkce.codeVerifier }] : []),
+      ...(actualRedirectUri ? [{ name: "redirect_uri", value: actualRedirectUri }] : []),
     ],
   });
 
@@ -146,7 +146,7 @@ async function getCodeViaEmbeddedBrowser(
 ): Promise<string> {
   const dataDirKey = await getDataDirKey(ctx, contextId);
   const authorizationUrlStr = authorizationUrl.toString();
-  console.log('[oauth2] Authorizing via embedded browser', authorizationUrlStr);
+  console.log("[oauth2] Authorizing via embedded browser", authorizationUrlStr);
 
   // oxlint-disable-next-line no-async-promise-executor -- Required for this pattern
   return new Promise<string>(async (resolve, reject) => {
@@ -154,10 +154,10 @@ async function getCodeViaEmbeddedBrowser(
     const { close } = await ctx.window.openUrl({
       dataDirKey,
       url: authorizationUrlStr,
-      label: 'oauth-authorization-url',
+      label: "oauth-authorization-url",
       async onClose() {
         if (!foundCode) {
-          reject(new Error('Authorization window closed'));
+          reject(new Error("Authorization window closed"));
         }
       },
       async onNavigate({ url: urlStr }) {
@@ -187,21 +187,21 @@ export function genPkceCodeVerifier() {
 }
 
 function pkceCodeChallenge(verifier: string, method: string) {
-  if (method === 'plain') {
+  if (method === "plain") {
     return verifier;
   }
 
-  const hash = encodeForPkce(createHash('sha256').update(verifier).digest());
+  const hash = encodeForPkce(createHash("sha256").update(verifier).digest());
   return hash
-    .replace(/=/g, '') // Remove padding '='
-    .replace(/\+/g, '-') // Replace '+' with '-'
-    .replace(/\//g, '_'); // Replace '/' with '_'
+    .replace(/=/g, "") // Remove padding '='
+    .replace(/\+/g, "-") // Replace '+' with '-'
+    .replace(/\//g, "_"); // Replace '/' with '_'
 }
 
 function encodeForPkce(bytes: Buffer) {
   return bytes
-    .toString('base64')
-    .replace(/=/g, '') // Remove padding '='
-    .replace(/\+/g, '-') // Replace '+' with '-'
-    .replace(/\//g, '_'); // Replace '/' with '_'
+    .toString("base64")
+    .replace(/=/g, "") // Remove padding '='
+    .replace(/\+/g, "-") // Replace '+' with '-'
+    .replace(/\//g, "_"); // Replace '/' with '_'
 }

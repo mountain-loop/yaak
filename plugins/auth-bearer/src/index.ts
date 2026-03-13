@@ -1,26 +1,26 @@
-import type { PluginDefinition } from '@yaakapp/api';
-import type { CallHttpAuthenticationRequest } from '@yaakapp-internal/plugins';
+import type { PluginDefinition } from "@yaakapp/api";
+import type { CallHttpAuthenticationRequest } from "@yaakapp-internal/plugins";
 
 export const plugin: PluginDefinition = {
   authentication: {
-    name: 'bearer',
-    label: 'Bearer Token',
-    shortLabel: 'Bearer',
+    name: "bearer",
+    label: "Bearer Token",
+    shortLabel: "Bearer",
     args: [
       {
-        type: 'text',
-        name: 'token',
-        label: 'Token',
+        type: "text",
+        name: "token",
+        label: "Token",
         optional: true,
         password: true,
       },
       {
-        type: 'text',
-        name: 'prefix',
-        label: 'Prefix',
+        type: "text",
+        name: "prefix",
+        label: "Prefix",
         optional: true,
-        placeholder: '',
-        defaultValue: 'Bearer',
+        placeholder: "",
+        defaultValue: "Bearer",
         description:
           'The prefix to use for the Authorization header, which will be of the format "<PREFIX> <TOKEN>".',
       },
@@ -31,9 +31,9 @@ export const plugin: PluginDefinition = {
   },
 };
 
-function generateAuthorizationHeader(values: CallHttpAuthenticationRequest['values']) {
-  const token = String(values.token || '').trim();
-  const prefix = String(values.prefix || '').trim();
+function generateAuthorizationHeader(values: CallHttpAuthenticationRequest["values"]) {
+  const token = String(values.token || "").trim();
+  const prefix = String(values.prefix || "").trim();
   const value = `${prefix} ${token}`.trim();
-  return { name: 'Authorization', value };
+  return { name: "Authorization", value };
 }

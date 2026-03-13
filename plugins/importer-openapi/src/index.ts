@@ -1,12 +1,12 @@
-import { convertPostman } from '@yaak/importer-postman/src';
-import type { Context, PluginDefinition } from '@yaakapp/api';
-import type { ImportPluginResponse } from '@yaakapp/api/lib/plugins/ImporterPlugin';
-import { convert } from 'openapi-to-postmanv2';
+import { convertPostman } from "@yaak/importer-postman/src";
+import type { Context, PluginDefinition } from "@yaakapp/api";
+import type { ImportPluginResponse } from "@yaakapp/api/lib/plugins/ImporterPlugin";
+import { convert } from "openapi-to-postmanv2";
 
 export const plugin: PluginDefinition = {
   importer: {
-    name: 'OpenAPI',
-    description: 'Import OpenAPI collections',
+    name: "OpenAPI",
+    description: "Import OpenAPI collections",
     onImport(_ctx: Context, args: { text: string }) {
       return convertOpenApi(args.text);
     },
@@ -19,7 +19,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   try {
     postmanCollection = await new Promise((resolve, reject) => {
       // oxlint-disable-next-line no-explicit-any
-      convert({ type: 'string', data: contents }, {}, (err, result: any) => {
+      convert({ type: "string", data: contents }, {}, (err, result: any) => {
         if (err != null) reject(err);
 
         if (Array.isArray(result.output) && result.output.length > 0) {

@@ -1,6 +1,6 @@
-import { patchModel, settingsAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useCallback } from 'react';
+import { patchModel, settingsAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useCallback } from "react";
 
 export function useZoom() {
   const settings = useAtomValue(settingsAtom);

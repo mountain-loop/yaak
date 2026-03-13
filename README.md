@@ -16,8 +16,6 @@
 </p>
 <br>
 
-
-
 <p align="center">
   <!-- sponsors-premium --><a href="https://github.com/MVST-Solutions"><img src="https:&#x2F;&#x2F;github.com&#x2F;MVST-Solutions.png" width="80px" alt="User avatar: MVST-Solutions" /></a>&nbsp;&nbsp;<a href="https://github.com/dharsanb"><img src="https:&#x2F;&#x2F;github.com&#x2F;dharsanb.png" width="80px" alt="User avatar: dharsanb" /></a>&nbsp;&nbsp;<a href="https://github.com/railwayapp"><img src="https:&#x2F;&#x2F;github.com&#x2F;railwayapp.png" width="80px" alt="User avatar: railwayapp" /></a>&nbsp;&nbsp;<a href="https://github.com/caseyamcl"><img src="https:&#x2F;&#x2F;github.com&#x2F;caseyamcl.png" width="80px" alt="User avatar: caseyamcl" /></a>&nbsp;&nbsp;<a href="https://github.com/bytebase"><img src="https:&#x2F;&#x2F;github.com&#x2F;bytebase.png" width="80px" alt="User avatar: bytebase" /></a>&nbsp;&nbsp;<a href="https://github.com/"><img src="https:&#x2F;&#x2F;raw.githubusercontent.com&#x2F;JamesIves&#x2F;github-sponsors-readme-action&#x2F;dev&#x2F;.github&#x2F;assets&#x2F;placeholder.png" width="80px" alt="User avatar: " /></a>&nbsp;&nbsp;<!-- sponsors-premium -->
 </p>
@@ -27,12 +25,10 @@
 
 ![Yaak API Client](https://yaak.app/static/screenshot.png)
 
-
 ## Features
 
-Yaak is an offline-first API client designed to stay out of your way while giving you everything you need when you need it. 
-Built with [Tauri](https://tauri.app), Rust, and React, it’s fast, lightweight, and private. No telemetry, no VC funding, and no cloud lock-in.  
-
+Yaak is an offline-first API client designed to stay out of your way while giving you everything you need when you need it.
+Built with [Tauri](https://tauri.app), Rust, and React, it’s fast, lightweight, and private. No telemetry, no VC funding, and no cloud lock-in.
 
 ### 🌐 Work with any API
 
@@ -41,20 +37,22 @@ Built with [Tauri](https://tauri.app), Rust, and React, it’s fast, lightweight
 - Filter and inspect responses with JSONPath or XPath.
 
 ### 🔐 Stay secure
+
 - Use OAuth 2.0, JWT, Basic Auth, or custom plugins for authentication.
-- Secure sensitive values with encrypted secrets. 
+- Secure sensitive values with encrypted secrets.
 - Store secrets in your OS keychain.
 
 ### ☁️ Organize & collaborate
+
 - Group requests into workspaces and nested folders.
 - Use environment variables to switch between dev, staging, and prod.
 - Mirror workspaces to your filesystem for versioning in Git or syncing with Dropbox.
 
 ### 🧩 Extend & customize
+
 - Insert dynamic values like UUIDs or timestamps with template tags.
 - Pick from built-in themes or build your own.
 - Create plugins to extend authentication, template tags, or the UI.
-
 
 ## Contribution Policy
 

@@ -6,38 +6,38 @@ import type {
   HttpUrlParameter,
   PluginDefinition,
   Workspace,
-} from '@yaakapp/api';
-import { split } from 'shlex';
+} from "@yaakapp/api";
+import { split } from "shlex";
 
 type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 
 interface ExportResources {
-  workspaces: AtLeast<Workspace, 'name' | 'id' | 'model'>[];
-  environments: AtLeast<Environment, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  httpRequests: AtLeast<HttpRequest, 'name' | 'id' | 'model' | 'workspaceId'>[];
-  folders: AtLeast<Folder, 'name' | 'id' | 'model' | 'workspaceId'>[];
+  workspaces: AtLeast<Workspace, "name" | "id" | "model">[];
+  environments: AtLeast<Environment, "name" | "id" | "model" | "workspaceId">[];
+  httpRequests: AtLeast<HttpRequest, "name" | "id" | "model" | "workspaceId">[];
+  folders: AtLeast<Folder, "name" | "id" | "model" | "workspaceId">[];
 }
 
-const DATA_FLAGS = ['d', 'data', 'data-raw', 'data-urlencode', 'data-binary', 'data-ascii'];
+const DATA_FLAGS = ["d", "data", "data-raw", "data-urlencode", "data-binary", "data-ascii"];
 const SUPPORTED_FLAGS = [
-  ['cookie', 'b'],
-  ['d', 'data'], // Add url encoded data
-  ['data-ascii'],
-  ['data-binary'],
-  ['data-raw'],
-  ['data-urlencode'],
-  ['digest'], // Apply auth as digest
-  ['form', 'F'], // Add multipart data
-  ['get', 'G'], // Put the post data in the URL
-  ['header', 'H'],
-  ['request', 'X'], // Request method
-  ['url'], // Specify the URL explicitly
-  ['url-query'],
-  ['user', 'u'], // Authentication
+  ["cookie", "b"],
+  ["d", "data"], // Add url encoded data
+  ["data-ascii"],
+  ["data-binary"],
+  ["data-raw"],
+  ["data-urlencode"],
+  ["digest"], // Apply auth as digest
+  ["form", "F"], // Add multipart data
+  ["get", "G"], // Put the post data in the URL
+  ["header", "H"],
+  ["request", "X"], // Request method
+  ["url"], // Specify the URL explicitly
+  ["url-query"],
+  ["user", "u"], // Authentication
   DATA_FLAGS,
 ].flat();
 
-const BOOLEAN_FLAGS = ['G', 'get', 'digest'];
+const BOOLEAN_FLAGS = ["G", "get", "digest"];
 
 type FlagValue = string | boolean;
 
@@ -45,8 +45,8 @@ type FlagsByName = Record<string, FlagValue[]>;
 
 export const plugin: PluginDefinition = {
   importer: {
-    name: 'cURL',
-    description: 'Import cURL commands',
+    name: "cURL",
+    description: "Import cURL commands",
     onImport(_ctx: Context, args: { text: string }) {
       // oxlint-disable-next-line no-explicit-any
       return convertCurl(args.text) as any;
@@ -60,14 +60,14 @@ export const plugin: PluginDefinition = {
  */
 function splitCommands(rawData: string): string[] {
   // Join line continuations (backslash-newline, and backslash-CRLF for Windows)
-  const joined = rawData.replace(/\\\r?\n/g, ' ');
+  const joined = rawData.replace(/\\\r?\n/g, " ");
 
   // Count consecutive backslashes immediately before position i.
   // An even count means the quote at i is NOT escaped; odd means it IS escaped.
   function isEscaped(i: number): boolean {
     let backslashes = 0;
     let j = i - 1;
-    while (j >= 0 && joined[j] === '\\') {
+    while (j >= 0 && joined[j] === "\\") {
       backslashes++;
       j--;
     }
@@ -76,7 +76,7 @@ function splitCommands(rawData: string): string[] {
 
   // Split on semicolons and newlines to separate commands
   const commands: string[] = [];
-  let current = '';
+  let current = "";
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let inDollarQuote = false;
@@ -108,7 +108,7 @@ function splitCommands(rawData: string): string[] {
       current += ch;
       continue;
     }
-    if (!inSingleQuote && !inDoubleQuote && !inDollarQuote && ch === '$' && next === "'") {
+    if (!inSingleQuote && !inDoubleQuote && !inDollarQuote && ch === "$" && next === "'") {
       inDollarQuote = true;
       current += ch + next;
       i++; // Skip the opening quote
@@ -126,13 +126,13 @@ function splitCommands(rawData: string): string[] {
     if (
       !inQuote &&
       !isEscaped(i) &&
-      (ch === ';' || ch === '\n' || (ch === '\r' && next === '\n'))
+      (ch === ";" || ch === "\n" || (ch === "\r" && next === "\n"))
     ) {
-      if (ch === '\r') i++; // Skip the \n in \r\n
+      if (ch === "\r") i++; // Skip the \n in \r\n
       if (current.trim()) {
         commands.push(current.trim());
       }
-      current = '';
+      current = "";
       continue;
     }
 
@@ -156,21 +156,21 @@ export function convertCurl(rawData: string) {
 
     // Break up squished arguments like `-XPOST` into `-X POST`
     return tokens.flatMap((token) => {
-      if (token.startsWith('-') && !token.startsWith('--') && token.length > 2) {
+      if (token.startsWith("-") && !token.startsWith("--") && token.length > 2) {
         return [token.slice(0, 2), token.slice(2)];
       }
       return token;
     });
   });
 
-  const workspace: ExportResources['workspaces'][0] = {
-    model: 'workspace',
-    id: generateId('workspace'),
-    name: 'Curl Import',
+  const workspace: ExportResources["workspaces"][0] = {
+    model: "workspace",
+    id: generateId("workspace"),
+    name: "Curl Import",
   };
 
-  const requests: ExportResources['httpRequests'] = commands
-    .filter((command) => command[0] === 'curl')
+  const requests: ExportResources["httpRequests"] = commands
+    .filter((command) => command[0] === "curl")
     .map((v) => importCommand(v, workspace.id));
 
   return {
@@ -191,13 +191,13 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   // Start at 1 so we can skip the ^curl part
   for (let i = 1; i < parseEntries.length; i++) {
     let parseEntry = parseEntries[i];
-    if (typeof parseEntry === 'string') {
+    if (typeof parseEntry === "string") {
       parseEntry = parseEntry.trim();
     }
 
-    if (typeof parseEntry === 'string' && parseEntry.match(/^-{1,2}[\w-]+/)) {
-      const isSingleDash = parseEntry[0] === '-' && parseEntry[1] !== '-';
-      let name = parseEntry.replace(/^-{1,2}/, '');
+    if (typeof parseEntry === "string" && parseEntry.match(/^-{1,2}[\w-]+/)) {
+      const isSingleDash = parseEntry[0] === "-" && parseEntry[1] !== "-";
+      let name = parseEntry.replace(/^-{1,2}/, "");
 
       if (!SUPPORTED_FLAGS.includes(name)) {
         continue;
@@ -211,13 +211,13 @@ function importCommand(parseEntries: string[], workspaceId: string) {
       // - Double dash followed by a letter: --data-raw, --header
       // This prevents mistaking data that starts with dashes (like multipart boundaries ------) as flags
       const nextEntryIsFlag =
-        typeof nextEntry === 'string' &&
+        typeof nextEntry === "string" &&
         (nextEntry.match(/^-[a-zA-Z]/) || nextEntry.match(/^--[a-zA-Z]/));
       if (isSingleDash && name.length > 1) {
         // Handle squished arguments like -XPOST
         value = name.slice(1);
         name = name.slice(0, 1);
-      } else if (typeof nextEntry === 'string' && hasValue && !nextEntryIsFlag) {
+      } else if (typeof nextEntry === "string" && hasValue && !nextEntryIsFlag) {
         // Next arg is not a flag, so assign it as the value
         value = nextEntry;
         i++; // Skip next one
@@ -236,14 +236,14 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   // Build the request //
   // ~~~~~~~~~~~~~~~~~ //
 
-  const urlArg = getPairValue(flagsByName, (singletons[0] as string) || '', ['url']);
-  const [baseUrl, search] = splitOnce(urlArg, '?');
+  const urlArg = getPairValue(flagsByName, (singletons[0] as string) || "", ["url"]);
+  const [baseUrl, search] = splitOnce(urlArg, "?");
   const urlParameters: HttpUrlParameter[] =
-    search?.split('&').map((p) => {
-      const v = splitOnce(p, '=');
+    search?.split("&").map((p) => {
+      const v = splitOnce(p, "=");
       return {
-        name: decodeURIComponent(v[0] ?? ''),
-        value: decodeURIComponent(v[1] ?? ''),
+        name: decodeURIComponent(v[0] ?? ""),
+        value: decodeURIComponent(v[1] ?? ""),
         enabled: true,
       };
     }) ?? [];
@@ -251,27 +251,27 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   const url = baseUrl ?? urlArg;
 
   // Query params
-  for (const p of flagsByName['url-query'] ?? []) {
-    if (typeof p !== 'string') {
+  for (const p of flagsByName["url-query"] ?? []) {
+    if (typeof p !== "string") {
       continue;
     }
-    const [name, value] = p.split('=');
+    const [name, value] = p.split("=");
     urlParameters.push({
-      name: name ?? '',
-      value: value ?? '',
+      name: name ?? "",
+      value: value ?? "",
       enabled: true,
     });
   }
 
   // Authentication
-  const [username, password] = getPairValue(flagsByName, '', ['u', 'user']).split(/:(.*)$/);
+  const [username, password] = getPairValue(flagsByName, "", ["u", "user"]).split(/:(.*)$/);
 
-  const isDigest = getPairValue(flagsByName, false, ['digest']);
-  const authenticationType = username ? (isDigest ? 'digest' : 'basic') : null;
+  const isDigest = getPairValue(flagsByName, false, ["digest"]);
+  const authenticationType = username ? (isDigest ? "digest" : "basic") : null;
   const authentication = username
     ? {
         username: username.trim(),
-        password: (password ?? '').trim(),
+        password: (password ?? "").trim(),
       }
     : {};
 
@@ -284,13 +284,13 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     // remove final colon from header name if present
     if (!value) {
       return {
-        name: (name ?? '').trim().replace(/;$/, ''),
-        value: '',
+        name: (name ?? "").trim().replace(/;$/, ""),
+        value: "",
         enabled: true,
       };
     }
     return {
-      name: (name ?? '').trim(),
+      name: (name ?? "").trim(),
       value: value.trim(),
       enabled: true,
     };
@@ -302,14 +302,14 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     ...((flagsByName.b as string[] | undefined) || []),
   ]
     .map((str) => {
-      const name = str.split('=', 1)[0];
-      const value = str.replace(`${name}=`, '');
+      const name = str.split("=", 1)[0];
+      const value = str.replace(`${name}=`, "");
       return `${name}=${value}`;
     })
-    .join('; ');
+    .join("; ");
 
   // Convert cookie value to header
-  const existingCookieHeader = headers.find((header) => header.name.toLowerCase() === 'cookie');
+  const existingCookieHeader = headers.find((header) => header.name.toLowerCase() === "cookie");
 
   if (cookieHeaderValue && existingCookieHeader) {
     // Has existing cookie header, so let's update it
@@ -317,15 +317,15 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   } else if (cookieHeaderValue) {
     // No existing cookie header, so let's make a new one
     headers.push({
-      name: 'Cookie',
+      name: "Cookie",
       value: cookieHeaderValue,
       enabled: true,
     });
   }
 
   // Body (Text or Blob)
-  const contentTypeHeader = headers.find((header) => header.name.toLowerCase() === 'content-type');
-  const mimeType = contentTypeHeader ? contentTypeHeader.value.split(';')[0]?.trim() : null;
+  const contentTypeHeader = headers.find((header) => header.name.toLowerCase() === "content-type");
+  const mimeType = contentTypeHeader ? contentTypeHeader.value.split(";")[0]?.trim() : null;
 
   // Extract boundary from Content-Type header for multipart parsing
   const boundaryMatch = contentTypeHeader?.value.match(/boundary=([^\s;]+)/i);
@@ -333,19 +333,19 @@ function importCommand(parseEntries: string[], workspaceId: string) {
 
   // Get raw data from --data-raw flags (before splitting by &)
   const rawDataValues = [
-    ...((flagsByName['data-raw'] as string[] | undefined) || []),
+    ...((flagsByName["data-raw"] as string[] | undefined) || []),
     ...((flagsByName.d as string[] | undefined) || []),
     ...((flagsByName.data as string[] | undefined) || []),
-    ...((flagsByName['data-binary'] as string[] | undefined) || []),
-    ...((flagsByName['data-ascii'] as string[] | undefined) || []),
+    ...((flagsByName["data-binary"] as string[] | undefined) || []),
+    ...((flagsByName["data-ascii"] as string[] | undefined) || []),
   ];
 
   // Check if this is multipart form data in --data-raw (Chrome DevTools format)
   let multipartFormDataFromRaw:
     | { name: string; value?: string; file?: string; enabled: boolean }[]
     | null = null;
-  if (mimeType === 'multipart/form-data' && boundary && rawDataValues.length > 0) {
-    const rawBody = rawDataValues.join('');
+  if (mimeType === "multipart/form-data" && boundary && rawDataValues.length > 0) {
+    const rawBody = rawDataValues.join("");
     multipartFormDataFromRaw = parseMultipartFormData(rawBody, boundary);
   }
 
@@ -356,15 +356,15 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     ...((flagsByName.form as string[] | undefined) || []),
     ...((flagsByName.F as string[] | undefined) || []),
   ].map((str) => {
-    const parts = str.split('=');
-    const name = parts[0] ?? '';
-    const value = parts[1] ?? '';
+    const parts = str.split("=");
+    const name = parts[0] ?? "";
+    const value = parts[1] ?? "";
     const item: { name: string; value?: string; file?: string; enabled: boolean } = {
       name,
       enabled: true,
     };
 
-    if (value.indexOf('@') === 0) {
+    if (value.indexOf("@") === 0) {
       item.file = value.slice(1);
     } else {
       item.value = value;
@@ -376,11 +376,11 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   // Body
   let body = {};
   let bodyType: string | null = null;
-  const bodyAsGET = getPairValue(flagsByName, false, ['G', 'get']);
+  const bodyAsGET = getPairValue(flagsByName, false, ["G", "get"]);
 
   if (multipartFormDataFromRaw) {
     // Handle multipart form data parsed from --data-raw (Chrome DevTools format)
-    bodyType = 'multipart/form-data';
+    bodyType = "multipart/form-data";
     body = {
       form: multipartFormDataFromRaw,
     };
@@ -388,57 +388,57 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     urlParameters.push(...dataParameters);
   } else if (
     dataParameters.length > 0 &&
-    (mimeType == null || mimeType === 'application/x-www-form-urlencoded')
+    (mimeType == null || mimeType === "application/x-www-form-urlencoded")
   ) {
-    bodyType = mimeType ?? 'application/x-www-form-urlencoded';
+    bodyType = mimeType ?? "application/x-www-form-urlencoded";
     body = {
       form: dataParameters.map((parameter) => ({
         ...parameter,
-        name: decodeURIComponent(parameter.name || ''),
-        value: decodeURIComponent(parameter.value || ''),
+        name: decodeURIComponent(parameter.name || ""),
+        value: decodeURIComponent(parameter.value || ""),
       })),
     };
     headers.push({
-      name: 'Content-Type',
-      value: 'application/x-www-form-urlencoded',
+      name: "Content-Type",
+      value: "application/x-www-form-urlencoded",
       enabled: true,
     });
   } else if (dataParameters.length > 0) {
     bodyType =
-      mimeType === 'application/json' || mimeType === 'text/xml' || mimeType === 'text/plain'
+      mimeType === "application/json" || mimeType === "text/xml" || mimeType === "text/plain"
         ? mimeType
-        : 'other';
+        : "other";
     body = {
       text: dataParameters
         .map(({ name, value }) => (name && value ? `${name}=${value}` : name || value))
-        .join('&'),
+        .join("&"),
     };
   } else if (formDataParams.length) {
-    bodyType = mimeType ?? 'multipart/form-data';
+    bodyType = mimeType ?? "multipart/form-data";
     body = {
       form: formDataParams,
     };
     if (mimeType == null) {
       headers.push({
-        name: 'Content-Type',
-        value: 'multipart/form-data',
+        name: "Content-Type",
+        value: "multipart/form-data",
         enabled: true,
       });
     }
   }
 
   // Method
-  let method = getPairValue(flagsByName, '', ['X', 'request']).toUpperCase();
+  let method = getPairValue(flagsByName, "", ["X", "request"]).toUpperCase();
 
-  if (method === '' && body) {
-    method = 'text' in body || 'form' in body ? 'POST' : 'GET';
+  if (method === "" && body) {
+    method = "text" in body || "form" in body ? "POST" : "GET";
   }
 
-  const request: ExportResources['httpRequests'][0] = {
-    id: generateId('http_request'),
-    model: 'http_request',
+  const request: ExportResources["httpRequests"][0] = {
+    id: generateId("http_request"),
+    model: "http_request",
     workspaceId,
-    name: '',
+    name: "",
     urlParameters,
     url,
     method,
@@ -473,22 +473,22 @@ function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
     }
 
     for (const p of pairs) {
-      if (typeof p !== 'string') continue;
-      const params = p.split('&');
+      if (typeof p !== "string") continue;
+      const params = p.split("&");
       for (const param of params) {
-        const [name, value] = splitOnce(param, '=');
-        if (param.startsWith('@')) {
+        const [name, value] = splitOnce(param, "=");
+        if (param.startsWith("@")) {
           // Yaak doesn't support files in url-encoded data, so
           dataParameters.push({
-            name: name ?? '',
-            value: '',
+            name: name ?? "",
+            value: "",
             filePath: param.slice(1),
             enabled: true,
           });
         } else {
           dataParameters.push({
-            name: name ?? '',
-            value: flagName === 'data-urlencode' ? encodeURIComponent(value ?? '') : (value ?? ''),
+            name: name ?? "",
+            value: flagName === "data-urlencode" ? encodeURIComponent(value ?? "") : (value ?? ""),
             enabled: true,
           });
         }
@@ -537,12 +537,12 @@ function parseMultipartFormData(
 
   for (const part of parts) {
     // Skip empty parts and the closing boundary marker
-    if (!part || part.trim() === '--' || part.trim() === '--\r\n') {
+    if (!part || part.trim() === "--" || part.trim() === "--\r\n") {
       continue;
     }
 
     // Each part has headers and content separated by \r\n\r\n
-    const headerContentSplit = part.indexOf('\r\n\r\n');
+    const headerContentSplit = part.indexOf("\r\n\r\n");
     if (headerContentSplit === -1) {
       continue;
     }
@@ -551,7 +551,7 @@ function parseMultipartFormData(
     let content = part.slice(headerContentSplit + 4); // Skip \r\n\r\n
 
     // Remove trailing \r\n from content
-    if (content.endsWith('\r\n')) {
+    if (content.endsWith("\r\n")) {
       content = content.slice(0, -2);
     }
 
@@ -564,7 +564,7 @@ function parseMultipartFormData(
       continue;
     }
 
-    const name = contentDispositionMatch[1] ?? '';
+    const name = contentDispositionMatch[1] ?? "";
     const filename = contentDispositionMatch[2];
 
     const item: { name: string; value?: string; file?: string; enabled: boolean } = {

@@ -4,9 +4,9 @@ import type {
   HttpRequest,
   WebsocketRequest,
   Workspace,
-} from '@yaakapp-internal/models';
-import { foldersAtom, workspacesAtom } from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
+} from "@yaakapp-internal/models";
+import { foldersAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
 
 const ancestorsAtom = atom((get) => [...get(foldersAtom), ...get(workspacesAtom)]);
 
@@ -19,7 +19,7 @@ export function useInheritedAuthentication(baseModel: AuthenticatedModel | null)
 
   const next = (child: AuthenticatedModel) => {
     // We hit the top
-    if (child.model === 'workspace') {
+    if (child.model === "workspace") {
       return child.authenticationType == null ? null : child;
     }
 

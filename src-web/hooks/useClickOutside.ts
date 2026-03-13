@@ -1,5 +1,5 @@
-import type { RefObject } from 'react';
-import { useEffect, useRef } from 'react';
+import type { RefObject } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Get notified when a mouse click happens outside the target ref
@@ -31,11 +31,11 @@ export function useClickOutside(
     };
     // NOTE: We're using mousedown instead of click to handle some edge cases like when a context
     //  menu is open with the ctrl key.
-    document.addEventListener('mousedown', handler, { capture: true });
-    document.addEventListener('contextmenu', handler, { capture: true });
+    document.addEventListener("mousedown", handler, { capture: true });
+    document.addEventListener("contextmenu", handler, { capture: true });
     return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('contextmenu', handler);
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("contextmenu", handler);
     };
   }, [ignored, ref]);
 }

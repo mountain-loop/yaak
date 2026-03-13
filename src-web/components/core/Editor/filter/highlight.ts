@@ -1,4 +1,4 @@
-import { styleTags, tags as t } from '@lezer/highlight';
+import { styleTags, tags as t } from "@lezer/highlight";
 
 export const highlight = styleTags({
   // Boolean operators
@@ -16,6 +16,6 @@ export const highlight = styleTags({
   Phrase: t.string, // "quoted string"
 
   // Fields
-  'FieldName/Word': t.attributeName,
-  'FieldValue/Term/Word': t.attributeValue,
+  "FieldName/Word": t.attributeName,
+  "FieldValue/Term/Word": t.attributeValue,
 });

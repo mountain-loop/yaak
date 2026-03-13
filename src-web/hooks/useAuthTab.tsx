@@ -1,20 +1,20 @@
-import type { Folder } from '@yaakapp-internal/models';
-import { modelTypeLabel, patchModel } from '@yaakapp-internal/models';
-import { useMemo } from 'react';
-import { openFolderSettings } from '../commands/openFolderSettings';
-import { openWorkspaceSettings } from '../commands/openWorkspaceSettings';
-import { Icon } from '../components/core/Icon';
-import { IconTooltip } from '../components/core/IconTooltip';
-import { InlineCode } from '../components/core/InlineCode';
-import { HStack } from '../components/core/Stacks';
-import type { TabItem } from '../components/core/Tabs/Tabs';
-import { capitalize } from '../lib/capitalize';
-import { showConfirm } from '../lib/confirm';
-import { resolvedModelName } from '../lib/resolvedModelName';
-import { useHttpAuthenticationSummaries } from './useHttpAuthentication';
-import type { AuthenticatedModel } from './useInheritedAuthentication';
-import { useInheritedAuthentication } from './useInheritedAuthentication';
-import { useModelAncestors } from './useModelAncestors';
+import type { Folder } from "@yaakapp-internal/models";
+import { modelTypeLabel, patchModel } from "@yaakapp-internal/models";
+import { useMemo } from "react";
+import { openFolderSettings } from "../commands/openFolderSettings";
+import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
+import { Icon } from "../components/core/Icon";
+import { IconTooltip } from "../components/core/IconTooltip";
+import { InlineCode } from "../components/core/InlineCode";
+import { HStack } from "../components/core/Stacks";
+import type { TabItem } from "../components/core/Tabs/Tabs";
+import { capitalize } from "../lib/capitalize";
+import { showConfirm } from "../lib/confirm";
+import { resolvedModelName } from "../lib/resolvedModelName";
+import { useHttpAuthenticationSummaries } from "./useHttpAuthentication";
+import type { AuthenticatedModel } from "./useInheritedAuthentication";
+import { useInheritedAuthentication } from "./useInheritedAuthentication";
+import { useModelAncestors } from "./useModelAncestors";
 
 export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedModel | null) {
   const authentication = useHttpAuthenticationSummaries();
@@ -27,23 +27,23 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
 
     const tab: TabItem = {
       value: tabValue,
-      label: 'Auth',
+      label: "Auth",
       options: {
         value: model.authenticationType,
         items: [
           ...authentication.map((a) => ({
-            label: a.label || 'UNKNOWN',
+            label: a.label || "UNKNOWN",
             shortLabel: a.shortLabel,
             value: a.name,
           })),
-          { type: 'separator' },
+          { type: "separator" },
           {
-            label: 'Inherit from Parent',
+            label: "Inherit from Parent",
             shortLabel:
-              inheritedAuth != null && inheritedAuth.authenticationType !== 'none' ? (
+              inheritedAuth != null && inheritedAuth.authenticationType !== "none" ? (
                 <HStack space={1.5}>
                   {authentication.find((a) => a.name === inheritedAuth.authenticationType)
-                    ?.shortLabel ?? 'UNKNOWN'}
+                    ?.shortLabel ?? "UNKNOWN"}
                   <IconTooltip
                     icon="magic_wand"
                     iconSize="xs"
@@ -51,15 +51,15 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
                   />
                 </HStack>
               ) : (
-                'Auth'
+                "Auth"
               ),
             value: null,
           },
-          { label: 'No Auth', shortLabel: 'No Auth', value: 'none' },
+          { label: "No Auth", shortLabel: "No Auth", value: "none" },
         ],
         itemsAfter: (() => {
           const actions: (
-            | { type: 'separator'; label: string }
+            | { type: "separator"; label: string }
             | { label: string; leftSlot: React.ReactNode; onSelect: () => Promise<void> }
           )[] = [];
 
@@ -67,26 +67,26 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
           if (
             parentModel &&
             model.authenticationType &&
-            model.authenticationType !== 'none' &&
-            (parentModel.authenticationType == null || parentModel.authenticationType === 'none')
+            model.authenticationType !== "none" &&
+            (parentModel.authenticationType == null || parentModel.authenticationType === "none")
           ) {
             actions.push(
-              { type: 'separator', label: 'Actions' },
+              { type: "separator", label: "Actions" },
               {
                 label: `Promote to ${capitalize(parentModel.model)}`,
                 leftSlot: (
                   <Icon
-                    icon={parentModel.model === 'workspace' ? 'corner_right_up' : 'folder_up'}
+                    icon={parentModel.model === "workspace" ? "corner_right_up" : "folder_up"}
                   />
                 ),
                 onSelect: async () => {
                   const confirmed = await showConfirm({
-                    id: 'promote-auth-confirm',
-                    title: 'Promote Authentication',
-                    confirmText: 'Promote',
+                    id: "promote-auth-confirm",
+                    title: "Promote Authentication",
+                    confirmText: "Promote",
                     description: (
                       <>
-                        Move authentication config to{' '}
+                        Move authentication config to{" "}
                         <InlineCode>{resolvedModelName(parentModel)}</InlineCode>?
                       </>
                     ),
@@ -98,10 +98,10 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
                       authenticationType: model.authenticationType,
                     });
 
-                    if (parentModel.model === 'folder') {
-                      openFolderSettings(parentModel.id, 'auth');
+                    if (parentModel.model === "folder") {
+                      openFolderSettings(parentModel.id, "auth");
                     } else {
-                      openWorkspaceSettings('auth');
+                      openWorkspaceSettings("auth");
                     }
                   }
                 },
@@ -111,33 +111,33 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
 
           // Copy from ancestor: copy auth config down to current model
           const ancestorWithAuth = ancestors.find(
-            (a) => a.authenticationType != null && a.authenticationType !== 'none',
+            (a) => a.authenticationType != null && a.authenticationType !== "none",
           );
           if (ancestorWithAuth) {
             if (actions.length === 0) {
-              actions.push({ type: 'separator', label: 'Actions' });
+              actions.push({ type: "separator", label: "Actions" });
             }
             actions.push({
               label: `Copy from ${modelTypeLabel(ancestorWithAuth)}`,
               leftSlot: (
                 <Icon
                   icon={
-                    ancestorWithAuth.model === 'workspace' ? 'corner_right_down' : 'folder_down'
+                    ancestorWithAuth.model === "workspace" ? "corner_right_down" : "folder_down"
                   }
                 />
               ),
               onSelect: async () => {
                 const confirmed = await showConfirm({
-                  id: 'copy-auth-confirm',
-                  title: 'Copy Authentication',
-                  confirmText: 'Copy',
+                  id: "copy-auth-confirm",
+                  title: "Copy Authentication",
+                  confirmText: "Copy",
                   description: (
                     <>
-                      Copy{' '}
+                      Copy{" "}
                       {authentication.find((a) => a.name === ancestorWithAuth.authenticationType)
-                        ?.label ?? 'authentication'}{' '}
+                        ?.label ?? "authentication"}{" "}
                       config from <InlineCode>{resolvedModelName(ancestorWithAuth)}</InlineCode>?
-                      This will override the current authentication but will not affect the{' '}
+                      This will override the current authentication but will not affect the{" "}
                       {modelTypeLabel(ancestorWithAuth).toLowerCase()}.
                     </>
                   ),
@@ -155,7 +155,7 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
           return actions.length > 0 ? actions : undefined;
         })(),
         onChange: async (authenticationType) => {
-          let authentication: Folder['authentication'] = model.authentication;
+          let authentication: Folder["authentication"] = model.authentication;
           if (model.authenticationType !== authenticationType) {
             authentication = {
               // Reset auth if changing types

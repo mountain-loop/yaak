@@ -5,6 +5,10 @@
     "type": "git",
     "url": "git+https://github.com/mountain-loop/yaak.git"
   },
-  "os": ["darwin"],
-  "cpu": ["x64"]
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ]
 }

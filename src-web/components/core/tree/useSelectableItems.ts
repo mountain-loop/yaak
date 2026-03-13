@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import type { SelectableTreeNode, TreeNode } from './common';
+import { useMemo } from "react";
+import type { SelectableTreeNode, TreeNode } from "./common";
 
 export function useSelectableItems<T extends { id: string }>(root: TreeNode<T>) {
   return useMemo(() => {

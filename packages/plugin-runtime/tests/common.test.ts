@@ -1,106 +1,106 @@
-import { applyFormInputDefaults } from '@yaakapp-internal/lib/templateFunction';
-import type { CallTemplateFunctionArgs } from '@yaakapp-internal/plugins';
-import type { Context, DynamicTemplateFunctionArg } from '@yaakapp/api';
-import { describe, expect, test } from 'vite-plus/test';
-import { applyDynamicFormInput } from '../src/common';
+import { applyFormInputDefaults } from "@yaakapp-internal/lib/templateFunction";
+import type { CallTemplateFunctionArgs } from "@yaakapp-internal/plugins";
+import type { Context, DynamicTemplateFunctionArg } from "@yaakapp/api";
+import { describe, expect, test } from "vite-plus/test";
+import { applyDynamicFormInput } from "../src/common";
 
-describe('applyFormInputDefaults', () => {
-  test('Works with top-level select', () => {
+describe("applyFormInputDefaults", () => {
+  test("Works with top-level select", () => {
     const args: DynamicTemplateFunctionArg[] = [
       {
-        type: 'select',
-        name: 'test',
-        options: [{ label: 'Option 1', value: 'one' }],
-        defaultValue: 'one',
+        type: "select",
+        name: "test",
+        options: [{ label: "Option 1", value: "one" }],
+        defaultValue: "one",
       },
     ];
     expect(applyFormInputDefaults(args, {})).toEqual({
-      test: 'one',
+      test: "one",
     });
   });
 
-  test('Works with existing value', () => {
+  test("Works with existing value", () => {
     const args: DynamicTemplateFunctionArg[] = [
       {
-        type: 'select',
-        name: 'test',
-        options: [{ label: 'Option 1', value: 'one' }],
-        defaultValue: 'one',
+        type: "select",
+        name: "test",
+        options: [{ label: "Option 1", value: "one" }],
+        defaultValue: "one",
       },
     ];
-    expect(applyFormInputDefaults(args, { test: 'explicit' })).toEqual({
-      test: 'explicit',
+    expect(applyFormInputDefaults(args, { test: "explicit" })).toEqual({
+      test: "explicit",
     });
   });
 
-  test('Works with recursive select', () => {
+  test("Works with recursive select", () => {
     const args: DynamicTemplateFunctionArg[] = [
-      { type: 'text', name: 'dummy', defaultValue: 'top' },
+      { type: "text", name: "dummy", defaultValue: "top" },
       {
-        type: 'accordion',
-        label: 'Test',
+        type: "accordion",
+        label: "Test",
         inputs: [
-          { type: 'text', name: 'name', defaultValue: 'hello' },
+          { type: "text", name: "name", defaultValue: "hello" },
           {
-            type: 'select',
-            name: 'test',
-            options: [{ label: 'Option 1', value: 'one' }],
-            defaultValue: 'one',
+            type: "select",
+            name: "test",
+            options: [{ label: "Option 1", value: "one" }],
+            defaultValue: "one",
           },
         ],
       },
     ];
     expect(applyFormInputDefaults(args, {})).toEqual({
-      dummy: 'top',
-      test: 'one',
-      name: 'hello',
+      dummy: "top",
+      test: "one",
+      name: "hello",
     });
   });
 
-  test('Works with dynamic options', () => {
+  test("Works with dynamic options", () => {
     const args: DynamicTemplateFunctionArg[] = [
       {
-        type: 'select',
-        name: 'test',
-        defaultValue: 'one',
+        type: "select",
+        name: "test",
+        defaultValue: "one",
         options: [],
         dynamic() {
-          return { options: [{ label: 'Option 1', value: 'one' }] };
+          return { options: [{ label: "Option 1", value: "one" }] };
         },
       },
     ];
     expect(applyFormInputDefaults(args, {})).toEqual({
-      test: 'one',
+      test: "one",
     });
     expect(applyFormInputDefaults(args, {})).toEqual({
-      test: 'one',
+      test: "one",
     });
   });
 });
 
-describe('applyDynamicFormInput', () => {
-  test('Works with plain input', async () => {
+describe("applyDynamicFormInput", () => {
+  test("Works with plain input", async () => {
     const ctx = {} as Context;
     const args: DynamicTemplateFunctionArg[] = [
-      { type: 'text', name: 'name' },
-      { type: 'checkbox', name: 'checked' },
+      { type: "text", name: "name" },
+      { type: "checkbox", name: "checked" },
     ];
     const callArgs: CallTemplateFunctionArgs = {
       values: {},
-      purpose: 'preview',
+      purpose: "preview",
     };
     expect(await applyDynamicFormInput(ctx, args, callArgs)).toEqual([
-      { type: 'text', name: 'name' },
-      { type: 'checkbox', name: 'checked' },
+      { type: "text", name: "name" },
+      { type: "checkbox", name: "checked" },
     ]);
   });
 
-  test('Works with dynamic input', async () => {
+  test("Works with dynamic input", async () => {
     const ctx = {} as Context;
     const args: DynamicTemplateFunctionArg[] = [
       {
-        type: 'text',
-        name: 'name',
+        type: "text",
+        name: "name",
         async dynamic(_ctx, _args) {
           return { hidden: true };
         },
@@ -108,28 +108,28 @@ describe('applyDynamicFormInput', () => {
     ];
     const callArgs: CallTemplateFunctionArgs = {
       values: {},
-      purpose: 'preview',
+      purpose: "preview",
     };
     expect(await applyDynamicFormInput(ctx, args, callArgs)).toEqual([
-      { type: 'text', name: 'name', hidden: true },
+      { type: "text", name: "name", hidden: true },
     ]);
   });
 
-  test('Works with recursive dynamic input', async () => {
+  test("Works with recursive dynamic input", async () => {
     const ctx = {} as Context;
     const callArgs: CallTemplateFunctionArgs = {
-      values: { hello: 'world' },
-      purpose: 'preview',
+      values: { hello: "world" },
+      purpose: "preview",
     };
     const args: DynamicTemplateFunctionArg[] = [
       {
-        type: 'banner',
+        type: "banner",
         inputs: [
           {
-            type: 'text',
-            name: 'name',
+            type: "text",
+            name: "name",
             async dynamic(_ctx, args) {
-              return { hidden: args.values.hello === 'world' };
+              return { hidden: args.values.hello === "world" };
             },
           },
         ],
@@ -137,11 +137,11 @@ describe('applyDynamicFormInput', () => {
     ];
     expect(await applyDynamicFormInput(ctx, args, callArgs)).toEqual([
       {
-        type: 'banner',
+        type: "banner",
         inputs: [
           {
-            type: 'text',
-            name: 'name',
+            type: "text",
+            name: "name",
             hidden: true,
           },
         ],

@@ -1,20 +1,20 @@
-import classNames from 'classnames';
-import type { ReactNode } from 'react';
-import { useCallback, useMemo } from 'react';
-import { createGlobalState } from 'react-use';
-import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { useFormatText } from '../../hooks/useFormatText';
-import type { EditorProps } from '../core/Editor/Editor';
-import { hyperlink } from '../core/Editor/hyperlink/extension';
-import { Editor } from '../core/Editor/LazyEditor';
-import { IconButton } from '../core/IconButton';
-import { Input } from '../core/Input';
+import classNames from "classnames";
+import type { ReactNode } from "react";
+import { useCallback, useMemo } from "react";
+import { createGlobalState } from "react-use";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useFormatText } from "../../hooks/useFormatText";
+import type { EditorProps } from "../core/Editor/Editor";
+import { hyperlink } from "../core/Editor/hyperlink/extension";
+import { Editor } from "../core/Editor/LazyEditor";
+import { IconButton } from "../core/IconButton";
+import { Input } from "../core/Input";
 
 const extraExtensions = [hyperlink];
 
 interface Props {
   text: string;
-  language: EditorProps['language'];
+  language: EditorProps["language"];
   stateKey: string | null;
   pretty?: boolean;
   className?: string;
@@ -49,11 +49,11 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
     if (isSearching) {
       setFilterText(null);
     } else {
-      setFilterText('');
+      setFilterText("");
     }
   }, [isSearching, setFilterText]);
 
-  const canFilter = onFilter && (language === 'json' || language === 'xml' || language === 'html');
+  const canFilter = onFilter && (language === "json" || language === "xml" || language === "html");
 
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = [];
@@ -64,17 +64,17 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
       nodes.push(
         <div key="input" className="w-full !opacity-100">
           <Input
-            key={stateKey ?? 'filter'}
+            key={stateKey ?? "filter"}
             validate={!filteredResponse.error}
             hideLabel
             autoFocus
             containerClassName="bg-surface"
             size="sm"
-            placeholder={language === 'json' ? 'JSONPath expression' : 'XPath expression'}
+            placeholder={language === "json" ? "JSONPath expression" : "XPath expression"}
             label="Filter expression"
             name="filter"
             defaultValue={filterText}
-            onKeyDown={(e) => e.key === 'Escape' && toggleSearch()}
+            onKeyDown={(e) => e.key === "Escape" && toggleSearch()}
             onChange={setFilterText}
             stateKey={stateKey ? `filter.${stateKey}` : null}
           />
@@ -87,10 +87,10 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
         key="icon"
         size="sm"
         isLoading={filteredResponse.isPending}
-        icon={isSearching ? 'x' : 'filter'}
-        title={isSearching ? 'Close filter' : 'Filter response'}
+        icon={isSearching ? "x" : "filter"}
+        title={isSearching ? "Close filter" : "Filter response"}
         onClick={toggleSearch}
-        className={classNames('border !border-border-subtle', isSearching && '!opacity-100')}
+        className={classNames("border !border-border-subtle", isSearching && "!opacity-100")}
       />,
     );
 
@@ -115,18 +115,18 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
   let body: string;
   if (isSearching && filterText?.length > 0) {
     if (filteredResponse.error) {
-      body = '';
+      body = "";
     } else {
-      body = filteredResponse.data != null ? filteredResponse.data : '';
+      body = filteredResponse.data != null ? filteredResponse.data : "";
     }
   } else {
     body = formattedBody;
   }
 
   // Decode unicode sequences in the text to readable characters
-  if (language === 'json' && pretty) {
+  if (language === "json" && pretty) {
     body = decodeUnicodeLiterals(body);
-    body = body.replace(/\\\//g, '/'); // Hide unnecessary escaping of '/' by some older frameworks
+    body = body.replace(/\\\//g, "/"); // Hide unnecessary escaping of '/' by some older frameworks
   }
 
   return (

@@ -1,4 +1,4 @@
-import type { DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
+import type { DragEndEvent, DragMoveEvent, DragStartEvent } from "@dnd-kit/core";
 import {
   DndContext,
   MeasuringStrategy,
@@ -7,10 +7,10 @@ import {
   useDroppable,
   useSensor,
   useSensors,
-} from '@dnd-kit/core';
-import { type } from '@tauri-apps/plugin-os';
-import classNames from 'classnames';
-import type { ComponentType, MouseEvent, ReactElement, Ref, RefAttributes } from 'react';
+} from "@dnd-kit/core";
+import { type } from "@tauri-apps/plugin-os";
+import classNames from "classnames";
+import type { ComponentType, MouseEvent, ReactElement, Ref, RefAttributes } from "react";
 import {
   forwardRef,
   memo,
@@ -20,14 +20,14 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
-import { useKey, useKeyPressEvent } from 'react-use';
-import type { HotKeyOptions, HotkeyAction } from '../../../hooks/useHotKey';
-import { useHotKey } from '../../../hooks/useHotKey';
-import { computeSideForDragMove } from '../../../lib/dnd';
-import { jotaiStore } from '../../../lib/jotai';
-import type { ContextMenuProps, DropdownItem } from '../Dropdown';
-import { ContextMenu } from '../Dropdown';
+} from "react";
+import { useKey, useKeyPressEvent } from "react-use";
+import type { HotKeyOptions, HotkeyAction } from "../../../hooks/useHotKey";
+import { useHotKey } from "../../../hooks/useHotKey";
+import { computeSideForDragMove } from "../../../lib/dnd";
+import { jotaiStore } from "../../../lib/jotai";
+import type { ContextMenuProps, DropdownItem } from "../Dropdown";
+import { ContextMenu } from "../Dropdown";
 import {
   collapsedFamily,
   draggingIdsFamily,
@@ -35,14 +35,14 @@ import {
   hoveredParentFamily,
   isCollapsedFamily,
   selectedIdsFamily,
-} from './atoms';
-import type { SelectableTreeNode, TreeNode } from './common';
-import { closestVisibleNode, equalSubtree, getSelectedItems, hasAncestor } from './common';
-import { TreeDragOverlay } from './TreeDragOverlay';
-import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from './TreeItem';
-import type { TreeItemListProps } from './TreeItemList';
-import { TreeItemList } from './TreeItemList';
-import { useSelectableItems } from './useSelectableItems';
+} from "./atoms";
+import type { SelectableTreeNode, TreeNode } from "./common";
+import { closestVisibleNode, equalSubtree, getSelectedItems, hasAncestor } from "./common";
+import { TreeDragOverlay } from "./TreeDragOverlay";
+import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from "./TreeItem";
+import type { TreeItemListProps } from "./TreeItemList";
+import { TreeItemList } from "./TreeItemList";
+import { useSelectableItems } from "./useSelectableItems";
 
 /** So we re-calculate after expanding a folder during drag */
 const measuring = { droppable: { strategy: MeasuringStrategy.Always } };
@@ -51,7 +51,7 @@ export interface TreeProps<T extends { id: string }> {
   root: TreeNode<T>;
   treeId: string;
   getItemKey: (item: T) => string;
-  getContextMenu?: (items: T[]) => ContextMenuProps['items'] | Promise<ContextMenuProps['items']>;
+  getContextMenu?: (items: T[]) => ContextMenuProps["items"] | Promise<ContextMenuProps["items"]>;
   ItemInner: ComponentType<{ treeId: string; item: T }>;
   ItemLeftSlotInner?: ComponentType<{ treeId: string; item: T }>;
   ItemRightSlot?: ComponentType<{ treeId: string; item: T }>;
@@ -140,7 +140,7 @@ function TreeInner<T extends { id: string }>(
       return false;
     }
     $el.focus();
-    $el.scrollIntoView({ block: 'nearest' });
+    $el.scrollIntoView({ block: "nearest" });
     return true;
   }, []);
 
@@ -241,7 +241,7 @@ function TreeInner<T extends { id: string }>(
     };
   }, [getContextMenu, selectableItems, setSelected, treeId]);
 
-  const handleSelect = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
+  const handleSelect = useCallback<NonNullable<TreeItemProps<T>["onClick"]>>(
     (item, { shiftKey, metaKey, ctrlKey }) => {
       const anchorSelectedId = jotaiStore.get(focusIdsFamily(treeId)).anchorId;
       const selectedIdsAtom = selectedIdsFamily(treeId);
@@ -281,7 +281,7 @@ function TreeInner<T extends { id: string }>(
         } else {
           setSelected([item.id], true);
         }
-      } else if (type() === 'macos' ? metaKey : ctrlKey) {
+      } else if (type() === "macos" ? metaKey : ctrlKey) {
         const withoutCurr = selectedIds.filter((id) => id !== item.id);
         if (withoutCurr.length === selectedIds.length) {
           // It wasn't in there, so add it
@@ -299,7 +299,7 @@ function TreeInner<T extends { id: string }>(
     [selectableItems, setSelected, treeId],
   );
 
-  const handleClick = useCallback<NonNullable<TreeItemProps<T>['onClick']>>(
+  const handleClick = useCallback<NonNullable<TreeItemProps<T>["onClick"]>>(
     (item, e) => {
       if (e.shiftKey || e.ctrlKey || e.metaKey) {
         handleSelect(item, e);
@@ -350,7 +350,7 @@ function TreeInner<T extends { id: string }>(
   );
 
   useKey(
-    (e) => e.key === 'ArrowUp' || e.key.toLowerCase() === 'k',
+    (e) => e.key === "ArrowUp" || e.key.toLowerCase() === "k",
     (e) => {
       if (!isTreeFocused()) return;
       e.preventDefault();
@@ -361,7 +361,7 @@ function TreeInner<T extends { id: string }>(
   );
 
   useKey(
-    (e) => e.key === 'ArrowDown' || e.key.toLowerCase() === 'j',
+    (e) => e.key === "ArrowDown" || e.key.toLowerCase() === "j",
     (e) => {
       if (!isTreeFocused()) return;
       e.preventDefault();
@@ -373,7 +373,7 @@ function TreeInner<T extends { id: string }>(
 
   // If the selected item is a collapsed folder, expand it. Otherwise, select next item
   useKey(
-    (e) => e.key === 'ArrowRight' || e.key === 'l',
+    (e) => e.key === "ArrowRight" || e.key === "l",
     (e) => {
       if (!isTreeFocused()) return;
       e.preventDefault();
@@ -399,7 +399,7 @@ function TreeInner<T extends { id: string }>(
   // If the selected item is in a folder, select its parent.
   // If the selected item is an expanded folder, collapse it.
   useKey(
-    (e) => e.key === 'ArrowLeft' || e.key === 'h',
+    (e) => e.key === "ArrowLeft" || e.key === "h",
     (e) => {
       if (!isTreeFocused()) return;
       e.preventDefault();
@@ -422,7 +422,7 @@ function TreeInner<T extends { id: string }>(
     [selectableItems, handleSelect],
   );
 
-  useKeyPressEvent('Escape', async () => {
+  useKeyPressEvent("Escape", async () => {
     if (!treeRef.current?.contains(document.activeElement)) return;
     clearDragState();
     const lastSelectedId = jotaiStore.get(focusIdsFamily(treeId)).lastId;
@@ -486,11 +486,11 @@ function TreeInner<T extends { id: string }>(
       let hoveredParent = node.parent;
       const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
       const hovered = selectableItems[dragIndex]?.node ?? null;
-      const hoveredIndex = dragIndex + (side === 'before' ? 0 : 1);
-      let hoveredChildIndex = overSelectableItem.index + (side === 'before' ? 0 : 1);
+      const hoveredIndex = dragIndex + (side === "before" ? 0 : 1);
+      let hoveredChildIndex = overSelectableItem.index + (side === "before" ? 0 : 1);
 
       // Move into the folder if it's open and we're moving after it
-      if (hovered?.children != null && side === 'after') {
+      if (hovered?.children != null && side === "after") {
         hoveredParent = hovered;
         hoveredChildIndex = 0;
       }
@@ -620,7 +620,7 @@ function TreeInner<T extends { id: string }>(
 
   const treeItemListProps: Omit<
     TreeItemListProps<T>,
-    'nodes' | 'treeId' | 'activeIdAtom' | 'hoveredParent' | 'hoveredIndex'
+    "nodes" | "treeId" | "activeIdAtom" | "hoveredParent" | "hoveredIndex"
   > = {
     getItemKey,
     getContextMenu: handleGetContextMenu,
@@ -670,24 +670,24 @@ function TreeInner<T extends { id: string }>(
           ref={treeRef}
           className={classNames(
             className,
-            'outline-none h-full',
-            'overflow-y-auto overflow-x-hidden',
-            'grid grid-rows-[auto_1fr]',
+            "outline-none h-full",
+            "overflow-y-auto overflow-x-hidden",
+            "grid grid-rows-[auto_1fr]",
           )}
         >
           <div
             className={classNames(
-              '[&_.tree-item.selected_.tree-item-inner]:text-text',
-              '[&:focus-within]:[&_.tree-item.selected]:bg-surface-active',
-              '[&:not(:focus-within)]:[&_.tree-item.selected:not([data-context-menu-open])]:bg-surface-highlight',
-              '[&_.tree-item.selected[data-context-menu-open]]:bg-surface-active',
+              "[&_.tree-item.selected_.tree-item-inner]:text-text",
+              "[&:focus-within]:[&_.tree-item.selected]:bg-surface-active",
+              "[&:not(:focus-within)]:[&_.tree-item.selected:not([data-context-menu-open])]:bg-surface-highlight",
+              "[&_.tree-item.selected[data-context-menu-open]]:bg-surface-active",
               // Round the items, but only if the ends of the selection.
               // Also account for the drop marker being in between items
-              '[&_.tree-item]:rounded-md',
-              '[&_.tree-item.selected+.tree-item.selected]:rounded-t-none',
-              '[&_.tree-item.selected+.drop-marker+.tree-item.selected]:rounded-t-none',
-              '[&_.tree-item.selected:has(+.tree-item.selected)]:rounded-b-none',
-              '[&_.tree-item.selected:has(+.drop-marker+.tree-item.selected)]:rounded-b-none',
+              "[&_.tree-item]:rounded-md",
+              "[&_.tree-item.selected+.tree-item.selected]:rounded-t-none",
+              "[&_.tree-item.selected+.drop-marker+.tree-item.selected]:rounded-t-none",
+              "[&_.tree-item.selected:has(+.tree-item.selected)]:rounded-b-none",
+              "[&_.tree-item.selected:has(+.drop-marker+.tree-item.selected)]:rounded-b-none",
             )}
           >
             <TreeItemList
@@ -766,7 +766,7 @@ function TreeHotKey<T extends { id: string }>({
       ...options,
       enable: () => {
         if (enable == null) return true;
-        if (typeof enable === 'function') return enable();
+        if (typeof enable === "function") return enable();
         return enable;
       },
     },
@@ -780,7 +780,7 @@ function TreeHotKeys<T extends { id: string }>({
   selectableItems,
 }: {
   treeId: string;
-  hotkeys: TreeProps<T>['hotkeys'];
+  hotkeys: TreeProps<T>["hotkeys"];
   selectableItems: SelectableTreeNode<T>[];
 }) {
   if (hotkeys == null) return null;

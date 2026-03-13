@@ -1,4 +1,4 @@
-import { atomWithKVStorage } from '../../lib/atoms/atomWithKVStorage';
+import { atomWithKVStorage } from "../../lib/atoms/atomWithKVStorage";
 
 export const showGraphQLDocExplorerAtom = atomWithKVStorage<
   Record<
@@ -11,4 +11,4 @@ export const showGraphQLDocExplorerAtom = atomWithKVStorage<
     | null
     | undefined
   >
->('show_graphql_docs', {});
+>("show_graphql_docs", {});

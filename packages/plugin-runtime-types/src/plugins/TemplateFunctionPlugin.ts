@@ -1,6 +1,6 @@
-import type { CallTemplateFunctionArgs, FormInput, TemplateFunction } from '../bindings/gen_events';
-import type { MaybePromise } from '../helpers';
-import type { Context } from './Context';
+import type { CallTemplateFunctionArgs, FormInput, TemplateFunction } from "../bindings/gen_events";
+import type { MaybePromise } from "../helpers";
+import type { Context } from "./Context";
 
 type AddDynamicMethod<T> = {
   dynamic?: (
@@ -12,13 +12,13 @@ type AddDynamicMethod<T> = {
 // oxlint-disable-next-line no-explicit-any -- distributive conditional type pattern
 type AddDynamic<T> = T extends any
   ? T extends { inputs?: FormInput[] }
-    ? Omit<T, 'inputs'> & {
+    ? Omit<T, "inputs"> & {
         inputs: Array<AddDynamic<FormInput>>;
         dynamic?: (
           ctx: Context,
           args: CallTemplateFunctionArgs,
         ) => MaybePromise<
-          Partial<Omit<T, 'inputs'> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
+          Partial<Omit<T, "inputs"> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
         >;
       }
     : T & AddDynamicMethod<T>
@@ -26,7 +26,7 @@ type AddDynamic<T> = T extends any
 
 export type DynamicTemplateFunctionArg = AddDynamic<FormInput>;
 
-export type TemplateFunctionPlugin = Omit<TemplateFunction, 'args'> & {
+export type TemplateFunctionPlugin = Omit<TemplateFunction, "args"> & {
   args: DynamicTemplateFunctionArg[];
   onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null>;
 };

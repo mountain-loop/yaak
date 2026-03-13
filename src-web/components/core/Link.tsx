@@ -1,8 +1,8 @@
-import { Link as RouterLink } from '@tanstack/react-router';
-import classNames from 'classnames';
-import type { HTMLAttributes } from 'react';
-import { appInfo } from '../../lib/appInfo';
-import { Icon } from './Icon';
+import { Link as RouterLink } from "@tanstack/react-router";
+import classNames from "classnames";
+import type { HTMLAttributes } from "react";
+import { appInfo } from "../../lib/appInfo";
+import { Icon } from "./Icon";
 
 interface Props extends HTMLAttributes<HTMLAnchorElement> {
   href: string;
@@ -14,17 +14,17 @@ export function Link({ href, children, noUnderline, className, ...other }: Props
 
   className = classNames(
     className,
-    'relative',
-    'inline-flex items-center hover:underline group',
-    !noUnderline && 'underline',
+    "relative",
+    "inline-flex items-center hover:underline group",
+    !noUnderline && "underline",
   );
 
   if (isExternal) {
-    const isYaakLink = href.startsWith('https://yaak.app');
+    const isYaakLink = href.startsWith("https://yaak.app");
     let finalHref = href;
     if (isYaakLink) {
       const url = new URL(href);
-      url.searchParams.set('ref', appInfo.identifier);
+      url.searchParams.set("ref", appInfo.identifier);
       finalHref = url.toString();
     }
     return (
@@ -32,7 +32,7 @@ export function Link({ href, children, noUnderline, className, ...other }: Props
       <a
         href={finalHref}
         target="_blank"
-        rel={isYaakLink ? undefined : 'noopener noreferrer'}
+        rel={isYaakLink ? undefined : "noopener noreferrer"}
         onClick={(e) => e.preventDefault()}
         className={className}
         {...other}

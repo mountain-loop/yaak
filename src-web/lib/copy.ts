@@ -1,5 +1,5 @@
-import { clear, writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { showToast } from './toast';
+import { clear, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { showToast } from "./toast";
 
 export function copyToClipboard(
   text: string | null,
@@ -11,12 +11,12 @@ export function copyToClipboard(
     writeText(text).catch(console.error);
   }
 
-  if (text !== '' && !disableToast) {
+  if (text !== "" && !disableToast) {
     showToast({
-      id: 'copied',
-      color: 'success',
-      icon: 'copy',
-      message: 'Copied to clipboard',
+      id: "copied",
+      color: "success",
+      icon: "copy",
+      message: "Copied to clipboard",
     });
   }
 }

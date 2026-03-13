@@ -1,42 +1,38 @@
-import {
-  createWorkspaceModel,
-  foldersAtom,
-  patchModel,
-} from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { Fragment, useMemo } from 'react';
-import { useAuthTab } from '../hooks/useAuthTab';
-import { useEnvironmentsBreakdown } from '../hooks/useEnvironmentsBreakdown';
-import { useHeadersTab } from '../hooks/useHeadersTab';
-import { useInheritedHeaders } from '../hooks/useInheritedHeaders';
-import { useModelAncestors } from '../hooks/useModelAncestors';
-import { deleteModelWithConfirm } from '../lib/deleteModelWithConfirm';
-import { hideDialog } from '../lib/dialog';
-import { CopyIconButton } from './CopyIconButton';
-import { Button } from './core/Button';
-import { CountBadge } from './core/CountBadge';
-import { Icon } from './core/Icon';
-import { InlineCode } from './core/InlineCode';
-import { Input } from './core/Input';
-import { Link } from './core/Link';
-import { HStack, VStack } from './core/Stacks';
-import type { TabItem } from './core/Tabs/Tabs';
-import { TabContent, Tabs } from './core/Tabs/Tabs';
-import { EmptyStateText } from './EmptyStateText';
-import { EnvironmentEditor } from './EnvironmentEditor';
-import { HeadersEditor } from './HeadersEditor';
-import { HttpAuthenticationEditor } from './HttpAuthenticationEditor';
-import { MarkdownEditor } from './MarkdownEditor';
+import { createWorkspaceModel, foldersAtom, patchModel } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { Fragment, useMemo } from "react";
+import { useAuthTab } from "../hooks/useAuthTab";
+import { useEnvironmentsBreakdown } from "../hooks/useEnvironmentsBreakdown";
+import { useHeadersTab } from "../hooks/useHeadersTab";
+import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
+import { useModelAncestors } from "../hooks/useModelAncestors";
+import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { hideDialog } from "../lib/dialog";
+import { CopyIconButton } from "./CopyIconButton";
+import { Button } from "./core/Button";
+import { CountBadge } from "./core/CountBadge";
+import { Icon } from "./core/Icon";
+import { InlineCode } from "./core/InlineCode";
+import { Input } from "./core/Input";
+import { Link } from "./core/Link";
+import { HStack, VStack } from "./core/Stacks";
+import type { TabItem } from "./core/Tabs/Tabs";
+import { TabContent, Tabs } from "./core/Tabs/Tabs";
+import { EmptyStateText } from "./EmptyStateText";
+import { EnvironmentEditor } from "./EnvironmentEditor";
+import { HeadersEditor } from "./HeadersEditor";
+import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
+import { MarkdownEditor } from "./MarkdownEditor";
 
 interface Props {
   folderId: string | null;
   tab?: FolderSettingsTab;
 }
 
-const TAB_AUTH = 'auth';
-const TAB_HEADERS = 'headers';
-const TAB_VARIABLES = 'variables';
-const TAB_GENERAL = 'general';
+const TAB_AUTH = "auth";
+const TAB_HEADERS = "headers";
+const TAB_VARIABLES = "variables";
+const TAB_GENERAL = "general";
 
 export type FolderSettingsTab =
   | typeof TAB_AUTH
@@ -54,7 +50,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
   const inheritedHeaders = useInheritedHeaders(folder);
   const environments = useEnvironmentsBreakdown();
   const folderEnvironment = environments.allEnvironments.find(
-    (e) => e.parentModel === 'folder' && e.parentId === folderId,
+    (e) => e.parentModel === "folder" && e.parentId === folderId,
   );
   const numVars = (folderEnvironment?.variables ?? []).filter((v) => v.name).length;
 
@@ -64,13 +60,13 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
     return [
       {
         value: TAB_GENERAL,
-        label: 'General',
+        label: "General",
       },
       ...headersTab,
       ...authTab,
       {
         value: TAB_VARIABLES,
-        label: 'Variables',
+        label: "Variables",
         rightSlot: numVars > 0 ? <CountBadge count={numVars} /> : null,
       },
     ];
@@ -86,11 +82,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           {breadcrumbs.map((item, index) => (
             <Fragment key={item.id}>
               {index > 0 && (
-                <Icon
-                  icon="chevron_right"
-                  size="lg"
-                  className="opacity-50 flex-shrink-0"
-                />
+                <Icon icon="chevron_right" size="lg" className="opacity-50 flex-shrink-0" />
               )}
               <span className="text-text-subtle truncate min-w-0" title={item.name}>
                 {item.name}
@@ -100,10 +92,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
           {breadcrumbs.length > 0 && (
             <Icon icon="chevron_right" size="lg" className="opacity-50 flex-shrink-0" />
           )}
-          <span
-            className="whitespace-nowrap"
-            title={folder.name}
-          >
+          <span className="whitespace-nowrap" title={folder.name}>
             {folder.name}
           </span>
         </div>
@@ -141,7 +130,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
                 onClick={async () => {
                   const didDelete = await deleteModelWithConfirm(folder);
                   if (didDelete) {
-                    hideDialog('folder-settings');
+                    hideDialog("folder-settings");
                   }
                 }}
                 color="danger"
@@ -177,10 +166,10 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
             <EmptyStateText>
               <VStack alignItems="center" space={1.5}>
                 <p>
-                  Override{' '}
+                  Override{" "}
                   <Link href="https://yaak.app/docs/using-yaak/environments-and-variables">
                     Variables
-                  </Link>{' '}
+                  </Link>{" "}
                   for requests within this folder.
                 </p>
                 <Button
@@ -189,10 +178,10 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
                   onClick={async () => {
                     await createWorkspaceModel({
                       workspaceId: folder.workspaceId,
-                      parentModel: 'folder',
+                      parentModel: "folder",
                       parentId: folder.id,
-                      model: 'environment',
-                      name: 'Folder Environment',
+                      model: "environment",
+                      name: "Folder Environment",
                     });
                   }}
                 >

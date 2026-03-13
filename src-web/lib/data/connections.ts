@@ -1,1 +1,1 @@
-export const connections = ['close', 'keep-alive'];
+export const connections = ["close", "keep-alive"];

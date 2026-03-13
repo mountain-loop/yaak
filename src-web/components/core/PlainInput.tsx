@@ -1,5 +1,5 @@
-import classNames from 'classnames';
-import type { FocusEvent, HTMLAttributes, ReactNode } from 'react';
+import classNames from "classnames";
+import type { FocusEvent, HTMLAttributes, ReactNode } from "react";
 import {
   forwardRef,
   useCallback,
@@ -7,30 +7,30 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-} from 'react';
-import { useRandomKey } from '../../hooks/useRandomKey';
-import { useStateWithDeps } from '../../hooks/useStateWithDeps';
-import { generateId } from '../../lib/generateId';
-import { IconButton } from './IconButton';
-import type { InputProps } from './Input';
-import { Label } from './Label';
-import { HStack } from './Stacks';
+} from "react";
+import { useRandomKey } from "../../hooks/useRandomKey";
+import { useStateWithDeps } from "../../hooks/useStateWithDeps";
+import { generateId } from "../../lib/generateId";
+import { IconButton } from "./IconButton";
+import type { InputProps } from "./Input";
+import { Label } from "./Label";
+import { HStack } from "./Stacks";
 
 export type PlainInputProps = Omit<
   InputProps,
-  | 'wrapLines'
-  | 'onKeyDown'
-  | 'type'
-  | 'stateKey'
-  | 'autocompleteVariables'
-  | 'autocompleteFunctions'
-  | 'autocomplete'
-  | 'extraExtensions'
-  | 'forcedEnvironmentId'
+  | "wrapLines"
+  | "onKeyDown"
+  | "type"
+  | "stateKey"
+  | "autocompleteVariables"
+  | "autocompleteFunctions"
+  | "autocomplete"
+  | "extraExtensions"
+  | "forcedEnvironmentId"
 > &
-  Pick<HTMLAttributes<HTMLInputElement>, 'onKeyDownCapture'> & {
-    onFocusRaw?: HTMLAttributes<HTMLInputElement>['onFocus'];
-    type?: 'text' | 'password' | 'number';
+  Pick<HTMLAttributes<HTMLInputElement>, "onKeyDownCapture"> & {
+    onFocusRaw?: HTMLAttributes<HTMLInputElement>["onFocus"];
+    type?: "text" | "password" | "number";
     step?: number;
     hideObscureToggle?: boolean;
     labelRightSlot?: ReactNode;
@@ -49,7 +49,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     hideObscureToggle,
     label,
     labelClassName,
-    labelPosition = 'top',
+    labelPosition = "top",
     labelRightSlot,
     leftSlot,
     name,
@@ -62,9 +62,9 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     placeholder,
     required,
     rightSlot,
-    size = 'md',
+    size = "md",
     tint,
-    type = 'text',
+    type = "text",
     validate,
   },
   ref,
@@ -74,7 +74,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
   const [focusedUpdateKey, regenerateFocusedUpdateKey] = useRandomKey();
   const forceUpdateKey = `${forceUpdateKeyFromAbove}::${focusedUpdateKey}`;
 
-  const [obscured, setObscured] = useStateWithDeps(type === 'password', [type]);
+  const [obscured, setObscured] = useStateWithDeps(type === "password", [type]);
   const [focused, setFocused] = useState(false);
   const [hasChanged, setHasChanged] = useStateWithDeps<boolean>(false, [forceUpdateKey]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -114,8 +114,8 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
   const id = useRef(`input-${generateId()}`);
   const commonClassName = classNames(
     className,
-    '!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder',
-    'px-2 text-xs font-mono cursor-text',
+    "!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder",
+    "px-2 text-xs font-mono cursor-text",
   );
 
   const handleChange = useCallback(
@@ -124,11 +124,11 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
       setHasChanged(true);
       const isValid = (value: string) => {
         if (required && !validateRequire(value)) return false;
-        if (typeof validate === 'boolean') return validate;
-        if (typeof validate === 'function' && !validate(value)) return false;
+        if (typeof validate === "boolean") return validate;
+        if (typeof validate === "function" && !validate(value)) return false;
         return true;
       };
-      inputRef.current?.setCustomValidity(isValid(value) ? '' : 'Invalid value');
+      inputRef.current?.setCustomValidity(isValid(value) ? "" : "Invalid value");
     },
     [onChange, required, setHasChanged, validate],
   );
@@ -139,10 +139,10 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     <div
       ref={wrapperRef}
       className={classNames(
-        'w-full',
-        'pointer-events-auto', // Just in case we're placing in disabled parent
-        labelPosition === 'left' && 'flex items-center gap-2',
-        labelPosition === 'top' && 'flex-row gap-0.5',
+        "w-full",
+        "pointer-events-auto", // Just in case we're placing in disabled parent
+        labelPosition === "left" && "flex items-center gap-2",
+        labelPosition === "top" && "flex-row gap-0.5",
       )}
     >
       <Label
@@ -159,41 +159,41 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
         alignItems="stretch"
         className={classNames(
           containerClassName,
-          'x-theme-input',
-          'relative w-full rounded-md text',
-          'border',
-          'overflow-hidden',
-          focused ? 'border-border-focus' : 'border-border-subtle',
-          hasChanged && 'has-[:invalid]:border-danger', // For built-in HTML validation
-          size === 'md' && 'min-h-md',
-          size === 'sm' && 'min-h-sm',
-          size === 'xs' && 'min-h-xs',
-          size === '2xs' && 'min-h-2xs',
+          "x-theme-input",
+          "relative w-full rounded-md text",
+          "border",
+          "overflow-hidden",
+          focused ? "border-border-focus" : "border-border-subtle",
+          hasChanged && "has-[:invalid]:border-danger", // For built-in HTML validation
+          size === "md" && "min-h-md",
+          size === "sm" && "min-h-sm",
+          size === "xs" && "min-h-xs",
+          size === "2xs" && "min-h-2xs",
         )}
       >
         {tint != null && (
           <div
             aria-hidden
             className={classNames(
-              'absolute inset-0 opacity-5 pointer-events-none',
-              tint === 'info' && 'bg-info',
-              tint === 'warning' && 'bg-warning',
+              "absolute inset-0 opacity-5 pointer-events-none",
+              tint === "info" && "bg-info",
+              tint === "warning" && "bg-warning",
             )}
           />
         )}
         {leftSlot}
         <HStack
           className={classNames(
-            'w-full min-w-0',
-            leftSlot ? 'pl-0.5 -ml-2' : null,
-            rightSlot ? 'pr-0.5 -mr-2' : null,
+            "w-full min-w-0",
+            leftSlot ? "pl-0.5 -ml-2" : null,
+            rightSlot ? "pr-0.5 -mr-2" : null,
           )}
         >
           <input
             id={id.current}
             ref={inputRef}
             key={forceUpdateKey}
-            type={type === 'password' && !obscured ? 'text' : type}
+            type={type === "password" && !obscured ? "text" : type}
             name={name}
             // oxlint-disable-next-line jsx-a11y/no-autofocus
             autoFocus={autoFocus}
@@ -202,8 +202,8 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             autoCapitalize="off"
             autoCorrect="off"
             onChange={(e) => handleChange(e.target.value)}
-            onPaste={(e) => onPaste?.(e.clipboardData.getData('Text'))}
-            className={classNames(commonClassName, 'h-full')}
+            onPaste={(e) => onPaste?.(e.clipboardData.getData("Text"))}
+            className={classNames(commonClassName, "h-full")}
             onFocus={handleFocus}
             onBlur={handleBlur}
             required={required}
@@ -211,14 +211,18 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             onKeyDownCapture={onKeyDownCapture}
           />
         </HStack>
-        {type === 'password' && !hideObscureToggle && (
+        {type === "password" && !hideObscureToggle && (
           <IconButton
-            title={obscured ? `Show ${typeof label === 'string' ? label : 'field'}` : `Obscure ${typeof label === 'string' ? label : 'field'}`}
+            title={
+              obscured
+                ? `Show ${typeof label === "string" ? label : "field"}`
+                : `Obscure ${typeof label === "string" ? label : "field"}`
+            }
             size="xs"
             className="mr-0.5 group/obscure !h-auto my-0.5"
             iconClassName="group-hover/obscure:text"
             iconSize="sm"
-            icon={obscured ? 'eye' : 'eye_closed'}
+            icon={obscured ? "eye" : "eye_closed"}
             onClick={() => setObscured((o) => !o)}
           />
         )}

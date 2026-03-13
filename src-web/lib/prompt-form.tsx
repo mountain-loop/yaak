@@ -1,11 +1,11 @@
-import type { FormInput, JsonPrimitive } from '@yaakapp-internal/plugins';
-import type { DialogProps } from '../components/core/Dialog';
-import type { PromptProps } from '../components/core/Prompt';
-import { Prompt } from '../components/core/Prompt';
-import { showDialog } from './dialog';
+import type { FormInput, JsonPrimitive } from "@yaakapp-internal/plugins";
+import type { DialogProps } from "../components/core/Dialog";
+import type { PromptProps } from "../components/core/Prompt";
+import { Prompt } from "../components/core/Prompt";
+import { showDialog } from "./dialog";
 
-type FormArgs = Pick<DialogProps, 'title' | 'description' | 'size'> &
-  Omit<PromptProps, 'onClose' | 'onCancel' | 'onResult'> & {
+type FormArgs = Pick<DialogProps, "title" | "description" | "size"> &
+  Omit<PromptProps, "onClose" | "onCancel" | "onResult"> & {
     id: string;
     onValuesChange?: (values: Record<string, JsonPrimitive>) => void;
     onInputsUpdated?: (cb: (inputs: FormInput[]) => void) => void;
@@ -20,13 +20,13 @@ export async function showPromptForm({
   onInputsUpdated,
   ...props
 }: FormArgs) {
-  return new Promise((resolve: PromptProps['onResult']) => {
+  return new Promise((resolve: PromptProps["onResult"]) => {
     showDialog({
       id,
       title,
       description,
       hideX: true,
-      size: size ?? 'sm',
+      size: size ?? "sm",
       disableBackdropClose: true, // Prevent accidental dismisses
       onClose: () => {
         // Click backdrop, close, or escape

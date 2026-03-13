@@ -1,19 +1,19 @@
-import { cookieJarsAtom } from '@yaakapp-internal/models';
-import { useAtomValue } from 'jotai';
-import { useEffect, useMemo } from 'react';
-import { jotaiStore } from '../lib/jotai';
-import { getKeyValue, setKeyValue } from '../lib/keyValueStore';
-import { activeCookieJarAtom } from './useActiveCookieJar';
-import { useKeyValue } from './useKeyValue';
+import { cookieJarsAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
+import { useEffect, useMemo } from "react";
+import { jotaiStore } from "../lib/jotai";
+import { getKeyValue, setKeyValue } from "../lib/keyValueStore";
+import { activeCookieJarAtom } from "./useActiveCookieJar";
+import { useKeyValue } from "./useKeyValue";
 
 const kvKey = (workspaceId: string) => `recent_cookie_jars::${workspaceId}`;
-const namespace = 'global';
+const namespace = "global";
 const fallback: string[] = [];
 
 export function useRecentCookieJars() {
   const cookieJars = useAtomValue(cookieJarsAtom);
   const kv = useKeyValue<string[]>({
-    key: kvKey(cookieJars[0]?.workspaceId ?? 'n/a'),
+    key: kvKey(cookieJars[0]?.workspaceId ?? "n/a"),
     namespace,
     fallback,
   });

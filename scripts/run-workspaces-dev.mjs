@@ -5,28 +5,28 @@
  * Handles cleanup of child processes on exit.
  */
 
-import { spawn } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { spawn } from "child_process";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.join(__dirname, '..');
+const rootDir = path.join(__dirname, "..");
 
 // Read root package.json to get workspaces
-const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
 const workspaces = rootPkg.workspaces || [];
 
 // Find all workspaces with a dev script
 const workspacesWithDev = workspaces.filter((ws) => {
-  const pkgPath = path.join(rootDir, ws, 'package.json');
+  const pkgPath = path.join(rootDir, ws, "package.json");
   if (!fs.existsSync(pkgPath)) return false;
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   return pkg.scripts?.dev != null;
 });
 
 if (workspacesWithDev.length === 0) {
-  console.log('No workspaces with dev script found');
+  console.log("No workspaces with dev script found");
   process.exit(0);
 }
 
@@ -37,13 +37,13 @@ const children = [];
 // Spawn all dev processes
 for (const ws of workspacesWithDev) {
   const cwd = path.join(rootDir, ws);
-  const child = spawn('npm', ['run', 'dev'], {
+  const child = spawn("npm", ["run", "dev"], {
     cwd,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
+    stdio: "inherit",
+    shell: process.platform === "win32",
   });
 
-  child.on('error', (err) => {
+  child.on("error", (err) => {
     console.error(`Error in ${ws}:`, err.message);
   });
 
@@ -55,27 +55,27 @@ function cleanup() {
   for (const { child } of children) {
     if (child.exitCode === null) {
       // Process still running
-      if (process.platform === 'win32') {
-        spawn('taskkill', ['/pid', child.pid, '/f', '/t'], { shell: true });
+      if (process.platform === "win32") {
+        spawn("taskkill", ["/pid", child.pid, "/f", "/t"], { shell: true });
       } else {
-        child.kill('SIGTERM');
+        child.kill("SIGTERM");
       }
     }
   }
 }
 
 // Handle various exit signals
-process.on('SIGINT', () => {
+process.on("SIGINT", () => {
   cleanup();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
+process.on("SIGTERM", () => {
   cleanup();
   process.exit(0);
 });
 
-process.on('exit', cleanup);
+process.on("exit", cleanup);
 
 // Keep the process running
 process.stdin.resume();

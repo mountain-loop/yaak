@@ -1,37 +1,37 @@
-import parseColor from 'parse-color';
+import parseColor from "parse-color";
 
 export class YaakColor {
-  private readonly appearance: 'dark' | 'light' = 'light';
+  private readonly appearance: "dark" | "light" = "light";
 
   private hue = 0;
   private saturation = 0;
   private lightness = 0;
   private alpha = 1;
 
-  constructor(cssColor: string, appearance: 'dark' | 'light' = 'light') {
+  constructor(cssColor: string, appearance: "dark" | "light" = "light") {
     try {
       this.set(cssColor);
       this.appearance = appearance;
     } catch (err) {
-      console.log('Failed to parse CSS color', cssColor, err);
+      console.log("Failed to parse CSS color", cssColor, err);
     }
   }
 
   static transparent(): YaakColor {
-    return new YaakColor('rgb(0,0,0)', 'light').translucify(1);
+    return new YaakColor("rgb(0,0,0)", "light").translucify(1);
   }
 
   static white(): YaakColor {
-    return new YaakColor('rgb(0,0,0)', 'light').lower(1);
+    return new YaakColor("rgb(0,0,0)", "light").lower(1);
   }
 
   static black(): YaakColor {
-    return new YaakColor('rgb(0,0,0)', 'light').lift(1);
+    return new YaakColor("rgb(0,0,0)", "light").lift(1);
   }
 
   set(cssColor: string): YaakColor {
     let fixedCssColor = cssColor;
-    if (cssColor.startsWith('#') && cssColor.length === 9) {
+    if (cssColor.startsWith("#") && cssColor.length === 9) {
       const [r, g, b, a] = hexToRgba(cssColor);
       fixedCssColor = `rgba(${r},${g},${b},${a})`;
     }
@@ -48,11 +48,11 @@ export class YaakColor {
   }
 
   lower(mod: number): YaakColor {
-    return this.appearance === 'dark' ? this._darken(mod) : this._lighten(mod);
+    return this.appearance === "dark" ? this._darken(mod) : this._lighten(mod);
   }
 
   lift(mod: number): YaakColor {
-    return this.appearance === 'dark' ? this._lighten(mod) : this._darken(mod);
+    return this.appearance === "dark" ? this._lighten(mod) : this._darken(mod);
   }
 
   minLightness(n: number): YaakColor {
@@ -132,7 +132,7 @@ function rgbaToHex(r: number, g: number, b: number, a: number): string {
     const hex = Number(Math.round(n)).toString(16);
     return hex.length === 1 ? `0${hex}` : hex;
   };
-  return `#${[toHex(r), toHex(g), toHex(b), toHex(a * 255)].join('').toUpperCase()}`;
+  return `#${[toHex(r), toHex(g), toHex(b), toHex(a * 255)].join("").toUpperCase()}`;
 }
 
 function rgbaToHexNoAlpha(r: number, g: number, b: number): string {
@@ -140,12 +140,12 @@ function rgbaToHexNoAlpha(r: number, g: number, b: number): string {
     const hex = Number(Math.round(n)).toString(16);
     return hex.length === 1 ? `0${hex}` : hex;
   };
-  return `#${[toHex(r), toHex(g), toHex(b)].join('').toUpperCase()}`;
+  return `#${[toHex(r), toHex(g), toHex(b)].join("").toUpperCase()}`;
 }
 
 function hexToRgba(hex: string): [number, number, number, number] {
   const fromHex = (h: string): number => {
-    if (h === '') return 255;
+    if (h === "") return 255;
     return Number(`0x${h}`);
   };
 

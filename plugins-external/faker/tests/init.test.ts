@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vite-plus/test';
+import { describe, expect, it } from "vite-plus/test";
 
-describe('template-function-faker', () => {
-  it('exports all expected template functions', async () => {
-    const { plugin } = await import('../src/index');
+describe("template-function-faker", () => {
+  it("exports all expected template functions", async () => {
+    const { plugin } = await import("../src/index");
     const names = plugin.templateFunctions?.map((fn) => fn.name).sort() ?? [];
 
     // Snapshot the full list of exported function names so we catch any
@@ -10,13 +10,13 @@ describe('template-function-faker', () => {
     expect(names).toMatchSnapshot();
   });
 
-  it('renders date results as unquoted ISO strings', async () => {
-    const { plugin } = await import('../src/index');
-    const fn = plugin.templateFunctions?.find((fn) => fn.name === 'faker.date.future');
+  it("renders date results as unquoted ISO strings", async () => {
+    const { plugin } = await import("../src/index");
+    const fn = plugin.templateFunctions?.find((fn) => fn.name === "faker.date.future");
     // oxlint-disable-next-line unbound-method
     const onRender = fn?.onRender;
 
-    expect(onRender).toBeTypeOf('function');
+    expect(onRender).toBeTypeOf("function");
     if (onRender == null) {
       throw new Error("Expected template function 'faker.date.future' to define onRender");
     }

@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-prompt",
   "displayName": "Prompt Template Functions",
-  "description": "Template functions for prompting for user input",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for prompting for user input",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

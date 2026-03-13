@@ -1,105 +1,105 @@
-import { type } from '@tauri-apps/plugin-os';
-import { debounce } from '@yaakapp-internal/lib';
-import { settingsAtom } from '@yaakapp-internal/models';
-import { atom, useAtomValue } from 'jotai';
-import { useEffect } from 'react';
-import { capitalize } from '../lib/capitalize';
-import { jotaiStore } from '../lib/jotai';
+import { type } from "@tauri-apps/plugin-os";
+import { debounce } from "@yaakapp-internal/lib";
+import { settingsAtom } from "@yaakapp-internal/models";
+import { atom, useAtomValue } from "jotai";
+import { useEffect } from "react";
+import { capitalize } from "../lib/capitalize";
+import { jotaiStore } from "../lib/jotai";
 
-const HOLD_KEYS = ['Shift', 'Control', 'Command', 'Alt', 'Meta'];
-const SINGLE_WHITELIST = ['Delete', 'Enter', 'Backspace'];
+const HOLD_KEYS = ["Shift", "Control", "Command", "Alt", "Meta"];
+const SINGLE_WHITELIST = ["Delete", "Enter", "Backspace"];
 
 export type HotkeyAction =
-  | 'app.zoom_in'
-  | 'app.zoom_out'
-  | 'app.zoom_reset'
-  | 'command_palette.toggle'
-  | 'editor.autocomplete'
-  | 'environment_editor.toggle'
-  | 'hotkeys.showHelp'
-  | 'model.create'
-  | 'model.duplicate'
-  | 'request.send'
-  | 'request.rename'
-  | 'switcher.next'
-  | 'switcher.prev'
-  | 'switcher.toggle'
-  | 'settings.show'
-  | 'sidebar.filter'
-  | 'sidebar.selected.delete'
-  | 'sidebar.selected.duplicate'
-  | 'sidebar.selected.move'
-  | 'sidebar.selected.rename'
-  | 'sidebar.expand_all'
-  | 'sidebar.collapse_all'
-  | 'sidebar.focus'
-  | 'sidebar.context_menu'
-  | 'url_bar.focus'
-  | 'workspace_settings.show';
+  | "app.zoom_in"
+  | "app.zoom_out"
+  | "app.zoom_reset"
+  | "command_palette.toggle"
+  | "editor.autocomplete"
+  | "environment_editor.toggle"
+  | "hotkeys.showHelp"
+  | "model.create"
+  | "model.duplicate"
+  | "request.send"
+  | "request.rename"
+  | "switcher.next"
+  | "switcher.prev"
+  | "switcher.toggle"
+  | "settings.show"
+  | "sidebar.filter"
+  | "sidebar.selected.delete"
+  | "sidebar.selected.duplicate"
+  | "sidebar.selected.move"
+  | "sidebar.selected.rename"
+  | "sidebar.expand_all"
+  | "sidebar.collapse_all"
+  | "sidebar.focus"
+  | "sidebar.context_menu"
+  | "url_bar.focus"
+  | "workspace_settings.show";
 
 /** Default hotkeys for macOS (uses Meta for Cmd) */
 const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
-  'app.zoom_in': ['Meta+Equal'],
-  'app.zoom_out': ['Meta+Minus'],
-  'app.zoom_reset': ['Meta+0'],
-  'command_palette.toggle': ['Meta+k'],
-  'editor.autocomplete': ['Control+Space'],
-  'environment_editor.toggle': ['Meta+Shift+e'],
-  'request.rename': ['Control+Shift+r'],
-  'request.send': ['Meta+Enter', 'Meta+r'],
-  'hotkeys.showHelp': ['Meta+Shift+/'],
-  'model.create': ['Meta+n'],
-  'model.duplicate': ['Meta+d'],
-  'switcher.next': ['Control+Shift+Tab'],
-  'switcher.prev': ['Control+Tab'],
-  'switcher.toggle': ['Meta+p'],
-  'settings.show': ['Meta+,'],
-  'sidebar.filter': ['Meta+f'],
-  'sidebar.expand_all': ['Meta+Shift+Equal'],
-  'sidebar.collapse_all': ['Meta+Shift+Minus'],
-  'sidebar.selected.delete': ['Delete', 'Meta+Backspace'],
-  'sidebar.selected.duplicate': ['Meta+d'],
-  'sidebar.selected.move': [],
-  'sidebar.selected.rename': ['Enter'],
-  'sidebar.focus': ['Meta+b'],
-  'sidebar.context_menu': ['Control+Enter'],
-  'url_bar.focus': ['Meta+l'],
-  'workspace_settings.show': ['Meta+;'],
+  "app.zoom_in": ["Meta+Equal"],
+  "app.zoom_out": ["Meta+Minus"],
+  "app.zoom_reset": ["Meta+0"],
+  "command_palette.toggle": ["Meta+k"],
+  "editor.autocomplete": ["Control+Space"],
+  "environment_editor.toggle": ["Meta+Shift+e"],
+  "request.rename": ["Control+Shift+r"],
+  "request.send": ["Meta+Enter", "Meta+r"],
+  "hotkeys.showHelp": ["Meta+Shift+/"],
+  "model.create": ["Meta+n"],
+  "model.duplicate": ["Meta+d"],
+  "switcher.next": ["Control+Shift+Tab"],
+  "switcher.prev": ["Control+Tab"],
+  "switcher.toggle": ["Meta+p"],
+  "settings.show": ["Meta+,"],
+  "sidebar.filter": ["Meta+f"],
+  "sidebar.expand_all": ["Meta+Shift+Equal"],
+  "sidebar.collapse_all": ["Meta+Shift+Minus"],
+  "sidebar.selected.delete": ["Delete", "Meta+Backspace"],
+  "sidebar.selected.duplicate": ["Meta+d"],
+  "sidebar.selected.move": [],
+  "sidebar.selected.rename": ["Enter"],
+  "sidebar.focus": ["Meta+b"],
+  "sidebar.context_menu": ["Control+Enter"],
+  "url_bar.focus": ["Meta+l"],
+  "workspace_settings.show": ["Meta+;"],
 };
 
 /** Default hotkeys for Windows/Linux (uses Control for Ctrl) */
 const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
-  'app.zoom_in': ['Control+Equal'],
-  'app.zoom_out': ['Control+Minus'],
-  'app.zoom_reset': ['Control+0'],
-  'command_palette.toggle': ['Control+k'],
-  'editor.autocomplete': ['Control+Space'],
-  'environment_editor.toggle': ['Control+Shift+e'],
-  'request.rename': ['F2'],
-  'request.send': ['Control+Enter', 'Control+r'],
-  'hotkeys.showHelp': ['Control+Shift+/'],
-  'model.create': ['Control+n'],
-  'model.duplicate': ['Control+d'],
-  'switcher.next': ['Control+Shift+Tab'],
-  'switcher.prev': ['Control+Tab'],
-  'switcher.toggle': ['Control+p'],
-  'settings.show': ['Control+,'],
-  'sidebar.filter': ['Control+f'],
-  'sidebar.expand_all': ['Control+Shift+Equal'],
-  'sidebar.collapse_all': ['Control+Shift+Minus'],
-  'sidebar.selected.delete': ['Delete', 'Control+Backspace'],
-  'sidebar.selected.duplicate': ['Control+d'],
-  'sidebar.selected.move': [],
-  'sidebar.selected.rename': ['Enter'],
-  'sidebar.focus': ['Control+b'],
-  'sidebar.context_menu': ['Alt+Insert'],
-  'url_bar.focus': ['Control+l'],
-  'workspace_settings.show': ['Control+;'],
+  "app.zoom_in": ["Control+Equal"],
+  "app.zoom_out": ["Control+Minus"],
+  "app.zoom_reset": ["Control+0"],
+  "command_palette.toggle": ["Control+k"],
+  "editor.autocomplete": ["Control+Space"],
+  "environment_editor.toggle": ["Control+Shift+e"],
+  "request.rename": ["F2"],
+  "request.send": ["Control+Enter", "Control+r"],
+  "hotkeys.showHelp": ["Control+Shift+/"],
+  "model.create": ["Control+n"],
+  "model.duplicate": ["Control+d"],
+  "switcher.next": ["Control+Shift+Tab"],
+  "switcher.prev": ["Control+Tab"],
+  "switcher.toggle": ["Control+p"],
+  "settings.show": ["Control+,"],
+  "sidebar.filter": ["Control+f"],
+  "sidebar.expand_all": ["Control+Shift+Equal"],
+  "sidebar.collapse_all": ["Control+Shift+Minus"],
+  "sidebar.selected.delete": ["Delete", "Control+Backspace"],
+  "sidebar.selected.duplicate": ["Control+d"],
+  "sidebar.selected.move": [],
+  "sidebar.selected.rename": ["Enter"],
+  "sidebar.focus": ["Control+b"],
+  "sidebar.context_menu": ["Alt+Insert"],
+  "url_bar.focus": ["Control+l"],
+  "workspace_settings.show": ["Control+;"],
 };
 
 /** Get the default hotkeys for the current platform */
 export const defaultHotkeys: Record<HotkeyAction, string[]> =
-  type() === 'macos' ? defaultHotkeysMac : defaultHotkeysOther;
+  type() === "macos" ? defaultHotkeysMac : defaultHotkeysOther;
 
 /** Atom that provides the effective hotkeys by merging defaults with user settings */
 export const hotkeysAtom = atom((get) => {
@@ -124,48 +124,48 @@ function getHotkeys(): Record<HotkeyAction, string[]> {
 }
 
 const hotkeyLabels: Record<HotkeyAction, string> = {
-  'app.zoom_in': 'Zoom In',
-  'app.zoom_out': 'Zoom Out',
-  'app.zoom_reset': 'Zoom to Actual Size',
-  'command_palette.toggle': 'Toggle Command Palette',
-  'editor.autocomplete': 'Trigger Autocomplete',
-  'environment_editor.toggle': 'Edit Environments',
-  'hotkeys.showHelp': 'Show Keyboard Shortcuts',
-  'model.create': 'New Request',
-  'model.duplicate': 'Duplicate Request',
-  'request.rename': 'Rename Active Request',
-  'request.send': 'Send Active Request',
-  'switcher.next': 'Go To Previous Request',
-  'switcher.prev': 'Go To Next Request',
-  'switcher.toggle': 'Toggle Request Switcher',
-  'settings.show': 'Open Settings',
-  'sidebar.filter': 'Filter Sidebar',
-  'sidebar.expand_all': 'Expand All Folders',
-  'sidebar.collapse_all': 'Collapse All Folders',
-  'sidebar.selected.delete': 'Delete Selected Sidebar Item',
-  'sidebar.selected.duplicate': 'Duplicate Selected Sidebar Item',
-  'sidebar.selected.move': 'Move Selected to Workspace',
-  'sidebar.selected.rename': 'Rename Selected Sidebar Item',
-  'sidebar.focus': 'Focus or Toggle Sidebar',
-  'sidebar.context_menu': 'Show Context Menu',
-  'url_bar.focus': 'Focus URL',
-  'workspace_settings.show': 'Open Workspace Settings',
+  "app.zoom_in": "Zoom In",
+  "app.zoom_out": "Zoom Out",
+  "app.zoom_reset": "Zoom to Actual Size",
+  "command_palette.toggle": "Toggle Command Palette",
+  "editor.autocomplete": "Trigger Autocomplete",
+  "environment_editor.toggle": "Edit Environments",
+  "hotkeys.showHelp": "Show Keyboard Shortcuts",
+  "model.create": "New Request",
+  "model.duplicate": "Duplicate Request",
+  "request.rename": "Rename Active Request",
+  "request.send": "Send Active Request",
+  "switcher.next": "Go To Previous Request",
+  "switcher.prev": "Go To Next Request",
+  "switcher.toggle": "Toggle Request Switcher",
+  "settings.show": "Open Settings",
+  "sidebar.filter": "Filter Sidebar",
+  "sidebar.expand_all": "Expand All Folders",
+  "sidebar.collapse_all": "Collapse All Folders",
+  "sidebar.selected.delete": "Delete Selected Sidebar Item",
+  "sidebar.selected.duplicate": "Duplicate Selected Sidebar Item",
+  "sidebar.selected.move": "Move Selected to Workspace",
+  "sidebar.selected.rename": "Rename Selected Sidebar Item",
+  "sidebar.focus": "Focus or Toggle Sidebar",
+  "sidebar.context_menu": "Show Context Menu",
+  "url_bar.focus": "Focus URL",
+  "workspace_settings.show": "Open Workspace Settings",
 };
 
 const layoutInsensitiveKeys = [
-  'Equal',
-  'Minus',
-  'BracketLeft',
-  'BracketRight',
-  'Backquote',
-  'Space',
+  "Equal",
+  "Minus",
+  "BracketLeft",
+  "BracketRight",
+  "Backquote",
+  "Space",
 ];
 
 export const hotkeyActions: HotkeyAction[] = (
   Object.keys(defaultHotkeys) as (keyof typeof defaultHotkeys)[]
 ).sort((a, b) => {
-  const scopeA = a.split('.')[0] || '';
-  const scopeB = b.split('.')[0] || '';
+  const scopeA = a.split(".")[0] || "";
+  const scopeB = b.split(".")[0] || "";
   if (scopeA !== scopeB) {
     return scopeA.localeCompare(scopeB);
   }
@@ -217,11 +217,11 @@ export function useHotKey(
 
 export function useSubscribeHotKeys() {
   useEffect(() => {
-    document.addEventListener('keyup', handleKeyUp, { capture: true });
-    document.addEventListener('keydown', handleKeyDown, { capture: true });
+    document.addEventListener("keyup", handleKeyUp, { capture: true });
+    document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => {
-      document.removeEventListener('keydown', handleKeyDown, { capture: true });
-      document.removeEventListener('keyup', handleKeyUp, { capture: true });
+      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+      document.removeEventListener("keyup", handleKeyUp, { capture: true });
     };
   }, []);
 }
@@ -260,13 +260,13 @@ function handleKeyDown(e: KeyboardEvent) {
   currentKeys.add(keyToAdd);
 
   const currentKeysWithModifiers = new Set(currentKeys);
-  if (e.altKey) currentKeysWithModifiers.add('Alt');
-  if (e.ctrlKey) currentKeysWithModifiers.add('Control');
-  if (e.metaKey) currentKeysWithModifiers.add('Meta');
-  if (e.shiftKey) currentKeysWithModifiers.add('Shift');
+  if (e.altKey) currentKeysWithModifiers.add("Alt");
+  if (e.ctrlKey) currentKeysWithModifiers.add("Control");
+  if (e.metaKey) currentKeysWithModifiers.add("Meta");
+  if (e.shiftKey) currentKeysWithModifiers.add("Shift");
 
   // Don't trigger if the user is focused within an element that explicitly disableds hotkeys
-  if (document.activeElement?.closest('[data-disable-hotkey]')) {
+  if (document.activeElement?.closest("[data-disable-hotkey]")) {
     return;
   }
 
@@ -274,14 +274,14 @@ function handleKeyDown(e: KeyboardEvent) {
   if (
     (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
     currentKeysWithModifiers.size === 1 &&
-    (currentKeysWithModifiers.has('Backspace') || currentKeysWithModifiers.has('Delete'))
+    (currentKeysWithModifiers.has("Backspace") || currentKeysWithModifiers.has("Delete"))
   ) {
     return;
   }
 
   const executed: string[] = [];
   for (const { action, callback, options } of jotaiStore.get(sortedCallbacksAtom)) {
-    const enable = typeof options.enable === 'function' ? options.enable() : options.enable;
+    const enable = typeof options.enable === "function" ? options.enable() : options.enable;
     if (enable === false) {
       continue;
     }
@@ -298,7 +298,7 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   if (executed.length > 0) {
-    console.log('Executed hotkey', executed.join(', '));
+    console.log("Executed hotkey", executed.join(", "));
     jotaiStore.set(currentKeysAtom, new Set([]));
   }
   clearCurrentKeysDebounced();
@@ -309,59 +309,59 @@ export function useHotkeyLabel(action: HotkeyAction): string {
 }
 
 export function getHotkeyScope(action: HotkeyAction): string {
-  const scope = action.split('.')[0];
-  return scope || '';
+  const scope = action.split(".")[0];
+  return scope || "";
 }
 
 export function formatHotkeyString(trigger: string): string[] {
   const os = type();
-  const parts = trigger.split('+');
+  const parts = trigger.split("+");
   const labelParts: string[] = [];
 
   for (const p of parts) {
-    if (os === 'macos') {
-      if (p === 'Meta') {
-        labelParts.push('⌘');
-      } else if (p === 'Shift') {
-        labelParts.push('⇧');
-      } else if (p === 'Control') {
-        labelParts.push('⌃');
-      } else if (p === 'Alt') {
-        labelParts.push('⌥');
-      } else if (p === 'Enter') {
-        labelParts.push('↩');
-      } else if (p === 'Tab') {
-        labelParts.push('⇥');
-      } else if (p === 'Backspace') {
-        labelParts.push('⌫');
-      } else if (p === 'Delete') {
-        labelParts.push('⌦');
-      } else if (p === 'Minus') {
-        labelParts.push('-');
-      } else if (p === 'Plus') {
-        labelParts.push('+');
-      } else if (p === 'Equal') {
-        labelParts.push('=');
-      } else if (p === 'Space') {
-        labelParts.push('Space');
+    if (os === "macos") {
+      if (p === "Meta") {
+        labelParts.push("⌘");
+      } else if (p === "Shift") {
+        labelParts.push("⇧");
+      } else if (p === "Control") {
+        labelParts.push("⌃");
+      } else if (p === "Alt") {
+        labelParts.push("⌥");
+      } else if (p === "Enter") {
+        labelParts.push("↩");
+      } else if (p === "Tab") {
+        labelParts.push("⇥");
+      } else if (p === "Backspace") {
+        labelParts.push("⌫");
+      } else if (p === "Delete") {
+        labelParts.push("⌦");
+      } else if (p === "Minus") {
+        labelParts.push("-");
+      } else if (p === "Plus") {
+        labelParts.push("+");
+      } else if (p === "Equal") {
+        labelParts.push("=");
+      } else if (p === "Space") {
+        labelParts.push("Space");
       } else {
         labelParts.push(capitalize(p));
       }
     } else {
-      if (p === 'Control') {
-        labelParts.push('Ctrl');
-      } else if (p === 'Space') {
-        labelParts.push('Space');
+      if (p === "Control") {
+        labelParts.push("Ctrl");
+      } else if (p === "Space") {
+        labelParts.push("Space");
       } else {
         labelParts.push(capitalize(p));
       }
     }
   }
 
-  if (os === 'macos') {
+  if (os === "macos") {
     return labelParts;
   }
-  return [labelParts.join('+')];
+  return [labelParts.join("+")];
 }
 
 export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
@@ -379,21 +379,21 @@ function compareKeys(keysA: string[], keysB: string[]) {
   const sortedA = keysA
     .map((k) => k.toLowerCase())
     .sort()
-    .join('::');
+    .join("::");
   const sortedB = keysB
     .map((k) => k.toLowerCase())
     .sort()
-    .join('::');
+    .join("::");
   return sortedA === sortedB;
 }
 
 /** Build the full key combination from a KeyboardEvent including modifiers */
 function getKeysFromEvent(e: KeyboardEvent): string[] {
   const keys: string[] = [];
-  if (e.altKey) keys.push('Alt');
-  if (e.ctrlKey) keys.push('Control');
-  if (e.metaKey) keys.push('Meta');
-  if (e.shiftKey) keys.push('Shift');
+  if (e.altKey) keys.push("Alt");
+  if (e.ctrlKey) keys.push("Control");
+  if (e.metaKey) keys.push("Meta");
+  if (e.shiftKey) keys.push("Shift");
 
   // Add the actual key (use code for layout-insensitive keys)
   const keyToAdd = layoutInsensitiveKeys.includes(e.code) ? e.code : e.key;
@@ -409,7 +409,7 @@ function keysMatchAction(keys: string[], action: HotkeyAction): boolean {
   if (!hkKeys || hkKeys.length === 0) return false;
 
   for (const hkKey of hkKeys) {
-    const hotkeyParts = hkKey.split('+');
+    const hotkeyParts = hkKey.split("+");
     if (compareKeys(hotkeyParts, keys)) {
       return true;
     }
