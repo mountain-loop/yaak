@@ -188,7 +188,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
       <span className="truncate">{item.label}</span>
-      {count > 0 && <span className="text-text-subtlest text-2xs shrink-0">{count}</span>}
+      {count > 0 && <span className="ml-auto text-text-subtlest text-2xs shrink-0">{count}</span>}
     </div>
   );
 }
