@@ -19,7 +19,7 @@ export function useCreateCookieJar() {
         title: "New CookieJar",
         placeholder: "My Jar",
         confirmText: "Create",
-        label: "Name",
+        label: "Название",
         defaultValue: "My Jar",
       });
       if (name == null) return null;

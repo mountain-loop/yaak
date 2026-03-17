@@ -44,15 +44,15 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
     () => [
       {
         key: "custom",
-        label: "CUSTOM",
+        label: "Пользовательский",
         leftSlot: <Icon icon="sparkles" />,
         onSelect: async () => {
           const newMethod = await showPrompt({
             id: "custom-method",
-            label: "Http Method",
-            title: "Custom Method",
-            confirmText: "Save",
-            description: "Enter a custom method name",
+            label: "HTTP-метод",
+            title: "Пользовательский метод",
+            confirmText: "Сохранить",
+            description: "Введите пользовательское имя метода",
             placeholder: "CUSTOM",
           });
           if (newMethod == null) return;

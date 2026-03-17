@@ -502,7 +502,7 @@ function Sidebar({ className }: { className?: string }) {
               hideLabel
               setRef={setFilterRef}
               size="sm"
-              label="filter"
+              label="фильтр"
               language={null} // Explicitly disable
               placeholder="Поиск"
               onChange={handleFilterChange}

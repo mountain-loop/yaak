@@ -44,7 +44,7 @@ export function ConfirmLargeResponse({ children, response }: Props) {
             Reveal Response
           </Button>
           <Button color="secondary" variant="border" size="xs" onClick={() => saveResponse()}>
-            Save to File
+            Сохранить в файл
           </Button>
           {isProbablyText && (
             <CopyButton

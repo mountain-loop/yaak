@@ -11,7 +11,6 @@ pub fn new_xplatform_command<S: AsRef<OsStr>>(program: S) -> tokio::process::Com
     let mut cmd = tokio::process::Command::new(program);
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
     cmd

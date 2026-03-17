@@ -136,7 +136,7 @@ export function initGlobalListeners() {
           timeout: null,
           message: (
             <VStack>
-              <h2 className="font-semibold">Plugin failed to load</h2>
+              <h2 className="font-semibold">Плагин не удалось загрузить</h2>
               <p className="text-text-subtle text-sm">
                 {dirBasename}: {message}
               </p>
@@ -152,7 +152,7 @@ export function initGlobalListeners() {
                 openSettings.mutate("plugins:installed");
               }}
             >
-              View Plugins
+              Открыть плагины
             </Button>
           ),
         });
@@ -170,8 +170,8 @@ function showUpdateInstalledToast(version: string) {
     timeout: null,
     message: (
       <VStack>
-        <h2 className="font-semibold">Yaak {version} was installed</h2>
-        <p className="text-text-subtle text-sm">Start using the new version now?</p>
+        <h2 className="font-semibold">Yaak {version} установлен</h2>
+        <p className="text-text-subtle text-sm">Начать использовать новую версию сейчас?</p>
       </VStack>
     ),
     action: ({ hide }) => (
@@ -179,13 +179,13 @@ function showUpdateInstalledToast(version: string) {
         size="xs"
         className="mr-auto min-w-[5rem]"
         color="primary"
-        loadingChildren="Restarting..."
+        loadingChildren="Перезапуск..."
         onClick={() => {
           hide();
           setTimeout(() => invokeCmd("cmd_restart", {}), 200);
         }}
       >
-        Relaunch Yaak
+        Перезапустить Yaak
       </ButtonInfiniteLoading>
     ),
   });
@@ -206,9 +206,9 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
     timeout: null,
     message: (
       <VStack>
-        <h2 className="font-semibold">Yaak {version} is available</h2>
+        <h2 className="font-semibold">Доступна Yaak {version}</h2>
         <p className="text-text-subtle text-sm">
-          {downloaded ? "Do you want to install" : "Download and install"} the update?
+          {downloaded ? "Установить" : "Скачать и установить"} обновление?
         </p>
       </VStack>
     ),
@@ -218,12 +218,12 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
           size="xs"
           color="info"
           className="min-w-[10rem]"
-          loadingChildren={downloaded ? "Installing..." : "Downloading..."}
+          loadingChildren={downloaded ? "Установка..." : "Загрузка..."}
           onClick={async () => {
             await emit<UpdateResponse>(replyEventId, { type: "action", action: "install" });
           }}
         >
-          {downloaded ? "Install Now" : "Download and Install"}
+          {downloaded ? "Установить сейчас" : "Скачать и установить"}
         </ButtonInfiniteLoading>
         <Button
           size="xs"
@@ -280,7 +280,7 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
             }
           }}
         >
-          Update All
+          Обновить все
         </ButtonInfiniteLoading>
         <Button
           size="xs"
@@ -291,7 +291,7 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
             openSettings.mutate("plugins:installed");
           }}
         >
-          View Updates
+          Открыть обновления
         </Button>
       </HStack>
     ),

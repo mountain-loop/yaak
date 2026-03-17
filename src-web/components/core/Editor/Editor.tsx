@@ -479,7 +479,7 @@ function EditorInner({
           showConfirm
           key="format"
           size="sm"
-          title="Reformat contents"
+          title="Переформатировать содержимое"
           icon="magic_wand"
           variant="border"
           className={classNames(actionClassName)}

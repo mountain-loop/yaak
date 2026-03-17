@@ -162,21 +162,21 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         options: {
           value: activeRequest.bodyType,
           items: [
-            { type: "separator", label: "Form Data" },
-            { label: "Url Encoded", value: BODY_TYPE_FORM_URLENCODED },
-            { label: "Multi-Part", value: BODY_TYPE_FORM_MULTIPART },
-            { type: "separator", label: "Text Content" },
+            { type: "separator", label: "Данные формы" },
+            { label: "URL-кодированные", value: BODY_TYPE_FORM_URLENCODED },
+            { label: "Мультичасть", value: BODY_TYPE_FORM_MULTIPART },
+            { type: "separator", label: "Текстовое содержимое" },
             { label: "GraphQL", value: BODY_TYPE_GRAPHQL },
             { label: "JSON", value: BODY_TYPE_JSON },
             { label: "XML", value: BODY_TYPE_XML },
             {
-              label: "Other",
+              label: "Другое",
               value: BODY_TYPE_OTHER,
-              shortLabel: nameOfContentTypeOr(contentType, "Other"),
+              shortLabel: nameOfContentTypeOr(contentType, "Другое"),
             },
-            { type: "separator", label: "Other" },
-            { label: "Binary File", value: BODY_TYPE_BINARY },
-            { label: "No Body", shortLabel: "Body", value: BODY_TYPE_NONE },
+            { type: "separator", label: "Другое" },
+            { label: "Бинарный файл", value: BODY_TYPE_BINARY },
+            { label: "Без тела", shortLabel: "Тело", value: BODY_TYPE_NONE },
           ],
           onChange: async (bodyType) => {
             if (bodyType === activeRequest.bodyType) return;
@@ -187,7 +187,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 id: "switched-method",
                 message: (
                   <>
-                    Request method switched to <InlineCode>POST</InlineCode>
+                    Метод запроса переключён на <InlineCode>POST</InlineCode>
                   </>
                 ),
               });
@@ -230,13 +230,13 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       {
         value: TAB_PARAMS,
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
-        label: "Params",
+        label: "Параметры",
       },
       ...headersTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
-        label: "Info",
+        label: "Инфо",
       },
     ],
     [
@@ -346,7 +346,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
           />
           <Tabs
             ref={tabsRef}
-            label="Request"
+            label="Запрос"
             tabs={tabs}
             tabListClassName="mt-1 -mb-1.5"
             storageKey={TABS_STORAGE_KEY}
@@ -441,7 +441,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             <TabContent value={TAB_DESCRIPTION}>
               <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
                 <PlainInput
-                  label="Request Name"
+                  label="Название запроса"
                   hideLabel
                   forceUpdateKey={updateKey}
                   defaultValue={activeRequest.name}
@@ -452,7 +452,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 />
                 <MarkdownEditor
                   name="request-description"
-                  placeholder="Request description"
+                  placeholder="Описание запроса"
                   defaultValue={activeRequest.description}
                   stateKey={`description.${activeRequest.id}`}
                   forceUpdateKey={updateKey}

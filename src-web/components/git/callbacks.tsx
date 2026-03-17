@@ -12,7 +12,7 @@ export function gitCallbacks(dir: string): GitCallbacks {
     },
     promptCredentials: async ({ url, error }) => {
       const creds = await promptCredentials({ url, error });
-      if (creds == null) throw new Error("Cancelled credentials prompt");
+      if (creds == null) throw new Error("Отменён запрос учетных данных");
       return creds;
     },
     promptDiverged: async ({ remote, branch }) => {

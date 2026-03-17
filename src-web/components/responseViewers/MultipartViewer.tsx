@@ -54,7 +54,7 @@ export function MultipartViewer({ data, boundary, idPrefix = "multipart" }: Prop
   return (
     <Tabs
       addBorders
-      label="Multipart"
+      label="Мультичасть"
       layout="horizontal"
       tabListClassName="border-r border-r-border -ml-3"
       tabs={parts.map((part, i) => ({

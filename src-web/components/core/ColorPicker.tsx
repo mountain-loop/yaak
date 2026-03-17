@@ -25,7 +25,7 @@ export function ColorPicker({ onChange, color, className }: Props) {
       />
       <PlainInput
         hideLabel
-        label="Plain Color"
+        label="Обычный цвет"
         forceUpdateKey={updateKey}
         defaultValue={color ?? ""}
         onChange={onChange}
@@ -104,7 +104,7 @@ export function ColorPickerWithThemeColors({ onChange, color, className }: Props
           />
           <PlainInput
             hideLabel
-            label="Plain Color"
+            label="Обычный цвет"
             forceUpdateKey={updateKey}
             defaultValue={color ?? ""}
             onChange={onChange}

@@ -70,7 +70,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     } catch (err) {
       showErrorToast({
         id: "git-commit-and-push-error",
-        title: "Error committing and pushing",
+        title: "Ошибка коммита и push",
         message: String(err),
       });
     } finally {
@@ -223,10 +223,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                 <div style={innerStyle} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
                   <Input
                     className="!text-base font-sans rounded-md"
-                    placeholder="Commit message..."
+                    placeholder="Сообщение коммита..."
                     onChange={setMessage}
                     stateKey={null}
-                    label="Commit message"
+                    label="Сообщение коммита"
                     fullHeight
                     multiLine
                     hideLabel

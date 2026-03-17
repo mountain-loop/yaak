@@ -23,7 +23,7 @@ export async function promptCredentials({
     : "Enter your password or access token for this Git server.";
   const r = await showPromptForm({
     id: "git-credentials",
-    title: "Credentials Required",
+    title: "Требуются учетные данные",
     description: error ? (
       <Banner color="danger">{error}</Banner>
     ) : (

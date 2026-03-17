@@ -43,10 +43,10 @@ export function SyncToFilesystemSetting({
 
       <SelectFile
         directory
-        label="Local directory sync"
+        label="Синхронизация локальной папки"
         size="xs"
-        noun="Directory"
-        help="Sync data to a folder for backup and Git integration."
+        noun="Папка"
+        help="Синхронизировать данные в папку для резервного копирования и интеграции с Git."
         filePath={value.filePath}
         onChange={async ({ filePath }) => {
           if (filePath != null) {
@@ -66,7 +66,7 @@ export function SyncToFilesystemSetting({
         <Checkbox
           checked={value.initGit}
           onChange={(initGit) => onChange({ ...value, initGit })}
-          title="Initialize Git Repo"
+          title="Инициализировать Git-репозиторий"
         />
       )}
     </VStack>

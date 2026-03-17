@@ -34,7 +34,7 @@ export function HistoryDialog({ log }: Props) {
                 {l.message || <em className="text-text-subtle">No message</em>}
               </TruncatedWideTableCell>
               <TableCell>
-                <span title={`Email: ${l.author.email}`}>{l.author.name || "Unknown"}</span>
+                <span title={`Email: ${l.author.email}`}>{l.author.name || "Неизвестно"}</span>
               </TableCell>
               <TableCell className="text-text-subtle">
                 <span title={l.when}>{formatDistanceToNowStrict(l.when)} ago</span>

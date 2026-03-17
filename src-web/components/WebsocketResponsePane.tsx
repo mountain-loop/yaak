@@ -169,17 +169,17 @@ function WebsocketEventDetail({
 
   const title =
     event.messageType === "close"
-      ? "Connection Closed"
+      ? "Соединение закрыто"
       : event.messageType === "open"
-        ? "Connection Open"
-        : `Message ${event.isServer ? "Received" : "Sent"}`;
+        ? "Соединение открыто"
+        : `Сообщение ${event.isServer ? "получено" : "отправлено"}`;
 
   const actions: EventDetailAction[] =
     message !== ""
       ? [
           {
             key: "toggle-hexdump",
-            label: hexDump ? "Show Message" : "Show Hexdump",
+            label: hexDump ? "Показать сообщение" : "Показать hex-дамп",
             onClick: () => setHexDump(!hexDump),
           },
         ]
@@ -196,7 +196,7 @@ function WebsocketEventDetail({
       />
       {!showLarge && event.message.length > 1000 * 1000 ? (
         <VStack space={2} className="italic text-text-subtlest">
-          Message previews larger than 1MB are hidden
+          Предпросмотр сообщений больше 1MB скрыт
           <div>
             <Button
               onClick={() => {
@@ -211,12 +211,12 @@ function WebsocketEventDetail({
               variant="border"
               size="xs"
             >
-              Try Showing
+              Показать
             </Button>
           </div>
         </VStack>
       ) : event.message.length === 0 ? (
-        <EmptyStateText>No Content</EmptyStateText>
+        <EmptyStateText>Нет содержимого</EmptyStateText>
       ) : (
         <Editor
           language={language}

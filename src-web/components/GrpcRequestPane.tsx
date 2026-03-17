@@ -113,7 +113,7 @@ export function GrpcRequestPane({
     if (activeRequest.service == null || activeRequest.method == null) {
       alert({
         id: "grpc-invalid-service-method",
-        title: "Error",
+        title: "Ошибка",
         body: "Service or method not selected",
       });
     }
@@ -127,12 +127,12 @@ export function GrpcRequestPane({
 
   const tabs: TabItem[] = useMemo(
     () => [
-      { value: TAB_MESSAGE, label: "Message" },
+      { value: TAB_MESSAGE, label: "Сообщение" },
       ...metadataTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
-        label: "Info",
+        label: "Инфо",
         rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
     ],
@@ -183,7 +183,7 @@ export function GrpcRequestPane({
             }))}
             itemsAfter={[
               {
-                label: "Refresh",
+                label: "Обновить",
                 type: "default",
                 leftSlot: <Icon size="sm" icon="refresh" />,
               },
@@ -209,14 +209,14 @@ export function GrpcRequestPane({
                   <IconButton
                     variant="border"
                     size="sm"
-                    title="Cancel"
+                    title="Отмена"
                     onClick={onCancel}
                     icon="x"
                   />
                   <IconButton
                     variant="border"
                     size="sm"
-                    title="Commit"
+                    title="Коммит"
                     onClick={onCommit}
                     icon="check"
                   />
@@ -251,7 +251,7 @@ export function GrpcRequestPane({
         </HStack>
       </div>
       <Tabs
-        label="Request"
+        label="Запрос"
         tabs={tabs}
         tabListClassName="mt-1 !mb-1.5"
         storageKey="grpc_request_tabs"
@@ -283,7 +283,7 @@ export function GrpcRequestPane({
         <TabContent value={TAB_DESCRIPTION}>
           <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
             <PlainInput
-              label="Request Name"
+              label="Название запроса"
               hideLabel
               forceUpdateKey={forceUpdateKey}
               defaultValue={activeRequest.name}
@@ -294,7 +294,7 @@ export function GrpcRequestPane({
             />
             <MarkdownEditor
               name="request-description"
-              placeholder="Request description"
+              placeholder="Описание запроса"
               defaultValue={activeRequest.description}
               stateKey={`description.${activeRequest.id}`}
               onChange={handleDescriptionChange}

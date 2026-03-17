@@ -202,7 +202,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             autoCapitalize="off"
             autoCorrect="off"
             onChange={(e) => handleChange(e.target.value)}
-            onPaste={(e) => onPaste?.(e.clipboardData.getData("Text"))}
+            onPaste={(e) => onPaste?.(e.clipboardData.getData("Текст"))}
             className={classNames(commonClassName, "h-full")}
             onFocus={handleFocus}
             onBlur={handleBlur}

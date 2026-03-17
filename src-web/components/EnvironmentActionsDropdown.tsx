@@ -41,10 +41,10 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         [activeEnvironment?.id],
       ),
       ...((subEnvironments.length > 0
-        ? [{ type: "separator", label: "Environments" }]
+        ? [{ type: "separator", label: "Окружения" }]
         : []) as DropdownItem[]),
       {
-        label: "Manage Environments",
+        label: "Управление окружениями",
         hotKeyAction: "environment_editor.toggle",
         leftSlot: <Icon icon="box" />,
         onSelect: () => editEnvironment(activeEnvironment),
@@ -71,7 +71,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         {...buttonProps}
       >
         <EnvironmentColorIndicator environment={activeEnvironment ?? null} />
-        {activeEnvironment?.name ?? (hasBaseVars ? "Environment" : "No Environment")}
+        {activeEnvironment?.name ?? (hasBaseVars ? "Окружение" : "Без окружения")}
       </Button>
     </Dropdown>
   );
