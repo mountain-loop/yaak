@@ -2,6 +2,7 @@ import type { EventCallback, EventName } from "@tauri-apps/api/event";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useRef } from "react";
+import { isTauriRuntime } from "../lib/tauri";
 
 export function useListenToTauriEvent<T>(event: EventName, fn: EventCallback<T>) {
   const handlerRef = useRef(fn);
@@ -15,6 +16,10 @@ export function useListenToTauriEvent<T>(event: EventName, fn: EventCallback<T>)
 }
 
 export function listenToTauriEvent<T>(event: EventName, fn: EventCallback<T>) {
+  if (!isTauriRuntime()) {
+    return () => {};
+  }
+
   const unsubPromise = listen<T>(
     event,
     fn,

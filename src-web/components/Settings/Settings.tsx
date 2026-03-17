@@ -1,6 +1,6 @@
 import { useSearch } from "@tanstack/react-router";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../../lib/os";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
 import classNames from "classnames";
@@ -83,7 +83,7 @@ export default function Settings({ hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(type() === "macos" ? "text-center" : "pl-2")}>Settings</div>
+            <div className={classNames(getOsType() === "macos" ? "text-center" : "pl-2")}>Settings</div>
           </HStack>
         </HeaderSize>
       )}

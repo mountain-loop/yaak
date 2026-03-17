@@ -3,6 +3,7 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { setWindowTheme } from "@yaakapp-internal/mac-window";
 import type { ModelPayload } from "@yaakapp-internal/models";
 import { getSettings } from "./lib/settings";
+import { isTauriRuntime } from "./lib/tauri";
 import type { Appearance } from "./lib/theme/appearance";
 import { getCSSAppearance, subscribeToPreferredAppearance } from "./lib/theme/appearance";
 import { getResolvedTheme } from "./lib/theme/themes";
@@ -20,19 +21,26 @@ configureTheme().then(
   async () => {
     // To prevent theme flashing, the backend hides new windows by default, so we
     // need to show it here, after configuring the theme for the first time.
-    await getCurrentWebviewWindow().show();
+    if (!isTauriRuntime()) return;
+    try {
+      await getCurrentWebviewWindow().show();
+    } catch {
+      // Non-Tauri context
+    }
   },
   (err) => console.log("Failed to configure theme", err),
 );
 
 // Listen for settings changes, the re-compute theme
-listen<ModelPayload>("model_write", async (event) => {
-  if (event.payload.change.type !== "upsert") return;
+if (isTauriRuntime()) {
+  listen<ModelPayload>("model_write", async (event) => {
+    if (event.payload.change.type !== "upsert") return;
 
-  const model = event.payload.model.model;
-  if (model !== "settings" && model !== "plugin") return;
-  await configureTheme();
-}).catch(console.error);
+    const model = event.payload.model.model;
+    if (model !== "settings" && model !== "plugin") return;
+    await configureTheme();
+  }).catch(console.error);
+}
 
 async function configureTheme() {
   const settings = await getSettings();
@@ -44,7 +52,7 @@ async function configureTheme() {
   );
   addThemeStylesToDocument(theme.active);
   setThemeOnDocument(theme.active);
-  if (theme.active.base.surface != null) {
+  if (theme.active.base.surface != null && isTauriRuntime()) {
     setWindowTheme(theme.active.base.surface);
   }
 }
