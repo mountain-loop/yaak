@@ -8,7 +8,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../../../lib/os";
 import classNames from "classnames";
 import type { ComponentType, MouseEvent, ReactElement, Ref, RefAttributes } from "react";
 import {
@@ -281,7 +281,7 @@ function TreeInner<T extends { id: string }>(
         } else {
           setSelected([item.id], true);
         }
-      } else if (type() === "macos" ? metaKey : ctrlKey) {
+      } else if (getOsType() === "macos" ? metaKey : ctrlKey) {
         const withoutCurr = selectedIds.filter((id) => id !== item.id);
         if (withoutCurr.length === selectedIds.length) {
           // It wasn't in there, so add it

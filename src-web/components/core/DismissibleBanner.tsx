@@ -48,9 +48,9 @@ export function DismissibleBanner({
           color={props.color}
           size="xs"
           onClick={() => setDismissed((d) => !d)}
-          title="Dismiss message"
+          title="Скрыть сообщение"
         >
-          Dismiss
+          Скрыть
         </Button>
       </HStack>
     </Banner>

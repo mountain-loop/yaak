@@ -1,5 +1,6 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { fireAndForget } from "../fireAndForget";
+import { isTauriRuntime } from "../tauri";
 
 export type Appearance = "light" | "dark";
 
@@ -8,8 +9,16 @@ export function getCSSAppearance(): Appearance {
 }
 
 export async function getWindowAppearance(): Promise<Appearance> {
-  const a = await getCurrentWebviewWindow().theme();
-  return a ?? getCSSAppearance();
+  if (!isTauriRuntime()) {
+    return getCSSAppearance();
+  }
+
+  try {
+    const a = await getCurrentWebviewWindow().theme();
+    return a ?? getCSSAppearance();
+  } catch {
+    return getCSSAppearance();
+  }
 }
 
 /**
@@ -19,19 +28,27 @@ export async function getWindowAppearance(): Promise<Appearance> {
 export function subscribeToWindowAppearanceChange(
   cb: (appearance: Appearance) => void,
 ): () => void {
+  if (!isTauriRuntime()) {
+    return () => {};
+  }
+
   const container = {
     unsubscribe: () => {},
   };
 
-  fireAndForget(
-    getCurrentWebviewWindow()
-      .onThemeChanged((t) => {
-        cb(t.payload);
-      })
-      .then((l) => {
-        container.unsubscribe = l;
-      }),
-  );
+  try {
+    fireAndForget(
+      getCurrentWebviewWindow()
+        .onThemeChanged((t) => {
+          cb(t.payload);
+        })
+        .then((l) => {
+          container.unsubscribe = l;
+        }),
+    );
+  } catch {
+    // Non-Tauri context
+  }
 
   return () => container.unsubscribe();
 }

@@ -1,6 +1,6 @@
 import type { PluginDefinition } from "@yaakapp/api";
 
-import { ntlm } from "httpntlm";
+import * as ntlm from "httpntlm/ntlm";
 
 function extractNtlmChallenge(headers: Array<{ name: string; value: string }>): string | null {
   const authValues = headers

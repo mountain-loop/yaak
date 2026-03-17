@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../../lib/os";
 import { useFonts } from "@yaakapp-internal/fonts";
 import { useLicense } from "@yaakapp-internal/license";
 import type { EditorKeymap, Settings } from "@yaakapp-internal/models";
@@ -164,7 +164,7 @@ export function SettingsInterface() {
 
       <NativeTitlebarSetting settings={settings} />
 
-      {type() !== "macos" && (
+      {getOsType() !== "macos" && (
         <Checkbox
           checked={settings.hideWindowControls}
           title="Hide window controls"

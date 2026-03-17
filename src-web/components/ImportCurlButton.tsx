@@ -37,7 +37,7 @@ export function ImportCurlButton() {
         className="rounded-full"
         rightSlot={<Icon icon="import" size="sm" />}
         isLoading={isLoading}
-        title="Import Curl command from clipboard"
+        title="Импортировать команду cURL из буфера"
         onClick={async () => {
           setIsLoading(true);
           try {
@@ -51,7 +51,7 @@ export function ImportCurlButton() {
           }
         }}
       >
-        Import Curl
+        Импорт cURL
       </Button>
     </m.div>
   );

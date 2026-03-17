@@ -31,34 +31,34 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
     <Dropdown
       items={[
         {
-          label: "Save to File",
+          label: "Сохранить в файл",
           onSelect: saveResponse.mutate,
           leftSlot: <Icon icon="save" />,
           hidden: responses.length === 0 || !!activeResponse.error,
           disabled: activeResponse.state !== "closed" && activeResponse.status >= 100,
         },
         {
-          label: "Copy Body",
+          label: "Скопировать тело",
           onSelect: copyResponse.mutate,
           leftSlot: <Icon icon="copy" />,
           hidden: responses.length === 0 || !!activeResponse.error,
           disabled: activeResponse.state !== "closed" && activeResponse.status >= 100,
         },
         {
-          label: "Delete",
+          label: "Удалить",
           leftSlot: <Icon icon="trash" />,
           onSelect: () => deleteModel(activeResponse),
         },
         {
-          label: "Unpin Response",
+          label: "Открепить ответ",
           onSelect: () => onPinnedResponseId(activeResponse.id),
           leftSlot: <Icon icon="unpin" />,
           hidden: latestResponseId === activeResponse.id,
           disabled: responses.length === 0,
         },
-        { type: "separator", label: "History" },
+        { type: "separator", label: "История" },
         {
-          label: `Delete ${responses.length} ${pluralize("Response", responses.length)}`,
+          label: `Удалить ${responses.length} ${pluralize("ответ", responses.length)}`,
           onSelect: deleteAllResponses.mutate,
           hidden: responses.length === 0,
           disabled: responses.length === 0,
@@ -78,7 +78,7 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
       ]}
     >
       <IconButton
-        title="Show response history"
+        title="Показать историю ответов"
         icon={activeResponse?.id === latestResponseId ? "history" : "pin"}
         className="m-0.5 text-text-subtle"
         size="sm"

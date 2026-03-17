@@ -60,13 +60,13 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
     return [
       {
         value: TAB_GENERAL,
-        label: "General",
+        label: "Общие",
       },
       ...headersTab,
       ...authTab,
       {
         value: TAB_VARIABLES,
-        label: "Variables",
+        label: "Переменные",
         rightSlot: numVars > 0 ? <CountBadge count={numVars} /> : null,
       },
     ];
@@ -100,7 +100,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
 
       <Tabs
         defaultValue={tab ?? TAB_GENERAL}
-        label="Folder Settings"
+        label="Настройки папки"
         className="pt-2 pb-2 pl-3 pr-1 flex-1"
         layout="horizontal"
         addBorders
@@ -112,14 +112,14 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
           <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] gap-3 pb-3 h-full">
             <Input
-              label="Folder Name"
+              label="Название папки"
               defaultValue={folder.name}
               onChange={(name) => patchModel(folder, { name })}
               stateKey={`name.${folder.id}`}
             />
             <MarkdownEditor
               name="folder-description"
-              placeholder="Folder description"
+              placeholder="Описание папки"
               className="border border-border px-2"
               defaultValue={folder.description}
               stateKey={`description.${folder.id}`}
@@ -137,7 +137,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
                 variant="border"
                 size="xs"
               >
-                Delete Folder
+                Удалить папку
               </Button>
               <InlineCode className="flex gap-1 items-center text-primary pl-2.5">
                 {folder.id}
@@ -145,7 +145,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
                   className="opacity-70 !text-primary"
                   size="2xs"
                   iconSize="sm"
-                  title="Copy folder ID"
+                  title="Скопировать ID папки"
                   text={folder.id}
                 />
               </InlineCode>
@@ -166,11 +166,11 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
             <EmptyStateText>
               <VStack alignItems="center" space={1.5}>
                 <p>
-                  Override{" "}
+                  Переопределите{" "}
                   <Link href="https://yaak.app/docs/using-yaak/environments-and-variables">
-                    Variables
+                    переменные
                   </Link>{" "}
-                  for requests within this folder.
+                  для запросов внутри этой папки.
                 </p>
                 <Button
                   variant="border"
@@ -181,11 +181,11 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
                       parentModel: "folder",
                       parentId: folder.id,
                       model: "environment",
-                      name: "Folder Environment",
+                      name: "Окружение папки",
                     });
                   }}
                 >
-                  Create Folder Environment
+                  Создать окружение папки
                 </Button>
               </VStack>
             </EmptyStateText>
