@@ -16,7 +16,7 @@ export type CallHttpAuthenticationActionArgs = { contextId: string, values: { [k
 
 export type CallHttpAuthenticationActionRequest = { index: number, pluginRefId: string, args: CallHttpAuthenticationActionArgs, };
 
-export type CallHttpAuthenticationRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, };
+export type CallHttpAuthenticationRequest = { contextId: string, values: { [key in string]?: JsonPrimitive }, method: string, url: string, headers: Array<HttpHeader>, body: string | null, };
 
 export type CallHttpAuthenticationResponse = {
 /**
