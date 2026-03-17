@@ -20,8 +20,8 @@ export function Prompt({
   onCancel,
   inputs: initialInputs,
   onResult,
-  confirmText = "Confirm",
-  cancelText = "Cancel",
+  confirmText = "Подтвердить",
+  cancelText = "Отмена",
   onValuesChange,
   onInputsUpdated,
 }: PromptProps) {
