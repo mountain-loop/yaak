@@ -146,7 +146,10 @@ export function duplicateModel<M extends AnyModel["model"], T extends ExtractMod
 
   // If the model has an explicit (non-empty) name, try to duplicate it with a name that doesn't conflict.
   // When the name is empty, keep it empty so the display falls back to the URL.
-  let name: string | undefined = "name" in model ? (model as { name: string }).name : undefined;
+  let name: string | undefined;
+  if ("name" in model) {
+    name = (model as { name: string }).name;
+  }
   if (name) {
     const existingModels = listModels(model.model);
     for (let i = 0; i < 100; i++) {
