@@ -130,7 +130,7 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
                 const confirmed = await showConfirm({
                   id: "copy-auth-confirm",
                   title: "Copy Authentication",
-                  confirmText: "Copy",
+                  confirmText: "Копировать",
                   description: (
                     <>
                       Copy{" "}

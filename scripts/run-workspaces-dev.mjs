@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
+const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
 
 // Read root package.json to get workspaces
 const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
@@ -37,10 +38,9 @@ const children = [];
 // Spawn all dev processes
 for (const ws of workspacesWithDev) {
   const cwd = path.join(rootDir, ws);
-  const child = spawn("npm", ["run", "dev"], {
+  const child = spawn(npmCmd, ["run", "dev"], {
     cwd,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
 
   child.on("error", (err) => {
@@ -56,7 +56,7 @@ function cleanup() {
     if (child.exitCode === null) {
       // Process still running
       if (process.platform === "win32") {
-        spawn("taskkill", ["/pid", child.pid, "/f", "/t"], { shell: true });
+        spawn("taskkill", ["/pid", child.pid, "/f", "/t"]);
       } else {
         child.kill("SIGTERM");
       }

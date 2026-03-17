@@ -60,7 +60,7 @@ export function GrpcEditor({
       console.log("Failed to find service", { service: request.service, services });
       showAlert({
         id: "grpc-find-service-error",
-        title: "Couldn't Find Service",
+        title: "Не удалось найти сервис",
         body: (
           <>
             Failed to find service <InlineCode>{request.service}</InlineCode> in schema
@@ -75,7 +75,7 @@ export function GrpcEditor({
       console.log("Failed to find method", { method: request.method, methods: s?.methods });
       showAlert({
         id: "grpc-find-schema-error",
-        title: "Couldn't Find Method",
+        title: "Не удалось найти метод",
         body: (
           <>
             Failed to find method <InlineCode>{request.method}</InlineCode> for{" "}
@@ -95,7 +95,7 @@ export function GrpcEditor({
     } catch (err) {
       showAlert({
         id: "grpc-parse-schema-error",
-        title: "Failed to Parse Schema",
+        title: "Не удалось разобрать схему",
         body: (
           <VStack space={4}>
             <p>
@@ -143,7 +143,7 @@ export function GrpcEditor({
           isLoading={reflectionLoading}
           onClick={() => {
             showDialog({
-              title: "Configure Schema",
+              title: "Настроить схему",
               size: "md",
               id: "reflection-failed",
               render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
@@ -157,7 +157,7 @@ export function GrpcEditor({
               : reflectionError
                 ? "Server Error"
                 : protoFiles.length > 0
-                  ? pluralizeCount("File", protoFiles.length)
+                  ? pluralizeCount("Файл", protoFiles.length)
                   : services != null && protoFiles.length === 0
                     ? "Schema Detected"
                     : "Select Schema"}

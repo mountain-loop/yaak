@@ -25,14 +25,14 @@ export function BranchSelectionDialog({ branches, onCancel, onSelect, selectText
       <Select
         name="branch"
         hideLabel
-        label="Branch"
+        label="Ветка"
         value={branch}
         options={branches.map((b) => ({ label: b, value: b }))}
         onChange={setBranch}
       />
       <HStack space={2} justifyContent="end">
         <Button onClick={onCancel} variant="border" color="secondary">
-          Cancel
+          Отмена
         </Button>
         <Button type="submit" color="primary">
           {selectText}

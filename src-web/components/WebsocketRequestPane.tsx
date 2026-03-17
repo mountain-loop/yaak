@@ -100,18 +100,18 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     return [
       {
         value: TAB_MESSAGE,
-        label: "Message",
+        label: "Сообщение",
       } as TabItem,
       {
         value: TAB_PARAMS,
         rightSlot: <CountBadge count={urlParameterPairs.length} />,
-        label: "Params",
+        label: "Параметры",
       },
       ...headersTab,
       ...authTab,
       {
         value: TAB_DESCRIPTION,
-        label: "Info",
+        label: "Инфо",
       },
     ];
   }, [authTab, headersTab, urlParameterPairs.length]);
@@ -207,7 +207,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 isLoading && (
                   <IconButton
                     size="xs"
-                    title="Close connection"
+                    title="Закрыть соединение"
                     icon="x"
                     iconColor="secondary"
                     className="w-8 mr-0.5 !h-full"
@@ -227,7 +227,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
           </div>
           <Tabs
             ref={tabsRef}
-            label="Request"
+            label="Запрос"
             tabs={tabs}
             tabListClassName="mt-1 !mb-1.5"
             storageKey={TABS_STORAGE_KEY}
@@ -269,7 +269,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             <TabContent value={TAB_DESCRIPTION}>
               <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
                 <PlainInput
-                  label="Request Name"
+                  label="Название запроса"
                   hideLabel
                   forceUpdateKey={forceUpdateKey}
                   defaultValue={activeRequest.name}
@@ -280,7 +280,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 />
                 <MarkdownEditor
                   name="request-description"
-                  placeholder="Request description"
+                  placeholder="Описание запроса"
                   defaultValue={activeRequest.description}
                   stateKey={`description.${activeRequest.id}`}
                   forceUpdateKey={forceUpdateKey}

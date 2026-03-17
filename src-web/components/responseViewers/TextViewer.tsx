@@ -71,7 +71,7 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
             containerClassName="bg-surface"
             size="sm"
             placeholder={language === "json" ? "JSONPath expression" : "XPath expression"}
-            label="Filter expression"
+            label="Выражение фильтра"
             name="filter"
             defaultValue={filterText}
             onKeyDown={(e) => e.key === "Escape" && toggleSearch()}

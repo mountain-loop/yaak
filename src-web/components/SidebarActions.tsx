@@ -27,12 +27,12 @@ export function SidebarActions() {
         }}
         className="pointer-events-auto"
         size="sm"
-        title="Toggle sidebar"
+        title="Показать/скрыть боковую панель"
         icon={hidden ? "left_panel_hidden" : "left_panel_visible"}
         iconColor="secondary"
       />
       <CreateDropdown hotKeyAction="model.create">
-        <IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Add Resource" />
+        <IconButton size="sm" icon="plus_circle" iconColor="secondary" title="Добавить ресурс" />
       </CreateDropdown>
     </HStack>
   );

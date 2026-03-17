@@ -11,10 +11,10 @@ export function ResponseInfo({ response }: Props) {
   return (
     <div className="overflow-auto h-full pb-4">
       <KeyValueRows>
-        <KeyValueRow labelColor="info" label="Version">
+        <KeyValueRow labelColor="info" label="Версия">
           {response.version ?? <span className="text-text-subtlest">--</span>}
         </KeyValueRow>
-        <KeyValueRow labelColor="info" label="Remote Address">
+        <KeyValueRow labelColor="info" label="Удалённый адрес">
           {response.remoteAddr ?? <span className="text-text-subtlest">--</span>}
         </KeyValueRow>
         <KeyValueRow
@@ -27,7 +27,7 @@ export function ResponseInfo({ response }: Props) {
                 className="inline-block w-auto ml-1 !h-auto opacity-50 hover:opacity-100"
                 icon="external_link"
                 onClick={() => openUrl(response.url)}
-                title="Open in browser"
+                title="Открыть в браузере"
               />
             </div>
           }

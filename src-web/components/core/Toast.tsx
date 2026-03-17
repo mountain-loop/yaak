@@ -72,7 +72,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           color={color}
           variant="border"
           className="opacity-60 border-0 !absolute top-2 right-2"
-          title="Dismiss"
+          title="Скрыть"
           icon="x"
           onClick={onClose}
         />

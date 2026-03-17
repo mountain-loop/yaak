@@ -76,7 +76,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
   const wasAuthInherited = inheritedAuth?.id !== model.id;
   if (wasAuthInherited) {
     const name = resolvedModelName(inheritedAuth);
-    const cta = inheritedAuth.model === "workspace" ? "Workspace" : name;
+    const cta = inheritedAuth.model === "workspace" ? "Рабочее пространство" : name;
     return (
       <EmptyStateText>
         <p>
@@ -101,7 +101,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
       <div>
         <HStack space={2} alignItems="start">
           <SegmentedControl
-            label="Enabled"
+            label="Включено"
             hideLabel
             name="enabled"
             value={
@@ -112,9 +112,9 @@ export function HttpAuthenticationEditor({ model }: Props) {
                   : "__DYNAMIC__"
             }
             options={[
-              { label: "Enabled", value: "__TRUE__" },
-              { label: "Disabled", value: "__FALSE__" },
-              { label: "Enabled when...", value: "__DYNAMIC__" },
+              { label: "Включено", value: "__TRUE__" },
+              { label: "Отключено", value: "__FALSE__" },
+              { label: "Включать когда...", value: "__DYNAMIC__" },
             ]}
             onChange={async (enabled) => {
               let disabled: boolean | string;
@@ -139,7 +139,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
               )}
             >
               <IconButton
-                title="Authentication Actions"
+                title="Действия аутентификации"
                 icon="settings"
                 size="xs"
                 className="!text-secondary"
@@ -193,10 +193,10 @@ function AuthenticationDisabledInput({
     <Input
       size="sm"
       className={className}
-      label="Dynamic Disabled"
+      label="Динамическое отключение"
       hideLabel
       defaultValue={value}
-      placeholder="Enabled when this renders a non-empty value"
+      placeholder="Включено, когда шаблон возвращает непустое значение"
       rightSlot={
         <div className="px-1 flex items-center">
           <div className="rounded-full bg-surface-highlight text-xs px-1.5 py-0.5 text-text-subtle whitespace-nowrap">

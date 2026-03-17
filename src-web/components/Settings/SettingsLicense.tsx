@@ -175,7 +175,7 @@ function SettingsLicenseCmp() {
         >
           <PlainInput
             autoFocus
-            label="License Key"
+            label="Лицензионный ключ"
             name="key"
             onChange={setKey}
             placeholder="YK1-XXXXX-XXXXX-XXXXX-XXXXX"

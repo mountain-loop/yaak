@@ -114,16 +114,16 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
           {isEncryptionEnabled ? (
             !allVariableAreEncrypted ? (
               <PillButton color="notice" onClick={() => encryptEnvironment(environment)}>
-                Encrypt All Variables
+                Зашифровать все переменные
               </PillButton>
             ) : (
               <PillButton color="secondary" onClick={setupOrConfigureEncryption}>
-                Encryption Settings
+                Настройки шифрования
               </PillButton>
             )
           ) : (
             <PillButton color="secondary" onClick={() => valueVisibility.set((v) => !v)}>
-              {valueVisibility.value ? "Hide Values" : "Show Values"}
+              {valueVisibility.value ? "Скрыть значения" : "Показать значения"}
             </PillButton>
           )}
           <PillButton
@@ -133,7 +133,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
               await patchModel(environment, { public: !environment.public });
             }}
           >
-            {environment.public ? "Sharable" : "Private"}
+            {environment.public ? "Общее" : "Личное"}
           </PillButton>
         </Heading>
         {environment.public && (!isEncryptionEnabled || !allVariableAreEncrypted) && (
@@ -143,7 +143,7 @@ export function EnvironmentEditor({ environment, hideName, className, setRef }: 
             className="mr-3"
             actions={[
               {
-                label: "Encrypt Variables",
+                label: "Шифровать переменные",
                 onClick: () => encryptEnvironment(environment),
                 color: "success",
               },

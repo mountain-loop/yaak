@@ -67,14 +67,14 @@ export function MarkdownEditor({
       <div className="absolute top-0 right-0 pt-1.5 pr-1.5">
         <SegmentedControl
           name={name}
-          label="View mode"
+          label="Режим просмотра"
           hideLabel
           onChange={setViewMode}
           value={viewMode}
           className="opacity-0 group-focus-within/markdown:opacity-100 group-hover/markdown:opacity-100"
           options={[
-            { icon: "eye", label: "Preview mode", value: "preview" },
-            { icon: "pencil", label: "Edit mode", value: "edit" },
+            { icon: "eye", label: "Режим просмотра", value: "preview" },
+            { icon: "pencil", label: "Режим редактирования", value: "edit" },
           ]}
         />
       </div>

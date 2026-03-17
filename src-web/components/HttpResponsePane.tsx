@@ -86,27 +86,27 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     () => [
       {
         value: TAB_BODY,
-        label: "Response",
+        label: "Ответ",
         options: {
           value: viewMode,
           onChange: setViewMode,
           items: [
-            { label: "Response", value: "pretty" },
+            { label: "Ответ", value: "pretty" },
             ...(mimeType?.startsWith("image")
               ? []
-              : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
+              : [{ label: "Ответ (сырые данные)", shortLabel: "Сырой", value: "raw" }]),
           ],
         },
       },
       {
         value: TAB_REQUEST,
-        label: "Request",
+        label: "Запрос",
         rightSlot:
           (activeResponse?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
       },
       {
         value: TAB_HEADERS,
-        label: "Headers",
+        label: "Заголовки",
         rightSlot: (
           <CountBadge
             count={activeResponse?.requestHeaders.length ?? 0}
@@ -117,7 +117,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       },
       {
         value: TAB_COOKIES,
-        label: "Cookies",
+        label: "Cookie",
         rightSlot:
           cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
             <CountBadge count={cookieCounts.sent} count2={cookieCounts.received} showZero />
@@ -130,8 +130,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
           value: timelineViewMode,
           onChange: (v) => setTimelineViewMode((v as TimelineViewMode) ?? "timeline"),
           items: [
-            { label: "Timeline", value: "timeline" },
-            { label: "Timeline (Text)", shortLabel: "Timeline", value: "text" },
+            { label: "Хронология", value: "timeline" },
+            { label: "Хронология (текст)", shortLabel: "Хронология", value: "text" },
           ],
         },
       },
@@ -259,7 +259,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
             {/* Show tabs if we have any data (headers, body, etc.) even if there's an error */}
             <Tabs
               tabs={tabs}
-              label="Response"
+              label="Ответ"
               className="ml-3 mr-3 mb-3 min-h-0 flex-1"
               tabListClassName="mt-0.5 -mb-1.5"
               storageKey="http_response_tabs"

@@ -17,7 +17,7 @@ export const importData = createFastMutation({
   onError: (err: string) => {
     showAlert({
       id: "import-failed",
-      title: "Import Failed",
+      title: "Ошибка импорта",
       size: "md",
       body: <FormattedError>{err}</FormattedError>,
     });
@@ -26,7 +26,7 @@ export const importData = createFastMutation({
     return new Promise<void>((resolve, reject) => {
       showDialog({
         id: "import",
-        title: "Import Data",
+        title: "Импорт данных",
         size: "sm",
         render: ({ hide }) => {
           const importAndHide = async (filePath: string) => {
@@ -60,7 +60,7 @@ async function performImport(filePath: string): Promise<boolean> {
 
   showDialog({
     id: "import-complete",
-    title: "Import Complete",
+    title: "Импорт завершен",
     size: "sm",
     hideX: true,
     render: ({ hide }) => {
@@ -68,27 +68,27 @@ async function performImport(filePath: string): Promise<boolean> {
         <VStack space={3} className="pb-4">
           <ul className="list-disc pl-6">
             {imported.workspaces.length > 0 && (
-              <li>{pluralizeCount("Workspace", imported.workspaces.length)}</li>
+              <li>{pluralizeCount("рабочее пространство", imported.workspaces.length)}</li>
             )}
             {imported.environments.length > 0 && (
-              <li>{pluralizeCount("Environment", imported.environments.length)}</li>
+              <li>{pluralizeCount("окружение", imported.environments.length)}</li>
             )}
             {imported.folders.length > 0 && (
-              <li>{pluralizeCount("Folder", imported.folders.length)}</li>
+              <li>{pluralizeCount("папка", imported.folders.length)}</li>
             )}
             {imported.httpRequests.length > 0 && (
-              <li>{pluralizeCount("HTTP Request", imported.httpRequests.length)}</li>
+              <li>{pluralizeCount("HTTP-запрос", imported.httpRequests.length)}</li>
             )}
             {imported.grpcRequests.length > 0 && (
-              <li>{pluralizeCount("GRPC Request", imported.grpcRequests.length)}</li>
+              <li>{pluralizeCount("gRPC-запрос", imported.grpcRequests.length)}</li>
             )}
             {imported.websocketRequests.length > 0 && (
-              <li>{pluralizeCount("Websocket Request", imported.websocketRequests.length)}</li>
+              <li>{pluralizeCount("WebSocket-запрос", imported.websocketRequests.length)}</li>
             )}
           </ul>
           <div>
             <Button className="ml-auto" onClick={hide} color="primary">
-              Done
+              Готово
             </Button>
           </div>
         </VStack>

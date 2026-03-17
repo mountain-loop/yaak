@@ -1,5 +1,5 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../lib/os";
 import { settingsAtom } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
@@ -18,7 +18,7 @@ export function WindowControls({ className, onlyX }: Props) {
   const [maximized, setMaximized] = useState<boolean>(false);
   const settings = useAtomValue(settingsAtom);
   // Never show controls on macOS or if hideWindowControls is true
-  if (type() === "macos" || settings.hideWindowControls || settings.useNativeTitlebar) {
+  if (getOsType() === "macos" || settings.hideWindowControls || settings.useNativeTitlebar) {
     return null;
   }
 

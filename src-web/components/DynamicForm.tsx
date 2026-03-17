@@ -387,7 +387,7 @@ function EditorArg({
                 size="sm"
                 className="my-0.5 opacity-60 group-hover:opacity-100"
                 icon="expand"
-                title="Pop out to large editor"
+                title="Открыть в большом редакторе"
                 onClick={() => {
                   showDialog({
                     id: "id",

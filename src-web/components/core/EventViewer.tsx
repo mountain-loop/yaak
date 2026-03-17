@@ -248,7 +248,7 @@ export function EventDetailHeader({
           </Button>
         ))}
         {copyText != null && (
-          <CopyIconButton text={copyText} size="xs" title="Copy" variant="border" iconSize="sm" />
+          <CopyIconButton text={copyText} size="xs" title="Копировать" variant="border" iconSize="sm" />
         )}
         {formattedTime && (
           <span className="text-text-subtlest font-mono text-editor ml-2">{formattedTime}</span>
@@ -265,7 +265,7 @@ export function EventDetailHeader({
             className="text-text-subtle -mr-3"
             size="xs"
             icon="x"
-            title="Close event panel"
+            title="Закрыть панель событий"
             onClick={onClose}
           />
         </div>

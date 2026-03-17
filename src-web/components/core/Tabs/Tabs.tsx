@@ -506,7 +506,7 @@ function TabButton({
           >
             {option && "shortLabel" in option && option.shortLabel
               ? option.shortLabel
-              : (option?.label ?? "Unknown")}
+              : (option?.label ?? "Неизвестно")}
           </Button>
         </RadioDropdown>
       );

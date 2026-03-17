@@ -25,7 +25,7 @@ pub(crate) struct PluginState {
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    let mut builder = plugin::Builder::new("yaak-mac-window")
+    let builder = plugin::Builder::new("yaak-mac-window")
         .setup(move |app, _| {
             app.manage(PluginState { native_titlebar: AtomicBool::new(false) });
             Ok(())
@@ -33,11 +33,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(generate_handler![set_title, set_theme]);
 
     #[cfg(target_os = "macos")]
-    {
-        builder = builder.on_window_ready(move |window| {
-            mac::setup_traffic_light_positioner(&window);
-        });
-    }
+    let builder = builder.on_window_ready(move |window| {
+        mac::setup_traffic_light_positioner(&window);
+    });
 
     builder.build()
 }

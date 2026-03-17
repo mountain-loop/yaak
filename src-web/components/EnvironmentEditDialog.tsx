@@ -173,7 +173,7 @@ function EnvironmentEditDialogSidebar({
     (items: TreeModel[]): ContextMenuProps["items"] => {
       const environment = items[0];
       const addEnvironmentItem: DropdownItem = {
-        label: "Create Sub Environment",
+        label: "Создать вложенное окружение",
         leftSlot: <Icon icon="plus" />,
         onSelect: async () => {
           await createSubEnvironment();
@@ -191,7 +191,7 @@ function EnvironmentEditDialogSidebar({
 
       const menuItems: DropdownItem[] = [
         {
-          label: "Rename",
+          label: "Переименовать",
           leftSlot: <Icon icon="pencil" />,
           hidden: isBaseEnvironment(environment) || !singleEnvironment,
           hotKeyAction: "sidebar.selected.rename",
@@ -205,7 +205,7 @@ function EnvironmentEditDialogSidebar({
           },
         },
         {
-          label: "Duplicate",
+          label: "Дублировать",
           leftSlot: <Icon icon="copy" />,
           hidden: isBaseEnvironment(environment),
           hotKeyAction: "sidebar.selected.duplicate",
@@ -229,7 +229,7 @@ function EnvironmentEditDialogSidebar({
         },
         {
           color: "danger",
-          label: "Delete",
+          label: "Удалить",
           hotKeyAction: "sidebar.selected.delete",
           hotKeyLabelOnly: true,
           hidden: !canDeleteEnvironment,
@@ -373,7 +373,7 @@ function ItemRightSlot({ item }: { item: TreeModel }) {
           iconSize="sm"
           icon="plus_circle"
           className="opacity-50 hover:opacity-100"
-          title="Add Sub-Environment"
+          title="Добавить вложенное окружение"
           onClick={createSubEnvironment}
         />
       )}
@@ -404,7 +404,7 @@ async function createSubEnvironment() {
 function getEditOptions(item: TreeModel) {
   const options: ReturnType<NonNullable<TreeProps<TreeModel>["getEditOptions"]>> = {
     defaultValue: item.name,
-    placeholder: "Name",
+    placeholder: "Название",
     async onChange(item, name) {
       await patchModel(item, { name });
     },

@@ -82,15 +82,15 @@ export function SettingsTheme() {
       </div>
       <Select
         name="appearance"
-        label="Appearance"
+        label="Внешний вид"
         labelPosition="top"
         size="sm"
         value={settings.appearance}
         onChange={(appearance) => patchModel(settings, { appearance })}
         options={[
-          { label: "Automatic", value: "system" },
-          { label: "Light", value: "light" },
-          { label: "Dark", value: "dark" },
+          { label: "Автоматически", value: "system" },
+          { label: "Светлая", value: "light" },
+          { label: "Тёмная", value: "dark" },
         ]}
       />
       <HStack space={2}>
@@ -99,7 +99,7 @@ export function SettingsTheme() {
             hideLabel
             leftSlot={<Icon icon="sun" color="secondary" />}
             name="lightTheme"
-            label="Light Theme"
+            label="Светлая тема"
             size="sm"
             className="flex-1"
             value={activeTheme.data.light.id}
@@ -112,7 +112,7 @@ export function SettingsTheme() {
             hideLabel
             name="darkTheme"
             className="flex-1"
-            label="Dark Theme"
+            label="Тёмная тема"
             leftSlot={<Icon icon="moon" color="secondary" />}
             size="sm"
             value={activeTheme.data.dark.id}

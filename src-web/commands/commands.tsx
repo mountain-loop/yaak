@@ -16,9 +16,12 @@ import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
 import { showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
-import { pluralizeCount } from "../lib/pluralize";
 import { showPrompt } from "../lib/prompt";
 import { resolvedModelNameWithFolders } from "../lib/resolvedModelName";
+
+function countFilesRu(count: number): string {
+  return `${count} ${count === 1 ? "файл" : "файлов"}`;
+}
 
 export const createFolder = createFastMutation<
   string | null,
@@ -35,11 +38,11 @@ export const createFolder = createFastMutation<
     if (!patch.name) {
       const name = await showPrompt({
         id: "new-folder",
-        label: "Name",
-        defaultValue: "Folder",
-        title: "New Folder",
-        confirmText: "Create",
-        placeholder: "Name",
+        label: "Название",
+        defaultValue: "Папка",
+        title: "Новая папка",
+        confirmText: "Создать",
+        placeholder: "Название",
       });
       if (name == null) return null;
 
@@ -86,7 +89,7 @@ export const syncWorkspace = createFastMutation<
 
     showDialog({
       id: "commit-sync",
-      title: "Changes Detected",
+      title: "Обнаружены изменения",
       size: "md",
       render: ({ hide }) => (
         <form
@@ -99,21 +102,22 @@ export const syncWorkspace = createFastMutation<
         >
           {isDeletingWorkspace ? (
             <Banner color="danger">
-              🚨 <strong>Changes contain a workspace deletion!</strong>
+              🚨 <strong>Изменения содержат удаление рабочего пространства!</strong>
             </Banner>
           ) : (
             <span />
           )}
           <p>
-            {pluralizeCount("file", dbOps.length)} in the directory{" "}
-            {dbOps.length === 1 ? "has" : "have"} changed. Do you want to update your workspace?
+            {countFilesRu(dbOps.length)} в каталоге{" "}
+            {dbOps.length === 1 ? "был изменен" : "были изменены"}.
+            Хотите обновить рабочее пространство?
           </p>
           <Table scrollable className="my-4">
             <TableHead>
               <TableRow>
-                <TableHeaderCell>Type</TableHeaderCell>
-                <TableHeaderCell>Name</TableHeaderCell>
-                <TableHeaderCell>Operation</TableHeaderCell>
+                <TableHeaderCell>Тип</TableHeaderCell>
+                <TableHeaderCell>Название</TableHeaderCell>
+                <TableHeaderCell>Операция</TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -124,17 +128,17 @@ export const syncWorkspace = createFastMutation<
                 let model: string;
 
                 if (op.type === "dbCreate") {
-                  label = "create";
+                  label = "создание";
                   name = resolvedModelNameWithFolders(op.fs.model);
                   color = "text-success";
                   model = modelTypeLabel(op.fs.model);
                 } else if (op.type === "dbUpdate") {
-                  label = "update";
+                  label = "обновление";
                   name = resolvedModelNameWithFolders(op.fs.model);
                   color = "text-info";
                   model = modelTypeLabel(op.fs.model);
                 } else if (op.type === "dbDelete") {
-                  label = "delete";
+                  label = "удаление";
                   name = resolvedModelNameWithFolders(op.model);
                   color = "text-danger";
                   model = modelTypeLabel(op.model);
@@ -157,10 +161,10 @@ export const syncWorkspace = createFastMutation<
           </Table>
           <footer className="py-3 flex flex-row-reverse items-center gap-3">
             <Button type="submit" color="primary">
-              Apply Changes
+              Применить изменения
             </Button>
             <Button onClick={hide} color="secondary">
-              Cancel
+              Отмена
             </Button>
           </footer>
         </form>

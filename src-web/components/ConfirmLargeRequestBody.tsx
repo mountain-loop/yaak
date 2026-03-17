@@ -55,9 +55,9 @@ export function ConfirmLargeRequestBody({ children, request }: Props) {
             onClick={async () => {
               const confirm = await showConfirm({
                 id: `delete-body-${request.id}`,
-                confirmText: "Delete Body",
-                title: "Delete Body Text",
-                description: "Are you sure you want to delete the request body text?",
+                confirmText: "Удалить тело",
+                title: "Удалить текст тела",
+                description: "Вы уверены, что хотите удалить текст тела запроса?",
                 color: "danger",
               });
               if (confirm) {

@@ -21,7 +21,7 @@ export function CopyIconButton({ text, ...props }: Props) {
           showToast({
             id: "failed-to-copy",
             color: "danger",
-            message: "Failed to copy",
+            message: "Не удалось скопировать",
           });
         } else {
           copyToClipboard(content, { disableToast: true });

@@ -66,15 +66,15 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
   return (
     <Tabs
       defaultValue={tab ?? DEFAULT_TAB}
-      label="Folder Settings"
+      label="Настройки папки"
       className="pt-4 pb-2 px-3"
       tabListClassName="pl-4"
       addBorders
       tabs={[
-        { value: TAB_GENERAL, label: "Workspace" },
+        { value: TAB_GENERAL, label: "Рабочее пространство" },
         {
           value: TAB_DATA,
-          label: "Storage",
+          label: "Хранилище",
         },
         ...headersTab,
         ...authTab,
@@ -95,7 +95,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       <TabContent value={TAB_HEADERS} className="overflow-y-auto h-full px-4">
         <HeadersEditor
           inheritedHeaders={inheritedHeaders}
-          inheritedHeadersLabel="Defaults"
+          inheritedHeadersLabel="По умолчанию"
           forceUpdateKey={workspace.id}
           headers={workspace.headers}
           onChange={(headers) => patchModel(workspace, { headers })}
@@ -107,8 +107,8 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           <PlainInput
             required
             hideLabel
-            placeholder="Workspace Name"
-            label="Name"
+            placeholder="Название рабочего пространства"
+            label="Название"
             defaultValue={workspace.name}
             className="!text-base font-sans"
             onChange={(name) => patchModel(workspace, { name })}
@@ -116,7 +116,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
 
           <MarkdownEditor
             name="workspace-description"
-            placeholder="Workspace description"
+            placeholder="Описание рабочего пространства"
             className="border border-border px-2"
             defaultValue={workspace.description}
             stateKey={`description.${workspace.id}`}
@@ -147,7 +147,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
                 className="opacity-70 !text-primary"
                 size="2xs"
                 iconSize="sm"
-                title="Copy workspace ID"
+                title="Скопировать ID рабочего пространства"
                 text={workspaceId}
               />
             </InlineCode>

@@ -78,7 +78,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
           <IconButton
             icon="trash"
             size="sm"
-            title="Remove certificate"
+            title="Удалить сертификат"
             className="text-text-subtlest -mr-2"
             onClick={() => onRemove(index)}
           />
@@ -98,7 +98,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
               if (!/^[a-zA-Z0-9_.-]+$/.test(value)) return false;
               return true;
             }}
-            label="Host"
+            label="Хост"
             placeholder="example.com"
             size="sm"
             required
@@ -106,7 +106,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             onChange={(host) => updateField("host", host)}
           />
           <PlainInput
-            label="Port"
+            label="Порт"
             hideLabel
             validate={(value) => {
               if (!value) return true;
@@ -130,7 +130,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
 
         <VStack space={2}>
           <SelectFile
-            label="CRT File"
+            label="Файл CRT"
             noun="Cert"
             filePath={certificate.crtFile ?? null}
             size="sm"
@@ -138,7 +138,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             onChange={({ filePath }) => updateField("crtFile", filePath)}
           />
           <SelectFile
-            label="KEY File"
+            label="Файл KEY"
             noun="Key"
             filePath={certificate.keyFile ?? null}
             size="sm"
@@ -150,7 +150,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
         <Separator className="my-3" />
 
         <SelectFile
-          label="PFX File"
+          label="Файл PFX"
           noun="Key"
           filePath={certificate.pfxFile ?? null}
           size="sm"
@@ -159,7 +159,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
         />
 
         <PlainInput
-          label="Passphrase"
+          label="Парольная фраза"
           size="sm"
           type="password"
           defaultValue={certificate.passphrase ?? ""}
@@ -198,7 +198,7 @@ export function SettingsCertificates() {
 
     const confirmed = await showConfirmDelete({
       id: "confirm-remove-certificate",
-      title: "Delete Certificate",
+      title: "Удалить сертификат",
       description: (
         <>
           Permanently delete certificate for{" "}

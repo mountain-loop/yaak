@@ -501,7 +501,7 @@ function EncryptionInput({
         onSelect: () => setState((s) => ({ ...s, obscured: !s.obscured })),
       },
       {
-        label: "Copy",
+        label: "Копировать",
         leftSlot: <Icon icon="copy" />,
         hidden: !state.value,
         onSelect: () => copyToClipboard(state.value ?? ""),
@@ -548,7 +548,7 @@ function EncryptionInput({
             size="sm"
             variant="border"
             color={tint}
-            aria-label="Configure encryption"
+            aria-label="Настроить шифрование"
             className={classNames(
               "flex items-center justify-center !h-full !px-1",
               "opacity-70", // Makes it a bit subtler
@@ -556,8 +556,8 @@ function EncryptionInput({
             )}
           >
             <HStack space={0.5}>
-              <Icon size="sm" title="Configure encryption" icon={icon} />
-              <Icon size="xs" title="Configure encryption" icon="chevron_down" />
+              <Icon size="sm" title="Настроить шифрование" icon={icon} />
+              <Icon size="xs" title="Настроить шифрование" icon="chevron_down" />
             </HStack>
           </Button>
         </Dropdown>

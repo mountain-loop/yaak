@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../lib/os";
 import classNames from "classnames";
 import { Provider as JotaiProvider } from "jotai";
 import { LazyMotion, MotionConfig } from "motion/react";
@@ -42,7 +42,7 @@ function RouteComponent() {
 function Layout() {
   return (
     <div
-      className={classNames("w-full h-full", type() === "linux" && "border border-border-subtle")}
+      className={classNames("w-full h-full", getOsType() === "linux" && "border border-border-subtle")}
     >
       <Outlet />
     </div>

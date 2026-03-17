@@ -520,12 +520,12 @@ export function PairEditorRow({
   const defaultItems = useMemo(
     (): DropdownItem[] => [
       {
-        label: "Edit Multi-line",
+        label: "Редактировать многострочно",
         onSelect: handleEditMultiLineValue,
         hidden: !allowMultilineValues,
       },
       {
-        label: "Delete",
+        label: "Удалить",
         onSelect: handleDelete,
         color: "danger",
       },
@@ -605,7 +605,7 @@ export function PairEditorRow({
           forceUpdateKey={forceUpdateKey}
           containerClassName={classNames("bg-surface", isLast && "border-dashed")}
           defaultValue={pair.name}
-          label="Name"
+          label="Название"
           name={`name[${index}]`}
           onChange={handleChangeName}
           onFocus={handleFocusName}
@@ -648,7 +648,7 @@ export function PairEditorRow({
               forcedEnvironmentId={forcedEnvironmentId}
               forceUpdateKey={forceUpdateKey}
               defaultValue={pair.value}
-              label="Value"
+              label="Значение"
               name={`value[${index}]`}
               onChange={handleChangeValueText}
               onFocus={handleFocusValue}
@@ -677,7 +677,7 @@ export function PairEditorRow({
             iconSize="sm"
             size="xs"
             icon={isLast || disabled ? "empty" : "chevron_down"}
-            title="Select form data type"
+            title="Выбрать тип данных формы"
             className="text-text-subtlest"
           />
         </Dropdown>
@@ -687,8 +687,8 @@ export function PairEditorRow({
 }
 
 const fileItems: RadioDropdownItem<string>[] = [
-  { label: "Text", value: "text" },
-  { label: "File", value: "file" },
+  { label: "Текст", value: "text" },
+  { label: "Файл", value: "file" },
 ];
 
 function FileActionsDropdown({
@@ -719,51 +719,51 @@ function FileActionsDropdown({
   const itemsAfter = useMemo<DropdownItem[]>(
     () => [
       {
-        label: "Edit Multi-Line",
+        label: "Редактировать многострочно",
         leftSlot: <Icon icon="file_code" />,
         hidden: pair.isFile,
         onSelect: editMultiLine,
       },
       {
-        label: "Set Content-Type",
+        label: "Задать Content-Type",
         leftSlot: <Icon icon="pencil" />,
         onSelect: async () => {
           const contentType = await showPrompt({
             id: "content-type",
-            title: "Override Content-Type",
+            title: "Переопределить Content-Type",
             label: "Content-Type",
             required: false,
             placeholder: "text/plain",
             defaultValue: pair.contentType ?? "",
-            confirmText: "Set",
-            description: "Leave blank to auto-detect",
+            confirmText: "Установить",
+            description: "Оставьте пустым для автоопределения",
           });
           if (contentType == null) return;
           onChangeContentType(contentType);
         },
       },
       {
-        label: "Set File Name",
+        label: "Задать имя файла",
         leftSlot: <Icon icon="file_code" />,
         onSelect: async () => {
           console.log("PAIR", pair);
           const defaultFilename = await basename(pair.value ?? "");
           const filename = await showPrompt({
             id: "filename",
-            title: "Override Filename",
-            label: "Filename",
+            title: "Переопределить имя файла",
+            label: "Имя файла",
             required: false,
             placeholder: defaultFilename ?? "myfile.png",
             defaultValue: pair.filename,
-            confirmText: "Set",
-            description: "Leave blank to use the name of the selected file",
+            confirmText: "Установить",
+            description: "Оставьте пустым, чтобы использовать имя выбранного файла",
           });
           if (filename == null) return;
           onChangeFilename(filename);
         },
       },
       {
-        label: "Unset File",
+        label: "Убрать файл",
         leftSlot: <Icon icon="x" />,
         hidden: pair.isFile,
         onSelect: async () => {
@@ -771,7 +771,7 @@ function FileActionsDropdown({
         },
       },
       {
-        label: "Delete",
+        label: "Удалить",
         onSelect: onDelete,
         variant: "danger",
         leftSlot: <Icon icon="trash" />,
@@ -802,7 +802,7 @@ function FileActionsDropdown({
         iconSize="sm"
         size="xs"
         icon="chevron_down"
-        title="Select form data type"
+        title="Выбрать тип данных формы"
         className="text-text-subtlest"
       />
     </RadioDropdown>

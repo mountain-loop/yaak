@@ -99,7 +99,7 @@ function EventDetails({
   const actions: EventDetailAction[] = [
     {
       key: "toggle-raw",
-      label: showRaw ? "Formatted" : "Text",
+      label: showRaw ? "Formatted" : "Текст",
       onClick: () => setShowRaw(!showRaw),
     },
   ];
@@ -112,11 +112,11 @@ function EventDetails({
       case "header_down":
         return "Header Received";
       case "send_url":
-        return "Request";
+        return "Запрос";
       case "receive_url":
-        return "Response";
+        return "Ответ";
       case "redirect":
-        return "Redirect";
+        return "Перенаправление";
       case "setting":
         return "Apply Setting";
       case "chunk_sent":
@@ -142,8 +142,8 @@ function EventDetails({
     if (e.type === "header_up" || e.type === "header_down") {
       return (
         <KeyValueRows>
-          <KeyValueRow label="Header">{e.name}</KeyValueRow>
-          <KeyValueRow label="Value">{e.value}</KeyValueRow>
+          <KeyValueRow label="Заголовок">{e.name}</KeyValueRow>
+          <KeyValueRow label="Значение">{e.value}</KeyValueRow>
         </KeyValueRows>
       );
     }
@@ -160,15 +160,15 @@ function EventDetails({
       return (
         <KeyValueRows>
           <KeyValueRow label="URL">{fullUrl}</KeyValueRow>
-          <KeyValueRow label="Method">{e.method}</KeyValueRow>
-          <KeyValueRow label="Scheme">{e.scheme}</KeyValueRow>
-          {e.username ? <KeyValueRow label="Username">{e.username}</KeyValueRow> : null}
-          {e.password ? <KeyValueRow label="Password">{e.password}</KeyValueRow> : null}
-          <KeyValueRow label="Host">{e.host}</KeyValueRow>
-          {!isDefaultPort ? <KeyValueRow label="Port">{e.port}</KeyValueRow> : null}
-          <KeyValueRow label="Path">{e.path}</KeyValueRow>
-          {e.query ? <KeyValueRow label="Query">{e.query}</KeyValueRow> : null}
-          {e.fragment ? <KeyValueRow label="Fragment">{e.fragment}</KeyValueRow> : null}
+          <KeyValueRow label="Метод">{e.method}</KeyValueRow>
+          <KeyValueRow label="Схема">{e.scheme}</KeyValueRow>
+          {e.username ? <KeyValueRow label="Пользователь">{e.username}</KeyValueRow> : null}
+          {e.password ? <KeyValueRow label="Пароль">{e.password}</KeyValueRow> : null}
+          <KeyValueRow label="Хост">{e.host}</KeyValueRow>
+          {!isDefaultPort ? <KeyValueRow label="Порт">{e.port}</KeyValueRow> : null}
+          <KeyValueRow label="Путь">{e.path}</KeyValueRow>
+          {e.query ? <KeyValueRow label="Запрос">{e.query}</KeyValueRow> : null}
+          {e.fragment ? <KeyValueRow label="Фрагмент">{e.fragment}</KeyValueRow> : null}
         </KeyValueRows>
       );
     }
@@ -177,8 +177,8 @@ function EventDetails({
     if (e.type === "receive_url") {
       return (
         <KeyValueRows>
-          <KeyValueRow label="HTTP Version">{e.version}</KeyValueRow>
-          <KeyValueRow label="Status">
+          <KeyValueRow label="HTTP-версия">{e.version}</KeyValueRow>
+          <KeyValueRow label="Статус">
             <HttpStatusTagRaw status={e.status} />
           </KeyValueRow>
         </KeyValueRows>
@@ -190,15 +190,15 @@ function EventDetails({
       const droppedHeaders = e.dropped_headers ?? [];
       return (
         <KeyValueRows>
-          <KeyValueRow label="Status">
+          <KeyValueRow label="Статус">
             <HttpStatusTagRaw status={e.status} />
           </KeyValueRow>
-          <KeyValueRow label="Location">{e.url}</KeyValueRow>
-          <KeyValueRow label="Behavior">
+          <KeyValueRow label="Расположение">{e.url}</KeyValueRow>
+          <KeyValueRow label="Поведение">
             {e.behavior === "drop_body" ? "Drop body, change to GET" : "Preserve method and body"}
           </KeyValueRow>
-          <KeyValueRow label="Body Dropped">{e.dropped_body ? "Yes" : "No"}</KeyValueRow>
-          <KeyValueRow label="Headers Dropped">
+          <KeyValueRow label="Тело отброшено">{e.dropped_body ? "Да" : "Нет"}</KeyValueRow>
+          <KeyValueRow label="Заголовки отброшены">
             {droppedHeaders.length > 0 ? droppedHeaders.join(", ") : "--"}
           </KeyValueRow>
         </KeyValueRows>
@@ -209,8 +209,8 @@ function EventDetails({
     if (e.type === "setting") {
       return (
         <KeyValueRows>
-          <KeyValueRow label="Setting">{e.name}</KeyValueRow>
-          <KeyValueRow label="Value">{e.value}</KeyValueRow>
+          <KeyValueRow label="Параметр">{e.name}</KeyValueRow>
+          <KeyValueRow label="Значение">{e.value}</KeyValueRow>
         </KeyValueRows>
       );
     }
@@ -224,16 +224,16 @@ function EventDetails({
     if (e.type === "dns_resolved") {
       return (
         <KeyValueRows>
-          <KeyValueRow label="Hostname">{e.hostname}</KeyValueRow>
-          <KeyValueRow label="Addresses">{e.addresses.join(", ")}</KeyValueRow>
-          <KeyValueRow label="Duration">
+          <KeyValueRow label="Имя хоста">{e.hostname}</KeyValueRow>
+          <KeyValueRow label="Адреса">{e.addresses.join(", ")}</KeyValueRow>
+          <KeyValueRow label="Длительность">
             {e.overridden ? (
               <span className="text-text-subtlest">--</span>
             ) : (
               `${String(e.duration)}ms`
             )}
           </KeyValueRow>
-          {e.overridden ? <KeyValueRow label="Source">Workspace Override</KeyValueRow> : null}
+          {e.overridden ? <KeyValueRow label="Источник">Переопределение рабочего пространства</KeyValueRow> : null}
         </KeyValueRows>
       );
     }
@@ -328,14 +328,14 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
       return {
         icon: "settings",
         color: "secondary",
-        label: "Setting",
+        label: "Параметр",
         summary: `${event.name} = ${event.value}`,
       };
     case "info":
       return {
         icon: "info",
         color: "secondary",
-        label: "Info",
+        label: "Инфо",
         summary: event.message,
       };
     case "redirect": {
@@ -351,7 +351,7 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
       return {
         icon: "arrow_big_right_dash",
         color: "success",
-        label: "Redirect",
+        label: "Перенаправление",
         summary: `Redirecting ${event.status} ${event.url}${dropped ? ` (${dropped})` : ""}`,
       };
     }
@@ -359,28 +359,28 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
       return {
         icon: "arrow_big_up_dash",
         color: "primary",
-        label: "Request",
+        label: "Запрос",
         summary: `${event.method} ${event.path}${event.query ? `?${event.query}` : ""}${event.fragment ? `#${event.fragment}` : ""}`,
       };
     case "receive_url":
       return {
         icon: "arrow_big_down_dash",
         color: "info",
-        label: "Response",
+        label: "Ответ",
         summary: `${event.version} ${event.status}`,
       };
     case "header_up":
       return {
         icon: "arrow_big_up_dash",
         color: "primary",
-        label: "Header",
+        label: "Заголовок",
         summary: `${event.name}: ${event.value}`,
       };
     case "header_down":
       return {
         icon: "arrow_big_down_dash",
         color: "info",
-        label: "Header",
+        label: "Заголовок",
         summary: `${event.name}: ${event.value}`,
       };
 
@@ -388,14 +388,14 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
       return {
         icon: "info",
         color: "secondary",
-        label: "Chunk",
+        label: "Фрагмент",
         summary: `${formatBytes(event.bytes)} chunk sent`,
       };
     case "chunk_received":
       return {
         icon: "info",
         color: "secondary",
-        label: "Chunk",
+        label: "Фрагмент",
         summary: `${formatBytes(event.bytes)} chunk received`,
       };
     case "dns_resolved":
@@ -411,7 +411,7 @@ function getEventDisplay(event: HttpResponseEventData): EventDisplay {
       return {
         icon: "info",
         color: "secondary",
-        label: "Unknown",
+        label: "Неизвестно",
         summary: "Unknown event",
       };
   }

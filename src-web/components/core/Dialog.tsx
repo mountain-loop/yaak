@@ -116,8 +116,8 @@ export function Dialog({
               <IconButton
                 className="opacity-70 hover:opacity-100"
                 onClick={onClose}
-                title="Close dialog (Esc)"
-                aria-label="Close"
+                title="Закрыть диалог (Esc)"
+                aria-label="Закрыть"
                 size="sm"
                 icon="x"
               />

@@ -21,7 +21,7 @@ export function withEncryptionEnabled(callback?: () => void) {
 function setupOrConfigure(onEnable?: () => void) {
   showDialog({
     id: "workspace-encryption",
-    title: "Workspace Encryption",
+    title: "Шифрование рабочего пространства",
     size: "md",
     render: ({ hide }) => (
       <VStack space={3} className="pb-2" alignItems="end">

@@ -29,7 +29,7 @@ export function ResponseHeaders({ response }: Props) {
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner storageKey={`${response.requestId}.general`} summary={<h2>Info</h2>}>
         <KeyValueRows>
-          <KeyValueRow labelColor="secondary" label="Request URL">
+          <KeyValueRow labelColor="secondary" label="URL запроса">
             <div className="flex items-center gap-1">
               <span className="select-text cursor-text">{response.url}</span>
               <IconButton
@@ -37,14 +37,14 @@ export function ResponseHeaders({ response }: Props) {
                 className="inline-block w-auto !h-auto opacity-50 hover:opacity-100"
                 icon="external_link"
                 onClick={() => openUrl(response.url)}
-                title="Open in browser"
+                title="Открыть в браузере"
               />
             </div>
           </KeyValueRow>
-          <KeyValueRow labelColor="secondary" label="Remote Address">
+          <KeyValueRow labelColor="secondary" label="Удалённый адрес">
             {response.remoteAddr ?? <span className="text-text-subtlest">--</span>}
           </KeyValueRow>
-          <KeyValueRow labelColor="secondary" label="Version">
+          <KeyValueRow labelColor="secondary" label="Версия">
             {response.version ?? <span className="text-text-subtlest">--</span>}
           </KeyValueRow>
         </KeyValueRows>

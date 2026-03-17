@@ -48,18 +48,18 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
     <div className="h-full">
       <Tabs
         defaultValue={defaultSubtab}
-        label="Plugins"
+        label="Плагины"
         addBorders
         tabListClassName="px-6 pt-2"
         tabs={[
-          { label: "Discover", value: "search" },
+          { label: "Обзор", value: "search" },
           {
-            label: "Installed",
+            label: "Установленные",
             value: "installed",
             rightSlot: <CountBadge count={installedPlugins.length} />,
           },
           {
-            label: "Bundled",
+            label: "Встроенные",
             value: "bundled",
             rightSlot: <CountBadge count={bundledPlugins.length} />,
           },
@@ -74,7 +74,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
             <footer className="grid grid-cols-[minmax(0,1fr)_auto] py-2 px-4 border-t bg-surface-highlight border-border-subtle min-w-0">
               <SelectFile
                 size="xs"
-                noun="Plugin"
+                noun="Плагин"
                 directory
                 onChange={({ filePath }) => setDirectory(filePath)}
                 filePath={directory}
@@ -91,20 +91,20 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
                       setDirectory(null);
                     }}
                   >
-                    Add Plugin
+                    Добавить плагин
                   </Button>
                 )}
                 <IconButton
                   size="sm"
                   icon="refresh"
-                  title="Reload plugins"
+                  title="Перезагрузить плагины"
                   spin={refreshPlugins.isPending}
                   onClick={() => refreshPlugins.mutate()}
                 />
                 <IconButton
                   size="sm"
                   icon="help"
-                  title="View documentation"
+                  title="Открыть документацию"
                   onClick={() =>
                     openUrl("https://yaak.app/docs/plugin-development/plugins-quick-start")
                   }
@@ -207,7 +207,7 @@ function PluginTableRow({
         <TableCell className="!py-0">
           <Checkbox
             hideLabel
-            title={plugin?.enabled ? "Disable plugin" : "Enable plugin"}
+            title={plugin?.enabled ? "Отключить плагин" : "Включить плагин"}
             checked={plugin?.enabled ?? false}
             disabled={plugin == null}
             onChange={async (enabled) => {
@@ -253,7 +253,7 @@ function PluginTableRow({
               isLoading={installPluginMutation.isPending}
               onClick={() => installPluginMutation.mutate(name)}
             >
-              Update
+              Обновить
             </Button>
           ) : plugin == null ? (
             <Button
@@ -264,18 +264,18 @@ function PluginTableRow({
               isLoading={installPluginMutation.isPending}
               onClick={() => installPluginMutation.mutate(name)}
             >
-              Install
+              Установить
             </Button>
           ) : null}
           {showUninstall && uninstall != null && (
             <Button
               size="xs"
-              title="Uninstall plugin"
+              title="Удалить плагин"
               variant="border"
               isLoading={uninstall.isPending}
               onClick={() => uninstall.mutate()}
             >
-              Uninstall
+              Удалить
             </Button>
           )}
         </HStack>
@@ -297,8 +297,8 @@ function PluginSearch() {
       <HStack space={1.5}>
         <PlainInput
           hideLabel
-          label="Search"
-          placeholder="Search plugins..."
+          label="Поиск"
+          placeholder="Поиск плагинов..."
           onChange={setQuery}
           defaultValue={query}
         />
@@ -394,8 +394,8 @@ function usePromptUninstall(pluginId: string | null, name: string) {
 
       const confirmed = await showConfirmDelete({
         id: `uninstall-plugin-${pluginId}`,
-        title: "Uninstall Plugin",
-        confirmText: "Uninstall",
+        title: "Удалить плагин",
+        confirmText: "Удалить",
         description: (
           <>
             Permanently uninstall <InlineCode>{name}</InlineCode>?

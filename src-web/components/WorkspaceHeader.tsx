@@ -56,7 +56,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         <ImportCurlButton />
         {showEncryptionSetup ? (
           <PillButton color="danger" onClick={setupOrConfigureEncryption}>
-            Enter Encryption Key
+            Введите ключ шифрования
           </PillButton>
         ) : (
           <LicenseBadge />
@@ -78,7 +78,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({ className }: Prop
         />
         <IconButton
           icon="search"
-          title="Search or execute a command"
+          title="Найти или выполнить команду"
           size="sm"
           hotkeyAction="command_palette.toggle"
           iconColor="secondary"
