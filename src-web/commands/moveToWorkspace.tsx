@@ -15,7 +15,7 @@ export const moveToWorkspace = createFastMutation({
     if (requests.length === 0) return;
 
     const title =
-      requests.length === 1 ? "Move Request" : `Move ${pluralizeCount("Request", requests.length)}`;
+      requests.length === 1 ? "Переместить запрос" : `Переместить ${pluralizeCount("запрос", requests.length)}`;
 
     showDialog({
       id: "change-workspace",

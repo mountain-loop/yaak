@@ -49,9 +49,9 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           variant="border"
           onClick={async () => {
             const selected = await open({
-              title: "Select Proto Files",
+              title: "Выберите файлы Proto",
               multiple: true,
-              filters: [{ name: "Proto Files", extensions: ["proto"] }],
+              filters: [{ name: "Файлы Proto", extensions: ["proto"] }],
             });
             if (selected == null) return;
 
@@ -60,14 +60,14 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             await grpc.reflect.refetch();
           }}
         >
-          Add Proto Files
+          Добавить файлы Proto
         </Button>
         <Button
           variant="border"
           color="primary"
           onClick={async () => {
             const selected = await open({
-              title: "Select Proto Directory",
+              title: "Выберите каталог Proto",
               directory: true,
             });
             if (selected == null) return;
@@ -76,7 +76,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             await grpc.reflect.refetch();
           }}
         >
-          Add Import Folders
+          Добавить папки импорта
         </Button>
         <Button
           isLoading={grpc.reflect.isFetching}
@@ -85,14 +85,14 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
           color="secondary"
           onClick={() => grpc.reflect.refetch()}
         >
-          Refresh Schema
+          Обновить схему
         </Button>
       </HStack>
       <VStack space={5}>
         {reflectError && (
           <Banner color="warning">
             <h1 className="font-bold">
-              Reflection failed on URL <InlineCode>{request.url || "n/a"}</InlineCode>
+              Ошибка рефлексии по URL <InlineCode>{request.url || "n/a"}</InlineCode>
             </h1>
             <p>{reflectError.trim()}</p>
           </Banner>
@@ -100,33 +100,32 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
         {!serverReflection && services != null && services.length > 0 && (
           <Banner className="flex flex-col gap-2">
             <p>
-              Found services{" "}
+              Найдены сервисы{" "}
               {services?.slice(0, 5).map((s, i) => {
                 return (
                   <span key={s.name + s.methods.map((m) => m.name).join(",")}>
                     <InlineCode>{s.name}</InlineCode>
-                    {i === services.length - 1 ? "" : i === services.length - 2 ? " and " : ", "}
+                    {i === services.length - 1 ? "" : i === services.length - 2 ? " и " : ", "}
                   </span>
                 );
               })}
-              {services?.length > 5 && pluralizeCount("other", services?.length - 5)}
+              {services?.length > 5 && pluralizeCount("других", services?.length - 5)}
             </p>
           </Banner>
         )}
         {serverReflection && services != null && services.length > 0 && (
           <Banner className="flex flex-col gap-2">
             <p>
-              Server reflection found services
+              Рефлексия сервера нашла сервисы
               {services?.map((s, i) => {
                 return (
                   <span key={s.name + s.methods.map((m) => m.name).join(",")}>
                     <InlineCode>{s.name}</InlineCode>
-                    {i === services.length - 1 ? "" : i === services.length - 2 ? " and " : ", "}
+                    {i === services.length - 1 ? "" : i === services.length - 2 ? " и " : ", "}
                   </span>
                 );
               })}
-              . You can override this schema by manually selecting <InlineCode>*.proto</InlineCode>{" "}
-              files.
+              . Вы можете переопределить эту схему, вручную выбрав файлы <InlineCode>*.proto</InlineCode>.
             </p>
           </Banner>
         )}
@@ -136,7 +135,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
             <thead>
               <tr>
                 <th className="text-text-subtlest" colSpan={3}>
-                  Added File Paths
+                  Добавленные пути файлов
                 </th>
               </tr>
             </thead>
@@ -155,7 +154,7 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
                     </td>
                     <td className="w-0 py-0.5">
                       <IconButton
-                        title="Remove file"
+                        title="Удалить файл"
                         variant="border"
                         size="xs"
                         icon="trash"
@@ -173,11 +172,11 @@ function GrpcProtoSelectionDialogWithRequest({ request }: Props & { request: Grp
         )}
         {reflectionUnimplemented && protoFiles.length === 0 && (
           <Banner>
-            <InlineCode>{request.url}</InlineCode> doesn&apos;t implement{" "}
+            <InlineCode>{request.url}</InlineCode> не поддерживает{" "}
             <Link href="https://github.com/grpc/grpc/blob/9aa3c5835a4ed6afae9455b63ed45c761d695bca/doc/server-reflection.md">
               Server Reflection
             </Link>{" "}
-            . Please manually add the <InlineCode>.proto</InlineCode> file to get started.
+            . Чтобы начать, добавьте вручную файл <InlineCode>.proto</InlineCode>.
           </Banner>
         )}
       </VStack>

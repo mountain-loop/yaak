@@ -53,7 +53,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
             .catch((err) => {
               showErrorToast({
                 id: "git-init-error",
-                title: "Error initializing Git",
+                title: "Ошибка инициализации Git",
                 message: String(err),
               });
             });
@@ -72,7 +72,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
         }
       }}
     >
-      <PlainInput required label="Name" defaultValue={name} onChange={setName} />
+      <PlainInput required label="Название" defaultValue={name} onChange={setName} />
 
       <SyncToFilesystemSetting
         onChange={setSyncConfig}
@@ -81,16 +81,16 @@ export function CreateWorkspaceDialog({ hide }: Props) {
       />
       <div>
         <Label htmlFor={null} help={<EncryptionHelp />}>
-          Workspace encryption
+          Шифрование рабочего пространства
         </Label>
         <Checkbox
           checked={setupEncryption}
           onChange={setSetupEncryption}
-          title="Enable Encryption"
+          title="Включить шифрование"
         />
       </div>
       <Button type="submit" color="primary" className="w-full mt-3">
-        Create Workspace
+        Создать рабочее пространство
       </Button>
     </VStack>
   );

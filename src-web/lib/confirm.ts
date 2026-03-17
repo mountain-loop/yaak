@@ -29,7 +29,7 @@ export async function showConfirm({
 export async function showConfirmDelete({ confirmText, color, ...extraProps }: ConfirmArgs) {
   return showConfirm({
     color: color ?? "danger",
-    confirmText: confirmText ?? "Delete",
+    confirmText: confirmText ?? "Удалить",
     ...extraProps,
   });
 }
