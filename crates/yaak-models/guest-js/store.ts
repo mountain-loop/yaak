@@ -151,6 +151,7 @@ export function duplicateModel<M extends AnyModel["model"], T extends ExtractMod
     name = (model as { name: string }).name;
   }
   if (name) {
+    name = resolvedModelName(model);
     const existingModels = listModels(model.model);
     for (let i = 0; i < 100; i++) {
       const hasConflict = existingModels.some((m) => {
