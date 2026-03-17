@@ -144,9 +144,10 @@ export function duplicateModel<M extends AnyModel["model"], T extends ExtractMod
     throw new Error("Failed to duplicate null model");
   }
 
-  // If the model has a name, try to duplicate it with a name that doesn't conflict
-  let name = "name" in model ? resolvedModelName(model) : undefined;
-  if (name != null) {
+  // If the model has an explicit (non-empty) name, try to duplicate it with a name that doesn't conflict.
+  // When the name is empty, keep it empty so the display falls back to the URL.
+  let name: string | undefined = "name" in model ? (model as { name: string }).name : undefined;
+  if (name) {
     const existingModels = listModels(model.model);
     for (let i = 0; i < 100; i++) {
       const hasConflict = existingModels.some((m) => {
