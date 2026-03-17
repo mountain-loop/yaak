@@ -345,13 +345,13 @@ function Sidebar({ className }: { className?: string }) {
 
       const initialItems: ContextMenuProps["items"] = [
         {
-          label: "Folder Settings",
+          label: "Настройки папки",
           hidden: !(items.length === 1 && child.model === "folder"),
           leftSlot: <Icon icon="folder_cog" />,
           onSelect: () => openFolderSettings(child.id),
         },
         {
-          label: "Send",
+          label: "Отправить",
           hotKeyAction: "request.send",
           hotKeyLabelOnly: true,
           hidden: !onlyHttpRequests,
@@ -421,7 +421,7 @@ function Sidebar({ className }: { className?: string }) {
           hidden: initialItems.filter((v) => !v.hidden).length === 0,
         },
         {
-          label: "Rename",
+          label: "Переименовать",
           leftSlot: <Icon icon="pencil" />,
           hidden: items.length > 1,
           hotKeyAction: "sidebar.selected.rename",
@@ -431,14 +431,14 @@ function Sidebar({ className }: { className?: string }) {
           },
         },
         {
-          label: "Duplicate",
+          label: "Дублировать",
           hotKeyAction: "model.duplicate",
           hotKeyLabelOnly: true, // Would trigger for every request (bad)
           leftSlot: <Icon icon="copy" />,
           onSelect: () => actions["sidebar.selected.duplicate"].cb(items),
         },
         {
-          label: items.length <= 1 ? "Move" : `Move ${requestItems.length} Requests`,
+          label: items.length <= 1 ? "Переместить" : `Переместить ${requestItems.length} запросов`,
           hotKeyAction: "sidebar.selected.move",
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="arrow_right_circle" />,
@@ -452,7 +452,7 @@ function Sidebar({ className }: { className?: string }) {
         },
         {
           color: "danger",
-          label: "Delete",
+          label: "Удалить",
           hotKeyAction: "sidebar.selected.delete",
           hotKeyLabelOnly: true,
           leftSlot: <Icon icon="trash" />,
@@ -504,7 +504,7 @@ function Sidebar({ className }: { className?: string }) {
               size="sm"
               label="filter"
               language={null} // Explicitly disable
-              placeholder="Search"
+              placeholder="Поиск"
               onChange={handleFilterChange}
               defaultValue={filterText.text}
               forceUpdateKey={filterText.key}
@@ -517,7 +517,7 @@ function Sidebar({ className }: { className?: string }) {
                   <IconButton
                     className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
                     icon="x"
-                    title="Clear filter"
+                    title="Очистить фильтр"
                     onClick={clearFilterText}
                   />
                 )
@@ -526,7 +526,7 @@ function Sidebar({ className }: { className?: string }) {
             <Dropdown
               items={[
                 {
-                  label: "Focus Active Request",
+                  label: "Фокус на активном запросе",
                   leftSlot: <Icon icon="crosshair" />,
                   onSelect: () => {
                     const activeId = jotaiStore.get(activeIdAtom);
@@ -550,14 +550,14 @@ function Sidebar({ className }: { className?: string }) {
                   },
                 },
                 {
-                  label: "Expand All Folders",
+                  label: "Развернуть все папки",
                   leftSlot: <Icon icon="chevrons_up_down" />,
                   onSelect: actions["sidebar.expand_all"].cb,
                   hotKeyAction: "sidebar.expand_all",
                   hotKeyLabelOnly: true,
                 },
                 {
-                  label: "Collapse All Folders",
+                  label: "Свернуть все папки",
                   leftSlot: <Icon icon="chevrons_down_up" />,
                   onSelect: actions["sidebar.collapse_all"].cb,
                   hotKeyAction: "sidebar.collapse_all",
@@ -569,7 +569,7 @@ function Sidebar({ className }: { className?: string }) {
                 size="xs"
                 className="ml-0.5 text-text-subtle hover:text-text"
                 icon="ellipsis_vertical"
-                title="Show sidebar actions menu"
+                title="Показать меню действий боковой панели"
               />
             </Dropdown>
           </>
@@ -577,7 +577,7 @@ function Sidebar({ className }: { className?: string }) {
       </div>
       {allHidden ? (
         <div className="italic text-text-subtle p-3 text-sm text-center">
-          No results for <InlineCode>{filterText.text}</InlineCode>
+          Нет результатов для <InlineCode>{filterText.text}</InlineCode>
         </div>
       ) : (
         <Tree

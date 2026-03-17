@@ -65,7 +65,7 @@ function ExportDataDialogContent({
     const workspace = ids.length === 1 ? workspaces.find((w) => w.id === ids[0]) : undefined;
     const slug = workspace ? slugify(workspace.name, { lower: true }) : "workspaces";
     const exportPath = await save({
-      title: "Export Data",
+      title: "Экспорт данных",
       defaultPath: `yaak.${slug}.json`,
     });
     if (exportPath == null) {
@@ -94,12 +94,12 @@ function ExportDataDialogContent({
                 <Checkbox
                   checked={!allSelected && !noneSelected ? "indeterminate" : allSelected}
                   hideLabel
-                  title="All workspaces"
+                  title="Все рабочие пространства"
                   onChange={handleToggleAll}
                 />
               </th>
               <th className="py-2 text-left pl-4" onClick={handleToggleAll}>
-                Workspace
+                Рабочее пространство
               </th>
             </tr>
           </thead>
@@ -122,30 +122,30 @@ function ExportDataDialogContent({
                     setSelectedWorkspaces((prev) => ({ ...prev, [w.id]: !prev[w.id] }))
                   }
                 >
-                  {w.name} {w.id === activeWorkspace.id ? "(current workspace)" : ""}
+                  {w.name} {w.id === activeWorkspace.id ? "(текущее рабочее пространство)" : ""}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <DetailsBanner color="secondary" defaultOpen summary="Extra Settings">
+        <DetailsBanner color="secondary" defaultOpen summary="Дополнительные настройки">
           <Checkbox
             checked={includePrivateEnvironments}
             onChange={setIncludePrivateEnvironments}
-            title="Include private environments"
-            help='Environments marked as "sharable" will be exported by default'
+            title="Включить приватные окружения"
+            help='Окружения, помеченные как "доступные для общего доступа", экспортируются по умолчанию'
           />
         </DetailsBanner>
       </VStack>
       <footer className="px-5 grid grid-cols-[1fr_auto] items-center bg-surface-highlight py-2 border-t border-border-subtle">
         <div>
           <Link href="https://yaak.app/button/new" noUnderline className="text-text-subtle">
-            Create Run Button
+            Создать кнопку запуска
           </Link>
         </div>
         <HStack space={2} justifyContent="end">
           <Button size="sm" className="focus" variant="border" onClick={onHide}>
-            Cancel
+            Отмена
           </Button>
           <Button
             size="sm"
@@ -155,8 +155,8 @@ function ExportDataDialogContent({
             disabled={noneSelected}
             onClick={() => handleExport()}
           >
-            Export{" "}
-            {pluralizeCount("Workspace", numSelected, { omitSingle: true, noneWord: "Nothing" })}
+            Экспорт{" "}
+            {pluralizeCount("рабочее пространство", numSelected, { omitSingle: true, noneWord: "Ничего" })}
           </Button>
         </HStack>
       </footer>

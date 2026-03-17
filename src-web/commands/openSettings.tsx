@@ -23,7 +23,7 @@ export const openSettings = createFastMutation<void, string, SettingsTabWithSubt
     await invokeCmd("cmd_new_child_window", {
       url: location.href,
       label: "settings",
-      title: "Yaak Settings",
+      title: "Настройки Yaak",
       innerSize: [750, 600],
     });
   },
