@@ -219,6 +219,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
                     .into_iter()
                     .map(|h| HttpHeader { name: h.name, value: h.value })
                     .collect(),
+                body: None,
             };
             let plugin_result = plugin_manager
                 .call_http_authentication(
