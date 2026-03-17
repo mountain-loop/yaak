@@ -97,42 +97,42 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     const commands: CommandPaletteItem[] = [
       {
         key: "settings.open",
-        label: "Open Settings",
+        label: "Открыть настройки",
         action: "settings.show",
         onSelect: () => openSettings.mutate(null),
       },
       {
         key: "app.create",
-        label: "Create Workspace",
+        label: "Создать рабочее пространство",
         onSelect: createWorkspace,
       },
       {
         key: "model.create",
-        label: "Create HTTP Request",
+        label: "Создать HTTP-запрос",
         onSelect: () => createRequestAndNavigate({ model: "http_request", workspaceId }),
       },
       {
         key: "grpc_request.create",
-        label: "Create GRPC Request",
+        label: "Создать gRPC-запрос",
         onSelect: () => createRequestAndNavigate({ model: "grpc_request", workspaceId }),
       },
       {
         key: "websocket_request.create",
-        label: "Create Websocket Request",
+        label: "Создать WebSocket-запрос",
         onSelect: () => createRequestAndNavigate({ model: "websocket_request", workspaceId }),
       },
       {
         key: "folder.create",
-        label: "Create Folder",
+        label: "Создать папку",
         onSelect: () => createFolder.mutate({}),
       },
       {
         key: "cookies.show",
-        label: "Show Cookies",
+        label: "Показать cookie",
         onSelect: async () => {
           showDialog({
             id: "cookies",
-            title: "Manage Cookies",
+            title: "Управление cookie",
             size: "full",
             render: () => <CookieDialog cookieJarId={activeCookieJar?.id ?? null} />,
           });
@@ -140,18 +140,18 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       },
       {
         key: "environment.edit",
-        label: "Edit Environment",
+        label: "Изменить окружение",
         action: "environment_editor.toggle",
         onSelect: () => editEnvironment(activeEnvironment),
       },
       {
         key: "environment.create",
-        label: "Create Environment",
+        label: "Создать окружение",
         onSelect: () => createSubEnvironmentAndActivate.mutate(baseEnvironment),
       },
       {
         key: "sidebar.toggle",
-        label: "Toggle Sidebar",
+        label: "Показать/скрыть боковую панель",
         action: "sidebar.focus",
         onSelect: () => setSidebarHidden((h) => !h),
       },
@@ -161,14 +161,14 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       commands.push({
         key: "request.send",
         action: "request.send",
-        label: "Send Request",
+        label: "Отправить запрос",
         onSelect: () => sendRequest(activeRequest.id),
       });
       if (appInfo.cliVersion != null) {
         commands.push({
           key: "request.copy_cli_send",
           searchText: `copy cli send yaak request send ${activeRequest.id}`,
-          label: "Copy CLI Send Command",
+          label: "Скопировать CLI-команду отправки",
           onSelect: () => copyToClipboard(`yaak request send ${activeRequest.id}`),
         });
       }
@@ -194,13 +194,13 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
     if (activeRequest != null) {
       commands.push({
         key: "http_request.rename",
-        label: "Rename Request",
+        label: "Переименовать запрос",
         onSelect: () => renameModelWithPrompt(activeRequest),
       });
 
       commands.push({
         key: "sidebar.selected.delete",
-        label: "Delete Request",
+        label: "Удалить запрос",
         onSelect: () => deleteModelWithConfirm(activeRequest),
       });
     }
@@ -285,13 +285,13 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
   const groups = useMemo<CommandPaletteGroup[]>(() => {
     const actionsGroup: CommandPaletteGroup = {
       key: "actions",
-      label: "Actions",
+      label: "Действия",
       items: workspaceCommands,
     };
 
     const requestGroup: CommandPaletteGroup = {
       key: "requests",
-      label: "Switch Request",
+      label: "Переключить запрос",
       items: [],
     };
 
@@ -322,7 +322,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const environmentGroup: CommandPaletteGroup = {
       key: "environments",
-      label: "Switch Environment",
+      label: "Переключить окружение",
       items: [],
     };
 
@@ -339,7 +339,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
 
     const workspaceGroup: CommandPaletteGroup = {
       key: "workspaces",
-      label: "Switch Workspace",
+      label: "Переключить рабочее пространство",
       items: [],
     };
 
@@ -437,8 +437,8 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
             </div>
           }
           name="command"
-          label="Command"
-          placeholder="Search or type a command"
+          label="Команда"
+          placeholder="Найдите или введите команду"
           className="font-sans !text-base"
           defaultValue={command}
           onChange={handleSetCommand}

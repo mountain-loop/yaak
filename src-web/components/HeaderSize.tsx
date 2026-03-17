@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../lib/os";
 import { settingsAtom } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
@@ -37,7 +37,7 @@ export function HeaderSize({
 
     if (nativeTitlebar) {
       // No style updates when using native titlebar
-    } else if (type() === "macos") {
+    } else if (getOsType() === "macos") {
       if (!isFullscreen) {
         // Add large padding for window controls
         s.paddingLeft = 76 / settings.interfaceScale;

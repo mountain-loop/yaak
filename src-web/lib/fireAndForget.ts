@@ -9,7 +9,7 @@ export function fireAndForget(promise: Promise<unknown>) {
     console.error("Unhandled async error:", err);
     showErrorToast({
       id: "async-error",
-      title: "Unexpected Error",
+      title: "Неожиданная ошибка",
       message: err instanceof Error ? err.message : String(err),
     });
   });

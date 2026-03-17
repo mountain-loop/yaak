@@ -1,6 +1,15 @@
 import type { InvokeArgs } from "@tauri-apps/api/core";
 import { invoke } from "@tauri-apps/api/core";
 
+export function isTauriRuntime(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const internals = (window as { __TAURI_INTERNALS__?: { invoke?: unknown } }).__TAURI_INTERNALS__;
+  return typeof internals?.invoke === "function";
+}
+
 type TauriCmd =
   | "cmd_call_grpc_request_action"
   | "cmd_call_http_authentication_action"
@@ -55,6 +64,9 @@ type TauriCmd =
 
 export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {
   // console.log('RUN COMMAND', cmd, args);
+  if (!isTauriRuntime()) {
+    throw new Error(`Tauri runtime unavailable for command: ${cmd}`);
+  }
   try {
     return await invoke(cmd, args);
   } catch (err) {

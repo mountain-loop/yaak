@@ -21,7 +21,7 @@ export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
   return (
     <VStack space={3}>
       <p>
-        Where would you like to open <InlineCode>{workspace.name}</InlineCode>?
+        Где вы хотите открыть <InlineCode>{workspace.name}</InlineCode>?
       </p>
       <HStack space={2} justifyContent="start" className="flex-row-reverse">
         <Button
@@ -35,7 +35,7 @@ export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
             }
           }}
         >
-          This Window
+          В этом окне
         </Button>
         <Button
           className="focus"
@@ -49,12 +49,12 @@ export function SwitchWorkspaceDialog({ hide, workspace }: Props) {
             }
           }}
         >
-          New Window
+          В новом окне
         </Button>
       </HStack>
       {settings && (
         <HStack justifyContent="end">
-          <Checkbox checked={remember} title="Remember my choice" onChange={setRemember} />
+          <Checkbox checked={remember} title="Запомнить мой выбор" onChange={setRemember} />
         </HStack>
       )}
     </VStack>

@@ -19,11 +19,11 @@ export function resolvedModelName(r: AnyModel | null): string {
   if (withoutVariables.trim() === "") {
     return r.model === "http_request"
       ? r.bodyType && r.bodyType === "graphql"
-        ? "GraphQL Request"
-        : "HTTP Request"
+        ? "GraphQL-запрос"
+        : "HTTP-запрос"
       : r.model === "websocket_request"
-        ? "WebSocket Request"
-        : "gRPC Request";
+        ? "WebSocket-запрос"
+        : "gRPC-запрос";
   }
 
   // GRPC gets nice short names

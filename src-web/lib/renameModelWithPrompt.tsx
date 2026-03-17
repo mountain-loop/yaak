@@ -10,20 +10,20 @@ export async function renameModelWithPrompt(model: Extract<AnyModel, { name: str
 
   const name = await showPrompt({
     id: "rename-request",
-    title: "Rename Request",
+    title: "Переименовать запрос",
     required: false,
     description:
       model.name === "" ? (
-        "Enter a new name"
+        "Введите новое имя"
       ) : (
         <>
-          Enter a new name for <InlineCode>{model.name}</InlineCode>
+          Введите новое имя для <InlineCode>{model.name}</InlineCode>
         </>
       ),
-    label: "Name",
-    placeholder: "New Name",
+    label: "Название",
+    placeholder: "Новое название",
     defaultValue: model.name,
-    confirmText: "Save",
+    confirmText: "Сохранить",
   });
 
   if (name == null) return;

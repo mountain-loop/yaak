@@ -1,6 +1,6 @@
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "./os";
 
-const os = type();
+const os = getOsType();
 export const revealInFinderText =
   os === "macos"
     ? "Reveal in Finder"

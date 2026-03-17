@@ -7,13 +7,10 @@
   "scripts": {
     "build": "run-s build:*",
     "build:1-build": "yaakcli build",
-    "build:2-cpywasm": "cpx \"../../node_modules/@1password/sdk-core/nodejs/core_bg.wasm\" build/",
+    "build:2-cpywasm": "node -e \"const fs=require('fs'); fs.mkdirSync('build',{recursive:true}); fs.copyFileSync('../../node_modules/@1password/sdk-core/nodejs/core_bg.wasm','build/core_bg.wasm');\"",
     "dev": "yaakcli dev"
   },
   "dependencies": {
     "@1password/sdk": "^0.4.0-beta.2"
-  },
-  "devDependencies": {
-    "cpx2": "^8.0.0"
   }
 }
