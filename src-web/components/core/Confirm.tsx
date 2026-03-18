@@ -48,7 +48,7 @@ export function Confirm({
             <CopyIconButton
               tabIndex={-1}
               text={requireTyping}
-              title="Copy name"
+              title="Скопировать имя"
               className="text-text-subtlest"
               iconSize="sm"
               size="2xs"
@@ -56,17 +56,17 @@ export function Confirm({
           }
           label={
             <>
-              Type <strong>{requireTyping}</strong> to confirm
+              Введите <strong>{requireTyping}</strong>, чтобы подтвердить
             </>
           }
         />
       )}
       <HStack space={2} justifyContent="start" className="mt-2 mb-4 flex-row-reverse">
         <Button type="submit" color={color} disabled={!didConfirm}>
-          {confirmText ?? "Confirm"}
+          {confirmText ?? "Подтвердить"}
         </Button>
         <Button onClick={handleHide} variant="border">
-          Cancel
+          Отмена
         </Button>
       </HStack>
     </form>

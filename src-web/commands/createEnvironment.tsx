@@ -25,8 +25,8 @@ export const createSubEnvironmentAndActivate = createFastMutation<
     return new Promise<string | null>((resolve) => {
       showDialog({
         id: "new-environment",
-        title: "New Environment",
-        description: "Create multiple environments with different sets of variables",
+        title: "Новое окружение",
+        description: "Создавайте несколько окружений с разными наборами переменных",
         size: "sm",
         onClose: () => resolve(null),
         render: ({ hide }) => (

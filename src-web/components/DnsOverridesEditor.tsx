@@ -128,7 +128,7 @@ function DnsOverrideRow({ override, onUpdate, onDelete }: DnsOverrideRowProps) {
         <PlainInput
           size="sm"
           hideLabel
-          label="Hostname"
+          label="Имя хоста"
           placeholder="api.example.com"
           defaultValue={override.hostname}
           onChange={(hostname) => onUpdate({ hostname })}
@@ -138,7 +138,7 @@ function DnsOverrideRow({ override, onUpdate, onDelete }: DnsOverrideRowProps) {
         <PlainInput
           size="sm"
           hideLabel
-          label="IPv4 addresses"
+          label="Адреса IPv4"
           placeholder="127.0.0.1"
           defaultValue={ipv4Value}
           onChange={(value) =>
@@ -155,7 +155,7 @@ function DnsOverrideRow({ override, onUpdate, onDelete }: DnsOverrideRowProps) {
         <PlainInput
           size="sm"
           hideLabel
-          label="IPv6 addresses"
+          label="Адреса IPv6"
           placeholder="::1"
           defaultValue={ipv6Value}
           onChange={(value) =>
@@ -173,7 +173,7 @@ function DnsOverrideRow({ override, onUpdate, onDelete }: DnsOverrideRowProps) {
           size="xs"
           iconSize="sm"
           icon="trash"
-          title="Delete override"
+          title="Удалить переопределение"
           onClick={onDelete}
         />
       </TableCell>

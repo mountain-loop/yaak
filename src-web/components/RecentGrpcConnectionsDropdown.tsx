@@ -26,17 +26,17 @@ export function RecentGrpcConnectionsDropdown({
     <Dropdown
       items={[
         {
-          label: "Clear Connection",
+          label: "Очистить соединение",
           onSelect: () => deleteModel(activeConnection),
           disabled: connections.length === 0,
         },
         {
-          label: `Clear ${pluralizeCount("Connection", connections.length)}`,
+          label: `Clear ${pluralizeCount("соединение", connections.length)}`,
           onSelect: deleteAllConnections.mutate,
           hidden: connections.length <= 1,
           disabled: connections.length === 0,
         },
-        { type: "separator", label: "History" },
+        { type: "separator", label: "История" },
         ...connections.map((c) => ({
           label: (
             <HStack space={2}>
@@ -50,7 +50,7 @@ export function RecentGrpcConnectionsDropdown({
       ]}
     >
       <IconButton
-        title="Show connection history"
+        title="Показать историю соединений"
         icon={activeConnection?.id === latestConnectionId ? "history" : "pin"}
         className="m-0.5 text-text-subtle"
         size="sm"

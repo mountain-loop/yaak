@@ -11,7 +11,7 @@ export function useExportData() {
   return useFastMutation({
     mutationKey: ["export_data"],
     onError: (err: string) => {
-      showAlert({ id: "export-failed", title: "Export Failed", body: err });
+      showAlert({ id: "export-failed", title: "Ошибка экспорта", body: err });
     },
     mutationFn: async () => {
       const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
@@ -21,7 +21,7 @@ export function useExportData() {
 
       showDialog({
         id: "export-data",
-        title: "Export Data",
+        title: "Экспорт данных",
         size: "md",
         noPadding: true,
         render: ({ hide }) => (
@@ -30,7 +30,7 @@ export function useExportData() {
             onSuccess={() => {
               showToast({
                 color: "success",
-                message: "Data export successful",
+                message: "Экспорт данных выполнен",
               });
             }}
           />

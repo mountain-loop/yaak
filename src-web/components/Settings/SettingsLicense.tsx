@@ -36,7 +36,7 @@ function SettingsLicenseCmp() {
 
     switch (check.data.status) {
       case "active":
-        return <Banner color="success">Your license is active 🥳</Banner>;
+        return <Banner color="success">Ваша лицензия активна 🥳</Banner>;
 
       case "trialing":
         return (
@@ -45,13 +45,13 @@ function SettingsLicenseCmp() {
               <strong>
                 {pluralizeCount("day", differenceInDays(check.data.data.end, new Date()))}
               </strong>{" "}
-              left to evaluate Yaak for commercial use.
+              осталось для оценки Yaak в коммерческом использовании.
               <br />
-              <span className="opacity-50">Personal use is always free, forever.</span>
+              <span className="opacity-50">Личное использование всегда бесплатно.</span>
               <Separator className="my-2" />
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
                 <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
-                  Learn More
+                  Подробнее
                 </Link>
               </div>
             </p>
@@ -62,16 +62,16 @@ function SettingsLicenseCmp() {
         return (
           <Banner color="notice" className="max-w-lg">
             <p className="w-full">
-              Your commercial-use trial has ended.
+              Ваш пробный период для коммерческого использования завершён.
               <br />
               <span className="opacity-50">
-                You may continue using Yaak for personal use only.
-                <br />A license is required for commercial use.
+                Вы можете продолжать использовать Yaak только для личных целей.
+                <br />Для коммерческого использования требуется лицензия.
               </span>
               <Separator className="my-2" />
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
                 <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
-                  Learn More
+                  Подробнее
                 </Link>
               </div>
             </p>
@@ -81,22 +81,22 @@ function SettingsLicenseCmp() {
       case "inactive":
         return (
           <Banner color="danger">
-            Your license is invalid. Please <Link href="https://yaak.app/dashboard">Sign In</Link>{" "}
-            for more details
+            Ваша лицензия недействительна. Пожалуйста, <Link href="https://yaak.app/dashboard">войдите</Link>{" "}
+            для подробностей
           </Banner>
         );
 
       case "expired":
         return (
           <Banner color="notice">
-            Your license expired{" "}
+            Срок действия вашей лицензии истёк{" "}
             <strong>{formatDate(check.data.data.periodEnd, "MMMM dd, yyyy")}</strong>. Please{" "}
-            <Link href="https://yaak.app/dashboard">Resubscribe</Link> to continue receiving
+            <Link href="https://yaak.app/dashboard">Продлите подписку</Link> to continue receiving
             updates.
             {check.data.data.changesUrl && (
               <>
                 <br />
-                <Link href={check.data.data.changesUrl}>What's new in latest builds</Link>
+                <Link href={check.data.data.changesUrl}>Что нового в последних сборках</Link>
               </>
             )}
           </Banner>
@@ -105,17 +105,17 @@ function SettingsLicenseCmp() {
       case "past_due":
         return (
           <Banner color="danger">
-            <strong>Your payment method needs attention.</strong>
+            <strong>Ваш способ оплаты требует внимания.</strong>
             <br />
             To re-activate your license, please{" "}
-            <Link href={check.data.data.billingUrl}>update your billing info</Link>.
+            <Link href={check.data.data.billingUrl}>обновите платёжные данные</Link>.
           </Banner>
         );
 
       case "error":
         return (
           <Banner color="danger">
-            License check failed: {check.data.data.message} (Code: {check.data.data.code})
+            Проверка лицензии не удалась: {check.data.data.message} (Код: {check.data.data.code})
           </Banner>
         );
     }
@@ -131,7 +131,7 @@ function SettingsLicenseCmp() {
       {check.data?.status === "active" ? (
         <HStack space={2}>
           <Button variant="border" color="secondary" size="sm" onClick={() => deactivate.mutate()}>
-            Deactivate License
+            Деактивировать лицензию
           </Button>
           <Button
             color="secondary"
@@ -139,13 +139,13 @@ function SettingsLicenseCmp() {
             onClick={() => openUrl("https://yaak.app/dashboard?s=support&ref=app.yaak.desktop")}
             rightSlot={<Icon icon="external_link" />}
           >
-            Direct Support
+            Прямая поддержка
           </Button>
         </HStack>
       ) : (
         <HStack space={2}>
           <Button variant="border" color="secondary" size="sm" onClick={toggleActivateFormVisible}>
-            Activate License
+            Активировать лицензию
           </Button>
           <Button
             size="sm"
@@ -157,7 +157,7 @@ function SettingsLicenseCmp() {
               )
             }
           >
-            Purchase License
+            Купить лицензию
           </Button>
         </HStack>
       )}
@@ -175,13 +175,13 @@ function SettingsLicenseCmp() {
         >
           <PlainInput
             autoFocus
-            label="License Key"
+            label="Лицензионный ключ"
             name="key"
             onChange={setKey}
             placeholder="YK1-XXXXX-XXXXX-XXXXX-XXXXX"
           />
           <Button type="submit" color="primary" size="sm" isLoading={activate.isPending}>
-            Submit
+            Отправить
           </Button>
         </VStack>
       )}

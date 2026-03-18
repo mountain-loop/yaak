@@ -53,7 +53,7 @@ export function SelectFile({
     onChange({ filePath: null, contentType: null });
   };
 
-  const itemLabel = noun ?? (directory ? "Folder" : "File");
+  const itemLabel = noun ?? (directory ? "Folder" : "Файл");
   const selectOrChange = (filePath ? "Change " : "Select ") + itemLabel;
   const [isHovering, setIsHovering] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

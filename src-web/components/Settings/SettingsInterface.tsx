@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../../lib/os";
 import { useFonts } from "@yaakapp-internal/fonts";
 import { useLicense } from "@yaakapp-internal/license";
 import type { EditorKeymap, Settings } from "@yaakapp-internal/models";
@@ -26,7 +26,7 @@ const fontSizeOptions = [
 ].map((n) => ({ label: `${n}`, value: `${n}` }));
 
 const keymaps: { value: EditorKeymap; label: string }[] = [
-  { value: "default", label: "Default" },
+  { value: "default", label: "По умолчанию" },
   { value: "vim", label: "Vim" },
   { value: "vscode", label: "VSCode" },
   { value: "emacs", label: "Emacs" },
@@ -44,14 +44,14 @@ export function SettingsInterface() {
   return (
     <VStack space={3} className="mb-4">
       <div className="mb-3">
-        <Heading>Interface</Heading>
-        <p className="text-text-subtle">Tweak settings related to the user interface.</p>
+        <Heading>Интерфейс</Heading>
+        <p className="text-text-subtle">Настройка параметров пользовательского интерфейса.</p>
       </div>
       <Select
         name="switchWorkspaceBehavior"
-        label="Open workspace behavior"
+        label="Поведение открытия рабочего пространства"
         size="sm"
-        help="When opening a workspace, should it open in the current window or a new window?"
+        help="При открытии рабочего пространства использовать текущее окно или новое?"
         value={
           settings.openWorkspaceNewWindow === true
             ? "new"
@@ -65,9 +65,9 @@ export function SettingsInterface() {
           else await patchModel(settings, { openWorkspaceNewWindow: null });
         }}
         options={[
-          { label: "Always ask", value: "ask" },
-          { label: "Open in current window", value: "current" },
-          { label: "Open in new window", value: "new" },
+          { label: "Всегда спрашивать", value: "ask" },
+          { label: "Открывать в текущем окне", value: "current" },
+          { label: "Открывать в новом окне", value: "new" },
         ]}
       />
       <HStack space={2} alignItems="end">
@@ -75,10 +75,10 @@ export function SettingsInterface() {
           <Select
             size="sm"
             name="uiFont"
-            label="Interface font"
+            label="Шрифт интерфейса"
             value={settings.interfaceFont ?? NULL_FONT_VALUE}
             options={[
-              { label: "System default", value: NULL_FONT_VALUE },
+              { label: "Системный по умолчанию", value: NULL_FONT_VALUE },
               ...(fonts.data.uiFonts.map((f) => ({
                 label: f,
                 value: f,
@@ -99,7 +99,7 @@ export function SettingsInterface() {
           hideLabel
           size="sm"
           name="interfaceFontSize"
-          label="Interface Font Size"
+          label="Размер шрифта интерфейса"
           defaultValue="14"
           value={`${settings.interfaceFontSize}`}
           options={fontSizeOptions}
@@ -111,10 +111,10 @@ export function SettingsInterface() {
           <Select
             size="sm"
             name="editorFont"
-            label="Editor font"
+            label="Шрифт редактора"
             value={settings.editorFont ?? NULL_FONT_VALUE}
             options={[
-              { label: "System default", value: NULL_FONT_VALUE },
+              { label: "Системный по умолчанию", value: NULL_FONT_VALUE },
               ...(fonts.data.editorFonts.map((f) => ({
                 label: f,
                 value: f,
@@ -130,7 +130,7 @@ export function SettingsInterface() {
           hideLabel
           size="sm"
           name="editorFontSize"
-          label="Editor Font Size"
+          label="Размер шрифта редактора"
           defaultValue="12"
           value={`${settings.editorFontSize}`}
           options={fontSizeOptions}
@@ -143,19 +143,19 @@ export function SettingsInterface() {
         leftSlot={<Icon icon="keyboard" color="secondary" />}
         size="sm"
         name="editorKeymap"
-        label="Editor keymap"
+        label="Раскладка клавиш редактора"
         value={`${settings.editorKeymap}`}
         options={keymaps}
         onChange={(v) => patchModel(settings, { editorKeymap: v })}
       />
       <Checkbox
         checked={settings.editorSoftWrap}
-        title="Wrap editor lines"
+        title="Переносить строки редактора"
         onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
       />
       <Checkbox
         checked={settings.coloredMethods}
-        title="Colorize request methods"
+        title="Подсвечивать методы запросов"
         onChange={(coloredMethods) => patchModel(settings, { coloredMethods })}
       />
       <CargoFeature feature="license">
@@ -164,11 +164,11 @@ export function SettingsInterface() {
 
       <NativeTitlebarSetting settings={settings} />
 
-      {type() !== "macos" && (
+      {getOsType() !== "macos" && (
         <Checkbox
           checked={settings.hideWindowControls}
-          title="Hide window controls"
-          help="Hide the close/maximize/minimize controls on Windows or Linux"
+          title="Скрыть элементы управления окном"
+          help="Скрыть кнопки закрытия/разворачивания/сворачивания в Windows или Linux"
           onChange={(hideWindowControls) => patchModel(settings, { hideWindowControls })}
         />
       )}
@@ -182,8 +182,8 @@ function NativeTitlebarSetting({ settings }: { settings: Settings }) {
     <div className="flex gap-1 overflow-hidden h-2xs">
       <Checkbox
         checked={nativeTitlebar}
-        title="Native title bar"
-        help="Use the operating system's standard title bar and window controls"
+        title="Системная строка заголовка"
+        help="Использовать стандартную строку заголовка и элементы управления окна ОС"
         onChange={setNativeTitlebar}
       />
       {settings.useNativeTitlebar !== nativeTitlebar && (
@@ -211,13 +211,13 @@ function LicenseSettings({ settings }: { settings: Settings }) {
   return (
     <Checkbox
       checked={settings.hideLicenseBadge}
-      title="Hide personal use badge"
+      title="Скрыть бейдж личного использования"
       onChange={async (hideLicenseBadge) => {
         if (hideLicenseBadge) {
           const confirmed = await showConfirm({
             id: "hide-license-badge",
-            title: "Confirm Personal Use",
-            confirmText: "Confirm",
+            title: "Подтвердить личное использование",
+            confirmText: "Подтвердить",
             description: (
               <VStack space={3}>
                 <p>Hey there 👋🏼</p>
@@ -231,7 +231,7 @@ function LicenseSettings({ settings }: { settings: Settings }) {
                 </p>
               </VStack>
             ),
-            requireTyping: "Personal Use",
+            requireTyping: "Личное использование",
             color: "info",
           });
           if (!confirmed) {

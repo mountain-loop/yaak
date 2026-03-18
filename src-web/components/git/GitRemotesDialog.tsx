@@ -25,7 +25,7 @@ export function GitRemotesDialog({ dir }: Props) {
               className="text-text-subtle ml-auto"
               size="2xs"
               color="primary"
-              title="Add remote"
+              title="Добавить remote"
               variant="border"
               onClick={() => addGitRemote(dir)}
             >
@@ -44,7 +44,7 @@ export function GitRemotesDialog({ dir }: Props) {
                 size="sm"
                 className="text-text-subtle ml-auto"
                 icon="trash"
-                title="Remove remote"
+                title="Удалить remote"
                 onClick={() => rmRemote.mutate({ name: r.name })}
               />
             </TableCell>
@@ -58,7 +58,7 @@ export function GitRemotesDialog({ dir }: Props) {
 GitRemotesDialog.show = (dir: string) => {
   showDialog({
     id: "git-remotes",
-    title: "Manage Remotes",
+    title: "Управление remote",
     size: "md",
     render: ({ hide }) => <GitRemotesDialog onDone={hide} dir={dir} />,
   });

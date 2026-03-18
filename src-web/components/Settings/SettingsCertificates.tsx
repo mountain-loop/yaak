@@ -60,7 +60,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             <Checkbox
               className="ml-1"
               checked={certificate.enabled ?? true}
-              title={certificate.enabled ? "Disable certificate" : "Enable certificate"}
+              title={certificate.enabled ? "Отключить сертификат" : "Включить сертификат"}
               hideLabel
               onChange={(enabled) => updateField("enabled", enabled)}
             />
@@ -71,14 +71,14 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
                 {certificate.port != null && `:${certificate.port}`}
               </InlineCode>
             ) : (
-              <span className="italic text-sm text-text-subtlest">Configure Certificate</span>
+              <span className="italic text-sm text-text-subtlest">Настроить сертификат</span>
             )}
             {certType && <InlineCode>{certType}</InlineCode>}
           </HStack>
           <IconButton
             icon="trash"
             size="sm"
-            title="Remove certificate"
+            title="Удалить сертификат"
             className="text-text-subtlest -mr-2"
             onClick={() => onRemove(index)}
           />
@@ -98,7 +98,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
               if (!/^[a-zA-Z0-9_.-]+$/.test(value)) return false;
               return true;
             }}
-            label="Host"
+            label="Хост"
             placeholder="example.com"
             size="sm"
             required
@@ -106,7 +106,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
             onChange={(host) => updateField("host", host)}
           />
           <PlainInput
-            label="Port"
+            label="Порт"
             hideLabel
             validate={(value) => {
               if (!value) return true;
@@ -130,16 +130,16 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
 
         <VStack space={2}>
           <SelectFile
-            label="CRT File"
-            noun="Cert"
+            label="Файл CRT"
+            noun="Сертификат"
             filePath={certificate.crtFile ?? null}
             size="sm"
             disabled={hasPfx}
             onChange={({ filePath }) => updateField("crtFile", filePath)}
           />
           <SelectFile
-            label="KEY File"
-            noun="Key"
+            label="Файл KEY"
+            noun="Ключ"
             filePath={certificate.keyFile ?? null}
             size="sm"
             disabled={hasPfx}
@@ -150,8 +150,8 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
         <Separator className="my-3" />
 
         <SelectFile
-          label="PFX File"
-          noun="Key"
+          label="Файл PFX"
+          noun="Ключ"
           filePath={certificate.pfxFile ?? null}
           size="sm"
           disabled={hasCrtKey}
@@ -159,7 +159,7 @@ function CertificateEditor({ certificate, index, onUpdate, onRemove }: Certifica
         />
 
         <PlainInput
-          label="Passphrase"
+          label="Парольная фраза"
           size="sm"
           type="password"
           defaultValue={certificate.passphrase ?? ""}
@@ -193,15 +193,15 @@ export function SettingsCertificates() {
     const cert = certificates[index];
     if (cert == null) return;
 
-    const host = cert.host || "this certificate";
+    const host = cert.host || "этот сертификат";
     const port = cert.port != null ? `:${cert.port}` : "";
 
     const confirmed = await showConfirmDelete({
       id: "confirm-remove-certificate",
-      title: "Delete Certificate",
+      title: "Удалить сертификат",
       description: (
         <>
-          Permanently delete certificate for{" "}
+          Безвозвратно удалить сертификат для{" "}
           <InlineCode>
             {host}
             {port}
@@ -223,13 +223,13 @@ export function SettingsCertificates() {
       <div className="mb-3">
         <HStack justifyContent="between" alignItems="start">
           <div>
-            <Heading>Client Certificates</Heading>
+            <Heading>Клиентские сертификаты</Heading>
             <p className="text-text-subtle">
-              Add and manage TLS certificates on a per domain basis
+              Добавляйте и управляйте TLS-сертификатами для отдельных доменов
             </p>
           </div>
           <Button variant="border" size="sm" color="secondary" onClick={handleAdd}>
-            Add Certificate
+            Добавить сертификат
           </Button>
         </HStack>
       </div>

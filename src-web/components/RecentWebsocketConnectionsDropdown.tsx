@@ -25,12 +25,12 @@ export function RecentWebsocketConnectionsDropdown({
     <Dropdown
       items={[
         {
-          label: "Clear Connection",
+          label: "Очистить соединение",
           onSelect: () => deleteModel(activeConnection),
           disabled: connections.length === 0,
         },
         {
-          label: `Clear ${pluralizeCount("Connection", connections.length)}`,
+          label: `Очистить ${pluralizeCount("соединение", connections.length)}`,
           onSelect: () => {
             const request = getModel("websocket_request", activeConnection.requestId);
             if (request != null) {
@@ -40,11 +40,11 @@ export function RecentWebsocketConnectionsDropdown({
           hidden: connections.length <= 1,
           disabled: connections.length === 0,
         },
-        { type: "separator", label: "History" },
+        { type: "separator", label: "История" },
         ...connections.map((c) => ({
           label: (
             <HStack space={2}>
-              {formatDistanceToNowStrict(`${c.createdAt}Z`)} ago &bull;{" "}
+              {formatDistanceToNowStrict(`${c.createdAt}Z`)} назад &bull;{" "}
               <span className="font-mono text-sm">{c.elapsed}ms</span>
             </HStack>
           ),
@@ -54,7 +54,7 @@ export function RecentWebsocketConnectionsDropdown({
       ]}
     >
       <IconButton
-        title="Show connection history"
+        title="Показать историю соединений"
         icon={activeConnection?.id === latestConnectionId ? "history" : "pin"}
         className="m-0.5 text-text-subtle"
         size="sm"

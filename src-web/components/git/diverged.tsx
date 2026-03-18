@@ -9,8 +9,8 @@ import { HStack } from "../core/Stacks";
 type Resolution = "force_reset" | "merge";
 
 const resolutionLabel: Record<Resolution, string> = {
-  force_reset: "Force Pull",
-  merge: "Merge",
+  force_reset: "Принудительный pull",
+  merge: "Слияние",
 };
 
 interface DivergedDialogProps {
@@ -50,13 +50,13 @@ function DivergedDialog({ remote, branch, onResult, onHide }: DivergedDialogProp
         options={[
           {
             value: "merge",
-            label: "Merge Commit",
-            description: "Combining local and remote changes into a single merge commit",
+            label: "Коммит слияния",
+            description: "Объединить локальные и удалённые изменения в один коммит слияния",
           },
           {
             value: "force_reset",
-            label: "Force Pull",
-            description: "Discard local commits and reset to match the remote branch",
+            label: "Принудительный pull",
+            description: "Отбросить локальные коммиты и сбросить состояние до удалённой ветки",
           },
         ]}
       />
@@ -66,10 +66,10 @@ function DivergedDialog({ remote, branch, onResult, onHide }: DivergedDialogProp
           disabled={selected == null}
           onClick={handleSubmit}
         >
-          {selected != null ? resolutionLabel[selected] : "Select an option"}
+          {selected != null ? resolutionLabel[selected] : "Выберите вариант"}
         </Button>
         <Button variant="border" onClick={handleCancel}>
-          Cancel
+          Отмена
         </Button>
       </HStack>
     </div>
@@ -86,7 +86,7 @@ export async function promptDivergedStrategy({
   return new Promise((resolve) => {
     showDialog({
       id: "git-diverged",
-      title: "Branches Diverged",
+      title: "Ветки разошлись",
       hideX: true,
       size: "sm",
       disableBackdropClose: true,

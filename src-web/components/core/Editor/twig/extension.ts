@@ -74,7 +74,7 @@ function mixLanguage(base: LanguageSupport): LRLanguage {
 
       return {
         parser: base.language.parser,
-        overlay: (node) => node.type.name === "Text",
+        overlay: (node) => node.type.name === "Текст",
       };
     }),
   });

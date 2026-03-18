@@ -27,28 +27,28 @@ export function SettingsGeneral() {
   return (
     <VStack space={1.5} className="mb-4">
       <div className="mb-4">
-        <Heading>General</Heading>
-        <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
+        <Heading>Общие</Heading>
+        <p className="text-text-subtle">Настройка общих параметров приложения и обновлений.</p>
       </div>
       <CargoFeature feature="updater">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1">
           <Select
             name="updateChannel"
-            label="Update Channel"
+            label="Канал обновлений"
             labelPosition="left"
             labelClassName="w-[14rem]"
             size="sm"
             value={settings.updateChannel}
             onChange={(updateChannel) => patchModel(settings, { updateChannel })}
             options={[
-              { label: "Stable", value: "stable" },
-              { label: "Beta (more frequent)", value: "beta" },
+              { label: "Стабильный", value: "stable" },
+              { label: "Бета (чаще)", value: "beta" },
             ]}
           />
           <IconButton
             variant="border"
             size="sm"
-            title="Check for updates"
+            title="Проверить обновления"
             icon="refresh"
             spin={checkForUpdates.isPending}
             onClick={() => checkForUpdates.mutateAsync()}
@@ -58,38 +58,38 @@ export function SettingsGeneral() {
         <Select
           name="autoupdate"
           value={settings.autoupdate ? "auto" : "manual"}
-          label="Update Behavior"
+          label="Поведение обновлений"
           labelPosition="left"
           size="sm"
           labelClassName="w-[14rem]"
           onChange={(v) => patchModel(settings, { autoupdate: v === "auto" })}
           options={[
-            { label: "Automatic", value: "auto" },
-            { label: "Manual", value: "manual" },
+            { label: "Автоматически", value: "auto" },
+            { label: "Вручную", value: "manual" },
           ]}
         />
         <Checkbox
           className="pl-2 mt-1 ml-[14rem]"
           checked={settings.autoDownloadUpdates}
           disabled={!settings.autoupdate}
-          help="Automatically download Yaak updates (!50MB) in the background, so they will be immediately ready to install."
-          title="Automatically download updates"
+          help="Автоматически скачивать обновления Yaak (~50MB) в фоне, чтобы они были сразу готовы к установке."
+          title="Автоматически скачивать обновления"
           onChange={(autoDownloadUpdates) => patchModel(settings, { autoDownloadUpdates })}
         />
 
         <Checkbox
           className="pl-2 mt-1 ml-[14rem]"
           checked={settings.checkNotifications}
-          title="Check for notifications"
-          help="Periodically ping Yaak servers to check for relevant notifications."
+          title="Проверять уведомления"
+          help="Периодически обращаться к серверам Yaak для проверки важных уведомлений."
           onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
         />
         <Checkbox
           disabled
           className="pl-2 mt-1 ml-[14rem]"
           checked={false}
-          title="Send anonymous usage statistics"
-          help="Yaak is local-first and does not collect analytics or usage data 🔐"
+          title="Отправлять анонимную статистику использования"
+          help="Yaak работает локально и не собирает аналитику или данные использования 🔐"
           onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
         />
       </CargoFeature>
@@ -107,7 +107,7 @@ export function SettingsGeneral() {
           required
           size="sm"
           name="requestTimeout"
-          label="Request Timeout (ms)"
+          label="Таймаут запроса (мс)"
           labelClassName="w-[14rem]"
           placeholder="0"
           labelPosition="left"
@@ -121,8 +121,8 @@ export function SettingsGeneral() {
 
         <Checkbox
           checked={workspace.settingValidateCertificates}
-          help="When disabled, skip validation of server certificates, useful when interacting with self-signed certs."
-          title="Validate TLS certificates"
+          help="Когда отключено, проверка сертификатов сервера пропускается; полезно для самоподписанных сертификатов."
+          title="Проверять TLS-сертификаты"
           onChange={(settingValidateCertificates) =>
             patchModel(workspace, { settingValidateCertificates })
           }
@@ -130,7 +130,7 @@ export function SettingsGeneral() {
 
         <Checkbox
           checked={workspace.settingFollowRedirects}
-          title="Follow redirects"
+          title="Следовать перенаправлениям"
           onChange={(settingFollowRedirects) =>
             patchModel(workspace, {
               settingFollowRedirects,
@@ -143,9 +143,9 @@ export function SettingsGeneral() {
 
       <Heading level={2}>App Info</Heading>
       <KeyValueRows>
-        <KeyValueRow label="Version">{appInfo.version}</KeyValueRow>
+        <KeyValueRow label="Версия">{appInfo.version}</KeyValueRow>
         <KeyValueRow
-          label="Data Directory"
+          label="Каталог данных"
           rightSlot={
             <IconButton
               title={revealInFinderText}
@@ -158,7 +158,7 @@ export function SettingsGeneral() {
           {appInfo.appDataDir}
         </KeyValueRow>
         <KeyValueRow
-          label="Logs Directory"
+          label="Каталог логов"
           rightSlot={
             <IconButton
               title={revealInFinderText}

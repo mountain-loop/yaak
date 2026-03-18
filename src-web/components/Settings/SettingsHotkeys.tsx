@@ -94,8 +94,8 @@ export function SettingsHotkeys() {
         </p>
       </div>
       <PlainInput
-        label="Filter"
-        placeholder="Filter shortcuts..."
+        label="Фильтр"
+        placeholder="Фильтр горячих клавиш..."
         defaultValue={filter}
         onChange={setFilter}
         hideLabel
@@ -189,7 +189,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
   // Build dropdown items dynamically
   const dropdownItems: DropdownItem[] = [
     {
-      label: "Add Keyboard Shortcut",
+      label: "Добавить горячую клавишу",
       leftSlot: <Icon icon="plus" />,
       onSelect: handleStartRecording,
     },
@@ -216,7 +216,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
           type: "separator",
         },
         {
-          label: "Remove All Shortcuts",
+          label: "Удалить все горячие клавиши",
           leftSlot: <Icon icon="trash" />,
           onSelect: handleClearAll,
         },
@@ -229,7 +229,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
       type: "separator",
     });
     dropdownItems.push({
-      label: "Reset to Default",
+      label: "Сбросить по умолчанию",
       leftSlot: <Icon icon="refresh" />,
       onSelect: onReset,
     });
@@ -259,7 +259,7 @@ function HotkeyRow({ action, currentKeys, defaultKeys, onSave, onReset }: Hotkey
           <IconButton
             icon="ellipsis_vertical"
             size="sm"
-            title="Hotkey actions"
+            title="Действия горячих клавиш"
             className="ml-auto text-text-subtlest"
           />
         </Dropdown>
@@ -319,12 +319,12 @@ function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps
     <VStack space={4}>
       <div>
         <p className="text-text-subtle mb-2">
-          Record a key combination for <span className="font-semibold">{label}</span>
+          Запишите сочетание клавиш для <span className="font-semibold">{label}</span>
         </p>
         <button
           type="button"
           data-disable-hotkey
-          aria-label="Keyboard shortcut input"
+          aria-label="Поле ввода горячей клавиши"
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           onClick={(e) => {
@@ -340,16 +340,16 @@ function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps
           {recordedKey ? (
             <HotkeyRaw labelParts={formatHotkeyString(recordedKey)} />
           ) : (
-            <span className="text-text-subtlest">Press keys...</span>
+            <span className="text-text-subtlest">Нажмите клавиши...</span>
           )}
         </button>
       </div>
       <HStack space={2} justifyContent="end">
         <Button color="secondary" onClick={onCancel}>
-          Cancel
+          Отмена
         </Button>
         <Button color="primary" onClick={handleSave} disabled={!recordedKey}>
-          Save
+          Сохранить
         </Button>
       </HStack>
     </VStack>

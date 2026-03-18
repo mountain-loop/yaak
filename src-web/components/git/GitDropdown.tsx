@@ -89,10 +89,10 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             // Checkout failed so ask user if they want to force it
             const forceCheckout = await showConfirm({
               id: "git-force-checkout",
-              title: "Conflicts Detected",
+              title: "Обнаружены конфликты",
               description:
                 "Your branch has conflicts. Either make a commit or force checkout to discard changes.",
-              confirmText: "Force Checkout",
+              confirmText: "Принудительный checkout",
               color: "warning",
             });
             if (forceCheckout) {
@@ -102,7 +102,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             // Checkout failed
             showErrorToast({
               id: "git-checkout-error",
-              title: "Error checking out branch",
+              title: "Ошибка переключения ветки",
               message: String(err),
             });
           }
@@ -125,33 +125,33 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
 
   const items: DropdownItem[] = [
     {
-      label: "View History...",
+      label: "История...",
       hidden: (log.data ?? []).length === 0,
       leftSlot: <Icon icon="history" />,
       onSelect: async () => {
         showDialog({
           id: "git-history",
           size: "md",
-          title: "Commit History",
+          title: "История коммитов",
           noPadding: true,
           render: () => <HistoryDialog log={log.data ?? []} />,
         });
       },
     },
     {
-      label: "Manage Remotes...",
+      label: "Управление remote...",
       leftSlot: <Icon icon="hard_drive_download" />,
       onSelect: () => GitRemotesDialog.show(syncDir),
     },
     { type: "separator" },
     {
-      label: "New Branch...",
+      label: "Новая ветка...",
       leftSlot: <Icon icon="git_branch_plus" />,
       async onSelect() {
         const name = await showPrompt({
           id: "git-branch-name",
-          title: "Create Branch",
-          label: "Branch Name",
+          title: "Создать ветку",
+          label: "Имя ветки",
         });
         if (!name) return;
 
@@ -162,7 +162,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             onError: (err) => {
               showErrorToast({
                 id: "git-branch-error",
-                title: "Error creating branch",
+                title: "Ошибка создания ветки",
                 message: String(err),
               });
             },
@@ -173,7 +173,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
     },
     { type: "separator" },
     {
-      label: "Push",
+      label: "Отправить (Push)",
       leftSlot: <Icon icon="arrow_up_from_line" />,
       waitForOnSelect: true,
       async onSelect() {
@@ -183,7 +183,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           onError(err) {
             showErrorToast({
               id: "git-push-error",
-              title: "Error pushing changes",
+              title: "Ошибка push изменений",
               message: String(err),
             });
           },
@@ -191,7 +191,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       },
     },
     {
-      label: "Pull",
+      label: "Получить (Pull)",
       leftSlot: <Icon icon="arrow_down_to_line" />,
       waitForOnSelect: true,
       async onSelect() {
@@ -201,7 +201,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           onError(err) {
             showErrorToast({
               id: "git-pull-error",
-              title: "Error pulling changes",
+              title: "Ошибка pull изменений",
               message: String(err),
             });
           },
@@ -209,13 +209,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       },
     },
     {
-      label: "Commit...",
+      label: "Коммит...",
 
       leftSlot: <Icon icon="git_commit_vertical" />,
       onSelect() {
         showDialog({
           id: "commit",
-          title: "Commit Changes",
+          title: "Зафиксировать изменения",
           size: "full",
           noPadding: true,
           render: ({ hide }) => (
@@ -225,16 +225,16 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
       },
     },
     {
-      label: "Reset Changes",
+      label: "Сбросить изменения",
       hidden: !hasChanges,
       leftSlot: <Icon icon="rotate_ccw" />,
       color: "danger",
       async onSelect() {
         const confirmed = await showConfirm({
           id: "git-reset-changes",
-          title: "Reset Changes",
-          description: "This will discard all uncommitted changes. This cannot be undone.",
-          confirmText: "Reset",
+          title: "Сбросить изменения",
+          description: "Это удалит все незафиксированные изменения. Отменить нельзя.",
+          confirmText: "Сбросить",
           color: "danger",
         });
         if (!confirmed) return;
@@ -244,7 +244,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           onSuccess() {
             showToast({
               id: "git-reset-success",
-              message: "Changes have been reset",
+              message: "Изменения сброшены",
               color: "success",
             });
             fireAndForget(sync({ force: true }));
@@ -252,14 +252,14 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           onError(err) {
             showErrorToast({
               id: "git-reset-error",
-              title: "Error resetting changes",
+              title: "Ошибка сброса изменений",
               message: String(err),
             });
           },
         });
       },
     },
-    { type: "separator", label: "Branches", hidden: localBranches.length < 1 },
+    { type: "separator", label: "Ветки", hidden: localBranches.length < 1 },
     ...localBranches.map((branch) => {
       const isCurrent = currentBranch === branch;
       return {
@@ -268,7 +268,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
         submenuOpenOnClick: true,
         submenu: [
           {
-            label: "Checkout",
+            label: "Переключить",
             hidden: isCurrent,
             onSelect: () => tryCheckout(branch, false),
           },
@@ -299,7 +299,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                   onError(err) {
                     showErrorToast({
                       id: "git-merged-branch-error",
-                      title: "Error merging branch",
+                      title: "Ошибка слияния ветки",
                       message: String(err),
                     });
                   },
@@ -308,17 +308,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             },
           },
           {
-            label: "New Branch...",
+            label: "Новая ветка...",
             async onSelect() {
               const name = await showPrompt({
                 id: "git-new-branch-from",
-                title: "New Branch",
+                title: "Новая ветка",
                 description: (
                   <>
                     Create a new branch from <InlineCode>{branch}</InlineCode>
                   </>
                 ),
-                label: "Branch Name",
+                label: "Имя ветки",
               });
               if (!name) return;
 
@@ -329,7 +329,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                   onError: (err) => {
                     showErrorToast({
                       id: "git-branch-error",
-                      title: "Error creating branch",
+                      title: "Ошибка создания ветки",
                       message: String(err),
                     });
                   },
@@ -339,12 +339,12 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
             },
           },
           {
-            label: "Rename...",
+            label: "Переименовать...",
             async onSelect() {
               const newName = await showPrompt({
                 id: "git-rename-branch",
-                title: "Rename Branch",
-                label: "New Branch Name",
+                title: "Переименовать ветку",
+                label: "Новое имя ветки",
                 defaultValue: branch,
               });
               if (!newName || newName === branch) return;
@@ -368,7 +368,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                   onError(err) {
                     showErrorToast({
                       id: "git-rename-branch-error",
-                      title: "Error renaming branch",
+                      title: "Ошибка переименования ветки",
                       message: String(err),
                     });
                   },
@@ -378,13 +378,13 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
           },
           { type: "separator", hidden: isCurrent },
           {
-            label: "Delete",
+            label: "Удалить",
             color: "danger",
             hidden: isCurrent,
             onSelect: async () => {
               const confirmed = await showConfirmDelete({
                 id: "git-delete-branch",
-                title: "Delete Branch",
+                title: "Удалить ветку",
                 description: (
                   <>
                     Permanently delete <InlineCode>{branch}</InlineCode>?
@@ -402,7 +402,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                   onError(err) {
                     showErrorToast({
                       id: "git-delete-branch-error",
-                      title: "Error deleting branch",
+                      title: "Ошибка удаления ветки",
                       message: String(err),
                     });
                   },
@@ -412,7 +412,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
               if (result.type === "not_fully_merged") {
                 const confirmed = await showConfirm({
                   id: "force-branch-delete",
-                  title: "Branch not fully merged",
+                  title: "Ветка не полностью слита",
                   description: (
                     <>
                       <p>
@@ -430,7 +430,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                       onError(err) {
                         showErrorToast({
                           id: "git-force-delete-branch-error",
-                          title: "Error force deleting branch",
+                          title: "Ошибка принудительного удаления ветки",
                           message: String(err),
                         });
                       },
@@ -451,17 +451,17 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
         submenuOpenOnClick: true,
         submenu: [
           {
-            label: "Checkout",
+            label: "Переключить",
             hidden: isCurrent,
             onSelect: () => tryCheckout(branch, false),
           },
           {
-            label: "Delete",
+            label: "Удалить",
             color: "danger",
             async onSelect() {
               const confirmed = await showConfirmDelete({
                 id: "git-delete-remote-branch",
-                title: "Delete Remote Branch",
+                title: "Удалить remote-ветку",
                 description: (
                   <>
                     Permanently delete <InlineCode>{branch}</InlineCode> from the remote?
@@ -488,7 +488,7 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
                   onError(err) {
                     showErrorToast({
                       id: "git-delete-remote-branch-error",
-                      title: "Error deleting remote branch",
+                      title: "Ошибка удаления remote-ветки",
                       message: String(err),
                     });
                   },
@@ -569,19 +569,19 @@ function SetupSyncDropdown({ workspaceMeta }: { workspaceMeta: WorkspaceMeta }) 
         },
         {
           color: "success",
-          label: "Open Workspace Settings",
+          label: "Открыть настройки рабочего пространства",
           leftSlot: <Icon icon="settings" />,
           onSelect: () => openWorkspaceSettings("data"),
         },
         { type: "separator" },
         {
-          label: "Hide This Message",
+          label: "Скрыть это сообщение",
           leftSlot: <Icon icon="eye_closed" />,
           async onSelect() {
             const confirmed = await showConfirm({
               id: "hide-sync-menu-prompt",
-              title: "Hide Setup Message",
-              description: "You can configure filesystem sync or Git it in the workspace settings",
+              title: "Скрыть сообщение настройки",
+              description: "Вы можете настроить синхронизацию файловой системы или Git в настройках рабочего пространства",
             });
             if (confirmed) {
               await setHidden((prev) => ({ ...prev, [workspaceMeta.workspaceId]: true }));
@@ -624,19 +624,19 @@ function SetupGitDropdown({
       items={[
         { type: "content", label: banner },
         {
-          label: "Initialize Git Repo",
+          label: "Инициализировать Git-репозиторий",
           leftSlot: <Icon icon="magic_wand" />,
           onSelect: initRepo,
         },
         { type: "separator" },
         {
-          label: "Hide This Message",
+          label: "Скрыть это сообщение",
           leftSlot: <Icon icon="eye_closed" />,
           async onSelect() {
             const confirmed = await showConfirm({
               id: "hide-git-init-prompt",
-              title: "Hide Git Setup",
-              description: "You can initialize a git repo outside of Yaak to bring this back",
+              title: "Скрыть настройку Git",
+              description: "Вы можете инициализировать Git-репозиторий вне Yaak, чтобы вернуть это сообщение",
             });
             if (confirmed) {
               await setHidden((prev) => ({ ...prev, [workspaceId]: true }));

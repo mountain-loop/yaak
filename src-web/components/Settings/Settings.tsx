@@ -1,6 +1,6 @@
 import { useSearch } from "@tanstack/react-router";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../../lib/os";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
 import classNames from "classnames";
@@ -83,7 +83,7 @@ export default function Settings({ hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(type() === "macos" ? "text-center" : "pl-2")}>Settings</div>
+            <div className={classNames(getOsType() === "macos" ? "text-center" : "pl-2")}>Настройки</div>
           </HStack>
         </HeaderSize>
       )}
@@ -92,11 +92,11 @@ export default function Settings({ hide }: Props) {
         defaultValue={mainTab || tabFromQuery}
         addBorders
         tabListClassName="min-w-[10rem] bg-surface x-theme-sidebar border-r border-border pl-3"
-        label="Settings"
+        label="Настройки"
         tabs={tabs.map(
           (value): TabItem => ({
             value,
-            label: capitalize(value),
+            label: value === TAB_GENERAL ? "Общие" : value === TAB_THEME ? "Тема" : value === TAB_INTERFACE ? "Интерфейс" : value === TAB_SHORTCUTS ? "Горячие клавиши" : value === TAB_PLUGINS ? "Плагины" : value === TAB_CERTIFICATES ? "Сертификаты" : value === TAB_PROXY ? "Прокси" : value === TAB_LICENSE ? "Лицензия" : capitalize(value),
             hidden: !appInfo.featureLicense && value === TAB_LICENSE,
             leftSlot:
               value === TAB_GENERAL ? (

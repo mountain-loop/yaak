@@ -13,7 +13,10 @@ export const openWorkspaceFromSyncDir = createFastMutation<void, void, string>({
       .filter((m) => m)[0];
 
     if (workspace == null) {
-      showSimpleAlert("Failed to Open", "No workspace found in directory");
+      showSimpleAlert(
+        "Не удалось открыть",
+        "В выбранной папке не найдено ни одного рабочего пространства",
+      );
       return;
     }
 

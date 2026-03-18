@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "../lib/os";
 import { debounce } from "@yaakapp-internal/lib";
 import { settingsAtom } from "@yaakapp-internal/models";
 import { atom, useAtomValue } from "jotai";
@@ -7,7 +7,7 @@ import { capitalize } from "../lib/capitalize";
 import { jotaiStore } from "../lib/jotai";
 
 const HOLD_KEYS = ["Shift", "Control", "Command", "Alt", "Meta"];
-const SINGLE_WHITELIST = ["Delete", "Enter", "Backspace"];
+const SINGLE_WHITELIST = ["Удалить", "Enter", "Backspace"];
 
 export type HotkeyAction =
   | "app.zoom_in"
@@ -57,7 +57,7 @@ const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
   "sidebar.filter": ["Meta+f"],
   "sidebar.expand_all": ["Meta+Shift+Equal"],
   "sidebar.collapse_all": ["Meta+Shift+Minus"],
-  "sidebar.selected.delete": ["Delete", "Meta+Backspace"],
+  "sidebar.selected.delete": ["Удалить", "Meta+Backspace"],
   "sidebar.selected.duplicate": ["Meta+d"],
   "sidebar.selected.move": [],
   "sidebar.selected.rename": ["Enter"],
@@ -87,7 +87,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
   "sidebar.filter": ["Control+f"],
   "sidebar.expand_all": ["Control+Shift+Equal"],
   "sidebar.collapse_all": ["Control+Shift+Minus"],
-  "sidebar.selected.delete": ["Delete", "Control+Backspace"],
+  "sidebar.selected.delete": ["Удалить", "Control+Backspace"],
   "sidebar.selected.duplicate": ["Control+d"],
   "sidebar.selected.move": [],
   "sidebar.selected.rename": ["Enter"],
@@ -99,7 +99,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
 
 /** Get the default hotkeys for the current platform */
 export const defaultHotkeys: Record<HotkeyAction, string[]> =
-  type() === "macos" ? defaultHotkeysMac : defaultHotkeysOther;
+  getOsType() === "macos" ? defaultHotkeysMac : defaultHotkeysOther;
 
 /** Atom that provides the effective hotkeys by merging defaults with user settings */
 export const hotkeysAtom = atom((get) => {
@@ -149,7 +149,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   "sidebar.focus": "Focus or Toggle Sidebar",
   "sidebar.context_menu": "Show Context Menu",
   "url_bar.focus": "Focus URL",
-  "workspace_settings.show": "Open Workspace Settings",
+  "workspace_settings.show": "Открыть настройки рабочего пространства",
 };
 
 const layoutInsensitiveKeys = [
@@ -274,7 +274,7 @@ function handleKeyDown(e: KeyboardEvent) {
   if (
     (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) &&
     currentKeysWithModifiers.size === 1 &&
-    (currentKeysWithModifiers.has("Backspace") || currentKeysWithModifiers.has("Delete"))
+    (currentKeysWithModifiers.has("Backspace") || currentKeysWithModifiers.has("Удалить"))
   ) {
     return;
   }
@@ -314,7 +314,7 @@ export function getHotkeyScope(action: HotkeyAction): string {
 }
 
 export function formatHotkeyString(trigger: string): string[] {
-  const os = type();
+  const os = getOsType();
   const parts = trigger.split("+");
   const labelParts: string[] = [];
 
@@ -334,7 +334,7 @@ export function formatHotkeyString(trigger: string): string[] {
         labelParts.push("⇥");
       } else if (p === "Backspace") {
         labelParts.push("⌫");
-      } else if (p === "Delete") {
+      } else if (p === "Удалить") {
         labelParts.push("⌦");
       } else if (p === "Minus") {
         labelParts.push("-");

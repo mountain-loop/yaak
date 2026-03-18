@@ -70,13 +70,13 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
 
   const showBanner = hasComments && autoFix && !bannerDismissed;
 
-  const stripMessage = "Automatically strip comments and trailing commas before sending";
+  const stripMessage = "Автоматически удалять комментарии и завершающие запятые перед отправкой";
   const actions = useMemo<EditorProps["actions"]>(
     () => [
       showBanner && (
         <Banner color="notice" className="!opacity-100 h-sm !py-0 !px-2 flex items-center text-xs">
           <p className="inline-flex items-center gap-1 min-w-0">
-            <span className="truncate">Auto-fix enabled</span>
+            <span className="truncate">Автоисправление включено</span>
             <Icon icon="arrow_right" size="sm" className="opacity-disabled" />
           </p>
         </Banner>
@@ -87,7 +87,7 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
           items={
             [
               {
-                label: "Automatically Fix JSON",
+                label: "Автоматически исправлять JSON",
                 keepOpenOnSelect: true,
                 onSelect: handleToggleAutoFix,
                 rightSlot: <IconTooltip content={stripMessage} />,
@@ -98,7 +98,7 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
             ] satisfies DropdownItem[]
           }
         >
-          <IconButton size="sm" variant="border" icon="settings" title="JSON Settings" />
+          <IconButton size="sm" variant="border" icon="settings" title="Настройки JSON" />
         </Dropdown>
       </div>,
     ],

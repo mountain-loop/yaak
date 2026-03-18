@@ -27,15 +27,15 @@ function getDetail(
     case "active":
       return null;
     case "personal_use":
-      return { label: "Personal Use", color: "notice" };
+      return { label: "Личное использование", color: "notice" };
     case "trialing":
-      return { label: "Commercial Trial", color: "secondary" };
+      return { label: "Коммерческий триал", color: "secondary" };
     case "error":
-      return { label: "Error", color: "danger" };
+      return { label: "Ошибка", color: "danger" };
     case "inactive":
-      return { label: "Personal Use", color: "notice" };
+      return { label: "Личное использование", color: "notice" };
     case "past_due":
-      return { label: "Past Due", color: "danger" };
+      return { label: "Просрочено", color: "danger" };
     case "expired":
       // Don't show the expired message if it's been less than 14 days since the last dismissal
       if (dismissedAt && differenceInCalendarDays(new Date(), dismissedAt) < 14) {
@@ -66,7 +66,7 @@ function getDetail(
             onSelect: () => openUrl(data.data.billingUrl),
           },
           {
-            label: "Enter License Key",
+            label: "Введите лицензионный ключ",
             leftSlot: <Icon icon="key_round" />,
             hidden: data.data.changesUrl == null,
             onSelect: openLicenseDialog,

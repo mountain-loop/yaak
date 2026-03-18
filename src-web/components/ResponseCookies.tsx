@@ -121,7 +121,7 @@ export function ResponseCookies({ response }: Props) {
         storageKey={`${response.requestId}.sent_cookies`}
         summary={
           <h2 className="flex items-center">
-            Sent Cookies <CountBadge showZero count={sentCookies.length} />
+            Отправленные cookie <CountBadge showZero count={sentCookies.length} />
           </h2>
         }
       >
@@ -144,7 +144,7 @@ export function ResponseCookies({ response }: Props) {
         storageKey={`${response.requestId}.received_cookies`}
         summary={
           <h2 className="flex items-center">
-            Received Cookies <CountBadge showZero count={receivedCookies.length} />
+            Полученные cookie <CountBadge showZero count={receivedCookies.length} />
           </h2>
         }
       >
@@ -168,39 +168,39 @@ export function ResponseCookies({ response }: Props) {
                   </span>
                   {cookie.isDeleted && (
                     <span className="text-xs font-sans text-danger bg-danger/10 px-1.5 py-0.5 rounded">
-                      Deleted
+                      Удалено
                     </span>
                   )}
                 </div>
                 <KeyValueRows>
                   {[
                     cookie.domain && (
-                      <KeyValueRow labelColor="info" label="Domain" key="domain">
+                      <KeyValueRow labelColor="info" label="Домен" key="domain">
                         {cookie.domain}
                       </KeyValueRow>
                     ),
                     cookie.path && (
-                      <KeyValueRow labelColor="info" label="Path" key="path">
+                      <KeyValueRow labelColor="info" label="Путь" key="path">
                         {cookie.path}
                       </KeyValueRow>
                     ),
                     cookie.expires && (
-                      <KeyValueRow labelColor="info" label="Expires" key="expires">
+                      <KeyValueRow labelColor="info" label="Истекает" key="expires">
                         {cookie.expires}
                       </KeyValueRow>
                     ),
                     cookie.maxAge && (
-                      <KeyValueRow labelColor="info" label="Max-Age" key="maxAge">
+                      <KeyValueRow labelColor="info" label="Макс. возраст" key="maxAge">
                         {cookie.maxAge}
                       </KeyValueRow>
                     ),
                     cookie.secure && (
-                      <KeyValueRow labelColor="info" label="Secure" key="secure">
+                      <KeyValueRow labelColor="info" label="Защищённый" key="secure">
                         true
                       </KeyValueRow>
                     ),
                     cookie.httpOnly && (
-                      <KeyValueRow labelColor="info" label="HttpOnly" key="httpOnly">
+                      <KeyValueRow labelColor="info" label="Только HTTP" key="httpOnly">
                         true
                       </KeyValueRow>
                     ),
@@ -221,5 +221,5 @@ export function ResponseCookies({ response }: Props) {
 }
 
 function NoCookies() {
-  return <span className="text-text-subtlest text-sm italic">No Cookies</span>;
+  return <span className="text-text-subtlest text-sm italic">Нет cookie</span>;
 }

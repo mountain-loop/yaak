@@ -21,13 +21,13 @@ export function useSaveResponse(response: HttpResponse) {
       const slug = slugify(request.name || "response", { lower: true });
       const filepath = await save({
         defaultPath: ext ? `${slug}.${ext}` : slug,
-        title: "Save Response",
+        title: "Сохранить ответ",
       });
       await invokeCmd("cmd_save_response", { responseId: response.id, filepath });
       showToast({
         message: (
           <>
-            Response saved to <InlineCode>{filepath}</InlineCode>
+            Ответ сохранён в <InlineCode>{filepath}</InlineCode>
           </>
         ),
       });

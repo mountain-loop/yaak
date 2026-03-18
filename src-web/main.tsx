@@ -1,6 +1,6 @@
 import "./main.css";
 import { RouterProvider } from "@tanstack/react-router";
-import { type } from "@tauri-apps/plugin-os";
+import { getOsType } from "./lib/os";
 import { changeModelStoreWorkspace, initModelStore } from "@yaakapp-internal/models";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -9,7 +9,12 @@ import { initGlobalListeners } from "./lib/initGlobalListeners";
 import { jotaiStore } from "./lib/jotai";
 import { router } from "./lib/router";
 
-const osType = type();
+let osType = "linux";
+try {
+  osType = getOsType();
+} catch {
+  // Non-Tauri context
+}
 document.documentElement.setAttribute("data-platform", osType);
 
 window.addEventListener("keydown", (e) => {

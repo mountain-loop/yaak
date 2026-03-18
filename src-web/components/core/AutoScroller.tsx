@@ -67,7 +67,7 @@ export function AutoScroller<T>({
       {!autoScroll && (
         <div className="absolute bottom-0 right-0 m-2">
           <IconButton
-            title="Lock scroll to bottom"
+            title="Закрепить прокрутку внизу"
             icon="arrow_down"
             size="sm"
             iconSize="md"

@@ -40,7 +40,7 @@ export function useSubscribeHttpAuthentication() {
       } catch (err) {
         showErrorToast({
           id: "http-authentication-error",
-          title: "HTTP Authentication Error",
+          title: "Ошибка HTTP-аутентификации",
           message: err,
         });
       }

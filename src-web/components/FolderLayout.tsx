@@ -114,7 +114,7 @@ function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | Webs
         <HStack space={0.5} className="ml-auto -mr-1.5">
           <IconButton
             color="custom"
-            title="Send Request"
+            title="Отправить запрос"
             size="sm"
             icon="external_link"
             className="opacity-70 hover:opacity-100"
@@ -122,7 +122,7 @@ function ChildCard({ child }: { child: Folder | HttpRequest | GrpcRequest | Webs
           />
           <IconButton
             color="custom"
-            title="Send Request"
+            title="Отправить запрос"
             size="sm"
             icon="send_horizontal"
             className="opacity-70 hover:opacity-100"
@@ -179,7 +179,7 @@ function HttpRequestCard({ request }: { request: HttpRequest }) {
             e.stopPropagation();
             showDialog({
               id: "response-preview",
-              title: "Response Preview",
+              title: "Предпросмотр ответа",
               size: "md",
               className: "h-full",
               render: () => {

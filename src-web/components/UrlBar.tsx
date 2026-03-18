@@ -72,7 +72,7 @@ export const UrlBar = memo(function UrlBar({
         hideLabel
         language="url"
         className="px-1.5 py-0.5"
-        label="Enter URL"
+        label="Введите URL"
         name="url"
         autocomplete={autocomplete}
         forceUpdateKey={forceUpdateKey}
@@ -92,7 +92,7 @@ export const UrlBar = memo(function UrlBar({
                 <IconButton
                   size="xs"
                   iconSize="md"
-                  title="Send Request"
+                  title="Отправить запрос"
                   type="submit"
                   className="w-8 mr-0.5 !h-full"
                   iconColor="secondary"

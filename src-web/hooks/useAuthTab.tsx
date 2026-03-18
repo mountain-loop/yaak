@@ -8,7 +8,6 @@ import { IconTooltip } from "../components/core/IconTooltip";
 import { InlineCode } from "../components/core/InlineCode";
 import { HStack } from "../components/core/Stacks";
 import type { TabItem } from "../components/core/Tabs/Tabs";
-import { capitalize } from "../lib/capitalize";
 import { showConfirm } from "../lib/confirm";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { useHttpAuthenticationSummaries } from "./useHttpAuthentication";
@@ -27,35 +26,35 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
 
     const tab: TabItem = {
       value: tabValue,
-      label: "Auth",
+      label: "Аутентификация",
       options: {
         value: model.authenticationType,
         items: [
           ...authentication.map((a) => ({
-            label: a.label || "UNKNOWN",
+            label: a.label || "НЕИЗВЕСТНО",
             shortLabel: a.shortLabel,
             value: a.name,
           })),
           { type: "separator" },
           {
-            label: "Inherit from Parent",
+            label: "Наследовать от родителя",
             shortLabel:
               inheritedAuth != null && inheritedAuth.authenticationType !== "none" ? (
                 <HStack space={1.5}>
                   {authentication.find((a) => a.name === inheritedAuth.authenticationType)
-                    ?.shortLabel ?? "UNKNOWN"}
+                    ?.shortLabel ?? "НЕИЗВЕСТНО"}
                   <IconTooltip
                     icon="magic_wand"
                     iconSize="xs"
-                    content="Authentication was inherited from an ancestor"
+                    content="Аутентификация унаследована от предка"
                   />
                 </HStack>
               ) : (
-                "Auth"
+                "Аутентификация"
               ),
             value: null,
           },
-          { label: "No Auth", shortLabel: "No Auth", value: "none" },
+          { label: "Без аутентификации", shortLabel: "Без аутентификации", value: "none" },
         ],
         itemsAfter: (() => {
           const actions: (
@@ -71,9 +70,9 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
             (parentModel.authenticationType == null || parentModel.authenticationType === "none")
           ) {
             actions.push(
-              { type: "separator", label: "Actions" },
+              { type: "separator", label: "Действия" },
               {
-                label: `Promote to ${capitalize(parentModel.model)}`,
+                label: `Поднять в ${modelTypeLabel(parentModel)}`,
                 leftSlot: (
                   <Icon
                     icon={parentModel.model === "workspace" ? "corner_right_up" : "folder_up"}
@@ -82,11 +81,11 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
                 onSelect: async () => {
                   const confirmed = await showConfirm({
                     id: "promote-auth-confirm",
-                    title: "Promote Authentication",
-                    confirmText: "Promote",
+                    title: "Поднять аутентификацию",
+                    confirmText: "Поднять",
                     description: (
                       <>
-                        Move authentication config to{" "}
+                        Переместить конфигурацию аутентификации в{" "}
                         <InlineCode>{resolvedModelName(parentModel)}</InlineCode>?
                       </>
                     ),
@@ -115,10 +114,10 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
           );
           if (ancestorWithAuth) {
             if (actions.length === 0) {
-              actions.push({ type: "separator", label: "Actions" });
+              actions.push({ type: "separator", label: "Действия" });
             }
             actions.push({
-              label: `Copy from ${modelTypeLabel(ancestorWithAuth)}`,
+              label: `Скопировать из ${modelTypeLabel(ancestorWithAuth)}`,
               leftSlot: (
                 <Icon
                   icon={
@@ -129,15 +128,15 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
               onSelect: async () => {
                 const confirmed = await showConfirm({
                   id: "copy-auth-confirm",
-                  title: "Copy Authentication",
-                  confirmText: "Copy",
+                  title: "Скопировать аутентификацию",
+                  confirmText: "Копировать",
                   description: (
                     <>
-                      Copy{" "}
+                      Скопировать{" "}
                       {authentication.find((a) => a.name === ancestorWithAuth.authenticationType)
-                        ?.label ?? "authentication"}{" "}
-                      config from <InlineCode>{resolvedModelName(ancestorWithAuth)}</InlineCode>?
-                      This will override the current authentication but will not affect the{" "}
+                        ?.label ?? "аутентификацию"}{" "}
+                      из <InlineCode>{resolvedModelName(ancestorWithAuth)}</InlineCode>?
+                      Это действие заменит текущую аутентификацию, но не повлияет на{" "}
                       {modelTypeLabel(ancestorWithAuth).toLowerCase()}.
                     </>
                   ),

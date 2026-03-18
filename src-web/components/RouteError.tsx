@@ -5,7 +5,7 @@ import { Heading } from "./core/Heading";
 import { VStack } from "./core/Stacks";
 
 export default function RouteError({ error }: { error: unknown }) {
-  console.log("Error", error);
+  console.log("Ошибка", error);
   const stringified = JSON.stringify(error);
   // oxlint-disable-next-line no-explicit-any
   const message = (error as any).message ?? stringified;
@@ -21,7 +21,7 @@ export default function RouteError({ error }: { error: unknown }) {
             <DetailsBanner
               color="secondary"
               className="mt-3 select-auto text-xs max-h-[40vh]"
-              summary="Stack Trace"
+              summary="Трассировка стека"
             >
               <div className="mt-2 text-xs">{stack}</div>
             </DetailsBanner>

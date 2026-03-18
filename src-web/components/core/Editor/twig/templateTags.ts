@@ -88,7 +88,7 @@ function templateTags(
 
           // The beta named the function `Response` but was changed in stable.
           // Keep this here for a while because there's no easy way to migrate
-          if (name === "Response") {
+          if (name === "Ответ") {
             name = "response";
           }
 

@@ -211,7 +211,7 @@ function GraphQLExplorerHeader({
         />
       </div>
       <div className="ml-auto flex gap-1 [&>*]:text-text-subtle">
-        <IconButton icon="x" size="sm" title="Close documentation explorer" onClick={onClose} />
+        <IconButton icon="x" size="sm" title="Закрыть обозреватель документации" onClick={onClose} />
       </div>
     </nav>
   );
@@ -795,13 +795,13 @@ function GqlSchemaSearch({
       <PlainInput
         ref={inputRef}
         size="sm"
-        label="search"
+        label="поиск"
         hideLabel
         defaultValue={value}
         placeholder={
           focused
             ? `Search ${currentItem != null && "name" in currentItem.type ? currentItem.type.name : "Schema"}`
-            : "Search"
+            : "Поиск"
         }
         leftSlot={
           <div className="w-10 flex justify-center items-center">

@@ -37,31 +37,31 @@ export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) 
       }}
     >
       <PlainInput
-        label="Name"
+        label="Название"
         required
         defaultValue={name}
         onChange={setName}
-        placeholder="Production"
+        placeholder="Прод"
       />
       <Checkbox
         checked={sharable}
-        title="Share this environment"
-        help="Sharable environments are included in data export and directory sync."
+        title="Сделать это окружение общим"
+        help="Общие окружения включаются в экспорт данных и синхронизацию каталога."
         onChange={toggleSharable}
       />
       <div>
         <Label
           htmlFor="color"
           className="mb-1.5"
-          help="Select a color to be displayed when this environment is active, to help identify it."
+          help="Выберите цвет, который будет отображаться, когда это окружение активно, чтобы его было легче распознать."
         >
-          Color
+          Цвет
         </Label>
         <ColorPickerWithThemeColors onChange={setColor} color={color} />
       </div>
       <Button type="submit" color="secondary" className="mt-3">
         {color != null && <ColorIndicator color={color} />}
-        Create Environment
+        Создать окружение
       </Button>
     </form>
   );

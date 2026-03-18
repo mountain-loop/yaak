@@ -13,10 +13,10 @@ export function useCheckForUpdates() {
       if (!hasUpdate) {
         showAlert({
           id: "no-updates",
-          title: "No Update Available",
+          title: "Обновлений нет",
           body: (
             <>
-              You are currently on the latest version <InlineCode>{appInfo.version}</InlineCode>
+              У вас уже установлена последняя версия <InlineCode>{appInfo.version}</InlineCode>
             </>
           ),
         });

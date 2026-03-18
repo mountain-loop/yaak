@@ -15,7 +15,7 @@ export function SettingsProxy() {
   return (
     <VStack space={1.5} className="mb-4">
       <div className="mb-3">
-        <Heading>Proxy</Heading>
+        <Heading>Прокси</Heading>
         <p className="text-text-subtle">
           Configure a proxy server for HTTP requests. Useful for corporate firewalls, debugging
           traffic, or routing through specific infrastructure.
@@ -23,7 +23,7 @@ export function SettingsProxy() {
       </div>
       <Select
         name="proxy"
-        label="Proxy"
+        label="Прокси"
         hideLabel
         size="sm"
         value={settings.proxy?.type ?? "automatic"}
@@ -46,9 +46,9 @@ export function SettingsProxy() {
           }
         }}
         options={[
-          { label: "Automatic proxy detection", value: "automatic" },
-          { label: "Custom proxy configuration", value: "enabled" },
-          { label: "No proxy", value: "disabled" },
+          { label: "Автоопределение прокси", value: "automatic" },
+          { label: "Пользовательская настройка прокси", value: "enabled" },
+          { label: "Без прокси", value: "disabled" },
         ]}
       />
       {settings.proxy?.type === "enabled" && (
@@ -56,8 +56,8 @@ export function SettingsProxy() {
           <Checkbox
             className="my-3"
             checked={!settings.proxy.disabled}
-            title="Enable proxy"
-            help="Use this to temporarily disable the proxy without losing the configuration"
+            title="Включить прокси"
+            help="Позволяет временно отключить прокси без потери настроек"
             onChange={async (enabled) => {
               const { proxy } = settings;
               const http = proxy?.type === "enabled" ? proxy.http : "";
@@ -122,7 +122,7 @@ export function SettingsProxy() {
           <Separator className="my-6" />
           <Checkbox
             checked={settings.proxy.auth != null}
-            title="Enable authentication"
+            title="Включить аутентификацию"
             onChange={async (enabled) => {
               const { proxy } = settings;
               const http = proxy?.type === "enabled" ? proxy.http : "";
@@ -141,7 +141,7 @@ export function SettingsProxy() {
               <PlainInput
                 required
                 size="sm"
-                label="User"
+                label="Пользователь"
                 placeholder="myUser"
                 defaultValue={settings.proxy.auth.user}
                 onChange={async (user) => {
@@ -159,7 +159,7 @@ export function SettingsProxy() {
               />
               <PlainInput
                 size="sm"
-                label="Password"
+                label="Пароль"
                 type="password"
                 placeholder="s3cretPassw0rd"
                 defaultValue={settings.proxy.auth.password}
@@ -182,8 +182,8 @@ export function SettingsProxy() {
             <>
               <Separator className="my-6" />
               <PlainInput
-                label="Proxy Bypass"
-                help="Comma-separated list to bypass the proxy."
+                label="Обход прокси"
+                help="Список через запятую для обхода прокси."
                 defaultValue={settings.proxy.bypass}
                 placeholder="127.0.0.1, *.example.com, localhost:3000"
                 onChange={async (bypass) => {

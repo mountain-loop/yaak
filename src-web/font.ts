@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import type { ModelPayload, Settings } from "@yaakapp-internal/models";
 import { fireAndForget } from "./lib/fireAndForget";
 import { getSettings } from "./lib/settings";
+import { isTauriRuntime } from "./lib/tauri";
 
 function setFonts(settings: Settings) {
   document.documentElement.style.setProperty("--font-family-editor", settings.editorFont ?? "");
@@ -12,10 +13,12 @@ function setFonts(settings: Settings) {
   );
 }
 
-listen<ModelPayload>("model_write", async (event) => {
-  if (event.payload.change.type !== "upsert") return;
-  if (event.payload.model.model !== "settings") return;
-  setFonts(event.payload.model);
-}).catch(console.error);
+if (isTauriRuntime()) {
+  listen<ModelPayload>("model_write", async (event) => {
+    if (event.payload.change.type !== "upsert") return;
+    if (event.payload.model.model !== "settings") return;
+    setFonts(event.payload.model);
+  }).catch(console.error);
+}
 
 fireAndForget(getSettings().then((settings) => setFonts(settings)));

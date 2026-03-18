@@ -44,7 +44,7 @@ function ActualEventStreamViewer({ response }: Props) {
         <EventViewerRow
           isActive={isActive}
           onClick={onClick}
-          icon={<Icon color="info" title="Server Message" icon="arrow_big_down_dash" />}
+          icon={<Icon color="info" title="Сообщение сервера" icon="arrow_big_down_dash" />}
           content={
             <HStack space={2} className="items-center">
               <EventLabels event={event} index={index} isActive={isActive} />
@@ -93,7 +93,7 @@ function EventDetail({
   return (
     <div className="flex flex-col h-full">
       <EventDetailHeader
-        title="Message Received"
+        title="Сообщение получено"
         prefix={<EventLabels event={event} index={index} />}
         onClose={onClose}
       />
@@ -114,7 +114,7 @@ function EventDetail({
               variant="border"
               size="xs"
             >
-              Try Showing
+              Показать
             </Button>
           </div>
         </VStack>

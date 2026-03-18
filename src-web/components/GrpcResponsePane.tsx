@@ -185,7 +185,7 @@ function GrpcEventDetail({
                 variant="border"
                 size="xs"
               >
-                Try Showing
+                Показать
               </Button>
             </div>
           </VStack>
@@ -235,16 +235,16 @@ function getEventDisplay(
   status: GrpcEvent["status"],
 ): { icon: IconProps["icon"]; color: IconProps["color"]; title: string } {
   if (eventType === "server_message") {
-    return { icon: "arrow_big_down_dash", color: "info", title: "Server message" };
+    return { icon: "arrow_big_down_dash", color: "info", title: "Сообщение сервера" };
   }
   if (eventType === "client_message") {
-    return { icon: "arrow_big_up_dash", color: "primary", title: "Client message" };
+    return { icon: "arrow_big_up_dash", color: "primary", title: "Сообщение клиента" };
   }
   if (eventType === "error" || (status != null && status > 0)) {
-    return { icon: "alert_triangle", color: "danger", title: "Error" };
+    return { icon: "alert_triangle", color: "danger", title: "Ошибка" };
   }
   if (eventType === "connection_end") {
-    return { icon: "check", color: "success", title: "Connection response" };
+    return { icon: "check", color: "success", title: "Ответ соединения" };
   }
-  return { icon: "info", color: undefined, title: "Event" };
+  return { icon: "info", color: undefined, title: "Событие" };
 }

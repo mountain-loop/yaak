@@ -87,7 +87,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                 ...((schema != null
                   ? [
                       {
-                        label: "Clear",
+                        label: "Очистить",
                         onSelect: clear,
                         color: "danger",
                         leftSlot: <Icon icon="trash" />,
@@ -106,7 +106,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                         variant="border"
                         onClick={() => {
                           showDialog({
-                            title: "Introspection Failed",
+                            title: "Интроспекция не удалась",
                             size: "sm",
                             id: "introspection-failed",
                             render: ({ hide }) => (
@@ -148,14 +148,14 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                   },
                 },
                 {
-                  label: "Introspect Schema",
+                  label: "Выполнить интроспекцию схемы",
                   leftSlot: <Icon icon="refresh" spin={isLoading} />,
                   keepOpenOnSelect: true,
                   onSelect: refetch,
                 },
-                { type: "separator", label: "Setting" },
+                { type: "separator", label: "Параметр" },
                 {
-                  label: "Automatic Introspection",
+                  label: "Автоматическая интроспекция",
                   keepOpenOnSelect: true,
                   onSelect: () => {
                     setAutoIntrospectDisabled({
@@ -178,12 +178,12 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
               <Button
                 size="sm"
                 variant="border"
-                title="Refetch Schema"
+                title="Перезагрузить схему"
                 isLoading={isLoading}
                 color={error ? "danger" : "default"}
                 forDropdown
               >
-                {error ? "Introspection Failed" : schema ? "Schema" : "No Schema"}
+                {error ? "Интроспекция не удалась" : schema ? "Schema" : "No Schema"}
               </Button>
             </Dropdown>
           )}

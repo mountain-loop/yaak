@@ -24,54 +24,54 @@ export function SettingsDropdown() {
       ref={dropdownRef}
       items={[
         {
-          label: "Settings",
+          label: "Настройки",
           hotKeyAction: "settings.show",
           leftSlot: <Icon icon="settings" />,
           onSelect: () => openSettings.mutate(null),
         },
         {
-          label: "Keyboard shortcuts",
+          label: "Горячие клавиши",
           hotKeyAction: "hotkeys.showHelp",
           leftSlot: <Icon icon="keyboard" />,
           onSelect: () => {
             showDialog({
               id: "hotkey",
-              title: "Keyboard Shortcuts",
+              title: "Горячие клавиши",
               size: "dynamic",
               render: () => <KeyboardShortcutsDialog />,
             });
           },
         },
         {
-          label: "Plugins",
+          label: "Плагины",
           leftSlot: <Icon icon="puzzle" />,
           onSelect: () => openSettings.mutate("plugins"),
         },
-        { type: "separator", label: "Share Workspace(s)" },
+        { type: "separator", label: "Поделиться рабочими пространствами" },
         {
-          label: "Import Data",
+          label: "Импорт данных",
           leftSlot: <Icon icon="folder_input" />,
           onSelect: () => importData.mutate(),
         },
         {
-          label: "Export Data",
+          label: "Экспорт данных",
           leftSlot: <Icon icon="folder_output" />,
           onSelect: () => exportData.mutate(),
         },
         {
-          label: "Create Run Button",
+          label: "Создать кнопку запуска",
           leftSlot: <Icon icon="rocket" />,
           onSelect: () => openUrl("https://yaak.app/button/new"),
         },
         { type: "separator", label: `Yaak v${appInfo.version}` },
         {
-          label: "Check for Updates",
+          label: "Проверить обновления",
           leftSlot: <Icon icon="update" />,
           hidden: !appInfo.featureUpdater,
           onSelect: () => checkForUpdates.mutate(),
         },
         {
-          label: "Purchase License",
+          label: "Купить лицензию",
           color: "success",
           hidden: check.data == null || check.data.status === "active",
           leftSlot: <Icon icon="circle_dollar_sign" />,
@@ -79,20 +79,20 @@ export function SettingsDropdown() {
           onSelect: () => openUrl("https://yaak.app/pricing"),
         },
         {
-          label: "Install CLI",
+          label: "Установить CLI",
           hidden: appInfo.cliVersion != null,
           leftSlot: <Icon icon="square_terminal" />,
           rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl("https://yaak.app/docs/cli"),
         },
         {
-          label: "Feedback",
+          label: "Обратная связь",
           leftSlot: <Icon icon="chat" />,
           rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl("https://yaak.app/feedback"),
         },
         {
-          label: "Changelog",
+          label: "Журнал изменений",
           leftSlot: <Icon icon="cake" />,
           rightSlot: <Icon icon="external_link" color="secondary" />,
           onSelect: () => openUrl(`https://yaak.app/changelog/${appInfo.version}`),
@@ -101,7 +101,7 @@ export function SettingsDropdown() {
     >
       <IconButton
         size="sm"
-        title="Main Menu"
+        title="Главное меню"
         icon="settings"
         iconColor="secondary"
         className="pointer-events-auto"

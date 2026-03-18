@@ -50,7 +50,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                   icon="trash"
                   size="xs"
                   iconSize="sm"
-                  title="Delete"
+                  title="Удалить"
                   className="ml-auto"
                   onClick={() =>
                     patchModel(cookieJar, {

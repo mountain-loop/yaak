@@ -7,7 +7,7 @@ const ntlmMock = vi.hoisted(() => ({
   createType3Message: vi.fn(),
 }));
 
-vi.mock("httpntlm", () => ({ ntlm: ntlmMock }));
+vi.mock("httpntlm/ntlm", () => ntlmMock);
 
 import { plugin } from "../src";
 

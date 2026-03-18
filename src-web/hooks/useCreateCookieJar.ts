@@ -11,16 +11,16 @@ export function useCreateCookieJar() {
     mutationFn: async () => {
       const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
       if (workspaceId == null) {
-        throw new Error("Cannot create cookie jar when there's no active workspace");
+        throw new Error("Невозможно создать CookieJar без активного рабочего пространства");
       }
 
       const name = await showPrompt({
         id: "new-cookie-jar",
-        title: "New CookieJar",
-        placeholder: "My Jar",
-        confirmText: "Create",
-        label: "Name",
-        defaultValue: "My Jar",
+        title: "Новый CookieJar",
+        placeholder: "Мой jar",
+        confirmText: "Создать",
+        label: "Название",
+        defaultValue: "Мой jar",
       });
       if (name == null) return null;
 
