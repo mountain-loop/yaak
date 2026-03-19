@@ -67,6 +67,13 @@
       @apply bg-selection !important;
     }
 
+    /* Fix WebKit/WKWebView rendering bug where selection layer leaves a ghost
+       residual line below wrapped lines after deselecting (CodeMirror issue #1600, #1627).
+       The layer div must be hidden when empty to force a repaint. */
+    .cm-selectionLayer:empty {
+      display: none;
+    }
+
     /* Style gutters */
 
     .cm-gutters {
