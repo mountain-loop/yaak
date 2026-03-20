@@ -332,6 +332,129 @@ describe("importer-curl", () => {
     });
   });
 
+  test("Imports Bearer token from Authorization header", () => {
+    expect(
+      convertCurl('curl -H "Authorization: Bearer token123" https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            authenticationType: "bearer",
+            authentication: {
+              token: "token123",
+              prefix: "Bearer",
+            },
+            headers: [],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Imports Basic auth from Authorization header (base64 decoded)", () => {
+    expect(
+      convertCurl('curl -H "Authorization: Basic dXNlcjpwYXNzd29yZA==" https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            authenticationType: "basic",
+            authentication: {
+              username: "user",
+              password: "password",
+            },
+            headers: [],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Authorization header takes precedence over -u flag", () => {
+    expect(
+      convertCurl('curl -u admin:secret -H "Authorization: Bearer token123" https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            authenticationType: "bearer",
+            authentication: {
+              token: "token123",
+              prefix: "Bearer",
+            },
+            headers: [],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Authorization header extraction is case-insensitive", () => {
+    expect(
+      convertCurl('curl -H "authorization: bearer lowercaseToken" https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            authenticationType: "bearer",
+            authentication: {
+              token: "lowercaseToken",
+              prefix: "Bearer",
+            },
+            headers: [],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Preserves other headers when extracting Authorization", () => {
+    expect(
+      convertCurl('curl -H "Authorization: Bearer token123" -H "X-Custom: value" https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            authenticationType: "bearer",
+            authentication: {
+              token: "token123",
+              prefix: "Bearer",
+            },
+            headers: [{ name: "X-Custom", value: "value", enabled: true }],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Invalid base64 in Basic auth keeps header in headers", () => {
+    expect(
+      convertCurl('curl -H "Authorization: Basic not-valid-base64!!!" https://yaak.app'),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            headers: [
+              { name: "Authorization", value: "Basic not-valid-base64!!!", enabled: true },
+            ],
+          }),
+        ],
+      },
+    });
+  });
+
   test("Imports cookie as header", () => {
     expect(convertCurl('curl --cookie "foo=bar" https://yaak.app')).toEqual({
       resources: {
