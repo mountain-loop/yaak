@@ -226,10 +226,8 @@ async fn build_body(
 
     let (body, content_type) = match body_type.as_str() {
         "binary" => (build_binary_body(&body).await?, None),
-        "graphql" => (build_graphql_body(&method, &body), Some("application/json".to_string())),
-        "application/x-www-form-urlencoded" => {
-            (build_form_body(&body), Some("application/x-www-form-urlencoded".to_string()))
-        }
+        "graphql" => (build_graphql_body(&method, &body), None),
+        "application/x-www-form-urlencoded" => (build_form_body(&body), None),
         "multipart/form-data" => build_multipart_body(&body, &headers).await?,
         _ if body.contains_key("text") => (build_text_body(&body, body_type), None),
         t => {
