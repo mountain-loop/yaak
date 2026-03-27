@@ -73,7 +73,7 @@
     "uuid": "^11.1.0",
     "vkbeautify": "^0.99.3",
     "whatwg-mimetype": "^4.0.0",
-    "yaml": "^2.6.1"
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@lezer/generator": "^1.8.0",
