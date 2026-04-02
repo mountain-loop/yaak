@@ -29,8 +29,6 @@
         }
       ]
     },
-    "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text",
     "core:webview:allow-set-webview-zoom",
     "core:window:allow-close",
     "core:window:allow-internal-toggle-maximize",
