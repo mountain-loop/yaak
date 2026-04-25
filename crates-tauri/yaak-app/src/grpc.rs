@@ -80,6 +80,7 @@ pub(crate) async fn build_metadata<R: Runtime>(
                         value: value.to_string(),
                     })
                     .collect(),
+                body: None,
             };
             let plugin_result = plugin_manager
                 .call_http_authentication(
