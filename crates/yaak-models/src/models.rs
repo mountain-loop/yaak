@@ -1366,6 +1366,9 @@ pub struct HttpResponse {
     pub remote_addr: Option<String>,
     pub request_content_length: Option<i32>,
     pub request_headers: Vec<HttpResponseHeader>,
+    pub method: Option<String>,
+    pub request_name: Option<String>,
+    pub request_body_type: Option<String>,
     pub status: i32,
     pub status_reason: Option<String>,
     pub state: HttpResponseState,
@@ -1414,6 +1417,9 @@ impl UpsertModelInfo for HttpResponse {
             (Headers, serde_json::to_string(&self.headers)?.into()),
             (RemoteAddr, self.remote_addr.into()),
             (RequestHeaders, serde_json::to_string(&self.request_headers)?.into()),
+            (Method, self.method.into()),
+            (RequestName, self.request_name.into()),
+            (RequestBodyType, self.request_body_type.into()),
             (State, serde_json::to_value(self.state)?.as_str().into()),
             (Status, self.status.into()),
             (StatusReason, self.status_reason.into()),
@@ -1437,6 +1443,9 @@ impl UpsertModelInfo for HttpResponse {
             HttpResponseIden::RemoteAddr,
             HttpResponseIden::RequestContentLength,
             HttpResponseIden::RequestHeaders,
+            HttpResponseIden::Method,
+            HttpResponseIden::RequestName,
+            HttpResponseIden::RequestBodyType,
             HttpResponseIden::State,
             HttpResponseIden::Status,
             HttpResponseIden::StatusReason,
@@ -1477,6 +1486,9 @@ impl UpsertModelInfo for HttpResponse {
                 r.get::<_, String>("request_headers").unwrap_or_default().as_str(),
             )
             .unwrap_or_default(),
+            method: r.get("method").unwrap_or_default(),
+            request_name: r.get("request_name").unwrap_or_default(),
+            request_body_type: r.get("request_body_type").unwrap_or_default(),
         })
     }
 }
