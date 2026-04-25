@@ -2,22 +2,44 @@
 
 export type DnsOverride = { hostname: string, ipv4: Array<string>, ipv6: Array<string>, enabled?: boolean, };
 
-export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, public: boolean, parentModel: string, parentId: string | null, variables: Array<EnvironmentVariable>, color: string | null, sortPriority: number, };
+export type Environment = { model: "environment", id: string, workspaceId: string, createdAt: string, updatedAt: string, name: string, public: boolean, parentModel: string, parentId: string | null, 
+/**
+ * Variables defined in this environment scope.
+ * Child environments override parent variables by name.
+ */
+variables: Array<EnvironmentVariable>, color: string | null, sortPriority: number, };
 
 export type EnvironmentVariable = { enabled?: boolean, name: string, value: string, id?: string, };
 
 export type Folder = { model: "folder", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, sortPriority: number, };
 
-export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<HttpRequestHeader>, method: string | null, name: string, service: string | null, sortPriority: number, url: string, };
+export type GrpcRequest = { model: "grpc_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authenticationType: string | null, authentication: Record<string, any>, description: string, message: string, metadata: Array<HttpRequestHeader>, method: string | null, name: string, service: string | null, sortPriority: number, 
+/**
+ * Server URL (http for plaintext or https for secure)
+ */
+url: string, };
 
-export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type HttpRequest = { model: "http_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, body: Record<string, any>, bodyType: string | null, description: string, headers: Array<HttpRequestHeader>, method: string, name: string, sortPriority: number, url: string, 
+/**
+ * URL parameters used for both path placeholders (`:id`) and query string entries.
+ */
+urlParameters: Array<HttpUrlParameter>, };
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type HttpUrlParameter = { enabled?: boolean, name: string, value: string, id?: string, };
+export type HttpUrlParameter = { enabled?: boolean, 
+/**
+ * Colon-prefixed parameters are treated as path parameters if they match, like `/users/:id`
+ * Other entries are appended as query parameters
+ */
+name: string, value: string, id?: string, };
 
 export type SyncModel = { "type": "workspace" } & Workspace | { "type": "environment" } & Environment | { "type": "folder" } & Folder | { "type": "http_request" } & HttpRequest | { "type": "grpc_request" } & GrpcRequest | { "type": "websocket_request" } & WebsocketRequest;
 
-export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, urlParameters: Array<HttpUrlParameter>, };
+export type WebsocketRequest = { model: "websocket_request", id: string, createdAt: string, updatedAt: string, workspaceId: string, folderId: string | null, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, message: string, name: string, sortPriority: number, url: string, 
+/**
+ * URL parameters used for both path placeholders (`:id`) and query string entries.
+ */
+urlParameters: Array<HttpUrlParameter>, };
 
 export type Workspace = { model: "workspace", id: string, createdAt: string, updatedAt: string, authentication: Record<string, any>, authenticationType: string | null, description: string, headers: Array<HttpRequestHeader>, name: string, encryptionKeyChallenge: string | null, settingValidateCertificates: boolean, settingFollowRedirects: boolean, settingRequestTimeout: number, settingDnsOverrides: Array<DnsOverride>, };

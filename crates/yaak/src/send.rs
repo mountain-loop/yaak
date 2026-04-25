@@ -491,6 +491,9 @@ pub async fn send_http_request<T: TemplateCallback>(
         .iter()
         .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
         .collect();
+    response.method = Some(sendable_request.method.clone());
+    response.request_name = Some(params.request.name.clone());
+    response.request_body_type = params.request.body_type.clone();
     response.url = sendable_request.url.clone();
     response.state = HttpResponseState::Initialized;
     response.error = None;

@@ -16,15 +16,30 @@ import type { TimelineViewMode } from "./HttpResponsePane";
 interface Props {
   response: HttpResponse;
   viewMode: TimelineViewMode;
+  events?: HttpResponseEvent[];
 }
 
-export function HttpResponseTimeline({ response, viewMode }: Props) {
-  return <Inner key={response.id} response={response} viewMode={viewMode} />;
+export function HttpResponseTimeline({ response, viewMode, events: externalEvents }: Props) {
+  return (
+    <Inner
+      key={response.id}
+      response={response}
+      viewMode={viewMode}
+      externalEvents={externalEvents}
+    />
+  );
 }
 
-function Inner({ response, viewMode }: Props) {
+function Inner({
+  response,
+  viewMode,
+  externalEvents,
+}: Props & { externalEvents?: HttpResponseEvent[] }) {
   const [showRaw, setShowRaw] = useState(false);
-  const { data: events, error, isLoading } = useHttpResponseEvents(response);
+  const fetched = useHttpResponseEvents(externalEvents != null ? null : response);
+  const events = externalEvents ?? fetched.data;
+  const error = externalEvents != null ? null : fetched.error;
+  const isLoading = externalEvents != null ? false : fetched.isLoading;
 
   // Generate plain text representation of all events (with prefixes for timeline view)
   const plainText = useMemo(() => {

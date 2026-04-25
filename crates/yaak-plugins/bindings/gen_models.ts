@@ -53,7 +53,7 @@ urlParameters: Array<HttpUrlParameter>, };
 
 export type HttpRequestHeader = { enabled?: boolean, name: string, value: string, id?: string, };
 
-export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, contentLengthCompressed: number | null, elapsed: number, elapsedHeaders: number, elapsedDns: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, requestContentLength: number | null, requestHeaders: Array<HttpResponseHeader>, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
+export type HttpResponse = { model: "http_response", id: string, createdAt: string, updatedAt: string, workspaceId: string, requestId: string, bodyPath: string | null, contentLength: number | null, contentLengthCompressed: number | null, elapsed: number, elapsedHeaders: number, elapsedDns: number, error: string | null, headers: Array<HttpResponseHeader>, remoteAddr: string | null, requestContentLength: number | null, requestHeaders: Array<HttpResponseHeader>, method: string | null, requestName: string | null, requestBodyType: string | null, status: number, statusReason: string | null, state: HttpResponseState, url: string, version: string | null, };
 
 export type HttpResponseEvent = { model: "http_response_event", id: string, createdAt: string, updatedAt: string, workspaceId: string, responseId: string, event: HttpResponseEventData, };
 
