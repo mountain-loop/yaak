@@ -1,10 +1,35 @@
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
 use log::{debug, info, warn};
-use reqwest::{Client, Proxy, redirect};
+use reqwest::{Client, ClientBuilder, Proxy, redirect};
 use std::sync::Arc;
 use yaak_models::models::DnsOverride;
 use yaak_tls::{ClientCertificateConfig, get_tls_config};
+
+pub const HTTP2_MAX_RESPONSE_HEADER_LIST_SIZE: u32 = 1024 * 1024;
+
+fn client_builder() -> ClientBuilder {
+    Client::builder().http2_max_header_list_size(HTTP2_MAX_RESPONSE_HEADER_LIST_SIZE)
+}
+
+#[derive(Clone)]
+pub struct ConfiguredClient {
+    inner: Client,
+}
+
+impl ConfiguredClient {
+    pub(crate) fn build_default() -> Result<Self> {
+        Ok(Self { inner: client_builder().build()? })
+    }
+
+    pub(crate) fn from_inner(inner: Client) -> Self {
+        Self { inner }
+    }
+
+    pub(crate) fn inner(&self) -> &Client {
+        &self.inner
+    }
+}
 
 #[derive(Clone)]
 pub struct HttpConnectionProxySettingAuth {
@@ -37,8 +62,8 @@ impl HttpConnectionOptions {
     /// Build a reqwest Client and return it along with the DNS resolver.
     /// The resolver is returned separately so it can be configured per-request
     /// to emit DNS timing events to the appropriate channel.
-    pub(crate) fn build_client(&self) -> Result<(Client, Arc<LocalhostResolver>)> {
-        let mut client = Client::builder()
+    pub(crate) fn build_client(&self) -> Result<(ConfiguredClient, Arc<LocalhostResolver>)> {
+        let mut client = client_builder()
             .connection_verbose(true)
             .redirect(redirect::Policy::none())
             // Decompression is handled by HttpTransaction, not reqwest
@@ -79,7 +104,7 @@ impl HttpConnectionOptions {
             self.client_certificate.is_some()
         );
 
-        Ok((client.build()?, resolver))
+        Ok((ConfiguredClient::from_inner(client.build()?), resolver))
     }
 }
 

@@ -1,7 +1,6 @@
-use crate::client::HttpConnectionOptions;
+use crate::client::{ConfiguredClient, HttpConnectionOptions};
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
-use reqwest::Client;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +9,7 @@ use tokio::sync::RwLock;
 /// A cached HTTP client along with its DNS resolver.
 /// The resolver is needed to set the event sender per-request.
 pub struct CachedClient {
-    pub client: Client,
+    pub client: ConfiguredClient,
     pub resolver: Arc<LocalhostResolver>,
 }
 
