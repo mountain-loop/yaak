@@ -1,9 +1,10 @@
 use crate::PluginContextExt;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::models_ext::QueryManagerExt;
 use log::info;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
+use std::io::ErrorKind;
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_core::WorkspaceContext;
 use yaak_models::models::{
@@ -18,8 +19,7 @@ pub(crate) async fn import_data<R: Runtime>(
     file_path: &str,
 ) -> Result<BatchUpsertResult> {
     let plugin_manager = window.state::<PluginManager>();
-    let file =
-        read_to_string(file_path).unwrap_or_else(|_| panic!("Unable to read file {}", file_path));
+    let file = read_import_file(file_path)?;
     let file_contents = file.as_str();
     let import_result = plugin_manager.import_data(&window.plugin_context(), file_contents).await?;
 
@@ -126,4 +126,42 @@ pub(crate) async fn import_data<R: Runtime>(
     })?;
 
     Ok(upserted)
+}
+
+fn read_import_file(file_path: &str) -> Result<String> {
+    read_to_string(file_path).map_err(|err| {
+        if err.kind() == ErrorKind::InvalidData {
+            Error::GenericError(format!(
+                "Import file must be UTF-8 text; binary files are not supported: {file_path}"
+            ))
+        } else {
+            Error::GenericError(format!("Unable to read import file {file_path}: {err}"))
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::{remove_file, write};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn read_import_file_returns_error_for_binary_file() {
+        let path = std::env::temp_dir().join(format!(
+            "yaak-import-binary-{}.pftrace",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos()
+        ));
+        write(&path, [0xff, 0xfe, 0xfd]).expect("write binary fixture");
+
+        let err = read_import_file(path.to_str().expect("temp path is utf-8"))
+            .expect_err("binary import should return an error");
+
+        assert!(err.to_string().contains("binary files are not supported"));
+
+        remove_file(path).expect("remove binary fixture");
+    }
 }
