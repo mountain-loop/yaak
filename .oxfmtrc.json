@@ -1,0 +1,4 @@
+{
+  "printWidth": 100,
+  "ignorePatterns": ["**/bindings/**", "crates/yaak-templates/pkg/**", "src-web/routeTree.gen.ts"]
+}
