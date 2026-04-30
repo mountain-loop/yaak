@@ -743,6 +743,7 @@ pub struct CallHttpAuthenticationRequest {
     pub method: String,
     pub url: String,
     pub headers: Vec<HttpHeader>,
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
