@@ -82,7 +82,7 @@
     "vendor:vendor-plugins": "node scripts/vendor-plugins.cjs",
     "vendor:vendor-protoc": "node scripts/vendor-protoc.cjs",
     "vendor:vendor-node": "node scripts/vendor-node.cjs",
-    "format": "vp fmt --ignore-path .oxfmtignore",
+    "format": "vp fmt",
     "lint": "run-p lint:*",
     "lint:vp": "vp lint",
     "lint:workspaces": "npm run --workspaces --if-present lint",
