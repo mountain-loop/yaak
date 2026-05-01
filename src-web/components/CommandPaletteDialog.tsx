@@ -45,6 +45,7 @@ import {
 } from "../lib/resolvedModelName";
 import { router } from "../lib/router";
 import { setWorkspaceSearchParams } from "../lib/setWorkspaceSearchParams";
+import { openHistory } from "../commands/openHistory";
 import { CookieDialog } from "./CookieDialog";
 import { Button } from "./core/Button";
 import { Heading } from "./core/Heading";
@@ -137,6 +138,11 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
             render: () => <CookieDialog cookieJarId={activeCookieJar?.id ?? null} />,
           });
         },
+      },
+      {
+        key: "history.show",
+        label: "Show Request History",
+        onSelect: () => openHistory.mutate(),
       },
       {
         key: "environment.edit",

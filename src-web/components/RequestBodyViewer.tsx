@@ -1,8 +1,11 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { lazy, Suspense } from "react";
 import { useHttpRequestBody } from "../hooks/useHttpRequestBody";
+import { tryFormatGraphql } from "../lib/formatters";
 import { getMimeTypeFromContentType, languageFromContentType } from "../lib/contentType";
+import { Editor } from "./core/Editor/LazyEditor";
 import { LoadingIcon } from "./core/LoadingIcon";
+import { Separator } from "./core/Separator";
 import { EmptyStateText } from "./EmptyStateText";
 import { AudioViewer } from "./responseViewers/AudioViewer";
 import { CsvViewer } from "./responseViewers/CsvViewer";
@@ -45,6 +48,10 @@ function RequestBodyViewerInner({ response }: Props) {
   }
 
   const { bodyText, body } = data;
+
+  if (response.requestBodyType === "graphql") {
+    return <GraphQLRequestBodyViewer response={response} bodyText={bodyText} />;
+  }
 
   // Try to detect language from content-type header that was sent
   const contentTypeHeader = response.requestHeaders.find(
@@ -99,4 +106,50 @@ function RequestBodyViewerInner({ response }: Props) {
   return (
     <TextViewer text={bodyText} language={language} stateKey={`request.body.${response.id}`} />
   );
+}
+
+function GraphQLRequestBodyViewer({
+  response,
+  bodyText,
+}: {
+  response: HttpResponse;
+  bodyText: string;
+}) {
+  const body = tryParseJson(bodyText, {});
+  const query = typeof body.query === "string" ? body.query : bodyText;
+  const variables =
+    body.variables == null ? null : JSON.stringify(body.variables, null, 2) ?? null;
+
+  return (
+    <div className="h-full w-full grid grid-cols-1 grid-rows-[minmax(0,100%)_auto]">
+      <Editor
+        readOnly
+        defaultValue={query}
+        language="graphql"
+        format={tryFormatGraphql}
+        stateKey={`request.body.graphql.${response.id}`}
+      />
+      {variables != null ? (
+        <div className="grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 min-h-[5rem]">
+          <Separator dashed className="pb-1">
+            Variables
+          </Separator>
+          <TextViewer
+            text={variables}
+            language="json"
+            pretty
+            stateKey={`request.body.graphql.variables.${response.id}`}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function tryParseJson(text: string, fallback: Record<string, unknown>) {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return fallback;
+  }
 }
