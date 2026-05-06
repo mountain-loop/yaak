@@ -6,6 +6,7 @@
   "description": "Template functions for working with cookies",
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev"
+    "dev": "yaakcli dev",
+    "test": "vp test --run tests"
   }
 }

@@ -12,11 +12,22 @@ export const plugin: PluginDefinition = {
           name: "name",
           label: "Cookie Name",
         },
+        {
+          type: "text",
+          name: "domain",
+          label: "Domain",
+          optional: true,
+        },
       ],
       async onRender(ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         // The legacy name was cookie_name, but we changed it
         const name = args.values.cookie_name ?? args.values.name;
-        return ctx.cookies.getValue({ name: String(name) });
+        const domain = String(args.values.domain ?? "").trim();
+
+        return ctx.cookies.getValue({
+          name: String(name),
+          ...(domain.length > 0 ? { domain } : {}),
+        });
       },
     },
   ],
