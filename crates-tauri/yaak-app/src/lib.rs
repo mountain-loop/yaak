@@ -34,8 +34,7 @@ use tokio::time;
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
-use yaak_templates::strip_json_comments::strip_json_comments;
-use yaak_grpc::{Code, ServiceDefinition, serialize_message};
+use yaak_grpc::{Code, ServiceDefinition};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
@@ -60,6 +59,7 @@ use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_templates::format_json::format_json;
+use yaak_templates::strip_json_comments::strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions, Tokens, transform_args};
 use yaak_tls::find_client_certificate;
 
@@ -522,7 +522,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     &method,
                                     in_msg_stream,
                                     &metadata,
-                                    client_cert,
+                                    client_cert.clone(),
                                     on_message.clone(),
                                 )
                                 .await,
@@ -538,7 +538,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                     &method,
                                     in_msg_stream,
                                     &metadata,
-                                    client_cert,
+                                    client_cert.clone(),
                                     on_message.clone(),
                                 )
                                 .await,
@@ -551,7 +551,9 @@ async fn cmd_grpc_go<R: Runtime>(
                     (false, false) => (
                         None,
                         Some(
-                            connection.unary(&service, &method, &msg, &metadata, client_cert).await,
+                            connection
+                                .unary(&service, &method, &msg, &metadata, client_cert.clone())
+                                .await,
                         ),
                     ),
                 };
@@ -589,11 +591,34 @@ async fn cmd_grpc_go<R: Runtime>(
                             &UpdateSource::from_window_label(window.label()),
                         )
                         .unwrap();
+                    let response_message = msg.into_inner();
+                    let content = match connection
+                        .serialize_message(&response_message, &metadata, client_cert.clone())
+                        .await
+                    {
+                        Ok(content) => content,
+                        Err(err) => {
+                            app_handle
+                                .db()
+                                .upsert_grpc_event(
+                                    &GrpcEvent {
+                                        content: "Failed to read response".to_string(),
+                                        error: Some(err.to_string()),
+                                        status: Some(Code::Internal as i32),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                    &UpdateSource::from_window_label(window.label()),
+                                )
+                                .unwrap();
+                            return;
+                        }
+                    };
                     app_handle
                         .db()
                         .upsert_grpc_event(
                             &GrpcEvent {
-                                content: serialize_message(&msg.into_inner()).unwrap(),
+                                content,
                                 event_type: GrpcEventType::ServerMessage,
                                 ..base_event.clone()
                             },
@@ -728,7 +753,28 @@ async fn cmd_grpc_go<R: Runtime>(
             loop {
                 match stream.message().await {
                     Ok(Some(msg)) => {
-                        let message = serialize_message(&msg).unwrap();
+                        let message = match connection
+                            .serialize_message(&msg, &metadata, client_cert.clone())
+                            .await
+                        {
+                            Ok(message) => message,
+                            Err(err) => {
+                                app_handle
+                                    .db()
+                                    .upsert_grpc_event(
+                                        &GrpcEvent {
+                                            content: "Failed to read response".to_string(),
+                                            error: Some(err.to_string()),
+                                            status: Some(Code::Internal as i32),
+                                            event_type: GrpcEventType::ConnectionEnd,
+                                            ..base_event.clone()
+                                        },
+                                        &UpdateSource::from_window_label(window.label()),
+                                    )
+                                    .unwrap();
+                                break;
+                            }
+                        };
                         app_handle
                             .db()
                             .upsert_grpc_event(

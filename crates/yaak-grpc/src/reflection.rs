@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use async_recursion::async_recursion;
 use log::{debug, info, warn};
 use prost::Message;
-use prost_reflect::{DescriptorPool, MethodDescriptor};
+use prost_reflect::{DescriptorPool, DynamicMessage, MethodDescriptor, ReflectMessage, Value};
 use prost_types::{FileDescriptorProto, FileDescriptorSet};
 use std::collections::{BTreeMap, HashSet};
 use std::env::temp_dir;
@@ -231,6 +231,83 @@ pub(crate) async fn reflect_types_for_message(
     }
 
     Ok(())
+}
+
+pub(crate) async fn reflect_types_for_dynamic_message(
+    pool: Arc<RwLock<DescriptorPool>>,
+    uri: &Uri,
+    message: &DynamicMessage,
+    metadata: &BTreeMap<String, String>,
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<()> {
+    let mut extra_types = HashSet::new();
+    collect_any_types_from_dynamic_message(message, &mut extra_types);
+
+    if extra_types.is_empty() {
+        return Ok(());
+    }
+
+    let mut client = AutoReflectionClient::new(uri, false, client_cert)?;
+    for extra_type in extra_types {
+        {
+            let guard = pool.read().await;
+            if guard.get_message_by_name(&extra_type).is_some() {
+                continue;
+            }
+        }
+        info!("Adding response file descriptor for {:?} from reflection", extra_type);
+        let req = MessageRequest::FileContainingSymbol(extra_type.clone().into());
+        let resp = match client.send_reflection_request(req, metadata).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(GenericError(format!(
+                    "Error sending reflection request for response @type \"{extra_type}\": {e:?}",
+                )));
+            }
+        };
+        let files = match resp {
+            MessageResponse::FileDescriptorResponse(resp) => resp.file_descriptor_proto,
+            _ => panic!("Expected a FileDescriptorResponse variant"),
+        };
+
+        {
+            let mut guard = pool.write().await;
+            add_file_descriptors_to_pool(files, &mut *guard, &mut client, metadata).await;
+        }
+    }
+
+    Ok(())
+}
+
+fn collect_any_types_from_dynamic_message(message: &DynamicMessage, out: &mut HashSet<String>) {
+    if message.descriptor().full_name() == "google.protobuf.Any" {
+        if let Some(Value::String(type_url)) = message.get_field_by_name("type_url").as_deref() {
+            if let Some(full_name) = type_url.rsplit_once('/').map(|(_, name)| name) {
+                out.insert(full_name.to_string());
+            }
+        }
+    }
+
+    for (_, value) in message.fields() {
+        collect_any_types_from_value(value, out);
+    }
+}
+
+fn collect_any_types_from_value(value: &Value, out: &mut HashSet<String>) {
+    match value {
+        Value::Message(message) => collect_any_types_from_dynamic_message(message, out),
+        Value::List(values) => {
+            for value in values {
+                collect_any_types_from_value(value, out);
+            }
+        }
+        Value::Map(values) => {
+            for value in values.values() {
+                collect_any_types_from_value(value, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[async_recursion]
