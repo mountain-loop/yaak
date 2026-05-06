@@ -10,6 +10,7 @@
     "moduleResolution": "node16",
     "resolveJsonModule": true,
     "sourceMap": true,
+    "rootDir": "src",
     "outDir": "build"
   },
   "include": ["src"]
