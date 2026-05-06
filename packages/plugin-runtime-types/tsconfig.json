@@ -5,6 +5,7 @@
     "lib": ["es2021", "dom"],
     "declaration": true,
     "declarationDir": "./lib",
+    "rootDir": "./src",
     "outDir": "./lib",
     "strict": true,
     "types": ["node"]
