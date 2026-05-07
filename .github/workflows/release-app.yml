@@ -172,7 +172,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: |
           Get-ChildItem -Recurse -Path target -File -Filter "*.exe.sig" | Remove-Item -Force
-          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./crates-tauri/yaak-app-client/tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          Push-Location crates-tauri/yaak-app-client
+          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          Pop-Location
           $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
           $setupSig = "$($setup.FullName).sig"
           $dest = $setup.FullName -replace '-setup\.exe$', '-setup-machine.exe'
