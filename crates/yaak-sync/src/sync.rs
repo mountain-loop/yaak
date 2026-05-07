@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
-use yaak_models::db_context::DbContext;
+use yaak_models::client_db::ClientDb;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
 
@@ -106,7 +106,7 @@ pub struct FsCandidate {
 }
 
 pub fn get_db_candidates(
-    db: &DbContext,
+    db: &ClientDb,
     version: &str,
     workspace_id: &str,
     sync_dir: &Path,
@@ -296,7 +296,7 @@ pub fn compute_sync_ops(
         .collect()
 }
 
-fn workspace_models(db: &DbContext, version: &str, workspace_id: &str) -> Result<Vec<SyncModel>> {
+fn workspace_models(db: &ClientDb, version: &str, workspace_id: &str) -> Result<Vec<SyncModel>> {
     // We want to include private environments here so that we can take them into account during
     // the sync process. Otherwise, they would be treated as deleted.
     let include_private_environments = true;
@@ -338,7 +338,7 @@ fn workspace_models(db: &DbContext, version: &str, workspace_id: &str) -> Result
 /// Apply sync operations to the filesystem and database.
 /// Returns a list of SyncStateOps that should be applied afterward.
 pub fn apply_sync_ops(
-    db: &DbContext,
+    db: &ClientDb,
     workspace_id: &str,
     sync_dir: &Path,
     sync_ops: Vec<SyncOp>,
@@ -502,7 +502,7 @@ pub enum SyncStateOp {
 }
 
 pub fn apply_sync_state_ops(
-    db: &DbContext,
+    db: &ClientDb,
     workspace_id: &str,
     sync_dir: &Path,
     ops: Vec<SyncStateOp>,
@@ -547,7 +547,7 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
     Path::new(&rel).to_path_buf()
 }
 
-fn delete_model(db: &DbContext, model: &SyncModel) -> Result<()> {
+fn delete_model(db: &ClientDb, model: &SyncModel) -> Result<()> {
     match model {
         SyncModel::Workspace(m) => {
             db.delete_workspace(&m, &UpdateSource::Sync)?;

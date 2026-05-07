@@ -1,5 +1,5 @@
 use crate::blob_manager::BlobManager;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
 use crate::queries::MAX_HISTORY_ITEMS;
@@ -9,7 +9,7 @@ use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 use std::fs;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_http_response(&self, id: &str) -> Result<HttpResponse> {
         self.find_one(HttpResponseIden::Id, id)
     }
@@ -101,7 +101,7 @@ impl<'a> DbContext<'a> {
             .values([(HttpResponseIden::State, closed.as_str().into())])
             .cond_where(Expr::col(HttpResponseIden::State).ne(closed.as_str()))
             .build_rusqlite(SqliteQueryBuilder);
-        let mut stmt = self.conn.prepare(sql.as_str())?;
+        let mut stmt = self.conn().prepare(sql.as_str())?;
         stmt.execute(&*params.as_params())?;
         Ok(())
     }

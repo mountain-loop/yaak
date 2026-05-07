@@ -12,8 +12,8 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 pub mod blob_manager;
+pub mod client_db;
 mod connection_or_tx;
-pub mod db_context;
 pub mod error;
 pub mod migrate;
 pub mod models;

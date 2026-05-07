@@ -1,0 +1,21 @@
+[package]
+name = "yaak-proxy-lib"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+log = { workspace = true }
+include_dir = "0.7"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.25.0"
+rusqlite = { version = "0.32.1", features = ["bundled", "chrono"] }
+sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+ts-rs = { workspace = true, features = ["chrono-impl"] }
+yaak-database = { workspace = true }
+yaak-proxy = { workspace = true }
+yaak-rpc = { workspace = true }

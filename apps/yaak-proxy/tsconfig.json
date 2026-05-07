@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "es2021",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "useDefineForClassFields": true,
+    "allowJs": false,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@yaakapp-internal/theme": ["../../packages/theme/src/index.ts"],
+      "@yaakapp-internal/theme/*": ["../../packages/theme/src/*"],
+      "@yaakapp-internal/ui": ["../../packages/ui/src/index.ts"],
+      "@yaakapp-internal/ui/*": ["../../packages/ui/src/*"]
+    }
+  },
+  "include": ["."],
+  "exclude": ["vite.config.ts"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

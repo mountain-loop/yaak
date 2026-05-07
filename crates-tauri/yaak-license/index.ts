@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { appInfo } from "@yaakapp/app/lib/appInfo";
+import { appInfo } from "@yaakapp/yaak-client/lib/appInfo";
 import { useEffect } from "react";
 import { LicenseCheckStatus } from "./bindings/license";
 

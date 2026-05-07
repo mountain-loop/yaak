@@ -1,0 +1,18 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for the Yaak Proxy app",
+  "windows": ["*"],
+  "permissions": [
+    "core:default",
+    "os:allow-os-type",
+    "core:window:allow-close",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-is-maximized",
+    "core:window:allow-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-show",
+    "core:window:allow-start-dragging",
+    "core:window:allow-unmaximize",
+    "yaak-mac-window:default"
+  ]
+}

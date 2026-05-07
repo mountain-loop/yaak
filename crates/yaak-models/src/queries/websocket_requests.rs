@@ -1,5 +1,5 @@
 use super::dedupe_headers;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
     Folder, FolderIden, HttpRequestHeader, WebsocketRequest, WebsocketRequestIden,
@@ -8,7 +8,7 @@ use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_websocket_request(&self, id: &str) -> Result<WebsocketRequest> {
         self.find_one(WebsocketRequestIden::Id, id)
     }

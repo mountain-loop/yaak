@@ -1,4 +1,4 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
     EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
@@ -8,7 +8,7 @@ use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_workspace(&self, id: &str) -> Result<Workspace> {
         self.find_one(WorkspaceIden::Id, id)
     }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Runs `npm run dev` in parallel for all workspaces that have a dev script.
+ * Runs `npm run dev` in parallel for the provided workspaces, or all
+ * workspaces with a dev script when none are specified.
  * Handles cleanup of child processes on exit.
  */
 
@@ -17,8 +18,11 @@ const rootDir = path.join(__dirname, "..");
 const rootPkg = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8"));
 const workspaces = rootPkg.workspaces || [];
 
-// Find all workspaces with a dev script
-const workspacesWithDev = workspaces.filter((ws) => {
+const requestedWorkspaces = process.argv.slice(2);
+const workspaceCandidates = requestedWorkspaces.length > 0 ? requestedWorkspaces : workspaces;
+
+// Find all candidate workspaces with a dev script
+const workspacesWithDev = workspaceCandidates.filter((ws) => {
   const pkgPath = path.join(rootDir, ws, "package.json");
   if (!fs.existsSync(pkgPath)) return false;
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
@@ -52,7 +56,7 @@ for (const ws of workspacesWithDev) {
 
 // Cleanup function to kill all children
 function cleanup() {
-  for (const { child } of children) {
+  for (const { ws: _ws, child } of children) {
     if (child.exitCode === null) {
       // Process still running
       if (process.platform === "win32") {

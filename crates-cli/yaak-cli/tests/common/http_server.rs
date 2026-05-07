@@ -28,8 +28,30 @@ impl TestHttpServer {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+                        let mut request = Vec::new();
                         let mut request_buf = [0u8; 4096];
-                        let _ = stream.read(&mut request_buf);
+                        loop {
+                            match stream.read(&mut request_buf) {
+                                Ok(0) => break,
+                                Ok(n) => {
+                                    request.extend_from_slice(&request_buf[..n]);
+                                    if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                                        break;
+                                    }
+                                }
+                                Err(err)
+                                    if err.kind() == std::io::ErrorKind::WouldBlock
+                                        || err.kind() == std::io::ErrorKind::TimedOut =>
+                                {
+                                    break;
+                                }
+                                Err(_) => break,
+                            }
+                        }
+
+                        if request.is_empty() {
+                            continue;
+                        }
 
                         let response = format!(
                             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -38,7 +60,6 @@ impl TestHttpServer {
                         let _ = stream.write_all(response.as_bytes());
                         let _ = stream.write_all(&body_bytes);
                         let _ = stream.flush();
-                        break;
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(10));
