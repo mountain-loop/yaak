@@ -11,11 +11,15 @@ export const plugin: PluginDefinition = {
           type: "text",
           name: "name",
           label: "Cookie Name",
+          placeholder: "cookie_name",
         },
         {
           type: "text",
           name: "domain",
           label: "Domain",
+          placeholder: "example.com",
+          description:
+            "Optionally filter by domain, useful if multiple cookies with the same name.",
           optional: true,
         },
       ],
