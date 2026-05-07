@@ -19,6 +19,7 @@ use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak_crypto::manager::EncryptionManager;
+use yaak_http::cookies::get_cookie_value_from_jar;
 use yaak_models::models::{HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::UpdateSource;
@@ -420,12 +421,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             let window = get_window_from_plugin_context(app_handle, plugin_context)?;
             let value = match cookie_jar_from_window(&window) {
                 None => None,
-                Some(j) => j.cookies.into_iter().find_map(|c| match Cookie::parse(c.raw_cookie) {
-                    Ok(c) if c.name().to_string().eq(&req.name) => {
-                        Some(c.value_trimmed().to_string())
-                    }
-                    _ => None,
-                }),
+                Some(j) => get_cookie_value_from_jar(j.cookies, &req.name, req.domain.as_deref()),
             };
             Ok(Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value })))
         }
