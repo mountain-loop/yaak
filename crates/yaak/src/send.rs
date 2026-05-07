@@ -972,6 +972,12 @@ pub async fn apply_plugin_authentication(
                         value: value.to_string(),
                     })
                     .collect(),
+                body: match &sendable_request.body {
+                    Some(SendableBody::Bytes(bytes)) => {
+                        String::from_utf8(bytes.to_vec()).ok()
+                    }
+                    _ => None,
+                },
             };
             let plugin_result = plugin_manager
                 .call_http_authentication(plugin_context, authentication_type, req)

@@ -65,6 +65,7 @@ export const plugin: PluginDefinition = {
           service: String(values.service || "sts"),
           region: values.region ? String(values.region) : undefined,
           headers,
+          body: args.body ?? undefined,
           doNotEncodePath: true,
         },
         {
