@@ -155,7 +155,8 @@ jobs:
           releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"
           releaseDraft: true
           prerelease: true
-          args: "${{ matrix.args }} --config ./crates-tauri/yaak-app-client/tauri.release.conf.json"
+          projectPath: ./crates-tauri/yaak-app-client
+          args: "${{ matrix.args }} --config ./tauri.release.conf.json"
 
       # Build a per-machine NSIS installer for enterprise deployment (PDQ, SCCM, Intune)
       - name: Build and upload machine-wide installer (Windows only)
