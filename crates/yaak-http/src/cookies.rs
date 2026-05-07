@@ -124,6 +124,30 @@ impl CookieStore {
     }
 }
 
+/// Get a stored cookie value by name, optionally scoped to an exact stored domain.
+pub fn get_cookie_value_from_jar(
+    cookies: impl IntoIterator<Item = Cookie>,
+    name: &str,
+    domain: Option<&str>,
+) -> Option<String> {
+    let domain = domain.and_then(normalize_cookie_domain_filter);
+
+    cookies.into_iter().find_map(|cookie| {
+        let (cookie_name, value) = parse_cookie_name_value(&cookie.raw_cookie)?;
+        if cookie_name != name {
+            return None;
+        }
+
+        if let Some(domain) = domain.as_deref() {
+            if !cookie_domain_matches_filter(&cookie.domain, domain) {
+                return None;
+            }
+        }
+
+        Some(value)
+    })
+}
+
 /// Parse name=value from a cookie string (raw_cookie format)
 fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
     // The raw_cookie typically looks like "name=value" or "name=value; attr1; attr2=..."
@@ -133,6 +157,20 @@ fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
     let value = parts.next().unwrap_or("").trim().to_string();
 
     if name.is_empty() { None } else { Some((name, value)) }
+}
+
+fn normalize_cookie_domain_filter(domain: &str) -> Option<String> {
+    let domain = domain.trim().trim_start_matches('.').to_lowercase();
+    if domain.is_empty() { None } else { Some(domain) }
+}
+
+fn cookie_domain_matches_filter(cookie_domain: &CookieDomain, domain: &str) -> bool {
+    match cookie_domain {
+        CookieDomain::HostOnly(cookie_domain) | CookieDomain::Suffix(cookie_domain) => {
+            normalize_cookie_domain_filter(cookie_domain).is_some_and(|d| d == domain)
+        }
+        CookieDomain::NotPresent | CookieDomain::Empty => false,
+    }
 }
 
 /// Parse a Set-Cookie header into a Cookie
@@ -278,6 +316,15 @@ fn is_localhost(domain: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn cookie(raw_cookie: &str, domain: CookieDomain) -> Cookie {
+        Cookie {
+            raw_cookie: raw_cookie.to_string(),
+            domain,
+            expires: CookieExpires::SessionEnd,
+            path: ("/".to_string(), false),
+        }
+    }
+
     #[test]
     fn test_parse_cookie_name_value() {
         assert_eq!(
@@ -385,6 +432,52 @@ mod tests {
 
         // Should only have one cookie
         assert_eq!(store.get_all_cookies().len(), 1);
+    }
+
+    #[test]
+    fn test_get_cookie_value_preserves_name_only_first_match() {
+        let cookies = vec![
+            cookie("co-auth=", CookieDomain::HostOnly("foo.example.com".to_string())),
+            cookie("co-auth=token", CookieDomain::Suffix("example.com".to_string())),
+        ];
+
+        assert_eq!(get_cookie_value_from_jar(cookies, "co-auth", None), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_get_cookie_value_matches_domain() {
+        let cookies = vec![
+            cookie("co-auth=", CookieDomain::HostOnly("foo.example.com".to_string())),
+            cookie("co-auth=token", CookieDomain::Suffix("example.com".to_string())),
+        ];
+
+        assert_eq!(
+            get_cookie_value_from_jar(cookies, "co-auth", Some("example.com")),
+            Some("token".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_cookie_value_normalizes_domain_filter() {
+        let cookies = vec![cookie(
+            "co-auth=token",
+            CookieDomain::Suffix("Example.COM".to_string()),
+        )];
+
+        assert_eq!(
+            get_cookie_value_from_jar(cookies, "co-auth", Some(" .example.com ")),
+            Some("token".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_cookie_value_requires_exact_stored_domain_match() {
+        let cookies = vec![cookie(
+            "co-auth=token",
+            CookieDomain::HostOnly("foo.example.com".to_string()),
+        )];
+
+        assert_eq!(get_cookie_value_from_jar(cookies, "co-auth", Some("example.com")), None);
     }
 
     #[test]

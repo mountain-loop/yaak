@@ -57,7 +57,7 @@ export function HttpMethodTagRaw({
   let label = method.toUpperCase();
   if (short) {
     label = methodNames[method.toLowerCase()] ?? method.slice(0, 4);
-    label = label.padStart(4, " ");
+    label = label.padEnd(4, " ");
   }
 
   const m = method.toUpperCase();

@@ -2,7 +2,8 @@ use crate::codec::DynamicCodec;
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::reflection::{
-    fill_pool_from_files, fill_pool_from_reflection, method_desc_to_path, reflect_types_for_message,
+    fill_pool_from_files, fill_pool_from_reflection, method_desc_to_path,
+    reflect_types_for_dynamic_message, reflect_types_for_message,
 };
 use crate::transport::get_transport;
 use crate::{MethodDefinition, ServiceDefinition, json_schema};
@@ -11,8 +12,11 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use log::{info, warn};
 pub use prost_reflect::DynamicMessage;
+use prost_reflect::ReflectMessage;
+use prost_reflect::prost::Message;
 use prost_reflect::{DescriptorPool, MethodDescriptor, ServiceDescriptor};
 use serde_json::Deserializer;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
@@ -113,6 +117,38 @@ impl GrpcConnection {
         client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
 
         Ok(client.unary(req, path, codec).await?)
+    }
+
+    pub async fn serialize_message(
+        &self,
+        message: &DynamicMessage,
+        metadata: &BTreeMap<String, String>,
+        client_cert: Option<ClientCertificateConfig>,
+    ) -> Result<String> {
+        let message = if self.use_reflection {
+            reflect_types_for_dynamic_message(
+                self.pool.clone(),
+                &self.uri,
+                message,
+                metadata,
+                client_cert,
+            )
+            .await?;
+
+            let message_name = message.descriptor().full_name().to_string();
+            let message_desc = {
+                let pool = self.pool.read().await;
+                pool.get_message_by_name(&message_name)
+                    .ok_or(GenericError(format!("Failed to find message {message_name}")))?
+            };
+            let mut message_with_updated_pool = DynamicMessage::new(message_desc);
+            message_with_updated_pool.merge(message.encode_to_vec().as_slice())?;
+            Cow::Owned(message_with_updated_pool)
+        } else {
+            Cow::Borrowed(message)
+        };
+
+        crate::serialize_dynamic_message_json(message.as_ref()).map_err(GenericError)
     }
 
     pub async fn streaming<F>(
