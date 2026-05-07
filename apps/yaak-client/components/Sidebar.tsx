@@ -274,7 +274,9 @@ function Sidebar({ className }: { className?: string }) {
 
   const handleSendSelected = useCallback(async (items: SidebarModel[]) => {
     await Promise.all(
-      items.filter((i) => i.model === "http_request").map((i) => sendAnyHttpRequest.mutate(i.id)),
+      items
+        .filter((i) => i.model === "http_request")
+        .map((i) => sendAnyHttpRequest.mutateAsync(i.id)),
     );
   }, []);
 
