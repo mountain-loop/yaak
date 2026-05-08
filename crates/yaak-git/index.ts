@@ -82,9 +82,11 @@ export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktr
     channel,
   });
 
-  void unlistenPromise.then(({ unlistenEvent }) => {
-    addGitWatchKey(unlistenEvent);
-  });
+  void unlistenPromise
+    .then(({ unlistenEvent }) => {
+      addGitWatchKey(unlistenEvent);
+    })
+    .catch(console.debug);
 
   return () =>
     unlistenPromise

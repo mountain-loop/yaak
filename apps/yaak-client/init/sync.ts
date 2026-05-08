@@ -29,13 +29,45 @@ const debouncedSync = debounce(async () => {
   await sync();
 }, 1000);
 
+let modelSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let modelSyncInFlight = false;
+
+function scheduleModelSync() {
+  if (modelSyncTimer == null) {
+    // No timer means this is the first model change in a burst, so sync immediately.
+    void syncModelChanges();
+  } else {
+    // Keep pushing the trailing sync out until model writes have been quiet for a bit.
+    clearTimeout(modelSyncTimer);
+  }
+
+  modelSyncTimer = setTimeout(async () => {
+    modelSyncTimer = null;
+    // Catch any final state that was written while the immediate sync was running.
+    await syncModelChanges();
+  }, 1000);
+}
+
+async function syncModelChanges() {
+  if (modelSyncInFlight) return;
+
+  modelSyncInFlight = true;
+  try {
+    await sync();
+  } catch (e) {
+    console.error(e);
+  } finally {
+    modelSyncInFlight = false;
+  }
+}
+
 /**
  * Subscribe to model change events. Since we check the workspace ID on sync, we can
  * simply add long-lived subscribers for the lifetime of the app.
  */
 function initModelListeners() {
   listenToTauriEvent<ModelPayload>("model_write", (p) => {
-    if (isModelRelevant(p.payload.model)) debouncedSync();
+    if (isModelRelevant(p.payload.model)) scheduleModelSync();
   });
 }
 

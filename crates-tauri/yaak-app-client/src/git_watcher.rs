@@ -10,9 +10,11 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Listener, Runtime};
 use tokio::select;
 use tokio::sync::watch;
-use tokio::time::timeout;
+use tokio::time::sleep;
 use ts_rs::TS;
 use yaak_git::{GitWorktreeStatus, git_path_is_ignored, git_repository_paths, git_worktree_status};
+
+const GIT_STATUS_COALESCE_WINDOW: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -62,25 +64,14 @@ pub(crate) async fn watch_git_worktree_status<R: Runtime>(
         loop {
             select! {
                 Some(event_res) = async_rx.recv() => {
-                    if !is_relevant_git_watch_event(event_res, &repo_dir, &workdir, &gitdir) {
-                        continue;
-                    }
-
-                    loop {
-                        match timeout(Duration::from_millis(250), async_rx.recv()).await {
-                            Ok(Some(event_res)) => {
-                                let _ = is_relevant_git_watch_event(
-                                    event_res,
-                                    &repo_dir,
-                                    &workdir,
-                                    &gitdir,
-                                );
-                            }
-                            Ok(None) | Err(_) => break,
-                        }
-                    }
-
-                    send_worktree_status(&repo_dir, &channel);
+                    handle_git_watch_event(
+                        event_res,
+                        &mut async_rx,
+                        &repo_dir,
+                        &workdir,
+                        &gitdir,
+                        &channel,
+                    ).await;
                 }
                 _ = cancel_rx.changed() => {
                     break;
@@ -99,6 +90,36 @@ pub(crate) async fn watch_git_worktree_status<R: Runtime>(
     });
 
     Ok(GitWatchResult { unlisten_event })
+}
+
+async fn handle_git_watch_event(
+    event_res: notify::Result<notify::Event>,
+    async_rx: &mut tokio::sync::mpsc::Receiver<notify::Result<notify::Event>>,
+    repo_dir: &Path,
+    workdir: &Path,
+    gitdir: &Path,
+    channel: &Channel<GitWorktreeStatus>,
+) {
+    if !is_relevant_git_watch_event(event_res, repo_dir, workdir, gitdir) {
+        return;
+    }
+
+    send_worktree_status(repo_dir, channel);
+
+    let settle_window = sleep(GIT_STATUS_COALESCE_WINDOW);
+    tokio::pin!(settle_window);
+    loop {
+        select! {
+            Some(event_res) = async_rx.recv() => {
+                let _ = is_relevant_git_watch_event(event_res, repo_dir, workdir, gitdir);
+            }
+            _ = &mut settle_window => {
+                break;
+            }
+        }
+    }
+
+    send_worktree_status(repo_dir, channel);
 }
 
 fn is_relevant_git_watch_event(

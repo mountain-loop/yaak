@@ -43,6 +43,7 @@ import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
 import { deepEqualAtom } from "../lib/atoms";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { gitWorktreeStatusFamily } from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { isSidebarFocused } from "../lib/scopes";
@@ -836,6 +837,7 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
   treeId: string;
   item: SidebarModel;
 }) {
+  const gitStatus = useAtomValue(gitWorktreeStatusFamily(item.id));
   const response = useAtomValue(
     useMemo(
       () =>
@@ -854,7 +856,16 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
 
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
-      <div className="truncate">{resolvedModelName(item)}</div>
+      <div
+        className={classNames(
+          "truncate",
+          gitStatus?.status === "modified" && "text-info",
+          gitStatus?.status === "untracked" && "text-success",
+          gitStatus?.status === "removed" && "text-danger",
+        )}
+      >
+        {resolvedModelName(item)}
+      </div>
       {response != null && (
         <div className="ml-auto">
           {response.state !== "closed" ? (
