@@ -141,7 +141,13 @@ function TreeItem_<T extends { id: string }>({
 
   const handleSubmitNameEdit = useCallback(
     async (el: HTMLInputElement) => {
-      getEditOptions?.(node.item).onChange(node.item, el.value);
+      const editOptions = getEditOptions?.(node.item);
+      if (editOptions == null || el.value === editOptions.defaultValue) {
+        setEditing(false);
+        return;
+      }
+
+      editOptions.onChange(node.item, el.value);
       onClick?.(node.item, { shiftKey: false, ctrlKey: false, metaKey: false });
       // Slight delay for the model to propagate to the local store
       setTimeout(() => setEditing(false), 200);
