@@ -3,7 +3,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { createFastMutation } from "@yaakapp/yaak-client/hooks/useFastMutation";
 import { queryClient } from "@yaakapp/yaak-client/lib/queryClient";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import {
   BranchDeleteResult,
   CloneResult,
@@ -60,18 +60,6 @@ export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
     queryFn: () => invoke("cmd_git_worktree_status", { dir }),
     placeholderData: (prev) => prev,
   });
-}
-
-export function useGitWorktreeStatusWatcher(dir: string | null | undefined) {
-  useEffect(() => {
-    if (dir == null) return;
-    const unwatch = watchGitWorktreeStatus(dir, (status) => {
-      queryClient.setQueryData(gitWorktreeStatusQueryKey(dir), status);
-    });
-    return () => {
-      void unwatch();
-    };
-  }, [dir]);
 }
 
 export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktreeStatus) => void) {
