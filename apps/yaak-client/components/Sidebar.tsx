@@ -2,6 +2,7 @@ import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
 import { debounce } from "@yaakapp-internal/lib";
 import { gitMutations } from "@yaakapp-internal/git";
+import type { GitStatus } from "@yaakapp-internal/git";
 import type {
   AnyModel,
   Folder,
@@ -50,7 +51,10 @@ import { deepEqualAtom } from "../lib/atoms";
 import { showConfirm } from "../lib/confirm";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { showDialog } from "../lib/dialog";
-import { gitWorktreeStatusFamily } from "../lib/gitWorktreeStatus";
+import {
+  gitWorktreeStatusByModelIdAtom,
+  gitWorktreeStatusFamily,
+} from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { isSidebarFocused } from "../lib/scopes";
@@ -872,6 +876,64 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   return [root, fields] as const;
 });
 
+const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
+  const allModels = get(memoAllPotentialChildrenAtom);
+  const activeWorkspace = get(activeWorkspaceAtom);
+  const gitStatusByModelId = get(gitWorktreeStatusByModelIdAtom);
+  const childrenMap: Record<string, Exclude<SidebarModel, Workspace>[]> = {};
+  const statusByModelId: Record<string, GitStatus> = {};
+
+  for (const item of allModels) {
+    if ("folderId" in item && item.folderId == null) {
+      childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
+      childrenMap[item.workspaceId]?.push(item);
+    } else if ("folderId" in item && item.folderId != null) {
+      childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
+      childrenMap[item.folderId]?.push(item);
+    }
+  }
+
+  const visit = (item: SidebarModel): GitStatus | null => {
+    const statuses: GitStatus[] = [];
+    const directStatus = gitStatusByModelId[item.id]?.status;
+    if (directStatus != null && directStatus !== "current") {
+      statuses.push(directStatus);
+    }
+
+    for (const child of childrenMap[item.id] ?? []) {
+      const childStatus = visit(child);
+      if (childStatus != null) statuses.push(childStatus);
+    }
+
+    const status = summarizeGitStatuses(statuses);
+    if (status != null) {
+      statusByModelId[item.id] = status;
+    }
+    return status;
+  };
+
+  if (activeWorkspace != null) {
+    visit(activeWorkspace);
+  }
+
+  return statusByModelId;
+});
+
+const sidebarGitStatusFamily = atomFamily(
+  (modelId: string) =>
+    selectAtom(sidebarGitStatusByModelIdAtom, (statusByModelId) => statusByModelId[modelId] ?? null),
+  Object.is,
+);
+
+function summarizeGitStatuses(statuses: GitStatus[]): GitStatus | null {
+  if (statuses.length === 0) return null;
+  const firstStatus = statuses[0];
+  if (firstStatus != null && statuses.every((status) => status === firstStatus)) {
+    return firstStatus;
+  }
+  return "modified";
+}
+
 function getItemKey(item: SidebarModel) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
@@ -918,7 +980,7 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
   treeId: string;
   item: SidebarModel;
 }) {
-  const gitStatus = useAtomValue(gitWorktreeStatusFamily(item.id));
+  const gitStatus = useAtomValue(sidebarGitStatusFamily(item.id));
   const response = useAtomValue(
     useMemo(
       () =>
@@ -940,9 +1002,9 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
       <div
         className={classNames(
           "truncate",
-          gitStatus?.status === "modified" && "text-info",
-          gitStatus?.status === "untracked" && "text-success",
-          gitStatus?.status === "removed" && "text-danger",
+          gitStatus === "modified" && "text-info",
+          gitStatus === "untracked" && "text-success",
+          gitStatus === "removed" && "text-danger",
         )}
       >
         {resolvedModelName(item)}
