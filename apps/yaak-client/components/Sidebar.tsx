@@ -25,7 +25,8 @@ import {
 } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { atom, useAtomValue } from "jotai";
-import { atomFamily, selectAtom } from "jotai/utils";
+import { atomFamily } from "jotai-family";
+import { selectAtom } from "jotai/utils";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { moveToWorkspace } from "../commands/moveToWorkspace";
 import { openFolderSettings } from "../commands/openFolderSettings";

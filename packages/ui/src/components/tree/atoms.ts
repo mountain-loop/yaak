@@ -1,5 +1,6 @@
 import { atom } from "jotai";
-import { atomFamily, selectAtom } from "jotai/utils";
+import { atomFamily } from "jotai-family";
+import { selectAtom } from "jotai/utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const selectedIdsFamily = atomFamily((_treeId: string) => {

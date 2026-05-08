@@ -1,6 +1,7 @@
 import type { GitWorktreeStatus, GitWorktreeStatusEntry } from "@yaakapp-internal/git";
 import { atom } from "jotai";
-import { atomFamily, selectAtom } from "jotai/utils";
+import { atomFamily } from "jotai-family";
+import { selectAtom } from "jotai/utils";
 
 export const gitWorktreeStatusAtom = atom<GitWorktreeStatus | null>(null);
 
