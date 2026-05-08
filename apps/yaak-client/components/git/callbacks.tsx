@@ -1,4 +1,5 @@
 import type { GitCallbacks } from "@yaakapp-internal/git";
+import { useMemo } from "react";
 import { sync } from "../../init/sync";
 import { promptCredentials } from "./credentials";
 import { promptDivergedStrategy } from "./diverged";
@@ -23,4 +24,8 @@ export function gitCallbacks(dir: string): GitCallbacks {
     },
     forceSync: () => sync({ force: true }),
   };
+}
+
+export function useGitCallbacks(dir: string): GitCallbacks {
+  return useMemo(() => gitCallbacks(dir), [dir]);
 }

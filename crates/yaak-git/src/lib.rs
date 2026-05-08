@@ -35,5 +35,8 @@ pub use push::{PushResult, git_push};
 pub use remotes::{GitRemote, git_add_remote, git_remotes, git_rm_remote};
 pub use repository::{GitRepositoryPaths, git_path_is_ignored, git_repository_paths};
 pub use reset::git_reset_changes;
-pub use status::{GitStatusSummary, GitWorktreeStatus, git_status, git_worktree_status};
+pub use status::{
+    GitBranchInfo, GitStatusSummary, GitWorktreeStatus, git_branch_info, git_status,
+    git_worktree_status,
+};
 pub use unstage::git_unstage;

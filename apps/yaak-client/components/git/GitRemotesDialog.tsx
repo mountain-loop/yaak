@@ -10,7 +10,7 @@ import {
   TableHeaderCell,
   TableRow,
 } from "@yaakapp-internal/ui";
-import { gitCallbacks } from "./callbacks";
+import { useGitCallbacks } from "./callbacks";
 import { addGitRemote } from "./showAddRemoteDialog";
 
 interface Props {
@@ -19,7 +19,8 @@ interface Props {
 }
 
 export function GitRemotesDialog({ dir }: Props) {
-  const [{ remotes }, { rmRemote }] = useGit(dir, gitCallbacks(dir));
+  const callbacks = useGitCallbacks(dir);
+  const [{ remotes }, { rmRemote }] = useGit(dir, callbacks);
 
   return (
     <Table scrollable>

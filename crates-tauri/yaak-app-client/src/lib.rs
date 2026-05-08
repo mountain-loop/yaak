@@ -1832,6 +1832,7 @@ pub fn run() {
             git_ext::cmd_git_delete_remote_branch,
             git_ext::cmd_git_merge_branch,
             git_ext::cmd_git_rename_branch,
+            git_ext::cmd_git_branch_info,
             git_ext::cmd_git_status,
             git_ext::cmd_git_worktree_status,
             git_ext::cmd_git_watch_worktree_status,

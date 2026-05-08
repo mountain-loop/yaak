@@ -21,7 +21,7 @@ import { DiffViewer } from "../core/Editor/DiffViewer";
 import { Input } from "../core/Input";
 import { Separator } from "../core/Separator";
 import { EmptyStateText } from "../EmptyStateText";
-import { gitCallbacks } from "./callbacks";
+import { useGitCallbacks } from "./callbacks";
 import { handlePushResult } from "./git-util";
 
 interface Props {
@@ -38,10 +38,8 @@ interface CommitTreeNode {
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
-  const [{ status }, { commit, commitAndPush, add, unstage }] = useGit(
-    syncDir,
-    gitCallbacks(syncDir),
-  );
+  const callbacks = useGitCallbacks(syncDir);
+  const [{ status }, { commit, commitAndPush, add, unstage }] = useGit(syncDir, callbacks);
   const [isPushing, setIsPushing] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [message, setMessage] = useState<string>("");

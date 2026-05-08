@@ -7,6 +7,8 @@ export type CloneResult = { "type": "success" } | { "type": "cancelled" } | { "t
 
 export type GitAuthor = { name: string | null, email: string | null, };
 
+export type GitBranchInfo = { path: string, headRef: string | null, headRefShorthand: string | null, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
+
 export type GitCommit = { author: GitAuthor, when: string, message: string | null, };
 
 export type GitRemote = { name: string, url: string | null, };

@@ -22,6 +22,20 @@ pub struct GitStatusSummary {
     pub behind: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_git.ts")]
+pub struct GitBranchInfo {
+    pub path: String,
+    pub head_ref: Option<String>,
+    pub head_ref_shorthand: Option<String>,
+    pub origins: Vec<String>,
+    pub local_branches: Vec<String>,
+    pub remote_branches: Vec<String>,
+    pub ahead: u32,
+    pub behind: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_git.ts")]
@@ -91,31 +105,15 @@ pub fn git_worktree_status(dir: &Path) -> crate::error::Result<GitWorktreeStatus
     Ok(GitWorktreeStatus { entries })
 }
 
+pub fn git_branch_info(dir: &Path) -> crate::error::Result<GitBranchInfo> {
+    let repo = open_repo(dir)?;
+    git_branch_info_for_repo(&repo, dir)
+}
+
 pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
     let repo = open_repo(dir)?;
-    let (head_tree, head_ref, head_ref_shorthand) = match repo.head() {
-        Ok(head) => {
-            let tree = head.peel_to_tree().ok();
-            let head_ref_shorthand = head.shorthand().map(|s| s.to_string());
-            let head_ref = head.name().map(|s| s.to_string());
-
-            (tree, head_ref, head_ref_shorthand)
-        }
-        Err(_) => {
-            // For "unborn" repos, reading from HEAD is the only way to get the branch name
-            // See https://github.com/starship/starship/pull/1336
-            let head_path = repo.path().join("HEAD");
-            let head_ref = fs::read_to_string(&head_path)
-                .ok()
-                .unwrap_or_default()
-                .lines()
-                .next()
-                .map(|s| s.trim_start_matches("ref:").trim().to_string());
-            let head_ref_shorthand =
-                head_ref.clone().map(|r| r.split('/').last().unwrap_or("unknown").to_string());
-            (None, head_ref, head_ref_shorthand)
-        }
-    };
+    let branch_info = git_branch_info_for_repo(&repo, dir)?;
+    let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
 
     let mut opts = git2::StatusOptions::new();
     opts.include_ignored(false)
@@ -160,9 +158,27 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
         })
     }
 
+    Ok(GitStatusSummary {
+        entries,
+        path: branch_info.path,
+        head_ref: branch_info.head_ref,
+        head_ref_shorthand: branch_info.head_ref_shorthand,
+        origins: branch_info.origins,
+        local_branches: branch_info.local_branches,
+        remote_branches: branch_info.remote_branches,
+        ahead: branch_info.ahead,
+        behind: branch_info.behind,
+    })
+}
+
+fn git_branch_info_for_repo(
+    repo: &git2::Repository,
+    dir: &Path,
+) -> crate::error::Result<GitBranchInfo> {
+    let (head_ref, head_ref_shorthand) = git_head_refs(repo);
     let origins = repo.remotes()?.into_iter().filter_map(|o| Some(o?.to_string())).collect();
-    let local_branches = local_branch_names(&repo)?;
-    let remote_branches = remote_branch_names(&repo)?;
+    let local_branches = local_branch_names(repo)?;
+    let remote_branches = remote_branch_names(repo)?;
 
     // Compute ahead/behind relative to remote tracking branch
     let (ahead, behind) = (|| -> Option<(usize, usize)> {
@@ -176,17 +192,40 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
     })()
     .unwrap_or((0, 0));
 
-    Ok(GitStatusSummary {
-        entries,
-        origins,
+    Ok(GitBranchInfo {
         path: dir.to_string_lossy().to_string(),
         head_ref,
         head_ref_shorthand,
+        origins,
         local_branches,
         remote_branches,
         ahead: ahead as u32,
         behind: behind as u32,
     })
+}
+
+fn git_head_refs(repo: &git2::Repository) -> (Option<String>, Option<String>) {
+    match repo.head() {
+        Ok(head) => {
+            let head_ref = head.name().map(|s| s.to_string());
+            let head_ref_shorthand = head.shorthand().map(|s| s.to_string());
+            (head_ref, head_ref_shorthand)
+        }
+        Err(_) => {
+            // For "unborn" repos, reading from HEAD is the only way to get the branch name
+            // See https://github.com/starship/starship/pull/1336
+            let head_path = repo.path().join("HEAD");
+            let head_ref = fs::read_to_string(&head_path)
+                .ok()
+                .unwrap_or_default()
+                .lines()
+                .next()
+                .map(|s| s.trim_start_matches("ref:").trim().to_string());
+            let head_ref_shorthand =
+                head_ref.clone().map(|r| r.split('/').last().unwrap_or("unknown").to_string());
+            (head_ref, head_ref_shorthand)
+        }
+    }
 }
 
 fn git_status_from_raw(status: git2::Status) -> Option<(GitStatus, bool)> {

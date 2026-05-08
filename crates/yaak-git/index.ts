@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import {
   BranchDeleteResult,
   CloneResult,
+  GitBranchInfo,
   GitCommit,
   GitRemote,
   GitStatusSummary,
@@ -84,13 +85,40 @@ export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktr
       .catch(console.error);
 }
 
-export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
-  const mutations = useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);
-  const fetchAll = useQuery<void, string>({
+function useGitFetchAll(dir: string, refreshKey?: string) {
+  return useQuery<void, string>({
     queryKey: ["git", "fetch_all", dir, refreshKey],
     queryFn: () => invoke("cmd_git_fetch_all", { dir }),
     refetchInterval: 10 * 60_000,
   });
+}
+
+function useGitBranchInfoQuery(dir: string, refreshKey?: string, fetchAllUpdatedAt?: number) {
+  return useQuery<GitBranchInfo, string>({
+    refetchOnMount: true,
+    queryKey: ["git", "branch_info", dir, refreshKey, fetchAllUpdatedAt],
+    queryFn: () => invoke("cmd_git_branch_info", { dir }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useGitBranchInfo(dir: string, refreshKey?: string) {
+  const fetchAll = useGitFetchAll(dir, refreshKey);
+  return useGitBranchInfoQuery(dir, refreshKey, fetchAll.dataUpdatedAt);
+}
+
+export function useGitLog(dir: string, refreshKey?: string) {
+  return useQuery<GitCommit[], string>({
+    queryKey: ["git", "log", dir, refreshKey],
+    queryFn: () => invoke("cmd_git_log", { dir }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
+  const mutations = useGitMutations(dir, callbacks);
+  const fetchAll = useGitFetchAll(dir, refreshKey);
+
   return [
     {
       remotes: useQuery<GitRemote[], string>({
@@ -98,11 +126,7 @@ export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string
         queryFn: () => getRemotes(dir),
         placeholderData: (prev) => prev,
       }),
-      log: useQuery<GitCommit[], string>({
-        queryKey: ["git", "log", dir, refreshKey],
-        queryFn: () => invoke("cmd_git_log", { dir }),
-        placeholderData: (prev) => prev,
-      }),
+      log: useGitLog(dir, refreshKey),
       status: useQuery<GitStatusSummary, string>({
         refetchOnMount: true,
         queryKey: ["git", "status", dir, refreshKey, fetchAll.dataUpdatedAt],
@@ -112,6 +136,10 @@ export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string
     },
     mutations,
   ] as const;
+}
+
+export function useGitMutations(dir: string, callbacks: GitCallbacks) {
+  return useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);
 }
 
 export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
