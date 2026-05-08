@@ -81,7 +81,7 @@ function TreeItem_<T extends { id: string }>({
   const isLastSelected = useAtomValue(isLastFocusedFamily({ treeId, itemId: node.item.id }));
   const [editing, setEditing] = useState<boolean>(false);
   const [dropHover, setDropHover] = useState<null | "drop" | "animate">(null);
-  const startedHoverTimeout = useRef<NodeJS.Timeout>(undefined);
+  const startedHoverTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const handle = useMemo<TreeItemHandle>(
     () => ({
       focus: () => {
