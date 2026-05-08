@@ -13,7 +13,7 @@ use yaak_git::{
     git_branch_info, git_checkout_branch, git_clone, git_commit, git_create_branch,
     git_delete_branch, git_delete_remote_branch, git_fetch_all, git_init, git_log,
     git_merge_branch, git_pull, git_pull_force_reset, git_pull_merge, git_push, git_remotes,
-    git_rename_branch, git_reset_changes, git_rm_remote, git_status, git_unstage,
+    git_rename_branch, git_reset_changes, git_restore, git_rm_remote, git_status, git_unstage,
     git_worktree_status,
 };
 
@@ -145,6 +145,14 @@ pub async fn cmd_git_unstage(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()>
 #[command]
 pub async fn cmd_git_reset_changes(dir: &Path) -> Result<()> {
     Ok(git_reset_changes(dir).await?)
+}
+
+#[command]
+pub async fn cmd_git_restore_files(dir: &Path, rela_paths: Vec<PathBuf>) -> Result<()> {
+    for path in rela_paths {
+        git_restore(dir, &path)?;
+    }
+    Ok(())
 }
 
 #[command]

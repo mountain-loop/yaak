@@ -1,6 +1,7 @@
 import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
 import { debounce } from "@yaakapp-internal/lib";
+import { gitMutations } from "@yaakapp-internal/git";
 import type {
   AnyModel,
   Folder,
@@ -29,7 +30,11 @@ import { moveToWorkspace } from "../commands/moveToWorkspace";
 import { openFolderSettings } from "../commands/openFolderSettings";
 import { activeFolderIdAtom } from "../hooks/useActiveFolderId";
 import { activeRequestIdAtom } from "../hooks/useActiveRequestId";
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import {
+  activeWorkspaceAtom,
+  activeWorkspaceIdAtom,
+  activeWorkspaceMetaAtom,
+} from "../hooks/useActiveWorkspace";
 import { allRequestsAtom } from "../hooks/useAllRequests";
 import { getCreateDropdownItems } from "../hooks/useCreateDropdownItems";
 import { getFolderActions } from "../hooks/useFolderActions";
@@ -42,7 +47,9 @@ import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
 import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
 import { deepEqualAtom } from "../lib/atoms";
+import { showConfirm } from "../lib/confirm";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { showDialog } from "../lib/dialog";
 import { gitWorktreeStatusFamily } from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
@@ -69,6 +76,9 @@ import type { InputHandle } from "./core/Input";
 import { Input } from "./core/Input";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { GitDropdown } from "./git/GitDropdown";
+import { gitCallbacks } from "./git/callbacks";
+import { HistoryDialog } from "./git/HistoryDialog";
+import { sync } from "../init/sync";
 
 const collapsedFamily = atomFamily((treeId: string) => {
   const key = ["sidebar_collapsed", treeId ?? "n/a"];
@@ -376,6 +386,8 @@ function Sidebar({ className }: { className?: string }) {
       }
 
       const workspaces = jotaiStore.get(workspacesAtom);
+      const syncDir = jotaiStore.get(activeWorkspaceMetaAtom)?.settingSyncDir;
+      const gitItems = getGitContextMenuItems({ items, syncDir });
       const onlyHttpRequests = items.every((i) => i.model === "http_request");
       const requestItems = items.filter(
         (i) =>
@@ -459,8 +471,10 @@ function Sidebar({ className }: { className?: string }) {
         ...initialItems,
         {
           type: "separator",
-          hidden: initialItems.filter((v) => !v.hidden).length === 0,
+          hidden: initialItems.filter((v) => !v.hidden).length === 0 || gitItems.length === 0,
         },
+        ...gitItems,
+        { type: "separator", hidden: gitItems.length === 0 },
         {
           label: "Rename",
           leftSlot: <Icon icon="pencil" />,
@@ -661,6 +675,60 @@ function Sidebar({ className }: { className?: string }) {
 }
 
 export default Sidebar;
+
+function getGitContextMenuItems({
+  items,
+  syncDir,
+}: {
+  items: SidebarModel[];
+  syncDir: string | null | undefined;
+}): DropdownItem[] {
+  if (syncDir == null) return [];
+
+  const gitStatusEntries = items.flatMap((item) => {
+    const status = jotaiStore.get(gitWorktreeStatusFamily(item.id));
+    return status == null || status.status === "current" ? [] : [status];
+  });
+
+  return [
+    {
+      label: "View History",
+      leftSlot: <Icon icon="history" />,
+      onSelect: () => {
+        showDialog({
+          id: "git-history",
+          size: "md",
+          title: "Commit History",
+          noPadding: true,
+          render: () => <HistoryDialog dir={syncDir} />,
+        });
+      },
+    },
+    {
+      label: "Restore Changes",
+      leftSlot: <Icon icon="rotate_ccw" />,
+      hidden: gitStatusEntries.length === 0,
+      async onSelect() {
+        const confirmed = await showConfirm({
+          id: "git-restore-sidebar-items",
+          title: "Restore Changes",
+          description:
+            gitStatusEntries.length === 1
+              ? "This will discard uncommitted changes for the selected item."
+              : `This will discard uncommitted changes for ${gitStatusEntries.length} selected items.`,
+          confirmText: "Restore",
+          color: "danger",
+        });
+        if (!confirmed) return;
+
+        await gitMutations(syncDir, gitCallbacks(syncDir)).restore.mutateAsync({
+          relaPaths: gitStatusEntries.map((entry) => entry.relaPath),
+        });
+        await sync({ force: true });
+      },
+    },
+  ];
+}
 
 const activeIdAtom = atom<string | null>((get) => {
   return get(activeRequestIdAtom) || get(activeFolderIdAtom);

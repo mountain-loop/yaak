@@ -1848,6 +1848,7 @@ pub fn run() {
             git_ext::cmd_git_add,
             git_ext::cmd_git_unstage,
             git_ext::cmd_git_reset_changes,
+            git_ext::cmd_git_restore_files,
             git_ext::cmd_git_add_credential,
             git_ext::cmd_git_remotes,
             git_ext::cmd_git_add_remote,

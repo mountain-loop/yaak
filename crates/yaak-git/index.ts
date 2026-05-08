@@ -324,6 +324,11 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: () => invoke("cmd_git_reset_changes", { dir }),
       onSuccess,
     }),
+    restore: createFastMutation<void, string, { relaPaths: string[] }>({
+      mutationKey: ["git", "restore", dir],
+      mutationFn: (args) => invoke("cmd_git_restore_files", { dir, ...args }),
+      onSuccess,
+    }),
   } as const;
 };
 
