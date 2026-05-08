@@ -1,6 +1,6 @@
 import { watchGitWorktreeStatus, type GitWorktreeStatusEntry } from "@yaakapp-internal/git";
 import { activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
-import { gitWorktreeStatusByModelIdAtom } from "../lib/gitWorktreeStatus";
+import { gitWorktreeStatusAtom, gitWorktreeStatusByModelIdAtom } from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 
 export function initGit() {
@@ -14,12 +14,15 @@ export function initGit() {
     void unwatch?.();
     unwatch = null;
     watchedDir = syncDir;
+    jotaiStore.set(gitWorktreeStatusAtom, null);
     jotaiStore.set(gitWorktreeStatusByModelIdAtom, {});
 
     if (syncDir == null) return;
 
     unwatch = watchGitWorktreeStatus(syncDir, (status) => {
       if (syncDir !== watchedDir) return;
+
+      jotaiStore.set(gitWorktreeStatusAtom, status);
 
       const statusByModelId: Record<string, GitWorktreeStatusEntry> = {};
       for (const entry of status.entries) {

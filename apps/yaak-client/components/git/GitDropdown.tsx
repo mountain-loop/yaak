@@ -12,6 +12,7 @@ import { sync } from "../../init/sync";
 import { showConfirm, showConfirmDelete } from "../../lib/confirm";
 import { fireAndForget } from "../../lib/fireAndForget";
 import { showDialog } from "../../lib/dialog";
+import { gitWorktreeStatusAtom } from "../../lib/gitWorktreeStatus";
 import { showPrompt } from "../../lib/prompt";
 import { showErrorToast, showToast } from "../../lib/toast";
 import type { DropdownItem } from "../core/Dropdown";
@@ -36,6 +37,7 @@ export function GitDropdown() {
 
 function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   const workspace = useAtomValue(activeWorkspaceAtom);
+  const worktreeStatus = useAtomValue(gitWorktreeStatusAtom);
   const [refreshKey, regenerateKey] = useRandomKey();
   const [
     { status, log },
@@ -73,7 +75,9 @@ function SyncDropdownWithSyncDir({ syncDir }: { syncDir: string }) {
   }
 
   const currentBranch = status.data.headRefShorthand;
-  const hasChanges = status.data.entries.some((e) => e.status !== "current");
+  const hasChanges =
+    worktreeStatus?.entries.some((e) => e.status !== "current") ??
+    status.data.entries.some((e) => e.status !== "current");
   const _hasRemotes = (status.data.origins ?? []).length > 0;
   const { ahead, behind } = status.data;
 
