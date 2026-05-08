@@ -77,7 +77,7 @@ import { Input } from "./core/Input";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { GitDropdown } from "./git/GitDropdown";
 import { gitCallbacks } from "./git/callbacks";
-import { HistoryDialog } from "./git/HistoryDialog";
+import { FileHistoryDialog } from "./git/FileHistoryDialog";
 import { sync } from "../init/sync";
 
 const collapsedFamily = atomFamily((treeId: string) => {
@@ -689,18 +689,27 @@ function getGitContextMenuItems({
     const status = jotaiStore.get(gitWorktreeStatusFamily(item.id));
     return status == null || status.status === "current" ? [] : [status];
   });
+  const historyItem = items.length === 1 ? items[0] : null;
+  const historyPath =
+    historyItem == null
+      ? null
+      : (jotaiStore.get(gitWorktreeStatusFamily(historyItem.id))?.relaPath ??
+        syncPathForModel(historyItem));
 
   return [
     {
       label: "View History",
       leftSlot: <Icon icon="history" />,
+      hidden: historyPath == null,
       onSelect: () => {
+        if (historyPath == null) return;
         showDialog({
           id: "git-history",
-          size: "md",
-          title: "Commit History",
+          size: "lg",
+          title: "File History",
           noPadding: true,
-          render: () => <HistoryDialog dir={syncDir} />,
+          noScroll: true,
+          render: () => <FileHistoryDialog dir={syncDir} relaPath={historyPath} />,
         });
       },
     },
@@ -728,6 +737,10 @@ function getGitContextMenuItems({
       },
     },
   ];
+}
+
+function syncPathForModel(item: SidebarModel) {
+  return `yaak.${item.id}.yaml`;
 }
 
 const activeIdAtom = atom<string | null>((get) => {

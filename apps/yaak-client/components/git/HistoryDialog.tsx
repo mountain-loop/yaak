@@ -25,7 +25,7 @@ export function HistoryDialog({ dir }: { dir: string }) {
         </TableHead>
         <TableBody>
           {(log.data ?? []).map((l) => (
-            <TableRow key={(l.author.name ?? "") + (l.message ?? "n/a") + l.when}>
+            <TableRow key={l.oid}>
               <TruncatedWideTableCell>
                 {l.message || <em className="text-text-subtle">No message</em>}
               </TruncatedWideTableCell>

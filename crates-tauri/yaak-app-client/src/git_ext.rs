@@ -8,13 +8,13 @@ use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Runtime, command};
 use yaak_git::{
-    BranchDeleteResult, CloneResult, GitBranchInfo, GitCommit, GitRemote, GitStatusSummary,
-    GitWorktreeStatus, PullResult, PushResult, git_add, git_add_credential, git_add_remote,
-    git_branch_info, git_checkout_branch, git_clone, git_commit, git_create_branch,
-    git_delete_branch, git_delete_remote_branch, git_fetch_all, git_init, git_log,
-    git_merge_branch, git_pull, git_pull_force_reset, git_pull_merge, git_push, git_remotes,
-    git_rename_branch, git_reset_changes, git_restore, git_rm_remote, git_status, git_unstage,
-    git_worktree_status,
+    BranchDeleteResult, CloneResult, GitBranchInfo, GitCommit, GitFileDiff, GitRemote,
+    GitStatusSummary, GitWorktreeStatus, PullResult, PushResult, git_add, git_add_credential,
+    git_add_remote, git_branch_info, git_checkout_branch, git_clone, git_commit, git_create_branch,
+    git_delete_branch, git_delete_remote_branch, git_fetch_all, git_file_diff_for_commit, git_init,
+    git_log, git_log_for_file, git_merge_branch, git_pull, git_pull_force_reset, git_pull_merge,
+    git_push, git_remotes, git_rename_branch, git_reset_changes, git_restore,
+    git_restore_file_from_commit, git_rm_remote, git_status, git_unstage, git_worktree_status,
 };
 
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
@@ -80,6 +80,20 @@ pub async fn cmd_git_watch_worktree_status<R: Runtime>(
 #[command]
 pub async fn cmd_git_log(dir: &Path) -> Result<Vec<GitCommit>> {
     Ok(git_log(dir)?)
+}
+
+#[command]
+pub async fn cmd_git_log_for_file(dir: &Path, rela_path: PathBuf) -> Result<Vec<GitCommit>> {
+    Ok(git_log_for_file(dir, &rela_path)?)
+}
+
+#[command]
+pub async fn cmd_git_file_diff_for_commit(
+    dir: &Path,
+    commit_oid: &str,
+    rela_path: PathBuf,
+) -> Result<GitFileDiff> {
+    Ok(git_file_diff_for_commit(dir, commit_oid, &rela_path)?)
 }
 
 #[command]
@@ -153,6 +167,15 @@ pub async fn cmd_git_restore_files(dir: &Path, rela_paths: Vec<PathBuf>) -> Resu
         git_restore(dir, &path)?;
     }
     Ok(())
+}
+
+#[command]
+pub async fn cmd_git_restore_file_from_commit(
+    dir: &Path,
+    commit_oid: &str,
+    rela_path: PathBuf,
+) -> Result<()> {
+    Ok(git_restore_file_from_commit(dir, commit_oid, &rela_path)?)
 }
 
 #[command]

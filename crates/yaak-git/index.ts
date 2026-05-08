@@ -9,6 +9,7 @@ import {
   CloneResult,
   GitBranchInfo,
   GitCommit,
+  GitFileDiff,
   GitRemote,
   GitStatusSummary,
   GitWorktreeStatus,
@@ -107,11 +108,29 @@ export function useGitBranchInfo(dir: string, refreshKey?: string) {
   return useGitBranchInfoQuery(dir, refreshKey, fetchAll.dataUpdatedAt);
 }
 
-export function useGitLog(dir: string, refreshKey?: string) {
+export function useGitLog(dir: string, refreshKey?: string, relaPath?: string) {
   return useQuery<GitCommit[], string>({
-    queryKey: ["git", "log", dir, refreshKey],
-    queryFn: () => invoke("cmd_git_log", { dir }),
+    queryKey: ["git", "log", dir, refreshKey, relaPath],
+    queryFn: () =>
+      relaPath == null
+        ? invoke("cmd_git_log", { dir })
+        : invoke("cmd_git_log_for_file", { dir, relaPath }),
     placeholderData: (prev) => prev,
+  });
+}
+
+export function useGitFileDiffForCommit(
+  dir: string,
+  relaPath: string,
+  commitOid: string | null | undefined,
+) {
+  return useQuery<GitFileDiff, string>({
+    enabled: commitOid != null,
+    queryKey: ["git", "file_diff_for_commit", dir, relaPath, commitOid],
+    queryFn: () => {
+      if (commitOid == null) throw new Error("Missing commit oid");
+      return invoke("cmd_git_file_diff_for_commit", { dir, relaPath, commitOid });
+    },
   });
 }
 
@@ -327,6 +346,15 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
     restore: createFastMutation<void, string, { relaPaths: string[] }>({
       mutationKey: ["git", "restore", dir],
       mutationFn: (args) => invoke("cmd_git_restore_files", { dir, ...args }),
+      onSuccess,
+    }),
+    restoreFileFromCommit: createFastMutation<
+      void,
+      string,
+      { commitOid: string; relaPath: string }
+    >({
+      mutationKey: ["git", "restore-file-from-commit", dir],
+      mutationFn: (args) => invoke("cmd_git_restore_file_from_commit", { dir, ...args }),
       onSuccess,
     }),
   } as const;

@@ -9,7 +9,9 @@ export type GitAuthor = { name: string | null, email: string | null, };
 
 export type GitBranchInfo = { path: string, headRef: string | null, headRefShorthand: string | null, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
 
-export type GitCommit = { author: GitAuthor, when: string, message: string | null, };
+export type GitCommit = { oid: string, author: GitAuthor, when: string, message: string | null, };
+
+export type GitFileDiff = { original: string, modified: string, };
 
 export type GitRemote = { name: string, url: string | null, };
 
@@ -19,7 +21,7 @@ export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: bool
 
 export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
 
-export type GitWorktreeStatus = { entries: Array<GitWorktreeStatusEntry> };
+export type GitWorktreeStatus = { entries: Array<GitWorktreeStatusEntry>, };
 
 export type GitWorktreeStatusEntry = { relaPath: string, modelId: string | null, status: GitStatus, staged: boolean, };
 

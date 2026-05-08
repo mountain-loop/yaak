@@ -38,6 +38,32 @@ pub fn git_restore(dir: &Path, rela_path: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn git_restore_file_from_commit(dir: &Path, commit_oid: &str, rela_path: &Path) -> Result<()> {
+    let repo = open_repo(dir)?;
+    validate_relative_path(rela_path)?;
+
+    let oid = git2::Oid::from_str(commit_oid)?;
+    let commit = repo.find_commit(oid)?;
+    let tree = commit.tree()?;
+    let path = repo.workdir().unwrap_or(dir).join(rela_path);
+
+    info!("Restoring file {rela_path:?} from commit {commit_oid} in {dir:?}");
+    if tree.get_path(rela_path).is_err() {
+        if path.is_dir() {
+            fs::remove_dir_all(path)?;
+        } else if path.exists() {
+            fs::remove_file(path)?;
+        }
+        return Ok(());
+    }
+
+    let mut checkout = git2::build::CheckoutBuilder::new();
+    checkout.force().path(rela_path);
+    repo.checkout_tree(commit.as_object(), Some(&mut checkout))?;
+
+    Ok(())
+}
+
 fn validate_relative_path(path: &Path) -> Result<()> {
     let is_safe = !path.as_os_str().is_empty()
         && !path.is_absolute()
