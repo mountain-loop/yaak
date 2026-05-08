@@ -6,17 +6,17 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::db_context::DbContext;
+use yaak_models::client_db::ClientDb;
 use yaak_models::query_manager::QueryManager;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
 
 const EMBEDDED_PLUGIN_RUNTIME: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../crates-tauri/yaak-app/vendored/plugin-runtime/index.cjs"
+    "/../../crates-tauri/yaak-app-client/vendored/plugin-runtime/index.cjs"
 ));
 static EMBEDDED_VENDORED_PLUGINS: Dir<'_> =
-    include_dir!("$CARGO_MANIFEST_DIR/../../crates-tauri/yaak-app/vendored/plugins");
+    include_dir!("$CARGO_MANIFEST_DIR/../../crates-tauri/yaak-app-client/vendored/plugins");
 
 #[derive(Clone, Debug, Default)]
 pub struct CliExecutionContext {
@@ -108,7 +108,7 @@ impl CliContext {
         &self.data_dir
     }
 
-    pub fn db(&self) -> DbContext<'_> {
+    pub fn db(&self) -> ClientDb<'_> {
         self.query_manager.connect()
     }
 

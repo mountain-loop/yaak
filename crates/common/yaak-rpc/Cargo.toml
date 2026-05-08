@@ -1,0 +1,12 @@
+[package]
+name = "yaak-rpc"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+ts-rs = { workspace = true }

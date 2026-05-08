@@ -1,0 +1,23 @@
+[package]
+name = "yaak-app-proxy"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[lib]
+name = "tauri_app_proxy_lib"
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.3", features = [] }
+
+[dependencies]
+log = { workspace = true }
+serde_json = { workspace = true }
+tauri = { workspace = true, features = ["devtools"] }
+tauri-plugin-os = "2.3.2"
+yaak-mac-window = { workspace = true }
+yaak-proxy-lib = { workspace = true }
+yaak-rpc = { workspace = true }
+yaak-window = { workspace = true }

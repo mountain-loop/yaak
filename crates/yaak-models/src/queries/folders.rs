@@ -1,5 +1,5 @@
 use crate::connection_or_tx::ConnectionOrTx;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
     Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest,
@@ -9,7 +9,7 @@ use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_folder(&self, id: &str) -> Result<Folder> {
         self.find_one(FolderIden::Id, id)
     }
@@ -19,7 +19,7 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn delete_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        match self.conn {
+        match self.conn() {
             ConnectionOrTx::Connection(_) => {}
             ConnectionOrTx::Transaction(_) => {}
         }

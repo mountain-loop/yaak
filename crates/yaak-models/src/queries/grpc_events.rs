@@ -1,9 +1,9 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{GrpcEvent, GrpcEventIden};
 use crate::util::UpdateSource;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_grpc_events(&self, id: &str) -> Result<GrpcEvent> {
         self.find_one(GrpcEventIden::Id, id)
     }

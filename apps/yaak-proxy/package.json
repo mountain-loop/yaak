@@ -1,0 +1,36 @@
+{
+  "name": "@yaakapp/yaak-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev --force",
+    "build": "vp build",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.90.5",
+    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/plugin-os": "^2.3.2",
+    "@yaakapp-internal/model-store": "^1.0.0",
+    "@yaakapp-internal/proxy-lib": "^1.0.0",
+    "@yaakapp-internal/theme": "^1.0.0",
+    "@yaakapp-internal/ui": "^1.0.0",
+    "classnames": "^2.5.1",
+    "jotai": "^2.18.0",
+    "motion": "^12.4.7",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@types/babel__core": "^7.20.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "typescript": "^5.8.3",
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
+    "vite-plus": "^0.1.20"
+  }
+}

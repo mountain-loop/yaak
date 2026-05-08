@@ -54,7 +54,7 @@ const SHA256_MAP = {
 
 const key = `${process.platform}_${process.env.YAAK_TARGET_ARCH ?? process.arch}`;
 
-const destDir = path.join(__dirname, `..`, "crates-tauri", "yaak-app", "vendored", "node");
+const destDir = path.join(__dirname, `..`, "crates-tauri", "yaak-app-client", "vendored", "node");
 const binDest = path.join(destDir, DST_BIN_MAP[key]);
 console.log(`Vendoring NodeJS ${NODE_VERSION} for ${key}`);
 

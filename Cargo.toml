@@ -2,6 +2,9 @@
 resolver = "2"
 members = [
   "crates/yaak",
+  # Common/foundation crates
+  "crates/common/yaak-database",
+  "crates/common/yaak-rpc",
   # Shared crates (no Tauri dependency)
   "crates/yaak-core",
   "crates/yaak-common",
@@ -17,14 +20,19 @@ members = [
   "crates/yaak-tls",
   "crates/yaak-ws",
   "crates/yaak-api",
+  "crates/yaak-proxy",
+  # Proxy-specific crates
+  "crates-proxy/yaak-proxy-lib",
   # CLI crates
   "crates-cli/yaak-cli",
   # Tauri-specific crates
-  "crates-tauri/yaak-app",
+  "crates-tauri/yaak-app-client",
+  "crates-tauri/yaak-app-proxy",
   "crates-tauri/yaak-fonts",
   "crates-tauri/yaak-license",
   "crates-tauri/yaak-mac-window",
   "crates-tauri/yaak-tauri-utils",
+  "crates-tauri/yaak-window",
 ]
 
 [workspace.dependencies]
@@ -47,6 +55,10 @@ thiserror = "2.0.17"
 tokio = "1.48.0"
 ts-rs = "11.1.0"
 
+# Internal crates - common/foundation
+yaak-database = { path = "crates/common/yaak-database" }
+yaak-rpc = { path = "crates/common/yaak-rpc" }
+
 # Internal crates - shared
 yaak-core = { path = "crates/yaak-core" }
 yaak = { path = "crates/yaak" }
@@ -63,12 +75,17 @@ yaak-templates = { path = "crates/yaak-templates" }
 yaak-tls = { path = "crates/yaak-tls" }
 yaak-ws = { path = "crates/yaak-ws" }
 yaak-api = { path = "crates/yaak-api" }
+yaak-proxy = { path = "crates/yaak-proxy" }
+
+# Internal crates - proxy
+yaak-proxy-lib = { path = "crates-proxy/yaak-proxy-lib" }
 
 # Internal crates - Tauri-specific
 yaak-fonts = { path = "crates-tauri/yaak-fonts" }
 yaak-license = { path = "crates-tauri/yaak-license" }
 yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
 yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
+yaak-window = { path = "crates-tauri/yaak-window" }
 
 [profile.release]
 strip = false

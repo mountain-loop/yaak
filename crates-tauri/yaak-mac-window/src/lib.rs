@@ -25,7 +25,7 @@ pub(crate) struct PluginState {
 }
 
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
-    #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+    #[allow(unused_mut)]
     let mut builder = plugin::Builder::new("yaak-mac-window")
         .setup(move |app, _| {
             app.manage(PluginState { native_titlebar: AtomicBool::new(false) });

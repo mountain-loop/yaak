@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { resolvedModelName } from "@yaakapp/app/lib/resolvedModelName";
+import { resolvedModelName } from "@yaakapp/yaak-client/lib/resolvedModelName";
 import { AnyModel, ModelPayload } from "../bindings/gen_models";
 import { modelStoreDataAtom } from "./atoms";
 import { ExtractModel, JotaiStore, ModelStoreData } from "./types";
@@ -86,7 +86,7 @@ export function getModel<M extends AnyModel["model"], T extends ExtractModel<Any
 export function getAnyModel(id: string): AnyModel | null {
   let data = mustStore().get(modelStoreDataAtom);
   for (const t of Object.keys(data)) {
-    // oxlint-disable-next-line no-explicit-any
+    // oxlint-disable-next-line no-explicit-any -- dynamic key access
     let v = (data as any)[t]?.[id];
     if (v?.model === t) return v;
   }

@@ -125,8 +125,8 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN_PATH
 
           # Sign vendored binaries with hardened runtime and their specific entitlements
-          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.yaakprotoc.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/protoc/yaakprotoc || true
-          codesign --force --options runtime --entitlements crates-tauri/yaak-app/macos/entitlements.yaaknode.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app/vendored/node/yaaknode || true
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app-client/macos/entitlements.yaakprotoc.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app-client/vendored/protoc/yaakprotoc || true
+          codesign --force --options runtime --entitlements crates-tauri/yaak-app-client/macos/entitlements.yaaknode.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app-client/vendored/node/yaaknode || true
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -155,7 +155,8 @@ jobs:
           releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"
           releaseDraft: true
           prerelease: true
-          args: "${{ matrix.args }} --config ./crates-tauri/yaak-app/tauri.release.conf.json"
+          projectPath: ./crates-tauri/yaak-app-client
+          args: "${{ matrix.args }} --config ./tauri.release.conf.json"
 
       # Build a per-machine NSIS installer for enterprise deployment (PDQ, SCCM, Intune)
       - name: Build and upload machine-wide installer (Windows only)
@@ -171,7 +172,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         run: |
           Get-ChildItem -Recurse -Path target -File -Filter "*.exe.sig" | Remove-Item -Force
-          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./crates-tauri/yaak-app/tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          Push-Location crates-tauri/yaak-app-client
+          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          Pop-Location
           $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
           $setupSig = "$($setup.FullName).sig"
           $dest = $setup.FullName -replace '-setup\.exe$', '-setup-machine.exe'

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { createFastMutation } from "@yaakapp/app/hooks/useFastMutation";
-import { queryClient } from "@yaakapp/app/lib/queryClient";
+import { createFastMutation } from "@yaakapp/yaak-client/hooks/useFastMutation";
+import { queryClient } from "@yaakapp/yaak-client/lib/queryClient";
 import { useMemo } from "react";
 import {
   BranchDeleteResult,
@@ -12,7 +12,7 @@ import {
   PullResult,
   PushResult,
 } from "./bindings/gen_git";
-import { showToast } from "@yaakapp/app/lib/toast";
+import { showToast } from "@yaakapp/yaak-client/lib/toast";
 
 export * from "./bindings/gen_git";
 export * from "./bindings/gen_models";
@@ -95,8 +95,8 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
 
   const handleError = (err: unknown) => {
     showToast({
-      id: err instanceof Error ? err.message : String(err),
-      message: err instanceof Error ? err.message : String(err),
+      id: String(err),
+      message: String(err),
       color: "danger",
       timeout: 5000,
     });
@@ -272,7 +272,10 @@ export async function gitClone(
   if (result.type !== "needs_credentials") return result;
 
   // Prompt for credentials
-  const creds = await promptCredentials({ url: result.url, error: result.error });
+  const creds = await promptCredentials({
+    url: result.url,
+    error: result.error,
+  });
   if (creds == null) return { type: "cancelled" };
 
   // Store credentials and retry

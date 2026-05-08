@@ -1,0 +1,12 @@
+[package]
+name = "yaak-window"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+log = { workspace = true }
+md5 = "0.8.0"
+rand = "0.9.0"
+tauri = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }

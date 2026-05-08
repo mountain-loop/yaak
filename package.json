@@ -1,5 +1,5 @@
 {
-  "name": "yaak-app",
+  "name": "yaak-monorepo",
   "version": "0.0.0",
   "private": true,
   "repository": {
@@ -7,6 +7,10 @@
     "url": "git+https://github.com/mountain-loop/yaak.git"
   },
   "workspaces": [
+    "packages/ui",
+    "packages/theme",
+    "packages/tailwind-config",
+    "packages/model-store",
     "packages/common-lib",
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
@@ -48,7 +52,8 @@
     "plugins/template-function-request",
     "plugins/template-function-response",
     "plugins/themes-yaak",
-    "crates-tauri/yaak-app",
+    "crates-tauri/yaak-app-client",
+    "crates-tauri/yaak-app-proxy",
     "crates-tauri/yaak-fonts",
     "crates-tauri/yaak-license",
     "crates-tauri/yaak-mac-window",
@@ -60,20 +65,24 @@
     "crates/yaak-sync",
     "crates/yaak-templates",
     "crates/yaak-ws",
-    "src-web"
+    "crates-proxy/yaak-proxy-lib",
+    "apps/yaak-client",
+    "apps/yaak-proxy"
   ],
   "scripts": {
     "prepare": "vp config",
     "init": "npm install && npm run bootstrap",
-    "start": "npm run app-dev",
-    "app-build": "tauri build",
-    "app-dev": "node scripts/run-dev.mjs",
+    "start": "npm run client:dev",
+    "client:build": "node scripts/run-build.mjs client",
+    "client:dev": "node scripts/run-dev.mjs client",
+    "proxy:build": "node scripts/run-build.mjs proxy",
+    "proxy:dev": "node scripts/run-dev.mjs proxy",
     "migration": "node scripts/create-migration.cjs",
     "build": "npm run --workspaces --if-present build",
     "test": "npm run --workspaces --if-present test",
-    "icons": "run-p icons:*",
-    "icons:dev": "tauri icon crates-tauri/yaak-app/icons/icon-dev.png --output crates-tauri/yaak-app/icons/dev",
-    "icons:release": "tauri icon crates-tauri/yaak-app/icons/icon.png --output crates-tauri/yaak-app/icons/release",
+    "icons": "run-p client:icons:*",
+    "client:icons:dev": "tauri icon crates-tauri/yaak-app-client/icons/icon-dev.png --output crates-tauri/yaak-app-client/icons/dev",
+    "client:icons:release": "tauri icon crates-tauri/yaak-app-client/icons/icon.png --output crates-tauri/yaak-app-client/icons/release",
     "bootstrap": "run-s bootstrap:*",
     "bootstrap:install-wasm-pack": "node scripts/install-wasm-pack.cjs",
     "bootstrap:build": "npm run build",
@@ -82,14 +91,16 @@
     "vendor:vendor-plugins": "node scripts/vendor-plugins.cjs",
     "vendor:vendor-protoc": "node scripts/vendor-protoc.cjs",
     "vendor:vendor-node": "node scripts/vendor-node.cjs",
-    "format": "vp fmt",
     "lint": "run-p lint:*",
     "lint:vp": "vp lint",
     "lint:workspaces": "npm run --workspaces --if-present lint",
     "replace-version": "node scripts/replace-version.cjs",
+    "format": "vp fmt --ignore-path .oxfmtignore",
     "tauri": "tauri",
-    "tauri-before-build": "npm run bootstrap",
-    "tauri-before-dev": "node scripts/run-workspaces-dev.mjs"
+    "client:tauri-before-build": "npm run bootstrap",
+    "client:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-client",
+    "proxy:tauri-before-build": "npm run bootstrap",
+    "proxy:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-proxy"
   },
   "dependencies": {
     "@codemirror/lang-go": "^6.0.1",
@@ -99,19 +110,24 @@
     "@codemirror/legacy-modes": "^6.5.2"
   },
   "devDependencies": {
+    "@rolldown/plugin-babel": "^0.2.3",
     "@tauri-apps/cli": "^2.9.6",
+    "@types/babel__core": "^7.20.5",
+    "@vitejs/plugin-react": "^6.0.1",
     "@yaakapp/cli": "^0.5.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "dotenv-cli": "^11.0.0",
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.8.3",
-    "vite-plus": "latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
+    "vite-plus": "^0.1.20",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.20"
   },
   "overrides": {
     "js-yaml": "^4.1.1",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.20"
   },
   "packageManager": "npm@11.11.1"
 }

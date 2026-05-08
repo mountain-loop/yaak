@@ -1,5 +1,5 @@
-crates-tauri/yaak-app/vendored/**/* linguist-generated=true
-crates-tauri/yaak-app/gen/schemas/**/* linguist-generated=true
+crates-tauri/yaak-app-client/vendored/**/* linguist-generated=true
+crates-tauri/yaak-app-client/gen/schemas/**/* linguist-generated=true
 **/bindings/* linguist-generated=true
 crates/yaak-templates/pkg/* linguist-generated=true
 
