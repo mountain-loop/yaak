@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
-import { debounce } from "@yaakapp-internal/lib";
 import { createFastMutation } from "@yaakapp/yaak-client/hooks/useFastMutation";
 import { queryClient } from "@yaakapp/yaak-client/lib/queryClient";
 import { useEffect, useMemo } from "react";
@@ -28,12 +27,6 @@ export interface GitCredentials {
 export type DivergedStrategy = "force_reset" | "merge" | "cancel";
 
 export type UncommittedChangesStrategy = "reset" | "cancel";
-
-export type GitWatchEventKind = "access" | "create" | "modify" | "remove" | "other";
-
-export interface GitWatchEvent {
-  kind: GitWatchEventKind;
-}
 
 interface GitWatchResult {
   unlistenEvent: string;
@@ -70,27 +63,24 @@ export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
 }
 
 export function useGitWorktreeStatusWatcher(dir: string | null | undefined) {
-  const onGitChange = useMemo(
-    () =>
-      debounce(() => {
-        if (dir != null) void invalidateGitWorktreeStatus(dir);
-      }, 350),
-    [dir],
-  );
-
   useEffect(() => {
     if (dir == null) return;
-    const unwatch = watchGitWorktree(dir, onGitChange);
+    const unwatch = watchGitWorktreeStatus(dir, (status) => {
+      queryClient.setQueryData(gitWorktreeStatusQueryKey(dir), status);
+    });
     return () => {
       void unwatch();
     };
-  }, [dir, onGitChange]);
+  }, [dir]);
 }
 
-export function watchGitWorktree(dir: string, callback: (e: GitWatchEvent) => void) {
-  const channel = new Channel<GitWatchEvent>();
+export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktreeStatus) => void) {
+  const channel = new Channel<GitWorktreeStatus>();
   channel.onmessage = callback;
-  const unlistenPromise = invoke<GitWatchResult>("cmd_git_watch_worktree", { dir, channel });
+  const unlistenPromise = invoke<GitWatchResult>("cmd_git_watch_worktree_status", {
+    dir,
+    channel,
+  });
 
   void unlistenPromise.then(({ unlistenEvent }) => {
     addGitWatchKey(unlistenEvent);

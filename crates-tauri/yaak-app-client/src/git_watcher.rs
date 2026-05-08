@@ -1,34 +1,18 @@
 use crate::error::{Error, Result};
 use chrono::Utc;
 use log::{debug, error, warn};
-use notify::{EventKind, Watcher};
+use notify::Watcher;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::mpsc;
+use std::time::Duration;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Listener, Runtime};
 use tokio::select;
 use tokio::sync::watch;
+use tokio::time::timeout;
 use ts_rs::TS;
-use yaak_git::{git_path_is_ignored, git_repository_paths};
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "index.ts")]
-pub(crate) struct GitWatchEvent {
-    kind: GitWatchEventKind,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "snake_case")]
-#[ts(export, export_to = "index.ts")]
-pub(crate) enum GitWatchEventKind {
-    Access,
-    Create,
-    Modify,
-    Remove,
-    Other,
-}
+use yaak_git::{GitWorktreeStatus, git_path_is_ignored, git_repository_paths, git_worktree_status};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -37,10 +21,10 @@ pub(crate) struct GitWatchResult {
     unlisten_event: String,
 }
 
-pub(crate) async fn watch_git_worktree<R: Runtime>(
+pub(crate) async fn watch_git_worktree_status<R: Runtime>(
     app_handle: AppHandle<R>,
     dir: &Path,
-    channel: Channel<GitWatchEvent>,
+    channel: Channel<GitWorktreeStatus>,
 ) -> Result<GitWatchResult> {
     let paths = git_repository_paths(dir)?;
     let repo_dir = dir.to_path_buf();
@@ -71,12 +55,32 @@ pub(crate) async fn watch_git_worktree<R: Runtime>(
 
     let (cancel_tx, cancel_rx) = watch::channel(());
     let mut cancel_rx = cancel_rx;
+    send_worktree_status(&repo_dir, &channel);
+
     tauri::async_runtime::spawn(async move {
         let _watcher = watcher;
         loop {
             select! {
                 Some(event_res) = async_rx.recv() => {
-                    handle_git_watch_event(event_res, &repo_dir, &workdir, &gitdir, &channel);
+                    if !is_relevant_git_watch_event(event_res, &repo_dir, &workdir, &gitdir) {
+                        continue;
+                    }
+
+                    loop {
+                        match timeout(Duration::from_millis(250), async_rx.recv()).await {
+                            Ok(Some(event_res)) => {
+                                let _ = is_relevant_git_watch_event(
+                                    event_res,
+                                    &repo_dir,
+                                    &workdir,
+                                    &gitdir,
+                                );
+                            }
+                            Ok(None) | Err(_) => break,
+                        }
+                    }
+
+                    send_worktree_status(&repo_dir, &channel);
                 }
                 _ = cancel_rx.changed() => {
                     break;
@@ -97,26 +101,23 @@ pub(crate) async fn watch_git_worktree<R: Runtime>(
     Ok(GitWatchResult { unlisten_event })
 }
 
-fn handle_git_watch_event(
+fn is_relevant_git_watch_event(
     event_res: notify::Result<notify::Event>,
     repo_dir: &Path,
     workdir: &Path,
     gitdir: &Path,
-    channel: &Channel<GitWatchEvent>,
-) {
+) -> bool {
     let event = match event_res {
         Ok(event) => event,
         Err(e) => {
             error!("Git watch error: {:?}", e);
-            return;
+            return false;
         }
     };
 
-    let mut has_relevant_change = false;
     for path in event.paths {
         if path.strip_prefix(gitdir).is_ok() {
-            has_relevant_change = true;
-            break;
+            return true;
         }
 
         let Ok(rela_path) = path.strip_prefix(workdir) else {
@@ -125,35 +126,26 @@ fn handle_git_watch_event(
 
         match git_path_is_ignored(repo_dir, rela_path) {
             Ok(true) => {}
-            Ok(false) => {
-                has_relevant_change = true;
-                break;
-            }
+            Ok(false) => return true,
             Err(e) => {
                 debug!("Failed to check Git ignore status for {:?}: {e}", rela_path);
-                has_relevant_change = true;
-                break;
+                return true;
             }
         }
     }
 
-    if !has_relevant_change {
-        return;
-    }
-
-    if let Err(e) = channel.send(GitWatchEvent { kind: event.kind.into() }) {
-        warn!("Failed to send git watch event: {:?}", e);
-    }
+    false
 }
 
-impl From<EventKind> for GitWatchEventKind {
-    fn from(kind: EventKind) -> Self {
-        match kind {
-            EventKind::Access(_) => Self::Access,
-            EventKind::Create(_) => Self::Create,
-            EventKind::Modify(_) => Self::Modify,
-            EventKind::Remove(_) => Self::Remove,
-            EventKind::Any | EventKind::Other => Self::Other,
+fn send_worktree_status(repo_dir: &Path, channel: &Channel<GitWorktreeStatus>) {
+    match git_worktree_status(repo_dir) {
+        Ok(status) => {
+            if let Err(e) = channel.send(status) {
+                warn!("Failed to send git worktree status: {:?}", e);
+            }
+        }
+        Err(e) => {
+            warn!("Failed to get git worktree status: {e}");
         }
     }
 }

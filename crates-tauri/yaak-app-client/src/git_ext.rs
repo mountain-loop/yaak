@@ -3,7 +3,7 @@
 //! This module provides the Tauri commands for git functionality.
 
 use crate::error::Result;
-use crate::git_watcher::{GitWatchEvent, GitWatchResult, watch_git_worktree};
+use crate::git_watcher::{GitWatchResult, watch_git_worktree_status};
 use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Runtime, command};
@@ -63,12 +63,12 @@ pub async fn cmd_git_worktree_status(dir: &Path) -> Result<GitWorktreeStatus> {
 }
 
 #[command]
-pub async fn cmd_git_watch_worktree<R: Runtime>(
+pub async fn cmd_git_watch_worktree_status<R: Runtime>(
     app_handle: AppHandle<R>,
     dir: &Path,
-    channel: Channel<GitWatchEvent>,
+    channel: Channel<GitWorktreeStatus>,
 ) -> Result<GitWatchResult> {
-    watch_git_worktree(app_handle, dir, channel).await
+    watch_git_worktree_status(app_handle, dir, channel).await
 }
 
 #[command]
