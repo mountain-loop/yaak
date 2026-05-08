@@ -3,8 +3,10 @@
 //! This module provides the Tauri commands for git functionality.
 
 use crate::error::Result;
+use crate::git_watcher::{GitWatchEvent, GitWatchResult, watch_git_worktree};
 use std::path::{Path, PathBuf};
-use tauri::command;
+use tauri::ipc::Channel;
+use tauri::{AppHandle, Runtime, command};
 use yaak_git::{
     BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, GitWorktreeStatus,
     PullResult, PushResult, git_add, git_add_credential, git_add_remote, git_checkout_branch,
@@ -58,6 +60,15 @@ pub async fn cmd_git_status(dir: &Path) -> Result<GitStatusSummary> {
 #[command]
 pub async fn cmd_git_worktree_status(dir: &Path) -> Result<GitWorktreeStatus> {
     Ok(git_worktree_status(dir)?)
+}
+
+#[command]
+pub async fn cmd_git_watch_worktree<R: Runtime>(
+    app_handle: AppHandle<R>,
+    dir: &Path,
+    channel: Channel<GitWatchEvent>,
+) -> Result<GitWatchResult> {
+    watch_git_worktree(app_handle, dir, channel).await
 }
 
 #[command]

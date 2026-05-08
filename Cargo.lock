@@ -10310,6 +10310,7 @@ dependencies = [
  "log 0.4.29",
  "md5 0.8.0",
  "mime_guess",
+ "notify",
  "openssl-sys",
  "pretty_graphql",
  "r2d2",

@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
+import { debounce } from "@yaakapp-internal/lib";
 import { createFastMutation } from "@yaakapp/yaak-client/hooks/useFastMutation";
 import { queryClient } from "@yaakapp/yaak-client/lib/queryClient";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   BranchDeleteResult,
   CloneResult,
@@ -27,6 +29,16 @@ export type DivergedStrategy = "force_reset" | "merge" | "cancel";
 
 export type UncommittedChangesStrategy = "reset" | "cancel";
 
+export type GitWatchEventKind = "access" | "create" | "modify" | "remove" | "other";
+
+export interface GitWatchEvent {
+  kind: GitWatchEventKind;
+}
+
+interface GitWatchResult {
+  unlistenEvent: string;
+}
+
 export interface GitCallbacks {
   addRemote: () => Promise<GitRemote | null>;
   promptCredentials: (
@@ -39,12 +51,57 @@ export interface GitCallbacks {
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ["git"] });
 
+function gitWorktreeStatusQueryKey(dir?: string, refreshKey?: string) {
+  return refreshKey == null
+    ? (["git", "worktree_status", dir] as const)
+    : (["git", "worktree_status", dir, refreshKey] as const);
+}
+
+export function invalidateGitWorktreeStatus(dir?: string) {
+  return queryClient.invalidateQueries({ queryKey: gitWorktreeStatusQueryKey(dir) });
+}
+
 export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
   return useQuery<GitWorktreeStatus, string>({
-    queryKey: ["git", "worktree_status", dir, refreshKey],
+    queryKey: gitWorktreeStatusQueryKey(dir, refreshKey),
     queryFn: () => invoke("cmd_git_worktree_status", { dir }),
     placeholderData: (prev) => prev,
   });
+}
+
+export function useGitWorktreeStatusWatcher(dir: string | null | undefined) {
+  const onGitChange = useMemo(
+    () =>
+      debounce(() => {
+        if (dir != null) void invalidateGitWorktreeStatus(dir);
+      }, 350),
+    [dir],
+  );
+
+  useEffect(() => {
+    if (dir == null) return;
+    const unwatch = watchGitWorktree(dir, onGitChange);
+    return () => {
+      void unwatch();
+    };
+  }, [dir, onGitChange]);
+}
+
+export function watchGitWorktree(dir: string, callback: (e: GitWatchEvent) => void) {
+  const channel = new Channel<GitWatchEvent>();
+  channel.onmessage = callback;
+  const unlistenPromise = invoke<GitWatchResult>("cmd_git_watch_worktree", { dir, channel });
+
+  void unlistenPromise.then(({ unlistenEvent }) => {
+    addGitWatchKey(unlistenEvent);
+  });
+
+  return () =>
+    unlistenPromise
+      .then(async ({ unlistenEvent }) => {
+        unlistenGitWatcher(unlistenEvent);
+      })
+      .catch(console.error);
 }
 
 export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
@@ -264,6 +321,35 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
 
 async function getRemotes(dir: string) {
   return invoke<GitRemote[]>("cmd_git_remotes", { dir });
+}
+
+function unlistenGitWatcher(unlistenEvent: string) {
+  void emit(unlistenEvent).then(() => {
+    removeGitWatchKey(unlistenEvent);
+  });
+}
+
+function getGitWatchKeys() {
+  return sessionStorage.getItem("git-worktree-watchers")?.split(",").filter(Boolean) ?? [];
+}
+
+function setGitWatchKeys(keys: string[]) {
+  sessionStorage.setItem("git-worktree-watchers", keys.join(","));
+}
+
+function addGitWatchKey(key: string) {
+  const keys = getGitWatchKeys();
+  setGitWatchKeys([...keys, key]);
+}
+
+function removeGitWatchKey(key: string) {
+  const keys = getGitWatchKeys();
+  setGitWatchKeys(keys.filter((k) => k !== key));
+}
+
+const gitWatchKeys = getGitWatchKeys();
+if (gitWatchKeys.length > 0) {
+  gitWatchKeys.forEach(unlistenGitWatcher);
 }
 
 /**

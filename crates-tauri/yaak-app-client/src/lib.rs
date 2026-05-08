@@ -67,6 +67,7 @@ mod commands;
 mod encoding;
 mod error;
 mod git_ext;
+mod git_watcher;
 mod grpc;
 mod history;
 mod http_request;
@@ -1833,6 +1834,7 @@ pub fn run() {
             git_ext::cmd_git_rename_branch,
             git_ext::cmd_git_status,
             git_ext::cmd_git_worktree_status,
+            git_ext::cmd_git_watch_worktree,
             git_ext::cmd_git_log,
             git_ext::cmd_git_initialize,
             git_ext::cmd_git_clone,
