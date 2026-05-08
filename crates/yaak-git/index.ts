@@ -9,6 +9,7 @@ import {
   GitCommit,
   GitRemote,
   GitStatusSummary,
+  GitWorktreeStatus,
   PullResult,
   PushResult,
 } from "./bindings/gen_git";
@@ -37,6 +38,14 @@ export interface GitCallbacks {
 }
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ["git"] });
+
+export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
+  return useQuery<GitWorktreeStatus, string>({
+    queryKey: ["git", "worktree_status", dir, refreshKey],
+    queryFn: () => invoke("cmd_git_worktree_status", { dir }),
+    placeholderData: (prev) => prev,
+  });
+}
 
 export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
   const mutations = useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);

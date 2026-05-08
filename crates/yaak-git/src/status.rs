@@ -33,6 +33,23 @@ pub struct GitStatusEntry {
     pub next: Option<SyncModel>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_git.ts")]
+pub struct GitWorktreeStatus {
+    pub entries: Vec<GitWorktreeStatusEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_git.ts")]
+pub struct GitWorktreeStatusEntry {
+    pub rela_path: String,
+    pub model_id: Option<String>,
+    pub status: GitStatus,
+    pub staged: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_git.ts")]
@@ -44,6 +61,34 @@ pub enum GitStatus {
     Removed,
     Renamed,
     TypeChange,
+}
+
+pub fn git_worktree_status(dir: &Path) -> crate::error::Result<GitWorktreeStatus> {
+    let repo = open_repo(dir)?;
+    let mut opts = git2::StatusOptions::new();
+    opts.include_ignored(false)
+        .include_untracked(true)
+        .recurse_untracked_dirs(true)
+        .include_unmodified(false);
+
+    let mut entries = Vec::new();
+    for entry in repo.statuses(Some(&mut opts))?.into_iter() {
+        let Some(rela_path) = entry.path() else {
+            continue;
+        };
+        let Some((status, staged)) = git_status_from_raw(entry.status()) else {
+            continue;
+        };
+
+        entries.push(GitWorktreeStatusEntry {
+            rela_path: rela_path.to_string(),
+            model_id: model_id_from_rela_path(Path::new(rela_path)),
+            status,
+            staged,
+        });
+    }
+
+    Ok(GitWorktreeStatus { entries })
 }
 
 pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
@@ -83,51 +128,8 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
     let mut entries: Vec<GitStatusEntry> = Vec::new();
     for entry in repo.statuses(Some(&mut opts))?.into_iter() {
         let rela_path = entry.path().unwrap().to_string();
-        let status = entry.status();
-        let index_status = match status {
-            // Note: order matters here, since we're checking a bitmap!
-            s if s.contains(git2::Status::CONFLICTED) => GitStatus::Conflict,
-            s if s.contains(git2::Status::INDEX_NEW) => GitStatus::Untracked,
-            s if s.contains(git2::Status::INDEX_MODIFIED) => GitStatus::Modified,
-            s if s.contains(git2::Status::INDEX_DELETED) => GitStatus::Removed,
-            s if s.contains(git2::Status::INDEX_RENAMED) => GitStatus::Renamed,
-            s if s.contains(git2::Status::INDEX_TYPECHANGE) => GitStatus::TypeChange,
-            s if s.contains(git2::Status::CURRENT) => GitStatus::Current,
-            s => {
-                warn!("Unknown index status {s:?}");
-                continue;
-            }
-        };
-
-        let worktree_status = match status {
-            // Note: order matters here, since we're checking a bitmap!
-            s if s.contains(git2::Status::CONFLICTED) => GitStatus::Conflict,
-            s if s.contains(git2::Status::WT_NEW) => GitStatus::Untracked,
-            s if s.contains(git2::Status::WT_MODIFIED) => GitStatus::Modified,
-            s if s.contains(git2::Status::WT_DELETED) => GitStatus::Removed,
-            s if s.contains(git2::Status::WT_RENAMED) => GitStatus::Renamed,
-            s if s.contains(git2::Status::WT_TYPECHANGE) => GitStatus::TypeChange,
-            s if s.contains(git2::Status::CURRENT) => GitStatus::Current,
-            s => {
-                warn!("Unknown worktree status {s:?}");
-                continue;
-            }
-        };
-
-        let status = if index_status == GitStatus::Current {
-            worktree_status.clone()
-        } else {
-            index_status.clone()
-        };
-
-        let staged = if index_status == GitStatus::Current && worktree_status == GitStatus::Current
-        {
-            // No change, so can't be added
-            false
-        } else if index_status != GitStatus::Current {
-            true
-        } else {
-            false
+        let Some((status, staged)) = git_status_from_raw(entry.status()) else {
+            continue;
         };
 
         // Get previous content from Git, if it's in there
@@ -185,4 +187,51 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
         ahead: ahead as u32,
         behind: behind as u32,
     })
+}
+
+fn git_status_from_raw(status: git2::Status) -> Option<(GitStatus, bool)> {
+    let index_status = match status {
+        // Note: order matters here, since we're checking a bitmap!
+        s if s.contains(git2::Status::CONFLICTED) => GitStatus::Conflict,
+        s if s.contains(git2::Status::INDEX_NEW) => GitStatus::Untracked,
+        s if s.contains(git2::Status::INDEX_MODIFIED) => GitStatus::Modified,
+        s if s.contains(git2::Status::INDEX_DELETED) => GitStatus::Removed,
+        s if s.contains(git2::Status::INDEX_RENAMED) => GitStatus::Renamed,
+        s if s.contains(git2::Status::INDEX_TYPECHANGE) => GitStatus::TypeChange,
+        s if s.contains(git2::Status::CURRENT) => GitStatus::Current,
+        s => {
+            warn!("Unknown index status {s:?}");
+            return None;
+        }
+    };
+
+    let worktree_status = match status {
+        // Note: order matters here, since we're checking a bitmap!
+        s if s.contains(git2::Status::CONFLICTED) => GitStatus::Conflict,
+        s if s.contains(git2::Status::WT_NEW) => GitStatus::Untracked,
+        s if s.contains(git2::Status::WT_MODIFIED) => GitStatus::Modified,
+        s if s.contains(git2::Status::WT_DELETED) => GitStatus::Removed,
+        s if s.contains(git2::Status::WT_RENAMED) => GitStatus::Renamed,
+        s if s.contains(git2::Status::WT_TYPECHANGE) => GitStatus::TypeChange,
+        s if s.contains(git2::Status::CURRENT) => GitStatus::Current,
+        s => {
+            warn!("Unknown worktree status {s:?}");
+            return None;
+        }
+    };
+
+    let status =
+        if index_status == GitStatus::Current { worktree_status } else { index_status.clone() };
+    let staged = index_status != GitStatus::Current;
+
+    Some((status, staged))
+}
+
+fn model_id_from_rela_path(path: &Path) -> Option<String> {
+    let ext = path.extension()?.to_str()?;
+    if ext != "yaml" && ext != "yml" && ext != "json" {
+        return None;
+    }
+
+    path.file_stem()?.to_str()?.strip_prefix("yaak.").map(String::from)
 }

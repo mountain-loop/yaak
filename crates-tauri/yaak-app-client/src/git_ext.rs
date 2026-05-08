@@ -6,11 +6,12 @@ use crate::error::Result;
 use std::path::{Path, PathBuf};
 use tauri::command;
 use yaak_git::{
-    BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, PullResult,
-    PushResult, git_add, git_add_credential, git_add_remote, git_checkout_branch, git_clone,
-    git_commit, git_create_branch, git_delete_branch, git_delete_remote_branch, git_fetch_all,
-    git_init, git_log, git_merge_branch, git_pull, git_pull_force_reset, git_pull_merge, git_push,
-    git_remotes, git_rename_branch, git_reset_changes, git_rm_remote, git_status, git_unstage,
+    BranchDeleteResult, CloneResult, GitCommit, GitRemote, GitStatusSummary, GitWorktreeStatus,
+    PullResult, PushResult, git_add, git_add_credential, git_add_remote, git_checkout_branch,
+    git_clone, git_commit, git_create_branch, git_delete_branch, git_delete_remote_branch,
+    git_fetch_all, git_init, git_log, git_merge_branch, git_pull, git_pull_force_reset,
+    git_pull_merge, git_push, git_remotes, git_rename_branch, git_reset_changes, git_rm_remote,
+    git_status, git_unstage, git_worktree_status,
 };
 
 // NOTE: All of these commands are async to prevent blocking work from locking up the UI
@@ -52,6 +53,11 @@ pub async fn cmd_git_rename_branch(dir: &Path, old_name: &str, new_name: &str) -
 #[command]
 pub async fn cmd_git_status(dir: &Path) -> Result<GitStatusSummary> {
     Ok(git_status(dir)?)
+}
+
+#[command]
+pub async fn cmd_git_worktree_status(dir: &Path) -> Result<GitWorktreeStatus> {
+    Ok(git_worktree_status(dir)?)
 }
 
 #[command]
