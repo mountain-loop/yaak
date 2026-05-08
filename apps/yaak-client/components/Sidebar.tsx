@@ -21,7 +21,17 @@ import {
   websocketConnectionsAtom,
   workspacesAtom,
 } from "@yaakapp-internal/models";
+import type { TreeHandle, TreeItemProps, TreeNode, TreeProps } from "@yaakapp-internal/ui";
+import {
+  Icon,
+  InlineCode,
+  isSelectedFamily,
+  LoadingIcon,
+  selectedIdsFamily,
+  Tree,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
+import { fuzzyMatch } from "fuzzbunny";
 import { atom, useAtomValue } from "jotai";
 import { atomFamily, selectAtom } from "jotai/utils";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
@@ -42,6 +52,7 @@ import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
 import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
 import { deepEqualAtom } from "../lib/atoms";
+import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
@@ -54,19 +65,9 @@ import { filter } from "./core/Editor/filter/extension";
 import { evaluate, parseQuery } from "./core/Editor/filter/query";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import { HttpStatusTag } from "./core/HttpStatusTag";
-import {
-  Icon,
-  LoadingIcon,
-  Tree,
-  isSelectedFamily,
-  selectedIdsFamily,
-  InlineCode,
-} from "@yaakapp-internal/ui";
-import type { TreeNode, TreeHandle, TreeProps, TreeItemProps } from "@yaakapp-internal/ui";
 import { IconButton } from "./core/IconButton";
 import type { InputHandle } from "./core/Input";
 import { Input } from "./core/Input";
-import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { GitDropdown } from "./git/GitDropdown";
 
 const collapsedFamily = atomFamily((treeId: string) => {
@@ -75,6 +76,7 @@ const collapsedFamily = atomFamily((treeId: string) => {
 });
 
 type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
+
 function isSidebarLeafModel(m: AnyModel): boolean {
   const modelMap: Record<Exclude<SidebarModel["model"], "workspace">, null> = {
     http_request: null,
@@ -854,7 +856,9 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
 
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
-      <div className="truncate">{resolvedModelName(item)}</div>
+      <div className="truncate">
+        <HighlightedName name={resolvedModelName(item)} />
+      </div>
       {response != null && (
         <div className="ml-auto">
           {response.state !== "closed" ? (
@@ -867,6 +871,42 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
     </div>
   );
 });
+
+const bareTermNeedleAtom = selectAtom(sidebarFilterAtom, (filter) => {
+  const text = filter.text.trim();
+  if (!text) return "";
+  const bareTerms = text.match(/(?:^|\s)(?!-)(?!["])([A-Za-z0-9_\-./]+)(?!["]?:)/g);
+  if (!bareTerms) return "";
+  return bareTerms
+    .map((t) => t.trim())
+    .filter((t) => {
+      if (!t || t.startsWith("-") || t.startsWith('"')) return false;
+      if (/^(AND|OR|NOT)$/i.test(t)) return false;
+      if (t.includes(":")) return false;
+      return true;
+    })
+    .join(" ");
+});
+
+function HighlightedName({ name }: { name: string }) {
+  const needle = useAtomValue(bareTermNeedleAtom);
+  if (!needle) return <>{name}</>;
+  const match = fuzzyMatch(name, needle);
+  if (!match) return <>{name}</>;
+  return (
+    <>
+      {match.highlights.map((segment, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="bg-transparent text-notice font-semibold">
+            {segment}
+          </mark>
+        ) : (
+          <span key={i}>{segment}</span>
+        ),
+      )}
+    </>
+  );
+}
 
 function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
   const item = node.item;
