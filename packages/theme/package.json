@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/api": "^2.11.0",
     "@yaakapp-internal/plugins": "^1.0.0",
     "parse-color": "^1.0.0"
   }

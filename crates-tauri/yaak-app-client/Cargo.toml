@@ -17,7 +17,7 @@ updater = []
 license = ["yaak-license"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.3", features = [] }
+tauri-build = { version = "2.6.1", features = [] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
@@ -50,15 +50,15 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-clipboard-manager = "2.3.2"
-tauri-plugin-deep-link = "2.4.5"
+tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-dialog = { workspace = true }
-tauri-plugin-fs = "2.4.4"
-tauri-plugin-log = { version = "2.7.1", features = ["colored"] }
-tauri-plugin-opener = "2.5.2"
+tauri-plugin-fs = "2.5.1"
+tauri-plugin-log = { version = "2.8.0", features = ["colored"] }
+tauri-plugin-opener = "2.5.4"
 tauri-plugin-os = "2.3.2"
 tauri-plugin-shell = { workspace = true }
-tauri-plugin-single-instance = { version = "2.3.6", features = ["deep-link"] }
-tauri-plugin-updater = "2.9.0"
+tauri-plugin-single-instance = { version = "2.4.2", features = ["deep-link"] }
+tauri-plugin-updater = "2.10.1"
 tauri-plugin-window-state = "2.4.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }

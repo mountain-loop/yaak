@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.5",
-    "@tauri-apps/api": "^2.9.1",
+    "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-os": "^2.3.2",
     "@yaakapp-internal/model-store": "^1.0.0",
     "@yaakapp-internal/proxy-lib": "^1.0.0",
