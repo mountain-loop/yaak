@@ -3,7 +3,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { defineConfig, normalizePath } from "vite";
+import { defineConfig, normalizePath } from "vite-plus";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import svgr from "vite-plugin-svgr";
 import topLevelAwait from "vite-plugin-top-level-await";
@@ -42,12 +42,15 @@ export default defineConfig(async () => {
       sourcemap: true,
       outDir: "../../dist/apps/yaak-client",
       emptyOutDir: true,
-      rollupOptions: {
+      rolldownOptions: {
         output: {
           // Make chunk names readable
           chunkFileNames: "assets/chunk-[name]-[hash].js",
           entryFileNames: "assets/entry-[name]-[hash].js",
           assetFileNames: "assets/asset-[name]-[hash][extname]",
+          // Vite-Plus/Rolldown 0.1.20 can emit a stale minified export for style-mod,
+          // which breaks CodeMirror MergeView in production builds.
+          minifyInternalExports: false,
         },
       },
     },
