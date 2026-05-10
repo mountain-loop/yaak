@@ -201,7 +201,7 @@ function BaseInput({
   const id = useRef(`input-${generateId()}`);
   const editorClassName = classNames(
     className,
-    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder",
+    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder pr-1.5",
   );
 
   const isValid = useMemo(() => {
