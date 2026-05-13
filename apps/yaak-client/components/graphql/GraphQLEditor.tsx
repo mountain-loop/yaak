@@ -1,3 +1,4 @@
+import { open } from "@tauri-apps/plugin-dialog";
 import type { HttpRequest } from "@yaakapp-internal/models";
 
 import { useAtom } from "jotai";
@@ -32,9 +33,36 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
   const [autoIntrospectDisabled, setAutoIntrospectDisabled] = useLocalStorage<
     Record<string, boolean>
   >("graphQLAutoIntrospectDisabled", {});
-  const { schema, isLoading, error, refetch, clear } = useIntrospectGraphQL(baseRequest, {
-    disabled: autoIntrospectDisabled?.[baseRequest.id],
-  });
+  const { schema, isLoading, error, refetch, clear, loadFromFile } = useIntrospectGraphQL(
+    baseRequest,
+    {
+      disabled: autoIntrospectDisabled?.[baseRequest.id],
+    },
+  );
+
+  const handleLoadFromFile = useCallback(async () => {
+    const selected = await open({
+      title: "Load GraphQL Schema",
+      multiple: false,
+      filters: [
+        {
+          name: "GraphQL Schema",
+          extensions: ["graphql", "graphqls", "gql", "json"],
+        },
+      ],
+    });
+    if (selected == null) return;
+
+    const result = await loadFromFile(selected);
+    if (result.ok) {
+      // Disable automatic introspection so URL/method edits don't overwrite
+      // the schema we just loaded from disk. User can re-enable from this menu.
+      setAutoIntrospectDisabled({
+        ...autoIntrospectDisabled,
+        [baseRequest.id]: true,
+      });
+    }
+  }, [autoIntrospectDisabled, baseRequest.id, loadFromFile, setAutoIntrospectDisabled]);
   const [currentBody, setCurrentBody] = useStateWithDeps<{
     query: string;
     variables: string | undefined;
@@ -151,6 +179,11 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
                   keepOpenOnSelect: true,
                   onSelect: refetch,
                 },
+                {
+                  label: "Load Schema from File…",
+                  leftSlot: <Icon icon="import" />,
+                  onSelect: handleLoadFromFile,
+                },
                 { type: "separator", label: "Setting" },
                 {
                   label: "Automatic Introspection",
@@ -195,6 +228,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
       isDocOpen,
       isLoading,
       refetch,
+      handleLoadFromFile,
       autoIntrospectDisabled,
       baseRequest.id,
       setGraphqlDocStateAtomValue,
