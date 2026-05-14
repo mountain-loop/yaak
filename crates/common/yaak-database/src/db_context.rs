@@ -65,8 +65,7 @@ impl<'a> DbContext<'a> {
             .cond_where(Expr::col(col).eq(value))
             .build_rusqlite(SqliteQueryBuilder);
         let mut stmt = self.conn.prepare(sql.as_str()).expect("Failed to prepare query");
-        stmt.query_row(&*params.as_params(), M::from_row)
-            .ok()
+        stmt.query_row(&*params.as_params(), M::from_row).ok()
     }
 
     pub fn find_all<M>(&self) -> Result<Vec<M>>
@@ -126,9 +125,8 @@ impl<'a> DbContext<'a> {
         let other_values = model.clone().insert_values(source)?;
 
         let mut column_vec = vec![id_iden.clone()];
-        let mut value_vec = vec![
-            if id_val.is_empty() { M::generate_id().into() } else { id_val.into() },
-        ];
+        let mut value_vec =
+            vec![if id_val.is_empty() { M::generate_id().into() } else { id_val.into() }];
 
         for (col, val) in other_values {
             value_vec.push(val.into());

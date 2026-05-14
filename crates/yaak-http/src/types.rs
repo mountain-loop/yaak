@@ -304,7 +304,10 @@ async fn build_binary_body(
     }))
 }
 
-fn build_text_body(body: &BTreeMap<String, serde_json::Value>, body_type: &str) -> Option<SendableBodyWithMeta> {
+fn build_text_body(
+    body: &BTreeMap<String, serde_json::Value>,
+    body_type: &str,
+) -> Option<SendableBodyWithMeta> {
     let text = get_str_map(body, "text");
     if text.is_empty() {
         return None;

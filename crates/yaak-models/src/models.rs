@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use ts_rs::TS;
+use yaak_database::{Result as DbResult, UpdateSource};
 pub use yaak_database::{UpsertModelInfo, upsert_date};
-use yaak_database::{UpdateSource, Result as DbResult};
 
 #[macro_export]
 macro_rules! impl_model {
@@ -2526,4 +2526,3 @@ impl AnyModel {
         }
     }
 }
-

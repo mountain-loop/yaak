@@ -14,10 +14,8 @@ pub struct ProxyQueryManager {
 impl ProxyQueryManager {
     pub fn new(db_path: &Path) -> Self {
         let manager = SqliteConnectionManager::file(db_path);
-        let pool = Pool::builder()
-            .max_size(5)
-            .build(manager)
-            .expect("Failed to create proxy DB pool");
+        let pool =
+            Pool::builder().max_size(5).build(manager).expect("Failed to create proxy DB pool");
         run_migrations(&pool, &MIGRATIONS).expect("Failed to run proxy DB migrations");
         Self { pool }
     }

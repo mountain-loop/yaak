@@ -5,6 +5,7 @@ import { changeModelStoreWorkspace, initModelStore } from "@yaakapp-internal/mod
 import { setPlatformOnDocument } from "@yaakapp-internal/theme";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { initGit } from "./init/git";
 import { initSync } from "./init/sync";
 import { initGlobalListeners } from "./lib/initGlobalListeners";
 import { jotaiStore } from "./lib/jotai";
@@ -31,6 +32,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 // Initialize a bunch of watchers
+initGit();
 initSync();
 initModelStore(jotaiStore);
 initGlobalListeners();

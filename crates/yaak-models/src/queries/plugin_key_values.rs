@@ -16,7 +16,10 @@ impl<'a> ClientDb<'a> {
                     .add(Expr::col(PluginKeyValueIden::Key).eq(key)),
             )
             .build_rusqlite(SqliteQueryBuilder);
-        self.conn().resolve().query_row(sql.as_str(), &*params.as_params(), |row| row.try_into()).ok()
+        self.conn()
+            .resolve()
+            .query_row(sql.as_str(), &*params.as_params(), |row| row.try_into())
+            .ok()
     }
 
     pub fn set_plugin_key_value(

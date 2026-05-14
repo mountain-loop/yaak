@@ -2,18 +2,18 @@ pub mod actions;
 pub mod db;
 pub mod models;
 
+use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
+use crate::db::ProxyQueryManager;
+use crate::models::{HttpExchange, ModelPayload, ProxyHeader};
+use log::warn;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
-use log::warn;
-use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource};
 use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
 use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
-use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
-use crate::db::ProxyQueryManager;
-use crate::models::{HttpExchange, ModelPayload, ProxyHeader};
 
 // -- Context --
 
@@ -25,11 +25,7 @@ pub struct ProxyCtx {
 
 impl ProxyCtx {
     pub fn new(db_path: &Path, events: RpcEventEmitter) -> Self {
-        Self {
-            handle: Mutex::new(None),
-            db: ProxyQueryManager::new(db_path),
-            events,
-        }
+        Self { handle: Mutex::new(None), db: ProxyQueryManager::new(db_path), events }
     }
 }
 
@@ -88,17 +84,15 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
     match invocation {
         ActionInvocation::Global { action } => match action {
             GlobalAction::ProxyStart => {
-                let mut handle = ctx
-                    .handle
-                    .lock()
-                    .map_err(|_| RpcError { message: "lock poisoned".into() })?;
+                let mut handle =
+                    ctx.handle.lock().map_err(|_| RpcError { message: "lock poisoned".into() })?;
 
                 if handle.is_some() {
                     return Ok(true); // already running
                 }
 
-                let mut proxy_handle = yaak_proxy::start_proxy(9090)
-                    .map_err(|e| RpcError { message: e })?;
+                let mut proxy_handle =
+                    yaak_proxy::start_proxy(9090).map_err(|e| RpcError { message: e })?;
 
                 if let Some(event_rx) = proxy_handle.take_event_rx() {
                     let db = ctx.db.clone();
@@ -107,49 +101,43 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
                 }
 
                 *handle = Some(proxy_handle);
-                ctx.events.emit("proxy_state_changed", &ProxyStatePayload {
-                    state: ProxyState::Running,
-                });
+                ctx.events
+                    .emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Running });
                 Ok(true)
             }
             GlobalAction::ProxyStop => {
-                let mut handle = ctx
-                    .handle
-                    .lock()
-                    .map_err(|_| RpcError { message: "lock poisoned".into() })?;
+                let mut handle =
+                    ctx.handle.lock().map_err(|_| RpcError { message: "lock poisoned".into() })?;
                 handle.take();
-                ctx.events.emit("proxy_state_changed", &ProxyStatePayload {
-                    state: ProxyState::Stopped,
-                });
+                ctx.events
+                    .emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Stopped });
                 Ok(true)
             }
         },
     }
 }
 
-fn get_proxy_state(ctx: &ProxyCtx, _req: GetProxyStateRequest) -> Result<GetProxyStateResponse, RpcError> {
-    let handle = ctx
-        .handle
-        .lock()
-        .map_err(|_| RpcError { message: "lock poisoned".into() })?;
-    let state = if handle.is_some() {
-        ProxyState::Running
-    } else {
-        ProxyState::Stopped
-    };
+fn get_proxy_state(
+    ctx: &ProxyCtx,
+    _req: GetProxyStateRequest,
+) -> Result<GetProxyStateResponse, RpcError> {
+    let handle = ctx.handle.lock().map_err(|_| RpcError { message: "lock poisoned".into() })?;
+    let state = if handle.is_some() { ProxyState::Running } else { ProxyState::Stopped };
     Ok(GetProxyStateResponse { state })
 }
 
-fn list_actions(_ctx: &ProxyCtx, _req: ListActionsRequest) -> Result<ListActionsResponse, RpcError> {
-    Ok(ListActionsResponse {
-        actions: crate::actions::all_global_actions(),
-    })
+fn list_actions(
+    _ctx: &ProxyCtx,
+    _req: ListActionsRequest,
+) -> Result<ListActionsResponse, RpcError> {
+    Ok(ListActionsResponse { actions: crate::actions::all_global_actions() })
 }
 
 fn list_models(ctx: &ProxyCtx, _req: ListModelsRequest) -> Result<ListModelsResponse, RpcError> {
     ctx.db.with_conn(|db| {
         Ok(ListModelsResponse {
-            http_exchanges: db.find_all::<HttpExchange>()
+            http_exchanges: db
+                .find_all::<HttpExchange>()
                 .map_err(|e| RpcError { message: e.to_string() })?,
         })
     })
@@ -157,28 +145,35 @@ fn list_models(ctx: &ProxyCtx, _req: ListModelsRequest) -> Result<ListModelsResp
 
 // -- Event loop --
 
-fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, db: ProxyQueryManager, events: RpcEventEmitter) {
+fn run_event_loop(
+    rx: std::sync::mpsc::Receiver<ProxyEvent>,
+    db: ProxyQueryManager,
+    events: RpcEventEmitter,
+) {
     let mut in_flight: HashMap<u64, CapturedRequest> = HashMap::new();
 
     while let Ok(event) = rx.recv() {
         match event {
             ProxyEvent::RequestStart { id, method, url, http_version } => {
-                in_flight.insert(id, CapturedRequest {
+                in_flight.insert(
                     id,
-                    method,
-                    url,
-                    http_version,
-                    status: None,
-                    elapsed_ms: None,
-                    remote_http_version: None,
-                    request_headers: vec![],
-                    request_body: None,
-                    response_headers: vec![],
-                    response_body: None,
-                    response_body_size: 0,
-                    state: RequestState::Sending,
-                    error: None,
-                });
+                    CapturedRequest {
+                        id,
+                        method,
+                        url,
+                        http_version,
+                        status: None,
+                        elapsed_ms: None,
+                        remote_http_version: None,
+                        request_headers: vec![],
+                        request_body: None,
+                        response_headers: vec![],
+                        response_body: None,
+                        response_body_size: 0,
+                        state: RequestState::Sending,
+                        error: None,
+                    },
+                );
             }
             ProxyEvent::RequestHeader { id, name, value } => {
                 if let Some(r) = in_flight.get_mut(&id) {
@@ -230,28 +225,30 @@ fn write_entry(db: &ProxyQueryManager, events: &RpcEventEmitter, r: &CapturedReq
     let entry = HttpExchange {
         url: r.url.clone(),
         method: r.method.clone(),
-        req_headers: r.request_headers.iter()
+        req_headers: r
+            .request_headers
+            .iter()
             .map(|(n, v)| ProxyHeader { name: n.clone(), value: v.clone() })
             .collect(),
         req_body: r.request_body.clone(),
         res_status: r.status.map(|s| s as i32),
-        res_headers: r.response_headers.iter()
+        res_headers: r
+            .response_headers
+            .iter()
             .map(|(n, v)| ProxyHeader { name: n.clone(), value: v.clone() })
             .collect(),
         res_body: r.response_body.clone(),
         error: r.error.clone(),
         ..Default::default()
     };
-    db.with_conn(|ctx| {
-        match ctx.upsert(&entry, &UpdateSource::Background) {
-            Ok((saved, created)) => {
-                events.emit("model_write", &ModelPayload {
-                    model: saved,
-                    change: ModelChangeEvent::Upsert { created },
-                });
-            }
-            Err(e) => warn!("Failed to write proxy entry: {e}"),
+    db.with_conn(|ctx| match ctx.upsert(&entry, &UpdateSource::Background) {
+        Ok((saved, created)) => {
+            events.emit(
+                "model_write",
+                &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
+            );
         }
+        Err(e) => warn!("Failed to write proxy entry: {e}"),
     });
 }
 

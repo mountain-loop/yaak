@@ -67,6 +67,7 @@ mod commands;
 mod encoding;
 mod error;
 mod git_ext;
+mod git_watcher;
 mod grpc;
 mod history;
 mod http_request;
@@ -121,9 +122,7 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
             }
 
             // Commands for development
-            "dev.reset_size" => webview_window
-                .set_size(LogicalSize::new(1100.0, 600.0))
-                .unwrap(),
+            "dev.reset_size" => webview_window.set_size(LogicalSize::new(1100.0, 600.0)).unwrap(),
             "dev.reset_size_16x9" => {
                 let width = webview_window.outer_size().unwrap().width;
                 let height = width * 9 / 16;
@@ -1506,7 +1505,6 @@ async fn cmd_reload_plugins<R: Runtime>(
     Ok(errors)
 }
 
-
 #[tauri::command]
 async fn cmd_plugin_info<R: Runtime>(
     id: &str,
@@ -1579,7 +1577,14 @@ async fn cmd_new_child_window(
     inner_size: (f64, f64),
 ) -> YaakResult<()> {
     let use_native_titlebar = parent_window.app_handle().db().get_settings().use_native_titlebar;
-    let win = yaak_window::window::create_child_window(&parent_window, url, label, title, inner_size, use_native_titlebar)?;
+    let win = yaak_window::window::create_child_window(
+        &parent_window,
+        url,
+        label,
+        title,
+        inner_size,
+        use_native_titlebar,
+    )?;
     setup_window_menu(&win)?;
     Ok(())
 }
@@ -1831,8 +1836,13 @@ pub fn run() {
             git_ext::cmd_git_delete_remote_branch,
             git_ext::cmd_git_merge_branch,
             git_ext::cmd_git_rename_branch,
+            git_ext::cmd_git_branch_info,
             git_ext::cmd_git_status,
+            git_ext::cmd_git_worktree_status,
+            git_ext::cmd_git_watch_worktree_status,
             git_ext::cmd_git_log,
+            git_ext::cmd_git_log_for_file,
+            git_ext::cmd_git_file_diff_for_commit,
             git_ext::cmd_git_initialize,
             git_ext::cmd_git_clone,
             git_ext::cmd_git_commit,
@@ -1844,6 +1854,8 @@ pub fn run() {
             git_ext::cmd_git_add,
             git_ext::cmd_git_unstage,
             git_ext::cmd_git_reset_changes,
+            git_ext::cmd_git_restore_files,
+            git_ext::cmd_git_restore_file_from_commit,
             git_ext::cmd_git_add_credential,
             git_ext::cmd_git_remotes,
             git_ext::cmd_git_add_remote,
@@ -1870,7 +1882,11 @@ pub fn run() {
             match event {
                 RunEvent::Ready => {
                     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
-                    if let Ok(win) = yaak_window::window::create_main_window(app_handle, "/", use_native_titlebar) {
+                    if let Ok(win) = yaak_window::window::create_main_window(
+                        app_handle,
+                        "/",
+                        use_native_titlebar,
+                    ) {
                         let _ = setup_window_menu(&win);
                     }
                     let h = app_handle.clone();

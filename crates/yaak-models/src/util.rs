@@ -10,7 +10,9 @@ use std::collections::BTreeMap;
 use ts_rs::TS;
 use yaak_core::WorkspaceContext;
 
-pub use yaak_database::{ModelChangeEvent, generate_id, generate_id_of_length, generate_prefixed_id};
+pub use yaak_database::{
+    ModelChangeEvent, generate_id, generate_id_of_length, generate_prefixed_id,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

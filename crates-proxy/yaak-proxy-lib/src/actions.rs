@@ -25,11 +25,7 @@ pub struct ActionMetadata {
 }
 
 fn default_hotkey(mac: &str, other: &str) -> Option<String> {
-    if cfg!(target_os = "macos") {
-        Some(mac.into())
-    } else {
-        Some(other.into())
-    }
+    if cfg!(target_os = "macos") { Some(mac.into()) } else { Some(other.into()) }
 }
 
 /// All global actions with their metadata, used by `list_actions` RPC.

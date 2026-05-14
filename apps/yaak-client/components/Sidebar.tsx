@@ -1,6 +1,8 @@
 import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
 import { debounce } from "@yaakapp-internal/lib";
+import { gitMutations } from "@yaakapp-internal/git";
+import type { GitStatus } from "@yaakapp-internal/git";
 import type {
   AnyModel,
   Folder,
@@ -23,13 +25,18 @@ import {
 } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { atom, useAtomValue } from "jotai";
-import { atomFamily, selectAtom } from "jotai/utils";
+import { atomFamily } from "jotai-family";
+import { selectAtom } from "jotai/utils";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { moveToWorkspace } from "../commands/moveToWorkspace";
 import { openFolderSettings } from "../commands/openFolderSettings";
 import { activeFolderIdAtom } from "../hooks/useActiveFolderId";
 import { activeRequestIdAtom } from "../hooks/useActiveRequestId";
-import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
+import {
+  activeWorkspaceAtom,
+  activeWorkspaceIdAtom,
+  activeWorkspaceMetaAtom,
+} from "../hooks/useActiveWorkspace";
 import { allRequestsAtom } from "../hooks/useAllRequests";
 import { getCreateDropdownItems } from "../hooks/useCreateDropdownItems";
 import { getFolderActions } from "../hooks/useFolderActions";
@@ -42,7 +49,13 @@ import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
 import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
 import { deepEqualAtom } from "../lib/atoms";
+import { showConfirm } from "../lib/confirm";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { showDialog } from "../lib/dialog";
+import {
+  gitWorktreeStatusByModelIdAtom,
+  gitWorktreeStatusFamily,
+} from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { isSidebarFocused } from "../lib/scopes";
@@ -68,6 +81,9 @@ import type { InputHandle } from "./core/Input";
 import { Input } from "./core/Input";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { GitDropdown } from "./git/GitDropdown";
+import { gitCallbacks } from "./git/callbacks";
+import { FileHistoryDialog } from "./git/FileHistoryDialog";
+import { sync } from "../init/sync";
 
 const collapsedFamily = atomFamily((treeId: string) => {
   const key = ["sidebar_collapsed", treeId ?? "n/a"];
@@ -375,6 +391,8 @@ function Sidebar({ className }: { className?: string }) {
       }
 
       const workspaces = jotaiStore.get(workspacesAtom);
+      const syncDir = jotaiStore.get(activeWorkspaceMetaAtom)?.settingSyncDir;
+      const gitItems = getGitContextMenuItems({ items, syncDir });
       const onlyHttpRequests = items.every((i) => i.model === "http_request");
       const requestItems = items.filter(
         (i) =>
@@ -458,8 +476,10 @@ function Sidebar({ className }: { className?: string }) {
         ...initialItems,
         {
           type: "separator",
-          hidden: initialItems.filter((v) => !v.hidden).length === 0,
+          hidden: initialItems.filter((v) => !v.hidden).length === 0 || gitItems.length === 0,
         },
+        ...gitItems,
+        { type: "separator", hidden: gitItems.length === 0 },
         {
           label: "Rename",
           leftSlot: <Icon icon="pencil" />,
@@ -661,6 +681,73 @@ function Sidebar({ className }: { className?: string }) {
 
 export default Sidebar;
 
+function getGitContextMenuItems({
+  items,
+  syncDir,
+}: {
+  items: SidebarModel[];
+  syncDir: string | null | undefined;
+}): DropdownItem[] {
+  if (syncDir == null) return [];
+
+  const gitStatusEntries = items.flatMap((item) => {
+    const status = jotaiStore.get(gitWorktreeStatusFamily(item.id));
+    return status == null || status.status === "current" ? [] : [status];
+  });
+  const historyItem = items.length === 1 ? items[0] : null;
+  const historyPath =
+    historyItem == null
+      ? null
+      : (jotaiStore.get(gitWorktreeStatusFamily(historyItem.id))?.relaPath ??
+        syncPathForModel(historyItem));
+
+  return [
+    {
+      label: "View History",
+      leftSlot: <Icon icon="history" />,
+      hidden: historyPath == null,
+      onSelect: () => {
+        if (historyPath == null) return;
+        showDialog({
+          id: "git-history",
+          size: "lg",
+          title: "File History",
+          noPadding: true,
+          noScroll: true,
+          render: () => <FileHistoryDialog dir={syncDir} relaPath={historyPath} />,
+        });
+      },
+    },
+    {
+      label: "Restore Changes",
+      leftSlot: <Icon icon="rotate_ccw" />,
+      hidden: gitStatusEntries.length === 0,
+      async onSelect() {
+        const confirmed = await showConfirm({
+          id: "git-restore-sidebar-items",
+          title: "Restore Changes",
+          description:
+            gitStatusEntries.length === 1
+              ? "This will discard uncommitted changes for the selected item."
+              : `This will discard uncommitted changes for ${gitStatusEntries.length} selected items.`,
+          confirmText: "Restore",
+          color: "danger",
+        });
+        if (!confirmed) return;
+
+        await gitMutations(syncDir, gitCallbacks(syncDir)).restore.mutateAsync({
+          relaPaths: gitStatusEntries.map((entry) => entry.relaPath),
+        });
+        await sync({ force: true });
+      },
+    },
+  ];
+}
+
+function syncPathForModel(item: SidebarModel) {
+  return `yaak.${item.id}.yaml`;
+}
+
 const activeIdAtom = atom<string | null>((get) => {
   return get(activeRequestIdAtom) || get(activeFolderIdAtom);
 });
@@ -790,6 +877,64 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   return [root, fields] as const;
 });
 
+const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
+  const allModels = get(memoAllPotentialChildrenAtom);
+  const activeWorkspace = get(activeWorkspaceAtom);
+  const gitStatusByModelId = get(gitWorktreeStatusByModelIdAtom);
+  const childrenMap: Record<string, Exclude<SidebarModel, Workspace>[]> = {};
+  const statusByModelId: Record<string, GitStatus> = {};
+
+  for (const item of allModels) {
+    if ("folderId" in item && item.folderId == null) {
+      childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
+      childrenMap[item.workspaceId]?.push(item);
+    } else if ("folderId" in item && item.folderId != null) {
+      childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
+      childrenMap[item.folderId]?.push(item);
+    }
+  }
+
+  const visit = (item: SidebarModel): GitStatus | null => {
+    const statuses: GitStatus[] = [];
+    const directStatus = gitStatusByModelId[item.id]?.status;
+    if (directStatus != null && directStatus !== "current") {
+      statuses.push(directStatus);
+    }
+
+    for (const child of childrenMap[item.id] ?? []) {
+      const childStatus = visit(child);
+      if (childStatus != null) statuses.push(childStatus);
+    }
+
+    const status = summarizeGitStatuses(statuses);
+    if (status != null) {
+      statusByModelId[item.id] = status;
+    }
+    return status;
+  };
+
+  if (activeWorkspace != null) {
+    visit(activeWorkspace);
+  }
+
+  return statusByModelId;
+});
+
+const sidebarGitStatusFamily = atomFamily(
+  (modelId: string) =>
+    selectAtom(sidebarGitStatusByModelIdAtom, (statusByModelId) => statusByModelId[modelId] ?? null),
+  Object.is,
+);
+
+function summarizeGitStatuses(statuses: GitStatus[]): GitStatus | null {
+  if (statuses.length === 0) return null;
+  const firstStatus = statuses[0];
+  if (firstStatus != null && statuses.every((status) => status === firstStatus)) {
+    return firstStatus;
+  }
+  return "modified";
+}
+
 function getItemKey(item: SidebarModel) {
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
@@ -836,6 +981,7 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
   treeId: string;
   item: SidebarModel;
 }) {
+  const gitStatus = useAtomValue(sidebarGitStatusFamily(item.id));
   const response = useAtomValue(
     useMemo(
       () =>
@@ -854,7 +1000,16 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
 
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
-      <div className="truncate">{resolvedModelName(item)}</div>
+      <div
+        className={classNames(
+          "truncate",
+          gitStatus === "modified" && "text-info",
+          gitStatus === "untracked" && "text-success",
+          gitStatus === "removed" && "text-danger",
+        )}
+      >
+        {resolvedModelName(item)}
+      </div>
       {response != null && (
         <div className="ml-auto">
           {response.state !== "closed" ? (

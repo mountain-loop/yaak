@@ -4,9 +4,9 @@ mod connection;
 mod request;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::mpsc as std_mpsc;
-use std::sync::Arc;
 
 use cert::CertificateAuthority;
 use tokio::net::TcpListener;
@@ -27,7 +27,11 @@ pub enum ProxyEvent {
         http_version: String,
     },
     /// A request header sent to the upstream server.
-    RequestHeader { id: u64, name: String, value: String },
+    RequestHeader {
+        id: u64,
+        name: String,
+        value: String,
+    },
     /// The full request body (buffered before forwarding).
     RequestBody { id: u64, body: Vec<u8> },
     /// Response headers received from upstream.
@@ -38,7 +42,11 @@ pub enum ProxyEvent {
         elapsed_ms: u64,
     },
     /// A response header received from the upstream server.
-    ResponseHeader { id: u64, name: String, value: String },
+    ResponseHeader {
+        id: u64,
+        name: String,
+        value: String,
+    },
     /// A chunk of the response body was received (emitted per-frame).
     ResponseBodyChunk { id: u64, bytes: usize },
     /// The response body stream has completed.

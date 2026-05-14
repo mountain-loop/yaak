@@ -55,8 +55,7 @@ pub fn run_migrations(pool: &Pool<SqliteConnectionManager>, dir: &Dir<'_>) -> Re
             continue;
         }
 
-        let sql =
-            entry.as_file().unwrap().contents_utf8().expect("Failed to read migration file");
+        let sql = entry.as_file().unwrap().contents_utf8().expect("Failed to read migration file");
 
         info!("Applying migration: {}", filename);
         let conn = pool.get()?;

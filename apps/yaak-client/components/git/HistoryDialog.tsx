@@ -1,4 +1,4 @@
-import type { GitCommit } from "@yaakapp-internal/git";
+import { useGitLog } from "@yaakapp-internal/git";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   Table,
@@ -10,11 +10,9 @@ import {
   TruncatedWideTableCell,
 } from "@yaakapp-internal/ui";
 
-interface Props {
-  log: GitCommit[];
-}
+export function HistoryDialog({ dir }: { dir: string }) {
+  const log = useGitLog(dir);
 
-export function HistoryDialog({ log }: Props) {
   return (
     <div className="pl-5 pr-1 pb-1">
       <Table scrollable className="px-1">
@@ -26,8 +24,8 @@ export function HistoryDialog({ log }: Props) {
           </TableRow>
         </TableHead>
         <TableBody>
-          {log.map((l) => (
-            <TableRow key={(l.author.name ?? "") + (l.message ?? "n/a") + l.when}>
+          {(log.data ?? []).map((l) => (
+            <TableRow key={l.oid}>
               <TruncatedWideTableCell>
                 {l.message || <em className="text-text-subtle">No message</em>}
               </TruncatedWideTableCell>

@@ -234,7 +234,7 @@ async fn start_integrated_update<R: Runtime>(
     window: &WebviewWindow<R>,
     update: &Update,
 ) -> Result<UpdateResponseAction> {
-    let download_path = ensure_download_path(window, update)?;
+    let download_path = ensure_download_dir(window)?.join(download_file_name(update));
     debug!("Download path: {}", download_path.display());
     let downloaded = download_path.exists();
     let ack_wait = Duration::from_secs(3);
@@ -345,7 +345,7 @@ pub async fn download_update_idempotent<R: Runtime>(
     window: &WebviewWindow<R>,
     update: &Update,
 ) -> Result<PathBuf> {
-    let dl_path = ensure_download_path(window, update)?;
+    let dl_path = ensure_download_dir(window)?.join(download_file_name(update));
 
     if dl_path.exists() {
         info!("{} already downloaded to {}", update.version, dl_path.display());
@@ -385,21 +385,36 @@ pub async fn install_update_maybe_download<R: Runtime>(
     let dl_path = download_update_idempotent(window, update).await?;
     let update_bytes = std::fs::read(&dl_path)?;
     update.install(update_bytes.as_slice())?;
+    delete_download_dir(window);
     Ok(())
 }
 
-pub fn ensure_download_path<R: Runtime>(
-    window: &WebviewWindow<R>,
-    update: &Update,
-) -> Result<PathBuf> {
-    // Ensure dir exists
-    let base_dir = window.path().app_cache_dir()?.join("updates");
+pub fn download_dir<R: Runtime>(window: &WebviewWindow<R>) -> Result<PathBuf> {
+    Ok(window.path().app_cache_dir()?.join("updates"))
+}
+
+pub fn ensure_download_dir<R: Runtime>(window: &WebviewWindow<R>) -> Result<PathBuf> {
+    let base_dir = download_dir(window)?;
     std::fs::create_dir_all(&base_dir)?;
+    Ok(base_dir)
+}
 
-    // Generate name based on signature
+pub fn download_file_name(update: &Update) -> String {
     let sig_digest = md5::compute(&update.signature);
-    let name = format!("yaak-{}-{:x}", update.version, sig_digest);
-    let dl_path = base_dir.join(name);
+    format!("yaak-{}-{:x}", update.version, sig_digest)
+}
 
-    Ok(dl_path)
+pub fn delete_download_dir<R: Runtime>(window: &WebviewWindow<R>) {
+    let base_dir = match download_dir(window) {
+        Ok(dir) => dir,
+        Err(e) => {
+            warn!("Failed to locate update downloads dir: {}", e);
+            return;
+        }
+    };
+    match std::fs::remove_dir_all(&base_dir) {
+        Ok(()) => info!("Removed update downloads dir {}", base_dir.display()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => warn!("Failed to remove update downloads dir {}: {}", base_dir.display(), e),
+    }
 }

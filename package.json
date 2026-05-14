@@ -111,7 +111,7 @@
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.3",
-    "@tauri-apps/cli": "^2.9.6",
+    "@tauri-apps/cli": "^2.11.1",
     "@types/babel__core": "^7.20.5",
     "@vitejs/plugin-react": "^6.0.1",
     "@yaakapp/cli": "^0.5.1",

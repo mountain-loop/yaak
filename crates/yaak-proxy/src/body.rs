@@ -79,10 +79,9 @@ where
                     let len = data.len();
                     self.bytes_count += len as u64;
                     self.chunks.push(data.clone());
-                    let _ = self.event_tx.send(ProxyEvent::ResponseBodyChunk {
-                        id: self.request_id,
-                        bytes: len,
-                    });
+                    let _ = self
+                        .event_tx
+                        .send(ProxyEvent::ResponseBodyChunk { id: self.request_id, bytes: len });
                 }
                 Poll::Ready(Some(Ok(frame)))
             }

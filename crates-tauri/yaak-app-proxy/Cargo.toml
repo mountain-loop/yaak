@@ -10,7 +10,7 @@ name = "tauri_app_proxy_lib"
 crate-type = ["staticlib", "cdylib", "lib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.3", features = [] }
+tauri-build = { version = "2.6.1", features = [] }
 
 [dependencies]
 log = { workspace = true }

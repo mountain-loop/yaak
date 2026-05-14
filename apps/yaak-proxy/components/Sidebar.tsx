@@ -2,7 +2,7 @@ import type { HttpExchange } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
-import { atomFamily } from "jotai/utils";
+import { atomFamily } from "jotai-family";
 import { useCallback } from "react";
 import { httpExchangesAtom } from "../lib/store";
 

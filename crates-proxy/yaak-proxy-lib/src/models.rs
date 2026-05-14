@@ -3,7 +3,10 @@ use rusqlite::Row;
 use sea_query::{IntoColumnRef, IntoIden, IntoTableRef, Order, SimpleExpr, enum_def};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use yaak_database::{ModelChangeEvent, Result as DbResult, UpdateSource, UpsertModelInfo, generate_prefixed_id, upsert_date};
+use yaak_database::{
+    ModelChangeEvent, Result as DbResult, UpdateSource, UpsertModelInfo, generate_prefixed_id,
+    upsert_date,
+};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

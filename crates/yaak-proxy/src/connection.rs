@@ -1,5 +1,5 @@
-use std::sync::mpsc as std_mpsc;
 use std::sync::Arc;
+use std::sync::mpsc as std_mpsc;
 
 use hyper::server::conn::http1;
 use hyper::service::service_fn;

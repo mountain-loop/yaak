@@ -3,7 +3,7 @@ import { duplicateModel, patchModel } from "@yaakapp-internal/models";
 import type { TreeHandle, TreeNode, TreeProps } from "@yaakapp-internal/ui";
 import { Banner, Icon, InlineCode, SplitLayout, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
-import { atomFamily } from "jotai/utils";
+import { atomFamily } from "jotai-family";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { createSubEnvironmentAndActivate } from "../commands/createEnvironment";
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";

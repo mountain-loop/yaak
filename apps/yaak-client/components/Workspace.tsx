@@ -128,7 +128,7 @@ export function Workspace() {
   );
 
   return (
-    <div className="grid w-full h-full grid-rows-[auto_1fr]">
+    <div className="grid w-full h-full grid-rows-[auto_minmax(0,1fr)]">
       {header}
       <SidebarLayout
         width={width ?? 250}

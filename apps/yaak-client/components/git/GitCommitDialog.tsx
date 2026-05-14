@@ -8,12 +8,14 @@ import type {
   WebsocketRequest,
   Workspace,
 } from "@yaakapp-internal/models";
-import { Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
+import { Banner, HStack, Icon, IconButton, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useCallback, useMemo, useState } from "react";
 import { modelToYaml } from "../../lib/diffYaml";
 import { resolvedModelName } from "../../lib/resolvedModelName";
+import { showConfirm } from "../../lib/confirm";
 import { showErrorToast } from "../../lib/toast";
+import { sync } from "../../init/sync";
 import { Button } from "../core/Button";
 import type { CheckboxProps } from "../core/Checkbox";
 import { Checkbox } from "../core/Checkbox";
@@ -21,7 +23,7 @@ import { DiffViewer } from "../core/Editor/DiffViewer";
 import { Input } from "../core/Input";
 import { Separator } from "../core/Separator";
 import { EmptyStateText } from "../EmptyStateText";
-import { gitCallbacks } from "./callbacks";
+import { useGitCallbacks } from "./callbacks";
 import { handlePushResult } from "./git-util";
 
 interface Props {
@@ -38,9 +40,10 @@ interface CommitTreeNode {
 }
 
 export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
-  const [{ status }, { commit, commitAndPush, add, unstage }] = useGit(
+  const callbacks = useGitCallbacks(syncDir);
+  const [{ status }, { commit, commitAndPush, add, unstage, restore }] = useGit(
     syncDir,
-    gitCallbacks(syncDir),
+    callbacks,
   );
   const [isPushing, setIsPushing] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
@@ -165,6 +168,24 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     [selectedEntry],
   );
 
+  const handleDiscardChanges = useCallback(
+    async (entry: GitStatusEntry) => {
+      const confirmed = await showConfirm({
+        id: "git-restore-commit-entry",
+        title: "Discard Changes",
+        description: "Do you really want to discard uncommitted changes for the selected item?",
+        confirmText: "Discard",
+        color: "danger",
+      });
+      if (!confirmed) return;
+
+      await restore.mutateAsync({ relaPaths: [entry.relaPath] });
+      await sync({ force: true });
+      setSelectedEntry(null);
+    },
+    [restore],
+  );
+
   if (tree == null) {
     return null;
   }
@@ -259,7 +280,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         secondSlot={({ style }) => (
           <div style={style} className="h-full px-4 border-l border-l-border-subtle">
             {selectedEntry ? (
-              <DiffPanel entry={selectedEntry} />
+              <DiffPanel entry={selectedEntry} onDiscardChanges={handleDiscardChanges} />
             ) : (
               <EmptyStateText>Select a change to view diff</EmptyStateText>
             )}
@@ -466,16 +487,35 @@ function isNodeRelevant(node: CommitTreeNode): boolean {
   return node.children.some((c) => isNodeRelevant(c));
 }
 
-function DiffPanel({ entry }: { entry: GitStatusEntry }) {
+function DiffPanel({
+  entry,
+  onDiscardChanges,
+}: {
+  entry: GitStatusEntry;
+  onDiscardChanges: (entry: GitStatusEntry) => void | Promise<void>;
+}) {
   const prevYaml = modelToYaml(entry.prev);
   const nextYaml = modelToYaml(entry.next);
 
   return (
     <div className="h-full flex flex-col">
-      <div className="text-sm text-text-subtle mb-2 px-1">
-        {resolvedModelName(entry.next ?? entry.prev)} ({entry.status})
+      <div className="text-text-subtle mb-2 px-1 grid items-center gap-2 grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 truncate">
+          {resolvedModelName(entry.next ?? entry.prev)} ({entry.status})
+        </div>
+        <Button
+          className="ml-auto"
+          color="warning"
+          size="2xs"
+          variant="border"
+          onClick={() => onDiscardChanges(entry)}
+        >Discard Changes</Button>
       </div>
-      <DiffViewer original={prevYaml ?? ""} modified={nextYaml ?? ""} className="flex-1 min-h-0" />
+      <DiffViewer
+        original={prevYaml ?? ""}
+        modified={nextYaml ?? ""}
+        className="flex-1 min-h-0"
+      />
     </div>
   );
 }

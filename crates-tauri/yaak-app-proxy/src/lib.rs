@@ -1,6 +1,6 @@
 use log::{error, info, warn};
-use tauri::{Emitter, Manager, RunEvent, State, WebviewWindow};
 use tauri::Runtime;
+use tauri::{Emitter, Manager, RunEvent, State, WebviewWindow};
 use yaak_proxy_lib::ProxyCtx;
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
 use yaak_window::window::CreateWindowConfig;

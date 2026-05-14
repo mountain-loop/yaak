@@ -3,7 +3,6 @@ use crate::http_request::send_http_request_with_context;
 use crate::models_ext::BlobManagerExt;
 use crate::models_ext::QueryManagerExt;
 use crate::render::{render_grpc_request, render_http_request, render_json_value};
-use yaak_window::window::{CreateWindowConfig, create_window};
 use crate::{
     call_frontend, cookie_jar_from_window, environment_from_window, get_window_from_plugin_context,
     workspace_from_window,
@@ -36,6 +35,7 @@ use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
+use yaak_window::window::{CreateWindowConfig, create_window};
 
 pub(crate) async fn handle_plugin_event<R: Runtime>(
     app_handle: &AppHandle<R>,

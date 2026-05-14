@@ -12,6 +12,8 @@ export type UpdateResponseAction = "install" | "skip";
 
 export type WatchResult = { unlistenEvent: string, };
 
+export type GitWatchResult = { unlistenEvent: string, };
+
 export type YaakNotification = { timestamp: string, timeout: number | null, id: string, title: string | null, message: string, color: string | null, action: YaakNotificationAction | null, };
 
 export type YaakNotificationAction = { label: string, url: string, };

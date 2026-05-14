@@ -1,14 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { createFastMutation } from "@yaakapp/yaak-client/hooks/useFastMutation";
 import { queryClient } from "@yaakapp/yaak-client/lib/queryClient";
 import { useMemo } from "react";
 import {
   BranchDeleteResult,
   CloneResult,
+  GitBranchInfo,
   GitCommit,
+  GitFileDiff,
   GitRemote,
   GitStatusSummary,
+  GitWorktreeStatus,
   PullResult,
   PushResult,
 } from "./bindings/gen_git";
@@ -26,6 +30,10 @@ export type DivergedStrategy = "force_reset" | "merge" | "cancel";
 
 export type UncommittedChangesStrategy = "reset" | "cancel";
 
+interface GitWatchResult {
+  unlistenEvent: string;
+}
+
 export interface GitCallbacks {
   addRemote: () => Promise<GitRemote | null>;
   promptCredentials: (
@@ -38,13 +46,98 @@ export interface GitCallbacks {
 
 const onSuccess = () => queryClient.invalidateQueries({ queryKey: ["git"] });
 
-export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
-  const mutations = useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);
-  const fetchAll = useQuery<void, string>({
+function gitWorktreeStatusQueryKey(dir?: string, refreshKey?: string) {
+  return refreshKey == null
+    ? (["git", "worktree_status", dir] as const)
+    : (["git", "worktree_status", dir, refreshKey] as const);
+}
+
+export function invalidateGitWorktreeStatus(dir?: string) {
+  return queryClient.invalidateQueries({ queryKey: gitWorktreeStatusQueryKey(dir) });
+}
+
+export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
+  return useQuery<GitWorktreeStatus, string>({
+    queryKey: gitWorktreeStatusQueryKey(dir, refreshKey),
+    queryFn: () => invoke("cmd_git_worktree_status", { dir }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktreeStatus) => void) {
+  const channel = new Channel<GitWorktreeStatus>();
+  channel.onmessage = callback;
+  const unlistenPromise = invoke<GitWatchResult>("cmd_git_watch_worktree_status", {
+    dir,
+    channel,
+  });
+
+  void unlistenPromise
+    .then(({ unlistenEvent }) => {
+      addGitWatchKey(unlistenEvent);
+    })
+    .catch(console.debug);
+
+  return () =>
+    unlistenPromise
+      .then(async ({ unlistenEvent }) => {
+        unlistenGitWatcher(unlistenEvent);
+      })
+      .catch(console.error);
+}
+
+function useGitFetchAll(dir: string, refreshKey?: string) {
+  return useQuery<void, string>({
     queryKey: ["git", "fetch_all", dir, refreshKey],
     queryFn: () => invoke("cmd_git_fetch_all", { dir }),
     refetchInterval: 10 * 60_000,
   });
+}
+
+function useGitBranchInfoQuery(dir: string, refreshKey?: string, fetchAllUpdatedAt?: number) {
+  return useQuery<GitBranchInfo, string>({
+    refetchOnMount: true,
+    queryKey: ["git", "branch_info", dir, refreshKey, fetchAllUpdatedAt],
+    queryFn: () => invoke("cmd_git_branch_info", { dir }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useGitBranchInfo(dir: string, refreshKey?: string) {
+  const fetchAll = useGitFetchAll(dir, refreshKey);
+  return useGitBranchInfoQuery(dir, refreshKey, fetchAll.dataUpdatedAt);
+}
+
+export function useGitLog(dir: string, refreshKey?: string, relaPath?: string) {
+  return useQuery<GitCommit[], string>({
+    queryKey: ["git", "log", dir, refreshKey, relaPath],
+    queryFn: () =>
+      relaPath == null
+        ? invoke("cmd_git_log", { dir })
+        : invoke("cmd_git_log_for_file", { dir, relaPath }),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useGitFileDiffForCommit(
+  dir: string,
+  relaPath: string,
+  commitOid: string | null | undefined,
+) {
+  return useQuery<GitFileDiff, string>({
+    enabled: commitOid != null,
+    queryKey: ["git", "file_diff_for_commit", dir, relaPath, commitOid],
+    queryFn: () => {
+      if (commitOid == null) throw new Error("Missing commit oid");
+      return invoke("cmd_git_file_diff_for_commit", { dir, relaPath, commitOid });
+    },
+  });
+}
+
+export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
+  const mutations = useGitMutations(dir, callbacks);
+  const fetchAll = useGitFetchAll(dir, refreshKey);
+
   return [
     {
       remotes: useQuery<GitRemote[], string>({
@@ -52,11 +145,7 @@ export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string
         queryFn: () => getRemotes(dir),
         placeholderData: (prev) => prev,
       }),
-      log: useQuery<GitCommit[], string>({
-        queryKey: ["git", "log", dir, refreshKey],
-        queryFn: () => invoke("cmd_git_log", { dir }),
-        placeholderData: (prev) => prev,
-      }),
+      log: useGitLog(dir, refreshKey),
       status: useQuery<GitStatusSummary, string>({
         refetchOnMount: true,
         queryKey: ["git", "status", dir, refreshKey, fetchAll.dataUpdatedAt],
@@ -66,6 +155,10 @@ export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string
     },
     mutations,
   ] as const;
+}
+
+export function useGitMutations(dir: string, callbacks: GitCallbacks) {
+  return useMemo(() => gitMutations(dir, callbacks), [dir, callbacks]);
 }
 
 export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
@@ -250,11 +343,54 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: () => invoke("cmd_git_reset_changes", { dir }),
       onSuccess,
     }),
+    restore: createFastMutation<void, string, { relaPaths: string[] }>({
+      mutationKey: ["git", "restore", dir],
+      mutationFn: (args) => invoke("cmd_git_restore_files", { dir, ...args }),
+      onSuccess,
+    }),
+    restoreFileFromCommit: createFastMutation<
+      void,
+      string,
+      { commitOid: string; relaPath: string }
+    >({
+      mutationKey: ["git", "restore-file-from-commit", dir],
+      mutationFn: (args) => invoke("cmd_git_restore_file_from_commit", { dir, ...args }),
+      onSuccess,
+    }),
   } as const;
 };
 
 async function getRemotes(dir: string) {
   return invoke<GitRemote[]>("cmd_git_remotes", { dir });
+}
+
+function unlistenGitWatcher(unlistenEvent: string) {
+  void emit(unlistenEvent).then(() => {
+    removeGitWatchKey(unlistenEvent);
+  });
+}
+
+function getGitWatchKeys() {
+  return sessionStorage.getItem("git-worktree-watchers")?.split(",").filter(Boolean) ?? [];
+}
+
+function setGitWatchKeys(keys: string[]) {
+  sessionStorage.setItem("git-worktree-watchers", keys.join(","));
+}
+
+function addGitWatchKey(key: string) {
+  const keys = getGitWatchKeys();
+  setGitWatchKeys([...keys, key]);
+}
+
+function removeGitWatchKey(key: string) {
+  const keys = getGitWatchKeys();
+  setGitWatchKeys(keys.filter((k) => k !== key));
+}
+
+const gitWatchKeys = getGitWatchKeys();
+if (gitWatchKeys.length > 0) {
+  gitWatchKeys.forEach(unlistenGitWatcher);
 }
 
 /**

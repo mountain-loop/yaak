@@ -113,11 +113,8 @@ pub fn strip_json_comments(text: &str) -> String {
     }
 
     // Remove lines that are now empty (were comment-only lines)
-    let result = result
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .collect::<Vec<&str>>()
-        .join("\n");
+    let result =
+        result.lines().filter(|line| !line.trim().is_empty()).collect::<Vec<&str>>().join("\n");
 
     // Remove trailing commas before } or ]
     strip_trailing_commas(&result)
@@ -192,10 +189,12 @@ mod tests {
     #[test]
     fn test_trailing_line_comment() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   "foo": "bar", // this is a comment
   "baz": 123
-}"#),
+}"#
+            ),
             r#"{
   "foo": "bar",
   "baz": 123
@@ -206,10 +205,12 @@ mod tests {
     #[test]
     fn test_whole_line_comment() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   // this is a comment
   "foo": "bar"
-}"#),
+}"#
+            ),
             r#"{
   "foo": "bar"
 }"#
@@ -219,9 +220,11 @@ mod tests {
     #[test]
     fn test_inline_block_comment() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   "foo": /* a comment */ "bar"
-}"#),
+}"#
+            ),
             r#"{
   "foo": "bar"
 }"#
@@ -231,10 +234,12 @@ mod tests {
     #[test]
     fn test_whole_line_block_comment() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   /* a comment */
   "foo": "bar"
-}"#),
+}"#
+            ),
             r#"{
   "foo": "bar"
 }"#
@@ -244,12 +249,14 @@ mod tests {
     #[test]
     fn test_multiline_block_comment() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   /**
    * Hello World!
    */
   "foo": "bar"
-}"#),
+}"#
+            ),
             r#"{
   "foo": "bar"
 }"#
@@ -276,12 +283,14 @@ mod tests {
     #[test]
     fn test_multiple_comments() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   // first comment
   "foo": "bar", // trailing
   /* block */
   "baz": 123
-}"#),
+}"#
+            ),
             r#"{
   "foo": "bar",
   "baz": 123
@@ -292,10 +301,12 @@ mod tests {
     #[test]
     fn test_trailing_comma_after_comment_removed() {
         assert_eq!(
-            strip_json_comments(r#"{
+            strip_json_comments(
+                r#"{
   "a": "aaa",
   // "b": "bbb"
-}"#),
+}"#
+            ),
             r#"{
   "a": "aaa"
 }"#
@@ -304,10 +315,7 @@ mod tests {
 
     #[test]
     fn test_trailing_comma_in_array() {
-        assert_eq!(
-            strip_json_comments(r#"[1, 2, /* 3 */]"#),
-            r#"[1, 2]"#
-        );
+        assert_eq!(strip_json_comments(r#"[1, 2, /* 3 */]"#), r#"[1, 2]"#);
     }
 
     #[test]

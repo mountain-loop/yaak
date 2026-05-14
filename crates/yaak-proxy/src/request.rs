@@ -63,10 +63,7 @@ fn emit_request_events(
         });
     }
     if let Some(body) = body {
-        let _ = tx.send(ProxyEvent::RequestBody {
-            id,
-            body: body.clone(),
-        });
+        let _ = tx.send(ProxyEvent::RequestBody { id, body: body.clone() });
     }
 }
 
@@ -123,22 +120,13 @@ async fn handle_http(
     let http_version = version_str(req.version());
     let start = Instant::now();
 
-    let _ = event_tx.send(ProxyEvent::RequestStart {
-        id,
-        method,
-        url: uri.clone(),
-        http_version,
-    });
+    let _ = event_tx.send(ProxyEvent::RequestStart { id, method, url: uri.clone(), http_version });
 
     let client: Client<_, Full<Bytes>> = Client::builder(TokioExecutor::new()).build_http();
 
     let (parts, body) = req.into_parts();
     let body_bytes = body.collect().await?.to_bytes();
-    let request_body = if body_bytes.is_empty() {
-        None
-    } else {
-        Some(body_bytes.to_vec())
-    };
+    let request_body = if body_bytes.is_empty() { None } else { Some(body_bytes.to_vec()) };
     emit_request_events(&event_tx, id, &parts.headers, &request_body);
 
     let outgoing_req = Request::from_parts(parts, Full::new(body_bytes));
@@ -148,16 +136,10 @@ async fn handle_http(
             emit_response_events(&event_tx, id, &resp, &start);
 
             let (parts, body) = resp.into_parts();
-            Ok(Response::from_parts(
-                parts,
-                measured_incoming(body, id, start, event_tx),
-            ))
+            Ok(Response::from_parts(parts, measured_incoming(body, id, start, event_tx)))
         }
         Err(e) => {
-            let _ = event_tx.send(ProxyEvent::Error {
-                id,
-                error: e.to_string(),
-            });
+            let _ = event_tx.send(ProxyEvent::Error { id, error: e.to_string() });
             Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
         }
     }
@@ -168,11 +150,7 @@ async fn handle_connect(
     event_tx: std_mpsc::Sender<ProxyEvent>,
     ca: Arc<CertificateAuthority>,
 ) -> Result<Response<BoxBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let authority = req
-        .uri()
-        .authority()
-        .map(|a| a.to_string())
-        .unwrap_or_default();
+    let authority = req.uri().authority().map(|a| a.to_string()).unwrap_or_default();
     let (host, port) = parse_host_port(&authority);
 
     let server_config = ca.server_config(&host)?;
@@ -189,10 +167,7 @@ async fn handle_connect(
             }
         };
 
-        let tls_stream = match acceptor
-            .accept(hyper_util::rt::TokioIo::new(upgraded))
-            .await
-        {
+        let tls_stream = match acceptor.accept(hyper_util::rt::TokioIo::new(upgraded)).await {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("TLS accept failed for {host}: {e}");
@@ -203,10 +178,7 @@ async fn handle_connect(
         let tx = event_tx.clone();
         let host_for_requests = host.clone();
         let mut builder = auto::Builder::new(TokioExecutor::new());
-        builder
-            .http1()
-            .preserve_header_case(true)
-            .title_case_headers(true);
+        builder.http1().preserve_header_case(true).title_case_headers(true);
         if let Err(e) = builder
             .serve_connection_with_upgrades(
                 hyper_util::rt::TokioIo::new(tls_stream),
@@ -271,20 +243,12 @@ async fn forward_https(
     let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
     let method = req.method().to_string();
     let http_version = version_str(req.version());
-    let path = req
-        .uri()
-        .path_and_query()
-        .map(|pq| pq.to_string())
-        .unwrap_or_else(|| "/".into());
+    let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
     let uri_str = format!("https://{host}{path}");
     let start = Instant::now();
 
-    let _ = event_tx.send(ProxyEvent::RequestStart {
-        id,
-        method,
-        url: uri_str.clone(),
-        http_version,
-    });
+    let _ =
+        event_tx.send(ProxyEvent::RequestStart { id, method, url: uri_str.clone(), http_version });
 
     // Connect to upstream with TLS
     let tcp_stream = TcpStream::connect(target_addr).await?;
@@ -305,18 +269,13 @@ async fn forward_https(
     let server_name = ServerName::try_from(host.to_string())?;
     let tls_stream = connector.connect(server_name, tcp_stream).await?;
 
-    let negotiated_h2 = tls_stream
-        .get_ref()
-        .1
-        .alpn_protocol()
-        .map_or(false, |p| p == b"h2");
+    let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol().map_or(false, |p| p == b"h2");
 
     let io = hyper_util::rt::TokioIo::new(tls_stream);
 
     let mut sender = if negotiated_h2 {
-        let (sender, conn) = hyper::client::conn::http2::Builder::new(TokioExecutor::new())
-            .handshake(io)
-            .await?;
+        let (sender, conn) =
+            hyper::client::conn::http2::Builder::new(TokioExecutor::new()).handshake(io).await?;
         tokio::spawn(async move {
             if let Err(e) = conn.await {
                 eprintln!("Upstream h2 connection error: {e}");
@@ -340,11 +299,7 @@ async fn forward_https(
     // Capture request metadata
     let (mut parts, body) = req.into_parts();
     let body_bytes = body.collect().await?.to_bytes();
-    let request_body = if body_bytes.is_empty() {
-        None
-    } else {
-        Some(body_bytes.to_vec())
-    };
+    let request_body = if body_bytes.is_empty() { None } else { Some(body_bytes.to_vec()) };
     emit_request_events(&event_tx, id, &parts.headers, &request_body);
 
     if negotiated_h2 {
@@ -365,16 +320,10 @@ async fn forward_https(
             emit_response_events(&event_tx, id, &resp, &start);
 
             let (parts, body) = resp.into_parts();
-            Ok(Response::from_parts(
-                parts,
-                measured_incoming(body, id, start, event_tx),
-            ))
+            Ok(Response::from_parts(parts, measured_incoming(body, id, start, event_tx)))
         }
         Err(e) => {
-            let _ = event_tx.send(ProxyEvent::Error {
-                id,
-                error: e.to_string(),
-            });
+            let _ = event_tx.send(ProxyEvent::Error { id, error: e.to_string() });
             Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
         }
     }

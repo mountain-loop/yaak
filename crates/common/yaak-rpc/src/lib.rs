@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 
 /// Type-erased handler function: takes context + JSON payload, returns JSON or error.
-type HandlerFn<Ctx> = Box<dyn Fn(&Ctx, serde_json::Value) -> Result<serde_json::Value, RpcError> + Send + Sync>;
+type HandlerFn<Ctx> =
+    Box<dyn Fn(&Ctx, serde_json::Value) -> Result<serde_json::Value, RpcError> + Send + Sync>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcError {
@@ -57,9 +58,7 @@ pub struct RpcRouter<Ctx> {
 
 impl<Ctx> RpcRouter<Ctx> {
     pub fn new() -> Self {
-        Self {
-            handlers: HashMap::new(),
-        }
+        Self { handlers: HashMap::new() }
     }
 
     /// Register a handler for a command name.
@@ -77,23 +76,15 @@ impl<Ctx> RpcRouter<Ctx> {
     ) -> Result<serde_json::Value, RpcError> {
         match self.handlers.get(cmd) {
             Some(handler) => handler(ctx, payload),
-            None => Err(RpcError {
-                message: format!("unknown command: {cmd}"),
-            }),
+            None => Err(RpcError { message: format!("unknown command: {cmd}") }),
         }
     }
 
     /// Handle a full `RpcRequest`, returning an `RpcResponse`.
     pub fn handle(&self, req: RpcRequest, ctx: &Ctx) -> RpcResponse {
         match self.dispatch(&req.cmd, req.payload, ctx) {
-            Ok(payload) => RpcResponse::Success {
-                id: req.id,
-                payload,
-            },
-            Err(e) => RpcResponse::Error {
-                id: req.id,
-                error: e.message,
-            },
+            Ok(payload) => RpcResponse::Success { id: req.id, payload },
+            Err(e) => RpcResponse::Error { id: req.id, error: e.message },
         }
     }
 
