@@ -67,23 +67,34 @@ export function SettingRow({
       aria-disabled={disabled || undefined}
       className={classNames(
         className,
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 border-b border-border-subtle py-4",
+        "@container border-b border-border-subtle py-4",
         disabled && "opacity-disabled",
       )}
     >
-      <div className="min-w-0">
-        <div className="text text-text">{title}</div>
-        {description != null && (
-          <div className="mt-1 max-w-2xl text-sm text-text-subtle">{description}</div>
+      <div
+        className={classNames(
+          "grid grid-cols-1 gap-2",
+          "@[30rem]:grid-cols-[minmax(0,1fr)_auto] items-center",
         )}
-      </div>
-      <div className={classNames("flex items-center justify-end", controlClassName)}>
-        {children}
+      >
+        <div className="min-w-0">
+          <div className="text text-text">{title}</div>
+          {description != null && (
+            <div className="mt-1 max-w-2xl text-sm text-text-subtle">{description}</div>
+          )}
+        </div>
+        <div
+          className={classNames(
+            "flex min-w-0 items-center justify-start @[40rem]:justify-end",
+            controlClassName,
+          )}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
 }
-
 export function SettingValue({
   actions,
   className,
