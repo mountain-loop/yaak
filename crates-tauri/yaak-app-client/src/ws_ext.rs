@@ -248,11 +248,16 @@ pub async fn cmd_ws_connect<R: Runtime>(
         }
     }
 
-    // Add cookies to WS HTTP Upgrade
-    if let (true, Some(id)) = (resolved_settings.send_cookies, cookie_jar_id) {
-        let cookie_jar = app_handle.db().get_cookie_jar(&id)?;
-        let store = CookieStore::from_cookies(cookie_jar.cookies);
+    let mut cookie_jar =
+        match (resolved_settings.send_cookies || resolved_settings.store_cookies, cookie_jar_id) {
+            (true, Some(id)) => Some(app_handle.db().get_cookie_jar(id)?),
+            _ => None,
+        };
+    let cookie_store =
+        cookie_jar.as_ref().map(|jar| CookieStore::from_cookies(jar.cookies.clone()));
 
+    // Add cookies to WS HTTP Upgrade
+    if let (true, Some(store)) = (resolved_settings.send_cookies, cookie_store.as_ref()) {
         // Convert WS URL -> HTTP URL because our cookie store matches based on
         // Path/HttpOnly/Secure attributes even though WS upgrades are HTTP requests
         let http_url = convert_ws_url_to_http(&url);
@@ -328,6 +333,23 @@ pub async fn cmd_ws_connect<R: Runtime>(
             value: value.to_str().unwrap().to_string(),
         })
         .collect::<Vec<HttpResponseHeader>>();
+
+    if let (true, Some(cookie_jar), Some(store)) =
+        (resolved_settings.store_cookies, cookie_jar.as_mut(), cookie_store.as_ref())
+    {
+        let set_cookie_headers = response
+            .headers()
+            .into_iter()
+            .filter(|(name, _)| name.as_str().eq_ignore_ascii_case("set-cookie"))
+            .filter_map(|(_, value)| value.to_str().ok().map(ToString::to_string))
+            .collect::<Vec<_>>();
+
+        if !set_cookie_headers.is_empty() {
+            store.store_cookies_from_response(&convert_ws_url_to_http(&url), &set_cookie_headers);
+            cookie_jar.cookies = store.get_all_cookies();
+            app_handle.db().upsert_cookie_jar(cookie_jar, &UpdateSource::Background)?;
+        }
+    }
 
     let connection = app_handle.db().upsert_websocket_connection(
         &WebsocketConnection {

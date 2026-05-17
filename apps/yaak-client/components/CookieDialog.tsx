@@ -24,6 +24,7 @@ import { EventDetailHeader } from "./core/EventViewer";
 import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
 import { EmptyStateText } from "./EmptyStateText";
 import { PlainInput } from "./core/PlainInput";
+import { Select } from "./core/Select";
 import { showAlert } from "../lib/alert";
 
 interface Props {
@@ -38,6 +39,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
   const [selectedCookieKey, setSelectedCookieKey] = useState<string | null>(null);
   const [editingCookieKey, setEditingCookieKey] = useState<string | null>(null);
   const [draftCookie, setDraftCookie] = useState<Cookie | null>(null);
+  const [draftExpiresInput, setDraftExpiresInput] = useState("");
   const filteredCookies = useMemo(() => {
     return cookieJar?.cookies.filter((cookie) => cookieMatchesFilter(cookie, filter)) ?? [];
   }, [cookieJar?.cookies, filter]);
@@ -56,6 +58,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
     setSelectedCookieKey(null);
     setEditingCookieKey(NEW_COOKIE_KEY);
     setDraftCookie(newCookieDraft());
+    setDraftExpiresInput("");
   };
 
   const handleEditCookie = () => {
@@ -65,6 +68,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
 
     setEditingCookieKey(cookieKey(selectedCookie));
     setDraftCookie(selectedCookie);
+    setDraftExpiresInput(cookieExpiresInputValue(selectedCookie));
   };
 
   const handleCancelEdit = () => {
@@ -73,6 +77,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
     }
     setEditingCookieKey(null);
     setDraftCookie(null);
+    setDraftExpiresInput("");
   };
 
   const handleCloseDetails = () => {
@@ -89,7 +94,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
       return;
     }
 
-    const nextCookie = normalizeCookie(draftCookie);
+    let nextCookie = normalizeCookie(draftCookie);
     if (nextCookie.name.trim().length === 0) {
       showAlert({
         id: "invalid-cookie-name",
@@ -97,6 +102,20 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
         body: "Cookie name is required.",
       });
       return;
+    }
+
+    if (nextCookie.expires !== "SessionEnd") {
+      const expires = cookieExpiresFromInput(draftExpiresInput);
+      if (expires == null) {
+        showAlert({
+          id: "invalid-cookie-expires",
+          title: "Invalid Cookie",
+          body: "Cookie expiration must be a valid date.",
+        });
+        return;
+      }
+
+      nextCookie = { ...nextCookie, expires };
     }
 
     const nextCookieKey = cookieKey(nextCookie);
@@ -112,6 +131,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
     setSelectedCookieKey(nextCookieKey);
     setEditingCookieKey(null);
     setDraftCookie(null);
+    setDraftExpiresInput("");
   };
 
   if (cookieJar == null) {
@@ -156,6 +176,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
           layout="vertical"
           storageKey="cookie-dialog-details"
           defaultRatio={0.65}
+          className="-mx-2"
           minHeightPx={10}
           firstSlot={({ style }) =>
             filteredCookies.length === 0 ? (
@@ -163,7 +184,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                 <EmptyStateText>No cookies match the current filter.</EmptyStateText>
               </div>
             ) : (
-              <Table scrollable style={style}>
+              <Table scrollable style={style} className="pr-0.5">
                 <TableHead>
                   <TableRow>
                     <TableHeaderCell>Name</TableHeaderCell>
@@ -185,6 +206,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                           setSelectedCookieKey(null);
                           setEditingCookieKey(null);
                           setDraftCookie(null);
+                          setDraftExpiresInput("");
                           patchModel(cookieJar, { cookies: [] });
                         }}
                       />
@@ -208,9 +230,12 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                           setSelectedCookieKey(key);
                           setEditingCookieKey(null);
                           setDraftCookie(null);
+                          setDraftExpiresInput("");
                         }}
                       >
-                        <TableCell>{c.name}</TableCell>
+                        <TableCell className={classNames("pl-2", isSelected && "rounded-l")}>
+                          {c.name}
+                        </TableCell>
                         <TruncatedWideTableCell className="min-w-[10rem]">
                           {c.value}
                         </TruncatedWideTableCell>
@@ -231,7 +256,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                           />
                         </TableCell>
                         <TableCell>{c.sameSite}</TableCell>
-                        <TableCell>
+                        <TableCell className="rounded-r pr-2">
                           <IconButton
                             icon="trash"
                             size="xs"
@@ -246,6 +271,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                               if (editingCookieKey === key) {
                                 setEditingCookieKey(null);
                                 setDraftCookie(null);
+                                setDraftExpiresInput("");
                               }
                               patchModel(cookieJar, {
                                 cookies: cookieJar.cookies.filter(
@@ -298,7 +324,12 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                       onClose={handleCloseDetails}
                     />
                     {isEditingCookie ? (
-                      <CookieEditor cookie={detailCookie} onChange={setDraftCookie} />
+                      <CookieEditor
+                        cookie={detailCookie}
+                        expiresInputValue={draftExpiresInput}
+                        onChange={setDraftCookie}
+                        onExpiresInputChange={setDraftExpiresInput}
+                      />
                     ) : (
                       <CookieDetails cookie={detailCookie} />
                     )}
@@ -354,17 +385,21 @@ function CookieDetails({ cookie }: { cookie: Cookie }) {
 
 function CookieEditor({
   cookie,
+  expiresInputValue,
   onChange,
+  onExpiresInputChange,
 }: {
   cookie: Cookie;
+  expiresInputValue: string;
   onChange: (cookie: Cookie) => void;
+  onExpiresInputChange: (value: string) => void;
 }) {
   const sessionCookie = cookie.expires === "SessionEnd";
 
   return (
     <div className="overflow-y-auto">
       <KeyValueRows>
-        <CookieKeyValueRow label="Name">
+        <CookieKeyValueRow align="middle" label="Name">
           <CookieTextInput
             required
             autoFocus
@@ -378,14 +413,14 @@ function CookieEditor({
             onChange={(value) => onChange({ ...cookie, value })}
           />
         </CookieKeyValueRow>
-        <CookieKeyValueRow label="Domain">
+        <CookieKeyValueRow align="middle" label="Domain">
           <CookieTextInput
             value={cookieDomainInputValue(cookie)}
             placeholder="n/a"
             onChange={(domain) => onChange(cookieWithDomain(cookie, domain))}
           />
         </CookieKeyValueRow>
-        <CookieKeyValueRow label="Path">
+        <CookieKeyValueRow align="middle" label="Path">
           <CookieTextInput
             value={cookie.path}
             placeholder="/"
@@ -397,24 +432,40 @@ function CookieEditor({
             <Checkbox
               checked={sessionCookie}
               title="Session cookie"
-              onChange={(checked) =>
+              onChange={(checked) => {
+                if (checked) {
+                  onChange({ ...cookie, expires: "SessionEnd" });
+                  return;
+                }
+
+                const expiresInput =
+                  cookieExpiresFromInput(expiresInputValue) == null
+                    ? defaultCookieExpiresInputValue()
+                    : expiresInputValue;
+
+                onExpiresInputChange(expiresInput);
                 onChange({
                   ...cookie,
-                  expires: checked
-                    ? "SessionEnd"
-                    : cookieExpiresFromInput(defaultCookieExpiresInputValue()),
-                })
-              }
+                  expires: cookieExpiresFromInput(expiresInput)!,
+                });
+              }}
             />
             <CookieTextInput
-              value={sessionCookie ? "" : cookieExpiresInputValue(cookie)}
+              value={sessionCookie ? "" : expiresInputValue}
               disabled={sessionCookie}
-              onChange={(value) => onChange({ ...cookie, expires: cookieExpiresFromInput(value) })}
+              onChange={(value) => {
+                onExpiresInputChange(value);
+
+                const expires = cookieExpiresFromInput(value);
+                if (expires != null) {
+                  onChange({ ...cookie, expires });
+                }
+              }}
             />
           </div>
         </CookieKeyValueRow>
         <CookieKeyValueRow label="Size">{cookieSize(cookie)}</CookieKeyValueRow>
-        <CookieKeyValueRow label="HTTP Only">
+        <CookieKeyValueRow align="middle" label="HTTP Only">
           <Checkbox
             hideLabel
             title="HTTP Only"
@@ -422,7 +473,7 @@ function CookieEditor({
             onChange={(httpOnly) => onChange({ ...cookie, httpOnly })}
           />
         </CookieKeyValueRow>
-        <CookieKeyValueRow label="Secure">
+        <CookieKeyValueRow align="middle" label="Secure">
           <Checkbox
             hideLabel
             title="Secure"
@@ -430,23 +481,27 @@ function CookieEditor({
             onChange={(secure) => onChange({ ...cookie, secure })}
           />
         </CookieKeyValueRow>
-        <CookieKeyValueRow label="Same Site">
-          <select
+        <CookieKeyValueRow align="middle" label="Same Site">
+          <Select
+            hideLabel
+            name="cookie-same-site"
+            label="Same Site"
             value={cookie.sameSite ?? ""}
-            className={cookieInputClassName}
-            onChange={(event) =>
+            size="xs"
+            className="w-full"
+            options={[
+              { label: "n/a", value: "" },
+              { label: "Lax", value: "Lax" },
+              { label: "Strict", value: "Strict" },
+              { label: "None", value: "None" },
+            ]}
+            onChange={(sameSite) =>
               onChange({
                 ...cookie,
-                sameSite:
-                  event.target.value === "" ? null : (event.target.value as Cookie["sameSite"]),
+                sameSite: sameSite === "" ? null : (sameSite as Cookie["sameSite"]),
               })
             }
-          >
-            <option value="">n/a</option>
-            <option value="Lax">Lax</option>
-            <option value="Strict">Strict</option>
-            <option value="None">None</option>
-          </select>
+          />
         </CookieKeyValueRow>
       </KeyValueRows>
     </div>
@@ -454,9 +509,7 @@ function CookieEditor({
 }
 
 function CookieKeyValueRow({ labelClassName, ...props }: ComponentProps<typeof KeyValueRow>) {
-  return (
-    <KeyValueRow labelClassName={classNames("w-[7rem] min-w-[7rem]", labelClassName)} {...props} />
-  );
+  return <KeyValueRow labelClassName={classNames("w-[7rem]", labelClassName)} {...props} />;
 }
 
 function CookieTextInput({
@@ -581,10 +634,10 @@ function defaultCookieExpiresInputValue() {
   return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 }
 
-function cookieExpiresFromInput(value: string): Cookie["expires"] {
+function cookieExpiresFromInput(value: string): Cookie["expires"] | null {
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) {
-    return "SessionEnd";
+    return null;
   }
 
   return { AtUtc: `${Math.floor(time / 1000)}` };

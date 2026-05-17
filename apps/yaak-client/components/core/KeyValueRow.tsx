@@ -34,6 +34,7 @@ interface KeyValueRowProps {
   children: ReactNode;
   rightSlot?: ReactNode;
   leftSlot?: ReactNode;
+  align?: "top" | "middle";
   labelClassName?: string;
   labelColor?: "secondary" | "primary" | "info";
   enableCopy?: boolean;
@@ -45,6 +46,7 @@ export function KeyValueRow({
   children,
   rightSlot,
   leftSlot,
+  align = "top",
   labelColor = "secondary",
   labelClassName,
   enableCopy,
@@ -69,7 +71,9 @@ export function KeyValueRow({
     <>
       <td
         className={classNames(
-          "select-none py-0.5 pr-2 h-full align-top max-w-[10rem]",
+          "select-none py-0.5 pr-2 h-full max-w-[10rem]",
+          align === "top" && "align-top",
+          align === "middle" && "align-middle",
           labelClassName,
           labelColor === "primary" && "text-primary",
           labelColor === "secondary" && "text-text-subtle",
@@ -78,7 +82,13 @@ export function KeyValueRow({
       >
         <span className="select-text cursor-text">{label}</span>
       </td>
-      <td className="select-none py-0.5 break-all align-top max-w-[15rem]">
+      <td
+        className={classNames(
+          "select-none py-0.5 break-all max-w-[15rem]",
+          align === "top" && "align-top",
+          align === "middle" && "align-middle",
+        )}
+      >
         <div className="select-text cursor-text max-h-[12rem] overflow-y-auto grid grid-cols-[auto_minmax(0,1fr)_auto]">
           {leftSlot ?? <span aria-hidden />}
           {children}

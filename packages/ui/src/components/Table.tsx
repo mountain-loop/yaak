@@ -34,9 +34,13 @@ export function TableBody({ children, className }: { children: ReactNode; classN
     <tbody
       className={classNames(
         className,
-        "[&>tr:not(:last-child)>td]:border-b [&>tr:not(:last-child)>td]:border-b-surface-highlight",
+        "[&>tr:not(:last-child):not([data-table-spacer])>td]:border-b",
+        "[&>tr:not(:last-child):not([data-table-spacer])>td]:border-b-surface-highlight",
       )}
     >
+      <tr aria-hidden data-table-spacer className="h-0.5">
+        <td className="p-0" colSpan={1000} />
+      </tr>
       {children}
     </tbody>
   );
