@@ -7,7 +7,7 @@ use log::debug;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use url::Url;
-use yaak_models::models::{Cookie, CookieDomain, CookieExpires};
+use yaak_models::models::{Cookie, CookieDomain, CookieExpires, CookieSameSite};
 
 /// A thread-safe cookie store that can be shared across requests
 #[derive(Debug, Clone)]
@@ -45,10 +45,7 @@ impl CookieStore {
         let matching_cookies: Vec<_> = cookies
             .iter()
             .filter(|cookie| self.cookie_matches(cookie, url, &now))
-            .filter_map(|cookie| {
-                // Parse the raw cookie to get name=value
-                parse_cookie_name_value(&cookie.raw_cookie)
-            })
+            .map(|cookie| (cookie.name.clone(), cookie.value.clone()))
             .collect();
 
         if matching_cookies.is_empty() {
@@ -72,13 +69,7 @@ impl CookieStore {
             if let Some(cookie) = parse_set_cookie(header_value, url) {
                 // Remove any existing cookie with the same name and domain
                 cookies.retain(|existing| !cookies_match(existing, &cookie));
-                debug!(
-                    "Storing cookie: {} for domain {:?}",
-                    parse_cookie_name_value(&cookie.raw_cookie)
-                        .map(|(n, _)| n)
-                        .unwrap_or_else(|| "unknown".to_string()),
-                    cookie.domain
-                );
+                debug!("Storing cookie: {} for domain {:?}", cookie.name, cookie.domain);
                 cookies.push(cookie);
             }
         }
@@ -117,10 +108,9 @@ impl CookieStore {
         }
 
         // Check path
-        let (cookie_path, _) = &cookie.path;
         let url_path = url.path();
 
-        path_matches(url_path, cookie_path)
+        path_matches(url_path, &cookie.path)
     }
 }
 
@@ -133,8 +123,7 @@ pub fn get_cookie_value_from_jar(
     let domain = domain.and_then(normalize_cookie_domain_filter);
 
     cookies.into_iter().find_map(|cookie| {
-        let (cookie_name, value) = parse_cookie_name_value(&cookie.raw_cookie)?;
-        if cookie_name != name {
+        if cookie.name != name {
             return None;
         }
 
@@ -144,11 +133,12 @@ pub fn get_cookie_value_from_jar(
             }
         }
 
-        Some(value)
+        Some(cookie.value)
     })
 }
 
 /// Parse name=value from a cookie string (raw_cookie format)
+#[cfg(test)]
 fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
     // The raw_cookie typically looks like "name=value" or "name=value; attr1; attr2=..."
     let first_part = raw_cookie.split(';').next()?;
@@ -176,8 +166,6 @@ fn cookie_domain_matches_filter(cookie_domain: &CookieDomain, domain: &str) -> b
 /// Parse a Set-Cookie header into a Cookie
 fn parse_set_cookie(header_value: &str, request_url: &Url) -> Option<Cookie> {
     let parsed = cookie::Cookie::parse(header_value).ok()?;
-
-    let raw_cookie = format!("{}={}", parsed.name(), parsed.value());
 
     // Determine domain
     let domain = if let Some(domain_attr) = parsed.domain() {
@@ -216,14 +204,28 @@ fn parse_set_cookie(header_value: &str, request_url: &Url) -> Option<Cookie> {
 
     // Determine path
     let path = if let Some(path_attr) = parsed.path() {
-        (path_attr.to_string(), true)
+        path_attr.to_string()
     } else {
         // Default path is the directory of the request URI
-        let default_path = default_cookie_path(request_url.path());
-        (default_path, false)
+        default_cookie_path(request_url.path())
     };
 
-    Some(Cookie { raw_cookie, domain, expires, path })
+    let same_site = parsed.same_site().map(|same_site| match same_site {
+        cookie::SameSite::Strict => CookieSameSite::Strict,
+        cookie::SameSite::Lax => CookieSameSite::Lax,
+        cookie::SameSite::None => CookieSameSite::None,
+    });
+
+    Some(Cookie {
+        name: parsed.name().to_string(),
+        value: parsed.value().to_string(),
+        domain,
+        expires,
+        path,
+        secure: parsed.secure().unwrap_or(false),
+        http_only: parsed.http_only().unwrap_or(false),
+        same_site,
+    })
 }
 
 /// Get the default cookie path from a request path (RFC 6265 Section 5.1.4)
@@ -261,10 +263,7 @@ fn path_matches(request_path: &str, cookie_path: &str) -> bool {
 
 /// Check if two cookies match (same name and domain)
 fn cookies_match(a: &Cookie, b: &Cookie) -> bool {
-    let name_a = parse_cookie_name_value(&a.raw_cookie).map(|(n, _)| n);
-    let name_b = parse_cookie_name_value(&b.raw_cookie).map(|(n, _)| n);
-
-    if name_a != name_b {
+    if a.name != b.name {
         return false;
     }
 
@@ -317,11 +316,16 @@ mod tests {
     use super::*;
 
     fn cookie(raw_cookie: &str, domain: CookieDomain) -> Cookie {
+        let (name, value) = parse_cookie_name_value(raw_cookie).unwrap();
         Cookie {
-            raw_cookie: raw_cookie.to_string(),
+            name,
+            value,
             domain,
             expires: CookieExpires::SessionEnd,
-            path: ("/".to_string(), false),
+            path: "/".to_string(),
+            secure: false,
+            http_only: false,
+            same_site: None,
         }
     }
 

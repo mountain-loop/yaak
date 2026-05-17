@@ -8,7 +8,6 @@ use crate::{
     workspace_from_window,
 };
 use chrono::Utc;
-use cookie::Cookie;
 use log::error;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Listener, Manager, Runtime};
@@ -409,11 +408,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             let window = get_window_from_plugin_context(app_handle, plugin_context)?;
             let names = match cookie_jar_from_window(&window) {
                 None => Vec::new(),
-                Some(j) => j
-                    .cookies
-                    .into_iter()
-                    .filter_map(|c| Cookie::parse(c.raw_cookie).ok().map(|c| c.name().to_string()))
-                    .collect(),
+                Some(j) => j.cookies.into_iter().map(|c| c.name).collect(),
             };
             Ok(Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse {
                 names,

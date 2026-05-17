@@ -24,7 +24,7 @@ export function Separator({
       )}
       <div
         className={classNames(
-          "h-0 border-t opacity-60",
+          "opacity-60",
           color == null && "border-border",
           color === "primary" && "border-primary",
           color === "secondary" && "border-secondary",
@@ -34,8 +34,8 @@ export function Separator({
           color === "danger" && "border-danger",
           color === "info" && "border-info",
           dashed && "border-dashed",
-          orientation === "horizontal" && "w-full h-[1px]",
-          orientation === "vertical" && "h-full w-[1px]",
+          orientation === "horizontal" && "w-full h-0 border-t",
+          orientation === "vertical" && "h-full w-0 border-l",
         )}
       />
     </div>

@@ -1,4 +1,5 @@
 import classNames from "classnames";
+import type { HTMLAttributes } from "react";
 import type { ReactNode } from "react";
 
 export function Table({
@@ -28,9 +29,14 @@ export function Table({
   );
 }
 
-export function TableBody({ children }: { children: ReactNode }) {
+export function TableBody({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <tbody className="[&>tr:not(:last-child)>td]:border-b [&>tr:not(:last-child)>td]:border-b-surface-highlight">
+    <tbody
+      className={classNames(
+        className,
+        "[&>tr:not(:last-child)>td]:border-b [&>tr:not(:last-child)>td]:border-b-surface-highlight",
+      )}
+    >
       {children}
     </tbody>
   );
@@ -49,8 +55,19 @@ export function TableHead({ children, className }: { children: ReactNode; classN
   );
 }
 
-export function TableRow({ children }: { children: ReactNode }) {
-  return <tr>{children}</tr>;
+export function TableRow({
+  children,
+  className,
+  ...props
+}: {
+  children: ReactNode;
+  className?: string;
+} & HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <tr className={className} {...props}>
+      {children}
+    </tr>
+  );
 }
 
 export function TableCell({
@@ -98,7 +115,7 @@ export function TableHeaderCell({
     <th
       className={classNames(
         className,
-        "py-2 [&:not(:first-child)]:pl-4 text-left text-text-subtle",
+        "whitespace-nowrap py-2 [&:not(:first-child)]:pl-4 text-left text-text-subtle",
       )}
     >
       {children}

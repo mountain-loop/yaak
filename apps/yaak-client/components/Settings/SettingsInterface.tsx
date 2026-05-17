@@ -3,7 +3,7 @@ import { useFonts } from "@yaakapp-internal/fonts";
 import { useLicense } from "@yaakapp-internal/license";
 import type { EditorKeymap, Settings } from "@yaakapp-internal/models";
 import { patchModel, settingsAtom } from "@yaakapp-internal/models";
-import { clamp, Heading, HStack, Icon, VStack } from "@yaakapp-internal/ui";
+import { clamp, Heading, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useState } from "react";
 import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
@@ -13,7 +13,16 @@ import { CargoFeature } from "../CargoFeature";
 import { Button } from "../core/Button";
 import { Checkbox } from "../core/Checkbox";
 import { Link } from "../core/Link";
-import { Select } from "../core/Select";
+import {
+  ModelSettingRowBoolean,
+  ModelSettingRowSelect,
+  SettingRow,
+  SettingRowBoolean,
+  SettingRowSelect,
+  SettingSelectControl,
+  SettingsList,
+  SettingsSection,
+} from "../core/SettingRow";
 
 const NULL_FONT_VALUE = "__NULL_FONT__";
 
@@ -38,154 +47,172 @@ export function SettingsInterface() {
   }
 
   return (
-    <VStack space={3} className="mb-4">
+    <VStack space={1.5} className="mb-4">
       <div className="mb-3">
         <Heading>Interface</Heading>
         <p className="text-text-subtle">Tweak settings related to the user interface.</p>
       </div>
-      <Select
-        name="switchWorkspaceBehavior"
-        label="Open workspace behavior"
-        size="sm"
-        help="When opening a workspace, should it open in the current window or a new window?"
-        value={
-          settings.openWorkspaceNewWindow === true
-            ? "new"
-            : settings.openWorkspaceNewWindow === false
-              ? "current"
-              : "ask"
-        }
-        onChange={async (v) => {
-          if (v === "current") await patchModel(settings, { openWorkspaceNewWindow: false });
-          else if (v === "new") await patchModel(settings, { openWorkspaceNewWindow: true });
-          else await patchModel(settings, { openWorkspaceNewWindow: null });
-        }}
-        options={[
-          { label: "Always ask", value: "ask" },
-          { label: "Open in current window", value: "current" },
-          { label: "Open in new window", value: "new" },
-        ]}
-      />
-      <HStack space={2} alignItems="end">
-        {fonts.data && (
-          <Select
-            size="sm"
-            name="uiFont"
-            label="Interface font"
-            value={settings.interfaceFont ?? NULL_FONT_VALUE}
-            options={[
-              { label: "System default", value: NULL_FONT_VALUE },
-              ...(fonts.data.uiFonts.map((f) => ({
-                label: f,
-                value: f,
-              })) ?? []),
-              // Some people like monospace fonts for the UI
-              ...(fonts.data.editorFonts.map((f) => ({
-                label: f,
-                value: f,
-              })) ?? []),
-            ]}
+      <SettingsList className="space-y-8">
+        <SettingsSection title="Workspaces">
+          <SettingRowSelect
+            title="Open workspace behavior"
+            description="Choose what happens when opening another workspace."
+            name="switchWorkspaceBehavior"
+            value={
+              settings.openWorkspaceNewWindow === true
+                ? "new"
+                : settings.openWorkspaceNewWindow === false
+                  ? "current"
+                  : "ask"
+            }
             onChange={async (v) => {
-              const interfaceFont = v === NULL_FONT_VALUE ? null : v;
-              await patchModel(settings, { interfaceFont });
+              if (v === "current") await patchModel(settings, { openWorkspaceNewWindow: false });
+              else if (v === "new") await patchModel(settings, { openWorkspaceNewWindow: true });
+              else await patchModel(settings, { openWorkspaceNewWindow: null });
             }}
-          />
-        )}
-        <Select
-          hideLabel
-          size="sm"
-          name="interfaceFontSize"
-          label="Interface Font Size"
-          defaultValue="14"
-          value={`${settings.interfaceFontSize}`}
-          options={fontSizeOptions}
-          onChange={(v) => patchModel(settings, { interfaceFontSize: Number.parseInt(v, 10) })}
-        />
-      </HStack>
-      <HStack space={2} alignItems="end">
-        {fonts.data && (
-          <Select
-            size="sm"
-            name="editorFont"
-            label="Editor font"
-            value={settings.editorFont ?? NULL_FONT_VALUE}
             options={[
-              { label: "System default", value: NULL_FONT_VALUE },
-              ...(fonts.data.editorFonts.map((f) => ({
-                label: f,
-                value: f,
-              })) ?? []),
+              { label: "Always ask", value: "ask" },
+              { label: "Open in current window", value: "current" },
+              { label: "Open in new window", value: "new" },
             ]}
-            onChange={async (v) => {
-              const editorFont = v === NULL_FONT_VALUE ? null : v;
-              await patchModel(settings, { editorFont });
-            }}
           />
-        )}
-        <Select
-          hideLabel
-          size="sm"
-          name="editorFontSize"
-          label="Editor Font Size"
-          defaultValue="12"
-          value={`${settings.editorFontSize}`}
-          options={fontSizeOptions}
-          onChange={(v) =>
-            patchModel(settings, { editorFontSize: clamp(Number.parseInt(v, 10) || 14, 8, 30) })
-          }
-        />
-      </HStack>
-      <Select
-        leftSlot={<Icon icon="keyboard" color="secondary" />}
-        size="sm"
-        name="editorKeymap"
-        label="Editor keymap"
-        value={`${settings.editorKeymap}`}
-        options={keymaps}
-        onChange={(v) => patchModel(settings, { editorKeymap: v })}
-      />
-      <Checkbox
-        checked={settings.editorSoftWrap}
-        title="Wrap editor lines"
-        onChange={(editorSoftWrap) => patchModel(settings, { editorSoftWrap })}
-      />
-      <Checkbox
-        checked={settings.coloredMethods}
-        title="Colorize request methods"
-        onChange={(coloredMethods) => patchModel(settings, { coloredMethods })}
-      />
-      <CargoFeature feature="license">
-        <LicenseSettings settings={settings} />
-      </CargoFeature>
+        </SettingsSection>
 
-      <NativeTitlebarSetting settings={settings} />
+        <SettingsSection title="Fonts">
+          <SettingRow
+            title="Interface font"
+            description="Font used for Yaak interface controls."
+            controlClassName="gap-1"
+          >
+            {fonts.data && (
+              <SettingSelectControl
+                name="uiFont"
+                label="Interface font"
+                selectClassName="!w-72"
+                value={settings.interfaceFont ?? NULL_FONT_VALUE}
+                defaultValue={NULL_FONT_VALUE}
+                options={[
+                  { label: "System default", value: NULL_FONT_VALUE },
+                  ...fonts.data.uiFonts.map((f) => ({ label: f, value: f })),
+                  ...fonts.data.editorFonts.map((f) => ({ label: f, value: f })),
+                ]}
+                onChange={async (v) => {
+                  const interfaceFont = v === NULL_FONT_VALUE ? null : v;
+                  await patchModel(settings, { interfaceFont });
+                }}
+              />
+            )}
+            <SettingSelectControl
+              name="interfaceFontSize"
+              label="Interface Font Size"
+              selectClassName="!w-20"
+              value={`${settings.interfaceFontSize}`}
+              defaultValue="14"
+              options={fontSizeOptions}
+              onChange={(v) => patchModel(settings, { interfaceFontSize: Number.parseInt(v, 10) })}
+            />
+          </SettingRow>
 
-      {type() !== "macos" && (
-        <Checkbox
-          checked={settings.hideWindowControls}
-          title="Hide window controls"
-          help="Hide the close/maximize/minimize controls on Windows or Linux"
-          onChange={(hideWindowControls) => patchModel(settings, { hideWindowControls })}
-        />
-      )}
+          <SettingRow
+            title="Editor font"
+            description="Font used in request and response editors."
+            controlClassName="gap-1"
+          >
+            {fonts.data && (
+              <SettingSelectControl
+                name="editorFont"
+                label="Editor font"
+                selectClassName="!w-72"
+                value={settings.editorFont ?? NULL_FONT_VALUE}
+                defaultValue={NULL_FONT_VALUE}
+                options={[
+                  { label: "System default", value: NULL_FONT_VALUE },
+                  ...fonts.data.editorFonts.map((f) => ({ label: f, value: f })),
+                ]}
+                onChange={async (v) => {
+                  const editorFont = v === NULL_FONT_VALUE ? null : v;
+                  await patchModel(settings, { editorFont });
+                }}
+              />
+            )}
+            <SettingSelectControl
+              name="editorFontSize"
+              label="Editor Font Size"
+              selectClassName="!w-20"
+              value={`${settings.editorFontSize}`}
+              defaultValue="12"
+              options={fontSizeOptions}
+              onChange={(v) =>
+                patchModel(settings, {
+                  editorFontSize: clamp(Number.parseInt(v, 10) || 14, 8, 30),
+                })
+              }
+            />
+          </SettingRow>
+        </SettingsSection>
+
+        <SettingsSection title="Editor">
+          <ModelSettingRowSelect
+            model={settings}
+            modelKey="editorKeymap"
+            title="Editor keymap"
+            description="Keyboard shortcut preset used by text editors."
+            options={keymaps}
+          />
+          <ModelSettingRowBoolean
+            model={settings}
+            modelKey="editorSoftWrap"
+            title="Wrap editor lines"
+            description="Wrap long lines in request and response editors."
+          />
+          <ModelSettingRowBoolean
+            model={settings}
+            modelKey="coloredMethods"
+            title="Colorize request methods"
+            description="Use method-specific colors for HTTP request methods."
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Window">
+          <NativeTitlebarSetting settings={settings} />
+          {type() !== "macos" && (
+            <ModelSettingRowBoolean
+              model={settings}
+              modelKey="hideWindowControls"
+              title="Hide window controls"
+              description="Hide the close, maximize, and minimize controls on Windows or Linux."
+            />
+          )}
+        </SettingsSection>
+
+        <CargoFeature feature="license">
+          <LicenseSettings settings={settings} />
+        </CargoFeature>
+      </SettingsList>
     </VStack>
   );
 }
 
 function NativeTitlebarSetting({ settings }: { settings: Settings }) {
   const [nativeTitlebar, setNativeTitlebar] = useState(settings.useNativeTitlebar);
+
   return (
-    <div className="flex gap-1 overflow-hidden h-2xs">
+    <SettingRow
+      title="Native title bar"
+      description="Use the operating system's standard title bar and window controls."
+      controlClassName="gap-2"
+    >
       <Checkbox
+        hideLabel
+        size="md"
         checked={nativeTitlebar}
         title="Native title bar"
-        help="Use the operating system's standard title bar and window controls"
         onChange={setNativeTitlebar}
       />
       {settings.useNativeTitlebar !== nativeTitlebar && (
         <Button
           color="primary"
-          size="2xs"
+          size="xs"
           onClick={async () => {
             await patchModel(settings, { useNativeTitlebar: nativeTitlebar });
             await invokeCmd("cmd_restart");
@@ -194,7 +221,7 @@ function NativeTitlebarSetting({ settings }: { settings: Settings }) {
           Apply and Restart
         </Button>
       )}
-    </div>
+    </SettingRow>
   );
 }
 
@@ -205,37 +232,40 @@ function LicenseSettings({ settings }: { settings: Settings }) {
   }
 
   return (
-    <Checkbox
-      checked={settings.hideLicenseBadge}
-      title="Hide personal use badge"
-      onChange={async (hideLicenseBadge) => {
-        if (hideLicenseBadge) {
-          const confirmed = await showConfirm({
-            id: "hide-license-badge",
-            title: "Confirm Personal Use",
-            confirmText: "Confirm",
-            description: (
-              <VStack space={3}>
-                <p>Hey there 👋🏼</p>
-                <p>
-                  Yaak is free for personal projects and learning.{" "}
-                  <strong>If you’re using Yaak at work, a license is required.</strong>
-                </p>
-                <p>
-                  Licenses help keep Yaak independent and sustainable.{" "}
-                  <Link href="https://yaak.app/pricing?s=badge">Purchase a License →</Link>
-                </p>
-              </VStack>
-            ),
-            requireTyping: "Personal Use",
-            color: "info",
-          });
-          if (!confirmed) {
-            return; // Cancel
+    <SettingsSection title="License">
+      <SettingRowBoolean
+        checked={settings.hideLicenseBadge}
+        title="Hide personal use badge"
+        description="Hide the personal-use badge from the interface."
+        onChange={async (hideLicenseBadge) => {
+          if (hideLicenseBadge) {
+            const confirmed = await showConfirm({
+              id: "hide-license-badge",
+              title: "Confirm Personal Use",
+              confirmText: "Confirm",
+              description: (
+                <VStack space={3}>
+                  <p>Hey there 👋🏼</p>
+                  <p>
+                    Yaak is free for personal projects and learning.{" "}
+                    <strong>If you’re using Yaak at work, a license is required.</strong>
+                  </p>
+                  <p>
+                    Licenses help keep Yaak independent and sustainable.{" "}
+                    <Link href="https://yaak.app/pricing?s=badge">Purchase a License →</Link>
+                  </p>
+                </VStack>
+              ),
+              requireTyping: "Personal Use",
+              color: "info",
+            });
+            if (!confirmed) {
+              return;
+            }
           }
-        }
-        await patchModel(settings, { hideLicenseBadge });
-      }}
-    />
+          await patchModel(settings, { hideLicenseBadge });
+        }}
+      />
+    </SettingsSection>
   );
 }

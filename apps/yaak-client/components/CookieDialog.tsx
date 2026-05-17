@@ -1,9 +1,30 @@
 import type { Cookie } from "@yaakapp-internal/models";
 import { cookieJarsAtom, patchModel } from "@yaakapp-internal/models";
+import { formatDate } from "date-fns/format";
 import { useAtomValue } from "jotai";
+import { type ComponentProps, useMemo, useState } from "react";
+import { showDialog } from "../lib/dialog";
+import { jotaiStore } from "../lib/jotai";
 import { cookieDomain } from "../lib/model_util";
-import { Banner, InlineCode } from "@yaakapp-internal/ui";
+import {
+  Icon,
+  SplitLayout,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+  TruncatedWideTableCell,
+} from "@yaakapp-internal/ui";
 import { IconButton } from "./core/IconButton";
+import { Checkbox } from "./core/Checkbox";
+import classNames from "classnames";
+import { EventDetailHeader } from "./core/EventViewer";
+import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { EmptyStateText } from "./EmptyStateText";
+import { PlainInput } from "./core/PlainInput";
+import { showAlert } from "../lib/alert";
 
 interface Props {
   cookieJarId: string | null;
@@ -12,56 +33,574 @@ interface Props {
 export const CookieDialog = ({ cookieJarId }: Props) => {
   const cookieJars = useAtomValue(cookieJarsAtom);
   const cookieJar = cookieJars?.find((c) => c.id === cookieJarId);
+  const [filter, setFilter] = useState("");
+  const [filterUpdateKey, setFilterUpdateKey] = useState(0);
+  const [selectedCookieKey, setSelectedCookieKey] = useState<string | null>(null);
+  const [editingCookieKey, setEditingCookieKey] = useState<string | null>(null);
+  const [draftCookie, setDraftCookie] = useState<Cookie | null>(null);
+  const filteredCookies = useMemo(() => {
+    return cookieJar?.cookies.filter((cookie) => cookieMatchesFilter(cookie, filter)) ?? [];
+  }, [cookieJar?.cookies, filter]);
+  const selectedCookie = useMemo(
+    () =>
+      selectedCookieKey == null
+        ? null
+        : (filteredCookies.find((cookie) => cookieKey(cookie) === selectedCookieKey) ?? null),
+    [filteredCookies, selectedCookieKey],
+  );
+  const detailCookie = draftCookie ?? selectedCookie;
+  const isCreatingCookie = editingCookieKey === NEW_COOKIE_KEY;
+  const isEditingCookie = draftCookie != null;
+
+  const handleAddCookie = () => {
+    setSelectedCookieKey(null);
+    setEditingCookieKey(NEW_COOKIE_KEY);
+    setDraftCookie(newCookieDraft());
+  };
+
+  const handleEditCookie = () => {
+    if (selectedCookie == null) {
+      return;
+    }
+
+    setEditingCookieKey(cookieKey(selectedCookie));
+    setDraftCookie(selectedCookie);
+  };
+
+  const handleCancelEdit = () => {
+    if (isCreatingCookie) {
+      setSelectedCookieKey(null);
+    }
+    setEditingCookieKey(null);
+    setDraftCookie(null);
+  };
+
+  const handleCloseDetails = () => {
+    if (isEditingCookie) {
+      handleCancelEdit();
+      return;
+    }
+
+    setSelectedCookieKey(null);
+  };
+
+  const handleSaveCookie = () => {
+    if (cookieJar == null || draftCookie == null) {
+      return;
+    }
+
+    const nextCookie = normalizeCookie(draftCookie);
+    if (nextCookie.name.trim().length === 0) {
+      showAlert({
+        id: "invalid-cookie-name",
+        title: "Invalid Cookie",
+        body: "Cookie name is required.",
+      });
+      return;
+    }
+
+    const nextCookieKey = cookieKey(nextCookie);
+    const nextCookies = cookieJar.cookies.filter((cookie) => {
+      const key = cookieKey(cookie);
+      if (editingCookieKey != null && key === editingCookieKey) {
+        return false;
+      }
+      return key !== nextCookieKey;
+    });
+
+    patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
+    setSelectedCookieKey(nextCookieKey);
+    setEditingCookieKey(null);
+    setDraftCookie(null);
+  };
 
   if (cookieJar == null) {
     return <div>No cookie jar selected</div>;
   }
 
-  if (cookieJar.cookies.length === 0) {
-    return (
-      <Banner>
-        Cookies will appear when a response contains the <InlineCode>Set-Cookie</InlineCode> header
-      </Banner>
-    );
-  }
-
   return (
-    <div className="pb-2">
-      <table className="w-full text-sm mb-auto min-w-full max-w-full divide-y divide-surface-highlight">
-        <thead>
-          <tr>
-            <th className="py-2 text-left">Domain</th>
-            <th className="py-2 text-left pl-4">Cookie</th>
-            <th className="py-2 pl-4" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-surface-highlight">
-          {cookieJar?.cookies.map((c: Cookie) => (
-            <tr key={JSON.stringify(c)}>
-              <td className="py-2 select-text cursor-text font-mono font-semibold max-w-0">
-                {cookieDomain(c)}
-              </td>
-              <td className="py-2 pl-4 select-text cursor-text font-mono text-text-subtle whitespace-nowrap overflow-x-auto max-w-[200px] hide-scrollbars">
-                {c.raw_cookie}
-              </td>
-              <td className="max-w-0 w-10">
-                <IconButton
-                  icon="trash"
-                  size="xs"
-                  iconSize="sm"
-                  title="Delete"
-                  className="ml-auto"
-                  onClick={() =>
-                    patchModel(cookieJar, {
-                      cookies: cookieJar.cookies.filter((c2: Cookie) => c2 !== c),
-                    })
-                  }
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="pb-2 grid grid-rows-[auto_minmax(0,1fr)] space-y-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <PlainInput
+          name="cookie-filter"
+          label="Filter cookies"
+          hideLabel
+          placeholder="Filter cookies"
+          defaultValue={filter}
+          forceUpdateKey={filterUpdateKey}
+          onChange={setFilter}
+          rightSlot={
+            filter.length > 0 && (
+              <IconButton
+                className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
+                icon="x"
+                title="Clear filter"
+                onClick={() => {
+                  setFilter("");
+                  setFilterUpdateKey((key) => key + 1);
+                }}
+              />
+            )
+          }
+        />
+        <IconButton icon="plus" size="sm" title="Add cookie" onClick={handleAddCookie} />
+      </div>
+      {cookieJar.cookies.length === 0 && detailCookie == null ? (
+        <EmptyStateText>
+          Cookies will appear when a response includes a Set-Cookie header.
+        </EmptyStateText>
+      ) : filteredCookies.length === 0 && detailCookie == null ? (
+        <EmptyStateText>No cookies match the current filter.</EmptyStateText>
+      ) : (
+        <SplitLayout
+          layout="vertical"
+          storageKey="cookie-dialog-details"
+          defaultRatio={0.65}
+          minHeightPx={10}
+          firstSlot={({ style }) =>
+            filteredCookies.length === 0 ? (
+              <div style={style}>
+                <EmptyStateText>No cookies match the current filter.</EmptyStateText>
+              </div>
+            ) : (
+              <Table scrollable style={style}>
+                <TableHead>
+                  <TableRow>
+                    <TableHeaderCell>Name</TableHeaderCell>
+                    <TableHeaderCell>Value</TableHeaderCell>
+                    <TableHeaderCell>Domain</TableHeaderCell>
+                    <TableHeaderCell>Path</TableHeaderCell>
+                    <TableHeaderCell>Expires</TableHeaderCell>
+                    <TableHeaderCell>Size</TableHeaderCell>
+                    <TableHeaderCell>HTTP Only</TableHeaderCell>
+                    <TableHeaderCell>Secure</TableHeaderCell>
+                    <TableHeaderCell>Same Site</TableHeaderCell>
+                    <TableHeaderCell>
+                      <IconButton
+                        icon="list_x"
+                        size="sm"
+                        className="text-text-subtle"
+                        title="Clear all cookies"
+                        onClick={() => {
+                          setSelectedCookieKey(null);
+                          setEditingCookieKey(null);
+                          setDraftCookie(null);
+                          patchModel(cookieJar, { cookies: [] });
+                        }}
+                      />
+                    </TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody className="[&_td]:select-auto [&_td]:cursor-auto">
+                  {filteredCookies.map((c: Cookie) => {
+                    const key = cookieKey(c);
+                    const isSelected = key === selectedCookieKey;
+
+                    return (
+                      <TableRow
+                        key={key}
+                        className={classNames(
+                          "group/tr cursor-default",
+                          isSelected && "[&_td]:bg-surface-highlight",
+                          !isSelected && "hover:[&_td]:bg-surface-hover",
+                        )}
+                        onClick={() => {
+                          setSelectedCookieKey(key);
+                          setEditingCookieKey(null);
+                          setDraftCookie(null);
+                        }}
+                      >
+                        <TableCell>{c.name}</TableCell>
+                        <TruncatedWideTableCell className="min-w-[10rem]">
+                          {c.value}
+                        </TruncatedWideTableCell>
+                        <TableCell>{cookieDomain(c)}</TableCell>
+                        <TableCell>{c.path}</TableCell>
+                        <TableCell>{cookieExpires(c)}</TableCell>
+                        <TableCell>{cookieSize(c)}</TableCell>
+                        <TableCell>
+                          <Icon
+                            icon={c.httpOnly ? "check" : "x"}
+                            className={classNames(!c.httpOnly && "opacity-10")}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Icon
+                            icon={c.secure ? "check" : "x"}
+                            className={classNames(!c.secure && "opacity-10")}
+                          />
+                        </TableCell>
+                        <TableCell>{c.sameSite}</TableCell>
+                        <TableCell>
+                          <IconButton
+                            icon="trash"
+                            size="xs"
+                            iconSize="sm"
+                            title="Delete"
+                            className="text-text-subtlest ml-auto group-hover/tr:text-text transition-colors"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (isSelected) {
+                                setSelectedCookieKey(null);
+                              }
+                              if (editingCookieKey === key) {
+                                setEditingCookieKey(null);
+                                setDraftCookie(null);
+                              }
+                              patchModel(cookieJar, {
+                                cookies: cookieJar.cookies.filter(
+                                  (c2: Cookie) => cookieKey(c2) !== key,
+                                ),
+                              });
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )
+          }
+          secondSlot={
+            detailCookie == null
+              ? null
+              : ({ style }) => (
+                  <div
+                    style={style}
+                    className="grid grid-rows-[auto_minmax(0,1fr)] bg-surface border-t border-border pt-2"
+                  >
+                    <EventDetailHeader
+                      title={isCreatingCookie ? "New Cookie" : detailCookie.name || "Cookie"}
+                      copyText={isEditingCookie ? undefined : detailCookie.value}
+                      actions={
+                        isEditingCookie
+                          ? [
+                              {
+                                key: "save",
+                                label: isCreatingCookie ? "Create" : "Save",
+                                onClick: handleSaveCookie,
+                              },
+                              {
+                                key: "cancel",
+                                label: "Cancel",
+                                onClick: handleCancelEdit,
+                              },
+                            ]
+                          : [
+                              {
+                                key: "edit",
+                                label: "Edit",
+                                onClick: handleEditCookie,
+                              },
+                            ]
+                      }
+                      onClose={handleCloseDetails}
+                    />
+                    {isEditingCookie ? (
+                      <CookieEditor cookie={detailCookie} onChange={setDraftCookie} />
+                    ) : (
+                      <CookieDetails cookie={detailCookie} />
+                    )}
+                  </div>
+                )
+          }
+        />
+      )}
     </div>
   );
 };
+
+CookieDialog.show = (cookieJarId: string | null) => {
+  const cookieJar = jotaiStore.get(cookieJarsAtom)?.find((jar) => jar.id === cookieJarId);
+  if (cookieJar == null) {
+    showAlert({
+      id: "invalid-jar",
+      body: `Failed to find cookie jar for ID: ${cookieJarId}`,
+      title: "Invalid Cookie Jar",
+    });
+    return;
+  }
+
+  showDialog({
+    id: "cookies",
+    title: `${cookieJar.name} Cookies`,
+    size: "full",
+    render: () => <CookieDialog cookieJarId={cookieJarId} />,
+  });
+};
+
+function CookieDetails({ cookie }: { cookie: Cookie }) {
+  return (
+    <div className="overflow-y-auto">
+      <KeyValueRows selectable>
+        <CookieKeyValueRow label="Name">{cookie.name}</CookieKeyValueRow>
+        <CookieKeyValueRow label="Value" enableCopy copyText={cookie.value}>
+          <pre className="whitespace-pre-wrap break-all">{cookie.value}</pre>
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Domain">{cookieDomain(cookie)}</CookieKeyValueRow>
+        <CookieKeyValueRow label="Path">{cookie.path}</CookieKeyValueRow>
+        <CookieKeyValueRow label="Expires">{cookieExpires(cookie)}</CookieKeyValueRow>
+        <CookieKeyValueRow label="Size">{cookieSize(cookie)}</CookieKeyValueRow>
+        <CookieKeyValueRow label="HTTP Only">{cookie.httpOnly ? "Yes" : "No"}</CookieKeyValueRow>
+        <CookieKeyValueRow label="Secure">{cookie.secure ? "Yes" : "No"}</CookieKeyValueRow>
+        {cookie.sameSite && (
+          <CookieKeyValueRow label="Same Site">{cookie.sameSite}</CookieKeyValueRow>
+        )}
+      </KeyValueRows>
+    </div>
+  );
+}
+
+function CookieEditor({
+  cookie,
+  onChange,
+}: {
+  cookie: Cookie;
+  onChange: (cookie: Cookie) => void;
+}) {
+  const sessionCookie = cookie.expires === "SessionEnd";
+
+  return (
+    <div className="overflow-y-auto">
+      <KeyValueRows>
+        <CookieKeyValueRow label="Name">
+          <CookieTextInput
+            required
+            autoFocus
+            value={cookie.name}
+            onChange={(name) => onChange({ ...cookie, name })}
+          />
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Value">
+          <CookieTextarea
+            value={cookie.value}
+            onChange={(value) => onChange({ ...cookie, value })}
+          />
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Domain">
+          <CookieTextInput
+            value={cookieDomainInputValue(cookie)}
+            placeholder="n/a"
+            onChange={(domain) => onChange(cookieWithDomain(cookie, domain))}
+          />
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Path">
+          <CookieTextInput
+            value={cookie.path}
+            placeholder="/"
+            onChange={(path) => onChange({ ...cookie, path })}
+          />
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Expires">
+          <div className="grid gap-1">
+            <Checkbox
+              checked={sessionCookie}
+              title="Session cookie"
+              onChange={(checked) =>
+                onChange({
+                  ...cookie,
+                  expires: checked
+                    ? "SessionEnd"
+                    : cookieExpiresFromInput(defaultCookieExpiresInputValue()),
+                })
+              }
+            />
+            <CookieTextInput
+              value={sessionCookie ? "" : cookieExpiresInputValue(cookie)}
+              disabled={sessionCookie}
+              onChange={(value) => onChange({ ...cookie, expires: cookieExpiresFromInput(value) })}
+            />
+          </div>
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Size">{cookieSize(cookie)}</CookieKeyValueRow>
+        <CookieKeyValueRow label="HTTP Only">
+          <Checkbox
+            hideLabel
+            title="HTTP Only"
+            checked={cookie.httpOnly}
+            onChange={(httpOnly) => onChange({ ...cookie, httpOnly })}
+          />
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Secure">
+          <Checkbox
+            hideLabel
+            title="Secure"
+            checked={cookie.secure}
+            onChange={(secure) => onChange({ ...cookie, secure })}
+          />
+        </CookieKeyValueRow>
+        <CookieKeyValueRow label="Same Site">
+          <select
+            value={cookie.sameSite ?? ""}
+            className={cookieInputClassName}
+            onChange={(event) =>
+              onChange({
+                ...cookie,
+                sameSite:
+                  event.target.value === "" ? null : (event.target.value as Cookie["sameSite"]),
+              })
+            }
+          >
+            <option value="">n/a</option>
+            <option value="Lax">Lax</option>
+            <option value="Strict">Strict</option>
+            <option value="None">None</option>
+          </select>
+        </CookieKeyValueRow>
+      </KeyValueRows>
+    </div>
+  );
+}
+
+function CookieKeyValueRow({ labelClassName, ...props }: ComponentProps<typeof KeyValueRow>) {
+  return (
+    <KeyValueRow labelClassName={classNames("w-[7rem] min-w-[7rem]", labelClassName)} {...props} />
+  );
+}
+
+function CookieTextInput({
+  autoFocus,
+  disabled,
+  onChange,
+  placeholder,
+  required,
+  value,
+}: {
+  autoFocus?: boolean;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  value: string;
+}) {
+  return (
+    <input
+      autoFocus={autoFocus}
+      className={cookieInputClassName}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      required={required}
+      type="text"
+      value={value}
+    />
+  );
+}
+
+function CookieTextarea({ onChange, value }: { onChange: (value: string) => void; value: string }) {
+  return (
+    <textarea
+      className={classNames(cookieInputClassName, "min-h-[5rem] resize-y")}
+      onChange={(event) => onChange(event.target.value)}
+      value={value}
+    />
+  );
+}
+
+const NEW_COOKIE_KEY = "__new-cookie__";
+const cookieInputClassName = classNames(
+  "w-full min-w-0 rounded bg-transparent px-1 py-0.5",
+  "border border-transparent outline-none",
+  "hover:border-border-subtle focus:border-border-focus",
+  "disabled:opacity-disabled disabled:border-dotted",
+);
+
+function cookieSize(cookie: Cookie) {
+  const encoder = new TextEncoder();
+  return encoder.encode(cookie.name).length + encoder.encode(cookie.value).length;
+}
+
+function newCookieDraft(): Cookie {
+  return {
+    name: "",
+    value: "",
+    domain: "NotPresent",
+    expires: "SessionEnd",
+    path: "/",
+    secure: false,
+    httpOnly: false,
+    sameSite: null,
+  };
+}
+
+function normalizeCookie(cookie: Cookie): Cookie {
+  return {
+    ...cookie,
+    name: cookie.name.trim(),
+    path: cookie.path.trim() || "/",
+  };
+}
+
+function cookieDomainInputValue(cookie: Cookie) {
+  const domain = cookieDomain(cookie);
+  return domain === "n/a" ? "" : domain;
+}
+
+function cookieWithDomain(cookie: Cookie, domain: string): Cookie {
+  const trimmedDomain = domain.trim();
+  if (trimmedDomain.length === 0) {
+    return { ...cookie, domain: "NotPresent" };
+  }
+
+  if (cookie.domain !== "NotPresent" && cookie.domain !== "Empty" && "Suffix" in cookie.domain) {
+    return { ...cookie, domain: { Suffix: trimmedDomain } };
+  }
+
+  return { ...cookie, domain: { HostOnly: trimmedDomain } };
+}
+
+function cookieExpires(cookie: Cookie) {
+  if (cookie.expires === "SessionEnd") {
+    return "Session";
+  }
+
+  const expiresSeconds = Number(cookie.expires.AtUtc);
+  if (!Number.isFinite(expiresSeconds)) {
+    return cookie.expires.AtUtc;
+  }
+
+  const date = new Date(expiresSeconds * 1000);
+  return formatDate(date, "MMM d, yyyy, h:mm:ss a");
+}
+
+function cookieExpiresInputValue(cookie: Cookie) {
+  if (cookie.expires === "SessionEnd") {
+    return "";
+  }
+
+  const expiresSeconds = Number(cookie.expires.AtUtc);
+  if (!Number.isFinite(expiresSeconds)) {
+    return "";
+  }
+
+  return new Date(expiresSeconds * 1000).toISOString();
+}
+
+function defaultCookieExpiresInputValue() {
+  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function cookieExpiresFromInput(value: string): Cookie["expires"] {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) {
+    return "SessionEnd";
+  }
+
+  return { AtUtc: `${Math.floor(time / 1000)}` };
+}
+
+function cookieMatchesFilter(cookie: Cookie, filter: string) {
+  const query = filter.trim().toLowerCase();
+  if (query.length === 0) {
+    return true;
+  }
+
+  return [cookie.name, cookie.value, cookieDomain(cookie)].some((value) =>
+    value.toLowerCase().includes(query),
+  );
+}
+
+function cookieKey(cookie: Cookie) {
+  return JSON.stringify([cookie.name, cookieDomain(cookie), cookie.path]);
+}

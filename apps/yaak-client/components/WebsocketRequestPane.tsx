@@ -34,6 +34,7 @@ import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
 import { HeadersEditor } from "./HeadersEditor";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
 import { UrlBar } from "./UrlBar";
 import { UrlParametersEditor } from "./UrlParameterEditor";
 
@@ -48,6 +49,7 @@ const TAB_MESSAGE = "message";
 const TAB_PARAMS = "params";
 const TAB_HEADERS = "headers";
 const TAB_AUTH = "auth";
+const TAB_SETTINGS = "settings";
 const TAB_DESCRIPTION = "description";
 const TABS_STORAGE_KEY = "websocket_request_tabs";
 
@@ -69,6 +71,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
   const inheritedHeaders = useInheritedHeaders(activeRequest);
+  const numSettingsOverrides = countOverriddenSettings(activeRequest);
 
   // Listen for event to focus the params tab (e.g., when clicking a :param in the URL)
   useRequestEditorEvent(
@@ -110,11 +113,16 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
       ...headersTab,
       ...authTab,
       {
+        value: TAB_SETTINGS,
+        label: "Settings",
+        rightSlot: <CountBadge count={numSettingsOverrides} />,
+      },
+      {
         value: TAB_DESCRIPTION,
         label: "Info",
       },
     ];
-  }, [authTab, headersTab, urlParameterPairs.length]);
+  }, [authTab, headersTab, numSettingsOverrides, urlParameterPairs.length]);
 
   const { activeResponse } = usePinnedHttpResponse(activeRequestId);
   const { mutate: cancelResponse } = useCancelHttpResponse(activeResponse?.id ?? null);
@@ -265,6 +273,9 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                 onChange={(message) => patchModel(activeRequest, { message })}
                 stateKey={`json.${activeRequest.id}`}
               />
+            </TabContent>
+            <TabContent value={TAB_SETTINGS}>
+              <ModelSettingsEditor model={activeRequest} />
             </TabContent>
             <TabContent value={TAB_DESCRIPTION}>
               <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">

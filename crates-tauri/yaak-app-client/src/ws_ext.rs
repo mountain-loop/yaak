@@ -134,7 +134,8 @@ pub async fn cmd_ws_connect<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_websocket_request(&unrendered_request)?;
     let settings = app_handle.db().get_settings();
     let (resolved_request, auth_context_id) =
         resolve_websocket_request(&window, &unrendered_request)?;
@@ -248,7 +249,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
     }
 
     // Add cookies to WS HTTP Upgrade
-    if let Some(id) = cookie_jar_id {
+    if let (true, Some(id)) = (resolved_settings.send_cookies, cookie_jar_id) {
         let cookie_jar = app_handle.db().get_cookie_jar(&id)?;
         let store = CookieStore::from_cookies(cookie_jar.cookies);
 
@@ -289,7 +290,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
             url.as_str(),
             headers,
             receive_tx,
-            workspace.setting_validate_certificates,
+            resolved_settings.validate_certificates,
             client_cert,
         )
         .await

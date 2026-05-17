@@ -20,16 +20,24 @@ import { IconButton } from "./core/IconButton";
 import { IconTooltip } from "./core/IconTooltip";
 import { Label } from "./core/Label";
 import { PlainInput } from "./core/PlainInput";
+import { SettingRow } from "./core/SettingRow";
 import { EncryptionHelp } from "./EncryptionHelp";
 
 interface Props {
+  layout?: "form" | "settings";
   size?: ButtonProps["size"];
   expanded?: boolean;
   onDone?: () => void;
   onEnabledEncryption?: () => void;
 }
 
-export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEncryption }: Props) {
+export function WorkspaceEncryptionSetting({
+  layout = "form",
+  size,
+  expanded,
+  onDone,
+  onEnabledEncryption,
+}: Props) {
   const [justEnabledEncryption, setJustEnabledEncryption] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +74,7 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
     key.error != null ||
     (workspace.encryptionKeyChallenge && workspaceMeta.encryptionKey == null)
   ) {
-    return (
+    const enterKey = (
       <EnterWorkspaceKey
         workspaceMeta={workspaceMeta}
         error={key.error}
@@ -79,6 +87,8 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         }}
       />
     );
+
+    return enterKey;
   }
 
   // Show the key if it exists
@@ -90,7 +100,8 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         encryptionKey={key.key}
       />
     );
-    return (
+
+    const content = (
       <VStack space={2} className="w-full">
         {justEnabledEncryption && (
           <Banner color="success" className="flex flex-col gap-2">
@@ -111,9 +122,43 @@ export function WorkspaceEncryptionSetting({ size, expanded, onDone, onEnabledEn
         )}
       </VStack>
     );
+
+    return content;
   }
 
   // Show button to enable encryption
+  if (layout === "settings") {
+    return (
+      <>
+        {error && (
+          <Banner color="danger" className="mb-3">
+            {error}
+          </Banner>
+        )}
+        <SettingRow
+          title="Workspace encryption"
+          description="Encrypt workspace secrets and sensitive values at rest."
+        >
+          <Button
+            color="secondary"
+            size={size}
+            onClick={async () => {
+              setError(null);
+              try {
+                await enableEncryption(workspaceMeta.workspaceId);
+                setJustEnabledEncryption(true);
+              } catch (err) {
+                setError(`Failed to enable encryption: ${String(err)}`);
+              }
+            }}
+          >
+            Enable Encryption
+          </Button>
+        </SettingRow>
+      </>
+    );
+  }
+
   return (
     <div className="mb-auto flex flex-col-reverse">
       <Button

@@ -15,6 +15,7 @@ import {
 import { createFolder } from "../commands/commands";
 import { createSubEnvironmentAndActivate } from "../commands/createEnvironment";
 import { openSettings } from "../commands/openSettings";
+import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
 import { switchWorkspace } from "../commands/switchWorkspace";
 import { useActiveCookieJar } from "../hooks/useActiveCookieJar";
 import { useActiveEnvironment } from "../hooks/useActiveEnvironment";
@@ -36,7 +37,6 @@ import { appInfo } from "../lib/appInfo";
 import { copyToClipboard } from "../lib/copy";
 import { createRequestAndNavigate } from "../lib/createRequestAndNavigate";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
-import { showDialog } from "../lib/dialog";
 import { editEnvironment } from "../lib/editEnvironment";
 import { renameModelWithPrompt } from "../lib/renameModelWithPrompt";
 import {
@@ -100,6 +100,12 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         onSelect: () => openSettings.mutate(null),
       },
       {
+        key: "workspace_settings.open",
+        label: "Open Workspace Settings",
+        action: "workspace_settings.show",
+        onSelect: () => openWorkspaceSettings(),
+      },
+      {
         key: "app.create",
         label: "Create Workspace",
         onSelect: createWorkspace,
@@ -128,12 +134,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         key: "cookies.show",
         label: "Show Cookies",
         onSelect: async () => {
-          showDialog({
-            id: "cookies",
-            title: "Manage Cookies",
-            size: "full",
-            render: () => <CookieDialog cookieJarId={activeCookieJar?.id ?? null} />,
-          });
+          CookieDialog.show(activeCookieJar?.id ?? null);
         },
       },
       {

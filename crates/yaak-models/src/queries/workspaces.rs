@@ -2,7 +2,7 @@ use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
     EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
-    WebsocketRequestIden, Workspace, WorkspaceIden,
+    ResolvedHttpRequestSettings, WebsocketRequestIden, Workspace, WorkspaceIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
@@ -83,6 +83,19 @@ impl<'a> ClientDb<'a> {
         let mut headers = default_headers();
         headers.extend(workspace.headers.clone());
         headers
+    }
+
+    pub fn resolve_settings_for_workspace(
+        &self,
+        workspace: &Workspace,
+    ) -> ResolvedHttpRequestSettings {
+        ResolvedHttpRequestSettings {
+            validate_certificates: workspace.setting_validate_certificates,
+            follow_redirects: workspace.setting_follow_redirects,
+            request_timeout: workspace.setting_request_timeout,
+            send_cookies: workspace.setting_send_cookies,
+            store_cookies: workspace.setting_store_cookies,
+        }
     }
 }
 

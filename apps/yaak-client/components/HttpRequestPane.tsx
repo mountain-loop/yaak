@@ -51,6 +51,7 @@ import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
 import { JsonBodyEditor } from "./JsonBodyEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { RequestMethodDropdown } from "./RequestMethodDropdown";
+import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
 import { UrlBar } from "./UrlBar";
 import { UrlParametersEditor } from "./UrlParameterEditor";
 
@@ -69,6 +70,7 @@ const TAB_BODY = "body";
 const TAB_PARAMS = "params";
 const TAB_HEADERS = "headers";
 const TAB_AUTH = "auth";
+const TAB_SETTINGS = "settings";
 const TAB_DESCRIPTION = "description";
 const TABS_STORAGE_KEY = "http_request_tabs";
 
@@ -92,6 +94,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const headersTab = useHeadersTab(TAB_HEADERS, activeRequest);
   const inheritedHeaders = useInheritedHeaders(activeRequest);
+  const numSettingsOverrides = countOverriddenSettings(activeRequest);
 
   // Listen for event to focus the params tab (e.g., when clicking a :param in the URL)
   useRequestEditorEvent(
@@ -235,6 +238,11 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       ...headersTab,
       ...authTab,
       {
+        value: TAB_SETTINGS,
+        label: "Settings",
+        rightSlot: <CountBadge count={numSettingsOverrides} />,
+      },
+      {
         value: TAB_DESCRIPTION,
         label: "Info",
       },
@@ -246,6 +254,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
       handleContentTypeChange,
       headersTab,
       numParams,
+      numSettingsOverrides,
       urlParameterPairs.length,
     ],
   );
@@ -371,6 +380,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 pairs={urlParameterPairs}
                 onChange={(urlParameters) => patchModel(activeRequest, { urlParameters })}
               />
+            </TabContent>
+            <TabContent value={TAB_SETTINGS}>
+              <ModelSettingsEditor model={activeRequest} />
             </TabContent>
             <TabContent value={TAB_BODY}>
               <ConfirmLargeRequestBody request={activeRequest}>

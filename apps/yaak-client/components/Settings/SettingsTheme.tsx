@@ -9,7 +9,12 @@ import type { ButtonProps } from "../core/Button";
 import { IconButton } from "../core/IconButton";
 import { Link } from "../core/Link";
 import type { SelectProps } from "../core/Select";
-import { Select } from "../core/Select";
+import {
+  ModelSettingRowSelect,
+  SettingRowSelect,
+  SettingsList,
+  SettingsSection,
+} from "../core/SettingRow";
 
 const Editor = lazy(() => import("../core/Editor/Editor").then((m) => ({ default: m.Editor })));
 
@@ -67,7 +72,7 @@ export function SettingsTheme() {
     }));
 
   return (
-    <VStack space={3} className="mb-4">
+    <VStack space={1.5} className="mb-4">
       <div className="mb-3">
         <Heading>Theme</Heading>
         <p className="text-text-subtle">
@@ -77,96 +82,92 @@ export function SettingsTheme() {
           </Link>
         </p>
       </div>
-      <Select
-        name="appearance"
-        label="Appearance"
-        labelPosition="top"
-        size="sm"
-        value={settings.appearance}
-        onChange={(appearance) => patchModel(settings, { appearance })}
-        options={[
-          { label: "Automatic", value: "system" },
-          { label: "Light", value: "light" },
-          { label: "Dark", value: "dark" },
-        ]}
-      />
-      <HStack space={2}>
-        {(settings.appearance === "system" || settings.appearance === "light") && (
-          <Select
-            hideLabel
-            leftSlot={<Icon icon="sun" color="secondary" />}
-            name="lightTheme"
-            label="Light Theme"
-            size="sm"
-            className="flex-1"
-            value={activeTheme.data.light.id}
-            options={lightThemes}
-            onChange={(themeLight) => patchModel(settings, { themeLight })}
+      <SettingsList className="space-y-8">
+        <SettingsSection title="Theme">
+          <ModelSettingRowSelect
+            model={settings}
+            modelKey="appearance"
+            title="Appearance"
+            description="Choose whether Yaak follows your system appearance or uses a fixed mode."
+            options={[
+              { label: "Automatic", value: "system" },
+              { label: "Light", value: "light" },
+              { label: "Dark", value: "dark" },
+            ]}
           />
-        )}
-        {(settings.appearance === "system" || settings.appearance === "dark") && (
-          <Select
-            hideLabel
-            name="darkTheme"
-            className="flex-1"
-            label="Dark Theme"
-            leftSlot={<Icon icon="moon" color="secondary" />}
-            size="sm"
-            value={activeTheme.data.dark.id}
-            options={darkThemes}
-            onChange={(themeDark) => patchModel(settings, { themeDark })}
-          />
-        )}
-      </HStack>
+          {(settings.appearance === "system" || settings.appearance === "light") && (
+            <SettingRowSelect
+              name="lightTheme"
+              title="Light theme"
+              description="Theme used when Yaak is in light mode."
+              value={activeTheme.data.light.id}
+              options={lightThemes}
+              onChange={(themeLight) => patchModel(settings, { themeLight })}
+            />
+          )}
+          {(settings.appearance === "system" || settings.appearance === "dark") && (
+            <SettingRowSelect
+              name="darkTheme"
+              title="Dark theme"
+              description="Theme used when Yaak is in dark mode."
+              value={activeTheme.data.dark.id}
+              options={darkThemes}
+              onChange={(themeDark) => patchModel(settings, { themeDark })}
+            />
+          )}
+        </SettingsSection>
 
-      <VStack
-        space={3}
-        className="mt-3 w-full bg-surface p-3 border border-dashed border-border-subtle rounded overflow-x-auto"
-      >
-        <HStack className="text" space={1.5}>
-          <Icon icon={appearance === "dark" ? "moon" : "sun"} />
-          <strong>{activeTheme.data.active.label}</strong>
-          <em>(preview)</em>
-        </HStack>
-        <HStack space={1.5} className="w-full">
-          {buttonColors.map((c, i) => (
-            <IconButton
-              key={c}
-              color={c}
-              size="2xs"
-              iconSize="xs"
-              icon={icons[i % icons.length] ?? "info"}
-              iconClassName="text"
-              title={`${c}`}
-            />
-          ))}
-          {buttonColors.map((c, i) => (
-            <IconButton
-              key={c}
-              color={c}
-              variant="border"
-              size="2xs"
-              iconSize="xs"
-              icon={icons[i % icons.length] ?? "info"}
-              iconClassName="text"
-              title={`${c}`}
-            />
-          ))}
-        </HStack>
-        <Suspense>
-          <Editor
-            defaultValue={[
-              "let foo = { // Demo code editor",
-              '  foo: ("bar" || "baz" ?? \'qux\'),',
-              "  baz: [1, 10.2, null, false, true],",
-              "};",
-            ].join("\n")}
-            heightMode="auto"
-            language="javascript"
-            stateKey={null}
-          />
-        </Suspense>
-      </VStack>
+        <SettingsSection title="Preview">
+          <VStack
+            space={3}
+            className="mt-4 w-full bg-surface p-3 border border-dashed border-border-subtle rounded overflow-x-auto"
+          >
+            <HStack className="text" space={1.5}>
+              <Icon icon={appearance === "dark" ? "moon" : "sun"} />
+              <strong>{activeTheme.data.active.label}</strong>
+              <em>(preview)</em>
+            </HStack>
+            <HStack space={1.5} className="w-full">
+              {buttonColors.map((c, i) => (
+                <IconButton
+                  key={c}
+                  color={c}
+                  size="2xs"
+                  iconSize="xs"
+                  icon={icons[i % icons.length] ?? "info"}
+                  iconClassName="text"
+                  title={`${c}`}
+                />
+              ))}
+              {buttonColors.map((c, i) => (
+                <IconButton
+                  key={c}
+                  color={c}
+                  variant="border"
+                  size="2xs"
+                  iconSize="xs"
+                  icon={icons[i % icons.length] ?? "info"}
+                  iconClassName="text"
+                  title={`${c}`}
+                />
+              ))}
+            </HStack>
+            <Suspense>
+              <Editor
+                defaultValue={[
+                  "let foo = { // Demo code editor",
+                  '  foo: ("bar" || "baz" ?? \'qux\'),',
+                  "  baz: [1, 10.2, null, false, true],",
+                  "};",
+                ].join("\n")}
+                heightMode="auto"
+                language="javascript"
+                stateKey={null}
+              />
+            </Suspense>
+          </VStack>
+        </SettingsSection>
+      </SettingsList>
     </VStack>
   );
 }

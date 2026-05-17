@@ -1,7 +1,10 @@
 use super::dedupe_headers;
 use crate::client_db::ClientDb;
 use crate::error::Result;
-use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden};
+use crate::models::{
+    Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden,
+    ResolvedHttpRequestSettings,
+};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -89,6 +92,47 @@ impl<'a> ClientDb<'a> {
         headers.append(&mut http_request.headers.clone());
 
         Ok(dedupe_headers(headers))
+    }
+
+    pub fn resolve_settings_for_http_request(
+        &self,
+        http_request: &HttpRequest,
+    ) -> Result<ResolvedHttpRequestSettings> {
+        let parent = if let Some(folder_id) = http_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            self.resolve_settings_for_folder(&folder)?
+        } else {
+            let workspace = self.get_workspace(&http_request.workspace_id)?;
+            self.resolve_settings_for_workspace(&workspace)
+        };
+
+        Ok(ResolvedHttpRequestSettings {
+            validate_certificates: if http_request.setting_validate_certificates.enabled {
+                http_request.setting_validate_certificates.value
+            } else {
+                parent.validate_certificates
+            },
+            follow_redirects: if http_request.setting_follow_redirects.enabled {
+                http_request.setting_follow_redirects.value
+            } else {
+                parent.follow_redirects
+            },
+            request_timeout: if http_request.setting_request_timeout.enabled {
+                http_request.setting_request_timeout.value
+            } else {
+                parent.request_timeout
+            },
+            send_cookies: if http_request.setting_send_cookies.enabled {
+                http_request.setting_send_cookies.value
+            } else {
+                parent.send_cookies
+            },
+            store_cookies: if http_request.setting_store_cookies.enabled {
+                http_request.setting_store_cookies.value
+            } else {
+                parent.store_cookies
+            },
+        })
     }
 
     pub fn list_http_requests_for_folder_recursive(

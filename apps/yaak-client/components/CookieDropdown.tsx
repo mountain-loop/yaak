@@ -4,7 +4,6 @@ import { memo, useMemo } from "react";
 import { useActiveCookieJar } from "../hooks/useActiveCookieJar";
 import { useCreateCookieJar } from "../hooks/useCreateCookieJar";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
-import { showDialog } from "../lib/dialog";
 import { showPrompt } from "../lib/prompt";
 import { setWorkspaceSearchParams } from "../lib/setWorkspaceSearchParams";
 import { CookieDialog } from "./CookieDialog";
@@ -36,12 +35,7 @@ export const CookieDropdown = memo(function CookieDropdown() {
               leftSlot: <Icon icon="cookie" />,
               onSelect: () => {
                 if (activeCookieJar == null) return;
-                showDialog({
-                  id: "cookies",
-                  title: "Manage Cookies",
-                  size: "full",
-                  render: () => <CookieDialog cookieJarId={activeCookieJar.id} />,
-                });
+                CookieDialog.show(activeCookieJar.id);
               },
             },
             {

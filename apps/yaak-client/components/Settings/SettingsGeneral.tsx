@@ -7,12 +7,18 @@ import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { appInfo } from "../../lib/appInfo";
 import { revealInFinderText } from "../../lib/reveal";
 import { CargoFeature } from "../CargoFeature";
-import { Checkbox } from "../core/Checkbox";
 import { IconButton } from "../core/IconButton";
-import { KeyValueRow, KeyValueRows } from "../core/KeyValueRow";
-import { PlainInput } from "../core/PlainInput";
-import { Select } from "../core/Select";
-import { Separator } from "../core/Separator";
+import {
+  ModelSettingRowBoolean,
+  ModelSettingRowNumber,
+  ModelSettingSelectControl,
+  SettingValue,
+  SettingRow,
+  SettingRowBoolean,
+  SettingRowSelect,
+  SettingsList,
+  SettingsSection,
+} from "../core/SettingRow";
 
 export function SettingsGeneral() {
   const workspace = useAtomValue(activeWorkspaceAtom);
@@ -29,147 +35,159 @@ export function SettingsGeneral() {
         <Heading>General</Heading>
         <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
       </div>
-      <CargoFeature feature="updater">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-1">
-          <Select
-            name="updateChannel"
-            label="Update Channel"
-            labelPosition="left"
-            labelClassName="w-[14rem]"
-            size="sm"
-            value={settings.updateChannel}
-            onChange={(updateChannel) => patchModel(settings, { updateChannel })}
-            options={[
-              { label: "Stable", value: "stable" },
-              { label: "Beta (more frequent)", value: "beta" },
-            ]}
-          />
-          <IconButton
-            variant="border"
-            size="sm"
-            title="Check for updates"
-            icon="refresh"
-            spin={checkForUpdates.isPending}
-            onClick={() => checkForUpdates.mutateAsync()}
-          />
-        </div>
+      <SettingsList className="space-y-8">
+        <CargoFeature feature="updater">
+          <SettingsSection title="Updates">
+            <SettingRow
+              title="Update Channel"
+              description="Choose whether Yaak should use stable releases or beta releases."
+            >
+              <div className="grid grid-cols-[12rem_auto] gap-1">
+                <ModelSettingSelectControl
+                  model={settings}
+                  modelKey="updateChannel"
+                  label="Update Channel"
+                  selectClassName="!w-full"
+                  options={[
+                    { label: "Stable", value: "stable" },
+                    { label: "Beta", value: "beta" },
+                  ]}
+                />
+                <IconButton
+                  variant="border"
+                  size="sm"
+                  title="Check for updates"
+                  icon="refresh"
+                  spin={checkForUpdates.isPending}
+                  onClick={() => checkForUpdates.mutateAsync()}
+                />
+              </div>
+            </SettingRow>
 
-        <Select
-          name="autoupdate"
-          value={settings.autoupdate ? "auto" : "manual"}
-          label="Update Behavior"
-          labelPosition="left"
-          size="sm"
-          labelClassName="w-[14rem]"
-          onChange={(v) => patchModel(settings, { autoupdate: v === "auto" })}
-          options={[
-            { label: "Automatic", value: "auto" },
-            { label: "Manual", value: "manual" },
-          ]}
-        />
-        <Checkbox
-          className="pl-2 mt-1 ml-[14rem]"
-          checked={settings.autoDownloadUpdates}
-          disabled={!settings.autoupdate}
-          help="Automatically download Yaak updates (!50MB) in the background, so they will be immediately ready to install."
-          title="Automatically download updates"
-          onChange={(autoDownloadUpdates) => patchModel(settings, { autoDownloadUpdates })}
-        />
-
-        <Checkbox
-          className="pl-2 mt-1 ml-[14rem]"
-          checked={settings.checkNotifications}
-          title="Check for notifications"
-          help="Periodically ping Yaak servers to check for relevant notifications."
-          onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
-        />
-        <Checkbox
-          disabled
-          className="pl-2 mt-1 ml-[14rem]"
-          checked={false}
-          title="Send anonymous usage statistics"
-          help="Yaak is local-first and does not collect analytics or usage data 🔐"
-          onChange={(checkNotifications) => patchModel(settings, { checkNotifications })}
-        />
-      </CargoFeature>
-
-      <Separator className="my-4" />
-
-      <Heading level={2}>
-        Workspace{" "}
-        <div className="inline-block ml-1 bg-surface-highlight px-2 py-0.5 rounded text text-shrink">
-          {workspace.name}
-        </div>
-      </Heading>
-      <VStack className="mt-1 w-full" space={3}>
-        <PlainInput
-          required
-          size="sm"
-          name="requestTimeout"
-          label="Request Timeout (ms)"
-          labelClassName="w-[14rem]"
-          placeholder="0"
-          labelPosition="left"
-          defaultValue={`${workspace.settingRequestTimeout}`}
-          validate={(value) => Number.parseInt(value, 10) >= 0}
-          onChange={(v) =>
-            patchModel(workspace, { settingRequestTimeout: Number.parseInt(v, 10) || 0 })
-          }
-          type="number"
-        />
-
-        <Checkbox
-          checked={workspace.settingValidateCertificates}
-          help="When disabled, skip validation of server certificates, useful when interacting with self-signed certs."
-          title="Validate TLS certificates"
-          onChange={(settingValidateCertificates) =>
-            patchModel(workspace, { settingValidateCertificates })
-          }
-        />
-
-        <Checkbox
-          checked={workspace.settingFollowRedirects}
-          title="Follow redirects"
-          onChange={(settingFollowRedirects) =>
-            patchModel(workspace, {
-              settingFollowRedirects,
-            })
-          }
-        />
-      </VStack>
-
-      <Separator className="my-4" />
-
-      <Heading level={2}>App Info</Heading>
-      <KeyValueRows>
-        <KeyValueRow label="Version">{appInfo.version}</KeyValueRow>
-        <KeyValueRow
-          label="Data Directory"
-          rightSlot={
-            <IconButton
-              title={revealInFinderText}
-              icon="folder_open"
-              size="2xs"
-              onClick={() => revealItemInDir(appInfo.appDataDir)}
+            <SettingRowSelect
+              title="Update Behavior"
+              description="Choose whether updates are installed automatically or manually."
+              name="autoupdate"
+              value={settings.autoupdate ? "auto" : "manual"}
+              onChange={(v) => patchModel(settings, { autoupdate: v === "auto" })}
+              options={[
+                { label: "Automatic", value: "auto" },
+                { label: "Manual", value: "manual" },
+              ]}
             />
+
+            <ModelSettingRowBoolean
+              model={settings}
+              modelKey="autoDownloadUpdates"
+              title="Automatically download updates"
+              description="Download Yaak updates in the background so they are ready to install."
+              disabled={!settings.autoupdate}
+            />
+
+            <ModelSettingRowBoolean
+              model={settings}
+              modelKey="checkNotifications"
+              title="Check for notifications"
+              description="Periodically ping Yaak servers to check for relevant notifications."
+            />
+
+            <SettingRowBoolean
+              title="Send anonymous usage statistics"
+              description="Yaak is local-first and does not collect analytics or usage data."
+              disabled
+              checked={false}
+              onChange={() => {}}
+            />
+          </SettingsSection>
+        </CargoFeature>
+
+        <SettingsSection
+          title={
+            <>
+              Workspace{" "}
+              <span className="inline-block bg-surface-highlight px-2 py-0.5 rounded text">
+                {workspace.name}
+              </span>
+            </>
           }
         >
-          {appInfo.appDataDir}
-        </KeyValueRow>
-        <KeyValueRow
-          label="Logs Directory"
-          rightSlot={
-            <IconButton
-              title={revealInFinderText}
-              icon="folder_open"
-              size="2xs"
-              onClick={() => revealItemInDir(appInfo.appLogDir)}
+          <ModelSettingRowNumber
+            model={workspace}
+            modelKey="settingRequestTimeout"
+            title="Request Timeout"
+            description="Maximum request duration in milliseconds. Set to 0 to disable the timeout."
+            placeholder="0"
+            required
+            validate={(value) => Number.parseInt(value, 10) >= 0}
+          />
+
+          <ModelSettingRowBoolean
+            model={workspace}
+            modelKey="settingValidateCertificates"
+            title="Validate TLS certificates"
+            description="When disabled, skip validation of server certificates."
+          />
+
+          <ModelSettingRowBoolean
+            model={workspace}
+            modelKey="settingFollowRedirects"
+            title="Follow redirects"
+            description="Follow HTTP redirects automatically."
+          />
+
+          <ModelSettingRowBoolean
+            model={workspace}
+            modelKey="settingSendCookies"
+            title="Automatically send cookies"
+            description="Attach matching cookies from the active cookie jar to outgoing requests."
+          />
+
+          <ModelSettingRowBoolean
+            model={workspace}
+            modelKey="settingStoreCookies"
+            title="Automatically store cookies"
+            description="Save cookies from Set-Cookie response headers to the active cookie jar."
+          />
+        </SettingsSection>
+
+        <SettingsSection title="App Info">
+          <SettingRow title="Version" description="Current Yaak version.">
+            <SettingValue value={appInfo.version} />
+          </SettingRow>
+          <SettingRow
+            title="Data Directory"
+            description="Where Yaak stores application data."
+            controlClassName="min-w-0 max-w-[min(42rem,55vw)] gap-2"
+          >
+            <SettingValue
+              value={appInfo.appDataDir}
+              actions={[
+                {
+                  title: revealInFinderText,
+                  icon: "folder_open",
+                  onClick: () => revealItemInDir(appInfo.appDataDir),
+                },
+              ]}
             />
-          }
-        >
-          {appInfo.appLogDir}
-        </KeyValueRow>
-      </KeyValueRows>
+          </SettingRow>
+          <SettingRow
+            title="Logs Directory"
+            description="Where Yaak writes application logs."
+            controlClassName="min-w-0 max-w-[min(42rem,55vw)] gap-2"
+          >
+            <SettingValue
+              value={appInfo.appLogDir}
+              actions={[
+                {
+                  title: revealInFinderText,
+                  icon: "folder_open",
+                  onClick: () => revealItemInDir(appInfo.appLogDir),
+                },
+              ]}
+            />
+          </SettingRow>
+        </SettingsSection>
+      </SettingsList>
     </VStack>
   );
 }

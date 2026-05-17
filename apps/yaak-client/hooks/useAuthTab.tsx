@@ -43,7 +43,7 @@ export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedMo
                   {authentication.find((a) => a.name === inheritedAuth.authenticationType)
                     ?.shortLabel ?? "UNKNOWN"}
                   <IconTooltip
-                    icon="magic_wand"
+                    icon="zap_off"
                     iconSize="xs"
                     content="Authentication was inherited from an ancestor"
                   />
