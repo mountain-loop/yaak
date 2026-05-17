@@ -248,16 +248,18 @@ pub async fn cmd_ws_connect<R: Runtime>(
         }
     }
 
-    let mut cookie_jar =
-        match (resolved_settings.send_cookies || resolved_settings.store_cookies, cookie_jar_id) {
-            (true, Some(id)) => Some(app_handle.db().get_cookie_jar(id)?),
-            _ => None,
-        };
+    let mut cookie_jar = match (
+        resolved_settings.send_cookies.value || resolved_settings.store_cookies.value,
+        cookie_jar_id,
+    ) {
+        (true, Some(id)) => Some(app_handle.db().get_cookie_jar(id)?),
+        _ => None,
+    };
     let cookie_store =
         cookie_jar.as_ref().map(|jar| CookieStore::from_cookies(jar.cookies.clone()));
 
     // Add cookies to WS HTTP Upgrade
-    if let (true, Some(store)) = (resolved_settings.send_cookies, cookie_store.as_ref()) {
+    if let (true, Some(store)) = (resolved_settings.send_cookies.value, cookie_store.as_ref()) {
         // Convert WS URL -> HTTP URL because our cookie store matches based on
         // Path/HttpOnly/Secure attributes even though WS upgrades are HTTP requests
         let http_url = convert_ws_url_to_http(&url);
@@ -295,7 +297,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
             url.as_str(),
             headers,
             receive_tx,
-            resolved_settings.validate_certificates,
+            resolved_settings.validate_certificates.value,
             client_cert,
         )
         .await
@@ -335,7 +337,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
         .collect::<Vec<HttpResponseHeader>>();
 
     if let (true, Some(cookie_jar), Some(store)) =
-        (resolved_settings.store_cookies, cookie_jar.as_mut(), cookie_store.as_ref())
+        (resolved_settings.store_cookies.value, cookie_jar.as_mut(), cookie_store.as_ref())
     {
         let set_cookie_headers = response
             .headers()

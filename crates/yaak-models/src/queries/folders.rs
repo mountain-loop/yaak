@@ -2,9 +2,9 @@ use crate::client_db::ClientDb;
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Result;
 use crate::models::{
-    Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest,
-    HttpRequestHeader, HttpRequestIden, ResolvedHttpRequestSettings, WebsocketRequest,
-    WebsocketRequestIden,
+    AnyModel, Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden,
+    HttpRequest, HttpRequestHeader, HttpRequestIden, ResolvedHttpRequestSettings, ResolvedSetting,
+    WebsocketRequest, WebsocketRequestIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
@@ -157,27 +157,42 @@ impl<'a> ClientDb<'a> {
 
         Ok(ResolvedHttpRequestSettings {
             validate_certificates: if folder.setting_validate_certificates.enabled {
-                folder.setting_validate_certificates.value
+                ResolvedSetting::from_model(
+                    folder.setting_validate_certificates.value,
+                    AnyModel::Folder(folder.clone()),
+                )
             } else {
                 parent.validate_certificates
             },
             follow_redirects: if folder.setting_follow_redirects.enabled {
-                folder.setting_follow_redirects.value
+                ResolvedSetting::from_model(
+                    folder.setting_follow_redirects.value,
+                    AnyModel::Folder(folder.clone()),
+                )
             } else {
                 parent.follow_redirects
             },
             request_timeout: if folder.setting_request_timeout.enabled {
-                folder.setting_request_timeout.value
+                ResolvedSetting::from_model(
+                    folder.setting_request_timeout.value,
+                    AnyModel::Folder(folder.clone()),
+                )
             } else {
                 parent.request_timeout
             },
             send_cookies: if folder.setting_send_cookies.enabled {
-                folder.setting_send_cookies.value
+                ResolvedSetting::from_model(
+                    folder.setting_send_cookies.value,
+                    AnyModel::Folder(folder.clone()),
+                )
             } else {
                 parent.send_cookies
             },
             store_cookies: if folder.setting_store_cookies.enabled {
-                folder.setting_store_cookies.value
+                ResolvedSetting::from_model(
+                    folder.setting_store_cookies.value,
+                    AnyModel::Folder(folder.clone()),
+                )
             } else {
                 parent.store_cookies
             },

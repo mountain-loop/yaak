@@ -92,23 +92,46 @@ pub struct DnsOverride {
     pub enabled: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ResolvedSetting<T> {
+    pub value: T,
+    pub source_model: String,
+    pub source_id: Option<String>,
+    pub source_name: Option<String>,
+}
+
+impl<T> ResolvedSetting<T> {
+    pub fn from_model(value: T, model: AnyModel) -> Self {
+        Self {
+            value,
+            source_model: model.model().to_string(),
+            source_id: Some(model.id().to_string()),
+            source_name: Some(model.resolved_name()),
+        }
+    }
+
+    pub fn default_source(value: T) -> Self {
+        Self { value, source_model: "default".to_string(), source_id: None, source_name: None }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedHttpRequestSettings {
-    pub validate_certificates: bool,
-    pub follow_redirects: bool,
-    pub request_timeout: i32,
-    pub send_cookies: bool,
-    pub store_cookies: bool,
+    pub validate_certificates: ResolvedSetting<bool>,
+    pub follow_redirects: ResolvedSetting<bool>,
+    pub request_timeout: ResolvedSetting<i32>,
+    pub send_cookies: ResolvedSetting<bool>,
+    pub store_cookies: ResolvedSetting<bool>,
 }
 
 impl Default for ResolvedHttpRequestSettings {
     fn default() -> Self {
         Self {
-            validate_certificates: true,
-            follow_redirects: true,
-            request_timeout: 0,
-            send_cookies: true,
-            store_cookies: true,
+            validate_certificates: ResolvedSetting::default_source(true),
+            follow_redirects: ResolvedSetting::default_source(true),
+            request_timeout: ResolvedSetting::default_source(0),
+            send_cookies: ResolvedSetting::default_source(true),
+            store_cookies: ResolvedSetting::default_source(true),
         }
     }
 }
@@ -1748,6 +1771,15 @@ pub enum HttpResponseEventData {
     Setting {
         name: String,
         value: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, as = "Option<String>")]
+        source_model: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, as = "Option<String>")]
+        source_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, as = "Option<String>")]
+        source_name: Option<String>,
     },
     Info {
         message: String,

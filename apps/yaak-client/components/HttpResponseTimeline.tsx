@@ -1,10 +1,15 @@
 import type {
+  AnyModel,
   HttpResponse,
   HttpResponseEvent,
   HttpResponseEventData,
 } from "@yaakapp-internal/models";
+import { foldersAtom, workspacesAtom } from "@yaakapp-internal/models";
+import { useAtomValue } from "jotai";
 import { type ReactNode, useMemo, useState } from "react";
 import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
+import { useAllRequests } from "../hooks/useAllRequests";
+import { resolvedModelName } from "../lib/resolvedModelName";
 import { Editor } from "./core/Editor/LazyEditor";
 import { type EventDetailAction, EventDetailHeader, EventViewer } from "./core/EventViewer";
 import { EventViewerRow } from "./core/EventViewerRow";
@@ -95,6 +100,7 @@ function EventDetails({
 }) {
   const { label } = getEventDisplay(event.event);
   const e = event.event;
+  const settingSourceModels = useSettingSourceModels();
 
   const actions: EventDetailAction[] = [
     {
@@ -211,6 +217,9 @@ function EventDetails({
         <KeyValueRows>
           <KeyValueRow label="Setting">{e.name}</KeyValueRow>
           <KeyValueRow label="Value">{e.value}</KeyValueRow>
+          {e.source_model != null ? (
+            <KeyValueRow label="Source">{formatSettingSource(e, settingSourceModels)}</KeyValueRow>
+          ) : null}
         </KeyValueRows>
       );
     }
@@ -313,6 +322,35 @@ function getEventTextParts(event: HttpResponseEventData): EventTextParts {
 function formatEventText(event: HttpResponseEventData, includePrefix: boolean): string {
   const { prefix, text } = getEventTextParts(event);
   return includePrefix ? `${prefix} ${text}` : text;
+}
+
+function useSettingSourceModels() {
+  const requests = useAllRequests();
+  const folders = useAtomValue(foldersAtom);
+  const workspaces = useAtomValue(workspacesAtom);
+
+  return useMemo<AnyModel[]>(
+    () => [...requests, ...folders, ...workspaces],
+    [requests, folders, workspaces],
+  );
+}
+
+function formatSettingSource(
+  event: Extract<HttpResponseEventData, { type: "setting" }>,
+  models: AnyModel[],
+): string {
+  const sourceModel = event.source_model;
+  if (sourceModel == null || sourceModel === "default") {
+    return "Default";
+  }
+
+  const model =
+    event.source_id == null
+      ? null
+      : (models.find((m) => m.model === sourceModel && m.id === event.source_id) ?? null);
+  const name = model == null ? event.source_name : resolvedModelName(model);
+  const label = sourceModel.replaceAll("_", " ");
+  return name == null || name.length === 0 ? label : `${name} (${label})`;
 }
 
 type EventDisplay = {

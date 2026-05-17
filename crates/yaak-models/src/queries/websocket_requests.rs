@@ -2,8 +2,8 @@ use super::dedupe_headers;
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
-    Folder, FolderIden, HttpRequestHeader, ResolvedHttpRequestSettings, WebsocketRequest,
-    WebsocketRequestIden,
+    AnyModel, Folder, FolderIden, HttpRequestHeader, ResolvedHttpRequestSettings, ResolvedSetting,
+    WebsocketRequest, WebsocketRequestIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
@@ -132,12 +132,18 @@ impl<'a> ClientDb<'a> {
 
         Ok(ResolvedHttpRequestSettings {
             send_cookies: if websocket_request.setting_send_cookies.enabled {
-                websocket_request.setting_send_cookies.value
+                ResolvedSetting::from_model(
+                    websocket_request.setting_send_cookies.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
             } else {
                 parent.send_cookies
             },
             store_cookies: if websocket_request.setting_store_cookies.enabled {
-                websocket_request.setting_store_cookies.value
+                ResolvedSetting::from_model(
+                    websocket_request.setting_store_cookies.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
             } else {
                 parent.store_cookies
             },

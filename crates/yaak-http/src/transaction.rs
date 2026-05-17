@@ -144,12 +144,6 @@ impl<S: HttpSender> HttpTransaction<S> {
                 options: request.options.clone(),
             };
 
-            // Send the request
-            send_event(HttpResponseEvent::Setting(
-                "redirects".to_string(),
-                request.options.follow_redirects.to_string(),
-            ));
-
             // Execute with cancellation support
             let response = tokio::select! {
                 result = self.sender.send(req, event_tx.clone()) => result?,

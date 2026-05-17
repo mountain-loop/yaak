@@ -258,7 +258,14 @@ export type HttpResponseEvent = {
  * The `From` impl is in yaak-http to avoid circular dependencies.
  */
 export type HttpResponseEventData =
-  | { type: "setting"; name: string; value: string }
+  | {
+      type: "setting";
+      name: string;
+      value: string;
+      source_model?: string;
+      source_id?: string;
+      source_name?: string;
+    }
   | { type: "info"; message: string }
   | {
       type: "redirect";

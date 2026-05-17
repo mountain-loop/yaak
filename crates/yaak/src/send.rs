@@ -4,7 +4,7 @@ use log::warn;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -26,6 +26,7 @@ use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::models::{
     ClientCertificate, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
     HttpResponseEvent, HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
+    ResolvedSetting,
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
@@ -343,16 +344,16 @@ pub fn resolve_http_send_runtime_config(
 
     Ok(HttpSendRuntimeConfig {
         send_options: SendableHttpRequestOptions {
-            follow_redirects: resolved_settings.follow_redirects,
-            timeout: if resolved_settings.request_timeout > 0 {
+            follow_redirects: resolved_settings.follow_redirects.value,
+            timeout: if resolved_settings.request_timeout.value > 0 {
                 Some(std::time::Duration::from_millis(
-                    resolved_settings.request_timeout.unsigned_abs() as u64,
+                    resolved_settings.request_timeout.value.unsigned_abs() as u64,
                 ))
             } else {
                 None
             },
         },
-        validate_certificates: resolved_settings.validate_certificates,
+        validate_certificates: resolved_settings.validate_certificates.value,
         proxy: proxy_setting_from_settings(settings.proxy),
         dns_overrides: workspace.setting_dns_overrides,
         client_certificates: settings.client_certificates,
@@ -486,8 +487,8 @@ pub async fn send_http_request<T: TemplateCallback>(
         cookie_jar.as_ref().map(|jar| CookieStore::from_cookies(jar.cookies.clone()));
     let cookie_behavior = CookieBehavior {
         store: cookie_store,
-        send_cookies: resolved_settings.send_cookies,
-        store_cookies: resolved_settings.store_cookies,
+        send_cookies: resolved_settings.send_cookies.value,
+        store_cookies: resolved_settings.store_cookies.value,
     };
 
     let rendered_request = render_http_request(
@@ -613,6 +614,37 @@ pub async fn send_http_request<T: TemplateCallback>(
     let executor = params.executor.unwrap_or(&default_executor);
     let started_at = Instant::now();
     let request_started_url = sendable_request.url.clone();
+
+    send_setting_event(
+        &event_tx,
+        "validate_certificates",
+        runtime_config.validate_certificates.to_string(),
+        &resolved_settings.validate_certificates,
+    );
+    send_setting_event(
+        &event_tx,
+        "redirects",
+        sendable_request.options.follow_redirects.to_string(),
+        &resolved_settings.follow_redirects,
+    );
+    send_setting_event(
+        &event_tx,
+        "timeout",
+        timeout_setting_value(sendable_request.options.timeout),
+        &resolved_settings.request_timeout,
+    );
+    send_setting_event(
+        &event_tx,
+        "send_cookies",
+        cookie_behavior.send_cookies.to_string(),
+        &resolved_settings.send_cookies,
+    );
+    send_setting_event(
+        &event_tx,
+        "store_cookies",
+        cookie_behavior.store_cookies.to_string(),
+        &resolved_settings.store_cookies,
+    );
 
     let mut http_response =
         match executor.send(sendable_request, event_tx, cookie_behavior.clone()).await {
@@ -955,6 +987,28 @@ fn persist_cookie_jar(
             Ok(())
         }
         _ => Ok(()),
+    }
+}
+
+fn send_setting_event<T>(
+    event_tx: &mpsc::Sender<SenderHttpResponseEvent>,
+    name: impl Into<String>,
+    value: impl Into<String>,
+    setting: &ResolvedSetting<T>,
+) {
+    let _ = event_tx.try_send(SenderHttpResponseEvent::Setting {
+        name: name.into(),
+        value: value.into(),
+        source_model: Some(setting.source_model.clone()),
+        source_id: setting.source_id.clone(),
+        source_name: setting.source_name.clone(),
+    });
+}
+
+fn timeout_setting_value(timeout: Option<Duration>) -> String {
+    match timeout {
+        Some(timeout) if !timeout.is_zero() => format!("{timeout:?}"),
+        _ => "Infinity".to_string(),
     }
 }
 
