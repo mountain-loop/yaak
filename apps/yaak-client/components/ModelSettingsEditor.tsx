@@ -57,7 +57,7 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
           {supportsHttpSettings && (
             <IntegerSettingRow
               title="Request Timeout"
-              description="Maximum request duration in milliseconds (0 to disable timeout)"
+              description="Maximum request duration in milliseconds. Set to 0 to disable"
               name="settingRequestTimeout"
               setting={model.settingRequestTimeout}
               inheritedValue={resolveInheritedValue(

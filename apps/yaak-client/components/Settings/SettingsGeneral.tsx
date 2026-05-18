@@ -115,7 +115,7 @@ export function SettingsGeneral() {
             model={workspace}
             modelKey="settingRequestTimeout"
             title="Request Timeout"
-            description="Maximum request duration in milliseconds. Set to 0 to disable the timeout."
+            description="Maximum request duration in milliseconds. Set to 0 to disable."
             placeholder="0"
             required
             validate={(value) => Number.parseInt(value, 10) >= 0}
