@@ -15,6 +15,3 @@ ALTER TABLE http_requests ADD COLUMN setting_follow_redirects TEXT DEFAULT '{"en
 
 ALTER TABLE websocket_requests ADD COLUMN setting_send_cookies TEXT DEFAULT '{"enabled":false,"value":true}' NOT NULL;
 ALTER TABLE websocket_requests ADD COLUMN setting_store_cookies TEXT DEFAULT '{"enabled":false,"value":true}' NOT NULL;
-
-ALTER TABLE grpc_requests ADD COLUMN setting_send_cookies TEXT DEFAULT '{"enabled":false,"value":true}' NOT NULL;
-ALTER TABLE grpc_requests ADD COLUMN setting_store_cookies TEXT DEFAULT '{"enabled":false,"value":true}' NOT NULL;

@@ -1397,6 +1397,7 @@ pub struct WebsocketRequest {
     pub url_parameters: Vec<HttpUrlParameter>,
     pub setting_send_cookies: InheritedBoolSetting,
     pub setting_store_cookies: InheritedBoolSetting,
+    pub setting_validate_certificates: InheritedBoolSetting,
 }
 
 impl UpsertModelInfo for WebsocketRequest {
@@ -1441,6 +1442,10 @@ impl UpsertModelInfo for WebsocketRequest {
             (UrlParameters, serde_json::to_string(&self.url_parameters)?.into()),
             (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
             (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
+            (
+                SettingValidateCertificates,
+                serde_json::to_string(&self.setting_validate_certificates)?.into(),
+            ),
         ])
     }
 
@@ -1460,6 +1465,7 @@ impl UpsertModelInfo for WebsocketRequest {
             WebsocketRequestIden::UrlParameters,
             WebsocketRequestIden::SettingSendCookies,
             WebsocketRequestIden::SettingStoreCookies,
+            WebsocketRequestIden::SettingValidateCertificates,
         ]
     }
 
@@ -1472,6 +1478,7 @@ impl UpsertModelInfo for WebsocketRequest {
         let headers: String = row.get("headers")?;
         let setting_send_cookies: String = row.get("setting_send_cookies")?;
         let setting_store_cookies: String = row.get("setting_store_cookies")?;
+        let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -1490,6 +1497,8 @@ impl UpsertModelInfo for WebsocketRequest {
             name: row.get("name")?,
             setting_send_cookies: serde_json::from_str(&setting_send_cookies).unwrap_or_default(),
             setting_store_cookies: serde_json::from_str(&setting_store_cookies).unwrap_or_default(),
+            setting_validate_certificates: serde_json::from_str(&setting_validate_certificates)
+                .unwrap_or_default(),
         })
     }
 }
@@ -2029,8 +2038,7 @@ pub struct GrpcRequest {
     pub sort_priority: f64,
     /// Server URL (http for plaintext or https for secure)
     pub url: String,
-    pub setting_send_cookies: InheritedBoolSetting,
-    pub setting_store_cookies: InheritedBoolSetting,
+    pub setting_validate_certificates: InheritedBoolSetting,
 }
 
 impl UpsertModelInfo for GrpcRequest {
@@ -2074,8 +2082,10 @@ impl UpsertModelInfo for GrpcRequest {
             (AuthenticationType, self.authentication_type.into()),
             (Authentication, serde_json::to_string(&self.authentication)?.into()),
             (Metadata, serde_json::to_string(&self.metadata)?.into()),
-            (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
-            (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
+            (
+                SettingValidateCertificates,
+                serde_json::to_string(&self.setting_validate_certificates)?.into(),
+            ),
         ])
     }
 
@@ -2094,8 +2104,7 @@ impl UpsertModelInfo for GrpcRequest {
             GrpcRequestIden::AuthenticationType,
             GrpcRequestIden::Authentication,
             GrpcRequestIden::Metadata,
-            GrpcRequestIden::SettingSendCookies,
-            GrpcRequestIden::SettingStoreCookies,
+            GrpcRequestIden::SettingValidateCertificates,
         ]
     }
 
@@ -2105,8 +2114,7 @@ impl UpsertModelInfo for GrpcRequest {
     {
         let authentication: String = row.get("authentication")?;
         let metadata: String = row.get("metadata")?;
-        let setting_send_cookies: String = row.get("setting_send_cookies")?;
-        let setting_store_cookies: String = row.get("setting_store_cookies")?;
+        let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -2124,8 +2132,8 @@ impl UpsertModelInfo for GrpcRequest {
             url: row.get("url")?,
             sort_priority: row.get("sort_priority")?,
             metadata: serde_json::from_str(metadata.as_str()).unwrap_or_default(),
-            setting_send_cookies: serde_json::from_str(&setting_send_cookies).unwrap_or_default(),
-            setting_store_cookies: serde_json::from_str(&setting_store_cookies).unwrap_or_default(),
+            setting_validate_certificates: serde_json::from_str(&setting_validate_certificates)
+                .unwrap_or_default(),
         })
     }
 }

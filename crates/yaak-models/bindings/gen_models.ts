@@ -183,8 +183,7 @@ export type GrpcRequest = {
    * Server URL (http for plaintext or https for secure)
    */
   url: string;
-  settingSendCookies: InheritedBoolSetting;
-  settingStoreCookies: InheritedBoolSetting;
+  settingValidateCertificates: InheritedBoolSetting;
 };
 
 export type HttpRequest = {
@@ -482,6 +481,7 @@ export type WebsocketRequest = {
   urlParameters: Array<HttpUrlParameter>;
   settingSendCookies: InheritedBoolSetting;
   settingStoreCookies: InheritedBoolSetting;
+  settingValidateCertificates: InheritedBoolSetting;
 };
 
 export type Workspace = {

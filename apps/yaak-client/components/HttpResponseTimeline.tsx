@@ -353,6 +353,15 @@ function formatSettingSource(
   return name == null || name.length === 0 ? label : `${name} (${label})`;
 }
 
+function formatSettingSourceModel(event: Extract<HttpResponseEventData, { type: "setting" }>) {
+  const sourceModel = event.source_model;
+  if (sourceModel == null || sourceModel === "default" || sourceModel === "workspace") {
+    return null;
+  }
+
+  return sourceModel;
+}
+
 type EventDisplay = {
   icon: IconProps["icon"];
   color: IconProps["color"];
@@ -363,11 +372,12 @@ type EventDisplay = {
 function getEventDisplay(event: HttpResponseEventData): EventDisplay {
   switch (event.type) {
     case "setting":
+      const sourceModel = formatSettingSourceModel(event);
       return {
         icon: "settings",
         color: "secondary",
         label: "Setting",
-        summary: `${event.name} = ${event.value}`,
+        summary: `${event.name} = ${event.value}${sourceModel == null ? "" : ` (${sourceModel})`}`,
       };
     case "info":
       return {

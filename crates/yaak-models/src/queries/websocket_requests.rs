@@ -131,6 +131,14 @@ impl<'a> ClientDb<'a> {
         };
 
         Ok(ResolvedHttpRequestSettings {
+            validate_certificates: if websocket_request.setting_validate_certificates.enabled {
+                ResolvedSetting::from_model(
+                    websocket_request.setting_validate_certificates.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
+            } else {
+                parent.validate_certificates
+            },
             send_cookies: if websocket_request.setting_send_cookies.enabled {
                 ResolvedSetting::from_model(
                     websocket_request.setting_send_cookies.value,

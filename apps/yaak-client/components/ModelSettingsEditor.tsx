@@ -26,7 +26,8 @@ interface Props {
 
 type ModelWithSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
 type ModelWithHttpSettings = Workspace | Folder | HttpRequest;
-type ModelWithCookieSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
+type ModelWithTlsSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
+type ModelWithCookieSettings = Workspace | Folder | HttpRequest | WebsocketRequest;
 type BooleanSetting = boolean | InheritedBoolSetting;
 type IntegerSetting = number | InheritedIntSetting;
 type CookieSettingsPatch = {
@@ -34,36 +35,43 @@ type CookieSettingsPatch = {
   settingStoreCookies?: ModelWithCookieSettings["settingStoreCookies"];
 };
 type HttpSettingsPatch = {
-  settingValidateCertificates?: ModelWithHttpSettings["settingValidateCertificates"];
   settingFollowRedirects?: ModelWithHttpSettings["settingFollowRedirects"];
   settingRequestTimeout?: ModelWithHttpSettings["settingRequestTimeout"];
+};
+type TlsSettingsPatch = {
+  settingValidateCertificates?: ModelWithTlsSettings["settingValidateCertificates"];
 };
 
 export function ModelSettingsEditor({ model, showSectionTitles = false }: Props) {
   const ancestors = useModelAncestors(model);
   const supportsHttpSettings =
     model.model === "workspace" || model.model === "folder" || model.model === "http_request";
+  const supportsCookieSettings = supportsHttpSettings || model.model === "websocket_request";
+  const supportsTlsSettings =
+    supportsHttpSettings || model.model === "websocket_request" || model.model === "grpc_request";
 
   return (
     <SettingsList className="space-y-8">
-      {supportsHttpSettings && (
+      {supportsTlsSettings && (
         <SettingsSection title={showSectionTitles ? "Requests" : null}>
-          <IntegerSettingRow
-            title="Request Timeout"
-            description="Maximum request duration in milliseconds. Set to 0 to disable the timeout."
-            name="settingRequestTimeout"
-            setting={model.settingRequestTimeout}
-            inheritedValue={resolveInheritedValue(
-              ancestors,
-              "settingRequestTimeout",
-              model.settingRequestTimeout,
-            )}
-            onChange={(settingRequestTimeout) =>
-              patchHttpSettings(model, {
-                settingRequestTimeout,
-              })
-            }
-          />
+          {supportsHttpSettings && (
+            <IntegerSettingRow
+              title="Request Timeout"
+              description="Maximum request duration in milliseconds (0 to disable timeout)"
+              name="settingRequestTimeout"
+              setting={model.settingRequestTimeout}
+              inheritedValue={resolveInheritedValue(
+                ancestors,
+                "settingRequestTimeout",
+                model.settingRequestTimeout,
+              )}
+              onChange={(settingRequestTimeout) =>
+                patchHttpSettings(model, {
+                  settingRequestTimeout,
+                })
+              }
+            />
+          )}
           <BooleanSettingRow
             title="Validate TLS certificates"
             description="When disabled, skip validation of server certificates."
@@ -74,76 +82,79 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
               model.settingValidateCertificates,
             )}
             onChange={(settingValidateCertificates) =>
-              patchHttpSettings(model, {
+              patchTlsSettings(model, {
                 settingValidateCertificates,
               })
             }
           />
+          {supportsHttpSettings && (
+            <BooleanSettingRow
+              title="Follow redirects"
+              description="Follow HTTP redirects automatically."
+              setting={model.settingFollowRedirects}
+              inheritedValue={resolveInheritedValue(
+                ancestors,
+                "settingFollowRedirects",
+                model.settingFollowRedirects,
+              )}
+              onChange={(settingFollowRedirects) =>
+                patchHttpSettings(model, {
+                  settingFollowRedirects,
+                })
+              }
+            />
+          )}
+        </SettingsSection>
+      )}
+      {supportsCookieSettings && (
+        <SettingsSection title={supportsTlsSettings || showSectionTitles ? "Cookies" : null}>
           <BooleanSettingRow
-            title="Follow redirects"
-            description="Follow HTTP redirects automatically."
-            setting={model.settingFollowRedirects}
+            title="Automatically send cookies"
+            description="Attach matching cookies from the active cookie jar to outgoing requests."
+            setting={model.settingSendCookies}
             inheritedValue={resolveInheritedValue(
               ancestors,
-              "settingFollowRedirects",
-              model.settingFollowRedirects,
+              "settingSendCookies",
+              model.settingSendCookies,
             )}
-            onChange={(settingFollowRedirects) =>
-              patchHttpSettings(model, {
-                settingFollowRedirects,
+            onChange={(settingSendCookies) =>
+              patchCookieSettings(model, {
+                settingSendCookies,
+              })
+            }
+          />
+          <BooleanSettingRow
+            title="Automatically store cookies"
+            description="Save cookies from Set-Cookie response headers to the active cookie jar."
+            setting={model.settingStoreCookies}
+            inheritedValue={resolveInheritedValue(
+              ancestors,
+              "settingStoreCookies",
+              model.settingStoreCookies,
+            )}
+            onChange={(settingStoreCookies) =>
+              patchCookieSettings(model, {
+                settingStoreCookies,
               })
             }
           />
         </SettingsSection>
       )}
-      <SettingsSection title={supportsHttpSettings || showSectionTitles ? "Cookies" : null}>
-        <BooleanSettingRow
-          title="Automatically send cookies"
-          description="Attach matching cookies from the active cookie jar to outgoing requests."
-          setting={model.settingSendCookies}
-          inheritedValue={resolveInheritedValue(
-            ancestors,
-            "settingSendCookies",
-            model.settingSendCookies,
-          )}
-          onChange={(settingSendCookies) =>
-            patchCookieSettings(model, {
-              settingSendCookies,
-            })
-          }
-        />
-        <BooleanSettingRow
-          title="Automatically store cookies"
-          description="Save cookies from Set-Cookie response headers to the active cookie jar."
-          setting={model.settingStoreCookies}
-          inheritedValue={resolveInheritedValue(
-            ancestors,
-            "settingStoreCookies",
-            model.settingStoreCookies,
-          )}
-          onChange={(settingStoreCookies) =>
-            patchCookieSettings(model, {
-              settingStoreCookies,
-            })
-          }
-        />
-      </SettingsSection>
     </SettingsList>
   );
 }
 
 export function countOverriddenSettings(model: ModelWithSettings) {
-  const settings: (BooleanSetting | IntegerSetting)[] = [
-    model.settingSendCookies,
-    model.settingStoreCookies,
-  ];
+  const settings: (BooleanSetting | IntegerSetting)[] = [];
+
+  if (model.model !== "grpc_request") {
+    settings.push(model.settingSendCookies, model.settingStoreCookies);
+  }
+
+  settings.push(model.settingValidateCertificates);
 
   if (model.model === "workspace" || model.model === "folder" || model.model === "http_request") {
-    settings.push(
-      model.settingValidateCertificates,
-      model.settingFollowRedirects,
-      model.settingRequestTimeout,
-    );
+    settings.push(model.settingFollowRedirects, model.settingRequestTimeout);
   }
 
   return settings.filter((setting) => isInheritedSetting(setting) && setting.enabled === true)
@@ -156,13 +167,22 @@ function patchCookieSettings(model: ModelWithCookieSettings, patch: Partial<Cook
   if (model.model === "http_request") return patchModel(model, patch as Partial<HttpRequest>);
   if (model.model === "websocket_request")
     return patchModel(model, patch as Partial<WebsocketRequest>);
-  return patchModel(model, patch as Partial<GrpcRequest>);
+  throw new Error("Unsupported cookie settings model");
 }
 
 function patchHttpSettings(model: ModelWithHttpSettings, patch: Partial<HttpSettingsPatch>) {
   if (model.model === "workspace") return patchModel(model, patch as Partial<Workspace>);
   if (model.model === "folder") return patchModel(model, patch as Partial<Folder>);
   return patchModel(model, patch as Partial<HttpRequest>);
+}
+
+function patchTlsSettings(model: ModelWithTlsSettings, patch: Partial<TlsSettingsPatch>) {
+  if (model.model === "workspace") return patchModel(model, patch as Partial<Workspace>);
+  if (model.model === "folder") return patchModel(model, patch as Partial<Folder>);
+  if (model.model === "http_request") return patchModel(model, patch as Partial<HttpRequest>);
+  if (model.model === "websocket_request")
+    return patchModel(model, patch as Partial<WebsocketRequest>);
+  return patchModel(model, patch as Partial<GrpcRequest>);
 }
 
 function BooleanSettingRow({
