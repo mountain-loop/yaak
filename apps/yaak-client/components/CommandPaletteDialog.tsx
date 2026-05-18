@@ -133,6 +133,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       {
         key: "cookies.show",
         label: "Show Cookies",
+        action: "cookies_editor.show",
         onSelect: async () => {
           CookieDialog.show(activeCookieJar?.id ?? null);
         },

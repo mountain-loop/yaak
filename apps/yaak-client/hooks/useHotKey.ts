@@ -14,6 +14,7 @@ export type HotkeyAction =
   | "app.zoom_out"
   | "app.zoom_reset"
   | "command_palette.toggle"
+  | "cookies_editor.show"
   | "editor.autocomplete"
   | "environment_editor.toggle"
   | "hotkeys.showHelp"
@@ -43,6 +44,7 @@ const defaultHotkeysMac: Record<HotkeyAction, string[]> = {
   "app.zoom_out": ["Meta+Minus"],
   "app.zoom_reset": ["Meta+0"],
   "command_palette.toggle": ["Meta+k"],
+  "cookies_editor.show": ["Meta+Shift+k"],
   "editor.autocomplete": ["Control+Space"],
   "environment_editor.toggle": ["Meta+Shift+e"],
   "request.rename": ["Control+Shift+r"],
@@ -73,6 +75,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
   "app.zoom_out": ["Control+Minus"],
   "app.zoom_reset": ["Control+0"],
   "command_palette.toggle": ["Control+k"],
+  "cookies_editor.show": ["Control+Shift+k"],
   "editor.autocomplete": ["Control+Space"],
   "environment_editor.toggle": ["Control+Shift+e"],
   "request.rename": ["F2"],
@@ -128,6 +131,7 @@ const hotkeyLabels: Record<HotkeyAction, string> = {
   "app.zoom_out": "Zoom Out",
   "app.zoom_reset": "Zoom to Actual Size",
   "command_palette.toggle": "Toggle Command Palette",
+  "cookies_editor.show": "Show Cookies",
   "editor.autocomplete": "Trigger Autocomplete",
   "environment_editor.toggle": "Edit Environments",
   "hotkeys.showHelp": "Show Keyboard Shortcuts",

@@ -229,7 +229,6 @@ function IntegerSettingRow({
   const inherited = isInheritedSetting(setting);
   const overridden = inherited ? setting.enabled === true : false;
   const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
-  const showReset = overridden && value !== inheritedValue;
 
   if (!inherited) {
     return (
@@ -249,7 +248,7 @@ function IntegerSettingRow({
     <SettingOverrideRow
       title={title}
       description={description}
-      overridden={showReset}
+      overridden={overridden}
       onResetOverride={() => onChange({ ...setting, enabled: false })}
     >
       <PlainInput

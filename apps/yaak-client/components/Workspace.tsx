@@ -6,6 +6,7 @@ import { useAtomValue } from "jotai";
 import * as m from "motion/react-m";
 import { useMemo, useState } from "react";
 import {
+  getActiveCookieJar,
   useEnsureActiveCookieJar,
   useSubscribeActiveCookieJarId,
 } from "../hooks/useActiveCookieJar";
@@ -33,6 +34,7 @@ import { jotaiStore } from "../lib/jotai";
 import { CreateDropdown } from "./CreateDropdown";
 import { Button } from "./core/Button";
 import { HotkeyList } from "./core/HotkeyList";
+import { CookieDialog } from "./CookieDialog";
 import { FeedbackLink } from "./core/Link";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { FolderLayout } from "./FolderLayout";
@@ -218,4 +220,8 @@ function useGlobalWorkspaceHooks() {
   useHotKey("model.duplicate", () =>
     duplicateRequestOrFolderAndNavigate(jotaiStore.get(activeRequestAtom)),
   );
+
+  useHotKey("cookies_editor.show", () => CookieDialog.show(getActiveCookieJar()?.id ?? null), {
+    enable: () => getActiveCookieJar() != null,
+  });
 }

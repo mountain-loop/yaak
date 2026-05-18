@@ -240,7 +240,13 @@ export function EventDetailHeader({
       </HStack>
       <HStack space={2} className="items-center">
         {actions?.map((action) => (
-          <Button key={action.key} variant="border" size="xs" onClick={action.onClick}>
+          <Button
+            key={action.key}
+            type="button"
+            variant="border"
+            size="xs"
+            onClick={action.onClick}
+          >
             {action.icon}
             {action.label}
           </Button>

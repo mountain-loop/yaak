@@ -2,7 +2,16 @@ import type { Cookie } from "@yaakapp-internal/models";
 import { cookieJarsAtom, patchModel } from "@yaakapp-internal/models";
 import { formatDate } from "date-fns/format";
 import { useAtomValue } from "jotai";
-import { type ComponentProps, useMemo, useState } from "react";
+import {
+  type ComponentProps,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
 import { cookieDomain } from "../lib/model_util";
@@ -40,6 +49,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
   const [editingCookieKey, setEditingCookieKey] = useState<string | null>(null);
   const [draftCookie, setDraftCookie] = useState<Cookie | null>(null);
   const [draftExpiresInput, setDraftExpiresInput] = useState("");
+  const editorFormRef = useRef<HTMLFormElement>(null);
   const filteredCookies = useMemo(() => {
     return cookieJar?.cookies.filter((cookie) => cookieMatchesFilter(cookie, filter)) ?? [];
   }, [cookieJar?.cookies, filter]);
@@ -89,21 +99,14 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
     setSelectedCookieKey(null);
   };
 
-  const handleSaveCookie = () => {
+  const handleSaveCookie = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
     if (cookieJar == null || draftCookie == null) {
       return;
     }
 
     let nextCookie = normalizeCookie(draftCookie);
-    if (nextCookie.name.trim().length === 0) {
-      showAlert({
-        id: "invalid-cookie-name",
-        title: "Invalid Cookie",
-        body: "Cookie name is required.",
-      });
-      return;
-    }
-
     if (nextCookie.expires !== "SessionEnd") {
       const expires = cookieExpiresFromInput(draftExpiresInput);
       if (expires == null) {
@@ -175,7 +178,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
         <SplitLayout
           layout="vertical"
           storageKey="cookie-dialog-details"
-          defaultRatio={0.65}
+          defaultRatio={0.5}
           className="-mx-2"
           minHeightPx={10}
           firstSlot={({ style }) =>
@@ -292,9 +295,11 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
             detailCookie == null
               ? null
               : ({ style }) => (
-                  <div
+                  <CookieDetailsPane
+                    formRef={editorFormRef}
+                    isEditing={isEditingCookie}
+                    onSubmit={handleSaveCookie}
                     style={style}
-                    className="grid grid-rows-[auto_minmax(0,1fr)] bg-surface border-t border-border pt-2"
                   >
                     <EventDetailHeader
                       title={isCreatingCookie ? "New Cookie" : detailCookie.name || "Cookie"}
@@ -305,7 +310,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                               {
                                 key: "save",
                                 label: isCreatingCookie ? "Create" : "Save",
-                                onClick: handleSaveCookie,
+                                onClick: () => editorFormRef.current?.requestSubmit(),
                               },
                               {
                                 key: "cancel",
@@ -333,7 +338,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                     ) : (
                       <CookieDetails cookie={detailCookie} />
                     )}
-                  </div>
+                  </CookieDetailsPane>
                 )
           }
         />
@@ -341,6 +346,36 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
     </div>
   );
 };
+
+function CookieDetailsPane({
+  children,
+  formRef,
+  isEditing,
+  onSubmit,
+  style,
+}: {
+  children: ReactNode;
+  formRef: RefObject<HTMLFormElement | null>;
+  isEditing: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  style: CSSProperties;
+}) {
+  const className = "grid grid-rows-[auto_minmax(0,1fr)] bg-surface border-t border-border pt-2";
+
+  if (isEditing) {
+    return (
+      <form ref={formRef} style={style} className={className} onSubmit={onSubmit}>
+        {children}
+      </form>
+    );
+  }
+
+  return (
+    <div style={style} className={className}>
+      {children}
+    </div>
+  );
+}
 
 CookieDialog.show = (cookieJarId: string | null) => {
   const cookieJar = jotaiStore.get(cookieJarsAtom)?.find((jar) => jar.id === cookieJarId);
@@ -403,6 +438,7 @@ function CookieEditor({
           <CookieTextInput
             required
             autoFocus
+            pattern={NON_EMPTY_INPUT_PATTERN}
             value={cookie.name}
             onChange={(name) => onChange({ ...cookie, name })}
           />
@@ -415,8 +451,10 @@ function CookieEditor({
         </CookieKeyValueRow>
         <CookieKeyValueRow align="middle" label="Domain">
           <CookieTextInput
+            required
+            pattern={NON_EMPTY_INPUT_PATTERN}
             value={cookieDomainInputValue(cookie)}
-            placeholder="n/a"
+            placeholder="example.com"
             onChange={(domain) => onChange(cookieWithDomain(cookie, domain))}
           />
         </CookieKeyValueRow>
@@ -516,6 +554,7 @@ function CookieTextInput({
   autoFocus,
   disabled,
   onChange,
+  pattern,
   placeholder,
   required,
   value,
@@ -523,6 +562,7 @@ function CookieTextInput({
   autoFocus?: boolean;
   disabled?: boolean;
   onChange: (value: string) => void;
+  pattern?: string;
   placeholder?: string;
   required?: boolean;
   value: string;
@@ -533,6 +573,7 @@ function CookieTextInput({
       className={cookieInputClassName}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
+      pattern={pattern}
       placeholder={placeholder}
       required={required}
       type="text"
@@ -552,10 +593,12 @@ function CookieTextarea({ onChange, value }: { onChange: (value: string) => void
 }
 
 const NEW_COOKIE_KEY = "__new-cookie__";
+const NON_EMPTY_INPUT_PATTERN = ".*\\S.*";
 const cookieInputClassName = classNames(
-  "w-full min-w-0 rounded bg-transparent px-1 py-0.5",
-  "border border-transparent outline-none",
-  "hover:border-border-subtle focus:border-border-focus",
+  "x-theme-input w-full min-w-0 min-h-sm rounded-md bg-transparent",
+  "border border-border-subtle outline-none",
+  "px-2 text-xs font-mono cursor-text placeholder:text-placeholder",
+  "focus:border-border-focus invalid:border-danger",
   "disabled:opacity-disabled disabled:border-dotted",
 );
 
@@ -580,9 +623,22 @@ function newCookieDraft(): Cookie {
 function normalizeCookie(cookie: Cookie): Cookie {
   return {
     ...cookie,
+    domain: normalizeCookieDomain(cookie.domain),
     name: cookie.name.trim(),
     path: cookie.path.trim() || "/",
   };
+}
+
+function normalizeCookieDomain(domain: Cookie["domain"]): Cookie["domain"] {
+  if (domain === "NotPresent" || domain === "Empty") {
+    return domain;
+  }
+
+  if ("Suffix" in domain) {
+    return { Suffix: domain.Suffix.trim() };
+  }
+
+  return { HostOnly: domain.HostOnly.trim() };
 }
 
 function cookieDomainInputValue(cookie: Cookie) {
