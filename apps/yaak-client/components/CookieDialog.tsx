@@ -711,5 +711,17 @@ function cookieMatchesFilter(cookie: Cookie, filter: string) {
 }
 
 function cookieKey(cookie: Cookie) {
-  return JSON.stringify([cookie.name, cookieDomain(cookie), cookie.path]);
+  return [cookie.name, cookieDomainKey(cookie.domain), cookie.path].join("|");
+}
+
+function cookieDomainKey(domain: Cookie["domain"]) {
+  if (typeof domain !== "string" && "HostOnly" in domain) {
+    return `HostOnly:${domain.HostOnly}`;
+  }
+
+  if (typeof domain !== "string" && "Suffix" in domain) {
+    return `Suffix:${domain.Suffix}`;
+  }
+
+  return domain;
 }
