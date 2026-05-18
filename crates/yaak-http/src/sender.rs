@@ -24,7 +24,13 @@ pub enum RedirectBehavior {
 
 #[derive(Debug, Clone)]
 pub enum HttpResponseEvent {
-    Setting(String, String),
+    Setting {
+        name: String,
+        value: String,
+        source_model: Option<String>,
+        source_id: Option<String>,
+        source_name: Option<String>,
+    },
     Info(String),
     Redirect {
         url: String,
@@ -67,7 +73,9 @@ pub enum HttpResponseEvent {
 impl Display for HttpResponseEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
+            HttpResponseEvent::Setting { name, value, .. } => {
+                write!(f, "* Setting {}={}", name, value)
+            }
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
             HttpResponseEvent::Redirect {
                 url,
@@ -146,7 +154,9 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
     fn from(event: HttpResponseEvent) -> Self {
         use yaak_models::models::HttpResponseEventData as D;
         match event {
-            HttpResponseEvent::Setting(name, value) => D::Setting { name, value },
+            HttpResponseEvent::Setting { name, value, source_model, source_id, source_name } => {
+                D::Setting { name, value, source_model, source_id, source_name }
+            }
             HttpResponseEvent::Info(message) => D::Info { message },
             HttpResponseEvent::Redirect {
                 url,
@@ -483,15 +493,6 @@ impl HttpSender for ReqwestSender {
 
         // Send the request
         let sendable_req = req_builder.build()?;
-        send_event(HttpResponseEvent::Setting(
-            "timeout".to_string(),
-            if request.options.timeout.unwrap_or_default().is_zero() {
-                "Infinity".to_string()
-            } else {
-                format!("{:?}", request.options.timeout)
-            },
-        ));
-
         send_event(HttpResponseEvent::SendUrl {
             method: sendable_req.method().to_string(),
             scheme: sendable_req.url().scheme().to_string(),

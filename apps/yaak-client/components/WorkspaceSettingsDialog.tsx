@@ -5,16 +5,19 @@ import { useAuthTab } from "../hooks/useAuthTab";
 import { useHeadersTab } from "../hooks/useHeadersTab";
 import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
+import { showDialog } from "../lib/dialog";
 import { router } from "../lib/router";
 import { CopyIconButton } from "./CopyIconButton";
 import { Button } from "./core/Button";
 import { CountBadge } from "./core/CountBadge";
 import { PlainInput } from "./core/PlainInput";
+import { SettingsList, SettingsSection } from "./core/SettingRow";
 import { TabContent, Tabs } from "./core/Tabs/Tabs";
 import { DnsOverridesEditor } from "./DnsOverridesEditor";
 import { HeadersEditor } from "./HeadersEditor";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { ModelSettingsEditor } from "./ModelSettingsEditor";
 import { SyncToFilesystemSetting } from "./SyncToFilesystemSetting";
 import { WorkspaceEncryptionSetting } from "./WorkspaceEncryptionSetting";
 
@@ -25,17 +28,17 @@ interface Props {
 }
 
 const TAB_AUTH = "auth";
-const TAB_DATA = "data";
 const TAB_DNS = "dns";
 const TAB_HEADERS = "headers";
 const TAB_GENERAL = "general";
+const TAB_SETTINGS = "settings";
 
 export type WorkspaceSettingsTab =
   | typeof TAB_AUTH
   | typeof TAB_DNS
   | typeof TAB_HEADERS
   | typeof TAB_GENERAL
-  | typeof TAB_DATA;
+  | typeof TAB_SETTINGS;
 
 const DEFAULT_TAB: WorkspaceSettingsTab = TAB_GENERAL;
 
@@ -71,8 +74,8 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
       tabs={[
         { value: TAB_GENERAL, label: "Workspace" },
         {
-          value: TAB_DATA,
-          label: "Storage",
+          value: TAB_SETTINGS,
+          label: "Settings",
         },
         ...headersTab,
         ...authTab,
@@ -99,6 +102,20 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           onChange={(headers) => patchModel(workspace, { headers })}
           stateKey={`headers.${workspace.id}`}
         />
+      </TabContent>
+      <TabContent value={TAB_SETTINGS} className="overflow-y-auto h-full px-4">
+        <SettingsList className="space-y-8 pb-3">
+          <SettingsSection title={null}>
+            <SyncToFilesystemSetting
+              layout="settings"
+              value={{ filePath: workspaceMeta.settingSyncDir }}
+              onCreateNewWorkspace={hide}
+              onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
+            />
+            <WorkspaceEncryptionSetting layout="settings" size="xs" />
+          </SettingsSection>
+          <ModelSettingsEditor model={workspace} showSectionTitles />
+        </SettingsList>
       </TabContent>
       <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-4">
         <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] gap-4 pb-3 h-full">
@@ -152,19 +169,21 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
           </HStack>
         </div>
       </TabContent>
-      <TabContent value={TAB_DATA} className="overflow-y-auto h-full px-4">
-        <VStack space={4} alignItems="start" className="pb-3 h-full">
-          <SyncToFilesystemSetting
-            value={{ filePath: workspaceMeta.settingSyncDir }}
-            onCreateNewWorkspace={hide}
-            onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
-          />
-          <WorkspaceEncryptionSetting size="xs" />
-        </VStack>
-      </TabContent>
       <TabContent value={TAB_DNS} className="overflow-y-auto h-full px-4">
         <DnsOverridesEditor workspace={workspace} />
       </TabContent>
     </Tabs>
   );
 }
+
+WorkspaceSettingsDialog.show = (workspaceId: string, tab?: WorkspaceSettingsTab) => {
+  showDialog({
+    id: "workspace-settings",
+    size: "lg",
+    className: "h-[calc(100vh-5rem)] !max-h-[50rem]",
+    noPadding: true,
+    render: ({ hide }) => (
+      <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} tab={tab} />
+    ),
+  });
+};

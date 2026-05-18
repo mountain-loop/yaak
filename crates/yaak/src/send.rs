@@ -4,7 +4,7 @@ use log::warn;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -26,6 +26,7 @@ use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::models::{
     ClientCertificate, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
     HttpResponseEvent, HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
+    ResolvedSetting,
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
@@ -115,8 +116,15 @@ pub trait SendRequestExecutor: Send + Sync {
         &self,
         sendable_request: SendableHttpRequest,
         event_tx: mpsc::Sender<SenderHttpResponseEvent>,
-        cookie_store: Option<CookieStore>,
+        cookie_behavior: CookieBehavior,
     ) -> yaak_http::error::Result<yaak_http::sender::HttpResponse>;
+}
+
+#[derive(Clone)]
+pub struct CookieBehavior {
+    pub store: Option<CookieStore>,
+    pub send_cookies: bool,
+    pub store_cookies: bool,
 }
 
 struct DefaultSendRequestExecutor;
@@ -127,11 +135,16 @@ impl SendRequestExecutor for DefaultSendRequestExecutor {
         &self,
         sendable_request: SendableHttpRequest,
         event_tx: mpsc::Sender<SenderHttpResponseEvent>,
-        cookie_store: Option<CookieStore>,
+        cookie_behavior: CookieBehavior,
     ) -> yaak_http::error::Result<yaak_http::sender::HttpResponse> {
         let sender = ReqwestSender::new()?;
-        let transaction = match cookie_store {
-            Some(store) => HttpTransaction::with_cookie_store(sender, store),
+        let transaction = match cookie_behavior.store {
+            Some(store) => HttpTransaction::with_cookie_behavior(
+                sender,
+                store,
+                cookie_behavior.send_cookies,
+                cookie_behavior.store_cookies,
+            ),
             None => HttpTransaction::new(sender),
         };
         let (_cancel_tx, cancel_rx) = watch::channel(false);
@@ -182,7 +195,7 @@ struct ConnectionManagerSendRequestExecutor<'a> {
     connection_manager: &'a HttpConnectionManager,
     plugin_context_id: String,
     query_manager: QueryManager,
-    workspace_id: String,
+    request: HttpRequest,
     cancelled_rx: Option<watch::Receiver<bool>>,
 }
 
@@ -192,11 +205,10 @@ impl SendRequestExecutor for ConnectionManagerSendRequestExecutor<'_> {
         &self,
         sendable_request: SendableHttpRequest,
         event_tx: mpsc::Sender<SenderHttpResponseEvent>,
-        cookie_store: Option<CookieStore>,
+        cookie_behavior: CookieBehavior,
     ) -> yaak_http::error::Result<yaak_http::sender::HttpResponse> {
-        let runtime_config =
-            resolve_http_send_runtime_config(&self.query_manager, &self.workspace_id)
-                .map_err(|e| yaak_http::error::Error::RequestError(e.to_string()))?;
+        let runtime_config = resolve_http_send_runtime_config(&self.query_manager, &self.request)
+            .map_err(|e| yaak_http::error::Error::RequestError(e.to_string()))?;
         let client_certificate =
             find_client_certificate(&sendable_request.url, &runtime_config.client_certificates);
         let cached_client = self
@@ -213,8 +225,13 @@ impl SendRequestExecutor for ConnectionManagerSendRequestExecutor<'_> {
         cached_client.resolver.set_event_sender(Some(event_tx.clone())).await;
 
         let sender = ReqwestSender::with_client(cached_client.client);
-        let transaction = match cookie_store {
-            Some(cs) => HttpTransaction::with_cookie_store(sender, cs),
+        let transaction = match cookie_behavior.store {
+            Some(cs) => HttpTransaction::with_cookie_behavior(
+                sender,
+                cs,
+                cookie_behavior.send_cookies,
+                cookie_behavior.store_cookies,
+            ),
             None => HttpTransaction::new(sender),
         };
 
@@ -315,24 +332,28 @@ pub struct HttpSendRuntimeConfig {
 
 pub fn resolve_http_send_runtime_config(
     query_manager: &QueryManager,
-    workspace_id: &str,
+    request: &HttpRequest,
 ) -> Result<HttpSendRuntimeConfig> {
     let db = query_manager.connect();
-    let workspace = db.get_workspace(workspace_id).map_err(SendHttpRequestError::LoadWorkspace)?;
+    let workspace =
+        db.get_workspace(&request.workspace_id).map_err(SendHttpRequestError::LoadWorkspace)?;
+    let resolved_settings = db
+        .resolve_settings_for_http_request(request)
+        .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
     let settings = db.get_settings();
 
     Ok(HttpSendRuntimeConfig {
         send_options: SendableHttpRequestOptions {
-            follow_redirects: workspace.setting_follow_redirects,
-            timeout: if workspace.setting_request_timeout > 0 {
+            follow_redirects: resolved_settings.follow_redirects.value,
+            timeout: if resolved_settings.request_timeout.value > 0 {
                 Some(std::time::Duration::from_millis(
-                    workspace.setting_request_timeout.unsigned_abs() as u64,
+                    resolved_settings.request_timeout.value.unsigned_abs() as u64,
                 ))
             } else {
                 None
             },
         },
-        validate_certificates: workspace.setting_validate_certificates,
+        validate_certificates: resolved_settings.validate_certificates.value,
         proxy: proxy_setting_from_settings(settings.proxy),
         dns_overrides: workspace.setting_dns_overrides,
         client_certificates: settings.client_certificates,
@@ -387,7 +408,7 @@ pub async fn send_http_request_with_plugins(
             connection_manager,
             plugin_context_id: params.plugin_context.id.clone(),
             query_manager: params.query_manager.clone(),
-            workspace_id: params.request.workspace_id.clone(),
+            request: params.request.clone(),
             cancelled_rx: params.cancelled_rx.clone(),
         });
 
@@ -454,12 +475,21 @@ pub async fn send_http_request<T: TemplateCallback>(
         } else {
             resolve_inherited_request(params.query_manager, &params.request)?
         };
-    let runtime_config =
-        resolve_http_send_runtime_config(params.query_manager, &params.request.workspace_id)?;
+    let runtime_config = resolve_http_send_runtime_config(params.query_manager, &params.request)?;
     let send_options = params.send_options.unwrap_or(runtime_config.send_options);
+    let resolved_settings = params
+        .query_manager
+        .connect()
+        .resolve_settings_for_http_request(&params.request)
+        .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
     let mut cookie_jar = load_cookie_jar(params.query_manager, params.cookie_jar_id.as_deref())?;
     let cookie_store =
         cookie_jar.as_ref().map(|jar| CookieStore::from_cookies(jar.cookies.clone()));
+    let cookie_behavior = CookieBehavior {
+        store: cookie_store,
+        send_cookies: resolved_settings.send_cookies.value,
+        store_cookies: resolved_settings.store_cookies.value,
+    };
 
     let rendered_request = render_http_request(
         &resolved_request,
@@ -585,33 +615,66 @@ pub async fn send_http_request<T: TemplateCallback>(
     let started_at = Instant::now();
     let request_started_url = sendable_request.url.clone();
 
-    let mut http_response = match executor
-        .send(sendable_request, event_tx, cookie_store.clone())
-        .await
-    {
-        Ok(response) => response,
-        Err(err) => {
-            persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
-            if persist_response {
-                let _ = persist_response_error(
+    send_setting_event(
+        &event_tx,
+        "validate_certificates",
+        runtime_config.validate_certificates.to_string(),
+        &resolved_settings.validate_certificates,
+    );
+    send_setting_event(
+        &event_tx,
+        "redirects",
+        sendable_request.options.follow_redirects.to_string(),
+        &resolved_settings.follow_redirects,
+    );
+    send_setting_event(
+        &event_tx,
+        "timeout",
+        timeout_setting_value(sendable_request.options.timeout),
+        &resolved_settings.request_timeout,
+    );
+    send_setting_event(
+        &event_tx,
+        "send_cookies",
+        cookie_behavior.send_cookies.to_string(),
+        &resolved_settings.send_cookies,
+    );
+    send_setting_event(
+        &event_tx,
+        "store_cookies",
+        cookie_behavior.store_cookies.to_string(),
+        &resolved_settings.store_cookies,
+    );
+
+    let mut http_response =
+        match executor.send(sendable_request, event_tx, cookie_behavior.clone()).await {
+            Ok(response) => response,
+            Err(err) => {
+                persist_cookie_jar(
                     params.query_manager,
-                    params.blob_manager,
-                    &params.update_source,
-                    &response,
-                    started_at,
-                    err.to_string(),
-                    request_started_url,
-                );
+                    cookie_jar.as_mut(),
+                    cookie_behavior.store.as_ref(),
+                )?;
+                if persist_response {
+                    let _ = persist_response_error(
+                        params.query_manager,
+                        params.blob_manager,
+                        &params.update_source,
+                        &response,
+                        started_at,
+                        err.to_string(),
+                        request_started_url,
+                    );
+                }
+                if let Err(join_err) = event_handle.await {
+                    warn!("Failed to join response event task: {}", join_err);
+                }
+                if let Some(task) = request_body_capture_task.take() {
+                    let _ = task.await;
+                }
+                return Err(SendHttpRequestError::SendRequest(err));
             }
-            if let Err(join_err) = event_handle.await {
-                warn!("Failed to join response event task: {}", join_err);
-            }
-            if let Some(task) = request_body_capture_task.take() {
-                let _ = task.await;
-            }
-            return Err(SendHttpRequestError::SendRequest(err));
-        }
-    };
+        };
 
     let headers_elapsed = duration_to_i32(started_at.elapsed());
     std::fs::create_dir_all(params.response_dir).map_err(|source| {
@@ -781,7 +844,11 @@ pub async fn send_http_request<T: TemplateCallback>(
                 request_started_url,
             );
         }
-        persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
+        persist_cookie_jar(
+            params.query_manager,
+            cookie_jar.as_mut(),
+            cookie_behavior.store.as_ref(),
+        )?;
         return Err(err);
     }
 
@@ -806,7 +873,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         response = final_response;
     }
 
-    persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
+    persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_behavior.store.as_ref())?;
 
     Ok(SendHttpRequestResult { rendered_request, response, response_body })
 }
@@ -920,6 +987,28 @@ fn persist_cookie_jar(
             Ok(())
         }
         _ => Ok(()),
+    }
+}
+
+fn send_setting_event<T>(
+    event_tx: &mpsc::Sender<SenderHttpResponseEvent>,
+    name: impl Into<String>,
+    value: impl Into<String>,
+    setting: &ResolvedSetting<T>,
+) {
+    let _ = event_tx.try_send(SenderHttpResponseEvent::Setting {
+        name: name.into(),
+        value: value.into(),
+        source_model: Some(setting.source_model.clone()),
+        source_id: setting.source_id.clone(),
+        source_name: setting.source_name.clone(),
+    });
+}
+
+fn timeout_setting_value(timeout: Option<Duration>) -> String {
+    match timeout {
+        Some(timeout) if !timeout.is_zero() => format!("{timeout:?}"),
+        _ => "Infinity".to_string(),
     }
 }
 

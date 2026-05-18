@@ -295,7 +295,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
+    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -330,7 +330,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &uri,
             &proto_files,
             &metadata,
-            workspace.setting_validate_certificates,
+            resolved_settings.validate_certificates.value,
             client_certificate,
         )
         .await
@@ -353,7 +353,7 @@ async fn cmd_grpc_go<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let workspace = app_handle.db().get_workspace(&unrendered_request.workspace_id)?;
+    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -423,7 +423,7 @@ async fn cmd_grpc_go<R: Runtime>(
             uri.as_str(),
             &proto_files.iter().map(|p| PathBuf::from_str(p).unwrap()).collect(),
             &metadata,
-            workspace.setting_validate_certificates,
+            resolved_settings.validate_certificates.value,
             client_cert.clone(),
         )
         .await;

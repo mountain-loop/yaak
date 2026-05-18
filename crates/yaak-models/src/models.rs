@@ -1,7 +1,9 @@
 use crate::error::Result;
 use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
-    Method, Name, SortPriority, UpdatedAt, Url, UrlParameters, WorkspaceId,
+    Method, Name, SettingFollowRedirects, SettingRequestTimeout, SettingSendCookies,
+    SettingStoreCookies, SettingValidateCertificates, SortPriority, UpdatedAt, Url, UrlParameters,
+    WorkspaceId,
 };
 use crate::util::generate_prefixed_id;
 use chrono::{NaiveDateTime, Utc};
@@ -88,6 +90,84 @@ pub struct DnsOverride {
     #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ResolvedSetting<T> {
+    pub value: T,
+    pub source_model: String,
+    pub source_id: Option<String>,
+    pub source_name: Option<String>,
+}
+
+impl<T> ResolvedSetting<T> {
+    pub fn from_model(value: T, model: AnyModel) -> Self {
+        Self {
+            value,
+            source_model: model.model().to_string(),
+            source_id: Some(model.id().to_string()),
+            source_name: Some(model.resolved_name()),
+        }
+    }
+
+    pub fn default_source(value: T) -> Self {
+        Self { value, source_model: "default".to_string(), source_id: None, source_name: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedHttpRequestSettings {
+    pub validate_certificates: ResolvedSetting<bool>,
+    pub follow_redirects: ResolvedSetting<bool>,
+    pub request_timeout: ResolvedSetting<i32>,
+    pub send_cookies: ResolvedSetting<bool>,
+    pub store_cookies: ResolvedSetting<bool>,
+}
+
+impl Default for ResolvedHttpRequestSettings {
+    fn default() -> Self {
+        Self {
+            validate_certificates: ResolvedSetting::default_source(true),
+            follow_redirects: ResolvedSetting::default_source(true),
+            request_timeout: ResolvedSetting::default_source(0),
+            send_cookies: ResolvedSetting::default_source(true),
+            store_cookies: ResolvedSetting::default_source(true),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct InheritedBoolSetting {
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub value: bool,
+}
+
+impl Default for InheritedBoolSetting {
+    fn default() -> Self {
+        Self { enabled: false, value: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct InheritedIntSetting {
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub value: i32,
+}
+
+impl Default for InheritedIntSetting {
+    fn default() -> Self {
+        Self { enabled: false, value: 0 }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -322,6 +402,10 @@ pub struct Workspace {
     pub setting_request_timeout: i32,
     #[serde(default)]
     pub setting_dns_overrides: Vec<DnsOverride>,
+    #[serde(default = "default_true")]
+    pub setting_send_cookies: bool,
+    #[serde(default = "default_true")]
+    pub setting_store_cookies: bool,
 }
 
 impl UpsertModelInfo for Workspace {
@@ -363,6 +447,8 @@ impl UpsertModelInfo for Workspace {
             (SettingRequestTimeout, self.setting_request_timeout.into()),
             (SettingValidateCertificates, self.setting_validate_certificates.into()),
             (SettingDnsOverrides, serde_json::to_string(&self.setting_dns_overrides)?.into()),
+            (SettingSendCookies, self.setting_send_cookies.into()),
+            (SettingStoreCookies, self.setting_store_cookies.into()),
         ])
     }
 
@@ -380,6 +466,8 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::SettingRequestTimeout,
             WorkspaceIden::SettingValidateCertificates,
             WorkspaceIden::SettingDnsOverrides,
+            WorkspaceIden::SettingSendCookies,
+            WorkspaceIden::SettingStoreCookies,
         ]
     }
 
@@ -405,6 +493,8 @@ impl UpsertModelInfo for Workspace {
             setting_request_timeout: row.get("setting_request_timeout")?,
             setting_validate_certificates: row.get("setting_validate_certificates")?,
             setting_dns_overrides: serde_json::from_str(&setting_dns_overrides).unwrap_or_default(),
+            setting_send_cookies: row.get("setting_send_cookies")?,
+            setting_store_cookies: row.get("setting_store_cookies")?,
         })
     }
 }
@@ -509,11 +599,127 @@ pub enum CookieExpires {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "gen_models.ts")]
+pub enum CookieSameSite {
+    Strict,
+    Lax,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
 pub struct Cookie {
-    pub raw_cookie: String,
+    pub name: String,
+    pub value: String,
     pub domain: CookieDomain,
     pub expires: CookieExpires,
-    pub path: (String, bool),
+    pub path: String,
+    pub secure: bool,
+    pub http_only: bool,
+    pub same_site: Option<CookieSameSite>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CookieFields {
+    name: String,
+    value: String,
+    domain: CookieDomain,
+    expires: CookieExpires,
+    path: String,
+    #[serde(default)]
+    secure: bool,
+    #[serde(default)]
+    http_only: bool,
+    #[serde(default)]
+    same_site: Option<CookieSameSite>,
+}
+
+#[derive(Deserialize)]
+struct LegacyCookie {
+    raw_cookie: String,
+    domain: CookieDomain,
+    expires: CookieExpires,
+    path: (String, bool),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum CookieCompat {
+    New(CookieFields),
+    Legacy(LegacyCookie),
+}
+
+impl<'de> Deserialize<'de> for Cookie {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match CookieCompat::deserialize(deserializer)? {
+            CookieCompat::New(cookie) => Self {
+                name: cookie.name,
+                value: cookie.value,
+                domain: cookie.domain,
+                expires: cookie.expires,
+                path: cookie.path,
+                secure: cookie.secure,
+                http_only: cookie.http_only,
+                same_site: cookie.same_site,
+            },
+            CookieCompat::Legacy(cookie) => {
+                let (name, value, secure, http_only, same_site) =
+                    parse_legacy_cookie_parts(&cookie.raw_cookie);
+                Self {
+                    name,
+                    value,
+                    domain: cookie.domain,
+                    expires: cookie.expires,
+                    path: cookie.path.0,
+                    secure,
+                    http_only,
+                    same_site,
+                }
+            }
+        })
+    }
+}
+
+fn parse_legacy_cookie_parts(
+    raw_cookie: &str,
+) -> (String, String, bool, bool, Option<CookieSameSite>) {
+    let mut parts = raw_cookie.split(';').map(str::trim);
+    let (name, value) = parts
+        .next()
+        .and_then(|part| {
+            let mut nv = part.splitn(2, '=');
+            Some((nv.next()?.trim().to_string(), nv.next().unwrap_or("").trim().to_string()))
+        })
+        .unwrap_or_default();
+
+    let mut secure = false;
+    let mut http_only = false;
+    let mut same_site = None;
+
+    for part in parts {
+        let mut attr = part.splitn(2, '=');
+        let key = attr.next().unwrap_or("").trim().to_lowercase();
+        let value = attr.next().unwrap_or("").trim().to_lowercase();
+        match key.as_str() {
+            "secure" => secure = true,
+            "httponly" => http_only = true,
+            "samesite" => {
+                same_site = match value.as_str() {
+                    "strict" => Some(CookieSameSite::Strict),
+                    "lax" => Some(CookieSameSite::Lax),
+                    "none" => Some(CookieSameSite::None),
+                    _ => same_site,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    (name, value, secure, http_only, same_site)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -751,6 +957,11 @@ pub struct Folder {
     pub headers: Vec<HttpRequestHeader>,
     pub name: String,
     pub sort_priority: f64,
+    pub setting_send_cookies: InheritedBoolSetting,
+    pub setting_store_cookies: InheritedBoolSetting,
+    pub setting_validate_certificates: InheritedBoolSetting,
+    pub setting_follow_redirects: InheritedBoolSetting,
+    pub setting_request_timeout: InheritedIntSetting,
 }
 
 impl UpsertModelInfo for Folder {
@@ -790,6 +1001,14 @@ impl UpsertModelInfo for Folder {
             (Description, self.description.into()),
             (Name, self.name.trim().into()),
             (SortPriority, self.sort_priority.into()),
+            (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
+            (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
+            (
+                SettingValidateCertificates,
+                serde_json::to_string(&self.setting_validate_certificates)?.into(),
+            ),
+            (SettingFollowRedirects, serde_json::to_string(&self.setting_follow_redirects)?.into()),
+            (SettingRequestTimeout, serde_json::to_string(&self.setting_request_timeout)?.into()),
         ])
     }
 
@@ -803,6 +1022,11 @@ impl UpsertModelInfo for Folder {
             FolderIden::Description,
             FolderIden::FolderId,
             FolderIden::SortPriority,
+            FolderIden::SettingSendCookies,
+            FolderIden::SettingStoreCookies,
+            FolderIden::SettingValidateCertificates,
+            FolderIden::SettingFollowRedirects,
+            FolderIden::SettingRequestTimeout,
         ]
     }
 
@@ -812,6 +1036,11 @@ impl UpsertModelInfo for Folder {
     {
         let headers: String = row.get("headers")?;
         let authentication: String = row.get("authentication")?;
+        let setting_send_cookies: String = row.get("setting_send_cookies")?;
+        let setting_store_cookies: String = row.get("setting_store_cookies")?;
+        let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
+        let setting_follow_redirects: String = row.get("setting_follow_redirects")?;
+        let setting_request_timeout: String = row.get("setting_request_timeout")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -825,6 +1054,14 @@ impl UpsertModelInfo for Folder {
             headers: serde_json::from_str(&headers).unwrap_or_default(),
             authentication_type: row.get("authentication_type")?,
             authentication: serde_json::from_str(&authentication).unwrap_or_default(),
+            setting_send_cookies: serde_json::from_str(&setting_send_cookies).unwrap_or_default(),
+            setting_store_cookies: serde_json::from_str(&setting_store_cookies).unwrap_or_default(),
+            setting_validate_certificates: serde_json::from_str(&setting_validate_certificates)
+                .unwrap_or_default(),
+            setting_follow_redirects: serde_json::from_str(&setting_follow_redirects)
+                .unwrap_or_default(),
+            setting_request_timeout: serde_json::from_str(&setting_request_timeout)
+                .unwrap_or_default(),
         })
     }
 }
@@ -885,6 +1122,11 @@ pub struct HttpRequest {
     pub url: String,
     /// URL parameters used for both path placeholders (`:id`) and query string entries.
     pub url_parameters: Vec<HttpUrlParameter>,
+    pub setting_send_cookies: InheritedBoolSetting,
+    pub setting_store_cookies: InheritedBoolSetting,
+    pub setting_validate_certificates: InheritedBoolSetting,
+    pub setting_follow_redirects: InheritedBoolSetting,
+    pub setting_request_timeout: InheritedIntSetting,
 }
 
 impl UpsertModelInfo for HttpRequest {
@@ -928,6 +1170,14 @@ impl UpsertModelInfo for HttpRequest {
             (AuthenticationType, self.authentication_type.into()),
             (Headers, serde_json::to_string(&self.headers)?.into()),
             (SortPriority, self.sort_priority.into()),
+            (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
+            (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
+            (
+                SettingValidateCertificates,
+                serde_json::to_string(&self.setting_validate_certificates)?.into(),
+            ),
+            (SettingFollowRedirects, serde_json::to_string(&self.setting_follow_redirects)?.into()),
+            (SettingRequestTimeout, serde_json::to_string(&self.setting_request_timeout)?.into()),
         ])
     }
 
@@ -947,6 +1197,11 @@ impl UpsertModelInfo for HttpRequest {
             Url,
             UrlParameters,
             SortPriority,
+            SettingSendCookies,
+            SettingStoreCookies,
+            SettingValidateCertificates,
+            SettingFollowRedirects,
+            SettingRequestTimeout,
         ]
     }
 
@@ -955,6 +1210,11 @@ impl UpsertModelInfo for HttpRequest {
         let body: String = row.get("body")?;
         let authentication: String = row.get("authentication")?;
         let headers: String = row.get("headers")?;
+        let setting_send_cookies: String = row.get("setting_send_cookies")?;
+        let setting_store_cookies: String = row.get("setting_store_cookies")?;
+        let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
+        let setting_follow_redirects: String = row.get("setting_follow_redirects")?;
+        let setting_request_timeout: String = row.get("setting_request_timeout")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -973,6 +1233,14 @@ impl UpsertModelInfo for HttpRequest {
             sort_priority: row.get("sort_priority")?,
             url: row.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
+            setting_send_cookies: serde_json::from_str(&setting_send_cookies).unwrap_or_default(),
+            setting_store_cookies: serde_json::from_str(&setting_store_cookies).unwrap_or_default(),
+            setting_validate_certificates: serde_json::from_str(&setting_validate_certificates)
+                .unwrap_or_default(),
+            setting_follow_redirects: serde_json::from_str(&setting_follow_redirects)
+                .unwrap_or_default(),
+            setting_request_timeout: serde_json::from_str(&setting_request_timeout)
+                .unwrap_or_default(),
         })
     }
 }
@@ -1127,6 +1395,9 @@ pub struct WebsocketRequest {
     pub url: String,
     /// URL parameters used for both path placeholders (`:id`) and query string entries.
     pub url_parameters: Vec<HttpUrlParameter>,
+    pub setting_send_cookies: InheritedBoolSetting,
+    pub setting_store_cookies: InheritedBoolSetting,
+    pub setting_validate_certificates: InheritedBoolSetting,
 }
 
 impl UpsertModelInfo for WebsocketRequest {
@@ -1169,6 +1440,12 @@ impl UpsertModelInfo for WebsocketRequest {
             (SortPriority, self.sort_priority.into()),
             (Url, self.url.into()),
             (UrlParameters, serde_json::to_string(&self.url_parameters)?.into()),
+            (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
+            (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
+            (
+                SettingValidateCertificates,
+                serde_json::to_string(&self.setting_validate_certificates)?.into(),
+            ),
         ])
     }
 
@@ -1186,6 +1463,9 @@ impl UpsertModelInfo for WebsocketRequest {
             WebsocketRequestIden::SortPriority,
             WebsocketRequestIden::Url,
             WebsocketRequestIden::UrlParameters,
+            WebsocketRequestIden::SettingSendCookies,
+            WebsocketRequestIden::SettingStoreCookies,
+            WebsocketRequestIden::SettingValidateCertificates,
         ]
     }
 
@@ -1196,6 +1476,9 @@ impl UpsertModelInfo for WebsocketRequest {
         let url_parameters: String = row.get("url_parameters")?;
         let authentication: String = row.get("authentication")?;
         let headers: String = row.get("headers")?;
+        let setting_send_cookies: String = row.get("setting_send_cookies")?;
+        let setting_store_cookies: String = row.get("setting_store_cookies")?;
+        let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -1212,6 +1495,10 @@ impl UpsertModelInfo for WebsocketRequest {
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             folder_id: row.get("folder_id")?,
             name: row.get("name")?,
+            setting_send_cookies: serde_json::from_str(&setting_send_cookies).unwrap_or_default(),
+            setting_store_cookies: serde_json::from_str(&setting_store_cookies).unwrap_or_default(),
+            setting_validate_certificates: serde_json::from_str(&setting_validate_certificates)
+                .unwrap_or_default(),
         })
     }
 }
@@ -1493,6 +1780,15 @@ pub enum HttpResponseEventData {
     Setting {
         name: String,
         value: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, as = "Option<String>")]
+        source_model: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, as = "Option<String>")]
+        source_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional, as = "Option<String>")]
+        source_name: Option<String>,
     },
     Info {
         message: String,
@@ -1742,6 +2038,7 @@ pub struct GrpcRequest {
     pub sort_priority: f64,
     /// Server URL (http for plaintext or https for secure)
     pub url: String,
+    pub setting_validate_certificates: InheritedBoolSetting,
 }
 
 impl UpsertModelInfo for GrpcRequest {
@@ -1785,6 +2082,10 @@ impl UpsertModelInfo for GrpcRequest {
             (AuthenticationType, self.authentication_type.into()),
             (Authentication, serde_json::to_string(&self.authentication)?.into()),
             (Metadata, serde_json::to_string(&self.metadata)?.into()),
+            (
+                SettingValidateCertificates,
+                serde_json::to_string(&self.setting_validate_certificates)?.into(),
+            ),
         ])
     }
 
@@ -1803,6 +2104,7 @@ impl UpsertModelInfo for GrpcRequest {
             GrpcRequestIden::AuthenticationType,
             GrpcRequestIden::Authentication,
             GrpcRequestIden::Metadata,
+            GrpcRequestIden::SettingValidateCertificates,
         ]
     }
 
@@ -1812,6 +2114,7 @@ impl UpsertModelInfo for GrpcRequest {
     {
         let authentication: String = row.get("authentication")?;
         let metadata: String = row.get("metadata")?;
+        let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -1829,6 +2132,8 @@ impl UpsertModelInfo for GrpcRequest {
             url: row.get("url")?,
             sort_priority: row.get("sort_priority")?,
             metadata: serde_json::from_str(metadata.as_str()).unwrap_or_default(),
+            setting_validate_certificates: serde_json::from_str(&setting_validate_certificates)
+                .unwrap_or_default(),
         })
     }
 }

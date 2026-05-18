@@ -43,6 +43,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     className,
     containerClassName,
     defaultValue,
+    disabled,
     forceUpdateKey: forceUpdateKeyFromAbove,
     help,
     hideLabel,
@@ -163,7 +164,8 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           "relative w-full rounded-md text",
           "border",
           "overflow-hidden",
-          focused ? "border-border-focus" : "border-border-subtle",
+          focused && !disabled ? "border-border-focus" : "border-border-subtle",
+          disabled && "border-dotted",
           hasChanged && "has-[:invalid]:border-danger", // For built-in HTML validation
           size === "md" && "min-h-md",
           size === "sm" && "min-h-sm",
@@ -198,12 +200,13 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             // oxlint-disable-next-line jsx-a11y/no-autofocus
             autoFocus={autoFocus}
             defaultValue={defaultValue ?? undefined}
+            disabled={disabled}
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
             onChange={(e) => handleChange(e.target.value)}
             onPaste={(e) => onPaste?.(e.clipboardData.getData("Text"))}
-            className={classNames(commonClassName, "h-full")}
+            className={classNames(commonClassName, "h-full disabled:opacity-disabled")}
             onFocus={handleFocus}
             onBlur={handleBlur}
             required={required}

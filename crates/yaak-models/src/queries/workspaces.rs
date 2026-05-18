@@ -1,8 +1,8 @@
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
-    EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
-    WebsocketRequestIden, Workspace, WorkspaceIden,
+    AnyModel, EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
+    ResolvedHttpRequestSettings, ResolvedSetting, WebsocketRequestIden, Workspace, WorkspaceIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
@@ -83,6 +83,34 @@ impl<'a> ClientDb<'a> {
         let mut headers = default_headers();
         headers.extend(workspace.headers.clone());
         headers
+    }
+
+    pub fn resolve_settings_for_workspace(
+        &self,
+        workspace: &Workspace,
+    ) -> ResolvedHttpRequestSettings {
+        ResolvedHttpRequestSettings {
+            validate_certificates: ResolvedSetting::from_model(
+                workspace.setting_validate_certificates,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+            follow_redirects: ResolvedSetting::from_model(
+                workspace.setting_follow_redirects,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+            request_timeout: ResolvedSetting::from_model(
+                workspace.setting_request_timeout,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+            send_cookies: ResolvedSetting::from_model(
+                workspace.setting_send_cookies,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+            store_cookies: ResolvedSetting::from_model(
+                workspace.setting_store_cookies,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+        }
     }
 }
 

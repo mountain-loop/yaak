@@ -19,6 +19,7 @@ type Props = Omit<ButtonProps, "type"> & {
   inline?: boolean;
   noun?: string;
   help?: ReactNode;
+  hideLabel?: boolean;
   label?: ReactNode;
 };
 
@@ -36,6 +37,7 @@ export function SelectFile({
   size = "sm",
   label,
   help,
+  hideLabel,
   ...props
 }: Props) {
   const handleClick = async () => {
@@ -95,7 +97,7 @@ export function SelectFile({
   return (
     <div ref={ref} className="w-full">
       {label && (
-        <Label htmlFor={null} help={help}>
+        <Label htmlFor={null} help={help} visuallyHidden={hideLabel}>
           {label}
         </Label>
       )}
