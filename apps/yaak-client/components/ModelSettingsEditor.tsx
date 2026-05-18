@@ -9,6 +9,15 @@ import type {
 } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
 import { useModelAncestors } from "../hooks/useModelAncestors";
+import {
+  modelSupportsSetting,
+  type RequestSettingDefinition,
+  SETTING_FOLLOW_REDIRECTS,
+  SETTING_REQUEST_TIMEOUT,
+  SETTING_SEND_COOKIES,
+  SETTING_STORE_COOKIES,
+  SETTING_VALIDATE_CERTIFICATES,
+} from "../lib/requestSettings";
 import { Checkbox } from "./core/Checkbox";
 import { PlainInput } from "./core/PlainInput";
 import {
@@ -44,11 +53,9 @@ type TlsSettingsPatch = {
 
 export function ModelSettingsEditor({ model, showSectionTitles = false }: Props) {
   const ancestors = useModelAncestors(model);
-  const supportsHttpSettings =
-    model.model === "workspace" || model.model === "folder" || model.model === "http_request";
-  const supportsCookieSettings = supportsHttpSettings || model.model === "websocket_request";
-  const supportsTlsSettings =
-    supportsHttpSettings || model.model === "websocket_request" || model.model === "grpc_request";
+  const supportsHttpSettings = modelSupportsHttpSettings(model);
+  const supportsCookieSettings = modelSupportsCookieSettings(model);
+  const supportsTlsSettings = modelSupportsTlsSettings(model);
 
   return (
     <SettingsList className="space-y-8">
@@ -56,13 +63,11 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
         <SettingsSection title={showSectionTitles ? "Requests" : null}>
           {supportsHttpSettings && (
             <IntegerSettingRow
-              title="Request Timeout"
-              description="Maximum request duration in milliseconds. Set to 0 to disable"
-              name="settingRequestTimeout"
+              settingDefinition={SETTING_REQUEST_TIMEOUT}
               setting={model.settingRequestTimeout}
               inheritedValue={resolveInheritedValue(
                 ancestors,
-                "settingRequestTimeout",
+                SETTING_REQUEST_TIMEOUT.modelKey,
                 model.settingRequestTimeout,
               )}
               onChange={(settingRequestTimeout) =>
@@ -73,12 +78,11 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
             />
           )}
           <BooleanSettingRow
-            title="Validate TLS certificates"
-            description="When disabled, skip validation of server certificates."
+            settingDefinition={SETTING_VALIDATE_CERTIFICATES}
             setting={model.settingValidateCertificates}
             inheritedValue={resolveInheritedValue(
               ancestors,
-              "settingValidateCertificates",
+              SETTING_VALIDATE_CERTIFICATES.modelKey,
               model.settingValidateCertificates,
             )}
             onChange={(settingValidateCertificates) =>
@@ -89,12 +93,11 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
           />
           {supportsHttpSettings && (
             <BooleanSettingRow
-              title="Follow redirects"
-              description="Follow HTTP redirects automatically."
+              settingDefinition={SETTING_FOLLOW_REDIRECTS}
               setting={model.settingFollowRedirects}
               inheritedValue={resolveInheritedValue(
                 ancestors,
-                "settingFollowRedirects",
+                SETTING_FOLLOW_REDIRECTS.modelKey,
                 model.settingFollowRedirects,
               )}
               onChange={(settingFollowRedirects) =>
@@ -109,12 +112,11 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
       {supportsCookieSettings && (
         <SettingsSection title={supportsTlsSettings || showSectionTitles ? "Cookies" : null}>
           <BooleanSettingRow
-            title="Automatically send cookies"
-            description="Attach matching cookies from the active cookie jar to outgoing requests."
+            settingDefinition={SETTING_SEND_COOKIES}
             setting={model.settingSendCookies}
             inheritedValue={resolveInheritedValue(
               ancestors,
-              "settingSendCookies",
+              SETTING_SEND_COOKIES.modelKey,
               model.settingSendCookies,
             )}
             onChange={(settingSendCookies) =>
@@ -124,12 +126,11 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
             }
           />
           <BooleanSettingRow
-            title="Automatically store cookies"
-            description="Save cookies from Set-Cookie response headers to the active cookie jar."
+            settingDefinition={SETTING_STORE_COOKIES}
             setting={model.settingStoreCookies}
             inheritedValue={resolveInheritedValue(
               ancestors,
-              "settingStoreCookies",
+              SETTING_STORE_COOKIES.modelKey,
               model.settingStoreCookies,
             )}
             onChange={(settingStoreCookies) =>
@@ -147,13 +148,13 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
 export function countOverriddenSettings(model: ModelWithSettings) {
   const settings: (BooleanSetting | IntegerSetting)[] = [];
 
-  if (model.model !== "grpc_request") {
+  if (modelSupportsCookieSettings(model)) {
     settings.push(model.settingSendCookies, model.settingStoreCookies);
   }
 
   settings.push(model.settingValidateCertificates);
 
-  if (model.model === "workspace" || model.model === "folder" || model.model === "http_request") {
+  if (modelSupportsHttpSettings(model)) {
     settings.push(model.settingFollowRedirects, model.settingRequestTimeout);
   }
 
@@ -185,17 +186,27 @@ function patchTlsSettings(model: ModelWithTlsSettings, patch: Partial<TlsSetting
   return patchModel(model, patch as Partial<GrpcRequest>);
 }
 
+function modelSupportsHttpSettings(model: ModelWithSettings): model is ModelWithHttpSettings {
+  return modelSupportsSetting(model, SETTING_REQUEST_TIMEOUT);
+}
+
+function modelSupportsCookieSettings(model: ModelWithSettings): model is ModelWithCookieSettings {
+  return modelSupportsSetting(model, SETTING_SEND_COOKIES);
+}
+
+function modelSupportsTlsSettings(model: ModelWithSettings): model is ModelWithTlsSettings {
+  return modelSupportsSetting(model, SETTING_VALIDATE_CERTIFICATES);
+}
+
 function BooleanSettingRow({
-  description,
   inheritedValue,
   setting,
-  title,
+  settingDefinition,
   onChange,
 }: {
-  description: string;
   inheritedValue: boolean;
   setting: BooleanSetting;
-  title: string;
+  settingDefinition: RequestSettingDefinition;
   onChange: (setting: BooleanSetting) => void;
 }) {
   const inherited = isInheritedSetting(setting);
@@ -206,8 +217,8 @@ function BooleanSettingRow({
     return (
       <SettingRowBoolean
         checked={value}
-        title={title}
-        description={description}
+        title={settingDefinition.title}
+        description={settingDefinition.description}
         onChange={(value) => onChange(value)}
       />
     );
@@ -215,15 +226,15 @@ function BooleanSettingRow({
 
   return (
     <SettingOverrideRow
-      title={title}
-      description={description}
+      title={settingDefinition.title}
+      description={settingDefinition.description}
       overridden={overridden}
       onResetOverride={() => onChange({ ...setting, enabled: false })}
     >
       <Checkbox
         hideLabel
         size="md"
-        title={title}
+        title={settingDefinition.title}
         checked={value}
         onChange={(value) => onChange({ ...setting, enabled: true, value })}
       />
@@ -232,18 +243,14 @@ function BooleanSettingRow({
 }
 
 function IntegerSettingRow({
-  description,
   inheritedValue,
-  name,
   setting,
-  title,
+  settingDefinition,
   onChange,
 }: {
-  description: string;
   inheritedValue: number;
-  name: string;
   setting: IntegerSetting;
-  title: string;
+  settingDefinition: RequestSettingDefinition<"settingRequestTimeout">;
   onChange: (setting: IntegerSetting) => void;
 }) {
   const inherited = isInheritedSetting(setting);
@@ -253,11 +260,11 @@ function IntegerSettingRow({
   if (!inherited) {
     return (
       <SettingRowNumber
-        name={name}
-        title={title}
-        description={description}
+        name={settingDefinition.modelKey}
+        title={settingDefinition.title}
+        description={settingDefinition.description}
         value={value}
-        placeholder="0"
+        placeholder={`${settingDefinition.defaultValue}`}
         validate={(value) => value === "" || Number.parseInt(value, 10) >= 0}
         onChange={(value) => onChange(value)}
       />
@@ -266,18 +273,18 @@ function IntegerSettingRow({
 
   return (
     <SettingOverrideRow
-      title={title}
-      description={description}
+      title={settingDefinition.title}
+      description={settingDefinition.description}
       overridden={overridden}
       onResetOverride={() => onChange({ ...setting, enabled: false })}
     >
       <PlainInput
         hideLabel
-        name={name}
-        label={title}
+        name={settingDefinition.modelKey}
+        label={settingDefinition.title}
         size="sm"
         type="number"
-        placeholder="0"
+        placeholder={`${settingDefinition.defaultValue}`}
         defaultValue={`${value}`}
         containerClassName="!w-48"
         validate={(value) => value === "" || Number.parseInt(value, 10) >= 0}

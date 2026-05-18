@@ -234,16 +234,14 @@ export function SettingRowNumber({
 export function ModelSettingRowNumber<M extends AnyModel, K extends ModelKeyOfValue<M, number>>({
   model,
   modelKey,
-  name = String(modelKey),
   ...props
 }: {
   model: M;
   modelKey: K;
-  name?: string;
 } & Omit<Parameters<typeof SettingRowNumber>[0], "name" | "onChange" | "value">) {
   return (
     <SettingRowNumber
-      name={name}
+      name={String(modelKey)}
       value={model[modelKey] as number}
       onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
       {...props}
@@ -295,16 +293,14 @@ export function SettingRowText({
 export function ModelSettingRowText<M extends AnyModel, K extends ModelKeyOfValue<M, string>>({
   model,
   modelKey,
-  name = String(modelKey),
   ...props
 }: {
   model: M;
   modelKey: K;
-  name?: string;
 } & Omit<Parameters<typeof SettingRowText>[0], "name" | "onChange" | "value">) {
   return (
     <SettingRowText
-      name={name}
+      name={String(modelKey)}
       value={model[modelKey] as string}
       onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
       {...props}
@@ -432,16 +428,14 @@ export function ModelSettingSelectControl<
 >({
   model,
   modelKey,
-  name = String(modelKey),
   ...props
 }: {
   model: M;
   modelKey: K;
-  name?: string;
 } & Omit<Parameters<typeof SettingSelectControl<V>>[0], "name" | "onChange" | "value">) {
   return (
     <SettingSelectControl
-      name={name}
+      name={String(modelKey)}
       value={model[modelKey] as V}
       onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
       {...props}
@@ -456,16 +450,14 @@ export function ModelSettingRowSelect<
 >({
   model,
   modelKey,
-  name = String(modelKey),
   ...props
 }: {
   model: M;
   modelKey: K;
-  name?: string;
 } & Omit<Parameters<typeof SettingRowSelect<V>>[0], "name" | "onChange" | "value">) {
   return (
     <SettingRowSelect
-      name={name}
+      name={String(modelKey)}
       value={model[modelKey] as V}
       onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
       {...props}

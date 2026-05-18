@@ -5,6 +5,13 @@ import { useAtomValue } from "jotai";
 import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { appInfo } from "../../lib/appInfo";
+import {
+  SETTING_FOLLOW_REDIRECTS,
+  SETTING_REQUEST_TIMEOUT,
+  SETTING_SEND_COOKIES,
+  SETTING_STORE_COOKIES,
+  SETTING_VALIDATE_CERTIFICATES,
+} from "../../lib/requestSettings";
 import { revealInFinderText } from "../../lib/reveal";
 import { CargoFeature } from "../CargoFeature";
 import { IconButton } from "../core/IconButton";
@@ -113,40 +120,40 @@ export function SettingsGeneral() {
         >
           <ModelSettingRowNumber
             model={workspace}
-            modelKey="settingRequestTimeout"
-            title="Request Timeout"
-            description="Maximum request duration in milliseconds. Set to 0 to disable."
-            placeholder="0"
+            modelKey={SETTING_REQUEST_TIMEOUT.modelKey}
+            title={SETTING_REQUEST_TIMEOUT.title}
+            description={SETTING_REQUEST_TIMEOUT.description}
+            placeholder={`${SETTING_REQUEST_TIMEOUT.defaultValue}`}
             required
             validate={(value) => Number.parseInt(value, 10) >= 0}
           />
 
           <ModelSettingRowBoolean
             model={workspace}
-            modelKey="settingValidateCertificates"
-            title="Validate TLS certificates"
-            description="When disabled, skip validation of server certificates."
+            modelKey={SETTING_VALIDATE_CERTIFICATES.modelKey}
+            title={SETTING_VALIDATE_CERTIFICATES.title}
+            description={SETTING_VALIDATE_CERTIFICATES.description}
           />
 
           <ModelSettingRowBoolean
             model={workspace}
-            modelKey="settingFollowRedirects"
-            title="Follow redirects"
-            description="Follow HTTP redirects automatically."
+            modelKey={SETTING_FOLLOW_REDIRECTS.modelKey}
+            title={SETTING_FOLLOW_REDIRECTS.title}
+            description={SETTING_FOLLOW_REDIRECTS.description}
           />
 
           <ModelSettingRowBoolean
             model={workspace}
-            modelKey="settingSendCookies"
-            title="Automatically send cookies"
-            description="Attach matching cookies from the active cookie jar to outgoing requests."
+            modelKey={SETTING_SEND_COOKIES.modelKey}
+            title={SETTING_SEND_COOKIES.title}
+            description={SETTING_SEND_COOKIES.description}
           />
 
           <ModelSettingRowBoolean
             model={workspace}
-            modelKey="settingStoreCookies"
-            title="Automatically store cookies"
-            description="Save cookies from Set-Cookie response headers to the active cookie jar."
+            modelKey={SETTING_STORE_COOKIES.modelKey}
+            title={SETTING_STORE_COOKIES.title}
+            description={SETTING_STORE_COOKIES.description}
           />
         </SettingsSection>
 
