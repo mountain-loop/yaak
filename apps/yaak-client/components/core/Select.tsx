@@ -109,7 +109,15 @@ export function Select<T extends string>({
       ) : (
         // Use custom "select" component until Tauri can be configured to have select menus not always appear in
         // light mode
-        <RadioDropdown value={value} onChange={handleChange} items={options}>
+        <RadioDropdown
+          value={value}
+          onChange={handleChange}
+          items={options.map((o) =>
+            o.type === "separator" || o.value !== defaultValue
+              ? o
+              : { ...o, label: <>{o.label} (default)</> },
+          )}
+        >
           <Button
             className="w-full text-sm font-mono"
             justify="start"

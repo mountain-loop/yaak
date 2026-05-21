@@ -21,6 +21,7 @@ import { EnvironmentEditor } from "./EnvironmentEditor";
 import { HeadersEditor } from "./HeadersEditor";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
 
 interface Props {
   folderId: string | null;
@@ -29,6 +30,7 @@ interface Props {
 
 const TAB_AUTH = "auth";
 const TAB_HEADERS = "headers";
+const TAB_SETTINGS = "settings";
 const TAB_VARIABLES = "variables";
 const TAB_GENERAL = "general";
 
@@ -36,6 +38,7 @@ export type FolderSettingsTab =
   | typeof TAB_AUTH
   | typeof TAB_HEADERS
   | typeof TAB_GENERAL
+  | typeof TAB_SETTINGS
   | typeof TAB_VARIABLES;
 
 export function FolderSettingsDialog({ folderId, tab }: Props) {
@@ -51,6 +54,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
     (e) => e.parentModel === "folder" && e.parentId === folderId,
   );
   const numVars = (folderEnvironment?.variables ?? []).filter((v) => v.name).length;
+  const numSettingsOverrides = folder == null ? 0 : countOverriddenSettings(folder);
 
   const tabs = useMemo<TabItem[]>(() => {
     if (folder == null) return [];
@@ -60,6 +64,11 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         value: TAB_GENERAL,
         label: "General",
       },
+      {
+        value: TAB_SETTINGS,
+        label: "Settings",
+        rightSlot: <CountBadge count={numSettingsOverrides} />,
+      },
       ...headersTab,
       ...authTab,
       {
@@ -68,7 +77,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         rightSlot: numVars > 0 ? <CountBadge count={numVars} /> : null,
       },
     ];
-  }, [authTab, folder, headersTab, numVars]);
+  }, [authTab, folder, headersTab, numSettingsOverrides, numVars]);
 
   if (folder == null) return null;
 
@@ -158,6 +167,9 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
             onChange={(headers) => patchModel(folder, { headers })}
             stateKey={`headers.${folder.id}`}
           />
+        </TabContent>
+        <TabContent value={TAB_SETTINGS} className="overflow-y-auto h-full px-4">
+          <ModelSettingsEditor model={folder} />
         </TabContent>
         <TabContent value={TAB_VARIABLES} className="overflow-y-auto h-full px-4">
           {folderEnvironment == null ? (

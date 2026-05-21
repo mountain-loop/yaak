@@ -1,7 +1,10 @@
 use super::dedupe_headers;
 use crate::client_db::ClientDb;
 use crate::error::Result;
-use crate::models::{Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden};
+use crate::models::{
+    AnyModel, Folder, FolderIden, HttpRequest, HttpRequestHeader, HttpRequestIden,
+    ResolvedHttpRequestSettings, ResolvedSetting,
+};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -89,6 +92,62 @@ impl<'a> ClientDb<'a> {
         headers.append(&mut http_request.headers.clone());
 
         Ok(dedupe_headers(headers))
+    }
+
+    pub fn resolve_settings_for_http_request(
+        &self,
+        http_request: &HttpRequest,
+    ) -> Result<ResolvedHttpRequestSettings> {
+        let parent = if let Some(folder_id) = http_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            self.resolve_settings_for_folder(&folder)?
+        } else {
+            let workspace = self.get_workspace(&http_request.workspace_id)?;
+            self.resolve_settings_for_workspace(&workspace)
+        };
+
+        Ok(ResolvedHttpRequestSettings {
+            validate_certificates: if http_request.setting_validate_certificates.enabled {
+                ResolvedSetting::from_model(
+                    http_request.setting_validate_certificates.value,
+                    AnyModel::HttpRequest(http_request.clone()),
+                )
+            } else {
+                parent.validate_certificates
+            },
+            follow_redirects: if http_request.setting_follow_redirects.enabled {
+                ResolvedSetting::from_model(
+                    http_request.setting_follow_redirects.value,
+                    AnyModel::HttpRequest(http_request.clone()),
+                )
+            } else {
+                parent.follow_redirects
+            },
+            request_timeout: if http_request.setting_request_timeout.enabled {
+                ResolvedSetting::from_model(
+                    http_request.setting_request_timeout.value,
+                    AnyModel::HttpRequest(http_request.clone()),
+                )
+            } else {
+                parent.request_timeout
+            },
+            send_cookies: if http_request.setting_send_cookies.enabled {
+                ResolvedSetting::from_model(
+                    http_request.setting_send_cookies.value,
+                    AnyModel::HttpRequest(http_request.clone()),
+                )
+            } else {
+                parent.send_cookies
+            },
+            store_cookies: if http_request.setting_store_cookies.enabled {
+                ResolvedSetting::from_model(
+                    http_request.setting_store_cookies.value,
+                    AnyModel::HttpRequest(http_request.clone()),
+                )
+            } else {
+                parent.store_cookies
+            },
+        })
     }
 
     pub fn list_http_requests_for_folder_recursive(

@@ -48,9 +48,9 @@ export default defineConfig(async () => {
           chunkFileNames: "assets/chunk-[name]-[hash].js",
           entryFileNames: "assets/entry-[name]-[hash].js",
           assetFileNames: "assets/asset-[name]-[hash][extname]",
-          // Vite-Plus/Rolldown 0.1.20 can emit a stale minified export for style-mod,
-          // which breaks CodeMirror MergeView in production builds.
-          minifyInternalExports: false,
+          // Vite-Plus/Rolldown 0.1.20 can emit a stale style-mod export when
+          // top-level var rewriting combines with OXC minification.
+          topLevelVar: false,
         },
       },
     },

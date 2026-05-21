@@ -20,6 +20,7 @@ import { GrpcEditor } from "./GrpcEditor";
 import { HeadersEditor } from "./HeadersEditor";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
 import { UrlBar } from "./UrlBar";
 
 interface Props {
@@ -47,6 +48,7 @@ interface Props {
 const TAB_MESSAGE = "message";
 const TAB_METADATA = "metadata";
 const TAB_AUTH = "auth";
+const TAB_SETTINGS = "settings";
 const TAB_DESCRIPTION = "description";
 
 export function GrpcRequestPane({
@@ -66,6 +68,7 @@ export function GrpcRequestPane({
   const authTab = useAuthTab(TAB_AUTH, activeRequest);
   const metadataTab = useHeadersTab(TAB_METADATA, activeRequest, "Metadata");
   const inheritedHeaders = useInheritedHeaders(activeRequest);
+  const numSettingsOverrides = countOverriddenSettings(activeRequest);
   const forceUpdateKey = useRequestUpdateKey(activeRequest.id ?? null);
 
   const urlContainerEl = useRef<HTMLDivElement>(null);
@@ -129,12 +132,17 @@ export function GrpcRequestPane({
       ...metadataTab,
       ...authTab,
       {
+        value: TAB_SETTINGS,
+        label: "Settings",
+        rightSlot: <CountBadge count={numSettingsOverrides} />,
+      },
+      {
         value: TAB_DESCRIPTION,
         label: "Info",
         rightSlot: activeRequest.description && <CountBadge count={true} />,
       },
     ],
-    [activeRequest.description, authTab, metadataTab],
+    [activeRequest.description, authTab, metadataTab, numSettingsOverrides],
   );
 
   const handleMetadataChange = useCallback(
@@ -277,6 +285,9 @@ export function GrpcRequestPane({
             stateKey={`headers.${activeRequest.id}`}
             onChange={handleMetadataChange}
           />
+        </TabContent>
+        <TabContent value={TAB_SETTINGS}>
+          <ModelSettingsEditor model={activeRequest} />
         </TabContent>
         <TabContent value={TAB_DESCRIPTION}>
           <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">

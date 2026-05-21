@@ -473,7 +473,7 @@ async fn build_plugin_reply(
                 let names = cookie_jar
                     .cookies
                     .into_iter()
-                    .filter_map(|c| parse_cookie_name_value(&c.raw_cookie).map(|(name, _)| name))
+                    .map(|c| c.name)
                     .collect();
 
                 Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse {
@@ -529,12 +529,6 @@ async fn render_json_value_for_cli<T: TemplateCallback>(
 ) -> yaak_templates::error::Result<Value> {
     let vars = &make_vars_hashmap(environment_chain);
     render_json_value_raw(value, vars, cb, opt).await
-}
-
-fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
-    let first_part = raw_cookie.split(';').next()?.trim();
-    let (name, value) = first_part.split_once('=')?;
-    Some((name.trim().to_string(), value.to_string()))
 }
 
 fn copy_text_to_clipboard(text: &str) -> Result<(), String> {
