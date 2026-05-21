@@ -333,9 +333,26 @@ describe("importer-curl", () => {
   });
 
   test("Imports Bearer token from Authorization header", () => {
-    expect(
-      convertCurl('curl -H "Authorization: Bearer token123" https://yaak.app'),
-    ).toEqual({
+    expect(convertCurl('curl -H "Authorization: Bearer token123" https://yaak.app')).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            authenticationType: "bearer",
+            authentication: {
+              token: "token123",
+              prefix: "Bearer",
+            },
+            headers: [],
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Trims whitespace before Bearer token from Authorization header", () => {
+    expect(convertCurl('curl -H "Authorization: Bearer    token123" https://yaak.app')).toEqual({
       resources: {
         workspaces: [baseWorkspace()],
         httpRequests: [
@@ -396,9 +413,7 @@ describe("importer-curl", () => {
   });
 
   test("Authorization header extraction is case-insensitive", () => {
-    expect(
-      convertCurl('curl -H "authorization: bearer lowercaseToken" https://yaak.app'),
-    ).toEqual({
+    expect(convertCurl('curl -H "authorization: bearer lowercaseToken" https://yaak.app')).toEqual({
       resources: {
         workspaces: [baseWorkspace()],
         httpRequests: [
@@ -446,9 +461,7 @@ describe("importer-curl", () => {
         httpRequests: [
           baseRequest({
             url: "https://yaak.app",
-            headers: [
-              { name: "Authorization", value: "Basic not-valid-base64!!!", enabled: true },
-            ],
+            headers: [{ name: "Authorization", value: "Basic not-valid-base64!!!", enabled: true }],
           }),
         ],
       },

@@ -187,20 +187,10 @@ interface ExtractedAuthentication {
   filteredHeaders: HttpUrlParameter[]; // headers without authorization
 }
 
-function extractAuthenticationFromHeaders(
-  headers: HttpUrlParameter[],
-): ExtractedAuthentication {
+function extractAuthenticationFromHeaders(headers: HttpUrlParameter[]): ExtractedAuthentication {
   const authorizationHeaderIndex = headers.findIndex(
     (h) => h.name.toLowerCase() === "authorization",
   );
-
-  if (authorizationHeaderIndex === -1) {
-    return {
-      authenticationType: null,
-      authentication: {},
-      filteredHeaders: headers,
-    };
-  }
 
   const authorizationHeader = headers[authorizationHeaderIndex];
   if (authorizationHeader == null) {
@@ -223,14 +213,14 @@ function extractAuthenticationFromHeaders(
   }
 
   const scheme = value.slice(0, spaceIndex).toLowerCase();
-  const token = value.slice(spaceIndex + 1);
+  const credentials = value.slice(spaceIndex + 1).trim();
 
   // Bearer authentication (RFC 6750)
   if (scheme === "bearer") {
     const filteredHeaders = headers.filter((_, i) => i !== authorizationHeaderIndex);
     return {
       authenticationType: "bearer",
-      authentication: { token, prefix: "Bearer" },
+      authentication: { token: credentials, prefix: "Bearer" },
       filteredHeaders,
     };
   }
@@ -238,7 +228,7 @@ function extractAuthenticationFromHeaders(
   // Basic authentication (RFC 7617)
   if (scheme === "basic") {
     try {
-      const decoded = Buffer.from(token, "base64").toString();
+      const decoded = Buffer.from(credentials, "base64").toString();
       const colonIndex = decoded.indexOf(":");
       if (colonIndex > 0) {
         const filteredHeaders = headers.filter((_, i) => i !== authorizationHeaderIndex);
@@ -414,10 +404,14 @@ function importCommand(parseEntries: string[], workspaceId: string) {
 
   // Use extracted authentication from header if found, otherwise fall back to -u/--user parsing
   const finalAuthenticationType = extractedAuthenticationType || authenticationType;
-  const finalAuthentication = extractedAuthenticationType ? extractedAuthentication : authentication;
+  const finalAuthentication = extractedAuthenticationType
+    ? extractedAuthentication
+    : authentication;
 
   // Body (Text or Blob)
-  const contentTypeHeader = filteredHeaders.find((header) => header.name.toLowerCase() === "content-type");
+  const contentTypeHeader = filteredHeaders.find(
+    (header) => header.name.toLowerCase() === "content-type",
+  );
   const mimeType = contentTypeHeader ? contentTypeHeader.value.split(";")[0]?.trim() : null;
 
   // Extract boundary from Content-Type header for multipart parsing
