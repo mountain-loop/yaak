@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body::{Body as HttpBody, Frame, SizeHint};
-use reqwest::{Client, Method, Version};
+use reqwest::{Method, Version};
 use std::fmt::Display;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -24,7 +24,13 @@ pub enum RedirectBehavior {
 
 #[derive(Debug, Clone)]
 pub enum HttpResponseEvent {
-    Setting(String, String),
+    Setting {
+        name: String,
+        value: String,
+        source_model: Option<String>,
+        source_id: Option<String>,
+        source_name: Option<String>,
+    },
     Info(String),
     Redirect {
         url: String,
@@ -67,7 +73,9 @@ pub enum HttpResponseEvent {
 impl Display for HttpResponseEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HttpResponseEvent::Setting(name, value) => write!(f, "* Setting {}={}", name, value),
+            HttpResponseEvent::Setting { name, value, .. } => {
+                write!(f, "* Setting {}={}", name, value)
+            }
             HttpResponseEvent::Info(s) => write!(f, "* {}", s),
             HttpResponseEvent::Redirect {
                 url,
@@ -146,7 +154,9 @@ impl From<HttpResponseEvent> for yaak_models::models::HttpResponseEventData {
     fn from(event: HttpResponseEvent) -> Self {
         use yaak_models::models::HttpResponseEventData as D;
         match event {
-            HttpResponseEvent::Setting(name, value) => D::Setting { name, value },
+            HttpResponseEvent::Setting { name, value, source_model, source_id, source_name } => {
+                D::Setting { name, value, source_model, source_id, source_name }
+            }
             HttpResponseEvent::Info(message) => D::Info { message },
             HttpResponseEvent::Redirect {
                 url,
@@ -411,18 +421,18 @@ pub trait HttpSender: Send + Sync {
 
 /// Reqwest-based implementation of HttpSender
 pub struct ReqwestSender {
-    client: Client,
+    client: crate::client::ConfiguredClient,
 }
 
 impl ReqwestSender {
     /// Create a new ReqwestSender with a default client
     pub fn new() -> Result<Self> {
-        let client = Client::builder().build().map_err(Error::Client)?;
+        let client = crate::client::ConfiguredClient::build_default()?;
         Ok(Self { client })
     }
 
-    /// Create a new ReqwestSender with a custom client
-    pub fn with_client(client: Client) -> Self {
+    /// Create a new ReqwestSender with a configured client
+    pub fn with_client(client: crate::client::ConfiguredClient) -> Self {
         Self { client }
     }
 }
@@ -444,7 +454,7 @@ impl HttpSender for ReqwestSender {
             .map_err(|e| Error::RequestError(format!("Invalid HTTP method: {}", e)))?;
 
         // Build the request
-        let mut req_builder = self.client.request(method, &request.url);
+        let mut req_builder = self.client.inner().request(method, &request.url);
 
         // Add headers
         for header in request.headers {
@@ -483,15 +493,6 @@ impl HttpSender for ReqwestSender {
 
         // Send the request
         let sendable_req = req_builder.build()?;
-        send_event(HttpResponseEvent::Setting(
-            "timeout".to_string(),
-            if request.options.timeout.unwrap_or_default().is_zero() {
-                "Infinity".to_string()
-            } else {
-                format!("{:?}", request.options.timeout)
-            },
-        ));
-
         send_event(HttpResponseEvent::SendUrl {
             method: sendable_req.method().to_string(),
             scheme: sendable_req.url().scheme().to_string(),
@@ -513,7 +514,7 @@ impl HttpSender for ReqwestSender {
         send_event(HttpResponseEvent::Info("Sending request to server".to_string()));
 
         // Map some errors to our own, so they look nicer
-        let response = self.client.execute(sendable_req).await.map_err(|e| {
+        let response = self.client.inner().execute(sendable_req).await.map_err(|e| {
             if reqwest::Error::is_timeout(&e) {
                 Error::RequestTimeout(
                     request.options.timeout.unwrap_or(Duration::from_secs(0)).clone(),

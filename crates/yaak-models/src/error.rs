@@ -40,6 +40,20 @@ pub enum Error {
     Unknown,
 }
 
+impl From<yaak_database::Error> for Error {
+    fn from(e: yaak_database::Error) -> Self {
+        match e {
+            yaak_database::Error::SqlError(e) => Error::SqlError(e),
+            yaak_database::Error::SqlPoolError(e) => Error::SqlPoolError(e),
+            yaak_database::Error::Database(s) => Error::Database(s),
+            yaak_database::Error::Io(e) => Error::Io(e),
+            yaak_database::Error::JsonError(e) => Error::JsonError(e),
+            yaak_database::Error::ModelNotFound(s) => Error::ModelNotFound(s),
+            yaak_database::Error::MigrationError(s) => Error::MigrationError(s),
+        }
+    }
+}
+
 impl Serialize for Error {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where

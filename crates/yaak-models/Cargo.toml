@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["serde"] }
+yaak-database = { workspace = true }
 hex = { workspace = true }
 include_dir = "0.7"
 log = { workspace = true }

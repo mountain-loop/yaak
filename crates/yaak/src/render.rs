@@ -2,7 +2,9 @@ use log::info;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use yaak_http::path_placeholders::apply_path_placeholders;
-use yaak_models::models::{Environment, GrpcRequest, HttpRequest, HttpRequestHeader, HttpUrlParameter};
+use yaak_models::models::{
+    Environment, GrpcRequest, HttpRequest, HttpRequestHeader, HttpUrlParameter,
+};
 use yaak_models::render::make_vars_hashmap;
 use yaak_templates::{RenderOptions, TemplateCallback, parse_and_render, render_json_value_raw};
 

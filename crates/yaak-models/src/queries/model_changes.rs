@@ -1,4 +1,4 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::util::ModelPayload;
 use rusqlite::params;
@@ -11,13 +11,13 @@ pub struct PersistedModelChange {
     pub payload: ModelPayload,
 }
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn list_model_changes_after(
         &self,
         after_id: i64,
         limit: usize,
     ) -> Result<Vec<PersistedModelChange>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn().prepare(
             r#"
                 SELECT id, created_at, payload
                 FROM model_changes
@@ -46,7 +46,7 @@ impl<'a> DbContext<'a> {
         since_id: i64,
         limit: usize,
     ) -> Result<Vec<PersistedModelChange>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn().prepare(
             r#"
                 SELECT id, created_at, payload
                 FROM model_changes
@@ -72,7 +72,7 @@ impl<'a> DbContext<'a> {
 
     pub fn prune_model_changes_older_than_days(&self, days: i64) -> Result<usize> {
         let offset = format!("-{days} days");
-        Ok(self.conn.resolve().execute(
+        Ok(self.conn().resolve().execute(
             r#"
                 DELETE FROM model_changes
                 WHERE created_at < STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW', ?1)
@@ -83,7 +83,7 @@ impl<'a> DbContext<'a> {
 
     pub fn prune_model_changes_older_than_hours(&self, hours: i64) -> Result<usize> {
         let offset = format!("-{hours} hours");
-        Ok(self.conn.resolve().execute(
+        Ok(self.conn().resolve().execute(
             r#"
                 DELETE FROM model_changes
                 WHERE created_at < STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW', ?1)
@@ -162,7 +162,7 @@ mod tests {
         let changes = db.list_model_changes_after(0, 10).expect("Failed to list changes");
         assert_eq!(changes.len(), 1);
 
-        db.conn
+        db.conn()
             .resolve()
             .execute(
                 "UPDATE model_changes SET created_at = '2000-01-01 00:00:00.000' WHERE id = ?1",
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(all.len(), 2);
 
         let fixed_ts = "2026-02-16 00:00:00.000";
-        db.conn
+        db.conn()
             .resolve()
             .execute("UPDATE model_changes SET created_at = ?1", params![fixed_ts])
             .expect("Failed to normalize timestamps");
@@ -229,7 +229,7 @@ mod tests {
         let changes = db.list_model_changes_after(0, 10).expect("Failed to list changes");
         assert_eq!(changes.len(), 1);
 
-        db.conn
+        db.conn()
             .resolve()
             .execute(
                 "UPDATE model_changes SET created_at = STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW', '-2 hours') WHERE id = ?1",
@@ -264,7 +264,7 @@ mod tests {
             "change": { "type": "upsert", "created": false }
         });
 
-        db.conn
+        db.conn()
             .resolve()
             .execute(
                 r#"

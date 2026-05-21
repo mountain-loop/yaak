@@ -109,19 +109,16 @@ fn position_traffic_lights(ns_window_handle: UnsafeWindowHandle, x: f64, y: f64,
         // we've modified it. This avoids the height growing on repeated calls.
         use std::sync::OnceLock;
         static DEFAULT_TITLEBAR_HEIGHT: OnceLock<f64> = OnceLock::new();
-        let default_height =
-            *DEFAULT_TITLEBAR_HEIGHT.get_or_init(|| NSView::frame(title_bar_container_view).size.height);
+        let default_height = *DEFAULT_TITLEBAR_HEIGHT
+            .get_or_init(|| NSView::frame(title_bar_container_view).size.height);
 
         // On pre-Tahoe, button_height + y is larger than the default title bar
         // height, so the resize works as before. On Tahoe (26+), the default is
         // already 32px and button_height + y = 32, so nothing changes. In that
         // case, add TITLEBAR_EXTRA_HEIGHT extra pixels to push the buttons down.
         let desired = button_height + y;
-        let title_bar_frame_height = if desired > default_height {
-            desired
-        } else {
-            default_height + TITLEBAR_EXTRA_HEIGHT
-        };
+        let title_bar_frame_height =
+            if desired > default_height { desired } else { default_height + TITLEBAR_EXTRA_HEIGHT };
 
         let mut title_bar_rect = NSView::frame(title_bar_container_view);
         title_bar_rect.size.height = title_bar_frame_height;

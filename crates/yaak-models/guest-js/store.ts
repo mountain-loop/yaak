@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { resolvedModelName } from "@yaakapp/app/lib/resolvedModelName";
+import { resolvedModelName } from "@yaakapp/yaak-client/lib/resolvedModelName";
 import { AnyModel, ModelPayload } from "../bindings/gen_models";
 import { modelStoreDataAtom } from "./atoms";
 import { ExtractModel, JotaiStore, ModelStoreData } from "./types";
@@ -86,7 +86,7 @@ export function getModel<M extends AnyModel["model"], T extends ExtractModel<Any
 export function getAnyModel(id: string): AnyModel | null {
   let data = mustStore().get(modelStoreDataAtom);
   for (const t of Object.keys(data)) {
-    // oxlint-disable-next-line no-explicit-any
+    // oxlint-disable-next-line no-explicit-any -- dynamic key access
     let v = (data as any)[t]?.[id];
     if (v?.model === t) return v;
   }
@@ -144,9 +144,10 @@ export function duplicateModel<M extends AnyModel["model"], T extends ExtractMod
     throw new Error("Failed to duplicate null model");
   }
 
-  // If the model has a name, try to duplicate it with a name that doesn't conflict
-  let name = "name" in model ? resolvedModelName(model) : undefined;
-  if (name != null) {
+  // If the model has an explicit (non-empty) name, try to duplicate it with a name that doesn't conflict.
+  // When the name is empty, keep it empty so the display falls back to the URL.
+  let name = "name" in model ? model.name : undefined;
+  if (name) {
     const existingModels = listModels(model.model);
     for (let i = 0; i < 100; i++) {
       const hasConflict = existingModels.some((m) => {

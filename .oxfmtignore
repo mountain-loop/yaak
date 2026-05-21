@@ -1,2 +1,3 @@
 **/bindings/**
+**/routeTree.gen.ts
 crates/yaak-templates/pkg/**

@@ -1,0 +1,11 @@
+{
+  "name": "@yaakapp-internal/tailwind-config",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "dependencies": {
+    "@tailwindcss/container-queries": "^0.1.1",
+    "tailwindcss": "^3.4.17"
+  }
+}

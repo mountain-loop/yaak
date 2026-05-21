@@ -9,18 +9,18 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_common::platform::get_os_str;
-use yaak_models::db_context::DbContext;
+use yaak_models::client_db::ClientDb;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 /// This is needed temporarily until all crates are refactored to not use Tauri.
 trait QueryManagerExt<'a, R> {
-    fn db(&'a self) -> DbContext<'a>;
+    fn db(&'a self) -> ClientDb<'a>;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
-    fn db(&'a self) -> DbContext<'a> {
+    fn db(&'a self) -> ClientDb<'a> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
     }

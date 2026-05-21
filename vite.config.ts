@@ -1,6 +1,9 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  staged: {
+    "*": "vp check --fix",
+  },
   lint: {
     ignorePatterns: ["npm/**", "crates/yaak-templates/pkg/**", "**/bindings/gen_*.ts"],
     options: {

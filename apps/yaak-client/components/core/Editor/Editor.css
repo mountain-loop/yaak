@@ -1,0 +1,495 @@
+.cm-wrapper {
+  @apply h-full overflow-hidden;
+
+  .cm-editor {
+    @apply w-full block text-base;
+
+    /* Regular cursor */
+
+    .cm-cursor {
+      @apply border-text !important;
+      /* Widen the cursor a bit */
+      @apply border-l-[2px];
+    }
+
+    /* Vim-mode cursor */
+
+    .cm-fat-cursor {
+      @apply outline-0 bg-text !important;
+      @apply text-surface !important;
+    }
+
+    /* Matching bracket */
+
+    .cm-matchingBracket {
+      @apply bg-transparent border-b border-b-text-subtle;
+    }
+
+    &:not(.cm-focused) {
+      .cm-cursor,
+      .cm-fat-cursor {
+        @apply hidden;
+      }
+    }
+
+    &.cm-focused {
+      outline: none !important;
+    }
+
+    .cm-content {
+      @apply py-0;
+    }
+
+    .cm-line {
+      @apply w-full;
+      /* Important! Ensure it spans the entire width */
+      @apply w-full text-text px-0;
+
+      /* So the search highlight border is not cut off by editor view */
+      @apply pl-[1px];
+    }
+
+    .cm-placeholder {
+      @apply text-placeholder;
+    }
+
+    .cm-scroller {
+      /* Inherit line-height from outside */
+      line-height: inherit;
+
+      * {
+        @apply cursor-text;
+        @apply caret-transparent !important;
+      }
+    }
+
+    .cm-selectionBackground {
+      @apply bg-selection !important;
+    }
+
+    /* Fix WebKit/WKWebView rendering bug where selection layer leaves a ghost
+       residual line below wrapped lines after deselecting (CodeMirror issue #1600, #1627).
+       The layer div must be hidden when empty to force a repaint. */
+    .cm-selectionLayer:empty {
+      display: none;
+    }
+
+    /* Style gutters */
+
+    .cm-gutters {
+      @apply border-0 text-text-subtlest bg-surface pr-1.5;
+      /* Not sure why, but there's a tiny gap left of the gutter that you can see text
+         through. Move left slightly to fix that. */
+      @apply -left-[1px];
+
+      .cm-gutterElement {
+        @apply cursor-default;
+      }
+    }
+
+    .cm-gutter-lint {
+      @apply w-auto !important;
+
+      .cm-gutterElement {
+        @apply px-0;
+      }
+
+      .cm-lint-marker {
+        @apply cursor-default opacity-80 hover:opacity-100 transition-opacity;
+        @apply rounded-full w-[0.9em] h-[0.9em];
+
+        content: "";
+
+        &.cm-lint-marker-error {
+          @apply bg-danger;
+        }
+      }
+    }
+
+    .template-tag {
+      /* Colors */
+      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap cursor-default;
+      @apply hover:border-border hover:text-text hover:bg-surface-highlight;
+
+      @apply inline border px-1 mx-[0.5px] rounded dark:shadow;
+
+      -webkit-text-security: none;
+
+      * {
+        @apply cursor-default;
+      }
+
+      .fn {
+        @apply inline-block;
+        .fn-inner {
+          @apply text-text-subtle max-w-[40em] italic inline-flex items-end whitespace-pre text-[0.9em];
+        }
+        .fn-arg-name {
+          /* Nothing yet */
+          @apply opacity-60;
+        }
+        .fn-arg-value {
+          @apply inline-block truncate;
+        }
+        .fn-bracket {
+          @apply text-text-subtle opacity-30;
+        }
+      }
+    }
+
+    .hyperlink-widget {
+      & > * {
+        @apply underline;
+      }
+
+      &:hover > * {
+        @apply text-primary;
+      }
+
+      -webkit-text-security: none;
+    }
+  }
+
+  &.cm-singleline {
+    .cm-editor {
+      @apply w-full h-full;
+    }
+
+    .cm-scroller {
+      @apply font-mono text-xs;
+
+      /* Hide scrollbars */
+
+      &::-webkit-scrollbar-corner,
+      &::-webkit-scrollbar {
+        @apply hidden !important;
+      }
+    }
+  }
+
+  &.cm-multiline {
+    &.cm-full-height {
+      @apply relative;
+
+      .cm-editor {
+        @apply inset-0 absolute;
+        position: absolute !important;
+      }
+    }
+
+    .cm-editor {
+      @apply h-full;
+    }
+
+    .cm-scroller {
+      @apply font-mono text-editor;
+    }
+  }
+}
+
+/* Style search matches */
+.cm-searchMatch {
+  @apply bg-transparent !important;
+  @apply rounded-[2px] outline outline-1;
+
+  &.cm-searchMatch-selected {
+    @apply outline-text;
+    @apply bg-text !important;
+
+    &,
+    * {
+      @apply text-surface font-semibold !important;
+    }
+  }
+}
+
+/* Obscure text for password fields */
+.cm-wrapper.cm-obscure-text .cm-line {
+  -webkit-text-security: disc;
+}
+
+/* Obscure text for password fields */
+.cm-wrapper.cm-obscure-text .cm-line {
+  -webkit-text-security: disc;
+
+  .cm-placeholder {
+    -webkit-text-security: none;
+  }
+}
+
+.cm-editor .cm-gutterElement {
+  @apply flex items-center;
+  transition: color var(--transition-duration);
+}
+
+.cm-editor .fold-gutter-icon {
+  @apply pt-[0.25em] pl-[0.4em] px-[0.4em] h-4 rounded;
+  @apply cursor-default !important;
+}
+
+.cm-editor .fold-gutter-icon::after {
+  @apply block w-1.5 h-1.5 p-0.5 border-transparent border-l border-b border-l-[currentColor] border-b-[currentColor] content-[''];
+}
+
+/* Rotate the fold gutter chevron when open */
+.cm-editor .fold-gutter-icon[data-open]::after {
+  @apply rotate-[-45deg];
+}
+
+/* Adjust fold gutter icon position after rotation */
+.cm-editor .fold-gutter-icon:not([data-open])::after {
+  @apply relative -left-[0.1em] top-[0.1em] rotate-[-135deg];
+}
+
+.cm-editor .fold-gutter-icon:hover {
+  @apply text-text bg-surface-highlight;
+}
+
+.cm-editor .cm-foldPlaceholder {
+  @apply px-2 border border-border-subtle bg-surface-highlight;
+  @apply hover:text-text hover:border-border-subtle text-text;
+  @apply cursor-default !important;
+}
+
+.cm-editor .cm-activeLineGutter {
+  @apply bg-transparent text-text-subtle;
+}
+
+/* Cursor and mouse cursor for readonly mode */
+.cm-wrapper.cm-readonly {
+  &.cm-singleline * {
+    @apply cursor-default;
+  }
+}
+
+.cm-singleline .cm-editor {
+  .cm-content {
+    @apply h-full flex items-center;
+
+    /* Break characters on line wrapping mode, useful for URL field.
+                 * We can make this dynamic if we need it to be configurable later
+                 */
+
+    &.cm-lineWrapping {
+      @apply break-all;
+    }
+  }
+}
+
+.cm-tooltip-lint {
+  @apply font-mono text-editor rounded overflow-hidden bg-surface-highlight border border-border shadow !important;
+
+  .cm-diagnostic-error {
+    @apply border-l-danger px-4 py-2;
+  }
+}
+
+.cm-lintPoint {
+  &.cm-lintPoint-error {
+    &::after {
+      @apply border-b-danger;
+    }
+  }
+}
+
+.cm-tooltip.cm-tooltip-hover {
+  @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto text-sm;
+  @apply p-1.5;
+
+  /* Style the tooltip for popping up "open in browser" and other stuff */
+
+  a,
+  button {
+    @apply text-text hover:bg-surface-highlight w-full h-sm flex items-center px-2 rounded;
+  }
+
+  a {
+    @apply cursor-default !important;
+
+    &::after {
+      @apply text-text bg-text h-3 w-3 ml-1;
+      content: "";
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' fill='black' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z'/%3E%3Cpath fill-rule='evenodd' d='M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z'/%3E%3C/svg%3E");
+      -webkit-mask-size: contain;
+      display: inline-block;
+    }
+  }
+}
+
+/* NOTE: Extra selector required to override default styles */
+.cm-tooltip.cm-tooltip-autocomplete,
+.cm-tooltip.cm-completionInfo {
+  @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto;
+
+  & * {
+    @apply font-mono text-editor !important;
+  }
+
+  .cm-completionIcon {
+    @apply opacity-80 italic;
+
+    &::after {
+      content: "a" !important; /* Default (eg. for GraphQL) */
+    }
+
+    &.cm-completionIcon-function::after {
+      content: "f" !important;
+      @apply text-info;
+    }
+
+    &.cm-completionIcon-variable::after {
+      content: "x" !important;
+      @apply text-primary;
+    }
+
+    &.cm-completionIcon-namespace::after {
+      content: "n" !important;
+      @apply text-warning;
+    }
+
+    &.cm-completionIcon-constant::after {
+      content: "c" !important;
+      @apply text-notice;
+    }
+
+    &.cm-completionIcon-class::after {
+      content: "o" !important;
+    }
+
+    &.cm-completionIcon-enum::after {
+      content: "e" !important;
+    }
+
+    &.cm-completionIcon-interface::after {
+      content: "i" !important;
+    }
+
+    &.cm-completionIcon-keyword::after {
+      content: "k" !important;
+    }
+
+    &.cm-completionIcon-method::after {
+      content: "m" !important;
+    }
+
+    &.cm-completionIcon-property::after {
+      content: "a" !important;
+    }
+
+    &.cm-completionIcon-text::after {
+      content: "t" !important;
+    }
+
+    &.cm-completionIcon-type::after {
+      content: "t" !important;
+    }
+  }
+
+  &.cm-completionInfo {
+    @apply mx-0.5 -mt-0.5 font-sans;
+  }
+
+  * {
+    @apply transition-none;
+  }
+
+  &.cm-tooltip-autocomplete {
+    @apply font-mono;
+
+    & > ul {
+      @apply p-1 max-h-[40vh];
+    }
+
+    & > ul > li {
+      @apply cursor-default px-2 h-[2em] rounded-sm text-text flex items-center;
+    }
+
+    & > ul > li[aria-selected] {
+      @apply bg-surface-highlight text-text;
+    }
+
+    .cm-completionIcon {
+      @apply text-sm flex items-center pb-0.5 flex-shrink-0;
+    }
+
+    .cm-completionLabel {
+      @apply text-text;
+    }
+
+    .cm-completionDetail {
+      @apply ml-auto pl-6 text-text-subtle;
+    }
+  }
+}
+
+.cm-editor .cm-panels {
+  @apply bg-surface-highlight backdrop-blur-sm p-1 mb-1 text-text z-20 rounded-md;
+
+  input,
+  button {
+    @apply rounded-sm outline-none;
+  }
+
+  button {
+    @apply border-border-subtle bg-surface-highlight text-text hover:border-info;
+    @apply appearance-none bg-none cursor-default;
+  }
+
+  button[name="close"] {
+    @apply text-text-subtle hocus:text-text px-2 -mr-1.5 !important;
+  }
+
+  input {
+    @apply bg-surface border-border-subtle focus:border-border-focus;
+    @apply border outline-none;
+  }
+
+  input.cm-textfield {
+    @apply cursor-text;
+  }
+
+  .cm-search label {
+    @apply inline-flex items-center h-6 px-1.5 rounded-sm border border-border-subtle cursor-default text-text-subtle text-xs;
+
+    input[type="checkbox"] {
+      @apply hidden;
+    }
+
+    &:has(:checked) {
+      @apply text-primary border-border;
+    }
+  }
+
+  /* Hide the "All" button */
+
+  button[name="select"] {
+    @apply hidden;
+  }
+
+  /* Replace next/prev button text with chevron icons */
+
+  .cm-search button[name="next"],
+  .cm-search button[name="prev"] {
+    @apply text-[0px] w-7 h-6 inline-flex items-center justify-center border border-border-subtle mr-1;
+  }
+
+  .cm-search button[name="prev"]::after,
+  .cm-search button[name="next"]::after {
+    @apply block w-3.5 h-3.5 bg-text;
+    content: "";
+  }
+
+  .cm-search button[name="prev"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 18l-6-6 6-6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 18l-6-6 6-6'/%3E%3C/svg%3E");
+  }
+
+  .cm-search button[name="next"]::after {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18l6-6-6-6'/%3E%3C/svg%3E");
+  }
+
+  .cm-search-match-count {
+    @apply text-text-subtle text-xs font-mono whitespace-nowrap px-1.5 py-0.5 self-center;
+  }
+}

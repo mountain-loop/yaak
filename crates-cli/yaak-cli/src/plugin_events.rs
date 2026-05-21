@@ -14,6 +14,7 @@ use yaak::plugin_events::{
 use yaak::render::{render_grpc_request, render_http_request};
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
+use yaak_http::cookies::get_cookie_value_from_jar;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::Environment;
 use yaak_models::queries::any_request::AnyRequest;
@@ -472,7 +473,7 @@ async fn build_plugin_reply(
                 let names = cookie_jar
                     .cookies
                     .into_iter()
-                    .filter_map(|c| parse_cookie_name_value(&c.raw_cookie).map(|(name, _)| name))
+                    .map(|c| c.name)
                     .collect();
 
                 Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse {
@@ -496,10 +497,8 @@ async fn build_plugin_reply(
                         }
                     };
 
-                let value = cookie_jar.cookies.into_iter().find_map(|c| {
-                    let (name, value) = parse_cookie_name_value(&c.raw_cookie)?;
-                    if name == req.name { Some(value) } else { None }
-                });
+                let value =
+                    get_cookie_value_from_jar(cookie_jar.cookies, &req.name, req.domain.as_deref());
                 Some(InternalEventPayload::GetCookieValueResponse(GetCookieValueResponse { value }))
             }
             HostRequest::WindowInfo(req) => {
@@ -530,13 +529,6 @@ async fn render_json_value_for_cli<T: TemplateCallback>(
 ) -> yaak_templates::error::Result<Value> {
     let vars = &make_vars_hashmap(environment_chain);
     render_json_value_raw(value, vars, cb, opt).await
-}
-
-
-fn parse_cookie_name_value(raw_cookie: &str) -> Option<(String, String)> {
-    let first_part = raw_cookie.split(';').next()?.trim();
-    let (name, value) = first_part.split_once('=')?;
-    Some((name.trim().to_string(), value.to_string()))
 }
 
 fn copy_text_to_clipboard(text: &str) -> Result<(), String> {

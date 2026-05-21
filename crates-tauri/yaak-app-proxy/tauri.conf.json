@@ -1,0 +1,24 @@
+{
+  "productName": "Yaak Proxy",
+  "version": "0.0.0",
+  "identifier": "app.yaak.proxy",
+  "build": {
+    "beforeBuildCommand": "npm --prefix ../.. run proxy:tauri-before-build",
+    "beforeDevCommand": "npm --prefix ../.. run proxy:tauri-before-dev",
+    "devUrl": "http://localhost:2420",
+    "frontendDist": "../../dist/apps/yaak-proxy"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": []
+  },
+  "bundle": {
+    "icon": [
+      "../yaak-app-client/icons/release/32x32.png",
+      "../yaak-app-client/icons/release/128x128.png",
+      "../yaak-app-client/icons/release/128x128@2x.png",
+      "../yaak-app-client/icons/release/icon.icns",
+      "../yaak-app-client/icons/release/icon.ico"
+    ]
+  }
+}
