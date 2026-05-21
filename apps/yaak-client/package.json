@@ -98,7 +98,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "decompress": "^4.2.1",
     "internal-ip": "^8.0.0",
-    "postcss": "^8.5.6",
+    "postcss": "^8.5.14",
     "postcss-nesting": "^13.0.2",
     "rollup": "^4.60.3",
     "tailwindcss": "^3.4.17",
