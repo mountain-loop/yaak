@@ -201,7 +201,7 @@ function BaseInput({
   const id = useRef(`input-${generateId()}`);
   const editorClassName = classNames(
     className,
-    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder pr-1.5",
+    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder",
   );
 
   const isValid = useMemo(() => {
@@ -290,7 +290,7 @@ function BaseInput({
         <HStack
           className={classNames(
             inputWrapperClassName,
-            "w-full min-w-0 px-2",
+            "flex-1 min-w-0 px-2",
             fullHeight && "h-full",
             leftSlot ? "pl-0.5 -ml-2" : null,
             rightSlot ? "pr-0.5 -mr-2" : null,
