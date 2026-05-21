@@ -1,6 +1,6 @@
 @top url { Protocol? Host Path? Query? }
 
-Path { ("/" (Placeholder | PathSegment))+ }
+Path { ("/" (Placeholder PathSegment? | PathSegment))+ }
 
 Query { "?" queryPair ("&" queryPair)* }
 
@@ -9,7 +9,10 @@ Query { "?" queryPair ("&" queryPair)* }
     Host { $[a-zA-Z0-9-_.:\[\]]+ }
     @precedence { Protocol, Host }
 
-    Placeholder { ":" ![/?#]+ }
+    // Placeholder name excludes `:` so a literal colon ends the placeholder. `/:abc:def`
+    // parses as Placeholder(:abc) + PathSegment(:def). `/abc:def` is all literal since
+    // the segment doesn't start with `:`.
+    Placeholder { ":" ![/?#:]+ }
     PathSegment { ![?#/]+ }
     @precedence { Placeholder, PathSegment }
 

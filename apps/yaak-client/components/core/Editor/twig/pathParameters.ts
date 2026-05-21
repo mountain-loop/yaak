@@ -60,6 +60,9 @@ function pathParameters(
                   if (node.name !== "Placeholder") return;
                   const globalFrom = innerTree.node.from + node.from;
                   const globalTo = innerTree.node.from + node.to;
+                  // A real path placeholder is preceded by `/`. This filters mid-segment
+                  // Placeholder nodes (e.g. trailing `:literal` after `:id:literal`).
+                  if (view.state.doc.sliceString(globalFrom - 1, globalFrom) !== "/") return;
                   const rawText = view.state.doc.sliceString(globalFrom, globalTo);
                   const onClick = () => onClickPathParameter(rawText);
                   const widget = new PathPlaceholderWidget(rawText, globalFrom, onClick);
