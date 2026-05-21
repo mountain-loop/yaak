@@ -199,9 +199,11 @@ function BaseInput({
   }, [onBlur]);
 
   const id = useRef(`input-${generateId()}`);
+  const hasObscureToggle = type === "password" && !disableObscureToggle;
   const editorClassName = classNames(
     className,
-    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder pr-1.5",
+    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder",
+    hasObscureToggle && "pr-1.5",
   );
 
   const isValid = useMemo(() => {
@@ -325,7 +327,7 @@ function BaseInput({
             {...props}
           />
         </HStack>
-        {type === "password" && !disableObscureToggle && (
+        {hasObscureToggle && (
           <IconButton
             title={
               obscured
