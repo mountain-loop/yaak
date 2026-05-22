@@ -26,4 +26,14 @@ describe("URL grammar Placeholder", () => {
     expect(url[positions[0] - 1]).toBe("/");
     expect(url[positions[1] - 1]).not.toBe("/");
   });
+
+  test("first segment of a path-only URL is a Placeholder, not eaten as Host", () => {
+    // Regression: without `Host?`, the first `:chip1` would be tokenized as Host
+    // (Host's char class includes `:` for `host:port`), leaving only `:chip2` as
+    // a Placeholder.
+    const url = "/:chip1/:chip2";
+    const positions = placeholderStarts(url);
+    expect(positions.length).toBe(2);
+    expect(url.slice(positions[0])).toMatch(/^:chip1/);
+  });
 });

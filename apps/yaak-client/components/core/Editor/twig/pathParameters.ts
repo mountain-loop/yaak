@@ -51,10 +51,12 @@ function pathParameters(
       to,
       enter(node) {
         if (node.name === "Text") {
-          // Find the `url` node and then jump into it to find the placeholders
+          // Find the URL overlay root. With `Host?` optional, a path-only URL like
+          // `/:foo/:bar` produces `Path` as the topmost overlay node instead of `url`,
+          // so accept either.
           for (let i = node.from; i < node.to; i++) {
             const innerTree = syntaxTree(view.state).resolveInner(i);
-            if (innerTree.node.name === "url") {
+            if (innerTree.node.name === "url" || innerTree.node.name === "Path") {
               innerTree.toTree().iterate({
                 enter(node) {
                   if (node.name !== "Placeholder") return;
