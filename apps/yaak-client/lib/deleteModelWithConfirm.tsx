@@ -35,10 +35,15 @@ export async function deleteModelWithConfirm(
           <>
             the following?
             <Prose className="mt-2">
-              <ul>
+              <ul className="space-y-1">
                 {models.map((m) => (
                   <li key={m.id}>
-                    <InlineCode>{resolvedModelName(m)}</InlineCode>
+                    <InlineCode
+                      className="inline-block truncate align-bottom max-w-full"
+                      title={resolvedModelName(m)}
+                    >
+                      {resolvedModelName(m)}
+                    </InlineCode>
                   </li>
                 ))}
               </ul>
