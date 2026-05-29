@@ -13,6 +13,7 @@ import {
   useSseSummaryResultKeyPath,
 } from "../../hooks/useSseSummaryResultKeyPath";
 import { isJSON } from "../../lib/contentType";
+import { copyToClipboard } from "../../lib/copy";
 import { Button } from "../core/Button";
 import type { EditorProps } from "../core/Editor/Editor";
 import { Editor } from "../core/Editor/LazyEditor";
@@ -84,7 +85,7 @@ function ActualEventStreamViewer({ response }: Props) {
             size="xs"
             defaultValue={summarySettings.resultKeyPath}
             disabled={!isCustomProvider || summarySettings.isLoading}
-            forceUpdateKey={`${response.requestId}:${summarySettings.provider}:${summarySettings.resultKeyPath}`}
+            forceUpdateKey={`${response.requestId}:${summarySettings.provider}`}
             placeholder="$.choices[0].delta.content"
             onChange={(keyPath) => {
               if (isCustomProvider) {
@@ -192,9 +193,17 @@ function SseSummaryFooter({
         className="h-1.5 cursor-ns-resize hover:bg-surface-highlight active:bg-surface-highlight"
         onPointerDown={handleResizeStart}
       />
-      <div className="px-2 pt-1">
+      <HStack space={2} alignItems="center" className="px-2 pt-1">
         <Separator>Summary</Separator>
-      </div>
+        <Button
+          size="xs"
+          variant="border"
+          disabled={!hasSummary}
+          onClick={() => copyToClipboard(summary)}
+        >
+          copy
+        </Button>
+      </HStack>
       <div className="px-3 py-2 overflow-auto text-xs">
         {error != null ? (
           <span className="text-danger">{error}</span>
