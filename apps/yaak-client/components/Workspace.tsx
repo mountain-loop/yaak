@@ -27,6 +27,7 @@ import { useSubscribeRecentRequests } from "../hooks/useRecentRequests";
 import { useSubscribeRecentWorkspaces } from "../hooks/useRecentWorkspaces";
 import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { useSidebarWidth } from "../hooks/useSidebarWidth";
+import { useSubscribeRequestTabs } from "../hooks/useRequestTabs";
 import { useSyncWorkspaceRequestTitle } from "../hooks/useSyncWorkspaceRequestTitle";
 import { duplicateRequestOrFolderAndNavigate } from "../lib/duplicateRequestOrFolderAndNavigate";
 import { importData } from "../lib/importData";
@@ -40,6 +41,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { FolderLayout } from "./FolderLayout";
 import { GrpcConnectionLayout } from "./GrpcConnectionLayout";
 import { HttpRequestLayout } from "./HttpRequestLayout";
+import { RequestTabs } from "./RequestTabs";
 import Sidebar from "./Sidebar";
 import { SidebarActions } from "./SidebarActions";
 import { WebsocketRequestLayout } from "./WebsocketRequestLayout";
@@ -93,9 +95,18 @@ export function Workspace() {
   );
 
   const workspaceBody = (
-    <ErrorBoundary name="Workspace Body">
-      <WorkspaceBody />
-    </ErrorBoundary>
+    <div className="flex flex-col h-full w-full min-w-0">
+      <ErrorBoundary name="Request Tabs">
+        <RequestTabs />
+      </ErrorBoundary>
+      {/* Plain block wrapper so the body layout's `gridArea: "body"` style is ignored
+          (a grid parent here would mis-place the request pane). */}
+      <div className="flex-1 min-h-0 min-w-0">
+        <ErrorBoundary name="Workspace Body">
+          <WorkspaceBody />
+        </ErrorBoundary>
+      </div>
+    </div>
   );
 
   const sidebarContent = floating ? (
@@ -206,6 +217,7 @@ function useGlobalWorkspaceHooks() {
   useEnsureActiveCookieJar();
 
   useSubscribeActiveRequestId();
+  useSubscribeRequestTabs();
   useSubscribeActiveFolderId();
   useSubscribeActiveEnvironmentId();
   useSubscribeActiveCookieJarId();
