@@ -33,6 +33,10 @@ use tonic::transport::Uri;
 use tonic::{IntoRequest, IntoStreamingRequest, Request, Response, Status, Streaming};
 use yaak_tls::ClientCertificateConfig;
 
+/// Maximum size for a single gRPC message (64 MB).
+/// Tonic defaults to 4 MB, which is too small for large responses.
+const GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024;
+
 #[derive(Clone)]
 pub struct GrpcConnection {
     pool: Arc<RwLock<DescriptorPool>>,
@@ -107,7 +111,8 @@ impl GrpcConnection {
         let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)?;
         deserializer.end()?;
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone())
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
         let mut req = req_message.into_request();
         decorate_req(metadata, &mut req)?;
@@ -206,7 +211,8 @@ impl GrpcConnection {
                 .filter_map(|x| x)
         };
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone())
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
 
@@ -272,7 +278,8 @@ impl GrpcConnection {
                 .filter_map(|x| x)
         };
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone())
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
 
@@ -300,7 +307,8 @@ impl GrpcConnection {
         let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)?;
         deserializer.end()?;
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone())
+            .max_decoding_message_size(GRPC_MAX_MESSAGE_SIZE);
 
         let mut req = req_message.into_request();
         decorate_req(metadata, &mut req)?;
