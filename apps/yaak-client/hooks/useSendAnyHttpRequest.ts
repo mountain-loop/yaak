@@ -13,7 +13,6 @@ export function useSendAnyHttpRequest() {
       if (request == null) {
         return null;
       }
-
       return invokeCmd("cmd_send_http_request", {
         request,
         environmentId: getActiveEnvironment()?.id,
@@ -30,7 +29,6 @@ export const sendAnyHttpRequest = createFastMutation<HttpResponse | null, string
     if (request == null) {
       return null;
     }
-
     return invokeCmd("cmd_send_http_request", {
       request,
       environmentId: getActiveEnvironment()?.id,

@@ -10,6 +10,7 @@ use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_http_request, render_json_value, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use crate::uri_scheme::handle_deep_link;
+use chrono::Utc;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
@@ -1463,13 +1464,22 @@ async fn cmd_send_http_request<R: Runtime>(
     request: HttpRequest,
 ) -> YaakResult<HttpResponse> {
     let blobs = app_handle.blob_manager();
+    let source = UpdateSource::from_window_label(window.label());
+    if !request.id.is_empty() {
+        if let Ok(mut persisted_request) = app_handle.db().get_http_request(&request.id) {
+            persisted_request.history_updated_at = Some(Utc::now().naive_utc());
+            app_handle.db().upsert_http_request(&persisted_request, &source)?;
+        }
+    }
+    let saved_request_id = if request.is_saved { Some(request.id.clone()) } else { None };
     let response = app_handle.db().upsert_http_response(
         &HttpResponse {
             request_id: request.id.clone(),
+            saved_request_id,
             workspace_id: request.workspace_id.clone(),
             ..Default::default()
         },
-        &UpdateSource::from_window_label(window.label()),
+        &source,
         &blobs,
     )?;
 
@@ -1515,7 +1525,7 @@ async fn cmd_send_http_request<R: Runtime>(
                     error: Some(e.to_string()),
                     ..resp
                 },
-                &UpdateSource::from_window_label(window.label()),
+                &source,
                 &blobs,
             )?
         }

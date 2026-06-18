@@ -2,6 +2,7 @@ import { HStack, Icon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import { memo } from "react";
+import { patchModel } from "@yaakapp-internal/models";
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
 import { activeRequestAtom } from "../hooks/useActiveRequest";
 import { useToggleCommandPalette } from "../hooks/useToggleCommandPalette";
@@ -35,6 +36,8 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
   const curlPanelRequestId = useAtomValue(curlPanelRequestIdAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
   const showCurlButton = activeRequest?.model === "http_request";
+  const showSaveRequestButton =
+    activeRequest?.model === "http_request" && activeRequest.isSaved !== true;
   const curlPanelOpen = showCurlButton && curlPanelRequestId === activeRequest.id;
   const showEncryptionSetup =
     workspace != null &&
@@ -78,6 +81,15 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
             color={curlPanelOpen ? "primary" : "default"}
             iconColor="secondary"
             onClick={() => (curlPanelOpen ? hideCurlPanel() : showCurlPanel(activeRequest.id))}
+          />
+        )}
+        {showSaveRequestButton && (
+          <IconButton
+            icon="save"
+            title="Save Request"
+            size="sm"
+            iconColor="secondary"
+            onClick={() => patchModel(activeRequest, { isSaved: true })}
           />
         )}
         <IconButton

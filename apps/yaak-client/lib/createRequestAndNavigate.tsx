@@ -19,6 +19,11 @@ export async function createRequestAndNavigate<
     }
   }
   patch.folderId = patch.folderId || activeRequest?.folderId;
+  if (patch.model === "http_request") {
+    Object.assign(patch, {
+      isSaved: false,
+    });
+  }
 
   const newId = await createWorkspaceModel(patch);
 

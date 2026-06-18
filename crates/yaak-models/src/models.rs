@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
-    Method, Name, SettingFollowRedirects, SettingRequestTimeout, SettingSendCookies,
-    SettingStoreCookies, SettingValidateCertificates, SortPriority, UpdatedAt, Url, UrlParameters,
-    WorkspaceId,
+    HistoryUpdatedAt, IsSaved, Method, Name, SettingFollowRedirects, SettingRequestTimeout,
+    SettingSendCookies, SettingStoreCookies, SettingValidateCertificates, SortPriority, UpdatedAt,
+    Url, UrlParameters, WorkspaceId,
 };
 use crate::util::generate_prefixed_id;
 use chrono::{NaiveDateTime, Utc};
@@ -1118,6 +1118,8 @@ pub struct HttpRequest {
     #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
+    pub is_saved: bool,
+    pub history_updated_at: Option<NaiveDateTime>,
     pub sort_priority: f64,
     pub url: String,
     /// URL parameters used for both path placeholders (`:id`) and query string entries.
@@ -1169,6 +1171,8 @@ impl UpsertModelInfo for HttpRequest {
             (Authentication, serde_json::to_string(&self.authentication)?.into()),
             (AuthenticationType, self.authentication_type.into()),
             (Headers, serde_json::to_string(&self.headers)?.into()),
+            (IsSaved, self.is_saved.into()),
+            (HistoryUpdatedAt, self.history_updated_at.into()),
             (SortPriority, self.sort_priority.into()),
             (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
             (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
@@ -1196,6 +1200,8 @@ impl UpsertModelInfo for HttpRequest {
             AuthenticationType,
             Url,
             UrlParameters,
+            IsSaved,
+            HistoryUpdatedAt,
             SortPriority,
             SettingSendCookies,
             SettingStoreCookies,
@@ -1230,6 +1236,8 @@ impl UpsertModelInfo for HttpRequest {
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
             method: row.get("method")?,
             name: row.get("name")?,
+            is_saved: row.get("is_saved")?,
+            history_updated_at: row.get("history_updated_at")?,
             sort_priority: row.get("sort_priority")?,
             url: row.get("url")?,
             url_parameters: serde_json::from_str(url_parameters.as_str()).unwrap_or_default(),
@@ -1643,6 +1651,7 @@ pub struct HttpResponse {
     pub updated_at: NaiveDateTime,
     pub workspace_id: String,
     pub request_id: String,
+    pub saved_request_id: Option<String>,
 
     pub body_path: Option<String>,
     pub content_length: Option<i32>,
@@ -1692,6 +1701,7 @@ impl UpsertModelInfo for HttpResponse {
             (CreatedAt, upsert_date(source, self.created_at)),
             (UpdatedAt, upsert_date(source, self.updated_at)),
             (RequestId, self.request_id.into()),
+            (SavedRequestId, self.saved_request_id.into()),
             (WorkspaceId, self.workspace_id.into()),
             (BodyPath, self.body_path.into()),
             (ContentLength, self.content_length.into()),
@@ -1715,6 +1725,7 @@ impl UpsertModelInfo for HttpResponse {
     fn update_columns() -> Vec<impl IntoIden> {
         vec![
             HttpResponseIden::UpdatedAt,
+            HttpResponseIden::SavedRequestId,
             HttpResponseIden::BodyPath,
             HttpResponseIden::ContentLength,
             HttpResponseIden::ContentLengthCompressed,
@@ -1745,6 +1756,7 @@ impl UpsertModelInfo for HttpResponse {
             model: r.get("model")?,
             workspace_id: r.get("workspace_id")?,
             request_id: r.get("request_id")?,
+            saved_request_id: r.get("saved_request_id").unwrap_or_default(),
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             error: r.get("error")?,

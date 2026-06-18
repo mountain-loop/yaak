@@ -23,7 +23,7 @@ mod workspace_metas;
 pub mod workspaces;
 pub use model_changes::PersistedModelChange;
 
-const MAX_HISTORY_ITEMS: usize = 20;
+const MAX_HISTORY_ITEMS: usize = 500;
 
 use crate::models::HttpRequestHeader;
 use std::collections::HashMap;

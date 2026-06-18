@@ -84,14 +84,15 @@ impl<'a> ClientDb<'a> {
         source: &UpdateSource,
         blob_manager: &BlobManager,
     ) -> Result<HttpResponse> {
-        let responses = self.list_http_responses_for_request(&http_response.request_id, None)?;
+        let response = self.upsert(http_response, source)?;
+        let responses = self.list_http_responses(&http_response.workspace_id, None)?;
 
-        for m in responses.iter().skip(MAX_HISTORY_ITEMS - 1) {
+        for m in responses.iter().skip(MAX_HISTORY_ITEMS) {
             debug!("Deleting old HTTP response {}", http_response.id);
             self.delete_http_response(&m, source, blob_manager)?;
         }
 
-        self.upsert(http_response, source)
+        Ok(response)
     }
 
     pub fn cancel_pending_http_responses(&self) -> Result<()> {

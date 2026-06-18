@@ -1,5 +1,6 @@
 import classNames from "classnames";
-import { useMemo, useRef } from "react";
+import type { MouseEvent } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useActiveRequest } from "../hooks/useActiveRequest";
 import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import { allRequestsAtom } from "../hooks/useAllRequests";
@@ -7,6 +8,7 @@ import { useHotKey } from "../hooks/useHotKey";
 import { useKeyboardEvent } from "../hooks/useKeyboardEvent";
 import { useRecentRequests } from "../hooks/useRecentRequests";
 import { jotaiStore } from "../lib/jotai";
+import { renameModelWithPrompt } from "../lib/renameModelWithPrompt";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { router } from "../lib/router";
 import { Button } from "./core/Button";
@@ -45,6 +47,18 @@ export function RecentRequestsDropdown({ className }: Props) {
     if (!dropdownRef.current?.isOpen) dropdownRef.current?.open();
     dropdownRef.current?.prev?.();
   });
+
+  const handleDoubleClick = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (activeRequest == null) return;
+
+      dropdownRef.current?.close?.();
+      void renameModelWithPrompt(activeRequest);
+    },
+    [activeRequest],
+  );
 
   const items = useMemo(() => {
     const activeWorkspaceId = jotaiStore.get(activeWorkspaceIdAtom);
@@ -88,6 +102,7 @@ export function RecentRequestsDropdown({ className }: Props) {
       <Button
         size="sm"
         hotkeyAction="switcher.toggle"
+        onDoubleClick={handleDoubleClick}
         className={classNames(
           className,
           "truncate pointer-events-auto",

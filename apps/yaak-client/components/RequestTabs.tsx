@@ -10,6 +10,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import type { GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
+import { patchModel } from "@yaakapp-internal/models";
 import { computeSideForDragMove, DropMarker, Icon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
@@ -171,6 +172,16 @@ export function RequestTabs() {
         leftSlot: <Icon icon="copy" />,
         hidden: request == null,
         onSelect: () => duplicateRequestOrFolderAndNavigate(request ?? null),
+      },
+      {
+        label: "Save Request",
+        leftSlot: <Icon icon="save" />,
+        hidden: request?.model !== "http_request" || request.isSaved === true,
+        onSelect: () => {
+          if (request?.model === "http_request") {
+            patchModel(request, { isSaved: true });
+          }
+        },
       },
       {
         type: "separator",

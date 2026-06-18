@@ -8,6 +8,7 @@ import type {
   Folder,
   GrpcRequest,
   HttpRequest,
+  HttpResponse,
   ModelPayload,
   WebsocketRequest,
   Workspace,
@@ -45,6 +46,7 @@ import { useHotKey } from "../hooks/useHotKey";
 import { getHttpRequestActions } from "../hooks/useHttpRequestActions";
 import { useListenToTauriEvent } from "../hooks/useListenToTauriEvent";
 import { getModelAncestors } from "../hooks/useModelAncestors";
+import { useDeleteSendHistory } from "../hooks/useDeleteSendHistory";
 import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
 import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
@@ -56,6 +58,7 @@ import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { showDialog } from "../lib/dialog";
 import { gitWorktreeStatusByModelIdAtom, gitWorktreeStatusFamily } from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
+import { setKeyValue } from "../lib/keyValueStore";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { isSidebarFocused } from "../lib/scopes";
 import { navigateToRequestOrFolderOrWorkspace } from "../lib/setWorkspaceSearchParams";
@@ -89,9 +92,27 @@ const collapsedFamily = atomFamily((treeId: string) => {
   return atomWithKVStorage<Record<string, boolean>>(key, {});
 });
 
-type SidebarModel = Workspace | Folder | HttpRequest | GrpcRequest | WebsocketRequest;
+type RequestGroup = {
+  id: "saved_requests" | "history_requests";
+  model: "request_group";
+  name: string;
+};
+type RequestHistoryItem = {
+  id: string;
+  model: "request_history";
+  name: string;
+  response: HttpResponse;
+};
+type SidebarModel =
+  | Workspace
+  | Folder
+  | HttpRequest
+  | GrpcRequest
+  | WebsocketRequest
+  | RequestGroup
+  | RequestHistoryItem;
 function isSidebarLeafModel(m: AnyModel): boolean {
-  const modelMap: Record<Exclude<SidebarModel["model"], "workspace">, null> = {
+  const modelMap: Record<"http_request" | "grpc_request" | "websocket_request" | "folder", null> = {
     http_request: null,
     grpc_request: null,
     websocket_request: null,
@@ -100,7 +121,28 @@ function isSidebarLeafModel(m: AnyModel): boolean {
   return m.model in modelMap;
 }
 
+function isRealSidebarModel(
+  item: SidebarModel,
+): item is Exclude<SidebarModel, RequestGroup | RequestHistoryItem | Workspace> | Workspace {
+  return item.model !== "request_group" && item.model !== "request_history";
+}
+
+const savedRequestsGroup: RequestGroup = {
+  id: "saved_requests",
+  model: "request_group",
+  name: "Collections",
+};
+
+const historyRequestsGroup: RequestGroup = {
+  id: "history_requests",
+  model: "request_group",
+  name: "History",
+};
+
 const OPACITY_SUBTLE = "opacity-80";
+
+savedRequestsGroup.name = "Collections";
+historyRequestsGroup.name = "History";
 
 function Sidebar({ className }: { className?: string }) {
   const [hidden, setHidden] = useSidebarHidden();
@@ -179,8 +221,21 @@ function Sidebar({ className }: { className?: string }) {
     children: SidebarModel[];
     insertAt: number;
   }) {
-    const prev = children[insertAt - 1] as Exclude<SidebarModel, Workspace>;
-    const next = children[insertAt] as Exclude<SidebarModel, Workspace>;
+    if (
+      parent.model === "request_group" ||
+      parent.model === "request_history" ||
+      items.some((item) => item.model === "request_group" || item.model === "request_history")
+    ) {
+      return;
+    }
+    const prev = children[insertAt - 1] as Exclude<
+      SidebarModel,
+      Workspace | RequestGroup | RequestHistoryItem
+    >;
+    const next = children[insertAt] as Exclude<
+      SidebarModel,
+      Workspace | RequestGroup | RequestHistoryItem
+    >;
     const folderId = parent.model === "folder" ? parent.id : null;
 
     const beforePriority = prev?.sortPriority ?? 0;
@@ -192,13 +247,15 @@ function Sidebar({ className }: { className?: string }) {
         // Add items to children at insertAt
         children.splice(insertAt, 0, ...items);
         await Promise.all(
-          children.map((m, i) => patchModel(m, { sortPriority: i * 1000, folderId })),
+          children
+            .filter(isRealSidebarModel)
+            .map((m, i) => patchModel(m, { sortPriority: i * 1000, folderId })),
         );
       } else {
         const range = afterPriority - beforePriority;
         const increment = range / (items.length + 2);
         await Promise.all(
-          items.map((m, i) =>
+          items.filter(isRealSidebarModel).map((m, i) =>
             // Spread item sortPriority out over before/after range
             patchModel(m, {
               sortPriority: beforePriority + (i + 1) * increment,
@@ -259,21 +316,33 @@ function Sidebar({ className }: { className?: string }) {
   );
 
   const handleRenameSelected = useCallback((items: SidebarModel[]) => {
-    if (items.length === 1 && items[0] != null) {
+    if (
+      items.length === 1 &&
+      items[0] != null &&
+      items[0].model !== "request_group" &&
+      items[0].model !== "request_history"
+    ) {
       treeRef.current?.renameItem(items[0].id);
     }
   }, []);
 
   const handleDeleteSelected = useCallback(async (items: SidebarModel[]) => {
-    await deleteModelWithConfirm(items);
+    await deleteModelWithConfirm(
+      items.filter((item) => item.model !== "request_group" && item.model !== "request_history"),
+    );
   }, []);
 
   const handleDuplicateSelected = useCallback(async (items: SidebarModel[]) => {
     if (items.length === 1 && items[0]) {
+      if (items[0].model === "request_group" || items[0].model === "request_history") return;
       const newId = await duplicateModel(items[0]);
       navigateToRequestOrFolderOrWorkspace(newId, items[0].model);
     } else {
-      await Promise.all(items.map(duplicateModel));
+      await Promise.all(
+        items
+          .filter((item) => item.model !== "request_group" && item.model !== "request_history")
+          .map(duplicateModel),
+      );
     }
   }, []);
 
@@ -389,6 +458,20 @@ function Sidebar({ className }: { className?: string }) {
         });
       }
 
+      if (child.model === "request_group") {
+        return [];
+      }
+
+      if (child.model === "request_history") {
+        return [
+          {
+            label: "Open Response",
+            leftSlot: <Icon icon="history" />,
+            onSelect: () => activateHistoryResponse(child),
+          },
+        ];
+      }
+
       const workspaces = jotaiStore.get(workspacesAtom);
       const syncDir = jotaiStore.get(activeWorkspaceMetaAtom)?.settingSyncDir;
       const gitItems = getGitContextMenuItems({ items, syncDir });
@@ -437,6 +520,18 @@ function Sidebar({ className }: { className?: string }) {
             if (child.model !== "http_request") return;
             navigateToRequestOrFolderOrWorkspace(child.id, child.model);
             showCurlPanel(child.id);
+          },
+        },
+        {
+          label: "Save Request",
+          leftSlot: <Icon icon="save" />,
+          hidden:
+            !(items.length === 1 && child.model === "http_request") ||
+            (child.model === "http_request" && child.isSaved === true),
+          onSelect: async () => {
+            if (child.model === "http_request") {
+              await patchModel(child, { isSaved: true });
+            }
           },
         },
         ...httpRequestActions.map((a) => ({
@@ -765,6 +860,7 @@ function getGitContextMenuItems({
 }
 
 function syncPathForModel(item: SidebarModel) {
+  if (item.model === "request_history") return null;
   return `yaak.${item.id}.yaml`;
 }
 
@@ -777,20 +873,44 @@ function getEditOptions(
 ): ReturnType<NonNullable<TreeItemProps<SidebarModel>["getEditOptions"]>> {
   return {
     onChange: handleSubmitEdit,
-    defaultValue: resolvedModelName(item),
+    defaultValue:
+      item.model === "request_group" || item.model === "request_history"
+        ? item.name
+        : resolvedModelName(item),
     placeholder: item.name,
   };
 }
 
 async function handleSubmitEdit(item: SidebarModel, text: string) {
+  if (item.model === "request_group" || item.model === "request_history") return;
   await patchModel(item, { name: text });
 }
 
 function handleActivate(item: SidebarModel) {
   // TODO: Add folder layout support
-  if (item.model !== "folder" && item.model !== "workspace") {
+  if (item.model === "request_history") {
+    void activateHistoryResponse(item);
+    return;
+  }
+  if (item.model !== "folder" && item.model !== "workspace" && item.model !== "request_group") {
     navigateToRequestOrFolderOrWorkspace(item.id, item.model);
   }
+}
+
+async function activateHistoryResponse(item: RequestHistoryItem) {
+  const request = getModel("http_request", item.response.requestId);
+  if (request == null) return;
+
+  const latestResponse =
+    jotaiStore.get(httpResponsesAtom).find((r) => r.requestId === item.response.requestId) ?? null;
+  if (latestResponse != null) {
+    await setKeyValue({
+      namespace: "global",
+      key: ["pinned_http_response_id", latestResponse.id],
+      value: item.response.id,
+    });
+  }
+  navigateToRequestOrFolderOrWorkspace(request.id, request.model);
 }
 
 const allPotentialChildrenAtom = atom<SidebarModel[]>((get) => {
@@ -810,12 +930,18 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   const allModels = get(memoAllPotentialChildrenAtom);
   const activeWorkspace = get(activeWorkspaceAtom);
   const filter = get(sidebarFilterAtom);
+  const responses = get(httpResponsesAtom);
 
   const childrenMap: Record<string, Exclude<SidebarModel, Workspace>[]> = {};
   for (const item of allModels) {
+    if (item.model === "http_request" && item.isSaved !== true) {
+      continue;
+    }
     if ("folderId" in item && item.folderId == null) {
-      childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
-      childrenMap[item.workspaceId]?.push(item);
+      const parentId =
+        item.workspaceId === activeWorkspace?.id ? savedRequestsGroup.id : item.workspaceId;
+      childrenMap[parentId] = childrenMap[parentId] ?? [];
+      childrenMap[parentId]?.push(item);
     } else if ("folderId" in item && item.folderId != null) {
       childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
       childrenMap[item.folderId]?.push(item);
@@ -827,6 +953,17 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   }
 
   const queryAst = parseQuery(filter.text);
+  childrenMap[activeWorkspace.id] = [savedRequestsGroup, historyRequestsGroup];
+  childrenMap[historyRequestsGroup.id] = responses
+    .filter((response) => response.workspaceId === activeWorkspace.id)
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .slice(0, 500)
+    .map((response) => ({
+      id: response.id,
+      model: "request_history" as const,
+      name: response.url || "HTTP request",
+      response,
+    }));
 
   // returns true if this node OR any child matches the filter
   const allFields: Record<string, Set<string>> = {};
@@ -835,7 +972,7 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
     let matchesSelf = true;
     const fields = getItemFields(node);
     const model = node.item.model;
-    const isLeafNode = !(model === "folder" || model === "workspace");
+    const isLeafNode = !(model === "folder" || model === "workspace" || model === "request_group");
 
     for (const [field, value] of Object.entries(fields)) {
       if (!value) continue;
@@ -854,7 +991,14 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
 
     if (node.children != null) {
       childItems.sort((a, b) => {
+        if (node.item.id === historyRequestsGroup.id) {
+          return 0;
+        }
+        if (!("sortPriority" in a) || !("sortPriority" in b)) {
+          return 0;
+        }
         if (a.sortPriority === b.sortPriority) {
+          if (!("updatedAt" in a) || !("updatedAt" in b)) return 0;
           return a.updatedAt > b.updatedAt ? 1 : -1;
         }
         return a.sortPriority - b.sortPriority;
@@ -905,9 +1049,14 @@ const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
   const statusByModelId: Record<string, GitStatus> = {};
 
   for (const item of allModels) {
+    if (item.model === "http_request" && item.isSaved !== true) {
+      continue;
+    }
     if ("folderId" in item && item.folderId == null) {
-      childrenMap[item.workspaceId] = childrenMap[item.workspaceId] ?? [];
-      childrenMap[item.workspaceId]?.push(item);
+      const parentId =
+        item.workspaceId === activeWorkspace?.id ? savedRequestsGroup.id : item.workspaceId;
+      childrenMap[parentId] = childrenMap[parentId] ?? [];
+      childrenMap[parentId]?.push(item);
     } else if ("folderId" in item && item.folderId != null) {
       childrenMap[item.folderId] = childrenMap[item.folderId] ?? [];
       childrenMap[item.folderId]?.push(item);
@@ -916,7 +1065,8 @@ const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
 
   const visit = (item: SidebarModel): GitStatus | null => {
     const statuses: GitStatus[] = [];
-    const directStatus = gitStatusByModelId[item.id]?.status;
+    const directStatus =
+      item.model === "request_group" ? null : gitStatusByModelId[item.id]?.status;
     if (directStatus != null && directStatus !== "current") {
       statuses.push(directStatus);
     }
@@ -934,6 +1084,7 @@ const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
   };
 
   if (activeWorkspace != null) {
+    childrenMap[activeWorkspace.id] = [savedRequestsGroup];
     visit(activeWorkspace);
   }
 
@@ -959,6 +1110,19 @@ function summarizeGitStatuses(statuses: GitStatus[]): GitStatus | null {
 }
 
 function getItemKey(item: SidebarModel) {
+  if (item.model === "request_group") {
+    return item.id;
+  }
+  if (item.model === "request_history") {
+    return [
+      item.id,
+      item.response.url,
+      item.response.status,
+      item.response.state,
+      item.response.createdAt,
+      item.response.updatedAt,
+    ].join("::");
+  }
   const responses = jotaiStore.get(httpResponsesAtom);
   const latestResponse = responses.find((r) => r.requestId === item.id) ?? null;
   const url = "url" in item ? item.url : "n/a";
@@ -982,6 +1146,17 @@ const SidebarLeftSlot = memo(function SidebarLeftSlot({
   treeId: string;
   item: SidebarModel;
 }) {
+  if (item.model === "request_group") {
+    const icon = item.id === savedRequestsGroup.id ? "folder" : "clock";
+    return <Icon icon={icon} className="text-text-subtle" />;
+  }
+  if (item.model === "request_history") {
+    return item.response.state !== "closed" ? (
+      <LoadingIcon size="sm" className="text-text-subtlest" />
+    ) : (
+      <HttpStatusTag short className="text-xs" response={item.response} />
+    );
+  }
   if (item.model === "folder") {
     return <Icon icon="folder" />;
   }
@@ -1004,8 +1179,9 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
   treeId: string;
   item: SidebarModel;
 }) {
+  const deleteSendHistory = useDeleteSendHistory();
   const gitStatus = useAtomValue(sidebarGitStatusFamily(item.id));
-  const response = useAtomValue(
+  const latestActivity = useAtomValue(
     useMemo(
       () =>
         selectAtom(
@@ -1014,25 +1190,64 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
             ...get(httpResponsesAtom),
             ...get(websocketConnectionsAtom),
           ]),
-          (responses) => responses.find((r) => r.requestId === item.id),
+          (responses) =>
+            item.model === "request_history"
+              ? item.response
+              : responses.find((r) => r.requestId === item.id),
           (a, b) => a?.state === b?.state && a?.id === b?.id, // Only update when the response state changes updated
         ),
-      [item.id],
+      [item],
     ),
   );
+  const historyTime =
+    item.model === "request_history"
+      ? formatHistoryTimestamp(item.response.createdAt)
+      : item.model === "http_request" && item.isSaved !== true
+        ? formatHistoryTimestamp(item.historyUpdatedAt ?? item.updatedAt)
+        : null;
+  const itemName =
+    item.model === "request_group"
+      ? item.name
+      : item.model === "request_history"
+        ? item.response.url || item.name
+        : resolvedModelName(item);
+  const response =
+    item.model === "request_history"
+      ? null
+      : latestActivity != null && "state" in latestActivity
+        ? latestActivity
+        : null;
+  const displayGitStatus = item.model === "request_history" ? null : gitStatus;
 
   return (
     <div className="flex items-center gap-2 min-w-0 h-full w-full text-left">
       <div
         className={classNames(
           "truncate",
-          gitStatus === "modified" && "text-info",
-          gitStatus === "untracked" && "text-success",
-          gitStatus === "removed" && "text-danger",
+          item.model === "request_group" && "text-xs font-semibold text-text-subtle",
+          item.model === "request_history" && "text-xs text-text-subtle",
+          displayGitStatus === "modified" && "text-info",
+          displayGitStatus === "untracked" && "text-success",
+          displayGitStatus === "removed" && "text-danger",
         )}
       >
-        {resolvedModelName(item)}
+        {itemName}
       </div>
+      {item.model === "request_group" && item.id === historyRequestsGroup.id && (
+        <IconButton
+          size="xs"
+          icon="trash"
+          title="Clear history"
+          className="ml-auto text-text-subtle hover:text-danger"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteSendHistory.mutate();
+          }}
+        />
+      )}
+      {historyTime != null && (
+        <div className="ml-auto text-xs text-text-subtlest">{historyTime}</div>
+      )}
       {response != null && (
         <div className="ml-auto">
           {response.state !== "closed" ? (
@@ -1046,14 +1261,35 @@ const SidebarInnerItem = memo(function SidebarInnerItem({
   );
 });
 
+function formatHistoryTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
   const item = node.item;
 
-  if (item.model === "workspace") return {};
+  if (item.model === "workspace" || item.model === "request_group") return {};
 
   const fields: Record<string, string> = {};
+  if (item.model === "request_history") {
+    fields.url = item.response.url;
+    fields.status = `${item.response.status}`;
+    fields.history = item.response.createdAt;
+    fields.type = "http";
+    fields.name = item.name;
+    return fields;
+  }
+
   if (item.model === "http_request") {
     fields.method = item.method.toUpperCase();
+    if (item.historyUpdatedAt) fields.history = item.historyUpdatedAt;
   }
 
   if (item.model === "grpc_request") {
@@ -1076,6 +1312,12 @@ function getItemFields(node: TreeNode<SidebarModel>): Record<string, string> {
 }
 
 function getItemText(item: SidebarModel): string {
+  if (item.model === "request_group") {
+    return item.name;
+  }
+  if (item.model === "request_history") {
+    return [item.response.status, item.response.url || item.name].join(" ");
+  }
   const segments = [];
   if (item.model === "http_request") {
     segments.push(item.method);
