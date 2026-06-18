@@ -114,7 +114,11 @@ function CurlSplit({
       minWidthPx={280}
       layout="horizontal"
       firstSlot={mainSlot}
-      secondSlot={({ style }) => <CurlViewer request={activeRequest} style={style} />}
+      secondSlot={({ style }) => (
+        <div style={style} className="p-3 pl-0">
+          <CurlViewer request={activeRequest} />
+        </div>
+      )}
     />
   );
 }

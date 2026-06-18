@@ -78,7 +78,6 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
             icon="square_terminal"
             title="View Curl"
             size="sm"
-            color={curlPanelOpen ? "primary" : "default"}
             iconColor="secondary"
             onClick={() => (curlPanelOpen ? hideCurlPanel() : showCurlPanel(activeRequest.id))}
           />
