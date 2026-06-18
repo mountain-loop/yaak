@@ -7,7 +7,7 @@ use crate::http_request::{resolve_http_request, send_http_request};
 use crate::import::import_data;
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
-use crate::render::{render_grpc_request, render_json_value, render_template};
+use crate::render::{render_grpc_request, render_http_request, render_json_value, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use crate::uri_scheme::handle_deep_link;
 use error::Result as YaakResult;
@@ -270,6 +270,36 @@ async fn cmd_render_template<R: Runtime>(
 }
 
 #[tauri::command]
+async fn cmd_render_http_request<R: Runtime>(
+    window: WebviewWindow<R>,
+    app_handle: AppHandle<R>,
+    http_request: HttpRequest,
+    environment_id: Option<&str>,
+    purpose: Option<RenderPurpose>,
+) -> YaakResult<HttpRequest> {
+    let resolved_request = resolve_http_request(&window, &http_request)?.0;
+    let environment_chain = app_handle.db().resolve_environments(
+        &resolved_request.workspace_id,
+        resolved_request.folder_id.as_deref(),
+        environment_id,
+    )?;
+    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
+    Ok(render_http_request(
+        &resolved_request,
+        environment_chain,
+        &PluginTemplateCallback::new(
+            plugin_manager,
+            encryption_manager,
+            &window.plugin_context(),
+            purpose.unwrap_or(RenderPurpose::Preview),
+        ),
+        &RenderOptions { error_behavior: RenderErrorBehavior::Throw },
+    )
+    .await?)
+}
+
+#[tauri::command]
 async fn cmd_dismiss_notification<R: Runtime>(
     window: WebviewWindow<R>,
     notification_id: &str,
@@ -295,7 +325,8 @@ async fn cmd_grpc_reflect<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -353,7 +384,8 @@ async fn cmd_grpc_go<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -1792,6 +1824,7 @@ pub fn run() {
             cmd_new_main_window,
             cmd_plugin_info,
             cmd_reload_plugins,
+            cmd_render_http_request,
             cmd_render_template,
             cmd_restart,
             cmd_save_response,

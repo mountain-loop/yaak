@@ -28,6 +28,8 @@ import {
   pinRequestTab,
   reorderRequestTabs,
 } from "../lib/requestTabs";
+import { copyRequestAsCurl } from "../lib/curl";
+import { showCurlPanel } from "../lib/curlPanel";
 import { duplicateRequestOrFolderAndNavigate } from "../lib/duplicateRequestOrFolderAndNavigate";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { CreateDropdown } from "./CreateDropdown";
@@ -136,8 +138,32 @@ export function RequestTabs() {
     const id = menu.id;
     const idx = tabIds.indexOf(id);
     const request = requestById.get(id);
+    const isHttpRequest = request?.model === "http_request";
     const hasTabsToRight = idx >= 0 && idx < tabIds.length - 1;
     return [
+      {
+        label: "Copy as Curl",
+        leftSlot: <Icon icon="copy" />,
+        hidden: !isHttpRequest,
+        onSelect: async () => {
+          if (request?.model !== "http_request") return;
+          await copyRequestAsCurl(request);
+        },
+      },
+      {
+        label: "View Curl",
+        leftSlot: <Icon icon="square_terminal" />,
+        hidden: !isHttpRequest,
+        onSelect: () => {
+          if (request?.model !== "http_request") return;
+          activateRequestTab(request.id);
+          showCurlPanel(request.id);
+        },
+      },
+      {
+        type: "separator",
+        hidden: !isHttpRequest,
+      },
       {
         label: "Duplicate",
         hotKeyAction: "model.duplicate",

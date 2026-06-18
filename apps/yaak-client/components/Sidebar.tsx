@@ -50,12 +50,11 @@ import { useSidebarHidden } from "../hooks/useSidebarHidden";
 import { getWebsocketRequestActions } from "../hooks/useWebsocketRequestActions";
 import { deepEqualAtom } from "../lib/atoms";
 import { showConfirm } from "../lib/confirm";
+import { copyRequestAsCurl } from "../lib/curl";
+import { showCurlPanel } from "../lib/curlPanel";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { showDialog } from "../lib/dialog";
-import {
-  gitWorktreeStatusByModelIdAtom,
-  gitWorktreeStatusFamily,
-} from "../lib/gitWorktreeStatus";
+import { gitWorktreeStatusByModelIdAtom, gitWorktreeStatusFamily } from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { isSidebarFocused } from "../lib/scopes";
@@ -400,6 +399,10 @@ function Sidebar({ className }: { className?: string }) {
           i.model === "grpc_request" ||
           i.model === "websocket_request",
       );
+      const httpRequestActions =
+        items.length === 1 && child.model === "http_request"
+          ? (await getHttpRequestActions()).filter((a) => a.label !== "Copy as Curl")
+          : [];
 
       const initialItems: ContextMenuProps["items"] = [
         {
@@ -416,10 +419,27 @@ function Sidebar({ className }: { className?: string }) {
           leftSlot: <Icon icon="send_horizontal" />,
           onSelect: () => handleSendSelected(items),
         },
-        ...(items.length === 1 && child.model === "http_request"
-          ? await getHttpRequestActions()
-          : []
-        ).map((a) => ({
+        {
+          label: "Copy as Curl",
+          leftSlot: <Icon icon="copy" />,
+          hidden: !(items.length === 1 && child.model === "http_request"),
+          onSelect: async () => {
+            if (child.model !== "http_request") return;
+            const request = getModel("http_request", child.id);
+            if (request != null) await copyRequestAsCurl(request);
+          },
+        },
+        {
+          label: "View Curl",
+          leftSlot: <Icon icon="square_terminal" />,
+          hidden: !(items.length === 1 && child.model === "http_request"),
+          onSelect: () => {
+            if (child.model !== "http_request") return;
+            navigateToRequestOrFolderOrWorkspace(child.id, child.model);
+            showCurlPanel(child.id);
+          },
+        },
+        ...httpRequestActions.map((a) => ({
           label: a.label,
           leftSlot: <Icon icon={a.icon ?? "empty"} />,
           onSelect: async () => {
@@ -922,7 +942,10 @@ const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
 
 const sidebarGitStatusFamily = atomFamily(
   (modelId: string) =>
-    selectAtom(sidebarGitStatusByModelIdAtom, (statusByModelId) => statusByModelId[modelId] ?? null),
+    selectAtom(
+      sidebarGitStatusByModelIdAtom,
+      (statusByModelId) => statusByModelId[modelId] ?? null,
+    ),
   Object.is,
 );
 

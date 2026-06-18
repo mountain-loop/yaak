@@ -3,8 +3,10 @@ import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import { memo } from "react";
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
+import { activeRequestAtom } from "../hooks/useActiveRequest";
 import { useToggleCommandPalette } from "../hooks/useToggleCommandPalette";
 import { workspaceLayoutAtom } from "../lib/atoms";
+import { curlPanelRequestIdAtom, hideCurlPanel, showCurlPanel } from "../lib/curlPanel";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
 import { CookieDropdown } from "./CookieDropdown";
 import { IconButton } from "./core/IconButton";
@@ -29,7 +31,11 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
   const togglePalette = useToggleCommandPalette();
   const [workspaceLayout, setWorkspaceLayout] = useAtom(workspaceLayoutAtom);
   const workspace = useAtomValue(activeWorkspaceAtom);
+  const activeRequest = useAtomValue(activeRequestAtom);
+  const curlPanelRequestId = useAtomValue(curlPanelRequestIdAtom);
   const workspaceMeta = useAtomValue(activeWorkspaceMetaAtom);
+  const showCurlButton = activeRequest?.model === "http_request";
+  const curlPanelOpen = showCurlButton && curlPanelRequestId === activeRequest.id;
   const showEncryptionSetup =
     workspace != null &&
     workspaceMeta != null &&
@@ -63,6 +69,16 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
           </PillButton>
         ) : (
           <LicenseBadge />
+        )}
+        {showCurlButton && (
+          <IconButton
+            icon="square_terminal"
+            title="View Curl"
+            size="sm"
+            color={curlPanelOpen ? "primary" : "default"}
+            iconColor="secondary"
+            onClick={() => (curlPanelOpen ? hideCurlPanel() : showCurlPanel(activeRequest.id))}
+          />
         )}
         <IconButton
           icon={
