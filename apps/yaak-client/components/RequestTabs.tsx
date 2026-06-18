@@ -28,6 +28,7 @@ import {
   pinRequestTab,
   reorderRequestTabs,
 } from "../lib/requestTabs";
+import { duplicateRequestOrFolderAndNavigate } from "../lib/duplicateRequestOrFolderAndNavigate";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { CreateDropdown } from "./CreateDropdown";
 import { ContextMenu } from "./core/Dropdown";
@@ -134,8 +135,21 @@ export function RequestTabs() {
     if (menu == null || workspaceId == null) return [];
     const id = menu.id;
     const idx = tabIds.indexOf(id);
+    const request = requestById.get(id);
     const hasTabsToRight = idx >= 0 && idx < tabIds.length - 1;
     return [
+      {
+        label: "Duplicate",
+        hotKeyAction: "model.duplicate",
+        hotKeyLabelOnly: true,
+        leftSlot: <Icon icon="copy" />,
+        hidden: request == null,
+        onSelect: () => duplicateRequestOrFolderAndNavigate(request ?? null),
+      },
+      {
+        type: "separator",
+        hidden: request == null,
+      },
       {
         label: "Close",
         leftSlot: <Icon icon="x" />,
@@ -159,7 +173,7 @@ export function RequestTabs() {
         onSelect: () => closeAllRequestTabs(workspaceId),
       },
     ];
-  }, [menu, workspaceId, tabIds]);
+  }, [menu, workspaceId, tabIds, requestById]);
 
   if (tabIds.length === 0) {
     return null;

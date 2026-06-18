@@ -7,6 +7,7 @@ import { getRecentRequests } from "../hooks/useRecentRequests";
 import { useRecentWorkspaces } from "../hooks/useRecentWorkspaces";
 import { fireAndForget } from "../lib/fireAndForget";
 import { router } from "../lib/router";
+import { setWorkspaceSearchParams } from "../lib/setWorkspaceSearchParams";
 
 export function RedirectToLatestWorkspace() {
   const workspaces = useAtomValue(workspacesAtom);
@@ -31,11 +32,11 @@ export function RedirectToLatestWorkspace() {
         const search = {
           cookie_jar_id: cookieJarId,
           environment_id: environmentId,
-          request_id: requestId,
         };
 
         console.log("Redirecting to workspace", params, search);
         await router.navigate({ to: "/workspaces/$workspaceId", params, search });
+        setWorkspaceSearchParams({ request_id: requestId, folder_id: null });
       })(),
     );
   }, [recentWorkspaces, workspaces, workspaces.length]);
