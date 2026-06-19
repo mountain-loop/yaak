@@ -53,7 +53,7 @@ export const defaultLightTheme: Theme = {
   dark: false,
   base: {
     surface: "hsl(0,0%,100%)",
-    surfaceHighlight: "hsl(218,24%,87%)",
+    surfaceHighlight: "hsl(218,24%,92%)",
     text: "hsl(217,24%,10%)",
     textSubtle: "hsl(217,24%,40%)",
     textSubtlest: "hsl(217,24%,58%)",
@@ -70,7 +70,7 @@ export const defaultLightTheme: Theme = {
     sidebar: {
       surface: "hsl(220,20%,98%)",
       border: "hsl(217,22%,88%)",
-      surfaceHighlight: "hsl(217,25%,90%)",
+      surfaceHighlight: "hsl(217,25%,94%)",
     },
   },
 };
