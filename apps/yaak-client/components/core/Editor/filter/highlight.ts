@@ -16,6 +16,7 @@ export const highlight = styleTags({
   Phrase: t.string, // "quoted string"
 
   // Fields
+  "FieldName/At": t.attributeName,
   "FieldName/Word": t.attributeName,
   "FieldValue/Term/Word": t.attributeValue,
 });
