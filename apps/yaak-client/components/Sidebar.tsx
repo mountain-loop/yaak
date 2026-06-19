@@ -670,7 +670,7 @@ function Sidebar({ className }: { className?: string }) {
               className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
             >
               <div>
-                No results, but found matches by{" "}
+                No results, but found matches for{" "}
                 {emptyFilterSuggestions?.map((suggestion, i) => (
                   <span key={suggestion.field}>
                     {i > 0 && " or "}
