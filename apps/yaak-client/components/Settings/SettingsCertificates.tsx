@@ -4,6 +4,7 @@ import { Heading, HStack, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useRef } from "react";
 import { showConfirmDelete } from "../../lib/confirm";
+import { CommercialUseBanner } from "../CommercialUseBanner";
 import { Button } from "../core/Button";
 import { Checkbox } from "../core/Checkbox";
 import { DetailsBanner } from "../core/DetailsBanner";
@@ -231,6 +232,10 @@ export function SettingsCertificates() {
           </Button>
         </HStack>
       </div>
+
+      <CommercialUseBanner source="client-certificates" title="Using certificates for work?">
+        A Yaak license is required for commercial use and helps support features like this.
+      </CommercialUseBanner>
 
       {certificates.length > 0 && (
         <VStack space={3}>

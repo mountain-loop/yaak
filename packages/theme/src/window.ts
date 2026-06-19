@@ -125,10 +125,11 @@ function bannerColorVariables(color: YaakColor | null): Partial<CSSVariables> {
   if (color == null) return {};
 
   return {
-    text: color.lift(0.8).css(),
-    textSubtle: color.translucify(0.3).css(),
-    textSubtlest: color.translucify(0.6).css(),
+    text: color.desaturate(0.5).lift(0.12).css(),
+    textSubtle: color.desaturate(0.58).lift(0.04).translucify(0.04).css(),
+    textSubtlest: color.desaturate(0.65).translucify(0.18).css(),
     surface: color.translucify(0.95).css(),
+    surfaceHighlight: color.translucify(0.85).css(),
     border: color.lift(0.3).translucify(0.8).css(),
   };
 }

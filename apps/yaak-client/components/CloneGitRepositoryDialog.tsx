@@ -4,6 +4,7 @@ import { Banner, VStack } from "@yaakapp-internal/ui";
 import { useState } from "react";
 import { openWorkspaceFromSyncDir } from "../commands/openWorkspaceFromSyncDir";
 import { appInfo } from "../lib/appInfo";
+import { CommercialUseBanner } from "./CommercialUseBanner";
 import { showErrorToast } from "../lib/toast";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
@@ -88,6 +89,10 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
           {error}
         </Banner>
       )}
+
+      <CommercialUseBanner source="git-clone" title="Using Git for work?">
+        A Yaak license is required for commercial use and helps support features like this.
+      </CommercialUseBanner>
 
       <PlainInput
         required
