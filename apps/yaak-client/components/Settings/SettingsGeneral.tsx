@@ -6,6 +6,7 @@ import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { appInfo } from "../../lib/appInfo";
 import { revealInFinderText } from "../../lib/reveal";
 import { CargoFeature } from "../CargoFeature";
+import { CommercialUseBanner } from "../CommercialUseBanner";
 import { DismissibleBanner } from "../core/DismissibleBanner";
 import { IconButton } from "../core/IconButton";
 import {
@@ -34,11 +35,16 @@ export function SettingsGeneral() {
 
   return (
     <VStack space={1.5} className="mb-4">
-      <div className="mb-4">
+      <div>
         <Heading>General</Heading>
         <p className="text-text-subtle">
           Configure general settings for update behavior and more.
         </p>
+      </div>
+      <div className="mt-3 mb-5">
+        <CommercialUseBanner source="settings-general" title="Using Yaak for work?">
+          A Yaak license is required for commercial use and helps support future development.
+        </CommercialUseBanner>
       </div>
       <SettingsList className="space-y-8">
         <CargoFeature feature="updater">
