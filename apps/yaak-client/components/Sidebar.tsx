@@ -670,7 +670,7 @@ function Sidebar({ className }: { className?: string }) {
               className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
             >
               <div>
-                Found matches by{" "}
+                No results, but found matches by{" "}
                 {emptyFilterSuggestions?.map((suggestion, i) => (
                   <span key={suggestion.field}>
                     {i > 0 && " or "}
@@ -688,12 +688,17 @@ function Sidebar({ className }: { className?: string }) {
               </div>
             </EmptyStateText>
           ) : (
-            <div className="text-text-subtle">
-              No results for{" "}
-              <InlineCode className="inline-block max-w-36 truncate align-middle">
-                {filterText.text}
-              </InlineCode>
-            </div>
+            <EmptyStateText
+              wrapperClassName="!h-auto mb-auto"
+              className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
+            >
+              <div>
+                No results for{" "}
+                <InlineCode className="inline-block max-w-36 truncate align-middle">
+                  {filterText.text}
+                </InlineCode>
+              </div>
+            </EmptyStateText>
           )}
         </div>
       ) : (
