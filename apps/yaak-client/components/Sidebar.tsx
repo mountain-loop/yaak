@@ -66,6 +66,7 @@ import type { FieldDef } from "./core/Editor/filter/extension";
 import { filter } from "./core/Editor/filter/extension";
 import type { Ast } from "./core/Editor/filter/query";
 import { evaluate, parseQuery } from "./core/Editor/filter/query";
+import { formatFieldFilter } from "./core/Editor/filter/format";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import { HttpStatusTag } from "./core/HttpStatusTag";
 import {
@@ -855,12 +856,6 @@ function getSidebarSuggestionValue(ast: Ast | null) {
   return null;
 }
 
-function formatSidebarFieldFilter(field: string, value: string) {
-  const escapedValue = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const filterValue = /^[A-Za-z0-9_\-./]+$/.test(value) ? value : `"${escapedValue}"`;
-  return `@${field}:${filterValue}`;
-}
-
 function sidebarFieldMatchesValue(fieldValue: string, filterValue: string) {
   return fieldValue.toLowerCase().includes(filterValue.toLowerCase());
 }
@@ -983,7 +978,7 @@ const sidebarTreeAtom = atom<
     })
     .map((field) => ({
       field,
-      filterText: formatSidebarFieldFilter(field, suggestionValue ?? ""),
+      filterText: formatFieldFilter(field, suggestionValue ?? ""),
     }));
   return [root, fields, suggestions] as const;
 });
