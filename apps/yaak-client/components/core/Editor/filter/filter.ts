@@ -3,20 +3,20 @@ import {LRParser} from "@lezer/lr"
 import {highlight} from "./highlight"
 export const parser = LRParser.deserialize({
   version: 14,
-  states: "%^OVQPOOPhOPOOOVQPO'#CfOmQPO'#ChO!_QPO'#ChO!dQPO'#CgOOQO'#Cc'#CcOVQPO'#CaOOQO'#Ca'#CaO!iQPO'#C`O!yQPO'#C_OOQO'#C^'#C^QOQPOOPOOO'#Cq'#CqP#UOPO)C>kO#]QPO,59QOOQO,59S,59SO#bQPO,59ROOQO,58{,58{OVQPO'#CrOOQO'#Cr'#CrO#jQPO,58zOVQPO'#CsO#zQPO,58yPOOO-E6o-E6oOOQO1G.l1G.lOOQO'#Cn'#CnOOQO'#Cl'#ClOOQO1G.m1G.mOOQO,59^,59^OOQO-E6p-E6pOOQO,59_,59_OOQO-E6q-E6q",
-  stateData: "$]~OjPQ~OUVOXQO]SO^ROaUO~Oj]O~OUbXXbX]bX^bX_[XabXcbXdbXhbXWbX~O^`O~O_aO~OccOdSXhSXWSX~PVOdfOhRXWRX~Oj]O~Qi]WiO~O^jOakO~OccOdSahSaWSa~PVOdfOhRaWRa~OUcd^d~",
-  goto: "#ihPPioszP!ZPP!d!d!mPPP!vP!yPP#V#]#cQ[OR_QTZOQSYOQRofUXOQfQbVSdXeRmc_WOQVXcef_UOQVXcef_TOQVXcefRla^UOQVXcefRkaQ^PRh^QeXRneQgYRpg",
-  nodeNames: "⚠ Query Expr OrExpr AndExpr Unary Not Primary RParen LParen Group Field FieldName At Word Colon FieldValue Phrase Term And Or",
-  maxTerm: 26,
+  states: "%WOVQPOOPhOPOOOVQPO'#CfOmQPO'#ChO!_QPO'#ChO!dQPO'#CgOOQO'#Cc'#CcOVQPO'#CaOOQO'#Ca'#CaO!iQPO'#C`O!yQPO'#C_OOQO'#C^'#C^QOQPOOPOOO'#Cr'#CrP#UOPO)C>lO#]QPO,59QOOQO,59S,59SO#bQQO,59ROOQO,58{,58{OVQPO'#CsOOQO'#Cs'#CsO#jQPO,58zOVQPO'#CtO#zQPO,58yPOOO-E6p-E6pOOQO1G.l1G.lOOQO'#Cl'#ClOOQO1G.m1G.mOOQO,59_,59_OOQO-E6q-E6qOOQO,59`,59`OOQO-E6r-E6r",
+  stateData: "$]~OkPQ~OUVOXQO]SO^ROaUO~Ok]O~OUcXXcX]cX^cX_[XacXdcXecXicXWcX~O^`O~O_aO~OdcOeSXiSXWSX~PVOefOiRXWRX~Ok]O~Qj]WiO~OajObjO~OdcOeSaiSaWSa~PVOefOiRaWRa~OUde^e~",
+  goto: "#^iPPjpt{P![PP!e!e!nPPP!wPP!ePP!z#Q#WQ[OR_QTZOQSYOQRnfUXOQfQbVSdXeRlc_WOQVXcef_UOQVXcef_TOQVXcefRkaQ^PRh^QeXRmeQgYRog",
+  nodeNames: "⚠ Query Expr OrExpr AndExpr Unary Not Primary RParen LParen Group Field FieldName At Word Colon FieldValue Phrase FieldValueWord Term And Or",
+  maxTerm: 27,
   nodeProps: [
     ["openedBy", 8,"LParen"],
     ["closedBy", 9,"RParen"]
   ],
   propSources: [highlight],
-  skippedNodes: [0,21],
+  skippedNodes: [0,22],
   repeatNodeCount: 3,
-  tokenData: ")n~RhX^!mpq!mrs#bxy%Oyz%T}!O%Y!Q![%_![!]%p!b!c%u!c!d%z!d!p%_!p!q'_!q!r(r!r!}%_#R#S%_#T#o%_#y#z!m$f$g!m#BY#BZ!m$IS$I_!m$I|$JO!m$JT$JU!m$KV$KW!m&FU&FV!m~!rYj~X^!mpq!m#y#z!m$f$g!m#BY#BZ!m$IS$I_!m$I|$JO!m$JT$JU!m$KV$KW!m&FU&FV!m~#eVOr#brs#zs#O#b#O#P$P#P;'S#b;'S;=`$x<%lO#b~$POa~~$SRO;'S#b;'S;=`$];=`O#b~$`WOr#brs#zs#O#b#O#P$P#P;'S#b;'S;=`$x;=`<%l#b<%lO#b~${P;=`<%l#b~%TOX~~%YOW~~%_OU~~%dS^~!Q![%_!c!}%_#R#S%_#T#o%_~%uO_~~%zO]~~&PU^~!Q![%_!c!p%_!p!q&c!q!}%_#R#S%_#T#o%_~&hU^~!Q![%_!c!f%_!f!g&z!g!}%_#R#S%_#T#o%_~'RSc~^~!Q![%_!c!}%_#R#S%_#T#o%_~'dU^~!Q![%_!c!q%_!q!r'v!r!}%_#R#S%_#T#o%_~'{U^~!Q![%_!c!v%_!v!w(_!w!}%_#R#S%_#T#o%_~(fSU~^~!Q![%_!c!}%_#R#S%_#T#o%_~(wU^~!Q![%_!c!t%_!t!u)Z!u!}%_#R#S%_#T#o%_~)bSd~^~!Q![%_!c!}%_#R#S%_#T#o%_",
-  tokenizers: [0],
+  tokenData: "2h~RiOX!pXY$hYZ$hZ]!p]^$h^p!ppq$hqr!prs$ysx!pxy&gyz'Qz}!p}!O'k!O![!p![!](U!]!b!p!b!c(o!c!d)Y!d!p!p!p!q,q!q!r0Y!r;'S!p;'S;=`$b<%lO!pR!w^bQ^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c;'S!p;'S;=`$b<%lO!pQ#xUbQOX#sZ]#s^p#sq;'S#s;'S;=`$[<%lO#sQ$_P;=`<%l#sR$eP;=`<%l!p~$mSk~XY$hYZ$h]^$hpq$h~$|VOr$yrs%cs#O$y#O#P%h#P;'S$y;'S;=`&a<%lO$y~%hOa~~%kRO;'S$y;'S;=`%t;=`O$y~%wWOr$yrs%cs#O$y#O#P%h#P;'S$y;'S;=`&a;=`<%l$y<%lO$y~&dP;=`<%l$yR&nUbQXPOX#sZ]#s^p#sq;'S#s;'S;=`$[<%lO#sR'XUbQWPOX#sZ]#s^p#sq;'S#s;'S;=`$[<%lO#sR'rUbQUPOX#sZ]#s^p#sq;'S#s;'S;=`$[<%lO#sR(]U_PbQOX#sZ]#s^p#sq;'S#s;'S;=`$[<%lO#sR(vU]PbQOX#sZ]#s^p#sq;'S#s;'S;=`$[<%lO#sR)a`bQ^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c!p!p!p!q*c!q;'S!p;'S;=`$b<%lO!pR*j`bQ^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c!f!p!f!g+l!g;'S!p;'S;=`$b<%lO!pR+u^bQdP^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c;'S!p;'S;=`$b<%lO!pR,x`bQ^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c!q!p!q!r-z!r;'S!p;'S;=`$b<%lO!pR.R`bQ^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c!v!p!v!w/T!w;'S!p;'S;=`$b<%lO!pR/^^bQUP^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c;'S!p;'S;=`$b<%lO!pR0a`bQ^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c!t!p!t!u1c!u;'S!p;'S;=`$b<%lO!pR1l^bQeP^POX!pZ]!p^p!pqr!prs#ssx!pxz#sz![!p![!]#s!]!b!p!b!c#s!c;'S!p;'S;=`$b<%lO!p",
+  tokenizers: [0, 1],
   topRules: {"Query":[0,1]},
   tokenPrec: 145
 })

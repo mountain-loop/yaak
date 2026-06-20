@@ -16,8 +16,8 @@ export interface FilterOptions {
 }
 
 const FIELD_IDENT = /[A-Za-z0-9_/]+$/;
-const VALUE_IDENT = /[A-Za-z0-9_\-./]+$/;
-const VALUE_IDENT_ONLY = /^[A-Za-z0-9_\-./]+$/;
+const VALUE_IDENT = /\S+$/;
+const VALUE_IDENT_ONLY = /^\S+$/;
 
 function normalizeFields(fields: FieldDef[]): {
   fieldNames: string[];

@@ -14,20 +14,30 @@ describe("formatFieldFilter", () => {
     expect(matchesFormattedUrl("yaak.app/foo-bar")).toBe(true);
   });
 
-  test("quotes values that start with an operator token", () => {
-    expect(formatFieldFilter("url", "-foo")).toBe('@url:"-foo"');
+  test("keeps non-syntax punctuation bare", () => {
+    expect(formatFieldFilter("url", "yaa$&#*@tsrna(*)")).toBe("@url:yaa$&#*@tsrna(*)");
+    expect(matchesFormattedUrl("yaa$&#*@tsrna(*)")).toBe(true);
+  });
+
+  test("keeps values that start with an operator token bare", () => {
+    expect(formatFieldFilter("url", "-foo")).toBe("@url:-foo");
     expect(matchesFormattedUrl("-foo")).toBe(true);
   });
 
-  test("quotes boolean operator words", () => {
-    expect(formatFieldFilter("url", "AND")).toBe('@url:"AND"');
-    expect(formatFieldFilter("url", "or")).toBe('@url:"or"');
-    expect(formatFieldFilter("url", "Not")).toBe('@url:"Not"');
+  test("keeps boolean operator words bare", () => {
+    expect(formatFieldFilter("url", "AND")).toBe("@url:AND");
+    expect(formatFieldFilter("url", "or")).toBe("@url:or");
+    expect(formatFieldFilter("url", "Not")).toBe("@url:Not");
     expect(matchesFormattedUrl("AND")).toBe(true);
   });
 
   test("escapes quoted values", () => {
     expect(formatFieldFilter("url", 'say "hi"')).toBe('@url:"say \\"hi\\""');
     expect(matchesFormattedUrl('say "hi"')).toBe(true);
+  });
+
+  test("quotes values that start with a quote", () => {
+    expect(formatFieldFilter("url", '"hi"')).toBe('@url:"\\"hi\\""');
+    expect(matchesFormattedUrl('"hi"')).toBe(true);
   });
 });

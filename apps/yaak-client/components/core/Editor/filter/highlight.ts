@@ -18,5 +18,5 @@ export const highlight = styleTags({
   // Fields
   "FieldName/At": t.attributeName,
   "FieldName/Word": t.attributeName,
-  "FieldValue/Term/Word": t.attributeValue,
+  "FieldValue/FieldValueWord": t.attributeValue,
 });
