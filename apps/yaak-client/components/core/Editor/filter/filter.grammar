@@ -2,7 +2,7 @@
 
 @skip { space+ }
 @tokens {
-  space { std.whitespace+ }
+  space { $[ \t\r\n]+ }
 
   LParen { "(" }
   RParen { ")" }
@@ -17,8 +17,10 @@
   // "quoted phrase" with simple escapes: \" and \\
   Phrase { '"' (!["\\] | "\\" _)* '"' }
 
-  // field/word characters (keep generous for URLs/paths)
-  Word { $[A-Za-z0-9_]+ }
+  // Bare words run until filter syntax or whitespace. Leading '-' remains unary
+  // negation, but '-' may appear after the first character.
+  Word { ![ \t\r\n():"@-] ![ \t\r\n():"@]* }
+  FieldValueWord { ![ \t\r\n"] ![ \t\r\n]* }
 
   @precedence { Not, And, Or, Word }
 }
@@ -66,7 +68,7 @@ FieldName {
 
 FieldValue {
   Phrase
-| Term
+| FieldValueWord
 }
 
 Term {
