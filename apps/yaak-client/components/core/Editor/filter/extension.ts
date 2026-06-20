@@ -15,8 +15,9 @@ export interface FilterOptions {
   fields: FieldDef[] | null; // e.g., ['method','status','path'] or [{name:'tag', values:()=>cachedTags}]
 }
 
-const IDENT = /[A-Za-z0-9_/]+$/;
-const IDENT_ONLY = /^[A-Za-z0-9_/]+$/;
+const FIELD_IDENT = /[A-Za-z0-9_/]+$/;
+const VALUE_IDENT = /[A-Za-z0-9_\-./]+$/;
+const VALUE_IDENT_ONLY = /^[A-Za-z0-9_\-./]+$/;
 
 function normalizeFields(fields: FieldDef[]): {
   fieldNames: string[];
@@ -31,12 +32,35 @@ function normalizeFields(fields: FieldDef[]): {
   return { fieldNames, fieldMap };
 }
 
-function wordBefore(doc: string, pos: number): { from: number; to: number; text: string } | null {
+function wordBefore(
+  doc: string,
+  pos: number,
+  pattern: RegExp,
+): { from: number; to: number; text: string } | null {
   const upto = doc.slice(0, pos);
-  const m = upto.match(IDENT);
+  const m = upto.match(pattern);
   if (!m) return null;
   const from = pos - m[0].length;
   return { from, to: pos, text: m[0] };
+}
+
+function fieldCompletionFrom(doc: string, pos: number): { from: number; includeAt: boolean } | null {
+  const w = wordBefore(doc, pos, FIELD_IDENT);
+  const from = w?.from ?? pos;
+  const beforeToken = doc[from - 1];
+
+  if (from === 0 || (beforeToken != null && /\s/.test(beforeToken))) {
+    return { from, includeAt: true };
+  }
+
+  if (beforeToken === "@") {
+    const beforeAt = doc[from - 2];
+    if (from === 1 || (beforeAt != null && /\s/.test(beforeAt))) {
+      return { from, includeAt: false };
+    }
+  }
+
+  return null;
 }
 
 function inPhrase(ctx: CompletionContext): boolean {
@@ -81,7 +105,7 @@ function contextInfo(stateDoc: string, pos: number) {
   if (inValue) {
     // word before the colon = field name
     const beforeColon = stateDoc.slice(0, lastColon);
-    const m = beforeColon.match(IDENT);
+    const m = beforeColon.match(FIELD_IDENT);
     fieldName = m ? m[0] : null;
 
     // nothing (or only spaces) typed after the colon?
@@ -93,15 +117,16 @@ function contextInfo(stateDoc: string, pos: number) {
 }
 
 /** Build a completion list for field names */
-function fieldNameCompletions(fieldNames: string[]): Completion[] {
+function fieldNameCompletions(fieldNames: string[], includeAt: boolean): Completion[] {
   return fieldNames.map((name) => ({
     label: name,
     type: "property",
     apply: (view, _completion, from, to) => {
-      // Insert "name:" (leave cursor right after colon)
+      // Leave cursor right after the field filter colon.
+      const insert = `${includeAt ? "@" : ""}${name}:`;
       view.dispatch({
-        changes: { from, to, insert: `${name}:` },
-        selection: { anchor: from + name.length + 1 },
+        changes: { from, to, insert },
+        selection: { anchor: from + insert.length },
       });
       startCompletion(view);
     },
@@ -115,7 +140,7 @@ function fieldValueCompletions(
   if (!def || !def.values) return null;
   const vals = Array.isArray(def.values) ? def.values : def.values();
   return vals.map((v) => ({
-    label: v.match(IDENT_ONLY) ? v : `"${v}"`,
+    label: v.match(VALUE_IDENT_ONLY) ? v : `"${v}"`,
     displayLabel: v,
     type: "constant",
   }));
@@ -132,14 +157,13 @@ function makeCompletionSource(opts: FilterOptions) {
       return null;
     }
 
-    const w = wordBefore(doc, pos);
-    const from = w?.from ?? pos;
-    const to = pos;
-
     const { inValue, fieldName, emptyAfterColon } = contextInfo(doc, pos);
 
     // In field value position
     if (inValue && fieldName) {
+      const w = wordBefore(doc, pos, VALUE_IDENT);
+      const from = w?.from ?? pos;
+      const to = pos;
       const valDefs = fieldMap[fieldName];
       const vals = fieldValueCompletions(valDefs);
 
@@ -162,7 +186,11 @@ function makeCompletionSource(opts: FilterOptions) {
     }
 
     // Not in a value: suggest field names (and maybe boolean ops)
-    const options: Completion[] = fieldNameCompletions(fieldNames);
+    const completion = fieldCompletionFrom(doc, pos);
+    if (completion == null) return null;
+    const { from, includeAt } = completion;
+    const to = pos;
+    const options: Completion[] = fieldNameCompletions(fieldNames, includeAt);
 
     return { from, to, options, filter: true };
   };

@@ -6,6 +6,7 @@
 
   LParen { "(" }
   RParen { ")" }
+  At { "@" }
   Colon  { ":" }
   Not  { "-" | "NOT" }
 
@@ -60,7 +61,7 @@ Field {
 }
 
 FieldName {
-  Word
+  At? Word
 }
 
 FieldValue {

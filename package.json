@@ -75,6 +75,7 @@
     "start": "npm run client:dev",
     "client:build": "node scripts/run-build.mjs client",
     "client:dev": "node scripts/run-dev.mjs client",
+    "client:bundle": "node scripts/run-build.mjs client --config crates-tauri/yaak-app-client/tauri.release.conf.json --no-sign",
     "proxy:build": "node scripts/run-build.mjs proxy",
     "proxy:dev": "node scripts/run-dev.mjs proxy",
     "migration": "node scripts/create-migration.cjs",

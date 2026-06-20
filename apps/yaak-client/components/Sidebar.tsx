@@ -64,7 +64,9 @@ import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
 import { ContextMenu, Dropdown } from "./core/Dropdown";
 import type { FieldDef } from "./core/Editor/filter/extension";
 import { filter } from "./core/Editor/filter/extension";
+import type { Ast } from "./core/Editor/filter/query";
 import { evaluate, parseQuery } from "./core/Editor/filter/query";
+import { formatFieldFilter } from "./core/Editor/filter/format";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import { HttpStatusTag } from "./core/HttpStatusTag";
 import {
@@ -79,6 +81,7 @@ import type { TreeNode, TreeHandle, TreeProps, TreeItemProps } from "@yaakapp-in
 import { IconButton } from "./core/IconButton";
 import type { InputHandle } from "./core/Input";
 import { Input } from "./core/Input";
+import { EmptyStateText } from "./EmptyStateText";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { GitDropdown } from "./git/GitDropdown";
 import { gitCallbacks } from "./git/callbacks";
@@ -108,7 +111,7 @@ function Sidebar({ className }: { className?: string }) {
   const activeWorkspaceId = useAtomValue(activeWorkspaceAtom)?.id;
   const treeId = `tree.${activeWorkspaceId ?? "unknown"}`;
   const filterText = useAtomValue(sidebarFilterAtom);
-  const [tree, allFields] = useAtomValue(sidebarTreeAtom) ?? [];
+  const [tree, allFields, emptyFilterSuggestions] = useAtomValue(sidebarTreeAtom) ?? [];
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
   const filterRef = useRef<InputHandle>(null);
@@ -227,7 +230,7 @@ function Sidebar({ className }: { className?: string }) {
   );
 
   const clearFilterText = useCallback(() => {
-    jotaiStore.set(sidebarFilterAtom, { text: "", key: `${Math.random()}` });
+    setSidebarFilterText("");
     requestAnimationFrame(() => {
       filterRef.current?.focus();
     });
@@ -251,6 +254,13 @@ function Sidebar({ className }: { className?: string }) {
       }, 0),
     [],
   );
+
+  const applyFilterExample = useCallback((text: string) => {
+    setSidebarFilterText(text);
+    requestAnimationFrame(() => {
+      filterRef.current?.focus();
+    });
+  }, []);
 
   const treeHasFocus = useCallback(() => treeRef.current?.hasFocus() ?? false, []);
 
@@ -654,8 +664,43 @@ function Sidebar({ className }: { className?: string }) {
         )}
       </div>
       {allHidden ? (
-        <div className="italic text-text-subtle p-3 text-sm text-center">
-          No results for <InlineCode>{filterText.text}</InlineCode>
+        <div className="p-3 text-sm text-center">
+          {(emptyFilterSuggestions?.length ?? 0) > 0 ? (
+            <EmptyStateText
+              wrapperClassName="!h-auto mb-auto"
+              className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
+            >
+              <div>
+                No results, but found matches for{" "}
+                {emptyFilterSuggestions?.map((suggestion, i) => (
+                  <span key={suggestion.field}>
+                    {i > 0 && " or "}
+                    <button
+                      type="button"
+                      className="max-w-full rounded align-middle focus-visible:outline focus-visible:outline-2 focus-visible:outline-info"
+                      onClick={() => applyFilterExample(suggestion.filterText)}
+                    >
+                      <InlineCode className="inline-block max-w-36 truncate align-middle whitespace-nowrap transition-colors hover:border-border hover:bg-surface-active hover:text-text">
+                        {suggestion.filterText}
+                      </InlineCode>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </EmptyStateText>
+          ) : (
+            <EmptyStateText
+              wrapperClassName="!h-auto mb-auto"
+              className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
+            >
+              <div>
+                No results for{" "}
+                <InlineCode className="inline-block max-w-36 truncate align-middle">
+                  {filterText.text}
+                </InlineCode>
+              </div>
+            </EmptyStateText>
+          )}
         </div>
       ) : (
         <Tree
@@ -786,7 +831,48 @@ const sidebarFilterAtom = atom<{ text: string; key: string }>({
   key: "",
 });
 
-const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) => {
+type SidebarFilterSuggestion = {
+  field: string;
+  filterText: string;
+};
+
+function setSidebarFilterText(text: string) {
+  jotaiStore.set(sidebarFilterAtom, { text, key: `${Math.random()}` });
+}
+
+function getSidebarSuggestionValue(ast: Ast | null) {
+  if (ast == null) return null;
+
+  if (ast.type === "Term" || ast.type === "Phrase") {
+    const value = ast.value.trim();
+    return value.length > 0 ? value : null;
+  }
+
+  if (ast.type === "Field") {
+    const value = ast.value.trim();
+    return value.length > 0 ? value : null;
+  }
+
+  return null;
+}
+
+function sidebarFieldMatchesValue(fieldValue: string, filterValue: string) {
+  return fieldValue.toLowerCase().includes(filterValue.toLowerCase());
+}
+
+const sidebarSuggestionFieldOrder = [
+  "url",
+  "folder",
+  "method",
+  "type",
+  "grpc_service",
+  "grpc_method",
+  "name",
+];
+
+const sidebarTreeAtom = atom<
+  [TreeNode<SidebarModel>, FieldDef[], SidebarFilterSuggestion[]] | null
+>((get) => {
   const allModels = get(memoAllPotentialChildrenAtom);
   const activeWorkspace = get(activeWorkspaceAtom);
   const filter = get(sidebarFilterAtom);
@@ -807,9 +893,11 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
   }
 
   const queryAst = parseQuery(filter.text);
+  const suggestionValue = getSidebarSuggestionValue(queryAst);
 
   // returns true if this node OR any child matches the filter
   const allFields: Record<string, Set<string>> = {};
+  const suggestionFields = new Set<string>();
   const build = (node: TreeNode<SidebarModel>, depth: number): boolean => {
     const childItems = childrenMap[node.item.id] ?? [];
     let matchesSelf = true;
@@ -821,6 +909,13 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
       if (!value) continue;
       allFields[field] = allFields[field] ?? new Set();
       allFields[field].add(value);
+      if (
+        isLeafNode &&
+        suggestionValue != null &&
+        sidebarFieldMatchesValue(value, suggestionValue)
+      ) {
+        suggestionFields.add(field);
+      }
     }
 
     if (queryAst != null) {
@@ -874,7 +969,18 @@ const sidebarTreeAtom = atom<[TreeNode<SidebarModel>, FieldDef[]] | null>((get) 
       values: Array.from(values).filter((v) => v.length < 20),
     });
   }
-  return [root, fields] as const;
+  const suggestions = Array.from(suggestionFields)
+    .sort((a, b) => {
+      const aIndex = sidebarSuggestionFieldOrder.indexOf(a);
+      const bIndex = sidebarSuggestionFieldOrder.indexOf(b);
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+      return (aIndex === -1 ? Infinity : aIndex) - (bIndex === -1 ? Infinity : bIndex);
+    })
+    .map((field) => ({
+      field,
+      filterText: formatFieldFilter(field, suggestionValue ?? ""),
+    }));
+  return [root, fields, suggestions] as const;
 });
 
 const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
