@@ -9,7 +9,7 @@ export async function addGitRemote(dir: string, defaultName?: string): Promise<G
     title: "Add Remote",
     inputs: [
       { type: "text", label: "Name", name: "name", defaultValue: defaultName },
-      { type: "text", label: "URL", name: "url" },
+      { type: "text", label: "URL", name: "url", placeholder: "git@github.com:org/repo.git" },
     ],
   });
   if (r == null) throw new Error("Cancelled remote prompt");

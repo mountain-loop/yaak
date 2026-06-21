@@ -6,6 +6,7 @@ import { formatDate } from "date-fns/format";
 import { useState } from "react";
 import { useToggle } from "../../hooks/useToggle";
 import { pluralizeCount } from "../../lib/pluralize";
+import { pricingUrl } from "../../lib/pricingUrl";
 import { CargoFeature } from "../CargoFeature";
 import { Button } from "../core/Button";
 import { Link } from "../core/Link";
@@ -48,7 +49,7 @@ function SettingsLicenseCmp() {
               <span className="opacity-50">Personal use is always free, forever.</span>
               <Separator className="my-2" />
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
-                <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
+                <Link noUnderline href={pricingUrl(`app.license.learn.${check.data.status}`)}>
                   Learn More
                 </Link>
               </div>
@@ -68,7 +69,7 @@ function SettingsLicenseCmp() {
               </span>
               <Separator className="my-2" />
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-notice">
-                <Link noUnderline href={`https://yaak.app/pricing?s=learn&t=${check.data.status}`}>
+                <Link noUnderline href={pricingUrl(`app.license.learn.${check.data.status}`)}>
                   Learn More
                 </Link>
               </div>
@@ -134,7 +135,7 @@ function SettingsLicenseCmp() {
           <Button
             color="secondary"
             size="sm"
-            onClick={() => openUrl("https://yaak.app/dashboard?s=support&ref=app.yaak.desktop")}
+            onClick={() => openUrl("https://yaak.app/dashboard?intent=app.license.support")}
             rightSlot={<Icon icon="external_link" />}
           >
             Direct Support
@@ -150,9 +151,7 @@ function SettingsLicenseCmp() {
             color="primary"
             rightSlot={<Icon icon="external_link" />}
             onClick={() =>
-              openUrl(
-                `https://yaak.app/pricing?s=purchase&ref=app.yaak.desktop&t=${check.data?.status ?? ""}`,
-              )
+              openUrl(pricingUrl(`app.license.purchase.${check.data?.status ?? "unknown"}`))
             }
           >
             Purchase License
