@@ -1,10 +1,11 @@
 import type { GetThemesResponse } from "@yaakapp-internal/plugins";
-import { defaultDarkTheme, defaultLightTheme } from "@yaakapp-internal/theme";
-import { invokeCmd } from "../tauri";
-import type { Appearance } from "./appearance";
-import { resolveAppearance } from "./appearance";
-
-export { defaultDarkTheme, defaultLightTheme } from "@yaakapp-internal/theme";
+import {
+  defaultDarkTheme,
+  defaultLightTheme,
+  resolveAppearance,
+  type Appearance,
+} from "@yaakapp-internal/theme";
+import { invokeCmd } from "./tauri";
 
 export async function getThemes() {
   const themes = (await invokeCmd<GetThemesResponse[]>("cmd_get_themes")).flatMap((t) => t.themes);

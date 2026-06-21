@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { Appearance } from "../lib/theme/appearance";
-import { getCSSAppearance, subscribeToPreferredAppearance } from "../lib/theme/appearance";
+import type { Appearance } from "@yaakapp-internal/theme";
+import { getCSSAppearance, subscribeToPreferredAppearance } from "@yaakapp-internal/theme";
 
 export function usePreferredAppearance() {
   const [preferredAppearance, setPreferredAppearance] = useState<Appearance>(getCSSAppearance());
