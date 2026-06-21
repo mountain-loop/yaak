@@ -2,8 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { LicenseCheckStatus } from "@yaakapp-internal/license";
 import { useEffect, useState } from "react";
+import { useKeyValue } from "../hooks/useKeyValue";
 import { appInfo } from "../lib/appInfo";
+import { pricingUrl } from "../lib/pricingUrl";
 import { DismissibleBanner } from "./core/DismissibleBanner";
+
+const COMMERCIAL_USE_SNOOZE_DAYS = 7;
 
 export function CommercialUseBanner({
   children,
@@ -15,6 +19,15 @@ export function CommercialUseBanner({
   title: string;
 }) {
   const [visible, setVisible] = useState(false);
+  const {
+    isLoading: isSnoozeLoading,
+    set: setSnoozedAt,
+    value: snoozedAt,
+  } = useKeyValue<string | null>({
+    namespace: "global",
+    key: "commercial-use-banner-snoozed-at",
+    fallback: null,
+  });
 
   useEffect(() => {
     let canceled = false;
@@ -30,19 +43,25 @@ export function CommercialUseBanner({
     };
   }, [source]);
 
-  if (!visible) return null;
+  if (
+    !visible ||
+    isSnoozeLoading ||
+    isWithinDays(snoozedAt, COMMERCIAL_USE_SNOOZE_DAYS)
+  ) {
+    return null;
+  }
 
   return (
     <div className="w-full">
       <DismissibleBanner
-        id="commercial-use"
-        color="primary"
+        id={`commercial-use:${source}`}
+        color="info"
         className="w-full"
-        dismissForDays={7}
+        onDismiss={() => setSnoozedAt(new Date().toISOString())}
         actions={[
           {
             label: "View plans",
-            color: "primary",
+            color: "info",
             variant: "solid",
             onClick: () => {
               openCommercialUsePricing(source).catch(console.error);
@@ -75,5 +94,14 @@ async function shouldShowCommercialUsePrompt(): Promise<boolean> {
 }
 
 async function openCommercialUsePricing(source: string): Promise<void> {
-  await openUrl(`https://yaak.app/pricing?s=${source}&ref=app.yaak.desktop`).catch(console.error);
+  await openUrl(pricingUrl(`app.commercial-use.${source}`)).catch(console.error);
+}
+
+function isWithinDays(date: string | null, days: number): boolean {
+  if (date == null) return false;
+
+  const time = new Date(date).getTime();
+  if (Number.isNaN(time)) return false;
+
+  return Date.now() - time < days * 24 * 60 * 60 * 1000;
 }

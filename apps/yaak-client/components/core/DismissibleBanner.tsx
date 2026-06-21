@@ -9,13 +9,13 @@ import { Button } from "./Button";
 export function DismissibleBanner({
   children,
   className,
-  dismissForDays,
   id,
+  onDismiss,
   actions,
   ...props
 }: BannerProps & {
   id: string;
-  dismissForDays?: number;
+  onDismiss?: () => void | Promise<void>;
   actions?: {
     label: string;
     onClick: () => void;
@@ -27,13 +27,13 @@ export function DismissibleBanner({
     isLoading,
     set: setDismissed,
     value: dismissed,
-  } = useKeyValue<boolean | string>({
+  } = useKeyValue<boolean>({
     namespace: "global",
     key: ["dismiss-banner", id],
     fallback: false,
   });
 
-  if (isLoading || isDismissed(dismissed, dismissForDays)) return null;
+  if (isLoading || dismissed) return null;
 
   return (
     <Banner className={classNames(className, "relative")} {...props}>
@@ -45,7 +45,10 @@ export function DismissibleBanner({
               variant="border"
               color={props.color}
               size="xs"
-              onClick={() => setDismissed(dismissForDays == null ? true : new Date().toISOString())}
+              onClick={() => {
+                setDismissed(true).catch(console.error);
+                Promise.resolve(onDismiss?.()).catch(console.error);
+              }}
               title="Dismiss message"
             >
               Dismiss
@@ -67,18 +70,4 @@ export function DismissibleBanner({
       </div>
     </Banner>
   );
-}
-
-function isDismissed(
-  dismissed: boolean | string | null,
-  dismissForDays: number | undefined,
-): boolean {
-  if (dismissed === false || dismissed == null) return false;
-  if (dismissed === true) return true;
-  if (dismissForDays == null) return dismissed.length > 0;
-
-  const dismissedAt = new Date(dismissed).getTime();
-  if (Number.isNaN(dismissedAt)) return false;
-
-  return Date.now() - dismissedAt < dismissForDays * 24 * 60 * 60 * 1000;
 }
