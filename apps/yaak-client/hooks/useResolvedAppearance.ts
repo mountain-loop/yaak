@@ -1,6 +1,6 @@
 import { settingsAtom } from "@yaakapp-internal/models";
+import { resolveAppearance } from "@yaakapp-internal/theme";
 import { useAtomValue } from "jotai";
-import { resolveAppearance } from "../lib/theme/appearance";
 import { usePreferredAppearance } from "./usePreferredAppearance";
 
 export function useResolvedAppearance() {

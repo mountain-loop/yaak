@@ -12,6 +12,9 @@ export type { DocumentPlatform, YaakColorKey, YaakColors, YaakTheme } from "./wi
 export {
   addThemeStylesToDocument,
   applyThemeToDocument,
+  completeColorVariables,
+  completeFullColorVariables,
+  completePartialColorVariables,
   completeTheme,
   getThemeCSS,
   indent,

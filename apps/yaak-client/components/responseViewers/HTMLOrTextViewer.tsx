@@ -69,6 +69,7 @@ function HttpTextViewer({ response, text, language, pretty, className }: HttpTex
       text={text}
       language={language}
       stateKey={`response.body.${response.id}`}
+      filterStateKey={`response.body.${response.requestId}`}
       pretty={pretty}
       className={className}
       onFilter={filterCallback}

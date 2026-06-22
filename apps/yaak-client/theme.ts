@@ -2,11 +2,14 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { setWindowTheme } from "@yaakapp-internal/mac-window";
 import type { ModelPayload } from "@yaakapp-internal/models";
+import type { Appearance } from "@yaakapp-internal/theme";
+import {
+  applyThemeToDocument,
+  getCSSAppearance,
+  subscribeToPreferredAppearance,
+} from "@yaakapp-internal/theme";
 import { getSettings } from "./lib/settings";
-import type { Appearance } from "./lib/theme/appearance";
-import { getCSSAppearance, subscribeToPreferredAppearance } from "./lib/theme/appearance";
-import { getResolvedTheme } from "./lib/theme/themes";
-import { applyThemeToDocument } from "@yaakapp-internal/theme";
+import { getResolvedTheme } from "./lib/themes";
 
 // NOTE: CSS appearance isn't as accurate as getting it async from the window (next step), but we want
 //  a good appearance guess so we're not waiting too long

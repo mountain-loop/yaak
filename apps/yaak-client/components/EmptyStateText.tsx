@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 interface Props {
   children: ReactNode;
   className?: string;
+  wrapperClassName?: string;
 }
 
-export function EmptyStateText({ children, className }: Props) {
+export function EmptyStateText({ children, className, wrapperClassName }: Props) {
   return (
-    <div className="w-full h-full pb-2">
+    <div className={classNames("w-full h-full pb-2", wrapperClassName)}>
       <div
         className={classNames(
           className,
