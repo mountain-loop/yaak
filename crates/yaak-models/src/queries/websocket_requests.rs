@@ -1,14 +1,15 @@
 use super::dedupe_headers;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
-    Folder, FolderIden, HttpRequestHeader, WebsocketRequest, WebsocketRequestIden,
+    AnyModel, Folder, FolderIden, HttpRequestHeader, ResolvedHttpRequestSettings, ResolvedSetting,
+    WebsocketRequest, WebsocketRequestIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_websocket_request(&self, id: &str) -> Result<WebsocketRequest> {
         self.find_one(WebsocketRequestIden::Id, id)
     }
@@ -115,5 +116,46 @@ impl<'a> DbContext<'a> {
         headers.append(&mut websocket_request.headers.clone());
 
         Ok(dedupe_headers(headers))
+    }
+
+    pub fn resolve_settings_for_websocket_request(
+        &self,
+        websocket_request: &WebsocketRequest,
+    ) -> Result<ResolvedHttpRequestSettings> {
+        let parent = if let Some(folder_id) = websocket_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            self.resolve_settings_for_folder(&folder)?
+        } else {
+            let workspace = self.get_workspace(&websocket_request.workspace_id)?;
+            self.resolve_settings_for_workspace(&workspace)
+        };
+
+        Ok(ResolvedHttpRequestSettings {
+            validate_certificates: if websocket_request.setting_validate_certificates.enabled {
+                ResolvedSetting::from_model(
+                    websocket_request.setting_validate_certificates.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
+            } else {
+                parent.validate_certificates
+            },
+            send_cookies: if websocket_request.setting_send_cookies.enabled {
+                ResolvedSetting::from_model(
+                    websocket_request.setting_send_cookies.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
+            } else {
+                parent.send_cookies
+            },
+            store_cookies: if websocket_request.setting_store_cookies.enabled {
+                ResolvedSetting::from_model(
+                    websocket_request.setting_store_cookies.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
+            } else {
+                parent.store_cookies
+            },
+            ..parent
+        })
     }
 }

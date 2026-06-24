@@ -1,8 +1,8 @@
 {
   "name": "@yaak/faker",
-  "private": true,
-  "version": "1.1.1",
   "displayName": "Faker",
+  "version": "1.1.1",
+  "private": true,
   "description": "Template functions for generating fake data using FakerJS",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   },
   "dependencies": {
     "@faker-js/faker": "^10.1.0"

@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-1password",
   "displayName": "1Password Template Functions",
-  "description": "Template function for accessing 1Password secrets",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template function for accessing 1Password secrets",
   "scripts": {
     "build": "run-s build:*",
     "build:1-build": "yaakcli build",

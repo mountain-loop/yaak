@@ -1,27 +1,27 @@
-import { createHash, createHmac } from 'node:crypto';
-import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
+import { createHash, createHmac } from "node:crypto";
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from "@yaakapp/api";
 
-const algorithms = ['md5', 'sha1', 'sha256', 'sha512'] as const;
-const encodings = ['base64', 'hex'] as const;
+const algorithms = ["md5", "sha1", "sha256", "sha512"] as const;
+const encodings = ["base64", "hex"] as const;
 
-type TemplateFunctionPlugin = NonNullable<PluginDefinition['templateFunctions']>[number];
+type TemplateFunctionPlugin = NonNullable<PluginDefinition["templateFunctions"]>[number];
 
 const hashFunctions: TemplateFunctionPlugin[] = algorithms.map((algorithm) => ({
   name: `hash.${algorithm}`,
-  description: 'Hash a value to its hexadecimal representation',
+  description: "Hash a value to its hexadecimal representation",
   args: [
     {
-      type: 'text',
-      name: 'input',
-      label: 'Input',
-      placeholder: 'input text',
+      type: "text",
+      name: "input",
+      label: "Input",
+      placeholder: "input text",
       multiLine: true,
     },
     {
-      type: 'select',
-      name: 'encoding',
-      label: 'Encoding',
-      defaultValue: 'base64',
+      type: "select",
+      name: "encoding",
+      label: "Encoding",
+      defaultValue: "base64",
       options: encodings.map((encoding) => ({
         label: capitalize(encoding),
         value: encoding,
@@ -32,32 +32,32 @@ const hashFunctions: TemplateFunctionPlugin[] = algorithms.map((algorithm) => ({
     const input = String(args.values.input);
     const encoding = String(args.values.encoding) as (typeof encodings)[number];
 
-    return createHash(algorithm).update(input, 'utf-8').digest(encoding);
+    return createHash(algorithm).update(input, "utf-8").digest(encoding);
   },
 }));
 
 const hmacFunctions: TemplateFunctionPlugin[] = algorithms.map((algorithm) => ({
   name: `hmac.${algorithm}`,
-  description: 'Compute the HMAC of a value',
+  description: "Compute the HMAC of a value",
   args: [
     {
-      type: 'text',
-      name: 'input',
-      label: 'Input',
-      placeholder: 'input text',
+      type: "text",
+      name: "input",
+      label: "Input",
+      placeholder: "input text",
       multiLine: true,
     },
     {
-      type: 'text',
-      name: 'key',
-      label: 'Key',
+      type: "text",
+      name: "key",
+      label: "Key",
       password: true,
     },
     {
-      type: 'select',
-      name: 'encoding',
-      label: 'Encoding',
-      defaultValue: 'base64',
+      type: "select",
+      name: "encoding",
+      label: "Encoding",
+      defaultValue: "base64",
       options: encodings.map((encoding) => ({
         value: encoding,
         label: capitalize(encoding),

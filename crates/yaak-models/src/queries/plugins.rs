@@ -1,9 +1,9 @@
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{Plugin, PluginIden};
 use crate::util::UpdateSource;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_plugin(&self, id: &str) -> Result<Plugin> {
         self.find_one(PluginIden::Id, id)
     }
@@ -26,6 +26,10 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn upsert_plugin(&self, plugin: &Plugin, source: &UpdateSource) -> Result<Plugin> {
-        self.upsert(plugin, source)
+        let mut plugin_to_upsert = plugin.clone();
+        if let Some(existing) = self.get_plugin_by_directory(&plugin.directory) {
+            plugin_to_upsert.id = existing.id;
+        }
+        self.upsert(&plugin_to_upsert, source)
     }
 }

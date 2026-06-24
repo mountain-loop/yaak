@@ -2,6 +2,7 @@ use crate::cli::SendArgs;
 use crate::commands::request;
 use crate::context::CliContext;
 use futures::future::join_all;
+use yaak_models::queries::any_request::AnyRequest;
 
 enum ExecutionMode {
     Sequential,
@@ -12,9 +13,10 @@ pub async fn run(
     ctx: &CliContext,
     args: SendArgs,
     environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> i32 {
-    match send_target(ctx, args, environment, verbose).await {
+    match send_target(ctx, args, environment, cookie_jar_id, verbose).await {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("Error: {error}");
@@ -27,30 +29,70 @@ async fn send_target(
     ctx: &CliContext,
     args: SendArgs,
     environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> Result<(), String> {
     let mode = if args.parallel { ExecutionMode::Parallel } else { ExecutionMode::Sequential };
 
-    if ctx.db().get_any_request(&args.id).is_ok() {
-        return request::send_request_by_id(ctx, &args.id, environment, verbose).await;
+    if let Ok(request) = ctx.db().get_any_request(&args.id) {
+        let workspace_id = match &request {
+            AnyRequest::HttpRequest(r) => r.workspace_id.clone(),
+            AnyRequest::GrpcRequest(r) => r.workspace_id.clone(),
+            AnyRequest::WebsocketRequest(r) => r.workspace_id.clone(),
+        };
+        let resolved_cookie_jar_id =
+            request::resolve_cookie_jar_id(ctx, &workspace_id, cookie_jar_id)?;
+
+        return request::send_request_by_id(
+            ctx,
+            &args.id,
+            environment,
+            resolved_cookie_jar_id.as_deref(),
+            verbose,
+        )
+        .await;
     }
 
-    if ctx.db().get_folder(&args.id).is_ok() {
+    if let Ok(folder) = ctx.db().get_folder(&args.id) {
+        let resolved_cookie_jar_id =
+            request::resolve_cookie_jar_id(ctx, &folder.workspace_id, cookie_jar_id)?;
+
         let request_ids = collect_folder_request_ids(ctx, &args.id)?;
         if request_ids.is_empty() {
             println!("No requests found in folder {}", args.id);
             return Ok(());
         }
-        return send_many(ctx, request_ids, mode, args.fail_fast, environment, verbose).await;
+        return send_many(
+            ctx,
+            request_ids,
+            mode,
+            args.fail_fast,
+            environment,
+            resolved_cookie_jar_id.as_deref(),
+            verbose,
+        )
+        .await;
     }
 
-    if ctx.db().get_workspace(&args.id).is_ok() {
+    if let Ok(workspace) = ctx.db().get_workspace(&args.id) {
+        let resolved_cookie_jar_id =
+            request::resolve_cookie_jar_id(ctx, &workspace.id, cookie_jar_id)?;
+
         let request_ids = collect_workspace_request_ids(ctx, &args.id)?;
         if request_ids.is_empty() {
             println!("No requests found in workspace {}", args.id);
             return Ok(());
         }
-        return send_many(ctx, request_ids, mode, args.fail_fast, environment, verbose).await;
+        return send_many(
+            ctx,
+            request_ids,
+            mode,
+            args.fail_fast,
+            environment,
+            resolved_cookie_jar_id.as_deref(),
+            verbose,
+        )
+        .await;
     }
 
     Err(format!("Could not resolve ID '{}' as request, folder, or workspace", args.id))
@@ -131,6 +173,7 @@ async fn send_many(
     mode: ExecutionMode,
     fail_fast: bool,
     environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> Result<(), String> {
     let mut success_count = 0usize;
@@ -139,7 +182,15 @@ async fn send_many(
     match mode {
         ExecutionMode::Sequential => {
             for request_id in request_ids {
-                match request::send_request_by_id(ctx, &request_id, environment, verbose).await {
+                match request::send_request_by_id(
+                    ctx,
+                    &request_id,
+                    environment,
+                    cookie_jar_id,
+                    verbose,
+                )
+                .await
+                {
                     Ok(()) => success_count += 1,
                     Err(error) => {
                         failures.push((request_id, error));
@@ -156,7 +207,14 @@ async fn send_many(
                 .map(|request_id| async move {
                     (
                         request_id.clone(),
-                        request::send_request_by_id(ctx, request_id, environment, verbose).await,
+                        request::send_request_by_id(
+                            ctx,
+                            request_id,
+                            environment,
+                            cookie_jar_id,
+                            verbose,
+                        )
+                        .await,
                     )
                 })
                 .collect::<Vec<_>>();

@@ -307,6 +307,9 @@ pub struct ListCookieNamesResponse {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct GetCookieValueRequest {
     pub name: String,
+
+    #[ts(optional = nullable)]
+    pub domain: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

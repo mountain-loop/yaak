@@ -1,0 +1,185 @@
+import { linter } from "@codemirror/lint";
+import type { EditorView } from "@codemirror/view";
+import { jsoncLanguage } from "@shopify/lang-jsonc";
+import type { GrpcRequest } from "@yaakapp-internal/models";
+import { FormattedError, InlineCode, VStack } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import {
+  handleRefresh,
+  jsonCompletion,
+  jsonSchemaLinter,
+  stateExtensions,
+  updateSchema,
+} from "codemirror-json-schema";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReflectResponseService } from "../hooks/useGrpc";
+import { showAlert } from "../lib/alert";
+import { showDialog } from "../lib/dialog";
+import { pluralizeCount } from "../lib/pluralize";
+import { Button } from "./core/Button";
+import type { EditorProps } from "./core/Editor/Editor";
+import { Editor } from "./core/Editor/LazyEditor";
+import { GrpcProtoSelectionDialog } from "./GrpcProtoSelectionDialog";
+
+type Props = Pick<EditorProps, "heightMode" | "onChange" | "className" | "forceUpdateKey"> & {
+  services: ReflectResponseService[] | null;
+  reflectionError?: string;
+  reflectionLoading?: boolean;
+  request: GrpcRequest;
+  protoFiles: string[];
+};
+
+export function GrpcEditor({
+  services,
+  reflectionError,
+  reflectionLoading,
+  request,
+  protoFiles,
+  ...extraEditorProps
+}: Props) {
+  const [editorView, setEditorView] = useState<EditorView | null>(null);
+  const handleInitEditorViewRef = useCallback((h: EditorView | null) => {
+    setEditorView(h);
+  }, []);
+
+  // Find the schema for the selected service and method and update the editor
+  useEffect(() => {
+    if (
+      editorView == null ||
+      services === null ||
+      request.service === null ||
+      request.method === null
+    ) {
+      return;
+    }
+
+    const s = services.find((s) => s.name === request.service);
+    if (s == null) {
+      console.log("Failed to find service", { service: request.service, services });
+      showAlert({
+        id: "grpc-find-service-error",
+        title: "Couldn't Find Service",
+        body: (
+          <>
+            Failed to find service <InlineCode>{request.service}</InlineCode> in schema
+          </>
+        ),
+      });
+      return;
+    }
+
+    const schema = s.methods.find((m) => m.name === request.method)?.schema;
+    if (request.method != null && schema == null) {
+      console.log("Failed to find method", { method: request.method, methods: s?.methods });
+      showAlert({
+        id: "grpc-find-schema-error",
+        title: "Couldn't Find Method",
+        body: (
+          <>
+            Failed to find method <InlineCode>{request.method}</InlineCode> for{" "}
+            <InlineCode>{request.service}</InlineCode> in schema
+          </>
+        ),
+      });
+      return;
+    }
+
+    if (schema == null) {
+      return;
+    }
+
+    try {
+      updateSchema(editorView, JSON.parse(schema));
+    } catch (err) {
+      showAlert({
+        id: "grpc-parse-schema-error",
+        title: "Failed to Parse Schema",
+        body: (
+          <VStack space={4}>
+            <p>
+              For service <InlineCode>{request.service}</InlineCode> and method{" "}
+              <InlineCode>{request.method}</InlineCode>
+            </p>
+            <FormattedError>{String(err)}</FormattedError>
+          </VStack>
+        ),
+      });
+    }
+  }, [editorView, services, request.method, request.service]);
+
+  const extraExtensions = useMemo(
+    () => [
+      linter(jsonSchemaLinter(), {
+        delay: 200,
+        needsRefresh: handleRefresh,
+      }),
+      jsoncLanguage.data.of({
+        autocomplete: jsonCompletion(),
+      }),
+      stateExtensions({}),
+    ],
+    [],
+  );
+
+  const reflectionUnavailable = reflectionError?.match(/unimplemented/i);
+  reflectionError = reflectionUnavailable ? undefined : reflectionError;
+
+  const actions = useMemo(
+    () => [
+      <div key="reflection" className={classNames(services == null && "!opacity-100")}>
+        <Button
+          size="xs"
+          color={
+            reflectionLoading
+              ? "secondary"
+              : reflectionUnavailable
+                ? "info"
+                : reflectionError
+                  ? "danger"
+                  : "secondary"
+          }
+          isLoading={reflectionLoading}
+          onClick={() => {
+            showDialog({
+              title: "Configure Schema",
+              size: "md",
+              id: "reflection-failed",
+              render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
+            });
+          }}
+        >
+          {reflectionLoading
+            ? "Inspecting Schema"
+            : reflectionUnavailable
+              ? "Select Proto Files"
+              : reflectionError
+                ? "Server Error"
+                : protoFiles.length > 0
+                  ? pluralizeCount("File", protoFiles.length)
+                  : services != null && protoFiles.length === 0
+                    ? "Schema Detected"
+                    : "Select Schema"}
+        </Button>
+      </div>,
+    ],
+    [protoFiles.length, reflectionError, reflectionLoading, reflectionUnavailable, services],
+  );
+
+  return (
+    <div className="h-full w-full grid grid-cols-1 grid-rows-[minmax(0,100%)_auto_auto_minmax(0,auto)]">
+      <Editor
+        setRef={handleInitEditorViewRef}
+        language="json"
+        autocompleteFunctions
+        autocompleteVariables
+        defaultValue={request.message}
+        heightMode="auto"
+        placeholder="..."
+        extraExtensions={extraExtensions}
+        actions={actions}
+        stateKey={`grpc_message.${request.id}`}
+        {...extraEditorProps}
+      />
+    </div>
+  );
+}

@@ -4,11 +4,11 @@ import type {
   DynamicAuthenticationArg,
   DynamicPromptFormArg,
   DynamicTemplateFunctionArg,
-} from '@yaakapp/api';
+} from "@yaakapp/api";
 import type {
   CallHttpAuthenticationActionArgs,
   CallTemplateFunctionArgs,
-} from '@yaakapp-internal/plugins';
+} from "@yaakapp-internal/plugins";
 
 type AnyDynamicArg = DynamicTemplateFunctionArg | DynamicAuthenticationArg | DynamicPromptFormArg;
 type AnyCallArgs =
@@ -42,7 +42,7 @@ export async function applyDynamicFormInput(
   const resolvedArgs: AnyDynamicArg[] = [];
   for (const { dynamic, ...arg } of args) {
     const dynamicResult =
-      typeof dynamic === 'function'
+      typeof dynamic === "function"
         ? await dynamic(
             ctx,
             callArgs as CallTemplateFunctionArgs &
@@ -56,7 +56,7 @@ export async function applyDynamicFormInput(
       ...dynamicResult,
     } as AnyDynamicArg;
 
-    if ('inputs' in newArg && Array.isArray(newArg.inputs)) {
+    if ("inputs" in newArg && Array.isArray(newArg.inputs)) {
       try {
         newArg.inputs = await applyDynamicFormInput(
           ctx,
@@ -66,7 +66,7 @@ export async function applyDynamicFormInput(
             CallPromptFormDynamicArgs,
         );
       } catch (e) {
-        console.error('Failed to apply dynamic form input', e);
+        console.error("Failed to apply dynamic form input", e);
       }
     }
     resolvedArgs.push(newArg);

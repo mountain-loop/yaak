@@ -26,10 +26,10 @@ import type {
   ShowToastRequest,
   TemplateRenderRequest,
   WorkspaceInfo,
-} from '../bindings/gen_events.ts';
-import type { Folder, HttpRequest } from '../bindings/gen_models.ts';
-import type { JsonValue } from '../bindings/serde_json/JsonValue';
-import type { MaybePromise } from '../helpers';
+} from "../bindings/gen_events.ts";
+import type { Folder, HttpRequest } from "../bindings/gen_models.ts";
+import type { JsonValue } from "../bindings/serde_json/JsonValue";
+import type { MaybePromise } from "../helpers";
 
 export type CallPromptFormDynamicArgs = {
   values: { [key in string]?: JsonPrimitive };
@@ -42,16 +42,16 @@ type AddDynamicMethod<T> = {
   ) => MaybePromise<Partial<T> | null | undefined>;
 };
 
-// biome-ignore lint/suspicious/noExplicitAny: distributive conditional type pattern
+// oxlint-disable-next-line no-explicit-any -- distributive conditional type pattern
 type AddDynamic<T> = T extends any
   ? T extends { inputs?: FormInput[] }
-    ? Omit<T, 'inputs'> & {
+    ? Omit<T, "inputs"> & {
         inputs: Array<AddDynamic<FormInput>>;
         dynamic?: (
           ctx: Context,
           args: CallPromptFormDynamicArgs,
         ) => MaybePromise<
-          Partial<Omit<T, 'inputs'> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
+          Partial<Omit<T, "inputs"> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
         >;
       }
     : T & AddDynamicMethod<T>
@@ -59,11 +59,11 @@ type AddDynamic<T> = T extends any
 
 export type DynamicPromptFormArg = AddDynamic<FormInput>;
 
-type DynamicPromptFormRequest = Omit<PromptFormRequest, 'inputs'> & {
+type DynamicPromptFormRequest = Omit<PromptFormRequest, "inputs"> & {
   inputs: DynamicPromptFormArg[];
 };
 
-export type WorkspaceHandle = Pick<WorkspaceInfo, 'id' | 'name'>;
+export type WorkspaceHandle = Pick<WorkspaceInfo, "id" | "name">;
 
 export interface Context {
   clipboard: {
@@ -73,8 +73,8 @@ export interface Context {
     show(args: ShowToastRequest): Promise<void>;
   };
   prompt: {
-    text(args: PromptTextRequest): Promise<PromptTextResponse['value']>;
-    form(args: DynamicPromptFormRequest): Promise<PromptFormResponse['values']>;
+    text(args: PromptTextRequest): Promise<PromptTextResponse["value"]>;
+    form(args: DynamicPromptFormRequest): Promise<PromptFormResponse["values"]>;
   };
   store: {
     set<T>(key: string, value: T): Promise<void>;
@@ -94,41 +94,41 @@ export interface Context {
     openExternalUrl(url: string): Promise<void>;
   };
   cookies: {
-    listNames(): Promise<ListCookieNamesResponse['names']>;
-    getValue(args: GetCookieValueRequest): Promise<GetCookieValueResponse['value']>;
+    listNames(): Promise<ListCookieNamesResponse["names"]>;
+    getValue(args: GetCookieValueRequest): Promise<GetCookieValueResponse["value"]>;
   };
   grpcRequest: {
-    render(args: RenderGrpcRequestRequest): Promise<RenderGrpcRequestResponse['grpcRequest']>;
+    render(args: RenderGrpcRequestRequest): Promise<RenderGrpcRequestResponse["grpcRequest"]>;
   };
   httpRequest: {
-    send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse['httpResponse']>;
-    getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse['httpRequest']>;
-    render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse['httpRequest']>;
-    list(args?: ListHttpRequestsRequest): Promise<ListHttpRequestsResponse['httpRequests']>;
+    send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse["httpResponse"]>;
+    getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse["httpRequest"]>;
+    render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse["httpRequest"]>;
+    list(args?: ListHttpRequestsRequest): Promise<ListHttpRequestsResponse["httpRequests"]>;
     create(
-      args: Omit<Partial<HttpRequest>, 'id' | 'model' | 'createdAt' | 'updatedAt'> &
-        Pick<HttpRequest, 'workspaceId' | 'url'>,
+      args: Omit<Partial<HttpRequest>, "id" | "model" | "createdAt" | "updatedAt"> &
+        Pick<HttpRequest, "workspaceId" | "url">,
     ): Promise<HttpRequest>;
     update(
-      args: Omit<Partial<HttpRequest>, 'model' | 'createdAt' | 'updatedAt'> &
-        Pick<HttpRequest, 'id'>,
+      args: Omit<Partial<HttpRequest>, "model" | "createdAt" | "updatedAt"> &
+        Pick<HttpRequest, "id">,
     ): Promise<HttpRequest>;
     delete(args: { id: string }): Promise<HttpRequest>;
   };
   folder: {
-    list(args?: ListFoldersRequest): Promise<ListFoldersResponse['folders']>;
+    list(args?: ListFoldersRequest): Promise<ListFoldersResponse["folders"]>;
     getById(args: { id: string }): Promise<Folder | null>;
     create(
-      args: Omit<Partial<Folder>, 'id' | 'model' | 'createdAt' | 'updatedAt'> &
-        Pick<Folder, 'workspaceId' | 'name'>,
+      args: Omit<Partial<Folder>, "id" | "model" | "createdAt" | "updatedAt"> &
+        Pick<Folder, "workspaceId" | "name">,
     ): Promise<Folder>;
     update(
-      args: Omit<Partial<Folder>, 'model' | 'createdAt' | 'updatedAt'> & Pick<Folder, 'id'>,
+      args: Omit<Partial<Folder>, "model" | "createdAt" | "updatedAt"> & Pick<Folder, "id">,
     ): Promise<Folder>;
     delete(args: { id: string }): Promise<Folder>;
   };
   httpResponse: {
-    find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse['httpResponses']>;
+    find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse["httpResponses"]>;
   };
   templates: {
     render<T extends JsonValue>(args: TemplateRenderRequest & { data: T }): Promise<T>;

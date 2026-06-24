@@ -5,9 +5,9 @@ import type {
   FormInput,
   GetHttpAuthenticationSummaryResponse,
   HttpAuthenticationAction,
-} from '../bindings/gen_events';
-import type { MaybePromise } from '../helpers';
-import type { Context } from './Context';
+} from "../bindings/gen_events";
+import type { MaybePromise } from "../helpers";
+import type { Context } from "./Context";
 
 type AddDynamicMethod<T> = {
   dynamic?: (
@@ -16,16 +16,16 @@ type AddDynamicMethod<T> = {
   ) => MaybePromise<Partial<T> | null | undefined>;
 };
 
-// biome-ignore lint/suspicious/noExplicitAny: distributive conditional type pattern
+// oxlint-disable-next-line no-explicit-any -- distributive conditional type pattern
 type AddDynamic<T> = T extends any
   ? T extends { inputs?: FormInput[] }
-    ? Omit<T, 'inputs'> & {
+    ? Omit<T, "inputs"> & {
         inputs: Array<AddDynamic<FormInput>>;
         dynamic?: (
           ctx: Context,
           args: CallHttpAuthenticationActionArgs,
         ) => MaybePromise<
-          Partial<Omit<T, 'inputs'> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
+          Partial<Omit<T, "inputs"> & { inputs: Array<AddDynamic<FormInput>> }> | null | undefined
         >;
       }
     : T & AddDynamicMethod<T>

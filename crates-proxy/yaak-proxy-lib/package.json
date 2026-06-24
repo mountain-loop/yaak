@@ -1,0 +1,6 @@
+{
+  "name": "@yaakapp-internal/proxy-lib",
+  "version": "1.0.0",
+  "private": true,
+  "main": "bindings/index.ts"
+}

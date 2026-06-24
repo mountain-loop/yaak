@@ -1,15 +1,16 @@
+use crate::client_db::ClientDb;
 use crate::connection_or_tx::ConnectionOrTx;
-use crate::db_context::DbContext;
 use crate::error::Result;
 use crate::models::{
-    Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequest,
-    HttpRequestHeader, HttpRequestIden, WebsocketRequest, WebsocketRequestIden,
+    AnyModel, Environment, EnvironmentIden, Folder, FolderIden, GrpcRequest, GrpcRequestIden,
+    HttpRequest, HttpRequestHeader, HttpRequestIden, ResolvedHttpRequestSettings, ResolvedSetting,
+    WebsocketRequest, WebsocketRequestIden,
 };
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_folder(&self, id: &str) -> Result<Folder> {
         self.find_one(FolderIden::Id, id)
     }
@@ -19,7 +20,7 @@ impl<'a> DbContext<'a> {
     }
 
     pub fn delete_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        match self.conn {
+        match self.conn() {
             ConnectionOrTx::Connection(_) => {}
             ConnectionOrTx::Transaction(_) => {}
         }
@@ -140,5 +141,61 @@ impl<'a> DbContext<'a> {
         headers.append(&mut folder.headers.clone());
 
         Ok(headers)
+    }
+
+    pub fn resolve_settings_for_folder(
+        &self,
+        folder: &Folder,
+    ) -> Result<ResolvedHttpRequestSettings> {
+        let parent = if let Some(folder_id) = folder.folder_id.clone() {
+            let parent_folder = self.get_folder(&folder_id)?;
+            self.resolve_settings_for_folder(&parent_folder)?
+        } else {
+            let workspace = self.get_workspace(&folder.workspace_id)?;
+            self.resolve_settings_for_workspace(&workspace)
+        };
+
+        Ok(ResolvedHttpRequestSettings {
+            validate_certificates: if folder.setting_validate_certificates.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_validate_certificates.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.validate_certificates
+            },
+            follow_redirects: if folder.setting_follow_redirects.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_follow_redirects.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.follow_redirects
+            },
+            request_timeout: if folder.setting_request_timeout.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_request_timeout.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.request_timeout
+            },
+            send_cookies: if folder.setting_send_cookies.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_send_cookies.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.send_cookies
+            },
+            store_cookies: if folder.setting_store_cookies.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_store_cookies.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.store_cookies
+            },
+        })
     }
 }

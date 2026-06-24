@@ -1,9 +1,9 @@
-import * as z from 'zod';
+import * as z from "zod";
 
 export const workspaceIdSchema = z
   .string()
   .optional()
-  .describe('Workspace ID (required if multiple workspaces are open)');
+  .describe("Workspace ID (required if multiple workspaces are open)");
 
 export const headersSchema = z
   .array(
@@ -24,7 +24,7 @@ export const urlParametersSchema = z
     }),
   )
   .optional()
-  .describe('URL query parameters');
+  .describe("URL query parameters");
 
 export const bodyTypeSchema = z
   .string()
@@ -37,7 +37,7 @@ export const bodySchema = z
   .record(z.string(), z.any())
   .optional()
   .describe(
-    'Body content object. Structure varies by bodyType:\n' +
+    "Body content object. Structure varies by bodyType:\n" +
       '- "binary": { filePath: "/path/to/file" }\n' +
       '- "graphql": { query: "{ users { name } }", variables: "{\\"id\\": \\"123\\"}" }\n' +
       '- "application/x-www-form-urlencoded": { form: [{ name: "key", value: "val", enabled: true }] }\n' +
@@ -56,7 +56,7 @@ export const authenticationSchema = z
   .record(z.string(), z.any())
   .optional()
   .describe(
-    'Authentication configuration object. Structure varies by authenticationType:\n' +
+    "Authentication configuration object. Structure varies by authenticationType:\n" +
       '- "basic": { username: "user", password: "pass" }\n' +
       '- "bearer": { token: "abc123", prefix: "Bearer" }\n' +
       '- "oauth2": { clientId: "...", clientSecret: "...", grantType: "authorization_code", authorizationUrl: "...", accessTokenUrl: "...", scope: "...", ... }\n' +

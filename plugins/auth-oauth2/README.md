@@ -25,7 +25,7 @@ The most secure and commonly used OAuth 2.0 flow for web applications.
 
 ### Client Credentials Flow
 
-Ideal for server-to-server authentication where no user interaction is required. 
+Ideal for server-to-server authentication where no user interaction is required.
 
 ### Implicit Flow
 

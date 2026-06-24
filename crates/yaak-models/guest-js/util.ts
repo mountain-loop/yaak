@@ -1,4 +1,4 @@
-import { ModelStoreData } from './types';
+import { ModelStoreData } from "./types";
 
 export function newStoreData(): ModelStoreData {
   return {

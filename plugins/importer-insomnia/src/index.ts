@@ -1,13 +1,13 @@
-import type { Context, PluginDefinition } from '@yaakapp/api';
-import YAML from 'yaml';
-import { deleteUndefinedAttrs, isJSObject } from './common';
-import { convertInsomniaV4 } from './v4';
-import { convertInsomniaV5 } from './v5';
+import type { Context, PluginDefinition } from "@yaakapp/api";
+import YAML from "yaml";
+import { deleteUndefinedAttrs, isJSObject } from "./common";
+import { convertInsomniaV4 } from "./v4";
+import { convertInsomniaV5 } from "./v5";
 
 export const plugin: PluginDefinition = {
   importer: {
-    name: 'Insomnia',
-    description: 'Import Insomnia workspaces',
+    name: "Insomnia",
+    description: "Import Insomnia workspaces",
     async onImport(_ctx: Context, args: { text: string }) {
       return convertInsomnia(args.text);
     },

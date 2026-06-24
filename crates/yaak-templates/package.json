@@ -1,7 +1,7 @@
 {
   "name": "@yaakapp-internal/templates",
-  "private": true,
   "version": "1.0.0",
+  "private": true,
   "main": "index.ts",
   "scripts": {
     "bootstrap": "npm run build",

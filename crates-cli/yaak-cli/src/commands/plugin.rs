@@ -1,11 +1,12 @@
-use crate::cli::{GenerateArgs, PluginArgs, PluginCommands, PluginPathArg};
+use crate::cli::{GenerateArgs, InstallPluginArgs, PluginPathArg};
+use crate::context::CliContext;
 use crate::ui;
 use crate::utils::http;
 use keyring::Entry;
 use rand::Rng;
 use rolldown::{
-    Bundler, BundlerOptions, ExperimentalOptions, InputItem, LogLevel, OutputFormat, Platform,
-    WatchOption, Watcher,
+    BundleEvent, Bundler, BundlerOptions, ExperimentalOptions, InputItem, LogLevel, OutputFormat,
+    Platform, WatchOption, Watcher, WatcherEvent,
 };
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -15,6 +16,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use walkdir::WalkDir;
+use yaak_api::{ApiClientKind, yaak_api_client};
+use yaak_models::models::{Plugin, PluginSource};
+use yaak_models::util::UpdateSource;
+use yaak_plugins::events::PluginContext;
+use yaak_plugins::install::download_and_install;
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
@@ -57,12 +63,13 @@ pub async fn run_build(args: PluginPathArg) -> i32 {
     }
 }
 
-pub async fn run(args: PluginArgs) -> i32 {
-    match args.command {
-        PluginCommands::Build(args) => run_build(args).await,
-        PluginCommands::Dev(args) => run_dev(args).await,
-        PluginCommands::Generate(args) => run_generate(args).await,
-        PluginCommands::Publish(args) => run_publish(args).await,
+pub async fn run_install(context: &CliContext, args: InstallPluginArgs) -> i32 {
+    match install(context, args).await {
+        Ok(()) => 0,
+        Err(error) => {
+            ui::error(&error);
+            1
+        }
     }
 }
 
@@ -114,12 +121,53 @@ async fn dev(args: PluginPathArg) -> CommandResult {
     ensure_plugin_build_inputs(&plugin_dir)?;
 
     ui::info(&format!("Watching plugin {}...", plugin_dir.display()));
-    ui::info("Press Ctrl-C to stop");
 
     let bundler = Bundler::new(bundler_options(&plugin_dir, true))
         .map_err(|err| format!("Failed to initialize Rolldown watcher: {err}"))?;
     let watcher = Watcher::new(vec![Arc::new(Mutex::new(bundler))], None)
         .map_err(|err| format!("Failed to start Rolldown watcher: {err}"))?;
+    let emitter = watcher.emitter();
+    let watch_root = plugin_dir.clone();
+    let _event_logger = tokio::spawn(async move {
+        loop {
+            let event = {
+                let rx = emitter.rx.lock().await;
+                rx.recv()
+            };
+
+            let Ok(event) = event else {
+                break;
+            };
+
+            match event {
+                WatcherEvent::Change(change) => {
+                    let changed_path = Path::new(change.path.as_str());
+                    let display_path = changed_path
+                        .strip_prefix(&watch_root)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| {
+                            changed_path
+                                .file_name()
+                                .map(|name| name.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| "unknown".to_string())
+                        });
+                    ui::info(&format!("Rebuilding plugin {display_path}"));
+                }
+                WatcherEvent::Event(BundleEvent::BundleEnd(_)) => {}
+                WatcherEvent::Event(BundleEvent::Error(event)) => {
+                    if event.error.diagnostics.is_empty() {
+                        ui::error("Plugin build failed");
+                    } else {
+                        for diagnostic in event.error.diagnostics {
+                            ui::error(&diagnostic.to_string());
+                        }
+                    }
+                }
+                WatcherEvent::Close => break,
+                _ => {}
+            }
+        }
+    });
 
     watcher.start().await;
     Ok(())
@@ -207,6 +255,113 @@ async fn publish(args: PluginPathArg) -> CommandResult {
     ui::success(&format!("Plugin published {}", published.version));
     println!(" -> {}", published.url);
     Ok(())
+}
+
+async fn install(context: &CliContext, args: InstallPluginArgs) -> CommandResult {
+    if args.source.starts_with('@') {
+        let (name, version) =
+            parse_registry_install_spec(args.source.as_str()).ok_or_else(|| {
+                "Invalid registry plugin spec. Expected format: @org/plugin or @org/plugin@version"
+                    .to_string()
+            })?;
+        return install_from_registry(context, name, version).await;
+    }
+
+    install_from_directory(context, args.source.as_str()).await
+}
+
+async fn install_from_registry(
+    context: &CliContext,
+    name: String,
+    version: Option<String>,
+) -> CommandResult {
+    let current_version = crate::version::cli_version();
+    let http_client = yaak_api_client(ApiClientKind::Cli, current_version)
+        .map_err(|err| format!("Failed to initialize API client: {err}"))?;
+    let installing_version = version.clone().unwrap_or_else(|| "latest".to_string());
+    ui::info(&format!("Installing registry plugin {name}@{installing_version}"));
+
+    let plugin_context = PluginContext::new(Some("cli".to_string()), None);
+    let installed = download_and_install(
+        context.plugin_manager(),
+        context.query_manager(),
+        &http_client,
+        &plugin_context,
+        name.as_str(),
+        version,
+    )
+    .await
+    .map_err(|err| format!("Failed to install plugin: {err}"))?;
+
+    ui::success(&format!("Installed plugin {}@{}", installed.name, installed.version));
+    Ok(())
+}
+
+async fn install_from_directory(context: &CliContext, source: &str) -> CommandResult {
+    let plugin_dir = resolve_plugin_dir(Some(PathBuf::from(source)))?;
+    let plugin_dir_str = plugin_dir
+        .to_str()
+        .ok_or_else(|| {
+            format!("Plugin directory path is not valid UTF-8: {}", plugin_dir.display())
+        })?
+        .to_string();
+    ui::info(&format!("Installing plugin from directory {}", plugin_dir.display()));
+
+    let plugin = context
+        .db()
+        .upsert_plugin(
+            &Plugin {
+                directory: plugin_dir_str,
+                url: None,
+                enabled: true,
+                source: PluginSource::Filesystem,
+                ..Default::default()
+            },
+            &UpdateSource::Background,
+        )
+        .map_err(|err| format!("Failed to save plugin in database: {err}"))?;
+
+    let plugin_context = PluginContext::new(Some("cli".to_string()), None);
+    context
+        .plugin_manager()
+        .add_plugin(&plugin_context, &plugin)
+        .await
+        .map_err(|err| format!("Failed to load plugin runtime: {err}"))?;
+
+    ui::success(&format!("Installed plugin from {}", plugin.directory));
+    Ok(())
+}
+
+fn parse_registry_install_spec(source: &str) -> Option<(String, Option<String>)> {
+    if !source.starts_with('@') || !source.contains('/') {
+        return None;
+    }
+
+    let rest = source.get(1..)?;
+    let version_split = rest.rfind('@').map(|idx| idx + 1);
+    let (name, version) = match version_split {
+        Some(at_idx) => {
+            let (name, version) = source.split_at(at_idx);
+            let version = version.strip_prefix('@').unwrap_or_default();
+            if version.is_empty() {
+                return None;
+            }
+            (name.to_string(), Some(version.to_string()))
+        }
+        None => (source.to_string(), None),
+    };
+
+    if !name.starts_with('@') {
+        return None;
+    }
+
+    let without_scope = name.get(1..)?;
+    let (scope, plugin_name) = without_scope.split_once('/')?;
+    if scope.is_empty() || plugin_name.is_empty() {
+        return None;
+    }
+
+    Some((name, version))
 }
 
 #[derive(Deserialize)]

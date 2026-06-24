@@ -1,12 +1,15 @@
 use super::dedupe_headers;
-use crate::db_context::DbContext;
+use crate::client_db::ClientDb;
 use crate::error::Result;
-use crate::models::{Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequestHeader};
+use crate::models::{
+    AnyModel, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequestHeader,
+    ResolvedHttpRequestSettings, ResolvedSetting,
+};
 use crate::util::UpdateSource;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-impl<'a> DbContext<'a> {
+impl<'a> ClientDb<'a> {
     pub fn get_grpc_request(&self, id: &str) -> Result<GrpcRequest> {
         self.find_one(GrpcRequestIden::Id, id)
     }
@@ -103,5 +106,30 @@ impl<'a> DbContext<'a> {
         metadata.append(&mut grpc_request.metadata.clone());
 
         Ok(dedupe_headers(metadata))
+    }
+
+    pub fn resolve_settings_for_grpc_request(
+        &self,
+        grpc_request: &GrpcRequest,
+    ) -> Result<ResolvedHttpRequestSettings> {
+        let parent = if let Some(folder_id) = grpc_request.folder_id.clone() {
+            let folder = self.get_folder(&folder_id)?;
+            self.resolve_settings_for_folder(&folder)?
+        } else {
+            let workspace = self.get_workspace(&grpc_request.workspace_id)?;
+            self.resolve_settings_for_workspace(&workspace)
+        };
+
+        Ok(ResolvedHttpRequestSettings {
+            validate_certificates: if grpc_request.setting_validate_certificates.enabled {
+                ResolvedSetting::from_model(
+                    grpc_request.setting_validate_certificates.value,
+                    AnyModel::GrpcRequest(grpc_request.clone()),
+                )
+            } else {
+                parent.validate_certificates
+            },
+            ..parent
+        })
     }
 }

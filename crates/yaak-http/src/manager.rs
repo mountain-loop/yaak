@@ -1,8 +1,6 @@
-use crate::client::HttpConnectionOptions;
+use crate::client::{ConfiguredClient, HttpConnectionOptions};
 use crate::dns::LocalhostResolver;
 use crate::error::Result;
-use log::info;
-use reqwest::Client;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -11,7 +9,7 @@ use tokio::sync::RwLock;
 /// A cached HTTP client along with its DNS resolver.
 /// The resolver is needed to set the event sender per-request.
 pub struct CachedClient {
-    pub client: Client,
+    pub client: ConfiguredClient,
     pub resolver: Arc<LocalhostResolver>,
 }
 
@@ -36,7 +34,6 @@ impl HttpConnectionManager {
         connections.retain(|_, (_, last_used)| last_used.elapsed() <= self.ttl);
 
         if let Some((cached, last_used)) = connections.get_mut(&id) {
-            info!("Re-using HTTP client {id}");
             *last_used = Instant::now();
             return Ok(CachedClient {
                 client: cached.client.clone(),

@@ -50,7 +50,7 @@ This will generate a random JSON body on every request:
 The plugin provides access to all FakerJS modules and their methods:
 
 | Category   | Description               | Example Methods                            |
-|------------|---------------------------|--------------------------------------------|
+| ---------- | ------------------------- | ------------------------------------------ |
 | `airline`  | Airline-related data      | `aircraftType`, `airline`, `airplane`      |
 | `animal`   | Animal names and types    | `bear`, `bird`, `cat`, `dog`, `fish`       |
 | `color`    | Colors in various formats | `human`, `rgb`, `hex`, `hsl`               |

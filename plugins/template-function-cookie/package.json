@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-cookie",
   "displayName": "Cookie Template Functions",
-  "description": "Template functions for working with cookies",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for working with cookies",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

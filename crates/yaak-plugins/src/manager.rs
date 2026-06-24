@@ -21,9 +21,10 @@ use crate::events::{
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
 use crate::plugin_handle::PluginHandle;
+use crate::plugin_meta::get_plugin_meta;
 use crate::server_ws::PluginRuntimeServerWebsocket;
 use log::{error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -33,7 +34,7 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::{Instant, timeout};
-use yaak_models::models::Plugin;
+use yaak_models::models::{Plugin, PluginSource};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, generate_id};
 use yaak_templates::error::Error::RenderError;
@@ -49,6 +50,8 @@ pub struct PluginManager {
     vendored_plugin_dir: PathBuf,
     pub(crate) installed_plugin_dir: PathBuf,
     dev_mode: bool,
+    /// Errors from plugin initialization, retrievable once via `take_init_errors`.
+    init_errors: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -92,6 +95,7 @@ impl PluginManager {
             vendored_plugin_dir,
             installed_plugin_dir,
             dev_mode,
+            init_errors: Default::default(),
         };
 
         // Forward events to subscribers
@@ -162,13 +166,14 @@ impl PluginManager {
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
         let db = query_manager.connect();
-        for dir in bundled_dirs {
-            if db.get_plugin_by_directory(&dir).is_none() {
+        for dir in &bundled_dirs {
+            if db.get_plugin_by_directory(dir).is_none() {
                 db.upsert_plugin(
                     &Plugin {
-                        directory: dir,
+                        directory: dir.clone(),
                         enabled: true,
                         url: None,
+                        source: PluginSource::Bundled,
                         ..Default::default()
                     },
                     &UpdateSource::Background,
@@ -181,22 +186,26 @@ impl PluginManager {
 
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {
-            let joined = init_errors
-                .into_iter()
-                .map(|(dir, err)| format!("{dir}: {err}"))
-                .collect::<Vec<_>>()
-                .join("; ");
-            return Err(PluginErr(format!("Failed to initialize plugin(s): {joined}")));
+            for (dir, err) in &init_errors {
+                warn!("Plugin failed to initialize: {dir}: {err}");
+            }
+            *plugin_manager.init_errors.lock().await = init_errors;
         }
 
         Ok(plugin_manager)
+    }
+
+    /// Take any initialization errors, clearing them from the manager.
+    /// Returns a list of `(plugin_directory, error_message)` pairs.
+    pub async fn take_init_errors(&self) -> Vec<(String, String)> {
+        std::mem::take(&mut *self.init_errors.lock().await)
     }
 
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)
     pub fn get_plugins_dir(&self) -> PathBuf {
         if self.dev_mode {
             // Use plugins directly for easy development
-            // Tauri runs from crates-tauri/yaak-app/, so go up two levels to reach project root
+            // Tauri runs from crates-tauri/yaak-app-client/, so go up two levels to reach project root
             env::current_dir()
                 .map(|cwd| cwd.join("../../plugins").canonicalize().unwrap())
                 .unwrap_or_else(|_| self.vendored_plugin_dir.clone())
@@ -211,6 +220,57 @@ impl PluginManager {
         let plugins_dir = self.get_plugins_dir();
         info!("Loading bundled plugins from {plugins_dir:?}");
         read_plugins_dir(&plugins_dir).await
+    }
+
+    pub async fn resolve_plugins_for_runtime_from_db(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
+        let bundled_dirs = match self.list_bundled_plugin_dirs().await {
+            Ok(dirs) => dirs,
+            Err(err) => {
+                warn!("Failed to read bundled plugin dirs for resolution: {err:?}");
+                Vec::new()
+            }
+        };
+        self.resolve_plugins_for_runtime(plugins, bundled_dirs)
+    }
+
+    /// Resolve the plugin set for the current runtime instance.
+    ///
+    /// Rules:
+    /// - Drop bundled rows that are not present in this instance's bundled directory list.
+    /// - Deduplicate by plugin metadata name (fallback to directory key when metadata is unreadable).
+    /// - Prefer sources in this order: filesystem > registry > bundled.
+    /// - For same-source conflicts, prefer the most recently installed row (`created_at`).
+    fn resolve_plugins_for_runtime(
+        &self,
+        plugins: Vec<Plugin>,
+        bundled_dirs: Vec<String>,
+    ) -> Vec<Plugin> {
+        let bundled_dir_set: HashSet<String> = bundled_dirs.into_iter().collect();
+        let mut selected: HashMap<String, Plugin> = HashMap::new();
+
+        for plugin in plugins {
+            if matches!(plugin.source, PluginSource::Bundled)
+                && !bundled_dir_set.contains(&plugin.directory)
+            {
+                continue;
+            }
+
+            let key = match get_plugin_meta(Path::new(&plugin.directory)) {
+                Ok(meta) => meta.name,
+                Err(_) => format!("__dir__{}", plugin.directory),
+            };
+
+            match selected.get(&key) {
+                Some(existing) if !prefer_plugin(&plugin, existing) => {}
+                _ => {
+                    selected.insert(key, plugin);
+                }
+            }
+        }
+
+        let mut resolved = selected.into_values().collect::<Vec<_>>();
+        resolved.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        resolved
     }
 
     pub async fn uninstall(&self, plugin_context: &PluginContext, dir: &str) -> Result<()> {
@@ -287,7 +347,8 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Initialize all plugins from the provided list.
+    /// Initialize all plugins from the provided DB list.
+    /// Plugin candidates are resolved for this runtime instance before initialization.
     /// Returns a list of (plugin_directory, error_message) for any plugins that failed to initialize.
     pub async fn initialize_all_plugins(
         &self,
@@ -297,15 +358,18 @@ impl PluginManager {
         info!("Initializing all plugins");
         let start = Instant::now();
         let mut errors = Vec::new();
+        let plugins = self.resolve_plugins_for_runtime_from_db(plugins).await;
+
+        // Rebuild runtime handles from scratch to avoid stale/duplicate handles.
+        let existing_handles = { self.plugin_handles.lock().await.clone() };
+        for plugin_handle in existing_handles {
+            if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
+                error!("Failed to remove plugin {} {e:?}", plugin_handle.dir);
+                errors.push((plugin_handle.dir.clone(), e.to_string()));
+            }
+        }
 
         for plugin in plugins {
-            // First remove the plugin if it exists and is enabled
-            if let Some(plugin_handle) = self.get_plugin_by_dir(&plugin.directory).await {
-                if let Err(e) = self.remove_plugin(plugin_context, &plugin_handle).await {
-                    error!("Failed to remove plugin {} {e:?}", plugin.directory);
-                    continue;
-                }
-            }
             if let Err(e) = self.add_plugin(plugin_context, &plugin).await {
                 warn!("Failed to add plugin {} {e:?}", plugin.directory);
                 errors.push((plugin.directory.clone(), e.to_string()));
@@ -1063,6 +1127,24 @@ impl PluginManager {
     }
 }
 
+fn source_priority(source: &PluginSource) -> i32 {
+    match source {
+        PluginSource::Filesystem => 3,
+        PluginSource::Registry => 2,
+        PluginSource::Bundled => 1,
+    }
+}
+
+fn prefer_plugin(candidate: &Plugin, existing: &Plugin) -> bool {
+    let candidate_priority = source_priority(&candidate.source);
+    let existing_priority = source_priority(&existing.source);
+    if candidate_priority != existing_priority {
+        return candidate_priority > existing_priority;
+    }
+
+    candidate.created_at > existing.created_at
+}
+
 async fn read_plugins_dir(dir: &PathBuf) -> Result<Vec<String>> {
     let mut result = read_dir(dir).await?;
     let mut dirs: Vec<String> = vec![];
@@ -1081,16 +1163,10 @@ async fn read_plugins_dir(dir: &PathBuf) -> Result<Vec<String>> {
 fn fix_windows_paths(p: &PathBuf) -> String {
     use dunce;
     use path_slash::PathBufExt;
-    use regex::Regex;
 
-    // 1. Remove UNC prefix for Windows paths to pass to sidecar
-    let safe_path = dunce::simplified(p.as_path()).to_string_lossy().to_string();
+    // 1. Remove UNC prefix for Windows paths
+    let safe_path = dunce::simplified(p.as_path());
 
-    // 2. Remove the drive letter
-    let safe_path = Regex::new("^[a-zA-Z]:").unwrap().replace(safe_path.as_str(), "");
-
-    // 3. Convert backslashes to forward
-    let safe_path = PathBuf::from(safe_path.to_string()).to_slash_lossy().to_string();
-
-    safe_path
+    // 2. Convert backslashes to forward slashes for Node.js compatibility
+    PathBuf::from(safe_path).to_slash_lossy().to_string()
 }

@@ -1,23 +1,23 @@
-import type { HttpRequest, PluginDefinition } from '@yaakapp/api';
+import type { HttpRequest, PluginDefinition } from "@yaakapp/api";
 
-const NEWLINE = '\\\n ';
+const NEWLINE = "\\\n ";
 
 export const plugin: PluginDefinition = {
   httpRequestActions: [
     {
-      label: 'Copy as Curl',
-      icon: 'copy',
+      label: "Copy as Curl",
+      icon: "copy",
       async onSelect(ctx, args) {
         const rendered_request = await ctx.httpRequest.render({
           httpRequest: args.httpRequest,
-          purpose: 'send',
+          purpose: "send",
         });
         const data = await convertToCurl(rendered_request);
         await ctx.clipboard.copyText(data);
         await ctx.toast.show({
-          message: 'Command copied to clipboard',
-          icon: 'copy',
-          color: 'success',
+          message: "Command copied to clipboard",
+          icon: "copy",
+          color: "success",
         });
       },
     },
@@ -25,40 +25,40 @@ export const plugin: PluginDefinition = {
 };
 
 export async function convertToCurl(request: Partial<HttpRequest>) {
-  const xs = ['curl'];
+  const xs = ["curl"];
 
   // Add method and URL all on first line
-  if (request.method) xs.push('-X', request.method);
+  if (request.method) xs.push("-X", request.method);
 
   // Build final URL with parameters (compatible with old curl)
-  let finalUrl = request.url || '';
+  let finalUrl = request.url || "";
   const urlParams = (request.urlParameters ?? []).filter(onlyEnabled);
   if (urlParams.length > 0) {
     // Build url
-    const [base, hash] = finalUrl.split('#');
-    const separator = base?.includes('?') ? '&' : '?';
+    const [base, hash] = finalUrl.split("#");
+    const separator = base?.includes("?") ? "&" : "?";
     const queryString = urlParams
       .map((p) => `${encodeURIComponent(p.name)}=${encodeURIComponent(p.value)}`)
-      .join('&');
-    finalUrl = base + separator + queryString + (hash ? `#${hash}` : '');
+      .join("&");
+    finalUrl = base + separator + queryString + (hash ? `#${hash}` : "");
   }
 
   // Add API key authentication
-  if (request.authenticationType === 'apikey') {
-    if (request.authentication?.location === 'query') {
-      const sep = finalUrl.includes('?') ? '&' : '?';
+  if (request.authenticationType === "apikey") {
+    if (request.authentication?.location === "query") {
+      const sep = finalUrl.includes("?") ? "&" : "?";
       finalUrl = [
         finalUrl,
         sep,
-        encodeURIComponent(request.authentication?.key ?? 'token'),
-        '=',
-        encodeURIComponent(request.authentication?.value ?? ''),
-      ].join('');
+        encodeURIComponent(request.authentication?.key ?? "token"),
+        "=",
+        encodeURIComponent(request.authentication?.value ?? ""),
+      ].join("");
     } else {
       request.headers = request.headers ?? [];
       request.headers.push({
-        name: request.authentication?.key ?? 'X-Api-Key',
-        value: request.authentication?.value ?? '',
+        name: request.authentication?.key ?? "X-Api-Key",
+        value: request.authentication?.value ?? "",
       });
     }
   }
@@ -68,80 +68,80 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
 
   // Add headers
   for (const h of (request.headers ?? []).filter(onlyEnabled)) {
-    xs.push('--header', quote(`${h.name}: ${h.value}`));
+    xs.push("--header", quote(`${h.name}: ${h.value}`));
     xs.push(NEWLINE);
   }
 
   // Add form params
-  const type = request.bodyType ?? 'none';
+  const type = request.bodyType ?? "none";
   if (
-    (type === 'multipart/form-data' || type === 'application/x-www-form-urlencoded') &&
+    (type === "multipart/form-data" || type === "application/x-www-form-urlencoded") &&
     Array.isArray(request.body?.form)
   ) {
-    const flag = request.bodyType === 'multipart/form-data' ? '--form' : '--data';
+    const flag = request.bodyType === "multipart/form-data" ? "--form" : "--data";
     for (const p of (request.body?.form ?? []).filter(onlyEnabled)) {
       if (p.file) {
         let v = `${p.name}=@${p.file}`;
-        v += p.contentType ? `;type=${p.contentType}` : '';
+        v += p.contentType ? `;type=${p.contentType}` : "";
         xs.push(flag, v);
       } else {
         xs.push(flag, quote(`${p.name}=${p.value}`));
       }
       xs.push(NEWLINE);
     }
-  } else if (type === 'graphql' && typeof request.body?.query === 'string') {
+  } else if (type === "graphql" && typeof request.body?.query === "string") {
     const body = {
-      query: request.body.query || '',
+      query: request.body.query || "",
       variables: maybeParseJSON(request.body.variables, undefined),
     };
-    xs.push('--data', quote(JSON.stringify(body)));
+    xs.push("--data", quote(JSON.stringify(body)));
     xs.push(NEWLINE);
-  } else if (type !== 'none' && typeof request.body?.text === 'string') {
-    xs.push('--data', quote(request.body.text));
+  } else if (type !== "none" && typeof request.body?.text === "string") {
+    xs.push("--data", quote(request.body.text));
     xs.push(NEWLINE);
   }
 
   // Add basic/digest authentication
   if (request.authentication?.disabled !== true) {
-    if (request.authenticationType === 'basic' || request.authenticationType === 'digest') {
-      if (request.authenticationType === 'digest') xs.push('--digest');
+    if (request.authenticationType === "basic" || request.authenticationType === "digest") {
+      if (request.authenticationType === "digest") xs.push("--digest");
       xs.push(
-        '--user',
+        "--user",
         quote(
-          `${request.authentication?.username ?? ''}:${request.authentication?.password ?? ''}`,
+          `${request.authentication?.username ?? ""}:${request.authentication?.password ?? ""}`,
         ),
       );
       xs.push(NEWLINE);
     }
 
     // Add bearer authentication
-    if (request.authenticationType === 'bearer') {
+    if (request.authenticationType === "bearer") {
       const value =
-        `${request.authentication?.prefix ?? 'Bearer'} ${request.authentication?.token ?? ''}`.trim();
-      xs.push('--header', quote(`Authorization: ${value}`));
+        `${request.authentication?.prefix ?? "Bearer"} ${request.authentication?.token ?? ""}`.trim();
+      xs.push("--header", quote(`Authorization: ${value}`));
       xs.push(NEWLINE);
     }
 
-    if (request.authenticationType === 'auth-aws-sig-v4') {
+    if (request.authenticationType === "auth-aws-sig-v4") {
       xs.push(
-        '--aws-sigv4',
+        "--aws-sigv4",
         [
-          'aws',
-          'amz',
-          request.authentication?.region ?? '',
-          request.authentication?.service ?? '',
-        ].join(':'),
+          "aws",
+          "amz",
+          request.authentication?.region ?? "",
+          request.authentication?.service ?? "",
+        ].join(":"),
       );
       xs.push(NEWLINE);
       xs.push(
-        '--user',
+        "--user",
         quote(
-          `${request.authentication?.accessKeyId ?? ''}:${request.authentication?.secretAccessKey ?? ''}`,
+          `${request.authentication?.accessKeyId ?? ""}:${request.authentication?.secretAccessKey ?? ""}`,
         ),
       );
       if (request.authentication?.sessionToken) {
         xs.push(NEWLINE);
-        xs.push('--header', quote(`X-Amz-Security-Token: ${request.authentication.sessionToken}`));
+        xs.push("--header", quote(`X-Amz-Security-Token: ${request.authentication.sessionToken}`));
       }
       xs.push(NEWLINE);
     }
@@ -152,7 +152,7 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
     xs.splice(xs.length - 1, 1);
   }
 
-  return xs.join(' ');
+  return xs.join(" ");
 }
 
 function quote(arg: string): string {

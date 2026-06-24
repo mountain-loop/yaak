@@ -1,12 +1,12 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { McpServerContext } from '../types.js';
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServerContext } from "../types.js";
 
 export function registerWorkspaceTools(server: McpServer, ctx: McpServerContext) {
   server.registerTool(
-    'list_workspaces',
+    "list_workspaces",
     {
-      title: 'List Workspaces',
-      description: 'List all open workspaces in Yaak',
+      title: "List Workspaces",
+      description: "List all open workspaces in Yaak",
     },
     async () => {
       const workspaces = await ctx.yaak.workspace.list();
@@ -14,7 +14,7 @@ export function registerWorkspaceTools(server: McpServer, ctx: McpServerContext)
       return {
         content: [
           {
-            type: 'text' as const,
+            type: "text" as const,
             text: JSON.stringify(workspaces, null, 2),
           },
         ],

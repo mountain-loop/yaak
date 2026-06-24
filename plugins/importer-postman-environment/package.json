@@ -1,13 +1,13 @@
 {
   "name": "@yaak/importer-postman-environment",
   "displayName": "Postman Environment Importer",
-  "description": "Import environments from Postman",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Import environments from Postman",
   "main": "./build/index.js",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   }
 }

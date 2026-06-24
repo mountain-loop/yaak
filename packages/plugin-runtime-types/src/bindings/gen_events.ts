@@ -396,7 +396,7 @@ description?: string, };
 
 export type GenericCompletionOption = { label: string, detail?: string, info?: string, type?: CompletionOptionType, boost?: number, };
 
-export type GetCookieValueRequest = { name: string, };
+export type GetCookieValueRequest = { name: string, domain?: string | null, };
 
 export type GetCookieValueResponse = { value: string | null, };
 

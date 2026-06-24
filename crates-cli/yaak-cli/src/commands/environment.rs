@@ -6,6 +6,7 @@ use crate::utils::json::{
     parse_required_json, require_id, validate_create_id,
 };
 use crate::utils::schema::append_agent_hints;
+use crate::utils::workspace::resolve_workspace_id;
 use schemars::schema_for;
 use yaak_models::models::Environment;
 use yaak_models::util::UpdateSource;
@@ -14,7 +15,7 @@ type CommandResult<T = ()> = std::result::Result<T, String>;
 
 pub fn run(ctx: &CliContext, args: EnvironmentArgs) -> i32 {
     let result = match args.command {
-        EnvironmentCommands::List { workspace_id } => list(ctx, &workspace_id),
+        EnvironmentCommands::List { workspace_id } => list(ctx, workspace_id.as_deref()),
         EnvironmentCommands::Schema { pretty } => schema(pretty),
         EnvironmentCommands::Show { environment_id } => show(ctx, &environment_id),
         EnvironmentCommands::Create { workspace_id, name, json } => {
@@ -45,10 +46,11 @@ fn schema(pretty: bool) -> CommandResult {
     Ok(())
 }
 
-fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {
+fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
+    let workspace_id = resolve_workspace_id(ctx, workspace_id, "environment list")?;
     let environments = ctx
         .db()
-        .list_environments_ensure_base(workspace_id)
+        .list_environments_ensure_base(&workspace_id)
         .map_err(|e| format!("Failed to list environments: {e}"))?;
 
     if environments.is_empty() {
@@ -92,8 +94,14 @@ fn create(
         validate_create_id(&payload, "environment")?;
         let mut environment: Environment = serde_json::from_value(payload)
             .map_err(|e| format!("Failed to parse environment create JSON: {e}"))?;
+        let fallback_workspace_id =
+            if workspace_id_arg.is_none() && environment.workspace_id.is_empty() {
+                Some(resolve_workspace_id(ctx, None, "environment create")?)
+            } else {
+                None
+            };
         merge_workspace_id_arg(
-            workspace_id_arg.as_deref(),
+            workspace_id_arg.as_deref().or(fallback_workspace_id.as_deref()),
             &mut environment.workspace_id,
             "environment create",
         )?;
@@ -111,9 +119,8 @@ fn create(
         return Ok(());
     }
 
-    let workspace_id = workspace_id_arg.ok_or_else(|| {
-        "environment create requires workspace_id unless JSON payload is provided".to_string()
-    })?;
+    let workspace_id =
+        resolve_workspace_id(ctx, workspace_id_arg.as_deref(), "environment create")?;
     let name = name.ok_or_else(|| {
         "environment create requires --name unless JSON payload is provided".to_string()
     })?;

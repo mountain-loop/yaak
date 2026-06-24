@@ -37,7 +37,6 @@ The plugin analyzes your gRPC request configuration and generates a properly for
 
 ### Simple Unary Call
 
-
 ```bash
 grpcurl -plaintext \
   -d '{"name": "John Doe"}' \

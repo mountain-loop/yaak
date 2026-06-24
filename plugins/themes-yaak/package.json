@@ -1,9 +1,9 @@
 {
   "name": "@yaak/themes-yaak",
   "displayName": "Yaak Themes",
-  "description": "Default themes for Yaak",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Default themes for Yaak",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

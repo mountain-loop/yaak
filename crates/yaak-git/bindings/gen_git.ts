@@ -7,7 +7,11 @@ export type CloneResult = { "type": "success" } | { "type": "cancelled" } | { "t
 
 export type GitAuthor = { name: string | null, email: string | null, };
 
-export type GitCommit = { author: GitAuthor, when: string, message: string | null, };
+export type GitBranchInfo = { path: string, headRef: string | null, headRefShorthand: string | null, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
+
+export type GitCommit = { oid: string, author: GitAuthor, when: string, message: string | null, };
+
+export type GitFileDiff = { original: string, modified: string, };
 
 export type GitRemote = { name: string, url: string | null, };
 
@@ -16,6 +20,10 @@ export type GitStatus = "untracked" | "conflict" | "current" | "modified" | "rem
 export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: boolean, prev: SyncModel | null, next: SyncModel | null, };
 
 export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
+
+export type GitWorktreeStatus = { entries: Array<GitWorktreeStatusEntry>, };
+
+export type GitWorktreeStatusEntry = { relaPath: string, modelId: string | null, status: GitStatus, staged: boolean, };
 
 export type PullResult = { "type": "success", message: string, } | { "type": "up_to_date" } | { "type": "needs_credentials", url: string, error: string | null, } | { "type": "diverged", remote: string, branch: string, } | { "type": "uncommitted_changes" };
 

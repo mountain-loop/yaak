@@ -14,34 +14,34 @@ const packages = [
   "cli-linux-arm64",
   "cli-linux-x64",
   "cli-win32-arm64",
-  "cli-win32-x64"
+  "cli-win32-x64",
 ];
 
 const binaries = [
   {
     src: join(__dirname, "dist", "cli-darwin-arm64", "yaak"),
-    dest: join(__dirname, "cli-darwin-arm64", "bin", "yaak")
+    dest: join(__dirname, "cli-darwin-arm64", "bin", "yaak"),
   },
   {
     src: join(__dirname, "dist", "cli-darwin-x64", "yaak"),
-    dest: join(__dirname, "cli-darwin-x64", "bin", "yaak")
+    dest: join(__dirname, "cli-darwin-x64", "bin", "yaak"),
   },
   {
     src: join(__dirname, "dist", "cli-linux-arm64", "yaak"),
-    dest: join(__dirname, "cli-linux-arm64", "bin", "yaak")
+    dest: join(__dirname, "cli-linux-arm64", "bin", "yaak"),
   },
   {
     src: join(__dirname, "dist", "cli-linux-x64", "yaak"),
-    dest: join(__dirname, "cli-linux-x64", "bin", "yaak")
+    dest: join(__dirname, "cli-linux-x64", "bin", "yaak"),
   },
   {
     src: join(__dirname, "dist", "cli-win32-arm64", "yaak.exe"),
-    dest: join(__dirname, "cli-win32-arm64", "bin", "yaak.exe")
+    dest: join(__dirname, "cli-win32-arm64", "bin", "yaak.exe"),
   },
   {
     src: join(__dirname, "dist", "cli-win32-x64", "yaak.exe"),
-    dest: join(__dirname, "cli-win32-x64", "bin", "yaak.exe")
-  }
+    dest: join(__dirname, "cli-win32-x64", "bin", "yaak.exe"),
+  },
 ];
 
 for (const { src, dest } of binaries) {
@@ -67,7 +67,7 @@ for (const pkg of packages) {
       "@yaakapp/cli-linux-arm64": version,
       "@yaakapp/cli-linux-x64": version,
       "@yaakapp/cli-win32-x64": version,
-      "@yaakapp/cli-win32-arm64": version
+      "@yaakapp/cli-win32-arm64": version,
     };
   }
 

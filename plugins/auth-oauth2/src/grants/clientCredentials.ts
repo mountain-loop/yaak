@@ -1,25 +1,25 @@
-import { createPrivateKey, randomUUID } from 'node:crypto';
-import type { Context } from '@yaakapp/api';
-import jwt, { type Algorithm } from 'jsonwebtoken';
-import { fetchAccessToken } from '../fetchAccessToken';
-import type { TokenStoreArgs } from '../store';
-import { getToken, storeToken } from '../store';
-import { isTokenExpired } from '../util';
+import { createPrivateKey, randomUUID } from "node:crypto";
+import type { Context } from "@yaakapp/api";
+import jwt, { type Algorithm } from "jsonwebtoken";
+import { fetchAccessToken } from "../fetchAccessToken";
+import type { TokenStoreArgs } from "../store";
+import { getToken, storeToken } from "../store";
+import { isTokenExpired } from "../util";
 
 export const jwtAlgorithms = [
-  'HS256',
-  'HS384',
-  'HS512',
-  'RS256',
-  'RS384',
-  'RS512',
-  'PS256',
-  'PS384',
-  'PS512',
-  'ES256',
-  'ES384',
-  'ES512',
-  'none',
+  "HS256",
+  "HS384",
+  "HS512",
+  "RS256",
+  "RS384",
+  "RS512",
+  "PS256",
+  "PS384",
+  "PS512",
+  "ES256",
+  "ES384",
+  "ES512",
+  "none",
 ] as const;
 
 export const defaultJwtAlgorithm = jwtAlgorithms[0];
@@ -40,7 +40,7 @@ function buildClientAssertionJwt(params: {
 }): string {
   const { clientId, accessTokenUrl, secret, algorithm } = params;
 
-  const isHmac = algorithm.startsWith('HS') || algorithm === 'none';
+  const isHmac = algorithm.startsWith("HS") || algorithm === "none";
 
   // Resolve the signing key depending on format
   let signingKey: jwt.Secret;
@@ -51,24 +51,25 @@ function buildClientAssertionJwt(params: {
   if (isHmac) {
     // HMAC algorithms use the raw secret (string or Buffer)
     signingKey = secret;
-  } else if (trimmed.startsWith('{')) {
+  } else if (trimmed.startsWith("{")) {
     // Looks like JSON - treat as JWK. There is surely a better way to detect JWK vs a raw secret, but this should work in most cases.
+    // oxlint-disable-next-line no-explicit-any
     let jwk: any;
     try {
       jwk = JSON.parse(trimmed);
     } catch {
-      throw new Error('Client Assertion secret looks like JSON but is not valid');
+      throw new Error("Client Assertion secret looks like JSON but is not valid");
     }
 
     kid = jwk?.kid;
-    signingKey = createPrivateKey({ key: jwk, format: 'jwk' });
-  } else if (trimmed.startsWith('-----')) {
+    signingKey = createPrivateKey({ key: jwk, format: "jwk" });
+  } else if (trimmed.startsWith("-----")) {
     // PEM-encoded key
-    signingKey = createPrivateKey({ key: trimmed, format: 'pem' });
+    signingKey = createPrivateKey({ key: trimmed, format: "pem" });
   } else {
     throw new Error(
-      'Client Assertion secret must be a JWK JSON object, a PEM-encoded key ' +
-        '(starting with -----), or a raw secret for HMAC algorithms.',
+      "Client Assertion secret must be a JWK JSON object, a PEM-encoded key " +
+        "(starting with -----), or a raw secret for HMAC algorithms.",
     );
   }
 
@@ -83,7 +84,7 @@ function buildClientAssertionJwt(params: {
   };
 
   // Build the JWT header; include "kid" when available
-  const header: jwt.JwtHeader = { alg: algorithm, typ: 'JWT' };
+  const header: jwt.JwtHeader = { alg: algorithm, typ: "JWT" };
   if (kid) {
     header.kid = kid;
   }
@@ -134,9 +135,9 @@ export async function getClientCredentials(
 
   const common: Omit<
     Parameters<typeof fetchAccessToken>[1],
-    'clientAssertion' | 'clientSecret' | 'credentialsInBody'
+    "clientAssertion" | "clientSecret" | "credentialsInBody"
   > = {
-    grantType: 'client_credentials',
+    grantType: "client_credentials",
     accessTokenUrl,
     audience,
     clientId,
@@ -145,7 +146,7 @@ export async function getClientCredentials(
   };
 
   const fetchParams: Parameters<typeof fetchAccessToken>[1] =
-    clientCredentialsMethod === 'client_assertion'
+    clientCredentialsMethod === "client_assertion"
       ? {
           ...common,
           clientAssertion: buildClientAssertionJwt({
@@ -153,7 +154,7 @@ export async function getClientCredentials(
             algorithm: clientAssertionAlgorithm as Algorithm,
             accessTokenUrl,
             secret: clientAssertionSecretBase64
-              ? Buffer.from(clientAssertionSecret, 'base64').toString('utf-8')
+              ? Buffer.from(clientAssertionSecret, "base64").toString("utf-8")
               : clientAssertionSecret,
           }),
         }

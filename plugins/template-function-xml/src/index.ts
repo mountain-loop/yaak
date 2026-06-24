@@ -1,52 +1,53 @@
-import { DOMParser } from '@xmldom/xmldom';
-import type { CallTemplateFunctionArgs, Context, PluginDefinition } from '@yaakapp/api';
-import xpath from 'xpath';
+/* oxlint-disable no-base-to-string */
+import { DOMParser } from "@xmldom/xmldom";
+import type { CallTemplateFunctionArgs, Context, PluginDefinition } from "@yaakapp/api";
+import xpath from "xpath";
 
-const RETURN_FIRST = 'first';
-const RETURN_ALL = 'all';
-const RETURN_JOIN = 'join';
+const RETURN_FIRST = "first";
+const RETURN_ALL = "all";
+const RETURN_JOIN = "join";
 
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
-      name: 'xml.xpath',
-      description: 'Filter XML-formatted text using XPath syntax',
-      previewArgs: ['query'],
+      name: "xml.xpath",
+      description: "Filter XML-formatted text using XPath syntax",
+      previewArgs: ["query"],
       args: [
         {
-          type: 'text',
-          name: 'input',
-          label: 'Input',
+          type: "text",
+          name: "input",
+          label: "Input",
           multiLine: true,
-          placeholder: '<foo></foo>',
+          placeholder: "<foo></foo>",
         },
         {
-          type: 'h_stack',
+          type: "h_stack",
           inputs: [
             {
-              type: 'select',
-              name: 'result',
-              label: 'Return Format',
+              type: "select",
+              name: "result",
+              label: "Return Format",
               defaultValue: RETURN_FIRST,
               options: [
-                { label: 'First result', value: RETURN_FIRST },
-                { label: 'All results', value: RETURN_ALL },
-                { label: 'Join with separator', value: RETURN_JOIN },
+                { label: "First result", value: RETURN_FIRST },
+                { label: "All results", value: RETURN_ALL },
+                { label: "Join with separator", value: RETURN_JOIN },
               ],
             },
             {
-              name: 'join',
-              type: 'text',
-              label: 'Separator',
+              name: "join",
+              type: "text",
+              label: "Separator",
               optional: true,
-              defaultValue: ', ',
+              defaultValue: ", ",
               dynamic(_ctx, args) {
                 return { hidden: args.values.result !== RETURN_JOIN };
               },
             },
           ],
         },
-        { type: 'text', name: 'query', label: 'Query', placeholder: '//foo' },
+        { type: "text", name: "query", label: "Query", placeholder: "//foo" },
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         try {
@@ -61,25 +62,25 @@ export const plugin: PluginDefinition = {
   ],
 };
 
-export type XPathResult = 'first' | 'join' | 'all';
+export type XPathResult = "first" | "join" | "all";
 export function filterXPath(
   body: string,
   path: string,
   result: XPathResult,
   join: string | null,
 ): string {
-  // biome-ignore lint/suspicious/noExplicitAny: none
-  const doc: any = new DOMParser().parseFromString(body, 'text/xml');
+  // oxlint-disable-next-line no-explicit-any
+  const doc: any = new DOMParser().parseFromString(body, "text/xml");
   const items = xpath.select(path, doc, false);
 
   if (!Array.isArray(items)) {
     return String(items);
   }
-  if (!Array.isArray(items) || result === 'first') {
-    return items[0] != null ? String(items[0].firstChild ?? '') : '';
+  if (!Array.isArray(items) || result === "first") {
+    return items[0] != null ? String(items[0].firstChild ?? "") : "";
   }
-  if (result === 'join') {
-    return items.map((item) => String(item.firstChild ?? '')).join(join ?? '');
+  if (result === "join") {
+    return items.map((item) => String(item.firstChild ?? "")).join(join ?? "");
   }
   // Not sure what cases this happens in (?)
   return String(items);

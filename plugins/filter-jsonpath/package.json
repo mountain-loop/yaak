@@ -1,14 +1,14 @@
 {
   "name": "@yaak/filter-jsonpath",
   "displayName": "JSONPath Filter",
+  "version": "0.1.0",
+  "private": true,
   "description": "Filter JSON response data using JSONPath expressions",
   "repository": {
     "type": "git",
     "url": "https://github.com/mountain-loop/yaak.git",
     "directory": "plugins/filter-jsonpath"
   },
-  "private": true,
-  "version": "0.1.0",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

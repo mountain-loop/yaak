@@ -1,8 +1,8 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import http from 'node:http';
-import type { Context } from '@yaakapp/api';
+import type { IncomingMessage, ServerResponse } from "node:http";
+import http from "node:http";
+import type { Context } from "@yaakapp/api";
 
-export const HOSTED_CALLBACK_URL = 'https://oauth.yaak.app/redirect';
+export const HOSTED_CALLBACK_URL_BASE = "https://oauth.yaak.app/redirect";
 export const DEFAULT_LOCALHOST_PORT = 8765;
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -36,12 +36,12 @@ export function startCallbackServer(options: {
 }): Promise<CallbackServerResult> {
   // Stop any previously active server before starting a new one
   if (activeServer) {
-    console.log('[oauth2] Stopping previous callback server before starting new one');
+    console.log("[oauth2] Stopping previous callback server before starting new one");
     activeServer.stop();
     activeServer = null;
   }
 
-  const { port = 0, path = '/callback', timeoutMs = CALLBACK_TIMEOUT_MS } = options;
+  const { port = 0, path = "/callback", timeoutMs = CALLBACK_TIMEOUT_MS } = options;
 
   return new Promise((resolve, reject) => {
     let callbackResolve: ((url: string) => void) | null = null;
@@ -50,33 +50,33 @@ export function startCallbackServer(options: {
     let stopped = false;
 
     const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
-      const reqUrl = new URL(req.url ?? '/', `http://${req.headers.host}`);
+      const reqUrl = new URL(req.url ?? "/", `http://${req.headers.host}`);
 
       // Only handle the callback path
       if (reqUrl.pathname !== path && reqUrl.pathname !== `${path}/`) {
-        res.writeHead(404, { 'Content-Type': 'text/plain' });
-        res.end('Not Found');
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not Found");
         return;
       }
 
-      if (req.method === 'POST') {
+      if (req.method === "POST") {
         // POST: read JSON body with the final callback URL and resolve
-        let body = '';
-        req.on('data', (chunk: Buffer) => {
+        let body = "";
+        req.on("data", (chunk: Buffer) => {
           body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on("end", () => {
           try {
             const { url: callbackUrl } = JSON.parse(body);
-            if (!callbackUrl || typeof callbackUrl !== 'string') {
-              res.writeHead(400, { 'Content-Type': 'text/plain' });
-              res.end('Missing url in request body');
+            if (!callbackUrl || typeof callbackUrl !== "string") {
+              res.writeHead(400, { "Content-Type": "text/plain" });
+              res.end("Missing url in request body");
               return;
             }
 
             // Send success response
-            res.writeHead(200, { 'Content-Type': 'text/plain' });
-            res.end('OK');
+            res.writeHead(200, { "Content-Type": "text/plain" });
+            res.end("OK");
 
             // Resolve the callback promise
             if (callbackResolve) {
@@ -88,19 +88,19 @@ export function startCallbackServer(options: {
             // Stop the server after a short delay to ensure response is sent
             setTimeout(() => stopServer(), 100);
           } catch {
-            res.writeHead(400, { 'Content-Type': 'text/plain' });
-            res.end('Invalid JSON');
+            res.writeHead(400, { "Content-Type": "text/plain" });
+            res.end("Invalid JSON");
           }
         });
         return;
       }
 
       // GET: serve intermediate page that reads the fragment and POSTs back
-      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.writeHead(200, { "Content-Type": "text/html" });
       res.end(getFragmentForwardingHtml());
     });
 
-    server.on('error', (err: Error) => {
+    server.on("error", (err: Error) => {
       if (!stopped) {
         reject(err);
       }
@@ -123,16 +123,16 @@ export function startCallbackServer(options: {
       server.close();
 
       if (callbackReject) {
-        callbackReject(new Error('Callback server stopped'));
+        callbackReject(new Error("Callback server stopped"));
         callbackResolve = null;
         callbackReject = null;
       }
     };
 
-    server.listen(port, '127.0.0.1', () => {
+    server.listen(port, "127.0.0.1", () => {
       const address = server.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('Failed to get server address'));
+      if (!address || typeof address === "string") {
+        reject(new Error("Failed to get server address"));
         return;
       }
 
@@ -147,7 +147,7 @@ export function startCallbackServer(options: {
         waitForCallback: () => {
           return new Promise<string>((res, rej) => {
             if (stopped) {
-              rej(new Error('Callback server already stopped'));
+              rej(new Error("Callback server already stopped"));
               return;
             }
 
@@ -157,7 +157,7 @@ export function startCallbackServer(options: {
             // Set timeout
             timeoutHandle = setTimeout(() => {
               if (callbackReject) {
-                callbackReject(new Error('Authorization timed out'));
+                callbackReject(new Error("Authorization timed out"));
                 callbackResolve = null;
                 callbackReject = null;
               }
@@ -176,12 +176,15 @@ export function startCallbackServer(options: {
 
 /**
  * Build the redirect URI for the hosted callback page.
- * The hosted page will redirect to the local server with the OAuth response.
+ * The port is encoded in the URL path so the hosted page can redirect
+ * to the local server without relying on query params (which some OAuth
+ * providers strip). The default port is omitted for a cleaner URL.
  */
-export function buildHostedCallbackRedirectUri(localPort: number, localPath: string): string {
-  const localRedirectUri = `http://127.0.0.1:${localPort}${localPath}`;
-  // The hosted callback page will read params and redirect to the local server
-  return `${HOSTED_CALLBACK_URL}?redirect_to=${encodeURIComponent(localRedirectUri)}`;
+export function buildHostedCallbackRedirectUri(localPort: number): string {
+  if (localPort === DEFAULT_LOCALHOST_PORT) {
+    return HOSTED_CALLBACK_URL_BASE;
+  }
+  return `${HOSTED_CALLBACK_URL_BASE}/${localPort}`;
 }
 
 /**
@@ -190,7 +193,7 @@ export function buildHostedCallbackRedirectUri(localPort: number, localPath: str
  */
 export function stopActiveServer(): void {
   if (activeServer) {
-    console.log('[oauth2] Stopping active callback server during dispose');
+    console.log("[oauth2] Stopping active callback server during dispose");
     activeServer.stop();
     activeServer = null;
   }
@@ -207,48 +210,43 @@ export async function getRedirectUrlViaExternalBrowser(
   ctx: Context,
   authorizationUrl: URL,
   options: {
-    callbackType: 'localhost' | 'hosted';
+    callbackType: "localhost" | "hosted";
     callbackPort?: number;
   },
 ): Promise<{ callbackUrl: string; redirectUri: string }> {
   const { callbackType, callbackPort } = options;
 
-  // Determine port based on callback type:
-  // - localhost: use specified port or default stable port
-  // - hosted: use random port (0) since hosted page redirects to local
-  const port = callbackType === 'localhost' ? (callbackPort ?? DEFAULT_LOCALHOST_PORT) : 0;
+  const port = callbackPort ?? DEFAULT_LOCALHOST_PORT;
 
-  console.log(
-    `[oauth2] Starting callback server (type: ${callbackType}, port: ${port || 'random'})`,
-  );
+  console.log(`[oauth2] Starting callback server (type: ${callbackType}, port: ${port})`);
 
   const server = await startCallbackServer({
     port,
-    path: '/callback',
+    path: "/callback",
   });
 
   try {
     // Determine the redirect URI to send to the OAuth provider
     let oauthRedirectUri: string;
 
-    if (callbackType === 'hosted') {
-      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port, '/callback');
-      console.log('[oauth2] Using hosted callback redirect:', oauthRedirectUri);
+    if (callbackType === "hosted") {
+      oauthRedirectUri = buildHostedCallbackRedirectUri(server.port);
+      console.log("[oauth2] Using hosted callback redirect:", oauthRedirectUri);
     } else {
       oauthRedirectUri = server.redirectUri;
-      console.log('[oauth2] Using localhost callback redirect:', oauthRedirectUri);
+      console.log("[oauth2] Using localhost callback redirect:", oauthRedirectUri);
     }
 
     // Set the redirect URI on the authorization URL
-    authorizationUrl.searchParams.set('redirect_uri', oauthRedirectUri);
+    authorizationUrl.searchParams.set("redirect_uri", oauthRedirectUri);
 
     const authorizationUrlStr = authorizationUrl.toString();
-    console.log('[oauth2] Opening external browser:', authorizationUrlStr);
+    console.log("[oauth2] Opening external browser:", authorizationUrlStr);
 
     // Show toast to inform user
     await ctx.toast.show({
-      message: 'Opening browser for authorization...',
-      icon: 'info',
+      message: "Opening browser for authorization...",
+      icon: "info",
       timeout: 3000,
     });
 
@@ -256,10 +254,10 @@ export async function getRedirectUrlViaExternalBrowser(
     await ctx.window.openExternalUrl(authorizationUrlStr);
 
     // Wait for the callback
-    console.log('[oauth2] Waiting for callback on', server.redirectUri);
+    console.log("[oauth2] Waiting for callback on", server.redirectUri);
     const callbackUrl = await server.waitForCallback();
 
-    console.log('[oauth2] Received callback:', callbackUrl);
+    console.log("[oauth2] Received callback:", callbackUrl);
 
     return { callbackUrl, redirectUri: oauthRedirectUri };
   } finally {

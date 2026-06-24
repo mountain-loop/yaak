@@ -6,6 +6,7 @@ use crate::utils::json::{
     parse_required_json, require_id, validate_create_id,
 };
 use crate::utils::schema::append_agent_hints;
+use crate::utils::workspace::resolve_workspace_id;
 use schemars::schema_for;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -24,13 +25,16 @@ pub async fn run(
     ctx: &CliContext,
     args: RequestArgs,
     environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> i32 {
     let result = match args.command {
-        RequestCommands::List { workspace_id } => list(ctx, &workspace_id),
+        RequestCommands::List { workspace_id } => list(ctx, workspace_id.as_deref()),
         RequestCommands::Show { request_id } => show(ctx, &request_id),
         RequestCommands::Send { request_id } => {
-            return match send_request_by_id(ctx, &request_id, environment, verbose).await {
+            return match send_request_by_id(ctx, &request_id, environment, cookie_jar_id, verbose)
+                .await
+            {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("Error: {error}");
@@ -63,10 +67,11 @@ pub async fn run(
     }
 }
 
-fn list(ctx: &CliContext, workspace_id: &str) -> CommandResult {
+fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
+    let workspace_id = resolve_workspace_id(ctx, workspace_id, "request list")?;
     let requests = ctx
         .db()
-        .list_http_requests(workspace_id)
+        .list_http_requests(&workspace_id)
         .map_err(|e| format!("Failed to list requests: {e}"))?;
     if requests.is_empty() {
         println!("No requests found in workspace {}", workspace_id);
@@ -350,8 +355,14 @@ fn create(
         validate_create_id(&payload, "request")?;
         let mut request: HttpRequest = serde_json::from_value(payload)
             .map_err(|e| format!("Failed to parse request create JSON: {e}"))?;
+        let fallback_workspace_id = if workspace_id_arg.is_none() && request.workspace_id.is_empty()
+        {
+            Some(resolve_workspace_id(ctx, None, "request create")?)
+        } else {
+            None
+        };
         merge_workspace_id_arg(
-            workspace_id_arg.as_deref(),
+            workspace_id_arg.as_deref().or(fallback_workspace_id.as_deref()),
             &mut request.workspace_id,
             "request create",
         )?;
@@ -365,9 +376,7 @@ fn create(
         return Ok(());
     }
 
-    let workspace_id = workspace_id_arg.ok_or_else(|| {
-        "request create requires workspace_id unless JSON payload is provided".to_string()
-    })?;
+    let workspace_id = resolve_workspace_id(ctx, workspace_id_arg.as_deref(), "request create")?;
     let name = name.unwrap_or_default();
     let url = url.unwrap_or_default();
     let method = method.unwrap_or_else(|| "GET".to_string());
@@ -436,6 +445,7 @@ pub async fn send_request_by_id(
     ctx: &CliContext,
     request_id: &str,
     environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> Result<(), String> {
     let request =
@@ -447,6 +457,7 @@ pub async fn send_request_by_id(
                 &http_request.id,
                 &http_request.workspace_id,
                 environment,
+                cookie_jar_id,
                 verbose,
             )
             .await
@@ -465,9 +476,13 @@ async fn send_http_request_by_id(
     request_id: &str,
     workspace_id: &str,
     environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> Result<(), String> {
-    let plugin_context = PluginContext::new(None, Some(workspace_id.to_string()));
+    let cookie_jar_id = resolve_cookie_jar_id(ctx, workspace_id, cookie_jar_id)?;
+
+    let plugin_context =
+        PluginContext::new(Some("cli".to_string()), Some(workspace_id.to_string()));
 
     let (event_tx, mut event_rx) = mpsc::channel::<SenderHttpResponseEvent>(100);
     let (body_chunk_tx, mut body_chunk_rx) = mpsc::unbounded_channel::<Vec<u8>>();
@@ -495,7 +510,7 @@ async fn send_http_request_by_id(
         request_id,
         environment_id: environment,
         update_source: UpdateSource::Sync,
-        cookie_jar_id: None,
+        cookie_jar_id,
         response_dir: &response_dir,
         emit_events_to: Some(event_tx),
         emit_response_body_chunks_to: Some(body_chunk_tx),
@@ -511,4 +526,23 @@ async fn send_http_request_by_id(
     let _ = body_handle.await;
     result.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+pub(crate) fn resolve_cookie_jar_id(
+    ctx: &CliContext,
+    workspace_id: &str,
+    explicit_cookie_jar_id: Option<&str>,
+) -> Result<Option<String>, String> {
+    if let Some(cookie_jar_id) = explicit_cookie_jar_id {
+        return Ok(Some(cookie_jar_id.to_string()));
+    }
+
+    let default_cookie_jar = ctx
+        .db()
+        .list_cookie_jars(workspace_id)
+        .map_err(|e| format!("Failed to list cookie jars: {e}"))?
+        .into_iter()
+        .min_by_key(|jar| jar.created_at)
+        .map(|jar| jar.id);
+    Ok(default_cookie_jar)
 }

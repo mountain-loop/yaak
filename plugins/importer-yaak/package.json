@@ -1,12 +1,12 @@
 {
   "name": "@yaak/importer-yaak",
   "displayName": "Yaak Importer",
-  "description": "Import data from Yaak export files",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Import data from Yaak export files",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",
-    "test": "vitest --run tests"
+    "test": "vp test --run tests"
   }
 }

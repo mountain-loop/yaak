@@ -1,9 +1,9 @@
 {
   "name": "@yaak/template-function-hash",
   "displayName": "Hash Template Functions",
-  "description": "Template functions for generating hash values",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
+  "description": "Template functions for generating hash values",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev"

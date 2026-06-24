@@ -1,13 +1,13 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { McpServerContext } from '../types.js';
-import { getWorkspaceContext } from './helpers.js';
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServerContext } from "../types.js";
+import { getWorkspaceContext } from "./helpers.js";
 
 export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
   server.registerTool(
-    'get_workspace_id',
+    "get_workspace_id",
     {
-      title: 'Get Workspace ID',
-      description: 'Get the current workspace ID',
+      title: "Get Workspace ID",
+      description: "Get the current workspace ID",
     },
     async () => {
       const workspaceCtx = await getWorkspaceContext(ctx);
@@ -16,8 +16,8 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
       return {
         content: [
           {
-            type: 'text' as const,
-            text: workspaceId || 'No workspace open',
+            type: "text" as const,
+            text: workspaceId || "No workspace open",
           },
         ],
       };
@@ -25,10 +25,10 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
   );
 
   server.registerTool(
-    'get_environment_id',
+    "get_environment_id",
     {
-      title: 'Get Environment ID',
-      description: 'Get the current environment ID',
+      title: "Get Environment ID",
+      description: "Get the current environment ID",
     },
     async () => {
       const workspaceCtx = await getWorkspaceContext(ctx);
@@ -37,8 +37,8 @@ export function registerWindowTools(server: McpServer, ctx: McpServerContext) {
       return {
         content: [
           {
-            type: 'text' as const,
-            text: environmentId || 'No environment selected',
+            type: "text" as const,
+            text: environmentId || "No environment selected",
           },
         ],
       };

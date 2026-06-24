@@ -8,7 +8,7 @@ Generate formatted release notes for Yaak releases by analyzing git history and 
 ## What to do
 
 1. Identifies the version tag and previous version
-2. Retrieves all commits between versions 
+2. Retrieves all commits between versions
    - If the version is a beta version, it retrieves commits between the beta version and previous beta version
    - If the version is a stable version, it retrieves commits between the stable version and the previous stable version
 3. Fetches PR descriptions for linked issues to find:
@@ -37,6 +37,7 @@ The skill generates markdown-formatted release notes following this structure:
 
 **IMPORTANT**: Always add a blank lines around the markdown code fence and output the markdown code block last
 **IMPORTANT**: PRs by `@gschier` should not mention the @username
+**IMPORTANT**: These are app release notes. Exclude CLI-only changes (commits prefixed with `cli:` or only touching `crates-cli/`) since the CLI has its own release process.
 
 ## After Generating Release Notes
 
