@@ -181,19 +181,7 @@ impl PluginManager {
             }
         }
 
-        let mut plugins = db.list_plugins()?;
-        plugins.retain(|p| {
-            if Path::new(&p.directory).exists() {
-                true
-            } else {
-                warn!("Stale plugin entry removed (directory missing): {}", p.directory);
-                if let Err(e) = db.delete_plugin(p, &UpdateSource::Background) {
-                    warn!("Failed to delete stale plugin from DB: {e:?}");
-                }
-                false
-            }
-        });
-
+        let plugins = db.list_plugins()?;
         drop(db);
 
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;

@@ -54,7 +54,7 @@ use yaak_plugins::events::{
     InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::plugin_meta::PluginMetadata;
+use yaak_plugins::plugin_meta::{PluginMetadata, get_plugin_meta};
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
@@ -1512,11 +1512,36 @@ async fn cmd_plugin_info<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<PluginMetadata> {
     let plugin = app_handle.db().get_plugin(id)?;
-    Ok(plugin_manager
+    if let Some(plugin_handle) = plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
-        .ok_or(GenericError("Failed to find plugin for info".to_string()))?
-        .info())
+    {
+        return Ok(plugin_handle.info());
+    }
+
+    if let Ok(metadata) = get_plugin_meta(&PathBuf::from(&plugin.directory)) {
+        return Ok(metadata);
+    }
+
+    Ok(fallback_plugin_metadata(&plugin.directory))
+}
+
+fn fallback_plugin_metadata(directory: &str) -> PluginMetadata {
+    let display_name = PathBuf::from(directory)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(directory)
+        .to_string();
+
+    PluginMetadata {
+        version: "Unavailable".to_string(),
+        name: directory.to_string(),
+        display_name,
+        description: Some(format!("Plugin metadata could not be loaded from {directory}")),
+        homepage_url: None,
+        repository_url: None,
+    }
 }
 
 #[tauri::command]
