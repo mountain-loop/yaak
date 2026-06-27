@@ -247,10 +247,13 @@ function parseOklch(
     );
   if (match == null) return null;
 
-  const lightness = parseOklchLightness(match[1]);
-  const chroma = parseCssNumber(match[2], 1);
-  const hue = normalizeHue(parseCssNumber(match[3].replace(/deg$/i, ""), 1));
-  const alpha = parseCssNumber(match[4] ?? match[5] ?? "1", 1);
+  const [, lightnessValue, chromaValue, hueValue, slashAlpha, commaAlpha] = match;
+  if (lightnessValue == null || chromaValue == null || hueValue == null) return null;
+
+  const lightness = parseOklchLightness(lightnessValue);
+  const chroma = parseCssNumber(chromaValue, 1);
+  const hue = normalizeHue(parseCssNumber(hueValue.replace(/deg$/i, ""), 1));
+  const alpha = parseCssNumber(slashAlpha ?? commaAlpha ?? "1", 1);
 
   if (
     !Number.isFinite(lightness) ||
