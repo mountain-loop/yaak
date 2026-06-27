@@ -17,7 +17,7 @@ export function BulkPairEditor({
   const pairsText = useMemo(() => {
     return pairs
       .filter((p) => !(p.name.trim() === "" && p.value.trim() === ""))
-      .map(pairToLine)
+      .map(formatBulkPairLine)
       .join("\n");
   }, [pairs]);
 
@@ -26,7 +26,7 @@ export function BulkPairEditor({
       const pairs = text
         .split("\n")
         .filter((l: string) => l.trim())
-        .map(lineToPair);
+        .map(parseBulkPairLine);
       onChange(pairs);
     },
     [onChange],
@@ -47,16 +47,16 @@ export function BulkPairEditor({
   );
 }
 
-function pairToLine(pair: Pair) {
+export function formatBulkPairLine(pair: Pair) {
   const value = pair.value.replaceAll("\n", "\\n");
   return `${pair.name}: ${value}`;
 }
 
-function lineToPair(line: string): PairWithId {
-  const [, name, value] = line.match(/^(:?[^:]+):\s+(.*)$/) ?? [];
+export function parseBulkPairLine(line: string): PairWithId {
+  const [, name, value] = line.match(/^([^:]+):\s+(.*)$/) ?? [];
   return {
     enabled: true,
-    name: (name ?? "").trim(),
+    name: (name ?? line).trim(),
     value: (value ?? "").replaceAll("\\n", "\n").trim(),
     id: generateId(),
   };
