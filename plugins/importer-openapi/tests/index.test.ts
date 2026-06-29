@@ -117,11 +117,17 @@ describe("importer-openapi", () => {
     expect(imported?.resources.folders).toEqual([
       expect.objectContaining({ name: "accounts", description: "Account operations" }),
     ]);
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        name: "Global Variables",
+        variables: [{ name: "baseUrl", value: "https://api.example.com/v1" }],
+      }),
+    ]);
     expect(imported?.resources.httpRequests).toEqual([
       expect.objectContaining({
         name: "Create member",
         method: "POST",
-        url: "https://api.example.com/v1/accounts/:accountId/members",
+        url: "${[baseUrl]}/accounts/:accountId/members",
         authenticationType: "bearer",
         authentication: { token: "", prefix: "Bearer" },
         bodyType: "application/json",
@@ -208,9 +214,14 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[499]).toEqual(
       expect.objectContaining({
         name: "Read resource 499",
-        url: "https://api.example.com/client/v4/zones/:zoneId/resources/499",
+        url: "${[baseUrl]}/zones/:zoneId/resources/499",
       }),
     );
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        variables: [{ name: "baseUrl", value: "https://api.example.com/client/v4" }],
+      }),
+    ]);
   });
 
   test("Skips invalid file", async () => {

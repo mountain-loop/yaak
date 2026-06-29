@@ -3,7 +3,23 @@
 exports[`importer-openapi > Snapshots real-world fixture apis-guru.yaml 1`] = `
 {
   "resources": {
-    "environments": [],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.apis.guru/v2",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
     "folders": [
       {
         "description": "Actions relating to APIs in the collection",
@@ -11,7 +27,7 @@ exports[`importer-openapi > Snapshots real-world fixture apis-guru.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_0",
         "model": "folder",
         "name": "APIs",
-        "sortPriority": 0,
+        "sortPriority": 1,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
     ],
@@ -39,8 +55,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "List all APIs",
-        "sortPriority": 1,
-        "url": "https://api.apis.guru/v2/list.json",
+        "sortPriority": 2,
+        "url": "\${[baseUrl]}/list.json",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -63,8 +79,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Get basic metrics",
-        "sortPriority": 2,
-        "url": "https://api.apis.guru/v2/metrics.json",
+        "sortPriority": 3,
+        "url": "\${[baseUrl]}/metrics.json",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -86,8 +102,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "List all providers",
-        "sortPriority": 3,
-        "url": "https://api.apis.guru/v2/providers.json",
+        "sortPriority": 4,
+        "url": "\${[baseUrl]}/providers.json",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -112,8 +128,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Retrieve one version of a particular API",
-        "sortPriority": 4,
-        "url": "https://api.apis.guru/v2/specs/:provider/:api.json",
+        "sortPriority": 5,
+        "url": "\${[baseUrl]}/specs/:provider/:api.json",
         "urlParameters": [
           {
             "enabled": true,
@@ -150,8 +166,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Retrieve one version of a particular API with a serviceName.",
-        "sortPriority": 5,
-        "url": "https://api.apis.guru/v2/specs/:provider/:service/:api.json",
+        "sortPriority": 6,
+        "url": "\${[baseUrl]}/specs/:provider/:service/:api.json",
         "urlParameters": [
           {
             "enabled": true,
@@ -193,8 +209,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "List all APIs for a particular provider",
-        "sortPriority": 6,
-        "url": "https://api.apis.guru/v2/:provider.json",
+        "sortPriority": 7,
+        "url": "\${[baseUrl]}/:provider.json",
         "urlParameters": [
           {
             "enabled": true,
@@ -225,8 +241,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "List all serviceNames for a particular provider",
-        "sortPriority": 7,
-        "url": "https://api.apis.guru/v2/:provider/services.json",
+        "sortPriority": 8,
+        "url": "\${[baseUrl]}/:provider/services.json",
         "urlParameters": [
           {
             "enabled": true,
@@ -260,7 +276,23 @@ License: CC0 1.0 (https://github.com/APIs-guru/openapi-directory#licenses)",
 exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
 {
   "resources": {
-    "environments": [],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "https://httpbin.org",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
     "folders": [
       {
         "description": "Testing different HTTP verbs",
@@ -268,7 +300,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_0",
         "model": "folder",
         "name": "HTTP Methods",
-        "sortPriority": 0,
+        "sortPriority": 1,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -277,7 +309,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_1",
         "model": "folder",
         "name": "Auth",
-        "sortPriority": 1,
+        "sortPriority": 2,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -286,7 +318,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_2",
         "model": "folder",
         "name": "Status codes",
-        "sortPriority": 2,
+        "sortPriority": 3,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -295,7 +327,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_3",
         "model": "folder",
         "name": "Request inspection",
-        "sortPriority": 3,
+        "sortPriority": 4,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -304,7 +336,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_4",
         "model": "folder",
         "name": "Response inspection",
-        "sortPriority": 4,
+        "sortPriority": 5,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -313,7 +345,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_5",
         "model": "folder",
         "name": "Response formats",
-        "sortPriority": 5,
+        "sortPriority": 6,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -322,7 +354,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_6",
         "model": "folder",
         "name": "Dynamic data",
-        "sortPriority": 6,
+        "sortPriority": 7,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -331,7 +363,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_7",
         "model": "folder",
         "name": "Cookies",
-        "sortPriority": 7,
+        "sortPriority": 8,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -340,7 +372,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_8",
         "model": "folder",
         "name": "Images",
-        "sortPriority": 8,
+        "sortPriority": 9,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -349,7 +381,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_9",
         "model": "folder",
         "name": "Redirects",
-        "sortPriority": 9,
+        "sortPriority": 10,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -358,7 +390,7 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "id": "GENERATE_ID::FOLDER_10",
         "model": "folder",
         "name": "Anything",
-        "sortPriority": 10,
+        "sortPriority": 11,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
     ],
@@ -382,8 +414,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Absolutely 302 Redirects n times.",
-        "sortPriority": 11,
-        "url": "https://httpbin.org/absolute-redirect/:n",
+        "sortPriority": 12,
+        "url": "\${[baseUrl]}/absolute-redirect/:n",
         "urlParameters": [
           {
             "enabled": true,
@@ -408,8 +440,8 @@ Responses:
         "method": "DELETE",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 12,
-        "url": "https://httpbin.org/anything",
+        "sortPriority": 13,
+        "url": "\${[baseUrl]}/anything",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -428,8 +460,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 13,
-        "url": "https://httpbin.org/anything",
+        "sortPriority": 14,
+        "url": "\${[baseUrl]}/anything",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -448,8 +480,8 @@ Responses:
         "method": "PATCH",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 14,
-        "url": "https://httpbin.org/anything",
+        "sortPriority": 15,
+        "url": "\${[baseUrl]}/anything",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -468,8 +500,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 15,
-        "url": "https://httpbin.org/anything",
+        "sortPriority": 16,
+        "url": "\${[baseUrl]}/anything",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -488,8 +520,8 @@ Responses:
         "method": "PUT",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 16,
-        "url": "https://httpbin.org/anything",
+        "sortPriority": 17,
+        "url": "\${[baseUrl]}/anything",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -508,8 +540,8 @@ Responses:
         "method": "TRACE",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 17,
-        "url": "https://httpbin.org/anything",
+        "sortPriority": 18,
+        "url": "\${[baseUrl]}/anything",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -531,8 +563,8 @@ Responses:
         "method": "DELETE",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 18,
-        "url": "https://httpbin.org/anything/:anything",
+        "sortPriority": 19,
+        "url": "\${[baseUrl]}/anything/:anything",
         "urlParameters": [
           {
             "enabled": true,
@@ -560,8 +592,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 19,
-        "url": "https://httpbin.org/anything/:anything",
+        "sortPriority": 20,
+        "url": "\${[baseUrl]}/anything/:anything",
         "urlParameters": [
           {
             "enabled": true,
@@ -589,8 +621,8 @@ Responses:
         "method": "PATCH",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 20,
-        "url": "https://httpbin.org/anything/:anything",
+        "sortPriority": 21,
+        "url": "\${[baseUrl]}/anything/:anything",
         "urlParameters": [
           {
             "enabled": true,
@@ -618,8 +650,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 21,
-        "url": "https://httpbin.org/anything/:anything",
+        "sortPriority": 22,
+        "url": "\${[baseUrl]}/anything/:anything",
         "urlParameters": [
           {
             "enabled": true,
@@ -647,8 +679,8 @@ Responses:
         "method": "PUT",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 22,
-        "url": "https://httpbin.org/anything/:anything",
+        "sortPriority": 23,
+        "url": "\${[baseUrl]}/anything/:anything",
         "urlParameters": [
           {
             "enabled": true,
@@ -676,8 +708,8 @@ Responses:
         "method": "TRACE",
         "model": "http_request",
         "name": "Returns anything passed in request data.",
-        "sortPriority": 23,
-        "url": "https://httpbin.org/anything/:anything",
+        "sortPriority": 24,
+        "url": "\${[baseUrl]}/anything/:anything",
         "urlParameters": [
           {
             "enabled": true,
@@ -705,8 +737,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Decodes base64url-encoded string.",
-        "sortPriority": 24,
-        "url": "https://httpbin.org/base64/:value",
+        "sortPriority": 25,
+        "url": "\${[baseUrl]}/base64/:value",
         "urlParameters": [
           {
             "enabled": true,
@@ -736,8 +768,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Prompts the user for authorization using HTTP Basic Auth.",
-        "sortPriority": 25,
-        "url": "https://httpbin.org/basic-auth/:user/:passwd",
+        "sortPriority": 26,
+        "url": "\${[baseUrl]}/basic-auth/:user/:passwd",
         "urlParameters": [
           {
             "enabled": true,
@@ -777,8 +809,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Prompts the user for authorization using bearer authentication.",
-        "sortPriority": 26,
-        "url": "https://httpbin.org/bearer",
+        "sortPriority": 27,
+        "url": "\${[baseUrl]}/bearer",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -797,8 +829,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns Brotli-encoded data.",
-        "sortPriority": 27,
-        "url": "https://httpbin.org/brotli",
+        "sortPriority": 28,
+        "url": "\${[baseUrl]}/brotli",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -820,8 +852,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns n random bytes generated with given seed",
-        "sortPriority": 28,
-        "url": "https://httpbin.org/bytes/:n",
+        "sortPriority": 29,
+        "url": "\${[baseUrl]}/bytes/:n",
         "urlParameters": [
           {
             "enabled": true,
@@ -862,8 +894,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a 304 if an If-Modified-Since header or If-None-Match is present. Returns the same as a GET otherwise.",
-        "sortPriority": 29,
-        "url": "https://httpbin.org/cache",
+        "sortPriority": 30,
+        "url": "\${[baseUrl]}/cache",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -885,8 +917,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Sets a Cache-Control header for n seconds.",
-        "sortPriority": 30,
-        "url": "https://httpbin.org/cache/:value",
+        "sortPriority": 31,
+        "url": "\${[baseUrl]}/cache/:value",
         "urlParameters": [
           {
             "enabled": true,
@@ -911,8 +943,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns cookie data.",
-        "sortPriority": 31,
-        "url": "https://httpbin.org/cookies",
+        "sortPriority": 32,
+        "url": "\${[baseUrl]}/cookies",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -934,8 +966,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Deletes cookie(s) as provided by the query string and redirects to cookie list.",
-        "sortPriority": 32,
-        "url": "https://httpbin.org/cookies/delete",
+        "sortPriority": 33,
+        "url": "\${[baseUrl]}/cookies/delete",
         "urlParameters": [
           {
             "enabled": false,
@@ -963,8 +995,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Sets cookie(s) as provided by the query string and redirects to cookie list.",
-        "sortPriority": 33,
-        "url": "https://httpbin.org/cookies/set",
+        "sortPriority": 34,
+        "url": "\${[baseUrl]}/cookies/set",
         "urlParameters": [
           {
             "enabled": false,
@@ -993,8 +1025,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Sets a cookie and redirects to cookie list.",
-        "sortPriority": 34,
-        "url": "https://httpbin.org/cookies/set/:name/:value",
+        "sortPriority": 35,
+        "url": "\${[baseUrl]}/cookies/set/:name/:value",
         "urlParameters": [
           {
             "enabled": true,
@@ -1024,8 +1056,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns Deflate-encoded data.",
-        "sortPriority": 35,
-        "url": "https://httpbin.org/deflate",
+        "sortPriority": 36,
+        "url": "\${[baseUrl]}/deflate",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1047,8 +1079,8 @@ Responses:
         "method": "DELETE",
         "model": "http_request",
         "name": "Returns a delayed response (max of 10 seconds).",
-        "sortPriority": 36,
-        "url": "https://httpbin.org/delay/:delay",
+        "sortPriority": 37,
+        "url": "\${[baseUrl]}/delay/:delay",
         "urlParameters": [
           {
             "enabled": true,
@@ -1076,8 +1108,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a delayed response (max of 10 seconds).",
-        "sortPriority": 37,
-        "url": "https://httpbin.org/delay/:delay",
+        "sortPriority": 38,
+        "url": "\${[baseUrl]}/delay/:delay",
         "urlParameters": [
           {
             "enabled": true,
@@ -1105,8 +1137,8 @@ Responses:
         "method": "PATCH",
         "model": "http_request",
         "name": "Returns a delayed response (max of 10 seconds).",
-        "sortPriority": 38,
-        "url": "https://httpbin.org/delay/:delay",
+        "sortPriority": 39,
+        "url": "\${[baseUrl]}/delay/:delay",
         "urlParameters": [
           {
             "enabled": true,
@@ -1134,8 +1166,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "Returns a delayed response (max of 10 seconds).",
-        "sortPriority": 39,
-        "url": "https://httpbin.org/delay/:delay",
+        "sortPriority": 40,
+        "url": "\${[baseUrl]}/delay/:delay",
         "urlParameters": [
           {
             "enabled": true,
@@ -1163,8 +1195,8 @@ Responses:
         "method": "PUT",
         "model": "http_request",
         "name": "Returns a delayed response (max of 10 seconds).",
-        "sortPriority": 40,
-        "url": "https://httpbin.org/delay/:delay",
+        "sortPriority": 41,
+        "url": "\${[baseUrl]}/delay/:delay",
         "urlParameters": [
           {
             "enabled": true,
@@ -1192,8 +1224,8 @@ Responses:
         "method": "TRACE",
         "model": "http_request",
         "name": "Returns a delayed response (max of 10 seconds).",
-        "sortPriority": 41,
-        "url": "https://httpbin.org/delay/:delay",
+        "sortPriority": 42,
+        "url": "\${[baseUrl]}/delay/:delay",
         "urlParameters": [
           {
             "enabled": true,
@@ -1218,8 +1250,8 @@ Responses:
         "method": "DELETE",
         "model": "http_request",
         "name": "The request's DELETE parameters.",
-        "sortPriority": 42,
-        "url": "https://httpbin.org/delete",
+        "sortPriority": 43,
+        "url": "\${[baseUrl]}/delete",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1238,8 +1270,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns page denied by robots.txt rules.",
-        "sortPriority": 43,
-        "url": "https://httpbin.org/deny",
+        "sortPriority": 44,
+        "url": "\${[baseUrl]}/deny",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1264,8 +1296,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Prompts the user for authorization using Digest Auth.",
-        "sortPriority": 44,
-        "url": "https://httpbin.org/digest-auth/:qop/:user/:passwd",
+        "sortPriority": 45,
+        "url": "\${[baseUrl]}/digest-auth/:qop/:user/:passwd",
         "urlParameters": [
           {
             "enabled": true,
@@ -1307,8 +1339,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Prompts the user for authorization using Digest Auth + Algorithm.",
-        "sortPriority": 45,
-        "url": "https://httpbin.org/digest-auth/:qop/:user/:passwd/:algorithm",
+        "sortPriority": 46,
+        "url": "\${[baseUrl]}/digest-auth/:qop/:user/:passwd/:algorithm",
         "urlParameters": [
           {
             "enabled": true,
@@ -1357,8 +1389,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Prompts the user for authorization using Digest Auth + Algorithm.",
-        "sortPriority": 46,
-        "url": "https://httpbin.org/digest-auth/:qop/:user/:passwd/:algorithm/:stale_after",
+        "sortPriority": 47,
+        "url": "\${[baseUrl]}/digest-auth/:qop/:user/:passwd/:algorithm/:stale_after",
         "urlParameters": [
           {
             "enabled": true,
@@ -1409,8 +1441,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Drips data over a duration after an optional initial delay.",
-        "sortPriority": 47,
-        "url": "https://httpbin.org/drip",
+        "sortPriority": 48,
+        "url": "\${[baseUrl]}/drip",
         "urlParameters": [
           {
             "enabled": false,
@@ -1450,8 +1482,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a UTF-8 encoded body.",
-        "sortPriority": 48,
-        "url": "https://httpbin.org/encoding/utf8",
+        "sortPriority": 49,
+        "url": "\${[baseUrl]}/encoding/utf8",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1487,8 +1519,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Assumes the resource has the given etag and responds to If-None-Match and If-Match headers appropriately.",
-        "sortPriority": 49,
-        "url": "https://httpbin.org/etag/:etag",
+        "sortPriority": 50,
+        "url": "\${[baseUrl]}/etag/:etag",
         "urlParameters": [
           {
             "enabled": true,
@@ -1513,8 +1545,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "The request's query parameters.",
-        "sortPriority": 50,
-        "url": "https://httpbin.org/get",
+        "sortPriority": 51,
+        "url": "\${[baseUrl]}/get",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1533,8 +1565,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns GZip-encoded data.",
-        "sortPriority": 51,
-        "url": "https://httpbin.org/gzip",
+        "sortPriority": 52,
+        "url": "\${[baseUrl]}/gzip",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1553,8 +1585,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Return the incoming request's HTTP headers.",
-        "sortPriority": 52,
-        "url": "https://httpbin.org/headers",
+        "sortPriority": 53,
+        "url": "\${[baseUrl]}/headers",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1578,8 +1610,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Prompts the user for authorization using HTTP Basic Auth.",
-        "sortPriority": 53,
-        "url": "https://httpbin.org/hidden-basic-auth/:user/:passwd",
+        "sortPriority": 54,
+        "url": "\${[baseUrl]}/hidden-basic-auth/:user/:passwd",
         "urlParameters": [
           {
             "enabled": true,
@@ -1609,8 +1641,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple HTML document.",
-        "sortPriority": 54,
-        "url": "https://httpbin.org/html",
+        "sortPriority": 55,
+        "url": "\${[baseUrl]}/html",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1629,8 +1661,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple image of the type suggest by the Accept header.",
-        "sortPriority": 55,
-        "url": "https://httpbin.org/image",
+        "sortPriority": 56,
+        "url": "\${[baseUrl]}/image",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1649,8 +1681,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple JPEG image.",
-        "sortPriority": 56,
-        "url": "https://httpbin.org/image/jpeg",
+        "sortPriority": 57,
+        "url": "\${[baseUrl]}/image/jpeg",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1669,8 +1701,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple PNG image.",
-        "sortPriority": 57,
-        "url": "https://httpbin.org/image/png",
+        "sortPriority": 58,
+        "url": "\${[baseUrl]}/image/png",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1689,8 +1721,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple SVG image.",
-        "sortPriority": 58,
-        "url": "https://httpbin.org/image/svg",
+        "sortPriority": 59,
+        "url": "\${[baseUrl]}/image/svg",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1709,8 +1741,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple WEBP image.",
-        "sortPriority": 59,
-        "url": "https://httpbin.org/image/webp",
+        "sortPriority": 60,
+        "url": "\${[baseUrl]}/image/webp",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1729,8 +1761,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns the requester's IP Address.",
-        "sortPriority": 60,
-        "url": "https://httpbin.org/ip",
+        "sortPriority": 61,
+        "url": "\${[baseUrl]}/ip",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1749,8 +1781,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple JSON document.",
-        "sortPriority": 61,
-        "url": "https://httpbin.org/json",
+        "sortPriority": 62,
+        "url": "\${[baseUrl]}/json",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1773,8 +1805,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Generate a page containing n links to other pages which do the same.",
-        "sortPriority": 62,
-        "url": "https://httpbin.org/links/:n/:offset",
+        "sortPriority": 63,
+        "url": "\${[baseUrl]}/links/:n/:offset",
         "urlParameters": [
           {
             "enabled": true,
@@ -1804,8 +1836,8 @@ Responses:
         "method": "PATCH",
         "model": "http_request",
         "name": "The request's PATCH parameters.",
-        "sortPriority": 63,
-        "url": "https://httpbin.org/patch",
+        "sortPriority": 64,
+        "url": "\${[baseUrl]}/patch",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1824,8 +1856,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "The request's POST parameters.",
-        "sortPriority": 64,
-        "url": "https://httpbin.org/post",
+        "sortPriority": 65,
+        "url": "\${[baseUrl]}/post",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1844,8 +1876,8 @@ Responses:
         "method": "PUT",
         "model": "http_request",
         "name": "The request's PUT parameters.",
-        "sortPriority": 65,
-        "url": "https://httpbin.org/put",
+        "sortPriority": 66,
+        "url": "\${[baseUrl]}/put",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1867,8 +1899,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Streams n random bytes generated with given seed, at given chunk size per packet.",
-        "sortPriority": 66,
-        "url": "https://httpbin.org/range/:numbytes",
+        "sortPriority": 67,
+        "url": "\${[baseUrl]}/range/:numbytes",
         "urlParameters": [
           {
             "enabled": true,
@@ -1893,8 +1925,8 @@ Responses:
         "method": "DELETE",
         "model": "http_request",
         "name": "302/3XX Redirects to the given URL.",
-        "sortPriority": 67,
-        "url": "https://httpbin.org/redirect-to",
+        "sortPriority": 68,
+        "url": "\${[baseUrl]}/redirect-to",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1917,8 +1949,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "302/3XX Redirects to the given URL.",
-        "sortPriority": 68,
-        "url": "https://httpbin.org/redirect-to",
+        "sortPriority": 69,
+        "url": "\${[baseUrl]}/redirect-to",
         "urlParameters": [
           {
             "enabled": true,
@@ -1948,8 +1980,8 @@ Responses:
         "method": "PATCH",
         "model": "http_request",
         "name": "302/3XX Redirects to the given URL.",
-        "sortPriority": 69,
-        "url": "https://httpbin.org/redirect-to",
+        "sortPriority": 70,
+        "url": "\${[baseUrl]}/redirect-to",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -1991,8 +2023,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "302/3XX Redirects to the given URL.",
-        "sortPriority": 70,
-        "url": "https://httpbin.org/redirect-to",
+        "sortPriority": 71,
+        "url": "\${[baseUrl]}/redirect-to",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2034,8 +2066,8 @@ Responses:
         "method": "PUT",
         "model": "http_request",
         "name": "302/3XX Redirects to the given URL.",
-        "sortPriority": 71,
-        "url": "https://httpbin.org/redirect-to",
+        "sortPriority": 72,
+        "url": "\${[baseUrl]}/redirect-to",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2054,8 +2086,8 @@ Responses:
         "method": "TRACE",
         "model": "http_request",
         "name": "302/3XX Redirects to the given URL.",
-        "sortPriority": 72,
-        "url": "https://httpbin.org/redirect-to",
+        "sortPriority": 73,
+        "url": "\${[baseUrl]}/redirect-to",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2077,8 +2109,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "302 Redirects n times.",
-        "sortPriority": 73,
-        "url": "https://httpbin.org/redirect/:n",
+        "sortPriority": 74,
+        "url": "\${[baseUrl]}/redirect/:n",
         "urlParameters": [
           {
             "enabled": true,
@@ -2106,8 +2138,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Relatively 302 Redirects n times.",
-        "sortPriority": 74,
-        "url": "https://httpbin.org/relative-redirect/:n",
+        "sortPriority": 75,
+        "url": "\${[baseUrl]}/relative-redirect/:n",
         "urlParameters": [
           {
             "enabled": true,
@@ -2135,8 +2167,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a set of response headers from the query string.",
-        "sortPriority": 75,
-        "url": "https://httpbin.org/response-headers",
+        "sortPriority": 76,
+        "url": "\${[baseUrl]}/response-headers",
         "urlParameters": [
           {
             "enabled": false,
@@ -2164,8 +2196,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "Returns a set of response headers from the query string.",
-        "sortPriority": 76,
-        "url": "https://httpbin.org/response-headers",
+        "sortPriority": 77,
+        "url": "\${[baseUrl]}/response-headers",
         "urlParameters": [
           {
             "enabled": false,
@@ -2190,8 +2222,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns some robots.txt rules.",
-        "sortPriority": 77,
-        "url": "https://httpbin.org/robots.txt",
+        "sortPriority": 78,
+        "url": "\${[baseUrl]}/robots.txt",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2217,8 +2249,8 @@ Responses:
         "method": "DELETE",
         "model": "http_request",
         "name": "Return status code or random status code if more than one are given",
-        "sortPriority": 78,
-        "url": "https://httpbin.org/status/:codes",
+        "sortPriority": 79,
+        "url": "\${[baseUrl]}/status/:codes",
         "urlParameters": [
           {
             "enabled": true,
@@ -2250,8 +2282,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Return status code or random status code if more than one are given",
-        "sortPriority": 79,
-        "url": "https://httpbin.org/status/:codes",
+        "sortPriority": 80,
+        "url": "\${[baseUrl]}/status/:codes",
         "urlParameters": [
           {
             "enabled": true,
@@ -2283,8 +2315,8 @@ Responses:
         "method": "PATCH",
         "model": "http_request",
         "name": "Return status code or random status code if more than one are given",
-        "sortPriority": 80,
-        "url": "https://httpbin.org/status/:codes",
+        "sortPriority": 81,
+        "url": "\${[baseUrl]}/status/:codes",
         "urlParameters": [
           {
             "enabled": true,
@@ -2316,8 +2348,8 @@ Responses:
         "method": "POST",
         "model": "http_request",
         "name": "Return status code or random status code if more than one are given",
-        "sortPriority": 81,
-        "url": "https://httpbin.org/status/:codes",
+        "sortPriority": 82,
+        "url": "\${[baseUrl]}/status/:codes",
         "urlParameters": [
           {
             "enabled": true,
@@ -2349,8 +2381,8 @@ Responses:
         "method": "PUT",
         "model": "http_request",
         "name": "Return status code or random status code if more than one are given",
-        "sortPriority": 82,
-        "url": "https://httpbin.org/status/:codes",
+        "sortPriority": 83,
+        "url": "\${[baseUrl]}/status/:codes",
         "urlParameters": [
           {
             "enabled": true,
@@ -2382,8 +2414,8 @@ Responses:
         "method": "TRACE",
         "model": "http_request",
         "name": "Return status code or random status code if more than one are given",
-        "sortPriority": 83,
-        "url": "https://httpbin.org/status/:codes",
+        "sortPriority": 84,
+        "url": "\${[baseUrl]}/status/:codes",
         "urlParameters": [
           {
             "enabled": true,
@@ -2411,8 +2443,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Streams n random bytes generated with given seed, at given chunk size per packet.",
-        "sortPriority": 84,
-        "url": "https://httpbin.org/stream-bytes/:n",
+        "sortPriority": 85,
+        "url": "\${[baseUrl]}/stream-bytes/:n",
         "urlParameters": [
           {
             "enabled": true,
@@ -2440,8 +2472,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Stream n JSON responses",
-        "sortPriority": 85,
-        "url": "https://httpbin.org/stream/:n",
+        "sortPriority": 86,
+        "url": "\${[baseUrl]}/stream/:n",
         "urlParameters": [
           {
             "enabled": true,
@@ -2466,8 +2498,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Return the incoming requests's User-Agent header.",
-        "sortPriority": 86,
-        "url": "https://httpbin.org/user-agent",
+        "sortPriority": 87,
+        "url": "\${[baseUrl]}/user-agent",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2486,8 +2518,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Return a UUID4.",
-        "sortPriority": 87,
-        "url": "https://httpbin.org/uuid",
+        "sortPriority": 88,
+        "url": "\${[baseUrl]}/uuid",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2506,8 +2538,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns a simple XML document.",
-        "sortPriority": 88,
-        "url": "https://httpbin.org/xml",
+        "sortPriority": 89,
+        "url": "\${[baseUrl]}/xml",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2530,7 +2562,23 @@ Contact: me@kennethreitz.org",
 exports[`importer-openapi > Snapshots real-world fixture nasa-apod.yaml 1`] = `
 {
   "resources": {
-    "environments": [],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.nasa.gov/planetary",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
     "folders": [
       {
         "description": "An example tag
@@ -2540,7 +2588,7 @@ Here's a link: https://example.com",
         "id": "GENERATE_ID::FOLDER_0",
         "model": "folder",
         "name": "request tag",
-        "sortPriority": 0,
+        "sortPriority": 1,
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
     ],
@@ -2570,8 +2618,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "Returns images",
-        "sortPriority": 1,
-        "url": "https://api.nasa.gov/planetary/apod",
+        "sortPriority": 2,
+        "url": "\${[baseUrl]}/apod",
         "urlParameters": [
           {
             "enabled": false,
@@ -2607,7 +2655,23 @@ License: Apache 2.0 (http://www.apache.org/licenses/LICENSE-2.0.html)",
 exports[`importer-openapi > Snapshots real-world fixture xkcd.yaml 1`] = `
 {
   "resources": {
-    "environments": [],
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "http://xkcd.com/",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
     "folders": [],
     "grpcRequests": [],
     "httpRequests": [
@@ -2627,8 +2691,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "GET /info.0.json",
-        "sortPriority": 0,
-        "url": "http://xkcd.com/info.0.json",
+        "sortPriority": 1,
+        "url": "\${[baseUrl]}/info.0.json",
         "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
@@ -2651,8 +2715,8 @@ Responses:
         "method": "GET",
         "model": "http_request",
         "name": "GET /{comicId}/info.0.json",
-        "sortPriority": 1,
-        "url": "http://xkcd.com/:comicId/info.0.json",
+        "sortPriority": 2,
+        "url": "\${[baseUrl]}/:comicId/info.0.json",
         "urlParameters": [
           {
             "enabled": true,
