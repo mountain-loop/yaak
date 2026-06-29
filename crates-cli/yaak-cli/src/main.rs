@@ -59,6 +59,7 @@ async fn main() {
             PluginCommands::Dev(args) => commands::plugin::run_dev(args).await,
             PluginCommands::Generate(args) => commands::plugin::run_generate(args).await,
             PluginCommands::Publish(args) => commands::plugin::run_publish(args).await,
+            PluginCommands::Metadata(args) => commands::plugin::run_metadata(args).await,
             PluginCommands::Install(install_args) => {
                 let mut context = CliContext::new(data_dir.clone(), app_id);
                 context.init_plugins(CliExecutionContext::default()).await;

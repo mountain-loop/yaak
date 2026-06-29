@@ -481,6 +481,10 @@ pub enum PluginCommands {
     /// Install a plugin from a local directory or from the registry
     Install(InstallPluginArgs),
 
+    /// Generate plugin metadata for the registry
+    #[command(hide = true)]
+    Metadata(PluginPathArg),
+
     /// Publish a Yaak plugin version to the plugin registry
     Publish(PluginPathArg),
 }
