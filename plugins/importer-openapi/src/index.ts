@@ -1,5 +1,6 @@
 import type {
   Context,
+  Environment,
   Folder,
   HttpRequest,
   HttpRequestHeader,
@@ -15,6 +16,7 @@ type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 type UnknownRecord = Record<string, unknown>;
 type ImportResources = {
   workspaces: AtLeast<Workspace, "name" | "id" | "model">[];
+  environments: AtLeast<Environment, "name" | "id" | "model" | "workspaceId" | "variables">[];
   folders: AtLeast<Folder, "name" | "id" | "model" | "workspaceId">[];
   httpRequests: AtLeast<HttpRequest, "name" | "id" | "model" | "workspaceId">[];
 };
@@ -55,9 +57,25 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
 
   const resources: ImportResources = {
     workspaces: [workspace],
+    environments: [],
     folders: [],
     httpRequests: [],
   };
+  const baseUrl = importBaseUrl(spec);
+  const requestBaseUrl = baseUrl.length > 0 ? "${[baseUrl]}" : "";
+
+  if (baseUrl.length > 0) {
+    resources.environments.push({
+      model: "environment",
+      id: importState.generateId("environment"),
+      workspaceId: workspace.id,
+      name: "Global Variables",
+      variables: [{ name: "baseUrl", value: baseUrl }],
+      parentModel: "workspace",
+      parentId: null,
+      sortPriority: importState.nextSortPriority(),
+    });
+  }
 
   const folderIdsByTag = new Map<string, string>();
   for (const tag of toArray(spec.tags)) {
@@ -102,6 +120,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
           operation,
           path: rawPath,
           pathParameters,
+          requestBaseUrl,
           spec,
           workspaceId: workspace.id,
           folderId,
@@ -115,7 +134,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   return {
     resources: deleteUndefinedAttrs(
       convertTemplateSyntax({
-        environments: [],
+        environments: resources.environments,
         folders: resources.folders,
         grpcRequests: [],
         httpRequests: resources.httpRequests,
@@ -132,6 +151,7 @@ function importOperation({
   operation,
   path,
   pathParameters,
+  requestBaseUrl,
   spec,
   workspaceId,
   folderId,
@@ -141,6 +161,7 @@ function importOperation({
   operation: UnknownRecord;
   path: string;
   pathParameters: unknown[];
+  requestBaseUrl: string;
   spec: UnknownRecord;
   workspaceId: string;
   folderId: string | null;
@@ -165,7 +186,7 @@ function importOperation({
       bodyContentType: body.bodyType,
     }),
     method: method.toUpperCase(),
-    url: buildOperationUrl(spec, path),
+    url: buildOperationUrl(requestBaseUrl, path),
     urlParameters,
     headers,
     body: body.body,
@@ -340,8 +361,8 @@ function findOrCreateFolderId({
   return folder.id;
 }
 
-function buildOperationUrl(spec: UnknownRecord, path: string): string {
-  return joinUrlParts(importBaseUrl(spec), path.replaceAll(/{([^}/]+)}/g, ":$1"));
+function buildOperationUrl(baseUrl: string, path: string): string {
+  return joinUrlParts(baseUrl, path.replaceAll(/{([^}/]+)}/g, ":$1"));
 }
 
 function importBaseUrl(spec: UnknownRecord): string {
