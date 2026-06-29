@@ -1,6 +1,6 @@
 import { useGitFileDiffForCommit, useGitLog, useGitMutations } from "@yaakapp-internal/git";
 import type { GitCommit } from "@yaakapp-internal/git";
-import { InlineCode, SplitLayout } from "@yaakapp-internal/ui";
+import { SplitLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";

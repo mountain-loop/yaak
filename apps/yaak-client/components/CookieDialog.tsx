@@ -130,7 +130,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
       return key !== nextCookieKey;
     });
 
-    patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
+    void patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
     setSelectedCookieKey(nextCookieKey);
     setEditingCookieKey(null);
     setDraftCookie(null);
@@ -210,7 +210,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                           setEditingCookieKey(null);
                           setDraftCookie(null);
                           setDraftExpiresInput("");
-                          patchModel(cookieJar, { cookies: [] });
+                          void patchModel(cookieJar, { cookies: [] });
                         }}
                       />
                     </TableHeaderCell>
@@ -276,7 +276,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                                 setDraftCookie(null);
                                 setDraftExpiresInput("");
                               }
-                              patchModel(cookieJar, {
+                              void patchModel(cookieJar, {
                                 cookies: cookieJar.cookies.filter(
                                   (c2: Cookie) => cookieKey(c2) !== key,
                                 ),
@@ -570,6 +570,8 @@ function CookieTextInput({
   return (
     <input
       autoFocus={autoFocus}
+      autoCapitalize="off"
+      autoCorrect="off"
       className={cookieInputClassName}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
@@ -585,6 +587,8 @@ function CookieTextInput({
 function CookieTextarea({ onChange, value }: { onChange: (value: string) => void; value: string }) {
   return (
     <textarea
+      autoCapitalize="off"
+      autoCorrect="off"
       className={classNames(cookieInputClassName, "min-h-[5rem] resize-y")}
       onChange={(event) => onChange(event.target.value)}
       value={value}

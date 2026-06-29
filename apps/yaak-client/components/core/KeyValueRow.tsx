@@ -55,6 +55,8 @@ export function KeyValueRow({
   const textToCopy =
     copyText ??
     (typeof children === "string" || typeof children === "number" ? `${children}` : null);
+  const copyTitle =
+    typeof label === "string" || typeof label === "number" ? `Copy ${label}` : "Copy value";
   const resolvedRightSlot =
     rightSlot ??
     (enableCopy && textToCopy != null ? (
@@ -62,7 +64,7 @@ export function KeyValueRow({
         text={textToCopy}
         className="text-text-subtle"
         size="2xs"
-        title={`Copy ${label}`}
+        title={copyTitle}
         iconSize="sm"
       />
     ) : null);

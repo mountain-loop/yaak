@@ -364,6 +364,8 @@ function TreeItem_<T extends { id: string }>({
                   ref={handleEditFocus}
                   defaultValue={defaultValue}
                   placeholder={placeholder}
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   className="bg-transparent outline-none w-full cursor-text"
                   onBlur={handleEditBlur}
                   onKeyDown={handleEditKeyDown}

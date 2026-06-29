@@ -8,7 +8,7 @@ import type {
   WebsocketRequest,
   Workspace,
 } from "@yaakapp-internal/models";
-import { Banner, HStack, Icon, IconButton, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
+import { Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useCallback, useMemo, useState } from "react";
 import { modelToYaml } from "../../lib/diffYaml";
