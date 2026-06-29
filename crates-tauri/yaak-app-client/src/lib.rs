@@ -1425,11 +1425,10 @@ async fn cmd_send_http_request<R: Runtime>(
     window: WebviewWindow<R>,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
-    // NOTE: We receive the entire request because to account for the race
-    //   condition where the user may have just edited a field before sending
-    //   that has not yet been saved in the DB.
-    request: HttpRequest,
+    request_id: String,
 ) -> YaakResult<HttpResponse> {
+    let request = app_handle.db().get_http_request(&request_id)?;
+
     let blobs = app_handle.blob_manager();
     let response = app_handle.db().upsert_http_response(
         &HttpResponse {
