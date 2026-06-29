@@ -14,8 +14,7 @@ use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
-use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,6 +30,7 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
+use yaak::export::{self, ExportDataParams};
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
@@ -41,7 +41,7 @@ use yaak_models::models::{
     GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Workspace,
     WorkspaceMeta,
 };
-use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
+use yaak_models::util::{BatchUpsertResult, UpdateSource};
 use yaak_plugins::events::{
     CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
     CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest,
@@ -1384,24 +1384,14 @@ async fn cmd_export_data<R: Runtime>(
     workspace_ids: Vec<&str>,
     include_private_environments: bool,
 ) -> YaakResult<()> {
-    let db = app_handle.db();
     let version = app_handle.package_info().version.to_string();
-    let export_data =
-        get_workspace_export_resources(&db, &version, workspace_ids, include_private_environments)?;
-    let f = File::options()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(export_path)
-        .expect("Unable to create file");
-
-    serde_json::to_writer_pretty(&f, &export_data)
-        .map_err(|e| GenericError(e.to_string()))
-        .expect("Failed to write");
-
-    f.sync_all().expect("Failed to sync");
-
-    Ok(())
+    Ok(export::export_data(ExportDataParams {
+        query_manager: &app_handle.db_manager(),
+        yaak_version: &version,
+        export_path: Path::new(export_path),
+        workspace_ids,
+        include_private_environments,
+    })?)
 }
 
 #[tauri::command]
