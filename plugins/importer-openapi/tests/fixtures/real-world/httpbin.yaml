@@ -1,0 +1,1121 @@
+openapi: 3.0.0
+servers:
+  - url: https://httpbin.org
+info:
+  contact:
+    email: me@kennethreitz.org
+    url: https://kennethreitz.org
+    x-responsibleDeveloper: Kenneth Reitz
+    x-responsibleOrganization: Kenneth Reitz
+  description: "A simple HTTP Request & Response Service.<br/> <br/> <b>Run locally: </b> <code>$ docker run -p 80:80 kennethreitz/httpbin</code>"
+  title: httpbin.org
+  version: 0.9.2
+  x-apisguru-categories:
+    - developer_tools
+  x-origin:
+    - format: swagger
+      url: http://httpbin.org/spec.json
+      version: "2.0"
+  x-providerName: httpbin.org
+  x-logo:
+    url: https://api.apis.guru/v2/cache/logo/https_apis.guru_assets_images_no-logo.svg
+tags:
+  - description: Testing different HTTP verbs
+    name: HTTP Methods
+  - description: Auth methods
+    name: Auth
+  - description: Generates responses with given status code
+    name: Status codes
+  - description: Inspect the request data
+    name: Request inspection
+  - description: Inspect the response data like caching and headers
+    name: Response inspection
+  - description: Returns responses in different data formats
+    name: Response formats
+  - description: Generates random and dynamic data
+    name: Dynamic data
+  - description: Creates, reads and deletes Cookies
+    name: Cookies
+  - description: Returns different image formats
+    name: Images
+  - description: Returns different redirect responses
+    name: Redirects
+  - description: Returns anything that is passed to request
+    name: Anything
+paths:
+  "/absolute-redirect/{n}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+      responses:
+        "302":
+          description: A redirection.
+      summary: Absolutely 302 Redirects n times.
+      tags:
+        - Redirects
+  /anything:
+    delete:
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    get:
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    patch:
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    post:
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    put:
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    trace:
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+  "/anything/{anything}":
+    delete:
+      parameters:
+        - description: Automatically added
+          in: path
+          name: anything
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    get:
+      parameters:
+        - description: Automatically added
+          in: path
+          name: anything
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    patch:
+      parameters:
+        - description: Automatically added
+          in: path
+          name: anything
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    post:
+      parameters:
+        - description: Automatically added
+          in: path
+          name: anything
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    put:
+      parameters:
+        - description: Automatically added
+          in: path
+          name: anything
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+    trace:
+      parameters:
+        - description: Automatically added
+          in: path
+          name: anything
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Anything passed in request
+      summary: Returns anything passed in request data.
+      tags:
+        - Anything
+  "/base64/{value}":
+    get:
+      parameters:
+        - in: path
+          name: value
+          required: true
+          schema:
+            default: SFRUUEJJTiBpcyBhd2Vzb21l
+            type: string
+      responses:
+        "200":
+          description: Decoded base64 content.
+      summary: Decodes base64url-encoded string.
+      tags:
+        - Dynamic data
+  "/basic-auth/{user}/{passwd}":
+    get:
+      parameters:
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: passwd
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sucessful authentication.
+        "401":
+          description: Unsuccessful authentication.
+      summary: Prompts the user for authorization using HTTP Basic Auth.
+      tags:
+        - Auth
+  /bearer:
+    get:
+      parameters:
+        - in: header
+          name: Authorization
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sucessful authentication.
+        "401":
+          description: Unsuccessful authentication.
+      summary: Prompts the user for authorization using bearer authentication.
+      tags:
+        - Auth
+  /brotli:
+    get:
+      responses:
+        "200":
+          description: Brotli-encoded data.
+      summary: Returns Brotli-encoded data.
+      tags:
+        - Response formats
+  "/bytes/{n}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bytes.
+      summary: Returns n random bytes generated with given seed
+      tags:
+        - Dynamic data
+  /cache:
+    get:
+      parameters:
+        - in: header
+          name: If-Modified-Since
+          schema:
+            type: string
+        - in: header
+          name: If-None-Match
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cached response
+        "304":
+          description: Modified
+      summary: Returns a 304 if an If-Modified-Since header or If-None-Match is present. Returns the same as a GET otherwise.
+      tags:
+        - Response inspection
+  "/cache/{value}":
+    get:
+      parameters:
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cache control set
+      summary: Sets a Cache-Control header for n seconds.
+      tags:
+        - Response inspection
+  /cookies:
+    get:
+      responses:
+        "200":
+          description: Set cookies.
+      summary: Returns cookie data.
+      tags:
+        - Cookies
+  /cookies/delete:
+    get:
+      parameters:
+        - allowEmptyValue: true
+          explode: true
+          in: query
+          name: freeform
+          schema:
+            additionalProperties:
+              type: string
+            type: string
+          style: form
+      responses:
+        "200":
+          description: Redirect to cookie list
+      summary: Deletes cookie(s) as provided by the query string and redirects to cookie list.
+      tags:
+        - Cookies
+  /cookies/set:
+    get:
+      parameters:
+        - allowEmptyValue: true
+          explode: true
+          in: query
+          name: freeform
+          schema:
+            additionalProperties:
+              type: string
+            type: string
+          style: form
+      responses:
+        "200":
+          description: Redirect to cookie list
+      summary: Sets cookie(s) as provided by the query string and redirects to cookie list.
+      tags:
+        - Cookies
+  "/cookies/set/{name}/{value}":
+    get:
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: value
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Set cookies and redirects to cookie list.
+      summary: Sets a cookie and redirects to cookie list.
+      tags:
+        - Cookies
+  /deflate:
+    get:
+      responses:
+        "200":
+          description: Defalte-encoded data.
+      summary: Returns Deflate-encoded data.
+      tags:
+        - Response formats
+  "/delay/{delay}":
+    delete:
+      parameters:
+        - in: path
+          name: delay
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A delayed response.
+      summary: Returns a delayed response (max of 10 seconds).
+      tags:
+        - Dynamic data
+    get:
+      parameters:
+        - in: path
+          name: delay
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A delayed response.
+      summary: Returns a delayed response (max of 10 seconds).
+      tags:
+        - Dynamic data
+    patch:
+      parameters:
+        - in: path
+          name: delay
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A delayed response.
+      summary: Returns a delayed response (max of 10 seconds).
+      tags:
+        - Dynamic data
+    post:
+      parameters:
+        - in: path
+          name: delay
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A delayed response.
+      summary: Returns a delayed response (max of 10 seconds).
+      tags:
+        - Dynamic data
+    put:
+      parameters:
+        - in: path
+          name: delay
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A delayed response.
+      summary: Returns a delayed response (max of 10 seconds).
+      tags:
+        - Dynamic data
+    trace:
+      parameters:
+        - in: path
+          name: delay
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: A delayed response.
+      summary: Returns a delayed response (max of 10 seconds).
+      tags:
+        - Dynamic data
+  /delete:
+    delete:
+      responses:
+        "200":
+          description: The request's DELETE parameters.
+      summary: The request's DELETE parameters.
+      tags:
+        - HTTP Methods
+  /deny:
+    get:
+      responses:
+        "200":
+          description: Denied message
+      summary: Returns page denied by robots.txt rules.
+      tags:
+        - Response formats
+  "/digest-auth/{qop}/{user}/{passwd}":
+    get:
+      parameters:
+        - description: auth or auth-int
+          in: path
+          name: qop
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: passwd
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sucessful authentication.
+        "401":
+          description: Unsuccessful authentication.
+      summary: Prompts the user for authorization using Digest Auth.
+      tags:
+        - Auth
+  "/digest-auth/{qop}/{user}/{passwd}/{algorithm}":
+    get:
+      parameters:
+        - description: auth or auth-int
+          in: path
+          name: qop
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: passwd
+          required: true
+          schema:
+            type: string
+        - description: MD5, SHA-256, SHA-512
+          in: path
+          name: algorithm
+          required: true
+          schema:
+            default: MD5
+            type: string
+      responses:
+        "200":
+          description: Sucessful authentication.
+        "401":
+          description: Unsuccessful authentication.
+      summary: Prompts the user for authorization using Digest Auth + Algorithm.
+      tags:
+        - Auth
+  "/digest-auth/{qop}/{user}/{passwd}/{algorithm}/{stale_after}":
+    get:
+      description: |
+        allow settings the stale_after argument.
+      parameters:
+        - description: auth or auth-int
+          in: path
+          name: qop
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: passwd
+          required: true
+          schema:
+            type: string
+        - description: MD5, SHA-256, SHA-512
+          in: path
+          name: algorithm
+          required: true
+          schema:
+            default: MD5
+            type: string
+        - in: path
+          name: stale_after
+          required: true
+          schema:
+            default: never
+            type: string
+      responses:
+        "200":
+          description: Sucessful authentication.
+        "401":
+          description: Unsuccessful authentication.
+      summary: Prompts the user for authorization using Digest Auth + Algorithm.
+      tags:
+        - Auth
+  /drip:
+    get:
+      parameters:
+        - description: The amount of time (in seconds) over which to drip each byte
+          in: query
+          name: duration
+          required: false
+          schema:
+            default: 2
+            type: number
+        - description: The number of bytes to respond with
+          in: query
+          name: numbytes
+          required: false
+          schema:
+            default: 10
+            type: integer
+        - description: The response code that will be returned
+          in: query
+          name: code
+          required: false
+          schema:
+            default: 200
+            type: integer
+        - description: The amount of time (in seconds) to delay before responding
+          in: query
+          name: delay
+          required: false
+          schema:
+            default: 2
+            type: number
+      responses:
+        "200":
+          description: A dripped response.
+      summary: Drips data over a duration after an optional initial delay.
+      tags:
+        - Dynamic data
+  /encoding/utf8:
+    get:
+      responses:
+        "200":
+          description: Encoded UTF-8 content.
+      summary: Returns a UTF-8 encoded body.
+      tags:
+        - Response formats
+  "/etag/{etag}":
+    get:
+      parameters:
+        - in: header
+          name: If-None-Match
+          schema:
+            type: string
+        - in: header
+          name: If-Match
+          schema:
+            type: string
+        - description: Automatically added
+          in: path
+          name: etag
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Normal response
+        "412":
+          description: match
+      summary: Assumes the resource has the given etag and responds to If-None-Match and If-Match headers appropriately.
+      tags:
+        - Response inspection
+  /get:
+    get:
+      responses:
+        "200":
+          description: The request's query parameters.
+      summary: The request's query parameters.
+      tags:
+        - HTTP Methods
+  /gzip:
+    get:
+      responses:
+        "200":
+          description: GZip-encoded data.
+      summary: Returns GZip-encoded data.
+      tags:
+        - Response formats
+  /headers:
+    get:
+      responses:
+        "200":
+          description: The request's headers.
+      summary: Return the incoming request's HTTP headers.
+      tags:
+        - Request inspection
+  "/hidden-basic-auth/{user}/{passwd}":
+    get:
+      parameters:
+        - in: path
+          name: user
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: passwd
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sucessful authentication.
+        "404":
+          description: Unsuccessful authentication.
+      summary: Prompts the user for authorization using HTTP Basic Auth.
+      tags:
+        - Auth
+  /html:
+    get:
+      responses:
+        "200":
+          description: An HTML page.
+      summary: Returns a simple HTML document.
+      tags:
+        - Response formats
+  /image:
+    get:
+      responses:
+        "200":
+          description: An image.
+      summary: Returns a simple image of the type suggest by the Accept header.
+      tags:
+        - Images
+  /image/jpeg:
+    get:
+      responses:
+        "200":
+          description: A JPEG image.
+      summary: Returns a simple JPEG image.
+      tags:
+        - Images
+  /image/png:
+    get:
+      responses:
+        "200":
+          description: A PNG image.
+      summary: Returns a simple PNG image.
+      tags:
+        - Images
+  /image/svg:
+    get:
+      responses:
+        "200":
+          description: An SVG image.
+      summary: Returns a simple SVG image.
+      tags:
+        - Images
+  /image/webp:
+    get:
+      responses:
+        "200":
+          description: A WEBP image.
+      summary: Returns a simple WEBP image.
+      tags:
+        - Images
+  /ip:
+    get:
+      responses:
+        "200":
+          description: The Requester's IP Address.
+      summary: Returns the requester's IP Address.
+      tags:
+        - Request inspection
+  /json:
+    get:
+      responses:
+        "200":
+          description: An JSON document.
+      summary: Returns a simple JSON document.
+      tags:
+        - Response formats
+  "/links/{n}/{offset}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: offset
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: HTML links.
+      summary: Generate a page containing n links to other pages which do the same.
+      tags:
+        - Dynamic data
+  /patch:
+    patch:
+      responses:
+        "200":
+          description: The request's PATCH parameters.
+      summary: The request's PATCH parameters.
+      tags:
+        - HTTP Methods
+  /post:
+    post:
+      responses:
+        "200":
+          description: The request's POST parameters.
+      summary: The request's POST parameters.
+      tags:
+        - HTTP Methods
+  /put:
+    put:
+      responses:
+        "200":
+          description: The request's PUT parameters.
+      summary: The request's PUT parameters.
+      tags:
+        - HTTP Methods
+  "/range/{numbytes}":
+    get:
+      parameters:
+        - in: path
+          name: numbytes
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bytes.
+      summary: Streams n random bytes generated with given seed, at given chunk size per packet.
+      tags:
+        - Dynamic data
+  /redirect-to:
+    delete:
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302/3XX Redirects to the given URL.
+      tags:
+        - Redirects
+    get:
+      parameters:
+        - in: query
+          name: url
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: status_code
+          schema:
+            type: integer
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302/3XX Redirects to the given URL.
+      tags:
+        - Redirects
+    patch:
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302/3XX Redirects to the given URL.
+      tags:
+        - Redirects
+    post:
+      requestBody:
+        $ref: "#/components/requestBodies/postRedirectTo"
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302/3XX Redirects to the given URL.
+      tags:
+        - Redirects
+    put:
+      requestBody:
+        $ref: "#/components/requestBodies/postRedirectTo"
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302/3XX Redirects to the given URL.
+      tags:
+        - Redirects
+    trace:
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302/3XX Redirects to the given URL.
+      tags:
+        - Redirects
+  "/redirect/{n}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+      responses:
+        "302":
+          description: A redirection.
+      summary: 302 Redirects n times.
+      tags:
+        - Redirects
+  "/relative-redirect/{n}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+      responses:
+        "302":
+          description: A redirection.
+      summary: Relatively 302 Redirects n times.
+      tags:
+        - Redirects
+  /response-headers:
+    get:
+      parameters:
+        - allowEmptyValue: true
+          explode: true
+          in: query
+          name: freeform
+          schema:
+            additionalProperties:
+              type: string
+            type: string
+          style: form
+      responses:
+        "200":
+          description: Response headers
+      summary: Returns a set of response headers from the query string.
+      tags:
+        - Response inspection
+    post:
+      parameters:
+        - allowEmptyValue: true
+          explode: true
+          in: query
+          name: freeform
+          schema:
+            additionalProperties:
+              type: string
+            type: string
+          style: form
+      responses:
+        "200":
+          description: Response headers
+      summary: Returns a set of response headers from the query string.
+      tags:
+        - Response inspection
+  /robots.txt:
+    get:
+      responses:
+        "200":
+          description: Robots file
+      summary: Returns some robots.txt rules.
+      tags:
+        - Response formats
+  "/status/{codes}":
+    delete:
+      parameters:
+        - in: path
+          name: codes
+          required: true
+          schema:
+            type: string
+      responses:
+        "100":
+          description: Informational responses
+        "200":
+          description: Success
+        "300":
+          description: Redirection
+        "400":
+          description: Client Errors
+        "500":
+          description: Server Errors
+      summary: Return status code or random status code if more than one are given
+      tags:
+        - Status codes
+    get:
+      parameters:
+        - in: path
+          name: codes
+          required: true
+          schema:
+            type: string
+      responses:
+        "100":
+          description: Informational responses
+        "200":
+          description: Success
+        "300":
+          description: Redirection
+        "400":
+          description: Client Errors
+        "500":
+          description: Server Errors
+      summary: Return status code or random status code if more than one are given
+      tags:
+        - Status codes
+    patch:
+      parameters:
+        - in: path
+          name: codes
+          required: true
+          schema:
+            type: string
+      responses:
+        "100":
+          description: Informational responses
+        "200":
+          description: Success
+        "300":
+          description: Redirection
+        "400":
+          description: Client Errors
+        "500":
+          description: Server Errors
+      summary: Return status code or random status code if more than one are given
+      tags:
+        - Status codes
+    post:
+      parameters:
+        - in: path
+          name: codes
+          required: true
+          schema:
+            type: string
+      responses:
+        "100":
+          description: Informational responses
+        "200":
+          description: Success
+        "300":
+          description: Redirection
+        "400":
+          description: Client Errors
+        "500":
+          description: Server Errors
+      summary: Return status code or random status code if more than one are given
+      tags:
+        - Status codes
+    put:
+      parameters:
+        - in: path
+          name: codes
+          required: true
+          schema:
+            type: string
+      responses:
+        "100":
+          description: Informational responses
+        "200":
+          description: Success
+        "300":
+          description: Redirection
+        "400":
+          description: Client Errors
+        "500":
+          description: Server Errors
+      summary: Return status code or random status code if more than one are given
+      tags:
+        - Status codes
+    trace:
+      parameters:
+        - in: path
+          name: codes
+          required: true
+          schema:
+            type: string
+      responses:
+        "100":
+          description: Informational responses
+        "200":
+          description: Success
+        "300":
+          description: Redirection
+        "400":
+          description: Client Errors
+        "500":
+          description: Server Errors
+      summary: Return status code or random status code if more than one are given
+      tags:
+        - Status codes
+  "/stream-bytes/{n}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bytes.
+      summary: Streams n random bytes generated with given seed, at given chunk size per packet.
+      tags:
+        - Dynamic data
+  "/stream/{n}":
+    get:
+      parameters:
+        - in: path
+          name: n
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Streamed JSON responses.
+      summary: Stream n JSON responses
+      tags:
+        - Dynamic data
+  /user-agent:
+    get:
+      responses:
+        "200":
+          description: The request's User-Agent header.
+      summary: Return the incoming requests's User-Agent header.
+      tags:
+        - Request inspection
+  /uuid:
+    get:
+      responses:
+        "200":
+          description: A UUID4.
+      summary: Return a UUID4.
+      tags:
+        - Dynamic data
+  /xml:
+    get:
+      responses:
+        "200":
+          description: An XML document.
+      summary: Returns a simple XML document.
+      tags:
+        - Response formats
+components:
+  requestBodies:
+    postRedirectTo:
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            properties:
+              status_code:
+                type: integer
+              url:
+                type: string
+            required:
+              - url
+            type: object
+      required: true
+x-protocol: https
