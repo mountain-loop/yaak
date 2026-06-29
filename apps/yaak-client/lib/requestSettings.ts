@@ -5,6 +5,7 @@ type ModelType = AnyModel["model"];
 type WorkspaceRequestSettings = Pick<
   Workspace,
   | "settingFollowRedirects"
+  | "settingRequestMessageSize"
   | "settingRequestTimeout"
   | "settingSendCookies"
   | "settingStoreCookies"
@@ -17,7 +18,9 @@ type ModelTypeWithSetting<K extends RequestSettingKey> = {
   [M in ModelType]: K extends keyof ModelForType<M> ? M : never;
 }[ModelType];
 
-export type RequestSettingDefinition<K extends RequestSettingKey = RequestSettingKey> = {
+export type RequestSettingDefinition<
+  K extends RequestSettingKey = RequestSettingKey,
+> = {
   defaultValue: WorkspaceRequestSettings[K];
   description: string;
   modelKey: K;
@@ -41,11 +44,26 @@ export const SETTING_REQUEST_TIMEOUT = defineRequestSetting({
   title: "Request Timeout",
 });
 
+export const SETTING_REQUEST_MESSAGE_SIZE = defineRequestSetting({
+  defaultValue: 64 * 1024 * 1024,
+  description:
+    "Maximum gRPC or WebSocket message size in MB. Set to 0 to disable.",
+  modelKey: "settingRequestMessageSize",
+  models: ["workspace", "folder", "websocket_request", "grpc_request"],
+  title: "Message Size Limit",
+});
+
 export const SETTING_VALIDATE_CERTIFICATES = defineRequestSetting({
   defaultValue: true,
   description: "When disabled, skip validation of server certificates.",
   modelKey: "settingValidateCertificates",
-  models: ["workspace", "folder", "http_request", "websocket_request", "grpc_request"],
+  models: [
+    "workspace",
+    "folder",
+    "http_request",
+    "websocket_request",
+    "grpc_request",
+  ],
   title: "Validate TLS certificates",
 });
 
@@ -59,7 +77,8 @@ export const SETTING_FOLLOW_REDIRECTS = defineRequestSetting({
 
 export const SETTING_SEND_COOKIES = defineRequestSetting({
   defaultValue: true,
-  description: "Attach matching cookies from the active cookie jar to outgoing requests.",
+  description:
+    "Attach matching cookies from the active cookie jar to outgoing requests.",
   modelKey: "settingSendCookies",
   models: ["workspace", "folder", "http_request", "websocket_request"],
   title: "Automatically send cookies",
@@ -67,7 +86,8 @@ export const SETTING_SEND_COOKIES = defineRequestSetting({
 
 export const SETTING_STORE_COOKIES = defineRequestSetting({
   defaultValue: true,
-  description: "Save cookies from Set-Cookie response headers to the active cookie jar.",
+  description:
+    "Save cookies from Set-Cookie response headers to the active cookie jar.",
   modelKey: "settingStoreCookies",
   models: ["workspace", "folder", "http_request", "websocket_request"],
   title: "Automatically store cookies",

@@ -112,7 +112,9 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
               onCreateNewWorkspace={hide}
               onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
             />
-            <WorkspaceEncryptionSetting layout="settings" size="xs" />
+            <div className="mt-4">
+              <WorkspaceEncryptionSetting layout="settings" size="xs" />
+            </div>
           </SettingsSection>
           <ModelSettingsEditor model={workspace} showSectionTitles />
         </SettingsList>

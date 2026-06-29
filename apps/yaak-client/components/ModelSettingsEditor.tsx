@@ -13,6 +13,7 @@ import {
   modelSupportsSetting,
   type RequestSettingDefinition,
   SETTING_FOLLOW_REDIRECTS,
+  SETTING_REQUEST_MESSAGE_SIZE,
   SETTING_REQUEST_TIMEOUT,
   SETTING_SEND_COOKIES,
   SETTING_STORE_COOKIES,
@@ -22,21 +23,44 @@ import { Checkbox } from "./core/Checkbox";
 import { PlainInput } from "./core/PlainInput";
 import {
   SettingOverrideRow,
+  SettingRow,
   SettingRowBoolean,
-  SettingRowNumber,
   SettingsList,
   SettingsSection,
 } from "./core/SettingRow";
+
+const BYTES_PER_MB = 1024 * 1024;
+const MAX_REQUEST_MESSAGE_SIZE_BYTES = 2_147_483_647;
+const MAX_MESSAGE_SIZE_MB = MAX_REQUEST_MESSAGE_SIZE_BYTES / BYTES_PER_MB;
 
 interface Props {
   showSectionTitles?: boolean;
   model: ModelWithSettings;
 }
 
-type ModelWithSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
+type ModelWithSettings =
+  | Workspace
+  | Folder
+  | HttpRequest
+  | WebsocketRequest
+  | GrpcRequest;
 type ModelWithHttpSettings = Workspace | Folder | HttpRequest;
-type ModelWithTlsSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
-type ModelWithCookieSettings = Workspace | Folder | HttpRequest | WebsocketRequest;
+type ModelWithTlsSettings =
+  | Workspace
+  | Folder
+  | HttpRequest
+  | WebsocketRequest
+  | GrpcRequest;
+type ModelWithCookieSettings =
+  | Workspace
+  | Folder
+  | HttpRequest
+  | WebsocketRequest;
+type ModelWithMessageSizeSettings =
+  | Workspace
+  | Folder
+  | WebsocketRequest
+  | GrpcRequest;
 type BooleanSetting = boolean | InheritedBoolSetting;
 type IntegerSetting = number | InheritedIntSetting;
 type CookieSettingsPatch = {
@@ -50,12 +74,19 @@ type HttpSettingsPatch = {
 type TlsSettingsPatch = {
   settingValidateCertificates?: ModelWithTlsSettings["settingValidateCertificates"];
 };
+type MessageSizeSettingsPatch = {
+  settingRequestMessageSize?: ModelWithMessageSizeSettings["settingRequestMessageSize"];
+};
 
-export function ModelSettingsEditor({ model, showSectionTitles = false }: Props) {
+export function ModelSettingsEditor({
+  model,
+  showSectionTitles = false,
+}: Props) {
   const ancestors = useModelAncestors(model);
   const supportsHttpSettings = modelSupportsHttpSettings(model);
   const supportsCookieSettings = modelSupportsCookieSettings(model);
   const supportsTlsSettings = modelSupportsTlsSettings(model);
+  const supportsMessageSizeSettings = modelSupportsMessageSizeSettings(model);
 
   return (
     <SettingsList className="space-y-8">
@@ -73,6 +104,22 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
               onChange={(settingRequestTimeout) =>
                 patchHttpSettings(model, {
                   settingRequestTimeout,
+                })
+              }
+            />
+          )}
+          {supportsMessageSizeSettings && (
+            <MessageSizeSettingRow
+              settingDefinition={SETTING_REQUEST_MESSAGE_SIZE}
+              setting={model.settingRequestMessageSize}
+              inheritedValue={resolveInheritedValue(
+                ancestors,
+                SETTING_REQUEST_MESSAGE_SIZE.modelKey,
+                model.settingRequestMessageSize,
+              )}
+              onChange={(settingRequestMessageSize) =>
+                patchMessageSizeSettings(model, {
+                  settingRequestMessageSize,
                 })
               }
             />
@@ -110,7 +157,9 @@ export function ModelSettingsEditor({ model, showSectionTitles = false }: Props)
         </SettingsSection>
       )}
       {supportsCookieSettings && (
-        <SettingsSection title={supportsTlsSettings || showSectionTitles ? "Cookies" : null}>
+        <SettingsSection
+          title={supportsTlsSettings || showSectionTitles ? "Cookies" : null}
+        >
           <BooleanSettingRow
             settingDefinition={SETTING_SEND_COOKIES}
             setting={model.settingSendCookies}
@@ -158,44 +207,101 @@ export function countOverriddenSettings(model: ModelWithSettings) {
     settings.push(model.settingFollowRedirects, model.settingRequestTimeout);
   }
 
-  return settings.filter((setting) => isInheritedSetting(setting) && setting.enabled === true)
-    .length;
+  if (modelSupportsMessageSizeSettings(model)) {
+    settings.push(model.settingRequestMessageSize);
+  }
+
+  return settings.filter(
+    (setting) => isInheritedSetting(setting) && setting.enabled === true,
+  ).length;
 }
 
-function patchCookieSettings(model: ModelWithCookieSettings, patch: Partial<CookieSettingsPatch>) {
-  if (model.model === "workspace") return patchModel(model, patch as Partial<Workspace>);
-  if (model.model === "folder") return patchModel(model, patch as Partial<Folder>);
-  if (model.model === "http_request") return patchModel(model, patch as Partial<HttpRequest>);
-  if (model.model === "websocket_request")
-    return patchModel(model, patch as Partial<WebsocketRequest>);
-  throw new Error("Unsupported cookie settings model");
+function patchCookieSettings(
+  model: ModelWithCookieSettings,
+  patch: Partial<CookieSettingsPatch>,
+) {
+  switch (model.model) {
+    case "workspace":
+      return patchModel(model, patch as Partial<Workspace>);
+    case "folder":
+      return patchModel(model, patch as Partial<Folder>);
+    case "http_request":
+      return patchModel(model, patch as Partial<HttpRequest>);
+    case "websocket_request":
+      return patchModel(model, patch as Partial<WebsocketRequest>);
+  }
 }
 
-function patchHttpSettings(model: ModelWithHttpSettings, patch: Partial<HttpSettingsPatch>) {
-  if (model.model === "workspace") return patchModel(model, patch as Partial<Workspace>);
-  if (model.model === "folder") return patchModel(model, patch as Partial<Folder>);
-  return patchModel(model, patch as Partial<HttpRequest>);
+function patchHttpSettings(
+  model: ModelWithHttpSettings,
+  patch: Partial<HttpSettingsPatch>,
+) {
+  switch (model.model) {
+    case "workspace":
+      return patchModel(model, patch as Partial<Workspace>);
+    case "folder":
+      return patchModel(model, patch as Partial<Folder>);
+    case "http_request":
+      return patchModel(model, patch as Partial<HttpRequest>);
+  }
 }
 
-function patchTlsSettings(model: ModelWithTlsSettings, patch: Partial<TlsSettingsPatch>) {
-  if (model.model === "workspace") return patchModel(model, patch as Partial<Workspace>);
-  if (model.model === "folder") return patchModel(model, patch as Partial<Folder>);
-  if (model.model === "http_request") return patchModel(model, patch as Partial<HttpRequest>);
-  if (model.model === "websocket_request")
-    return patchModel(model, patch as Partial<WebsocketRequest>);
-  return patchModel(model, patch as Partial<GrpcRequest>);
+function patchTlsSettings(
+  model: ModelWithTlsSettings,
+  patch: Partial<TlsSettingsPatch>,
+) {
+  switch (model.model) {
+    case "workspace":
+      return patchModel(model, patch as Partial<Workspace>);
+    case "folder":
+      return patchModel(model, patch as Partial<Folder>);
+    case "http_request":
+      return patchModel(model, patch as Partial<HttpRequest>);
+    case "websocket_request":
+      return patchModel(model, patch as Partial<WebsocketRequest>);
+    case "grpc_request":
+      return patchModel(model, patch as Partial<GrpcRequest>);
+  }
 }
 
-function modelSupportsHttpSettings(model: ModelWithSettings): model is ModelWithHttpSettings {
+function patchMessageSizeSettings(
+  model: ModelWithMessageSizeSettings,
+  patch: Partial<MessageSizeSettingsPatch>,
+) {
+  switch (model.model) {
+    case "workspace":
+      return patchModel(model, patch as Partial<Workspace>);
+    case "folder":
+      return patchModel(model, patch as Partial<Folder>);
+    case "websocket_request":
+      return patchModel(model, patch as Partial<WebsocketRequest>);
+    case "grpc_request":
+      return patchModel(model, patch as Partial<GrpcRequest>);
+  }
+}
+
+function modelSupportsHttpSettings(
+  model: ModelWithSettings,
+): model is ModelWithHttpSettings {
   return modelSupportsSetting(model, SETTING_REQUEST_TIMEOUT);
 }
 
-function modelSupportsCookieSettings(model: ModelWithSettings): model is ModelWithCookieSettings {
+function modelSupportsCookieSettings(
+  model: ModelWithSettings,
+): model is ModelWithCookieSettings {
   return modelSupportsSetting(model, SETTING_SEND_COOKIES);
 }
 
-function modelSupportsTlsSettings(model: ModelWithSettings): model is ModelWithTlsSettings {
+function modelSupportsTlsSettings(
+  model: ModelWithSettings,
+): model is ModelWithTlsSettings {
   return modelSupportsSetting(model, SETTING_VALIDATE_CERTIFICATES);
+}
+
+function modelSupportsMessageSizeSettings(
+  model: ModelWithSettings,
+): model is ModelWithMessageSizeSettings {
+  return modelSupportsSetting(model, SETTING_REQUEST_MESSAGE_SIZE);
 }
 
 function BooleanSettingRow({
@@ -211,7 +317,11 @@ function BooleanSettingRow({
 }) {
   const inherited = isInheritedSetting(setting);
   const overridden = inherited ? setting.enabled === true : false;
-  const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
+  const value = inherited
+    ? overridden
+      ? setting.value
+      : inheritedValue
+    : setting;
 
   if (!inherited) {
     return (
@@ -255,19 +365,28 @@ function IntegerSettingRow({
 }) {
   const inherited = isInheritedSetting(setting);
   const overridden = inherited ? setting.enabled === true : false;
-  const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
+  const value = inherited
+    ? overridden
+      ? setting.value
+      : inheritedValue
+    : setting;
 
   if (!inherited) {
     return (
-      <SettingRowNumber
-        name={settingDefinition.modelKey}
+      <SettingRow
         title={settingDefinition.title}
         description={settingDefinition.description}
-        value={value}
-        placeholder={`${settingDefinition.defaultValue}`}
-        validate={(value) => value === "" || Number.parseInt(value, 10) >= 0}
-        onChange={(value) => onChange(value)}
-      />
+      >
+        <NumberUnitInput
+          name={settingDefinition.modelKey}
+          label={settingDefinition.title}
+          unit="ms"
+          value={`${value}`}
+          placeholder={`${settingDefinition.defaultValue}`}
+          validate={isValidInteger}
+          onChange={(value) => onChange(parseInteger(value))}
+        />
+      </SettingRow>
     );
   }
 
@@ -278,25 +397,157 @@ function IntegerSettingRow({
       overridden={overridden}
       onResetOverride={() => onChange({ ...setting, enabled: false })}
     >
-      <PlainInput
-        hideLabel
+      <NumberUnitInput
         name={settingDefinition.modelKey}
         label={settingDefinition.title}
-        size="sm"
-        type="number"
+        unit="ms"
+        value={`${value}`}
         placeholder={`${settingDefinition.defaultValue}`}
-        defaultValue={`${value}`}
-        containerClassName="!w-48"
-        validate={(value) => value === "" || Number.parseInt(value, 10) >= 0}
+        validate={isValidInteger}
         onChange={(value) =>
           onChange({
             ...setting,
             enabled: true,
-            value: Number.parseInt(value, 10) || 0,
+            value: parseInteger(value),
           })
         }
       />
     </SettingOverrideRow>
+  );
+}
+
+function MessageSizeSettingRow({
+  inheritedValue,
+  setting,
+  settingDefinition,
+  onChange,
+}: {
+  inheritedValue: number;
+  setting: IntegerSetting;
+  settingDefinition: RequestSettingDefinition<"settingRequestMessageSize">;
+  onChange: (setting: IntegerSetting) => void;
+}) {
+  const inherited = isInheritedSetting(setting);
+  const overridden = inherited ? setting.enabled === true : false;
+  const value = inherited
+    ? overridden
+      ? setting.value
+      : inheritedValue
+    : setting;
+  const displayValue = formatMegabytes(value);
+  const placeholder = formatMegabytes(settingDefinition.defaultValue);
+
+  if (!inherited) {
+    return (
+      <SettingRow
+        title={settingDefinition.title}
+        description={settingDefinition.description}
+      >
+        <MessageSizeInput
+          name={settingDefinition.modelKey}
+          label={settingDefinition.title}
+          value={displayValue}
+          placeholder={placeholder}
+          onChange={(value) => onChange(parseMegabytes(value))}
+        />
+      </SettingRow>
+    );
+  }
+
+  return (
+    <SettingOverrideRow
+      title={settingDefinition.title}
+      description={settingDefinition.description}
+      overridden={overridden}
+      onResetOverride={() => onChange({ ...setting, enabled: false })}
+    >
+      <MessageSizeInput
+        name={settingDefinition.modelKey}
+        label={settingDefinition.title}
+        value={displayValue}
+        placeholder={placeholder}
+        onChange={(value) =>
+          onChange({
+            ...setting,
+            enabled: true,
+            value: parseMegabytes(value),
+          })
+        }
+      />
+    </SettingOverrideRow>
+  );
+}
+
+function MessageSizeInput({
+  label,
+  name,
+  onChange,
+  placeholder,
+  value,
+}: {
+  label: string;
+  name: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <NumberUnitInput
+      name={name}
+      label={label}
+      unit="MB"
+      value={value}
+      inputMode="decimal"
+      step="any"
+      placeholder={placeholder}
+      validate={isValidMegabytes}
+      onChange={onChange}
+    />
+  );
+}
+
+function NumberUnitInput({
+  inputMode,
+  label,
+  name,
+  onChange,
+  placeholder,
+  step,
+  unit,
+  validate,
+  value,
+}: {
+  inputMode?: "decimal" | "numeric";
+  label: string;
+  name: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  step?: number | "any";
+  unit: string;
+  validate: (value: string) => boolean;
+  value: string;
+}) {
+  return (
+    <PlainInput
+      hideLabel
+      name={name}
+      label={label}
+      size="sm"
+      type="number"
+      inputMode={inputMode}
+      step={step}
+      placeholder={placeholder}
+      defaultValue={value}
+      className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      containerClassName="!w-48"
+      validate={validate}
+      rightSlot={
+        <span className="flex self-stretch items-center border-l border-border-subtle px-2 text-xs font-medium text-text-subtle">
+          {unit}
+        </span>
+      }
+      onChange={onChange}
+    />
   );
 }
 
@@ -308,7 +559,7 @@ function isInheritedSetting<T>(
 
 function resolveInheritedValue(
   ancestors: (Folder | Workspace)[],
-  key: "settingRequestTimeout",
+  key: "settingRequestTimeout" | "settingRequestMessageSize",
   fallback: IntegerSetting,
 ): number;
 function resolveInheritedValue(
@@ -338,10 +589,46 @@ function resolveInheritedValue(
 type WorkspaceSettings = Pick<
   Workspace,
   | "settingFollowRedirects"
+  | "settingRequestMessageSize"
   | "settingRequestTimeout"
   | "settingSendCookies"
   | "settingStoreCookies"
   | "settingValidateCertificates"
 >;
 
-type BooleanWorkspaceSettingKey = Exclude<keyof WorkspaceSettings, "settingRequestTimeout">;
+type BooleanWorkspaceSettingKey = Exclude<
+  keyof WorkspaceSettings,
+  "settingRequestTimeout" | "settingRequestMessageSize"
+>;
+
+function formatMegabytes(bytes: number) {
+  const megabytes = bytes / BYTES_PER_MB;
+  return Number.isInteger(megabytes)
+    ? `${megabytes}`
+    : megabytes.toFixed(3).replace(/\.?0+$/, "");
+}
+
+function parseMegabytes(value: string) {
+  const megabytes = Number(value);
+  return Number.isFinite(megabytes) ? Math.round(megabytes * BYTES_PER_MB) : 0;
+}
+
+function parseInteger(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+}
+
+function isValidInteger(value: string) {
+  const parsed = Number(value);
+  return value === "" || (Number.isInteger(parsed) && parsed >= 0);
+}
+
+function isValidMegabytes(value: string) {
+  if (value === "") return true;
+  const megabytes = Number(value);
+  return (
+    Number.isFinite(megabytes) &&
+    megabytes >= 0 &&
+    megabytes <= MAX_MESSAGE_SIZE_MB
+  );
+}
