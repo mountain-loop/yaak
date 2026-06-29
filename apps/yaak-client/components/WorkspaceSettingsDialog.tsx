@@ -1,5 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, InlineCode } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useAuthTab } from "../hooks/useAuthTab";
 import { useHeadersTab } from "../hooks/useHeadersTab";

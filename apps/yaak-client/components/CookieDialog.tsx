@@ -130,7 +130,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
       return key !== nextCookieKey;
     });
 
-    patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
+    void patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
     setSelectedCookieKey(nextCookieKey);
     setEditingCookieKey(null);
     setDraftCookie(null);
@@ -210,7 +210,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                           setEditingCookieKey(null);
                           setDraftCookie(null);
                           setDraftExpiresInput("");
-                          patchModel(cookieJar, { cookies: [] });
+                          void patchModel(cookieJar, { cookies: [] });
                         }}
                       />
                     </TableHeaderCell>
@@ -276,7 +276,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                                 setDraftCookie(null);
                                 setDraftExpiresInput("");
                               }
-                              patchModel(cookieJar, {
+                              void patchModel(cookieJar, {
                                 cookies: cookieJar.cookies.filter(
                                   (c2: Cookie) => cookieKey(c2) !== key,
                                 ),
