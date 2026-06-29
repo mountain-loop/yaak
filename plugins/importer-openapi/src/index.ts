@@ -368,7 +368,19 @@ function interpolateServerUrl(server: UnknownRecord): string {
 
 function joinUrlParts(baseUrl: string, path: string): string {
   if (baseUrl.length === 0) return path;
-  return `${baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+  return `${trimTrailingSlashes(baseUrl)}/${trimLeadingSlashes(path)}`;
+}
+
+function trimLeadingSlashes(value: string): string {
+  let index = 0;
+  while (value[index] === "/") index++;
+  return value.slice(index);
+}
+
+function trimTrailingSlashes(value: string): string {
+  let index = value.length;
+  while (value[index - 1] === "/") index--;
+  return value.slice(0, index);
 }
 
 function importUrlParameters({
