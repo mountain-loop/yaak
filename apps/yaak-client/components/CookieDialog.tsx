@@ -570,6 +570,8 @@ function CookieTextInput({
   return (
     <input
       autoFocus={autoFocus}
+      autoCapitalize="off"
+      autoCorrect="off"
       className={cookieInputClassName}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
@@ -585,6 +587,8 @@ function CookieTextInput({
 function CookieTextarea({ onChange, value }: { onChange: (value: string) => void; value: string }) {
   return (
     <textarea
+      autoCapitalize="off"
+      autoCorrect="off"
       className={classNames(cookieInputClassName, "min-h-[5rem] resize-y")}
       onChange={(event) => onChange(event.target.value)}
       value={value}
