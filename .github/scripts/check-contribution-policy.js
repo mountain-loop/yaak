@@ -1,3 +1,5 @@
+const fs = require("node:fs");
+
 const COMMENT_MARKER = "<!-- yaak-contribution-policy -->";
 
 const MAINTAINER_LOGINS = new Set(["gschier"]);
@@ -280,6 +282,22 @@ function buildBlockingComment(analysis) {
     ...analysis.blockers.map((blocker) => `- ${blocker.message}`),
   ];
 
+  if (!analysis.templateUsed) {
+    lines.push(
+      "",
+      "You can copy this template into the PR description and keep any existing context that is still useful.",
+      "",
+      "<details>",
+      "<summary>PR description template</summary>",
+      "",
+      "```md",
+      getPullRequestTemplate(),
+      "```",
+      "",
+      "</details>",
+    );
+  }
+
   if (analysis.largeDiff) {
     lines.push(
       "",
@@ -293,6 +311,10 @@ function buildBlockingComment(analysis) {
   );
 
   return lines.join("\n");
+}
+
+function getPullRequestTemplate() {
+  return fs.readFileSync(".github/pull_request_template.md", "utf8").trim();
 }
 
 function buildInScopeComment() {
