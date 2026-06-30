@@ -78,19 +78,30 @@ function hasMeaningfulText(value) {
   return stripComments(value || "").length > 0;
 }
 
-function checkboxState(body, label) {
-  const flexibleLabel = escapeRegExp(label).replace(/\\ /g, "\\s+");
-  const pattern = new RegExp(
-    `^\\s*[-*]\\s*\\[([ xX])\\]\\s*${flexibleLabel}\\s*$`,
-    "im",
-  );
-  const match = body.match(pattern);
+function normalizeCheckboxLabel(label) {
+  return label
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  if (match == null) {
-    return null;
+function checkboxState(body, label) {
+  const expectedLabel = normalizeCheckboxLabel(label);
+
+  for (const line of body.split("\n")) {
+    const match = line.match(/^\s*[-*]\s*\[([ xX])\]\s*(.*?)\s*$/i);
+
+    if (match == null) {
+      continue;
+    }
+
+    if (normalizeCheckboxLabel(match[2]) === expectedLabel) {
+      return match[1].toLowerCase() === "x";
+    }
   }
 
-  return match[1].toLowerCase() === "x";
+  return null;
 }
 
 function findFeedbackUrl(body) {
@@ -252,9 +263,18 @@ function truncateTitle(title) {
   return `${title.slice(0, SUMMARY_TITLE_MAX_LENGTH - 3).trimEnd()}...`;
 }
 
+function escapeTableText(value) {
+  return escapeHtml(value).replace(/\n/g, "<br>");
+}
+
 function summarizeResult({ pr, analysis, skipped, skipReason }) {
+  const comment =
+    analysis?.blockers.length > 0
+      ? buildBlockingComment(analysis).replace(COMMENT_MARKER, "").trim()
+      : "None";
   const summary = {
     blocked: analysis?.blockers.length > 0,
+    comment,
     details: "None",
     labels:
       analysis?.desiredLabels.length > 0
@@ -270,6 +290,7 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
     return {
       ...summary,
       blocked: false,
+      comment: "None",
       details: escapeHtml(skipReason),
       labels: "None",
       status: "Skipped",
@@ -279,6 +300,7 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
   if (summary.blocked) {
     return {
       ...summary,
+      comment: escapeTableText(summary.comment),
       details: escapeHtml(
         analysis.blockers.map((blocker) => blocker.message).join("; "),
       ),
@@ -289,6 +311,7 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
 
   return {
     ...summary,
+    comment: "None",
     labels: escapeHtml(summary.labels),
   };
 }
@@ -584,6 +607,7 @@ async function run({ github, context, core }) {
         { data: "Status", header: true },
         { data: "Labels", header: true },
         { data: "Details", header: true },
+        { data: "Comment", header: true },
       ],
       ...results.map((result) => [
         result.summary.prLink,
@@ -591,6 +615,7 @@ async function run({ github, context, core }) {
         result.summary.status,
         result.summary.labels,
         result.summary.details,
+        result.summary.comment,
       ]),
     ])
     .write();
