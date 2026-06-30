@@ -305,11 +305,6 @@ function buildBlockingComment(analysis) {
     );
   }
 
-  lines.push(
-    "",
-    "I did not overwrite the PR body, since that can remove useful context. Editing the description directly is the safest way to keep your notes while completing the template.",
-  );
-
   return lines.join("\n");
 }
 
