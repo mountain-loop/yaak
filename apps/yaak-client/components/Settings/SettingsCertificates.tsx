@@ -233,9 +233,7 @@ export function SettingsCertificates() {
         </HStack>
       </div>
 
-      <CommercialUseBanner source="client-certificates" title="Using certificates for work?">
-        A Yaak license is required for commercial use and helps support features like this.
-      </CommercialUseBanner>
+      <CommercialUseBanner source="client-certificates" title="Using certificates for work?" />
 
       {certificates.length > 0 && (
         <VStack space={3}>

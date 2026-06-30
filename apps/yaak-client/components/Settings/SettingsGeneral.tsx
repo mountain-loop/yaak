@@ -42,9 +42,7 @@ export function SettingsGeneral() {
         </p>
       </div>
       <div className="mt-3 mb-5">
-        <CommercialUseBanner source="settings-general" title="Using Yaak for work?">
-          A Yaak license is required for commercial use and helps support future development.
-        </CommercialUseBanner>
+        <CommercialUseBanner source="settings-general" title="Using Yaak for work?" />
       </div>
       <SettingsList className="space-y-8">
         <CargoFeature feature="updater">

@@ -207,9 +207,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         defaultRatio={0.6}
         firstSlot={({ style }) => (
           <div style={style} className="h-full px-4 grid grid-rows-[auto_minmax(0,1fr)] gap-3">
-            <CommercialUseBanner source="git-commit" title="Using Git for work?">
-              A Yaak license is required for commercial use and helps support features like this.
-            </CommercialUseBanner>
+            <CommercialUseBanner source="git-commit" title="Using Git for work?" />
             <SplitLayout
               storageKey="commit-vertical"
               layout="vertical"

@@ -8,13 +8,13 @@ import { pricingUrl } from "../lib/pricingUrl";
 import { DismissibleBanner } from "./core/DismissibleBanner";
 
 const COMMERCIAL_USE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+const COMMERCIAL_USE_BANNER_MESSAGE =
+  "Personal use of Yaak is free. If you’re using Yaak at work, please purchase a license.";
 
 export function CommercialUseBanner({
-  children,
   source,
   title,
 }: {
-  children: string;
   source: string;
   title: string;
 }) {
@@ -79,7 +79,7 @@ export function CommercialUseBanner({
       >
         <div className="text-sm">
           <p className="font-semibold text-text">{title}</p>
-          <p className="mt-0.5 text-text-subtle">{children}</p>
+          <p className="mt-0.5 text-text-subtle">{COMMERCIAL_USE_BANNER_MESSAGE}</p>
         </div>
       </DismissibleBanner>
     </div>

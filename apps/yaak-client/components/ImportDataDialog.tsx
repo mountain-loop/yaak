@@ -15,9 +15,7 @@ export function ImportDataDialog({ importData }: Props) {
 
   return (
     <VStack space={5} className="pb-4">
-      <CommercialUseBanner source="data-import" title="Importing work data?">
-        A Yaak license is required for commercial use and helps support features like this.
-      </CommercialUseBanner>
+      <CommercialUseBanner source="data-import" title="Importing work data?" />
 
       <VStack space={1}>
         <ul className="list-disc pl-5">

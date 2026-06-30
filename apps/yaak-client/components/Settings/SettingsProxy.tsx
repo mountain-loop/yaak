@@ -34,9 +34,7 @@ export function SettingsProxy() {
           traffic, or routing through specific infrastructure.
         </p>
       </div>
-      <CommercialUseBanner source="proxy-settings" title="Using a proxy for work?">
-        A Yaak license is required for commercial use and helps support features like this.
-      </CommercialUseBanner>
+      <CommercialUseBanner source="proxy-settings" title="Using a proxy for work?" />
       <SettingsList className="space-y-8">
         <SettingsSection title="Proxy">
           <SettingRowSelect

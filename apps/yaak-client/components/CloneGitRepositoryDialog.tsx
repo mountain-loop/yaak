@@ -90,9 +90,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         </Banner>
       )}
 
-      <CommercialUseBanner source="git-clone" title="Using Git for work?">
-        A Yaak license is required for commercial use and helps support features like this.
-      </CommercialUseBanner>
+      <CommercialUseBanner source="git-clone" title="Using Git for work?" />
 
       <PlainInput
         required
