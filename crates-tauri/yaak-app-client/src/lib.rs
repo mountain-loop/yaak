@@ -295,7 +295,8 @@ async fn cmd_grpc_reflect<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -332,6 +333,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &metadata,
             resolved_settings.validate_certificates.value,
             client_certificate,
+            resolved_settings.request_message_size.value,
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -353,7 +355,8 @@ async fn cmd_grpc_go<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -425,6 +428,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &metadata,
             resolved_settings.validate_certificates.value,
             client_cert.clone(),
+            resolved_settings.request_message_size.value,
         )
         .await;
 
@@ -714,7 +718,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 Some(s) => GrpcEvent {
                                     error: Some(s.message().to_string()),
                                     status: Some(s.code() as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Request failed".to_string(),
                                     metadata: metadata_to_map(s.metadata().clone()),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
@@ -722,7 +726,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 None => GrpcEvent {
                                     error: Some(e.message),
                                     status: Some(Code::Unknown as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Request failed".to_string(),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
@@ -738,7 +742,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             &GrpcEvent {
                                 error: Some(e.to_string()),
                                 status: Some(Code::Unknown as i32),
-                                content: "Failed to connect".to_string(),
+                                content: "Request failed".to_string(),
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
@@ -781,7 +785,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 Some(s) => GrpcEvent {
                                     error: Some(s.message().to_string()),
                                     status: Some(s.code() as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Stream failed".to_string(),
                                     metadata: metadata_to_map(s.metadata().clone()),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
@@ -789,7 +793,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 None => GrpcEvent {
                                     error: Some(e.message),
                                     status: Some(Code::Unknown as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Stream failed".to_string(),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
@@ -806,7 +810,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             &GrpcEvent {
                                 error: Some(e.to_string()),
                                 status: Some(Code::Unknown as i32),
-                                content: "Failed to connect".to_string(),
+                                content: "Stream failed".to_string(),
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
@@ -878,7 +882,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             .db()
                             .upsert_grpc_event(
                                 &GrpcEvent {
-                                    content: status.to_string(),
+                                    content: "Stream failed".to_string(),
+                                    error: Some(status.message().to_string()),
                                     status: Some(status.code() as i32),
                                     metadata: metadata_to_map(status.metadata().clone()),
                                     event_type: GrpcEventType::ConnectionEnd,
@@ -887,6 +892,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 &UpdateSource::from_window_label(window.label()),
                             )
                             .unwrap();
+                        break;
                     }
                 }
             }

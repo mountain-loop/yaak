@@ -139,6 +139,14 @@ impl<'a> ClientDb<'a> {
             } else {
                 parent.validate_certificates
             },
+            request_message_size: if websocket_request.setting_request_message_size.enabled {
+                ResolvedSetting::from_model(
+                    websocket_request.setting_request_message_size.value,
+                    AnyModel::WebsocketRequest(websocket_request.clone()),
+                )
+            } else {
+                parent.request_message_size
+            },
             send_cookies: if websocket_request.setting_send_cookies.enabled {
                 ResolvedSetting::from_model(
                     websocket_request.setting_send_cookies.value,

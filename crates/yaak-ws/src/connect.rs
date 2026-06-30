@@ -20,6 +20,7 @@ pub async fn ws_connect(
     headers: HeaderMap<HeaderValue>,
     validate_certificates: bool,
     client_cert: Option<ClientCertificateConfig>,
+    request_message_size: i32,
 ) -> Result<(WebSocketStream<MaybeTlsStream<TcpStream>>, Response)> {
     info!("Connecting to WS {url}");
     let tls_config = get_tls_config(validate_certificates, WITH_ALPN, client_cert.clone())?;
@@ -34,7 +35,7 @@ pub async fn ws_connect(
 
     let (stream, response) = connect_async_tls_with_config(
         req,
-        Some(WebSocketConfig::default()),
+        Some(websocket_config(request_message_size)),
         false,
         Some(Connector::Rustls(Arc::new(tls_config))),
     )
@@ -47,4 +48,13 @@ pub async fn ws_connect(
     );
 
     Ok((stream, response))
+}
+
+fn websocket_config(request_message_size: i32) -> WebSocketConfig {
+    let max_message_size = message_size_limit(request_message_size);
+    WebSocketConfig::default().max_message_size(max_message_size).max_frame_size(max_message_size)
+}
+
+pub(crate) fn message_size_limit(setting: i32) -> Option<usize> {
+    setting.try_into().ok().filter(|limit| *limit > 0)
 }

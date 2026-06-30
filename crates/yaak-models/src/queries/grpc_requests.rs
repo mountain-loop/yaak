@@ -129,6 +129,14 @@ impl<'a> ClientDb<'a> {
             } else {
                 parent.validate_certificates
             },
+            request_message_size: if grpc_request.setting_request_message_size.enabled {
+                ResolvedSetting::from_model(
+                    grpc_request.setting_request_message_size.value,
+                    AnyModel::GrpcRequest(grpc_request.clone()),
+                )
+            } else {
+                parent.request_message_size
+            },
             ..parent
         })
     }

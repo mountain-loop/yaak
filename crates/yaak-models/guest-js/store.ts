@@ -54,7 +54,7 @@ function trackModelWrite<T>(write: Promise<T>): Promise<T> {
 }
 
 export async function flushAllModelWrites(): Promise<void> {
-  const results = await Promise.allSettled([...pendingModelWrites]);
+  const results = await Promise.allSettled(pendingModelWrites);
   const rejected = results.find((result) => result.status === "rejected");
   if (rejected?.status === "rejected") {
     throw rejected.reason;
