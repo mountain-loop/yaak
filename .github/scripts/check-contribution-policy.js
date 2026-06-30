@@ -277,7 +277,7 @@ function buildBlockingComment(analysis) {
     COMMENT_MARKER,
     "Thanks for the PR. Yaak currently accepts community PRs for bug fixes and small-scope improvements, plus larger changes that link a feedback item where @gschier explicitly gave permission to work on it.",
     "",
-    "This PR cannot be accepted yet. Please update the PR description to address:",
+    "This PR cannot be accepted yet because the following contribution policy requirements were unmet:",
     "",
     ...analysis.blockers.map((blocker) => `- ${blocker.message}`),
   ];
