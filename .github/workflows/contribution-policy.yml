@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       pr:
-        description: PR number to check, or "all" for every open PR
+        description: PR number or all
         required: true
         default: all
         type: string
       dry_run:
-        description: Preview labels and comments without changing PRs
+        description: Dry run
         required: true
         default: true
         type: boolean
