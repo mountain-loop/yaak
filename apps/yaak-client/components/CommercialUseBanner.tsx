@@ -44,17 +44,17 @@ export function CommercialUseBanner({
     };
   }, [source]);
 
-  const snooze = getSnooze(snoozedAt, COMMERCIAL_USE_SNOOZE_MS);
+  const snoozed = isSnoozed(snoozedAt, COMMERCIAL_USE_SNOOZE_MS);
   const handleShow = useCallback(() => {
-    if (snoozeStartedRef.current || snooze.active) {
+    if (snoozeStartedRef.current || snoozed) {
       return;
     }
 
     snoozeStartedRef.current = true;
     setSnoozedAt(JSON.stringify({ source, at: new Date().toISOString() })).catch(console.error);
-  }, [setSnoozedAt, snooze.active, source]);
+  }, [setSnoozedAt, snoozed, source]);
 
-  if (!visible || isSnoozeLoading || (snooze.active && snooze.source !== source)) {
+  if (!visible || isSnoozeLoading || snoozed) {
     return null;
   }
 
@@ -64,7 +64,9 @@ export function CommercialUseBanner({
         id={`commercial-use:${source}`}
         color="info"
         className="w-full"
-        onDismiss={() => setSnoozedAt(new Date().toISOString())}
+        onDismiss={() =>
+          setSnoozedAt(JSON.stringify({ source, at: new Date().toISOString() }))
+        }
         onShow={handleShow}
         actions={[
           {
@@ -105,17 +107,16 @@ async function openCommercialUsePricing(source: string): Promise<void> {
   await openUrl(pricingUrl(`app.commercial-use.${source}`)).catch(console.error);
 }
 
-function getSnooze(value: string | null, ms: number): { active: boolean; source: string | null } {
-  if (value == null) return { active: false, source: null };
+function isSnoozed(value: string | null, ms: number): boolean {
+  if (value == null) return false;
 
   try {
-    const snooze = JSON.parse(value) as { source?: unknown; at?: unknown };
-    const source = typeof snooze.source === "string" ? snooze.source : null;
+    const snooze = JSON.parse(value) as { at?: unknown };
     const at = typeof snooze.at === "string" ? snooze.at : null;
-    return { active: isWithinMs(at, ms), source };
+    return isWithinMs(at, ms);
   } catch {
     // Older builds stored only the timestamp, so keep respecting that as a global snooze.
-    return { active: isWithinMs(value, ms), source: null };
+    return isWithinMs(value, ms);
   }
 }
 
