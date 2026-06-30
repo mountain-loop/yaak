@@ -6,6 +6,7 @@ const MAINTAINER_PERMISSIONS = new Set(["admin", "maintain", "write"]);
 
 const LARGE_DIFF_CHANGED_FILES = 20;
 const LARGE_DIFF_CHANGED_LINES = 800;
+const SUMMARY_TITLE_MAX_LENGTH = 80;
 
 const LABELS = {
   accepted: {
@@ -234,21 +235,62 @@ function buildBlockingComment(analysis) {
   return lines.join("\n");
 }
 
-function summarizeResult({ pr, analysis, skipped, skipReason }) {
-  if (skipped) {
-    return `#${pr.number} ${pr.title} - skipped (${skipReason})`;
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function truncateTitle(title) {
+  if (title.length <= SUMMARY_TITLE_MAX_LENGTH) {
+    return title;
   }
 
-  const status =
-    analysis.blockers.length > 0
-      ? `blocked: ${analysis.blockers.map((blocker) => blocker.message).join("; ")}`
-      : "accepted";
-  const labels =
-    analysis.desiredLabels.length > 0
-      ? analysis.desiredLabels.join(", ")
-      : "none";
+  return `${title.slice(0, SUMMARY_TITLE_MAX_LENGTH - 3).trimEnd()}...`;
+}
 
-  return `#${pr.number} ${pr.title} - ${status}; labels: ${labels}`;
+function summarizeResult({ pr, analysis, skipped, skipReason }) {
+  const summary = {
+    blocked: analysis?.blockers.length > 0,
+    details: "None",
+    labels:
+      analysis?.desiredLabels.length > 0
+        ? analysis.desiredLabels.join(", ")
+        : "None",
+    number: pr.number,
+    prLink: `<a href="${escapeHtml(pr.html_url)}">#${pr.number}</a>`,
+    status: "Accepted",
+    title: escapeHtml(truncateTitle(pr.title)),
+  };
+
+  if (skipped) {
+    return {
+      ...summary,
+      blocked: false,
+      details: escapeHtml(skipReason),
+      labels: "None",
+      status: "Skipped",
+    };
+  }
+
+  if (summary.blocked) {
+    return {
+      ...summary,
+      details: escapeHtml(
+        analysis.blockers.map((blocker) => blocker.message).join("; "),
+      ),
+      labels: escapeHtml(summary.labels),
+      status: "Blocked",
+    };
+  }
+
+  return {
+    ...summary,
+    labels: escapeHtml(summary.labels),
+  };
 }
 
 async function isOfficialMaintainer({ github, owner, repo, pr }) {
@@ -448,7 +490,9 @@ async function checkPullRequest({
 
   if (dryRun) {
     const summary = summarizeResult({ pr, analysis });
-    core.notice(`[dry-run] ${summary}`);
+    core.notice(
+      `[dry-run] PR #${summary.number}: ${summary.status}; labels: ${summary.labels}; details: ${summary.details}`,
+    );
     return {
       blocked: analysis.blockers.length > 0,
       number: pr.number,
@@ -503,9 +547,11 @@ async function listOpenPullRequests({ github, owner, repo }) {
 async function run({ github, context, core }) {
   const { owner, repo } = context.repo;
   const payloadPr = context.payload.pull_request;
+  const dryRunInput = context.payload.inputs?.dry_run;
   const dryRun =
     context.eventName === "workflow_dispatch" &&
-    context.payload.inputs?.dry_run !== "false";
+    dryRunInput !== false &&
+    dryRunInput !== "false";
   const pullRequests =
     payloadPr == null
       ? await listOpenPullRequests({ github, owner, repo })
@@ -534,9 +580,18 @@ async function run({ github, context, core }) {
     .addTable([
       [
         { data: "PR", header: true },
-        { data: "Result", header: true },
+        { data: "Title", header: true },
+        { data: "Status", header: true },
+        { data: "Labels", header: true },
+        { data: "Details", header: true },
       ],
-      ...results.map((result) => [`#${result.number}`, result.summary]),
+      ...results.map((result) => [
+        result.summary.prLink,
+        result.summary.title,
+        result.summary.status,
+        result.summary.labels,
+        result.summary.details,
+      ]),
     ])
     .write();
 
