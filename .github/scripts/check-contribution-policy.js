@@ -60,6 +60,8 @@ const CHECKBOXES = {
     "I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).",
   testedLocally: "I tested this change locally.",
   testsUpdated: "I added or updated tests when reasonable.",
+  screenshotsAdded:
+    "I added screenshots or recordings for UI changes when reasonable.",
 };
 
 function escapeRegExp(value) {
@@ -241,6 +243,14 @@ function analyzePullRequest(pr) {
       blockers.push({
         label: LABELS.policyUnmet.name,
         message: "Confirm that tests were added or updated when reasonable.",
+      });
+    }
+
+    if (states.screenshotsAdded !== true) {
+      blockers.push({
+        label: LABELS.policyUnmet.name,
+        message:
+          "Confirm that screenshots or recordings were added for UI changes when reasonable.",
       });
     }
   }

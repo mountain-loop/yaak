@@ -9,6 +9,7 @@
 - [ ] I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - [ ] I tested this change locally.
 - [ ] I added or updated tests when reasonable.
+- [ ] I added screenshots or recordings for UI changes when reasonable.
 
 Explicit permission feedback item (required if not a bug fix):
 
