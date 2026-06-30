@@ -681,6 +681,23 @@ async function listOpenPullRequests({ github, owner, repo }) {
   });
 }
 
+function getManualPullRequestNumbers({ context, core }) {
+  const value = String(context.payload.inputs?.pr || "all").trim();
+
+  if (value.toLowerCase() === "all") {
+    return null;
+  }
+
+  const pullNumber = Number(value);
+
+  if (!Number.isInteger(pullNumber) || pullNumber <= 0) {
+    core.setFailed('The "pr" input must be "all" or a positive PR number.');
+    return [];
+  }
+
+  return [pullNumber];
+}
+
 async function run({ github, context, core }) {
   const { owner, repo } = context.repo;
   const payloadPr = context.payload.pull_request;
@@ -689,14 +706,32 @@ async function run({ github, context, core }) {
     context.eventName === "workflow_dispatch" &&
     dryRunInput !== false &&
     dryRunInput !== "false";
+  let pullNumbers;
+
+  if (payloadPr != null) {
+    pullNumbers = [payloadPr.number];
+  } else {
+    pullNumbers = getManualPullRequestNumbers({ context, core });
+  }
+
+  if (pullNumbers?.length === 0) {
+    return;
+  }
+
   const pullRequests =
-    payloadPr == null
+    pullNumbers == null
       ? await listOpenPullRequests({ github, owner, repo })
-      : [payloadPr];
+      : pullNumbers.map((number) => ({ number }));
   const results = [];
 
   if (dryRun) {
-    core.notice("Running contribution policy in dry-run mode.");
+    core.notice(
+      `Running contribution policy in dry-run mode for ${
+        pullNumbers == null
+          ? "all open PRs"
+          : pullNumbers.map((number) => `#${number}`).join(", ")
+      }.`,
+    );
   }
 
   for (const pr of pullRequests) {

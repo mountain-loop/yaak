@@ -3,6 +3,11 @@ name: Contribution Policy
 on:
   workflow_dispatch:
     inputs:
+      pr:
+        description: PR number to check, or "all" for every open PR
+        required: true
+        default: all
+        type: string
       dry_run:
         description: Preview labels and comments without changing PRs
         required: true
