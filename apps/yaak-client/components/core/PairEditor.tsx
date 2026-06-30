@@ -25,7 +25,10 @@ import { Checkbox } from "./Checkbox";
 import type { DropdownItem } from "./Dropdown";
 import { Dropdown } from "./Dropdown";
 import type { EditorProps } from "./Editor/Editor";
-import type { GenericCompletionConfig } from "./Editor/genericCompletion";
+import type {
+  GenericCompletionConfig,
+  GenericCompletionOptionWithApply,
+} from "./Editor/genericCompletion";
 import { Editor } from "./Editor/LazyEditor";
 import { Icon } from "@yaakapp-internal/ui";
 import { IconButton } from "./IconButton";
@@ -44,6 +47,12 @@ export type PairEditorProps = {
   allowFileValues?: boolean;
   allowMultilineValues?: boolean;
   className?: string;
+  /**
+   * Show a dropdown picker button next to the name/value inputs, populated from
+   * the same options as the inline autocomplete. Pickers only render for fields
+   * that actually have options.
+   */
+  enableOptionsDropdown?: boolean;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string;
   nameAutocomplete?: GenericCompletionConfig;
@@ -86,6 +95,7 @@ export function PairEditor({
   allowFileValues,
   allowMultilineValues,
   className,
+  enableOptionsDropdown,
   forcedEnvironmentId,
   forceUpdateKey,
   nameAutocomplete,
@@ -301,6 +311,7 @@ export function PairEditor({
                   allowFileValues={allowFileValues}
                   allowMultilineValues={allowMultilineValues}
                   className="py-1"
+                  enableOptionsDropdown={enableOptionsDropdown}
                   forcedEnvironmentId={forcedEnvironmentId}
                   forceUpdateKey={localForceUpdateKey}
                   index={i}
@@ -380,6 +391,7 @@ type PairEditorRowProps = {
   PairEditorProps,
   | "allowFileValues"
   | "allowMultilineValues"
+  | "enableOptionsDropdown"
   | "forcedEnvironmentId"
   | "forceUpdateKey"
   | "nameAutocomplete"
@@ -407,6 +419,7 @@ export function PairEditorRow({
   className,
   disableDrag,
   disabled,
+  enableOptionsDropdown,
   forceUpdateKey,
   forcedEnvironmentId,
   index,
@@ -551,6 +564,30 @@ export function PairEditorRow({
     [setDraggableRef, setDroppableRef],
   );
 
+  // Insert a chosen suggestion into one of the inputs. Dispatching the change
+  // fires the editor's onChange (which updates the pair), and focusing handles
+  // the "add a new empty row" behavior when picking on the last row.
+  const replaceInputValue = useCallback((ref: typeof nameInputRef, value: string) => {
+    const input = ref.current;
+    if (input == null) return;
+    input.dispatch({ changes: { from: 0, to: input.value().length, insert: value } });
+    input.focus();
+  }, []);
+
+  const handleSelectName = useCallback(
+    (value: string) => replaceInputValue(nameInputRef, value),
+    [replaceInputValue],
+  );
+  const handleSelectValue = useCallback(
+    (value: string) => replaceInputValue(valueInputRef, value),
+    [replaceInputValue],
+  );
+
+  const nameOptions = nameAutocomplete?.options ?? [];
+  const valueOptions = valueAutocomplete?.(pair.name)?.options ?? [];
+  const showNameDropdown = !!enableOptionsDropdown && !disabled && nameOptions.length > 0;
+  const showValueDropdown = !!enableOptionsDropdown && !disabled && valueOptions.length > 0;
+
   return (
     <div
       ref={handleSetRef}
@@ -612,6 +649,11 @@ export function PairEditorRow({
           autocomplete={nameAutocomplete}
           autocompleteVariables={nameAutocompleteVariables}
           autocompleteFunctions={nameAutocompleteFunctions}
+          rightSlot={
+            showNameDropdown ? (
+              <OptionsPickerDropdown options={nameOptions} onSelect={handleSelectName} />
+            ) : undefined
+          }
         />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pair.isFile ? (
@@ -656,6 +698,11 @@ export function PairEditorRow({
               autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariablesFiltered}
+              rightSlot={
+                showValueDropdown ? (
+                  <OptionsPickerDropdown options={valueOptions} onSelect={handleSelectValue} />
+                ) : undefined
+              }
             />
           )}
         </div>
@@ -805,6 +852,37 @@ function FileActionsDropdown({
         className="text-text-subtlest"
       />
     </RadioDropdown>
+  );
+}
+
+/**
+ * Small chevron button rendered inside a name/value input that opens a dropdown
+ * of the same options used for inline autocomplete. Lets users browse and pick a
+ * value without knowing what to type (ARC-style). Shows `label` but inserts
+ * `apply` when present (e.g. a friendly User-Agent label).
+ */
+function OptionsPickerDropdown({
+  options,
+  onSelect,
+}: {
+  options: GenericCompletionOptionWithApply[];
+  onSelect: (value: string) => void;
+}) {
+  const items = useMemo<DropdownItem[]>(
+    () => options.map((o) => ({ label: o.label, onSelect: () => onSelect(o.apply ?? o.label) })),
+    [options, onSelect],
+  );
+
+  return (
+    <Dropdown items={items}>
+      <IconButton
+        iconSize="sm"
+        size="xs"
+        icon="chevron_down"
+        title="Show suggestions"
+        className="mr-0.5 !h-auto my-0.5 text-text-subtlest"
+      />
+    </Dropdown>
   );
 }
 
