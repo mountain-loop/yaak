@@ -1,0 +1,32 @@
+name: Contribution Policy
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview labels and comments without changing PRs
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  check:
+    name: Check contribution policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout policy script
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check contribution policy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { run } = require("./.github/scripts/check-contribution-policy.js");
+            await run({ github, context, core });
