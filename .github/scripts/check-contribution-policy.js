@@ -28,16 +28,17 @@ const LABELS = {
     description:
       "Community PR links feedback where @gschier explicitly allowed the work.",
   },
-  needsTemplate: {
-    name: "contribution: needs template",
+  missingTemplate: {
+    name: "contribution: missing template",
     color: "D93F0B",
-    description: "Community PR needs a completed pull request template.",
+    description:
+      "Community PR is missing enough of the pull request template to review.",
   },
-  needsPermission: {
-    name: "contribution: needs permission",
+  policyUnmet: {
+    name: "contribution: policy unmet",
     color: "B60205",
     description:
-      "Community PR needs feedback showing explicit permission from @gschier.",
+      "Community PR does not currently satisfy the contribution policy.",
   },
   needsScopeReview: {
     name: "contribution: needs scope review",
@@ -183,7 +184,7 @@ function analyzePullRequest(pr) {
 
   if (!templateUsed) {
     blockers.push({
-      label: LABELS.needsTemplate.name,
+      label: LABELS.missingTemplate.name,
       message:
         "Update the PR description with the repository pull request template.",
     });
@@ -196,7 +197,7 @@ function analyzePullRequest(pr) {
 
     if (!hasSummary) {
       blockers.push({
-        label: LABELS.needsTemplate.name,
+        label: LABELS.policyUnmet.name,
         message:
           "Add a short summary describing the bug fix or permitted change.",
       });
@@ -204,19 +205,19 @@ function analyzePullRequest(pr) {
 
     if (bugFix && explicitPermission) {
       blockers.push({
-        label: LABELS.needsTemplate.name,
+        label: LABELS.policyUnmet.name,
         message:
           "Choose either the bug-fix checkbox or the explicit-permission checkbox, not both.",
       });
     } else if (!bugFix && !explicitPermission) {
       blockers.push({
-        label: LABELS.needsTemplate.name,
+        label: LABELS.policyUnmet.name,
         message:
           "Check whether this is a bug fix, or confirm that explicit permission from @gschier is linked.",
       });
     } else if (explicitPermission && feedbackUrl == null) {
       blockers.push({
-        label: LABELS.needsPermission.name,
+        label: LABELS.policyUnmet.name,
         message:
           "Link the feedback item where @gschier explicitly gave you permission to work on this.",
       });
@@ -224,21 +225,21 @@ function analyzePullRequest(pr) {
 
     if (states.readContributing !== true) {
       blockers.push({
-        label: LABELS.needsTemplate.name,
+        label: LABELS.policyUnmet.name,
         message: "Confirm that `CONTRIBUTING.md` was read and followed.",
       });
     }
 
     if (states.testedLocally !== true) {
       blockers.push({
-        label: LABELS.needsTemplate.name,
+        label: LABELS.policyUnmet.name,
         message: "Confirm that the change was tested locally.",
       });
     }
 
     if (states.testsUpdated !== true) {
       blockers.push({
-        label: LABELS.needsTemplate.name,
+        label: LABELS.policyUnmet.name,
         message: "Confirm that tests were added or updated when reasonable.",
       });
     }
@@ -255,11 +256,11 @@ function analyzePullRequest(pr) {
           : LABELS.inScope.name,
     );
   } else if (
-    blockers.some((blocker) => blocker.label === LABELS.needsTemplate.name)
+    blockers.some((blocker) => blocker.label === LABELS.missingTemplate.name)
   ) {
-    desiredLabels.add(LABELS.needsTemplate.name);
+    desiredLabels.add(LABELS.missingTemplate.name);
   } else {
-    desiredLabels.add(blockers[0].label);
+    desiredLabels.add(LABELS.policyUnmet.name);
   }
 
   return {
