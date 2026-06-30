@@ -4,13 +4,13 @@
 
 ## Submission
 
-- [ ] This PR is a bug fix or small-scope improvement.
-- [ ] If this PR is not a bug fix or small-scope improvement, I linked the feedback item where @gschier explicitly gave me permission to work on it.
+- [ ] This PR is a bug fix.
+- [ ] If this PR is not a bug fix, I linked the feedback item where @gschier explicitly gave me permission to work on it.
 - [ ] I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - [ ] I tested this change locally.
 - [ ] I added or updated tests when reasonable.
 
-Explicit permission feedback item (required if not a bug fix or small-scope improvement):
+Explicit permission feedback item (required if not a bug fix):
 
 <!-- https://yaak.app/feedback/... -->
 

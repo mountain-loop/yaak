@@ -43,7 +43,7 @@ const LABELS = {
     name: "contribution: needs scope review",
     color: "FBCA04",
     description:
-      "Community PR may be broader than Yaak's small-scope contribution policy.",
+      "Community PR may be broader than Yaak's bug-fix contribution policy.",
   },
 };
 
@@ -52,9 +52,9 @@ const MANAGED_LABEL_NAMES = [
 ];
 
 const CHECKBOXES = {
-  smallScope: "This PR is a bug fix or small-scope improvement.",
+  bugFix: "This PR is a bug fix.",
   explicitPermission:
-    "If this PR is not a bug fix or small-scope improvement, I linked the feedback item where @gschier explicitly gave me permission to work on it.",
+    "If this PR is not a bug fix, I linked the feedback item where @gschier explicitly gave me permission to work on it.",
   readContributing:
     "I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).",
   testedLocally: "I tested this change locally.",
@@ -191,27 +191,28 @@ function analyzePullRequest(pr) {
     const summary = getSection(body, "Summary");
     const hasSummary = hasMeaningfulText(summary);
     const feedbackUrl = findFeedbackUrl(body);
-    const smallScope = states.smallScope === true;
+    const bugFix = states.bugFix === true;
     const explicitPermission = states.explicitPermission === true;
 
     if (!hasSummary) {
       blockers.push({
         label: LABELS.needsTemplate.name,
-        message: "Add a short summary describing the bug fix or improvement.",
+        message:
+          "Add a short summary describing the bug fix or permitted change.",
       });
     }
 
-    if (smallScope && explicitPermission) {
+    if (bugFix && explicitPermission) {
       blockers.push({
         label: LABELS.needsTemplate.name,
         message:
-          "Choose either the small-scope checkbox or the explicit-permission checkbox, not both.",
+          "Choose either the bug-fix checkbox or the explicit-permission checkbox, not both.",
       });
-    } else if (!smallScope && !explicitPermission) {
+    } else if (!bugFix && !explicitPermission) {
       blockers.push({
         label: LABELS.needsTemplate.name,
         message:
-          "Check whether this is a bug fix or small-scope improvement, or confirm that explicit permission from @gschier is linked.",
+          "Check whether this is a bug fix, or confirm that explicit permission from @gschier is linked.",
       });
     } else if (explicitPermission && feedbackUrl == null) {
       blockers.push({
@@ -275,7 +276,7 @@ function analyzePullRequest(pr) {
 function buildBlockingComment(analysis) {
   const lines = [
     COMMENT_MARKER,
-    "Thanks for the PR. Yaak currently accepts community PRs for bug fixes and small-scope improvements, plus larger changes that link a feedback item where @gschier explicitly gave permission to work on it.",
+    "Thanks for the PR. Yaak currently accepts community PRs for bug fixes, plus larger changes that link a feedback item where @gschier explicitly gave permission to work on it.",
     "",
     "This PR cannot be accepted yet because the following contribution policy requirements were unmet:",
     "",
@@ -326,7 +327,7 @@ function buildOutOfScopeComment() {
     COMMENT_MARKER,
     "Thanks for the PR. This does not appear to match Yaak's current contribution policy.",
     "",
-    "Yaak currently accepts community PRs for bug fixes, small-scope improvements, or changes tied to a feedback item where @gschier explicitly gave permission to work on it.",
+    "Yaak currently accepts community PRs for bug fixes, or changes tied to a feedback item where @gschier explicitly gave permission to work on it.",
     "",
     "If this PR is tied to a feedback item where @gschier explicitly gave permission, please link it in the PR description.",
   ].join("\n");
