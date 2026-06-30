@@ -20,20 +20,22 @@ const LABELS = {
     color: "B60205",
     description: "Community PR does not match Yaak's contribution policy.",
   },
-  approvedFeedback: {
-    name: "contribution: approved feedback",
+  explicitPermission: {
+    name: "contribution: explicit permission",
     color: "5319E7",
-    description: "Community PR links an approved feedback item.",
+    description:
+      "Community PR links feedback where @gschier explicitly allowed the work.",
   },
   needsTemplate: {
     name: "contribution: needs template",
     color: "D93F0B",
     description: "Community PR needs a completed pull request template.",
   },
-  needsApproval: {
-    name: "contribution: needs approval",
+  needsPermission: {
+    name: "contribution: needs permission",
     color: "B60205",
-    description: "Community PR needs an approved feedback item before review.",
+    description:
+      "Community PR needs feedback showing explicit permission from @gschier.",
   },
   needsScopeReview: {
     name: "contribution: needs scope review",
@@ -43,21 +45,14 @@ const LABELS = {
   },
 };
 
-const LEGACY_MANAGED_LABEL_NAMES = [
-  "contribution: accepted",
-  "contribution: large diff",
-];
 const MANAGED_LABEL_NAMES = [
-  ...new Set([
-    ...Object.values(LABELS).map((label) => label.name),
-    ...LEGACY_MANAGED_LABEL_NAMES,
-  ]),
+  ...new Set(Object.values(LABELS).map((label) => label.name)),
 ];
 
 const CHECKBOXES = {
   smallScope: "This PR is a bug fix or small-scope improvement.",
-  approvedFeedback:
-    "If this PR is not a bug fix or small-scope improvement, I linked an approved feedback item below.",
+  explicitPermission:
+    "If this PR is not a bug fix or small-scope improvement, I linked the feedback item where @gschier explicitly gave me permission to work on it.",
   readContributing:
     "I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).",
   testedLocally: "I tested this change locally.",
@@ -195,7 +190,7 @@ function analyzePullRequest(pr) {
     const hasSummary = hasMeaningfulText(summary);
     const feedbackUrl = findFeedbackUrl(body);
     const smallScope = states.smallScope === true;
-    const approvedFeedback = states.approvedFeedback === true;
+    const explicitPermission = states.explicitPermission === true;
 
     if (!hasSummary) {
       blockers.push({
@@ -204,23 +199,23 @@ function analyzePullRequest(pr) {
       });
     }
 
-    if (smallScope && approvedFeedback) {
+    if (smallScope && explicitPermission) {
       blockers.push({
         label: LABELS.needsTemplate.name,
         message:
-          "Choose either the small-scope checkbox or the approved-feedback checkbox, not both.",
+          "Choose either the small-scope checkbox or the explicit-permission checkbox, not both.",
       });
-    } else if (!smallScope && !approvedFeedback) {
+    } else if (!smallScope && !explicitPermission) {
       blockers.push({
         label: LABELS.needsTemplate.name,
         message:
-          "Check whether this is a bug fix or small-scope improvement, or confirm that an approved feedback item is linked.",
+          "Check whether this is a bug fix or small-scope improvement, or confirm that explicit permission from @gschier is linked.",
       });
-    } else if (approvedFeedback && feedbackUrl == null) {
+    } else if (explicitPermission && feedbackUrl == null) {
       blockers.push({
-        label: LABELS.needsApproval.name,
+        label: LABELS.needsPermission.name,
         message:
-          "Link the approved feedback item where contribution approval was explicitly stated.",
+          "Link the feedback item where @gschier explicitly gave you permission to work on this.",
       });
     }
 
@@ -252,8 +247,8 @@ function analyzePullRequest(pr) {
     desiredLabels.add(
       largeDiff
         ? LABELS.needsScopeReview.name
-        : states.approvedFeedback
-          ? LABELS.approvedFeedback.name
+        : states.explicitPermission
+          ? LABELS.explicitPermission.name
           : LABELS.inScope.name,
     );
   } else if (
@@ -278,7 +273,7 @@ function analyzePullRequest(pr) {
 function buildBlockingComment(analysis) {
   const lines = [
     COMMENT_MARKER,
-    "Thanks for the PR. Yaak currently accepts community PRs for bug fixes and small-scope improvements, plus larger changes that link an approved feedback item from https://yaak.app/feedback.",
+    "Thanks for the PR. Yaak currently accepts community PRs for bug fixes and small-scope improvements, plus larger changes that link a feedback item where @gschier explicitly gave permission to work on it.",
     "",
     "This PR cannot be accepted yet. Please update the PR description to address:",
     "",
@@ -314,9 +309,9 @@ function buildOutOfScopeComment() {
     COMMENT_MARKER,
     "Thanks for the PR. This does not appear to match Yaak's current contribution policy.",
     "",
-    "Yaak currently accepts community PRs for bug fixes, small-scope improvements, or changes tied to a maintainer-reviewed feedback item from https://yaak.app/feedback.",
+    "Yaak currently accepts community PRs for bug fixes, small-scope improvements, or changes tied to a feedback item where @gschier explicitly gave permission to work on it.",
     "",
-    "If this PR is tied to a feedback item where contribution approval was explicitly stated, please link it in the PR description.",
+    "If this PR is tied to a feedback item where @gschier explicitly gave permission, please link it in the PR description.",
   ].join("\n");
 }
 
