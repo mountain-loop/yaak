@@ -2,6 +2,7 @@ import type { Color } from "@yaakapp-internal/plugins";
 import type { BannerProps } from "@yaakapp-internal/ui";
 import { Banner } from "@yaakapp-internal/ui";
 import classNames from "classnames";
+import { useEffect } from "react";
 import { useKeyValue } from "../../hooks/useKeyValue";
 import type { ButtonProps } from "./Button";
 import { Button } from "./Button";
@@ -11,11 +12,13 @@ export function DismissibleBanner({
   className,
   id,
   onDismiss,
+  onShow,
   actions,
   ...props
 }: BannerProps & {
   id: string;
   onDismiss?: () => void | Promise<void>;
+  onShow?: () => void | Promise<void>;
   actions?: {
     label: string;
     onClick: () => void;
@@ -33,7 +36,15 @@ export function DismissibleBanner({
     fallback: false,
   });
 
-  if (isLoading || dismissed) return null;
+  const shouldShow = !isLoading && !dismissed;
+
+  useEffect(() => {
+    if (shouldShow) {
+      Promise.resolve(onShow?.()).catch(console.error);
+    }
+  }, [onShow, shouldShow]);
+
+  if (!shouldShow) return null;
 
   return (
     <Banner className={classNames(className, "relative")} {...props}>

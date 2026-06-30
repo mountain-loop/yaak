@@ -1,13 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { LicenseCheckStatus } from "@yaakapp-internal/license";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKeyValue } from "../hooks/useKeyValue";
 import { appInfo } from "../lib/appInfo";
 import { pricingUrl } from "../lib/pricingUrl";
 import { DismissibleBanner } from "./core/DismissibleBanner";
 
-const COMMERCIAL_USE_SNOOZE_DAYS = 7;
+const COMMERCIAL_USE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export function CommercialUseBanner({
   children,
@@ -19,6 +19,7 @@ export function CommercialUseBanner({
   title: string;
 }) {
   const [visible, setVisible] = useState(false);
+  const snoozeStartedRef = useRef(false);
   const {
     isLoading: isSnoozeLoading,
     set: setSnoozedAt,
@@ -43,11 +44,17 @@ export function CommercialUseBanner({
     };
   }, [source]);
 
-  if (
-    !visible ||
-    isSnoozeLoading ||
-    isWithinDays(snoozedAt, COMMERCIAL_USE_SNOOZE_DAYS)
-  ) {
+  const snooze = getSnooze(snoozedAt, COMMERCIAL_USE_SNOOZE_MS);
+  const handleShow = useCallback(() => {
+    if (snoozeStartedRef.current || snooze.active) {
+      return;
+    }
+
+    snoozeStartedRef.current = true;
+    setSnoozedAt(JSON.stringify({ source, at: new Date().toISOString() })).catch(console.error);
+  }, [setSnoozedAt, snooze.active, source]);
+
+  if (!visible || isSnoozeLoading || (snooze.active && snooze.source !== source)) {
     return null;
   }
 
@@ -58,6 +65,7 @@ export function CommercialUseBanner({
         color="info"
         className="w-full"
         onDismiss={() => setSnoozedAt(new Date().toISOString())}
+        onShow={handleShow}
         actions={[
           {
             label: "View plans",
@@ -97,11 +105,25 @@ async function openCommercialUsePricing(source: string): Promise<void> {
   await openUrl(pricingUrl(`app.commercial-use.${source}`)).catch(console.error);
 }
 
-function isWithinDays(date: string | null, days: number): boolean {
+function getSnooze(value: string | null, ms: number): { active: boolean; source: string | null } {
+  if (value == null) return { active: false, source: null };
+
+  try {
+    const snooze = JSON.parse(value) as { source?: unknown; at?: unknown };
+    const source = typeof snooze.source === "string" ? snooze.source : null;
+    const at = typeof snooze.at === "string" ? snooze.at : null;
+    return { active: isWithinMs(at, ms), source };
+  } catch {
+    // Older builds stored only the timestamp, so keep respecting that as a global snooze.
+    return { active: isWithinMs(value, ms), source: null };
+  }
+}
+
+function isWithinMs(date: string | null, ms: number): boolean {
   if (date == null) return false;
 
   const time = new Date(date).getTime();
   if (Number.isNaN(time)) return false;
 
-  return Date.now() - time < days * 24 * 60 * 60 * 1000;
+  return Date.now() - time < ms;
 }
