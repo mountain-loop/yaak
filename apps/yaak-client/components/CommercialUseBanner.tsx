@@ -70,7 +70,7 @@ export function CommercialUseBanner({
         onShow={handleShow}
         actions={[
           {
-            label: "View plans",
+            label: "Purchase License",
             color: "info",
             variant: "solid",
             onClick: () => {
