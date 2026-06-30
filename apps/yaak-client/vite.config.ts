@@ -39,6 +39,7 @@ export default defineConfig(async () => {
       }),
     ],
     build: {
+      target: "esnext",
       sourcemap: true,
       outDir: "../../dist/apps/yaak-client",
       emptyOutDir: true,
