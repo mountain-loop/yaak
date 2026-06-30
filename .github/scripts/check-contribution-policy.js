@@ -35,15 +35,18 @@ const LABELS = {
     color: "B60205",
     description: "Community PR needs an approved feedback item before review.",
   },
-  largeDiff: {
-    name: "contribution: large diff",
+  needsScopeReview: {
+    name: "contribution: needs scope review",
     color: "FBCA04",
     description:
-      "Community PR has a larger-than-usual diff for a small-scope contribution.",
+      "Community PR may be broader than Yaak's small-scope contribution policy.",
   },
 };
 
-const LEGACY_MANAGED_LABEL_NAMES = ["contribution: accepted"];
+const LEGACY_MANAGED_LABEL_NAMES = [
+  "contribution: accepted",
+  "contribution: large diff",
+];
 const MANAGED_LABEL_NAMES = [
   ...new Set([
     ...Object.values(LABELS).map((label) => label.name),
@@ -170,16 +173,10 @@ function analyzePullRequest(pr) {
   }
 
   if (labelNames.has(LABELS.inScope.name)) {
-    const desiredLabels = [LABELS.inScope.name];
-
-    if (largeDiff) {
-      desiredLabels.push(LABELS.largeDiff.name);
-    }
-
     return {
       blockers: [],
       changedFiles,
-      desiredLabels,
+      desiredLabels: [LABELS.inScope.name],
       largeDiff,
       status: "in_scope",
       templateUsed,
@@ -249,18 +246,22 @@ function analyzePullRequest(pr) {
     }
   }
 
-  const desiredLabels = new Set(blockers.map((blocker) => blocker.label));
+  const desiredLabels = new Set();
 
   if (blockers.length === 0) {
     desiredLabels.add(
-      states.approvedFeedback
-        ? LABELS.approvedFeedback.name
-        : LABELS.inScope.name,
+      largeDiff
+        ? LABELS.needsScopeReview.name
+        : states.approvedFeedback
+          ? LABELS.approvedFeedback.name
+          : LABELS.inScope.name,
     );
-  }
-
-  if (largeDiff) {
-    desiredLabels.add(LABELS.largeDiff.name);
+  } else if (
+    blockers.some((blocker) => blocker.label === LABELS.needsTemplate.name)
+  ) {
+    desiredLabels.add(LABELS.needsTemplate.name);
+  } else {
+    desiredLabels.add(blockers[0].label);
   }
 
   return {
@@ -287,7 +288,7 @@ function buildBlockingComment(analysis) {
   if (analysis.largeDiff) {
     lines.push(
       "",
-      `This PR also changes ${analysis.changedFiles} files and ${analysis.totalChangedLines} lines, so it has been labeled as a large diff. That label is advisory, but maintainers may ask for the scope to be reduced.`,
+      `This PR also changes ${analysis.changedFiles} files and ${analysis.totalChangedLines} lines, so it has been labeled as needing scope review. That label is advisory, but maintainers may ask for the scope to be reduced.`,
     );
   }
 
