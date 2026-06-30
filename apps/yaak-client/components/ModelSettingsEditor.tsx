@@ -435,7 +435,7 @@ function MessageSizeSettingRow({
       : inheritedValue
     : setting;
   const displayValue = formatMegabytes(value);
-  const placeholder = formatMegabytes(settingDefinition.defaultValue);
+  const placeholder = "0";
 
   if (!inherited) {
     return (

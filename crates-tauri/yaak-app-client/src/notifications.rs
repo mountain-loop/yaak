@@ -79,7 +79,7 @@ impl YaakNotifier {
             return Ok(());
         }
 
-        debug!("Checking for notifications");
+        info!("Checking for notifications");
 
         #[cfg(feature = "license")]
         let license_check = {
@@ -115,17 +115,20 @@ impl YaakNotifier {
             ]);
         let resp = req.send().await?;
         if resp.status() != 200 {
-            debug!("Skipping notification status code {}", resp.status());
+            info!("Skipping notification status code {}", resp.status());
             return Ok(());
         }
 
-        for notification in resp.json::<Vec<YaakNotification>>().await? {
+        let notifications = resp.json::<Vec<YaakNotification>>().await?;
+        debug!("Received {} notifications", notifications.len());
+
+        for notification in notifications {
             let seen = get_kv(app_handle).await?;
             if seen.contains(&notification.id) {
                 debug!("Already seen notification {}", notification.id);
                 continue;
             }
-            debug!("Got notification {:?}", notification);
+            info!("Got notification {:?}", notification);
 
             let _ = app_handle.emit_to(window.label(), "notification", notification.clone());
             break; // Only show one notification
