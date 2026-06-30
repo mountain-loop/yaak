@@ -8,11 +8,13 @@ on:
         required: true
         default: true
         type: boolean
+  pull_request_target:
+    types: [labeled, unlabeled]
 
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   check:
@@ -22,6 +24,7 @@ jobs:
       - name: Checkout policy script
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.base.sha || github.ref }}
           fetch-depth: 1
 
       - name: Check contribution policy

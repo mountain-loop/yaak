@@ -3,16 +3,22 @@ const COMMENT_MARKER = "<!-- yaak-contribution-policy -->";
 const MAINTAINER_LOGINS = new Set(["gschier"]);
 const MAINTAINER_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const MAINTAINER_PERMISSIONS = new Set(["admin", "maintain", "write"]);
+const REVIEWER_LOGIN = "gschier";
 
 const LARGE_DIFF_CHANGED_FILES = 20;
 const LARGE_DIFF_CHANGED_LINES = 800;
 const SUMMARY_TITLE_MAX_LENGTH = 80;
 
 const LABELS = {
-  accepted: {
-    name: "contribution: accepted",
+  inScope: {
+    name: "contribution: in scope",
     color: "0E8A16",
-    description: "Community PR appears to match Yaak's contribution policy.",
+    description: "Community PR appears to be in scope for maintainer review.",
+  },
+  outOfScope: {
+    name: "contribution: out of scope",
+    color: "B60205",
+    description: "Community PR does not match Yaak's contribution policy.",
   },
   approvedFeedback: {
     name: "contribution: approved feedback",
@@ -37,7 +43,13 @@ const LABELS = {
   },
 };
 
-const MANAGED_LABEL_NAMES = Object.values(LABELS).map((label) => label.name);
+const LEGACY_MANAGED_LABEL_NAMES = ["contribution: accepted"];
+const MANAGED_LABEL_NAMES = [
+  ...new Set([
+    ...Object.values(LABELS).map((label) => label.name),
+    ...LEGACY_MANAGED_LABEL_NAMES,
+  ]),
+];
 
 const CHECKBOXES = {
   smallScope: "This PR is a bug fix or small-scope improvement.",
@@ -112,8 +124,13 @@ function findFeedbackUrl(body) {
   );
 }
 
+function getLabelNames(pr) {
+  return new Set((pr.labels || []).map((label) => label.name));
+}
+
 function analyzePullRequest(pr) {
   const body = normalizeBody(pr.body);
+  const labelNames = getLabelNames(pr);
   const states = Object.fromEntries(
     Object.entries(CHECKBOXES).map(([key, label]) => [
       key,
@@ -134,6 +151,41 @@ function analyzePullRequest(pr) {
   const largeDiff =
     changedFiles > LARGE_DIFF_CHANGED_FILES ||
     totalChangedLines > LARGE_DIFF_CHANGED_LINES;
+
+  if (labelNames.has(LABELS.outOfScope.name)) {
+    return {
+      blockers: [
+        {
+          label: LABELS.outOfScope.name,
+          message: "Marked out of scope by maintainer label.",
+        },
+      ],
+      changedFiles,
+      desiredLabels: [LABELS.outOfScope.name],
+      largeDiff,
+      status: "out_of_scope",
+      templateUsed,
+      totalChangedLines,
+    };
+  }
+
+  if (labelNames.has(LABELS.inScope.name)) {
+    const desiredLabels = [LABELS.inScope.name];
+
+    if (largeDiff) {
+      desiredLabels.push(LABELS.largeDiff.name);
+    }
+
+    return {
+      blockers: [],
+      changedFiles,
+      desiredLabels,
+      largeDiff,
+      status: "in_scope",
+      templateUsed,
+      totalChangedLines,
+    };
+  }
 
   if (!templateUsed) {
     blockers.push({
@@ -203,7 +255,7 @@ function analyzePullRequest(pr) {
     desiredLabels.add(
       states.approvedFeedback
         ? LABELS.approvedFeedback.name
-        : LABELS.accepted.name,
+        : LABELS.inScope.name,
     );
   }
 
@@ -216,6 +268,7 @@ function analyzePullRequest(pr) {
     changedFiles,
     desiredLabels: [...desiredLabels],
     largeDiff,
+    status: blockers.length === 0 ? "in_scope" : "blocked",
     templateUsed,
     totalChangedLines,
   };
@@ -246,6 +299,38 @@ function buildBlockingComment(analysis) {
   return lines.join("\n");
 }
 
+function buildInScopeComment() {
+  return [
+    COMMENT_MARKER,
+    "Thanks for the PR. This appears to match Yaak's contribution policy and is awaiting review by @gschier.",
+    "",
+    "This only means the PR is in scope for review. It does not mean the change has been reviewed or accepted for merge.",
+  ].join("\n");
+}
+
+function buildOutOfScopeComment() {
+  return [
+    COMMENT_MARKER,
+    "Thanks for the PR. This does not appear to match Yaak's current contribution policy.",
+    "",
+    "Yaak currently accepts community PRs for bug fixes, small-scope improvements, or changes tied to a maintainer-reviewed feedback item from https://yaak.app/feedback.",
+    "",
+    "If this PR is tied to a feedback item where contribution approval was explicitly stated, please link it in the PR description.",
+  ].join("\n");
+}
+
+function buildPolicyComment(analysis) {
+  if (analysis.status === "out_of_scope") {
+    return buildOutOfScopeComment();
+  }
+
+  if (analysis.blockers.length > 0) {
+    return buildBlockingComment(analysis);
+  }
+
+  return buildInScopeComment();
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -269,9 +354,9 @@ function escapeTableText(value) {
 
 function summarizeResult({ pr, analysis, skipped, skipReason }) {
   const comment =
-    analysis?.blockers.length > 0
-      ? buildBlockingComment(analysis).replace(COMMENT_MARKER, "").trim()
-      : "None";
+    analysis == null
+      ? "None"
+      : buildPolicyComment(analysis).replace(COMMENT_MARKER, "").trim();
   const summary = {
     blocked: analysis?.blockers.length > 0,
     comment,
@@ -282,7 +367,7 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
         : "None",
     number: pr.number,
     prLink: `<a href="${escapeHtml(pr.html_url)}">#${pr.number}</a>`,
-    status: "Accepted",
+    status: "In scope",
     title: escapeHtml(truncateTitle(pr.title)),
   };
 
@@ -305,13 +390,13 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
         analysis.blockers.map((blocker) => blocker.message).join("; "),
       ),
       labels: escapeHtml(summary.labels),
-      status: "Blocked",
+      status: analysis.status === "out_of_scope" ? "Out of scope" : "Blocked",
     };
   }
 
   return {
     ...summary,
-    comment: "None",
+    comment: escapeTableText(summary.comment),
     labels: escapeHtml(summary.labels),
   };
 }
@@ -459,6 +544,27 @@ async function deletePolicyComment({ github, owner, repo, issueNumber }) {
   });
 }
 
+async function requestMaintainerReview({ github, owner, repo, pr }) {
+  if (pr.user.login === REVIEWER_LOGIN) {
+    return;
+  }
+
+  try {
+    await github.rest.pulls.requestReviewers({
+      owner,
+      repo,
+      pull_number: pr.number,
+      reviewers: [REVIEWER_LOGIN],
+    });
+  } catch (error) {
+    if (error.status === 422) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
 async function checkPullRequest({
   github,
   core,
@@ -538,7 +644,7 @@ async function checkPullRequest({
       owner,
       repo,
       issueNumber,
-      body: buildBlockingComment(analysis),
+      body: buildPolicyComment(analysis),
     });
     return {
       blocked: true,
@@ -548,7 +654,14 @@ async function checkPullRequest({
     };
   }
 
-  await deletePolicyComment({ github, owner, repo, issueNumber });
+  await upsertPolicyComment({
+    github,
+    owner,
+    repo,
+    issueNumber,
+    body: buildPolicyComment(analysis),
+  });
+  await requestMaintainerReview({ github, owner, repo, pr });
   core.notice(`Contribution policy check passed for PR #${pr.number}.`);
   return {
     blocked: false,
