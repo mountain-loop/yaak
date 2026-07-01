@@ -14,7 +14,14 @@ on:
         default: true
         type: boolean
   pull_request_target:
-    types: [labeled, unlabeled]
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+      - labeled
+      - unlabeled
 
 permissions:
   contents: read
