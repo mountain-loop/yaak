@@ -1,0 +1,2741 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`importer-openapi > Snapshots real-world fixture apis-guru.yaml 1`] = `
+{
+  "resources": {
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.apis.guru/v2",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "folders": [
+      {
+        "description": "Actions relating to APIs in the collection",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_0",
+        "model": "folder",
+        "name": "APIs",
+        "sortPriority": 1,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "grpcRequests": [],
+    "httpRequests": [
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "List all APIs in the directory.
+Returns links to the OpenAPI definitions for each API in the directory.
+If API exist in multiple versions \`preferred\` one is explicitly marked.
+Some basic info from the OpenAPI definition is cached inside each object.
+This allows you to generate some simple views without needing to fetch the OpenAPI definition for each API.
+
+
+Operation ID: listAPIs
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_0",
+        "method": "GET",
+        "model": "http_request",
+        "name": "List all APIs",
+        "sortPriority": 2,
+        "url": "\${[baseUrl]}/list.json",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Some basic metrics for the entire directory.
+Just stunning numbers to put on a front page and are intended purely for WoW effect :)
+
+
+Operation ID: getMetrics
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_1",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Get basic metrics",
+        "sortPriority": 3,
+        "url": "\${[baseUrl]}/metrics.json",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "List all the providers in the directory
+
+
+Operation ID: getProviders
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_2",
+        "method": "GET",
+        "model": "http_request",
+        "name": "List all providers",
+        "sortPriority": 4,
+        "url": "\${[baseUrl]}/providers.json",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns the API entry for one specific version of an API where there is no serviceName.
+
+Operation ID: getAPI
+
+Parameters:
+- provider (path, required)
+- api (path, required)
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_3",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Retrieve one version of a particular API",
+        "sortPriority": 5,
+        "url": "\${[baseUrl]}/specs/:provider/:api.json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":provider",
+            "value": "apis.guru",
+          },
+          {
+            "enabled": true,
+            "name": ":api",
+            "value": "2.1.0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns the API entry for one specific version of an API where there is a serviceName.
+
+Operation ID: getServiceAPI
+
+Parameters:
+- provider (path, required)
+- service (path, required)
+- api (path, required)
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_4",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Retrieve one version of a particular API with a serviceName.",
+        "sortPriority": 6,
+        "url": "\${[baseUrl]}/specs/:provider/:service/:api.json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":provider",
+            "value": "apis.guru",
+          },
+          {
+            "enabled": true,
+            "name": ":service",
+            "value": "graph",
+          },
+          {
+            "enabled": true,
+            "name": ":api",
+            "value": "2.1.0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "List all APIs in the directory for a particular providerName
+Returns links to the individual API entry for each API.
+
+
+Operation ID: getProvider
+
+Parameters:
+- provider (path, required)
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_5",
+        "method": "GET",
+        "model": "http_request",
+        "name": "List all APIs for a particular provider",
+        "sortPriority": 7,
+        "url": "\${[baseUrl]}/:provider.json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":provider",
+            "value": "apis.guru",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "List all serviceNames in the directory for a particular providerName
+
+
+Operation ID: getServices
+
+Parameters:
+- provider (path, required)
+
+Responses:
+- 200: OK",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_6",
+        "method": "GET",
+        "model": "http_request",
+        "name": "List all serviceNames for a particular provider",
+        "sortPriority": 8,
+        "url": "\${[baseUrl]}/:provider/services.json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":provider",
+            "value": "apis.guru",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "websocketRequests": [],
+    "workspaces": [
+      {
+        "description": "Wikipedia for Web APIs. Repository of API definitions in OpenAPI format.
+**Warning**: If you want to be notified about changes in advance please join our [Slack channel](https://join.slack.com/t/mermade/shared_invite/zt-g78g7xir-MLE_CTCcXCdfJfG3CJe9qA).
+Client sample: [[Demo]](https://apis.guru/simple-ui) [[Repo]](https://github.com/APIs-guru/simple-ui)
+
+
+Contact: mike.ralphson@gmail.com
+
+License: CC0 1.0 (https://github.com/APIs-guru/openapi-directory#licenses)",
+        "id": "GENERATE_ID::WORKSPACE_0",
+        "model": "workspace",
+        "name": "APIs.guru",
+      },
+    ],
+  },
+}
+`;
+
+exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
+{
+  "resources": {
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "https://httpbin.org",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "folders": [
+      {
+        "description": "Testing different HTTP verbs",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_0",
+        "model": "folder",
+        "name": "HTTP Methods",
+        "sortPriority": 1,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Auth methods",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_1",
+        "model": "folder",
+        "name": "Auth",
+        "sortPriority": 2,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Generates responses with given status code",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_2",
+        "model": "folder",
+        "name": "Status codes",
+        "sortPriority": 3,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Inspect the request data",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_3",
+        "model": "folder",
+        "name": "Request inspection",
+        "sortPriority": 4,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Inspect the response data like caching and headers",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_4",
+        "model": "folder",
+        "name": "Response inspection",
+        "sortPriority": 5,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Returns responses in different data formats",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_5",
+        "model": "folder",
+        "name": "Response formats",
+        "sortPriority": 6,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Generates random and dynamic data",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_6",
+        "model": "folder",
+        "name": "Dynamic data",
+        "sortPriority": 7,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Creates, reads and deletes Cookies",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_7",
+        "model": "folder",
+        "name": "Cookies",
+        "sortPriority": 8,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Returns different image formats",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_8",
+        "model": "folder",
+        "name": "Images",
+        "sortPriority": 9,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Returns different redirect responses",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_9",
+        "model": "folder",
+        "name": "Redirects",
+        "sortPriority": 10,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "description": "Returns anything that is passed to request",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_10",
+        "model": "folder",
+        "name": "Anything",
+        "sortPriority": 11,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "grpcRequests": [],
+    "httpRequests": [
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Absolutely 302 Redirects n times.
+
+Parameters:
+- n (path, required)
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_0",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Absolutely 302 Redirects n times.",
+        "sortPriority": 12,
+        "url": "\${[baseUrl]}/absolute-redirect/:n",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_1",
+        "method": "DELETE",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 13,
+        "url": "\${[baseUrl]}/anything",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_2",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 14,
+        "url": "\${[baseUrl]}/anything",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_3",
+        "method": "PATCH",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 15,
+        "url": "\${[baseUrl]}/anything",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_4",
+        "method": "POST",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 16,
+        "url": "\${[baseUrl]}/anything",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_5",
+        "method": "PUT",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 17,
+        "url": "\${[baseUrl]}/anything",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_6",
+        "method": "TRACE",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 18,
+        "url": "\${[baseUrl]}/anything",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Parameters:
+- anything (path, required): Automatically added
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_7",
+        "method": "DELETE",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 19,
+        "url": "\${[baseUrl]}/anything/:anything",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":anything",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Parameters:
+- anything (path, required): Automatically added
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_8",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 20,
+        "url": "\${[baseUrl]}/anything/:anything",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":anything",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Parameters:
+- anything (path, required): Automatically added
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_9",
+        "method": "PATCH",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 21,
+        "url": "\${[baseUrl]}/anything/:anything",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":anything",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Parameters:
+- anything (path, required): Automatically added
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_10",
+        "method": "POST",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 22,
+        "url": "\${[baseUrl]}/anything/:anything",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":anything",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Parameters:
+- anything (path, required): Automatically added
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_11",
+        "method": "PUT",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 23,
+        "url": "\${[baseUrl]}/anything/:anything",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":anything",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns anything passed in request data.
+
+Parameters:
+- anything (path, required): Automatically added
+
+Responses:
+- 200: Anything passed in request",
+        "folderId": "GENERATE_ID::FOLDER_10",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_12",
+        "method": "TRACE",
+        "model": "http_request",
+        "name": "Returns anything passed in request data.",
+        "sortPriority": 24,
+        "url": "\${[baseUrl]}/anything/:anything",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":anything",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Decodes base64url-encoded string.
+
+Parameters:
+- value (path, required)
+
+Responses:
+- 200: Decoded base64 content.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_13",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Decodes base64url-encoded string.",
+        "sortPriority": 25,
+        "url": "\${[baseUrl]}/base64/:value",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":value",
+            "value": "SFRUUEJJTiBpcyBhd2Vzb21l",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Prompts the user for authorization using HTTP Basic Auth.
+
+Parameters:
+- user (path, required)
+- passwd (path, required)
+
+Responses:
+- 200: Sucessful authentication.
+- 401: Unsuccessful authentication.",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_14",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Prompts the user for authorization using HTTP Basic Auth.",
+        "sortPriority": 26,
+        "url": "\${[baseUrl]}/basic-auth/:user/:passwd",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":user",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":passwd",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Prompts the user for authorization using bearer authentication.
+
+Parameters:
+- Authorization (header)
+
+Responses:
+- 200: Sucessful authentication.
+- 401: Unsuccessful authentication.",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "headers": [
+          {
+            "enabled": false,
+            "name": "Authorization",
+            "value": "",
+          },
+        ],
+        "id": "GENERATE_ID::HTTP_REQUEST_15",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Prompts the user for authorization using bearer authentication.",
+        "sortPriority": 27,
+        "url": "\${[baseUrl]}/bearer",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns Brotli-encoded data.
+
+Responses:
+- 200: Brotli-encoded data.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_16",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns Brotli-encoded data.",
+        "sortPriority": 28,
+        "url": "\${[baseUrl]}/brotli",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns n random bytes generated with given seed
+
+Parameters:
+- n (path, required)
+
+Responses:
+- 200: Bytes.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_17",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns n random bytes generated with given seed",
+        "sortPriority": 29,
+        "url": "\${[baseUrl]}/bytes/:n",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a 304 if an If-Modified-Since header or If-None-Match is present. Returns the same as a GET otherwise.
+
+Parameters:
+- If-Modified-Since (header)
+- If-None-Match (header)
+
+Responses:
+- 200: Cached response
+- 304: Modified",
+        "folderId": "GENERATE_ID::FOLDER_4",
+        "headers": [
+          {
+            "enabled": false,
+            "name": "If-Modified-Since",
+            "value": "",
+          },
+          {
+            "enabled": false,
+            "name": "If-None-Match",
+            "value": "",
+          },
+        ],
+        "id": "GENERATE_ID::HTTP_REQUEST_18",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a 304 if an If-Modified-Since header or If-None-Match is present. Returns the same as a GET otherwise.",
+        "sortPriority": 30,
+        "url": "\${[baseUrl]}/cache",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Sets a Cache-Control header for n seconds.
+
+Parameters:
+- value (path, required)
+
+Responses:
+- 200: Cache control set",
+        "folderId": "GENERATE_ID::FOLDER_4",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_19",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Sets a Cache-Control header for n seconds.",
+        "sortPriority": 31,
+        "url": "\${[baseUrl]}/cache/:value",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":value",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns cookie data.
+
+Responses:
+- 200: Set cookies.",
+        "folderId": "GENERATE_ID::FOLDER_7",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_20",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns cookie data.",
+        "sortPriority": 32,
+        "url": "\${[baseUrl]}/cookies",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Deletes cookie(s) as provided by the query string and redirects to cookie list.
+
+Parameters:
+- freeform (query)
+
+Responses:
+- 200: Redirect to cookie list",
+        "folderId": "GENERATE_ID::FOLDER_7",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_21",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Deletes cookie(s) as provided by the query string and redirects to cookie list.",
+        "sortPriority": 33,
+        "url": "\${[baseUrl]}/cookies/delete",
+        "urlParameters": [
+          {
+            "enabled": false,
+            "name": "freeform",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Sets cookie(s) as provided by the query string and redirects to cookie list.
+
+Parameters:
+- freeform (query)
+
+Responses:
+- 200: Redirect to cookie list",
+        "folderId": "GENERATE_ID::FOLDER_7",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_22",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Sets cookie(s) as provided by the query string and redirects to cookie list.",
+        "sortPriority": 34,
+        "url": "\${[baseUrl]}/cookies/set",
+        "urlParameters": [
+          {
+            "enabled": false,
+            "name": "freeform",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Sets a cookie and redirects to cookie list.
+
+Parameters:
+- name (path, required)
+- value (path, required)
+
+Responses:
+- 200: Set cookies and redirects to cookie list.",
+        "folderId": "GENERATE_ID::FOLDER_7",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_23",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Sets a cookie and redirects to cookie list.",
+        "sortPriority": 35,
+        "url": "\${[baseUrl]}/cookies/set/:name/:value",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":name",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":value",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns Deflate-encoded data.
+
+Responses:
+- 200: Defalte-encoded data.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_24",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns Deflate-encoded data.",
+        "sortPriority": 36,
+        "url": "\${[baseUrl]}/deflate",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a delayed response (max of 10 seconds).
+
+Parameters:
+- delay (path, required)
+
+Responses:
+- 200: A delayed response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_25",
+        "method": "DELETE",
+        "model": "http_request",
+        "name": "Returns a delayed response (max of 10 seconds).",
+        "sortPriority": 37,
+        "url": "\${[baseUrl]}/delay/:delay",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":delay",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a delayed response (max of 10 seconds).
+
+Parameters:
+- delay (path, required)
+
+Responses:
+- 200: A delayed response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_26",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a delayed response (max of 10 seconds).",
+        "sortPriority": 38,
+        "url": "\${[baseUrl]}/delay/:delay",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":delay",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a delayed response (max of 10 seconds).
+
+Parameters:
+- delay (path, required)
+
+Responses:
+- 200: A delayed response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_27",
+        "method": "PATCH",
+        "model": "http_request",
+        "name": "Returns a delayed response (max of 10 seconds).",
+        "sortPriority": 39,
+        "url": "\${[baseUrl]}/delay/:delay",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":delay",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a delayed response (max of 10 seconds).
+
+Parameters:
+- delay (path, required)
+
+Responses:
+- 200: A delayed response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_28",
+        "method": "POST",
+        "model": "http_request",
+        "name": "Returns a delayed response (max of 10 seconds).",
+        "sortPriority": 40,
+        "url": "\${[baseUrl]}/delay/:delay",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":delay",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a delayed response (max of 10 seconds).
+
+Parameters:
+- delay (path, required)
+
+Responses:
+- 200: A delayed response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_29",
+        "method": "PUT",
+        "model": "http_request",
+        "name": "Returns a delayed response (max of 10 seconds).",
+        "sortPriority": 41,
+        "url": "\${[baseUrl]}/delay/:delay",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":delay",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a delayed response (max of 10 seconds).
+
+Parameters:
+- delay (path, required)
+
+Responses:
+- 200: A delayed response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_30",
+        "method": "TRACE",
+        "model": "http_request",
+        "name": "Returns a delayed response (max of 10 seconds).",
+        "sortPriority": 42,
+        "url": "\${[baseUrl]}/delay/:delay",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":delay",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "The request's DELETE parameters.
+
+Responses:
+- 200: The request's DELETE parameters.",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_31",
+        "method": "DELETE",
+        "model": "http_request",
+        "name": "The request's DELETE parameters.",
+        "sortPriority": 43,
+        "url": "\${[baseUrl]}/delete",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns page denied by robots.txt rules.
+
+Responses:
+- 200: Denied message",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_32",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns page denied by robots.txt rules.",
+        "sortPriority": 44,
+        "url": "\${[baseUrl]}/deny",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Prompts the user for authorization using Digest Auth.
+
+Parameters:
+- qop (path, required): auth or auth-int
+- user (path, required)
+- passwd (path, required)
+
+Responses:
+- 200: Sucessful authentication.
+- 401: Unsuccessful authentication.",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_33",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Prompts the user for authorization using Digest Auth.",
+        "sortPriority": 45,
+        "url": "\${[baseUrl]}/digest-auth/:qop/:user/:passwd",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":qop",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":user",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":passwd",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Prompts the user for authorization using Digest Auth + Algorithm.
+
+Parameters:
+- qop (path, required): auth or auth-int
+- user (path, required)
+- passwd (path, required)
+- algorithm (path, required): MD5, SHA-256, SHA-512
+
+Responses:
+- 200: Sucessful authentication.
+- 401: Unsuccessful authentication.",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_34",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Prompts the user for authorization using Digest Auth + Algorithm.",
+        "sortPriority": 46,
+        "url": "\${[baseUrl]}/digest-auth/:qop/:user/:passwd/:algorithm",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":qop",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":user",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":passwd",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":algorithm",
+            "value": "MD5",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "allow settings the stale_after argument.
+
+
+Parameters:
+- qop (path, required): auth or auth-int
+- user (path, required)
+- passwd (path, required)
+- algorithm (path, required): MD5, SHA-256, SHA-512
+- stale_after (path, required)
+
+Responses:
+- 200: Sucessful authentication.
+- 401: Unsuccessful authentication.",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_35",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Prompts the user for authorization using Digest Auth + Algorithm.",
+        "sortPriority": 47,
+        "url": "\${[baseUrl]}/digest-auth/:qop/:user/:passwd/:algorithm/:stale_after",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":qop",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":user",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":passwd",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":algorithm",
+            "value": "MD5",
+          },
+          {
+            "enabled": true,
+            "name": ":stale_after",
+            "value": "never",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Drips data over a duration after an optional initial delay.
+
+Parameters:
+- duration (query): The amount of time (in seconds) over which to drip each byte
+- numbytes (query): The number of bytes to respond with
+- code (query): The response code that will be returned
+- delay (query): The amount of time (in seconds) to delay before responding
+
+Responses:
+- 200: A dripped response.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_36",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Drips data over a duration after an optional initial delay.",
+        "sortPriority": 48,
+        "url": "\${[baseUrl]}/drip",
+        "urlParameters": [
+          {
+            "enabled": false,
+            "name": "duration",
+            "value": "2",
+          },
+          {
+            "enabled": false,
+            "name": "numbytes",
+            "value": "10",
+          },
+          {
+            "enabled": false,
+            "name": "code",
+            "value": "200",
+          },
+          {
+            "enabled": false,
+            "name": "delay",
+            "value": "2",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a UTF-8 encoded body.
+
+Responses:
+- 200: Encoded UTF-8 content.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_37",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a UTF-8 encoded body.",
+        "sortPriority": 49,
+        "url": "\${[baseUrl]}/encoding/utf8",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Assumes the resource has the given etag and responds to If-None-Match and If-Match headers appropriately.
+
+Parameters:
+- If-None-Match (header)
+- If-Match (header)
+- etag (path, required): Automatically added
+
+Responses:
+- 200: Normal response
+- 412: match",
+        "folderId": "GENERATE_ID::FOLDER_4",
+        "headers": [
+          {
+            "enabled": false,
+            "name": "If-None-Match",
+            "value": "",
+          },
+          {
+            "enabled": false,
+            "name": "If-Match",
+            "value": "",
+          },
+        ],
+        "id": "GENERATE_ID::HTTP_REQUEST_38",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Assumes the resource has the given etag and responds to If-None-Match and If-Match headers appropriately.",
+        "sortPriority": 50,
+        "url": "\${[baseUrl]}/etag/:etag",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":etag",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "The request's query parameters.
+
+Responses:
+- 200: The request's query parameters.",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_39",
+        "method": "GET",
+        "model": "http_request",
+        "name": "The request's query parameters.",
+        "sortPriority": 51,
+        "url": "\${[baseUrl]}/get",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns GZip-encoded data.
+
+Responses:
+- 200: GZip-encoded data.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_40",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns GZip-encoded data.",
+        "sortPriority": 52,
+        "url": "\${[baseUrl]}/gzip",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return the incoming request's HTTP headers.
+
+Responses:
+- 200: The request's headers.",
+        "folderId": "GENERATE_ID::FOLDER_3",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_41",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Return the incoming request's HTTP headers.",
+        "sortPriority": 53,
+        "url": "\${[baseUrl]}/headers",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Prompts the user for authorization using HTTP Basic Auth.
+
+Parameters:
+- user (path, required)
+- passwd (path, required)
+
+Responses:
+- 200: Sucessful authentication.
+- 404: Unsuccessful authentication.",
+        "folderId": "GENERATE_ID::FOLDER_1",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_42",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Prompts the user for authorization using HTTP Basic Auth.",
+        "sortPriority": 54,
+        "url": "\${[baseUrl]}/hidden-basic-auth/:user/:passwd",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":user",
+            "value": "",
+          },
+          {
+            "enabled": true,
+            "name": ":passwd",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple HTML document.
+
+Responses:
+- 200: An HTML page.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_43",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple HTML document.",
+        "sortPriority": 55,
+        "url": "\${[baseUrl]}/html",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple image of the type suggest by the Accept header.
+
+Responses:
+- 200: An image.",
+        "folderId": "GENERATE_ID::FOLDER_8",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_44",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple image of the type suggest by the Accept header.",
+        "sortPriority": 56,
+        "url": "\${[baseUrl]}/image",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple JPEG image.
+
+Responses:
+- 200: A JPEG image.",
+        "folderId": "GENERATE_ID::FOLDER_8",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_45",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple JPEG image.",
+        "sortPriority": 57,
+        "url": "\${[baseUrl]}/image/jpeg",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple PNG image.
+
+Responses:
+- 200: A PNG image.",
+        "folderId": "GENERATE_ID::FOLDER_8",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_46",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple PNG image.",
+        "sortPriority": 58,
+        "url": "\${[baseUrl]}/image/png",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple SVG image.
+
+Responses:
+- 200: An SVG image.",
+        "folderId": "GENERATE_ID::FOLDER_8",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_47",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple SVG image.",
+        "sortPriority": 59,
+        "url": "\${[baseUrl]}/image/svg",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple WEBP image.
+
+Responses:
+- 200: A WEBP image.",
+        "folderId": "GENERATE_ID::FOLDER_8",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_48",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple WEBP image.",
+        "sortPriority": 60,
+        "url": "\${[baseUrl]}/image/webp",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns the requester's IP Address.
+
+Responses:
+- 200: The Requester's IP Address.",
+        "folderId": "GENERATE_ID::FOLDER_3",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_49",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns the requester's IP Address.",
+        "sortPriority": 61,
+        "url": "\${[baseUrl]}/ip",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple JSON document.
+
+Responses:
+- 200: An JSON document.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_50",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple JSON document.",
+        "sortPriority": 62,
+        "url": "\${[baseUrl]}/json",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Generate a page containing n links to other pages which do the same.
+
+Parameters:
+- n (path, required)
+- offset (path, required)
+
+Responses:
+- 200: HTML links.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_51",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Generate a page containing n links to other pages which do the same.",
+        "sortPriority": 63,
+        "url": "\${[baseUrl]}/links/:n/:offset",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+          {
+            "enabled": true,
+            "name": ":offset",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "The request's PATCH parameters.
+
+Responses:
+- 200: The request's PATCH parameters.",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_52",
+        "method": "PATCH",
+        "model": "http_request",
+        "name": "The request's PATCH parameters.",
+        "sortPriority": 64,
+        "url": "\${[baseUrl]}/patch",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "The request's POST parameters.
+
+Responses:
+- 200: The request's POST parameters.",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_53",
+        "method": "POST",
+        "model": "http_request",
+        "name": "The request's POST parameters.",
+        "sortPriority": 65,
+        "url": "\${[baseUrl]}/post",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "The request's PUT parameters.
+
+Responses:
+- 200: The request's PUT parameters.",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_54",
+        "method": "PUT",
+        "model": "http_request",
+        "name": "The request's PUT parameters.",
+        "sortPriority": 66,
+        "url": "\${[baseUrl]}/put",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Streams n random bytes generated with given seed, at given chunk size per packet.
+
+Parameters:
+- numbytes (path, required)
+
+Responses:
+- 200: Bytes.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_55",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Streams n random bytes generated with given seed, at given chunk size per packet.",
+        "sortPriority": 67,
+        "url": "\${[baseUrl]}/range/:numbytes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":numbytes",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "302/3XX Redirects to the given URL.
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_56",
+        "method": "DELETE",
+        "model": "http_request",
+        "name": "302/3XX Redirects to the given URL.",
+        "sortPriority": 68,
+        "url": "\${[baseUrl]}/redirect-to",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "302/3XX Redirects to the given URL.
+
+Parameters:
+- url (query, required)
+- status_code (query)
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_57",
+        "method": "GET",
+        "model": "http_request",
+        "name": "302/3XX Redirects to the given URL.",
+        "sortPriority": 69,
+        "url": "\${[baseUrl]}/redirect-to",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": "url",
+            "value": "",
+          },
+          {
+            "enabled": false,
+            "name": "status_code",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "302/3XX Redirects to the given URL.
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_58",
+        "method": "PATCH",
+        "model": "http_request",
+        "name": "302/3XX Redirects to the given URL.",
+        "sortPriority": 70,
+        "url": "\${[baseUrl]}/redirect-to",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {
+          "form": [
+            {
+              "enabled": false,
+              "name": "status_code",
+              "value": "0",
+            },
+            {
+              "enabled": true,
+              "name": "url",
+              "value": "",
+            },
+          ],
+        },
+        "bodyType": "application/x-www-form-urlencoded",
+        "description": "302/3XX Redirects to the given URL.
+
+Request body:
+Selected content type: application/x-www-form-urlencoded
+Available content types: application/x-www-form-urlencoded
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Content-Type",
+            "value": "application/x-www-form-urlencoded",
+          },
+        ],
+        "id": "GENERATE_ID::HTTP_REQUEST_59",
+        "method": "POST",
+        "model": "http_request",
+        "name": "302/3XX Redirects to the given URL.",
+        "sortPriority": 71,
+        "url": "\${[baseUrl]}/redirect-to",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {
+          "form": [
+            {
+              "enabled": false,
+              "name": "status_code",
+              "value": "0",
+            },
+            {
+              "enabled": true,
+              "name": "url",
+              "value": "",
+            },
+          ],
+        },
+        "bodyType": "application/x-www-form-urlencoded",
+        "description": "302/3XX Redirects to the given URL.
+
+Request body:
+Selected content type: application/x-www-form-urlencoded
+Available content types: application/x-www-form-urlencoded
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Content-Type",
+            "value": "application/x-www-form-urlencoded",
+          },
+        ],
+        "id": "GENERATE_ID::HTTP_REQUEST_60",
+        "method": "PUT",
+        "model": "http_request",
+        "name": "302/3XX Redirects to the given URL.",
+        "sortPriority": 72,
+        "url": "\${[baseUrl]}/redirect-to",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "302/3XX Redirects to the given URL.
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_61",
+        "method": "TRACE",
+        "model": "http_request",
+        "name": "302/3XX Redirects to the given URL.",
+        "sortPriority": 73,
+        "url": "\${[baseUrl]}/redirect-to",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "302 Redirects n times.
+
+Parameters:
+- n (path, required)
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_62",
+        "method": "GET",
+        "model": "http_request",
+        "name": "302 Redirects n times.",
+        "sortPriority": 74,
+        "url": "\${[baseUrl]}/redirect/:n",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Relatively 302 Redirects n times.
+
+Parameters:
+- n (path, required)
+
+Responses:
+- 302: A redirection.",
+        "folderId": "GENERATE_ID::FOLDER_9",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_63",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Relatively 302 Redirects n times.",
+        "sortPriority": 75,
+        "url": "\${[baseUrl]}/relative-redirect/:n",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a set of response headers from the query string.
+
+Parameters:
+- freeform (query)
+
+Responses:
+- 200: Response headers",
+        "folderId": "GENERATE_ID::FOLDER_4",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_64",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a set of response headers from the query string.",
+        "sortPriority": 76,
+        "url": "\${[baseUrl]}/response-headers",
+        "urlParameters": [
+          {
+            "enabled": false,
+            "name": "freeform",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a set of response headers from the query string.
+
+Parameters:
+- freeform (query)
+
+Responses:
+- 200: Response headers",
+        "folderId": "GENERATE_ID::FOLDER_4",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_65",
+        "method": "POST",
+        "model": "http_request",
+        "name": "Returns a set of response headers from the query string.",
+        "sortPriority": 77,
+        "url": "\${[baseUrl]}/response-headers",
+        "urlParameters": [
+          {
+            "enabled": false,
+            "name": "freeform",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns some robots.txt rules.
+
+Responses:
+- 200: Robots file",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_66",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns some robots.txt rules.",
+        "sortPriority": 78,
+        "url": "\${[baseUrl]}/robots.txt",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return status code or random status code if more than one are given
+
+Parameters:
+- codes (path, required)
+
+Responses:
+- 100: Informational responses
+- 200: Success
+- 300: Redirection
+- 400: Client Errors
+- 500: Server Errors",
+        "folderId": "GENERATE_ID::FOLDER_2",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_67",
+        "method": "DELETE",
+        "model": "http_request",
+        "name": "Return status code or random status code if more than one are given",
+        "sortPriority": 79,
+        "url": "\${[baseUrl]}/status/:codes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":codes",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return status code or random status code if more than one are given
+
+Parameters:
+- codes (path, required)
+
+Responses:
+- 100: Informational responses
+- 200: Success
+- 300: Redirection
+- 400: Client Errors
+- 500: Server Errors",
+        "folderId": "GENERATE_ID::FOLDER_2",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_68",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Return status code or random status code if more than one are given",
+        "sortPriority": 80,
+        "url": "\${[baseUrl]}/status/:codes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":codes",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return status code or random status code if more than one are given
+
+Parameters:
+- codes (path, required)
+
+Responses:
+- 100: Informational responses
+- 200: Success
+- 300: Redirection
+- 400: Client Errors
+- 500: Server Errors",
+        "folderId": "GENERATE_ID::FOLDER_2",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_69",
+        "method": "PATCH",
+        "model": "http_request",
+        "name": "Return status code or random status code if more than one are given",
+        "sortPriority": 81,
+        "url": "\${[baseUrl]}/status/:codes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":codes",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return status code or random status code if more than one are given
+
+Parameters:
+- codes (path, required)
+
+Responses:
+- 100: Informational responses
+- 200: Success
+- 300: Redirection
+- 400: Client Errors
+- 500: Server Errors",
+        "folderId": "GENERATE_ID::FOLDER_2",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_70",
+        "method": "POST",
+        "model": "http_request",
+        "name": "Return status code or random status code if more than one are given",
+        "sortPriority": 82,
+        "url": "\${[baseUrl]}/status/:codes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":codes",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return status code or random status code if more than one are given
+
+Parameters:
+- codes (path, required)
+
+Responses:
+- 100: Informational responses
+- 200: Success
+- 300: Redirection
+- 400: Client Errors
+- 500: Server Errors",
+        "folderId": "GENERATE_ID::FOLDER_2",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_71",
+        "method": "PUT",
+        "model": "http_request",
+        "name": "Return status code or random status code if more than one are given",
+        "sortPriority": 83,
+        "url": "\${[baseUrl]}/status/:codes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":codes",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return status code or random status code if more than one are given
+
+Parameters:
+- codes (path, required)
+
+Responses:
+- 100: Informational responses
+- 200: Success
+- 300: Redirection
+- 400: Client Errors
+- 500: Server Errors",
+        "folderId": "GENERATE_ID::FOLDER_2",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_72",
+        "method": "TRACE",
+        "model": "http_request",
+        "name": "Return status code or random status code if more than one are given",
+        "sortPriority": 84,
+        "url": "\${[baseUrl]}/status/:codes",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":codes",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Streams n random bytes generated with given seed, at given chunk size per packet.
+
+Parameters:
+- n (path, required)
+
+Responses:
+- 200: Bytes.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_73",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Streams n random bytes generated with given seed, at given chunk size per packet.",
+        "sortPriority": 85,
+        "url": "\${[baseUrl]}/stream-bytes/:n",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Stream n JSON responses
+
+Parameters:
+- n (path, required)
+
+Responses:
+- 200: Streamed JSON responses.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_74",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Stream n JSON responses",
+        "sortPriority": 86,
+        "url": "\${[baseUrl]}/stream/:n",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":n",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return the incoming requests's User-Agent header.
+
+Responses:
+- 200: The request's User-Agent header.",
+        "folderId": "GENERATE_ID::FOLDER_3",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_75",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Return the incoming requests's User-Agent header.",
+        "sortPriority": 87,
+        "url": "\${[baseUrl]}/user-agent",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Return a UUID4.
+
+Responses:
+- 200: A UUID4.",
+        "folderId": "GENERATE_ID::FOLDER_6",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_76",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Return a UUID4.",
+        "sortPriority": 88,
+        "url": "\${[baseUrl]}/uuid",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Returns a simple XML document.
+
+Responses:
+- 200: An XML document.",
+        "folderId": "GENERATE_ID::FOLDER_5",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_77",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns a simple XML document.",
+        "sortPriority": 89,
+        "url": "\${[baseUrl]}/xml",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "websocketRequests": [],
+    "workspaces": [
+      {
+        "description": "A simple HTTP Request & Response Service.<br/> <br/> <b>Run locally: </b> <code>$ docker run -p 80:80 kennethreitz/httpbin</code>
+
+Contact: me@kennethreitz.org",
+        "id": "GENERATE_ID::WORKSPACE_0",
+        "model": "workspace",
+        "name": "httpbin.org",
+      },
+    ],
+  },
+}
+`;
+
+exports[`importer-openapi > Snapshots real-world fixture nasa-apod.yaml 1`] = `
+{
+  "resources": {
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "https://api.nasa.gov/planetary",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "folders": [
+      {
+        "description": "An example tag
+
+Here's a link: https://example.com",
+        "folderId": null,
+        "id": "GENERATE_ID::FOLDER_0",
+        "model": "folder",
+        "name": "request tag",
+        "sortPriority": 1,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "grpcRequests": [],
+    "httpRequests": [
+      {
+        "authentication": {
+          "key": "api_key",
+          "location": "query",
+          "value": "",
+        },
+        "authenticationType": "apikey",
+        "body": {},
+        "bodyType": null,
+        "description": "Returns the picture of the day
+
+Parameters:
+- date (query): The date of the APOD image to retrieve
+- hd (query): Retrieve the URL for the high resolution image
+
+Responses:
+- 200: successful operation
+- 400: Date must be between Jun 16, 1995 and Mar 28, 2019.",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_0",
+        "method": "GET",
+        "model": "http_request",
+        "name": "Returns images",
+        "sortPriority": 2,
+        "url": "\${[baseUrl]}/apod",
+        "urlParameters": [
+          {
+            "enabled": false,
+            "name": "date",
+            "value": "",
+          },
+          {
+            "enabled": false,
+            "name": "hd",
+            "value": "false",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "websocketRequests": [],
+    "workspaces": [
+      {
+        "description": "This endpoint structures the APOD imagery and associated metadata so that it can be repurposed for other applications. In addition, if the concept_tags parameter is set to True, then keywords derived from the image explanation are returned. These keywords could be used as auto-generated hashtags for twitter or instagram feeds; but generally help with discoverability of relevant imagery
+
+Contact: evan.t.yates@nasa.gov
+
+License: Apache 2.0 (http://www.apache.org/licenses/LICENSE-2.0.html)",
+        "id": "GENERATE_ID::WORKSPACE_0",
+        "model": "workspace",
+        "name": "APOD",
+      },
+    ],
+  },
+}
+`;
+
+exports[`importer-openapi > Snapshots real-world fixture xkcd.yaml 1`] = `
+{
+  "resources": {
+    "environments": [
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_0",
+        "model": "environment",
+        "name": "Global Variables",
+        "parentId": null,
+        "parentModel": "workspace",
+        "sortPriority": 0,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "http://xkcd.com/",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "folders": [],
+    "grpcRequests": [],
+    "httpRequests": [
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Fetch current comic and metadata.
+
+
+Responses:
+- 200: OK",
+        "folderId": null,
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_0",
+        "method": "GET",
+        "model": "http_request",
+        "name": "GET /info.0.json",
+        "sortPriority": 1,
+        "url": "\${[baseUrl]}/info.0.json",
+        "urlParameters": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "authentication": {},
+        "authenticationType": null,
+        "body": {},
+        "bodyType": null,
+        "description": "Fetch comics and metadata  by comic id.
+
+
+Parameters:
+- comicId (path, required)
+
+Responses:
+- 200: OK",
+        "folderId": null,
+        "headers": [],
+        "id": "GENERATE_ID::HTTP_REQUEST_1",
+        "method": "GET",
+        "model": "http_request",
+        "name": "GET /{comicId}/info.0.json",
+        "sortPriority": 2,
+        "url": "\${[baseUrl]}/:comicId/info.0.json",
+        "urlParameters": [
+          {
+            "enabled": true,
+            "name": ":comicId",
+            "value": "0",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+    ],
+    "websocketRequests": [],
+    "workspaces": [
+      {
+        "description": "Webcomic of romance, sarcasm, math, and language.",
+        "id": "GENERATE_ID::WORKSPACE_0",
+        "model": "workspace",
+        "name": "XKCD",
+      },
+    ],
+  },
+}
+`;
