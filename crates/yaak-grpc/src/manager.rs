@@ -39,6 +39,7 @@ pub struct GrpcConnection {
     conn: Client<HttpsConnector<HttpConnector>, BoxBody>,
     pub uri: Uri,
     use_reflection: bool,
+    max_message_size: usize,
 }
 
 #[derive(Default, Debug)]
@@ -97,8 +98,15 @@ impl GrpcConnection {
         client_cert: Option<ClientCertificateConfig>,
     ) -> Result<Response<DynamicMessage>> {
         if self.use_reflection {
-            reflect_types_for_message(self.pool.clone(), &self.uri, message, metadata, client_cert)
-                .await?;
+            reflect_types_for_message(
+                self.pool.clone(),
+                &self.uri,
+                message,
+                metadata,
+                client_cert,
+                self.max_message_size,
+            )
+            .await?;
         }
         let method = &self.method(&service, &method).await?;
         let input_message = method.input();
@@ -107,7 +115,7 @@ impl GrpcConnection {
         let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)?;
         deserializer.end()?;
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = grpc_client(self.conn.clone(), self.uri.clone(), self.max_message_size);
 
         let mut req = req_message.into_request();
         decorate_req(metadata, &mut req)?;
@@ -132,6 +140,7 @@ impl GrpcConnection {
                 message,
                 metadata,
                 client_cert,
+                self.max_message_size,
             )
             .await?;
 
@@ -171,6 +180,7 @@ impl GrpcConnection {
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
             let client_cert = client_cert.clone();
+            let max_message_size = self.max_message_size;
             stream
                 .then(move |json| {
                     let pool = pool.clone();
@@ -183,8 +193,15 @@ impl GrpcConnection {
                     let json_clone = json.clone();
                     async move {
                         if use_reflection {
-                            if let Err(e) =
-                                reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
+                            if let Err(e) = reflect_types_for_message(
+                                pool,
+                                &uri,
+                                &json,
+                                &md,
+                                client_cert,
+                                max_message_size,
+                            )
+                            .await
                             {
                                 warn!("Failed to resolve Any types: {e}");
                             }
@@ -206,7 +223,7 @@ impl GrpcConnection {
                 .filter_map(|x| x)
         };
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = grpc_client(self.conn.clone(), self.uri.clone(), self.max_message_size);
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
 
@@ -237,6 +254,7 @@ impl GrpcConnection {
             let md = metadata.clone();
             let use_reflection = self.use_reflection.clone();
             let client_cert = client_cert.clone();
+            let max_message_size = self.max_message_size;
             stream
                 .then(move |json| {
                     let pool = pool.clone();
@@ -249,8 +267,15 @@ impl GrpcConnection {
                     let json_clone = json.clone();
                     async move {
                         if use_reflection {
-                            if let Err(e) =
-                                reflect_types_for_message(pool, &uri, &json, &md, client_cert).await
+                            if let Err(e) = reflect_types_for_message(
+                                pool,
+                                &uri,
+                                &json,
+                                &md,
+                                client_cert,
+                                max_message_size,
+                            )
+                            .await
                             {
                                 warn!("Failed to resolve Any types: {e}");
                             }
@@ -272,7 +297,7 @@ impl GrpcConnection {
                 .filter_map(|x| x)
         };
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = grpc_client(self.conn.clone(), self.uri.clone(), self.max_message_size);
         let path = method_desc_to_path(method);
         let codec = DynamicCodec::new(method.clone());
 
@@ -300,7 +325,7 @@ impl GrpcConnection {
         let req_message = DynamicMessage::deserialize(input_message, &mut deserializer)?;
         deserializer.end()?;
 
-        let mut client = tonic::client::Grpc::with_origin(self.conn.clone(), self.uri.clone());
+        let mut client = grpc_client(self.conn.clone(), self.uri.clone(), self.max_message_size);
 
         let mut req = req_message.into_request();
         decorate_req(metadata, &mut req)?;
@@ -309,6 +334,23 @@ impl GrpcConnection {
         let codec = DynamicCodec::new(method.clone());
         client.ready().await.map_err(|e| GenericError(format!("Failed to connect: {}", e)))?;
         Ok(client.server_streaming(req, path, codec).await?)
+    }
+}
+
+fn grpc_client(
+    conn: Client<HttpsConnector<HttpConnector>, BoxBody>,
+    uri: Uri,
+    max_message_size: usize,
+) -> tonic::client::Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>> {
+    tonic::client::Grpc::with_origin(conn, uri)
+        .max_decoding_message_size(max_message_size)
+        .max_encoding_message_size(max_message_size)
+}
+
+fn message_size_limit(setting: i32) -> usize {
+    match setting.try_into() {
+        Ok(0) | Err(_) => usize::MAX,
+        Ok(limit) => limit,
     }
 }
 
@@ -348,6 +390,7 @@ impl GrpcHandle {
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
         client_cert: Option<ClientCertificateConfig>,
+        request_message_size: i32,
     ) -> Result<bool> {
         let server_reflection = proto_files.is_empty();
         let key = make_pool_key(id, uri, proto_files);
@@ -359,7 +402,14 @@ impl GrpcHandle {
 
         let pool = if server_reflection {
             let full_uri = uri_from_str(uri)?;
-            fill_pool_from_reflection(&full_uri, metadata, validate_certificates, client_cert).await
+            fill_pool_from_reflection(
+                &full_uri,
+                metadata,
+                validate_certificates,
+                client_cert,
+                message_size_limit(request_message_size),
+            )
+            .await
         } else {
             fill_pool_from_files(&self.config, proto_files).await
         }?;
@@ -376,12 +426,21 @@ impl GrpcHandle {
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
         client_cert: Option<ClientCertificateConfig>,
+        request_message_size: i32,
     ) -> Result<Vec<ServiceDefinition>> {
         // Ensure we have a pool; reflect only if missing
         if self.get_pool(id, uri, proto_files).is_none() {
             info!("Reflecting gRPC services for {} at {}", id, uri);
-            self.reflect(id, uri, proto_files, metadata, validate_certificates, client_cert)
-                .await?;
+            self.reflect(
+                id,
+                uri,
+                proto_files,
+                metadata,
+                validate_certificates,
+                client_cert,
+                request_message_size,
+            )
+            .await?;
         }
 
         let pool = self
@@ -421,8 +480,10 @@ impl GrpcHandle {
         metadata: &BTreeMap<String, String>,
         validate_certificates: bool,
         client_cert: Option<ClientCertificateConfig>,
+        request_message_size: i32,
     ) -> Result<GrpcConnection> {
         let use_reflection = proto_files.is_empty();
+        let max_message_size = message_size_limit(request_message_size);
         if self.get_pool(id, uri, proto_files).is_none() {
             self.reflect(
                 id,
@@ -431,6 +492,7 @@ impl GrpcHandle {
                 metadata,
                 validate_certificates,
                 client_cert.clone(),
+                request_message_size,
             )
             .await?;
         }
@@ -440,7 +502,13 @@ impl GrpcHandle {
             .clone();
         let uri = uri_from_str(uri)?;
         let conn = get_transport(validate_certificates, client_cert.clone())?;
-        Ok(GrpcConnection { pool: Arc::new(RwLock::new(pool)), use_reflection, conn, uri })
+        Ok(GrpcConnection {
+            pool: Arc::new(RwLock::new(pool)),
+            use_reflection,
+            conn,
+            uri,
+            max_message_size,
+        })
     }
 
     fn get_pool(&self, id: &str, uri: &str, proto_files: &Vec<PathBuf>) -> Option<&DescriptorPool> {

@@ -131,6 +131,7 @@ impl<'a> ClientDb<'a> {
             } else {
                 parent.request_timeout
             },
+            request_message_size: parent.request_message_size,
             send_cookies: if http_request.setting_send_cookies.enabled {
                 ResolvedSetting::from_model(
                     http_request.setting_send_cookies.value,

@@ -1,5 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, InlineCode } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useAuthTab } from "../hooks/useAuthTab";
 import { useHeadersTab } from "../hooks/useHeadersTab";
@@ -112,7 +112,9 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
               onCreateNewWorkspace={hide}
               onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
             />
-            <WorkspaceEncryptionSetting layout="settings" size="xs" />
+            <div className="mt-4">
+              <WorkspaceEncryptionSetting layout="settings" size="xs" />
+            </div>
           </SettingsSection>
           <ModelSettingsEditor model={workspace} showSectionTitles />
         </SettingsList>

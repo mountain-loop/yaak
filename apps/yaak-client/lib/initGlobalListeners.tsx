@@ -44,6 +44,19 @@ export function initGlobalListeners() {
         color: "danger",
         timeout: null,
         message: `Failed to load plugin "${name}": ${err}`,
+        action: ({ hide }) => (
+          <Button
+            size="xs"
+            color="danger"
+            variant="border"
+            onClick={() => {
+              hide();
+              openSettings.mutate("plugins:installed");
+            }}
+          >
+            Manage Plugins
+          </Button>
+        ),
       });
     }
   });

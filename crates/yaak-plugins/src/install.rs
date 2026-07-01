@@ -1,6 +1,6 @@
 use crate::api::{PluginVersion, download_plugin_archive, get_plugin};
 use crate::checksum::compute_checksum;
-use crate::error::Error::PluginErr;
+use crate::error::Error::{PluginErr, PluginNotFoundErr};
 use crate::error::Result;
 use crate::events::PluginContext;
 use crate::manager::PluginManager;
@@ -29,7 +29,14 @@ pub async fn delete_and_uninstall(
         let db = query_manager.connect();
         db.delete_plugin_by_id(plugin_id, &update_source)?
     };
-    plugin_manager.uninstall(plugin_context, plugin.directory.as_str()).await?;
+    if let Err(err) = plugin_manager
+        .uninstall(plugin_context, plugin.directory.as_str())
+        .await
+    {
+        if !matches!(err, PluginNotFoundErr(_)) {
+            return Err(err);
+        }
+    }
     Ok(plugin)
 }
 

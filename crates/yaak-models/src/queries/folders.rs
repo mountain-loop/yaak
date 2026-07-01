@@ -180,6 +180,14 @@ impl<'a> ClientDb<'a> {
             } else {
                 parent.request_timeout
             },
+            request_message_size: if folder.setting_request_message_size.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_request_message_size.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.request_message_size
+            },
             send_cookies: if folder.setting_send_cookies.enabled {
                 ResolvedSetting::from_model(
                     folder.setting_send_cookies.value,

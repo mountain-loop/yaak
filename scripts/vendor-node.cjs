@@ -6,7 +6,8 @@ const Downloader = require("nodejs-file-downloader");
 const { rmSync, cpSync, mkdirSync, existsSync } = require("node:fs");
 const { execSync } = require("node:child_process");
 
-const NODE_VERSION = "v24.11.1";
+const nodeVersionFile = path.join(__dirname, "..", "packages", "plugin-runtime", ".node-version");
+const NODE_VERSION = `v${fs.readFileSync(nodeVersionFile, "utf8").trim().replace(/^v/, "")}`;
 
 // `${process.platform}_${process.arch}`
 const MAC_ARM = "darwin_arm64";

@@ -580,6 +580,10 @@ function getExtensions({
 
   return [
     ...baseExtensions, // Must be first
+    EditorView.contentAttributes.of({
+      autocapitalize: "off",
+      autocorrect: "off",
+    }),
     EditorView.domEventHandlers({
       focus: () => {
         onFocus.current?.();

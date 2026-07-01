@@ -21,6 +21,7 @@ impl<'a> ClientDb<'a> {
                 &Workspace {
                     name: "Yaak".to_string(),
                     setting_follow_redirects: true,
+                    setting_request_message_size: crate::models::DEFAULT_REQUEST_MESSAGE_SIZE,
                     setting_validate_certificates: true,
                     ..Default::default()
                 },
@@ -100,6 +101,10 @@ impl<'a> ClientDb<'a> {
             ),
             request_timeout: ResolvedSetting::from_model(
                 workspace.setting_request_timeout,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+            request_message_size: ResolvedSetting::from_model(
+                workspace.setting_request_message_size,
                 AnyModel::Workspace(workspace.clone()),
             ),
             send_cookies: ResolvedSetting::from_model(

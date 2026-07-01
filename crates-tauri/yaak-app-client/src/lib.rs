@@ -14,8 +14,7 @@ use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
-use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -31,6 +30,7 @@ use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
+use yaak::export::{self, ExportDataParams};
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
@@ -41,7 +41,7 @@ use yaak_models::models::{
     GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Workspace,
     WorkspaceMeta,
 };
-use yaak_models::util::{BatchUpsertResult, UpdateSource, get_workspace_export_resources};
+use yaak_models::util::{BatchUpsertResult, UpdateSource};
 use yaak_plugins::events::{
     CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
     CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest,
@@ -54,7 +54,7 @@ use yaak_plugins::events::{
     InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::plugin_meta::PluginMetadata;
+use yaak_plugins::plugin_meta::{PluginMetadata, get_plugin_meta};
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
@@ -295,7 +295,8 @@ async fn cmd_grpc_reflect<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -332,6 +333,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
             &metadata,
             resolved_settings.validate_certificates.value,
             client_certificate,
+            resolved_settings.request_message_size.value,
         )
         .await
         .map_err(|e| GenericError(e.to_string()))?)
@@ -353,7 +355,8 @@ async fn cmd_grpc_go<R: Runtime>(
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
-    let resolved_settings = app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
+    let resolved_settings =
+        app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -425,6 +428,7 @@ async fn cmd_grpc_go<R: Runtime>(
             &metadata,
             resolved_settings.validate_certificates.value,
             client_cert.clone(),
+            resolved_settings.request_message_size.value,
         )
         .await;
 
@@ -714,7 +718,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 Some(s) => GrpcEvent {
                                     error: Some(s.message().to_string()),
                                     status: Some(s.code() as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Request failed".to_string(),
                                     metadata: metadata_to_map(s.metadata().clone()),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
@@ -722,7 +726,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 None => GrpcEvent {
                                     error: Some(e.message),
                                     status: Some(Code::Unknown as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Request failed".to_string(),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
@@ -738,7 +742,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             &GrpcEvent {
                                 error: Some(e.to_string()),
                                 status: Some(Code::Unknown as i32),
-                                content: "Failed to connect".to_string(),
+                                content: "Request failed".to_string(),
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
@@ -781,7 +785,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 Some(s) => GrpcEvent {
                                     error: Some(s.message().to_string()),
                                     status: Some(s.code() as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Stream failed".to_string(),
                                     metadata: metadata_to_map(s.metadata().clone()),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
@@ -789,7 +793,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 None => GrpcEvent {
                                     error: Some(e.message),
                                     status: Some(Code::Unknown as i32),
-                                    content: "Failed to connect".to_string(),
+                                    content: "Stream failed".to_string(),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
@@ -806,7 +810,7 @@ async fn cmd_grpc_go<R: Runtime>(
                             &GrpcEvent {
                                 error: Some(e.to_string()),
                                 status: Some(Code::Unknown as i32),
-                                content: "Failed to connect".to_string(),
+                                content: "Stream failed".to_string(),
                                 event_type: GrpcEventType::ConnectionEnd,
                                 ..base_event.clone()
                             },
@@ -878,7 +882,8 @@ async fn cmd_grpc_go<R: Runtime>(
                             .db()
                             .upsert_grpc_event(
                                 &GrpcEvent {
-                                    content: status.to_string(),
+                                    content: "Stream failed".to_string(),
+                                    error: Some(status.message().to_string()),
                                     status: Some(status.code() as i32),
                                     metadata: metadata_to_map(status.metadata().clone()),
                                     event_type: GrpcEventType::ConnectionEnd,
@@ -887,6 +892,7 @@ async fn cmd_grpc_go<R: Runtime>(
                                 &UpdateSource::from_window_label(window.label()),
                             )
                             .unwrap();
+                        break;
                     }
                 }
             }
@@ -1384,24 +1390,14 @@ async fn cmd_export_data<R: Runtime>(
     workspace_ids: Vec<&str>,
     include_private_environments: bool,
 ) -> YaakResult<()> {
-    let db = app_handle.db();
     let version = app_handle.package_info().version.to_string();
-    let export_data =
-        get_workspace_export_resources(&db, &version, workspace_ids, include_private_environments)?;
-    let f = File::options()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(export_path)
-        .expect("Unable to create file");
-
-    serde_json::to_writer_pretty(&f, &export_data)
-        .map_err(|e| GenericError(e.to_string()))
-        .expect("Failed to write");
-
-    f.sync_all().expect("Failed to sync");
-
-    Ok(())
+    Ok(export::export_data(ExportDataParams {
+        query_manager: &app_handle.db_manager(),
+        yaak_version: &version,
+        export_path: Path::new(export_path),
+        workspace_ids,
+        include_private_environments,
+    })?)
 }
 
 #[tauri::command]
@@ -1425,11 +1421,10 @@ async fn cmd_send_http_request<R: Runtime>(
     window: WebviewWindow<R>,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
-    // NOTE: We receive the entire request because to account for the race
-    //   condition where the user may have just edited a field before sending
-    //   that has not yet been saved in the DB.
-    request: HttpRequest,
+    request_id: String,
 ) -> YaakResult<HttpResponse> {
+    let request = app_handle.db().get_http_request(&request_id)?;
+
     let blobs = app_handle.blob_manager();
     let response = app_handle.db().upsert_http_response(
         &HttpResponse {
@@ -1512,11 +1507,36 @@ async fn cmd_plugin_info<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<PluginMetadata> {
     let plugin = app_handle.db().get_plugin(id)?;
-    Ok(plugin_manager
+    if let Some(plugin_handle) = plugin_manager
         .get_plugin_by_dir(plugin.directory.as_str())
         .await
-        .ok_or(GenericError("Failed to find plugin for info".to_string()))?
-        .info())
+    {
+        return Ok(plugin_handle.info());
+    }
+
+    if let Ok(metadata) = get_plugin_meta(&PathBuf::from(&plugin.directory)) {
+        return Ok(metadata);
+    }
+
+    Ok(fallback_plugin_metadata(&plugin.directory))
+}
+
+fn fallback_plugin_metadata(directory: &str) -> PluginMetadata {
+    let display_name = PathBuf::from(directory)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(directory)
+        .to_string();
+
+    PluginMetadata {
+        version: "Unavailable".to_string(),
+        name: directory.to_string(),
+        display_name,
+        description: Some(format!("Plugin metadata could not be loaded from {directory}")),
+        homepage_url: None,
+        repository_url: None,
+    }
 }
 
 #[tauri::command]

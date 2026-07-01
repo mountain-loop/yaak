@@ -33,15 +33,21 @@ impl AutoReflectionClient {
         uri: &Uri,
         validate_certificates: bool,
         client_cert: Option<ClientCertificateConfig>,
+        max_message_size: usize,
     ) -> Result<Self> {
         let client_v1 = v1::server_reflection_client::ServerReflectionClient::with_origin(
             get_transport(validate_certificates, client_cert.clone())?,
             uri.clone(),
-        );
-        let client_v1alpha = v1alpha::server_reflection_client::ServerReflectionClient::with_origin(
-            get_transport(validate_certificates, client_cert.clone())?,
-            uri.clone(),
-        );
+        )
+        .max_decoding_message_size(max_message_size)
+        .max_encoding_message_size(max_message_size);
+        let client_v1alpha =
+            v1alpha::server_reflection_client::ServerReflectionClient::with_origin(
+                get_transport(validate_certificates, client_cert.clone())?,
+                uri.clone(),
+            )
+            .max_decoding_message_size(max_message_size)
+            .max_encoding_message_size(max_message_size);
         Ok(AutoReflectionClient { use_v1alpha: false, client_v1, client_v1alpha })
     }
 
