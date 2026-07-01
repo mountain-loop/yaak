@@ -180,8 +180,12 @@ function convertUrl(rawUrl: unknown): Pick<HttpRequest, "url" | "urlParameters">
     v += `:${url.port}`;
   }
 
-  if ("path" in url && Array.isArray(url.path) && url.path.length > 0) {
-    v += `/${Array.isArray(url.path) ? url.path.join("/") : url.path}`;
+  if ("path" in url) {
+    if (Array.isArray(url.path) && url.path.length > 0) {
+      v += `/${url.path.join("/")}`;
+    } else if (typeof url.path === "string" && url.path.length > 0) {
+      v += `/${url.path.replace(/^\//, "")}`;
+    }
   }
 
   const params: HttpUrlParameter[] = [];
