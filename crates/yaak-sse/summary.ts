@@ -36,7 +36,7 @@ export function candidateJsonPayloadsFromSseText(text: string): string[] {
       continue;
     }
 
-    if (looksLikeJson(trimmedBlock) && isParsableJson(trimmedBlock)) {
+    if (isParsableJson(trimmedBlock)) {
       candidates.push(trimmedBlock);
       continue;
     }
@@ -47,7 +47,7 @@ export function candidateJsonPayloadsFromSseText(text: string): string[] {
         !trimmedLine ||
         trimmedLine.startsWith(":") ||
         STANDARD_SSE_FIELD.test(trimmedLine) ||
-        !looksLikeJson(trimmedLine)
+        !isParsableJson(trimmedLine)
       ) {
         continue;
       }
@@ -119,10 +119,6 @@ function stringifySummaryValue(value: unknown): string | null {
   } catch {
     return null;
   }
-}
-
-function looksLikeJson(value: string): boolean {
-  return /^[{["0-9tfn-]/.test(value);
 }
 
 function isParsableJson(value: string): boolean {
