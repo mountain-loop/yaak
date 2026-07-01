@@ -19,10 +19,12 @@ Generate formatted markdown release notes for a Yaak tag.
    - `gh pr view <PR_NUMBER> --json number,title,body,author,url`
 5. Extract useful details:
    - Feedback URLs (`feedback.yaak.app`)
+   - Contributor GitHub handles from `author.login`
    - Plugin install links or other notable context
 6. Format notes using Yaak style:
    - Changelog badge at top
    - Bulleted items with PR links where available
+   - Contributor handles for external PRs
    - Feedback links where available
    - Full changelog compare link at bottom
 
@@ -31,6 +33,7 @@ Generate formatted markdown release notes for a Yaak tag.
 - Wrap final notes in a markdown code fence.
 - Keep a blank line before and after the code fence.
 - Output the markdown code block last.
+- Append contributor attribution to PR-backed bullets for non-`@gschier` authors, using `by [@handle](https://github.com/handle)`.
 - Do not append `by @gschier` for PRs authored by `@gschier`.
 - These are app release notes. Exclude CLI-only changes (commits prefixed with `cli:` or only touching `crates-cli/`) since the CLI has its own release process.
 
