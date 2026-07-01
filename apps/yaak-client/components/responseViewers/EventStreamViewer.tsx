@@ -1,35 +1,37 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
-import type { ServerSentEvent } from "@yaakapp-internal/sse";
-import { HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { extractSseValueAtPath, type ServerSentEvent } from "@yaakapp-internal/sse";
+import { HStack, Icon, InlineCode, SplitLayout, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import type { PointerEvent as ReactPointerEvent } from "react";
-import { Fragment, useCallback, useMemo, useState } from "react";
-import { useLocalStorage } from "react-use";
+import type { CSSProperties, ReactNode } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { useKeyValue } from "../../hooks/useKeyValue";
 import { useFormatText } from "../../hooks/useFormatText";
 import { useResponseBodyEventSource } from "../../hooks/useResponseBodyEventSource";
 import { useResponseBodySseSummary } from "../../hooks/useResponseBodySseSummary";
 import {
-  sseSummaryProviderOptions,
+  sseSummaryResultKeyPathAutocomplete,
   useSseSummaryResultKeyPath,
 } from "../../hooks/useSseSummaryResultKeyPath";
 import { isJSON } from "../../lib/contentType";
-import { copyToClipboard } from "../../lib/copy";
+import { EmptyStateText } from "../EmptyStateText";
+import { Markdown } from "../Markdown";
 import { Button } from "../core/Button";
+import type { DropdownItem } from "../core/Dropdown";
+import { Dropdown } from "../core/Dropdown";
 import type { EditorProps } from "../core/Editor/Editor";
 import { Editor } from "../core/Editor/LazyEditor";
 import { EventDetailHeader, EventViewer } from "../core/EventViewer";
 import { EventViewerRow } from "../core/EventViewerRow";
-import { PlainInput } from "../core/PlainInput";
+import { IconButton } from "../core/IconButton";
+import { IconTooltip } from "../core/IconTooltip";
+import { Input } from "../core/Input";
 import { Select } from "../core/Select";
-import { Separator } from "../core/Separator";
 
 interface Props {
   response: HttpResponse;
 }
 
-const DEFAULT_SUMMARY_HEIGHT = 160;
-const MIN_SUMMARY_HEIGHT = 72;
-const MAX_SUMMARY_HEIGHT = 480;
+const DEFAULT_EXTRACTED_TEXT_RATIO = 0.28;
 
 export function EventStreamViewer({ response }: Props) {
   return (
@@ -44,99 +46,188 @@ export function EventStreamViewer({ response }: Props) {
 function ActualEventStreamViewer({ response }: Props) {
   const [showLarge, setShowLarge] = useState<boolean>(false);
   const [showingLarge, setShowingLarge] = useState<boolean>(false);
-  const summarySettings = useSseSummaryResultKeyPath({
-    requestId: response.requestId,
-    workspaceId: response.workspaceId,
+  const filterEventPreviewsSetting = useKeyValue<boolean>({
+    namespace: "no_sync",
+    key: ["sse_filter_event_previews", response.requestId],
+    fallback: false,
   });
-  const [summaryHeight, setSummaryHeight] = useLocalStorage<number>(
-    `sse_summary_height::${response.requestId}`,
-    DEFAULT_SUMMARY_HEIGHT,
-  );
-  const providerSelectOptions = useMemo(
-    () =>
-      sseSummaryProviderOptions.map((option) => ({
-        label: option.label,
-        value: option.value,
-      })),
-    [],
-  );
+  const applyToDetailsSetting = useKeyValue<boolean>({
+    namespace: "no_sync",
+    key: ["sse_apply_to_details", response.requestId],
+    fallback: false,
+  });
+  const renderMarkdownSetting = useKeyValue<boolean>({
+    namespace: "no_sync",
+    key: ["sse_render_markdown", response.requestId],
+    fallback: false,
+  });
+  const summarySettings = useSseSummaryResultKeyPath({ response });
   const events = useResponseBodyEventSource(response);
   const summary = useResponseBodySseSummary(response, summarySettings.resultKeyPath);
-  const isCustomProvider = summarySettings.provider === "custom";
-
-  return (
-    <div className="h-full min-h-0 grid grid-rows-[auto_minmax(0,1fr)_auto]">
-      <HStack space={2} alignItems="center" className="px-2 py-1 border-b border-border-subtle">
-        <div className="w-60 max-w-full shrink-0">
-          <Select
-            name="sse-summary-provider"
-            label="Summary provider"
-            hideLabel
-            size="xs"
-            value={summarySettings.provider}
-            options={providerSelectOptions}
-            onChange={summarySettings.setProvider}
-          />
-        </div>
-        <div className="min-w-40 flex-1">
-          <PlainInput
-            label="Result JSON path"
-            hideLabel
-            size="xs"
-            defaultValue={summarySettings.resultKeyPath}
-            disabled={!isCustomProvider || summarySettings.isLoading}
-            forceUpdateKey={`${response.requestId}:${summarySettings.provider}`}
-            placeholder="$.choices[0].delta.content"
-            onChange={(keyPath) => {
-              if (isCustomProvider) {
-                void summarySettings.setCustomResultKeyPath(keyPath);
-              }
-            }}
-          />
-        </div>
-        <span className="min-w-0 max-w-96 text-xs text-text-subtlest font-mono truncate">
-          {summarySettings.resultKeyPath}
-        </span>
-      </HStack>
-      <EventViewer
-        events={events.data ?? []}
-        getEventKey={(_, index) => String(index)}
-        error={events.error ? String(events.error) : null}
-        splitLayoutStorageKey="sse_events"
-        defaultRatio={0.4}
-        renderRow={({ event, index, isActive, onClick }) => (
-          <EventViewerRow
-            isActive={isActive}
-            onClick={onClick}
-            icon={<Icon color="info" title="Server Message" icon="arrow_big_down_dash" />}
-            content={
-              <HStack space={2} className="items-center">
-                <EventLabels event={event} index={index} isActive={isActive} />
-                <span className="truncate text-xs">{event.data.slice(0, 1000)}</span>
-              </HStack>
+  const showExtractedText = summarySettings.resultKeyPath != null;
+  const showResultKeyPathWarning =
+    showExtractedText &&
+    summary.data != null &&
+    summary.data.fragmentCount === 0 &&
+    !summary.isFetching &&
+    summary.error == null;
+  const filterEventPreviews = showExtractedText && filterEventPreviewsSetting.value === true;
+  const applyToDetails = showExtractedText && applyToDetailsSetting.value === true;
+  const renderMarkdown = showExtractedText && renderMarkdownSetting.value === true;
+  const settingsItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        label: "Apply to Previews",
+        keepOpenOnSelect: true,
+        onSelect: () => filterEventPreviewsSetting.set(filterEventPreviewsSetting.value !== true),
+        leftSlot: (
+          <Icon
+            icon={
+              filterEventPreviewsSetting.value === true
+                ? "check_square_checked"
+                : "check_square_unchecked"
             }
           />
-        )}
-        renderDetail={({ event, index, onClose }) => (
-          <EventDetail
-            event={event}
-            index={index}
-            showLarge={showLarge}
-            showingLarge={showingLarge}
-            setShowLarge={setShowLarge}
-            setShowingLarge={setShowingLarge}
-            onClose={onClose}
+        ),
+      },
+      {
+        label: "Apply to Details",
+        keepOpenOnSelect: true,
+        onSelect: () => applyToDetailsSetting.set(applyToDetailsSetting.value !== true),
+        leftSlot: (
+          <Icon
+            icon={
+              applyToDetailsSetting.value === true
+                ? "check_square_checked"
+                : "check_square_unchecked"
+            }
           />
+        ),
+      },
+    ],
+    [
+      applyToDetailsSetting,
+      filterEventPreviewsSetting,
+    ],
+  );
+
+  return (
+    <div className="h-full min-h-0 grid grid-rows-[auto_minmax(0,1fr)]">
+      <HStack space={2} alignItems="center" className="pt-1 pb-1 border-b border-border-subtle">
+        <div className={classNames(summarySettings.enabled ? "w-44 shrink-0" : "min-w-40 flex-1")}>
+          <Select
+            name={`sse-summary-result-key-path-enabled::${response.requestId}`}
+            label="Extracted text"
+            hideLabel
+            size="xs"
+            value={summarySettings.enabled ? "jsonpath" : "off"}
+            options={[
+              { label: "Full events", value: "off" },
+              { label: "JSONPath", value: "jsonpath" },
+            ]}
+            onChange={(value) => summarySettings.setEnabled(value === "jsonpath")}
+          />
+        </div>
+        {summarySettings.enabled && (
+          <>
+            <div className="min-w-40 flex-1">
+              <Input
+                label="Result JSON path"
+                hideLabel
+                size="xs"
+                autocomplete={sseSummaryResultKeyPathAutocomplete}
+                defaultValue={summarySettings.resultKeyPathInputValue}
+                forceUpdateKey={`${response.requestId}:${summarySettings.inferredResultKeyPath ?? ""}`}
+                placeholder="$.choices[0].delta.content"
+                rightSlot={
+                  showResultKeyPathWarning ? (
+                    <div className="flex items-center px-2">
+                      <IconTooltip
+                        tabIndex={-1}
+                        icon="alert_triangle"
+                        iconColor="notice"
+                        content="No text fragments matched this JSONPath."
+                      />
+                    </div>
+                  ) : null
+                }
+                stateKey={`sse-summary-result-key-path::${response.requestId}`}
+                tint={showResultKeyPathWarning ? "notice" : undefined}
+                onChange={summarySettings.setResultKeyPath}
+              />
+            </div>
+            <Dropdown items={settingsItems}>
+              <IconButton
+                size="xs"
+                variant="border"
+                icon="settings"
+                title="Extracted text settings"
+              />
+            </Dropdown>
+          </>
         )}
-      />
-      <SseSummaryFooter
-        error={summary.error ? String(summary.error) : null}
-        height={summaryHeight ?? DEFAULT_SUMMARY_HEIGHT}
-        isLoading={summary.isLoading}
-        onHeightChange={setSummaryHeight}
-        resultKeyPath={summarySettings.resultKeyPath}
-        summary={summary.data?.summary ?? ""}
-        fragmentCount={summary.data?.fragmentCount ?? 0}
+      </HStack>
+      <SplitLayout
+        layout="vertical"
+        storageKey={`sse_extracted_text::${response.requestId}`}
+        defaultRatio={DEFAULT_EXTRACTED_TEXT_RATIO}
+        minHeightPx={72}
+        resizeHandleClassName="hover:bg-surface-highlight active:bg-surface-highlight"
+        firstSlot={({ style }) => (
+          <div style={style} className="min-h-0">
+            <EventViewer
+              events={events.data ?? []}
+              getEventKey={(_, index) => String(index)}
+              error={events.error ? String(events.error) : null}
+              splitLayoutStorageKey="sse_events"
+              defaultRatio={0.4}
+              renderRow={({ event, index, isActive, onClick }) => (
+                <EventViewerRow
+                  isActive={isActive}
+                  onClick={onClick}
+                  icon={<Icon color="info" title="Server Message" icon="arrow_big_down_dash" />}
+                  content={
+                    <HStack space={2} className="items-center">
+                      <EventLabels event={event} index={index} isActive={isActive} />
+                      <span className="truncate text-xs">
+                        {getEventPreview(event, summarySettings.resultKeyPath, filterEventPreviews)}
+                      </span>
+                    </HStack>
+                  }
+                />
+              )}
+              renderDetail={({ event, index, onClose }) => (
+                <EventDetail
+                  event={event}
+                  index={index}
+                  applyJsonPath={applyToDetails}
+                  resultKeyPath={summarySettings.resultKeyPath}
+                  showLarge={showLarge}
+                  showingLarge={showingLarge}
+                  setShowLarge={setShowLarge}
+                  setShowingLarge={setShowingLarge}
+                  onClose={onClose}
+                />
+              )}
+            />
+          </div>
+        )}
+        secondSlot={
+          showExtractedText
+            ? ({ style }) => (
+                <SseSummaryFooter
+                  style={style}
+                  error={summary.error ? String(summary.error) : null}
+                  isLoading={summary.isLoading}
+                  onRenderMarkdownChange={renderMarkdownSetting.set}
+                  renderMarkdown={renderMarkdown}
+                  resultKeyPath={summarySettings.resultKeyPath ?? ""}
+                  summary={summary.data?.summary ?? ""}
+                  fragmentCount={summary.data?.fragmentCount ?? 0}
+                />
+              )
+            : null
+        }
       />
     </div>
   );
@@ -145,107 +236,126 @@ function ActualEventStreamViewer({ response }: Props) {
 function SseSummaryFooter({
   error,
   fragmentCount,
-  height,
   isLoading,
-  onHeightChange,
+  onRenderMarkdownChange,
+  renderMarkdown,
   resultKeyPath,
+  style,
   summary,
 }: {
   error: string | null;
   fragmentCount: number;
-  height: number;
   isLoading: boolean;
-  onHeightChange: (height: number) => void;
+  onRenderMarkdownChange: (renderMarkdown: boolean) => void;
+  renderMarkdown: boolean;
   resultKeyPath: string;
+  style: CSSProperties;
   summary: string;
 }) {
   const hasSummary = fragmentCount > 0;
-  const handleResizeStart = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      const startY = event.clientY;
-      const startHeight = height;
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        onHeightChange(clampSummaryHeight(startHeight + startY - moveEvent.clientY));
-      };
-
-      const handlePointerUp = () => {
-        document.removeEventListener("pointermove", handlePointerMove);
-        document.removeEventListener("pointerup", handlePointerUp);
-      };
-
-      document.addEventListener("pointermove", handlePointerMove);
-      document.addEventListener("pointerup", handlePointerUp);
-    },
-    [height, onHeightChange],
+  const actions = useMemo(
+    () => [
+      {
+        key: "sse-summary-format",
+        label: "Extracted text format",
+        type: "select" as const,
+        value: renderMarkdown ? "markdown" : "text",
+        options: [
+          { label: "Text", value: "text" },
+          { label: "Markdown", value: "markdown" },
+        ],
+        onChange: (value: string) => onRenderMarkdownChange(value === "markdown"),
+      },
+    ],
+    [onRenderMarkdownChange, renderMarkdown],
   );
 
   return (
     <div
-      className="min-h-0 border-t border-border-subtle bg-surface grid grid-rows-[auto_auto_minmax(0,1fr)]"
-      style={{ height: clampSummaryHeight(height) }}
+      style={style}
+      className="min-h-0 overflow-hidden border-t border-border-subtle bg-surface grid grid-rows-[auto_minmax(0,1fr)]"
     >
+      <div className="pt-2">
+        <EventDetailHeader
+          actions={actions}
+          title="Extracted Text"
+          copyText={hasSummary ? summary : undefined}
+        />
+      </div>
       <div
-        role="separator"
-        aria-label="Resize summary"
-        aria-orientation="horizontal"
-        className="h-1.5 cursor-ns-resize hover:bg-surface-highlight active:bg-surface-highlight"
-        onPointerDown={handleResizeStart}
-      />
-      <HStack space={2} alignItems="center" className="px-2 pt-1">
-        <Separator>Summary</Separator>
-        <Button
-          size="xs"
-          variant="border"
-          disabled={!hasSummary}
-          onClick={() => copyToClipboard(summary)}
-        >
-          copy
-        </Button>
-      </HStack>
-      <div className="px-3 py-2 overflow-auto text-xs">
+        className={classNames(
+          "min-h-0 py-2 overflow-auto",
+          (error != null || isLoading || (hasSummary && !renderMarkdown)) && "text-xs",
+        )}
+      >
         {error != null ? (
           <span className="text-danger">{error}</span>
         ) : isLoading ? (
-          <span className="italic text-text-subtlest">Loading summary...</span>
+          <span className="italic text-text-subtlest">Loading extracted text...</span>
         ) : hasSummary ? (
-          <pre className="font-mono whitespace-pre-wrap break-words select-text">{summary}</pre>
+          renderMarkdown ? (
+            <div className="min-h-0">
+              <Markdown className="select-auto cursor-auto">{summary}</Markdown>
+            </div>
+          ) : (
+            <pre className="font-mono whitespace-pre-wrap break-words select-auto cursor-auto">
+              {summary}
+            </pre>
+          )
         ) : (
-          <span className="italic text-text-subtlest">
-            No summary fragments found for <InlineCode className="py-0">{resultKeyPath}</InlineCode>
-          </span>
+          <EmptyStateText className="gap-1.5">
+            No fragments for <InlineCode className="py-0">{resultKeyPath}</InlineCode>
+          </EmptyStateText>
         )}
       </div>
     </div>
   );
 }
 
-function clampSummaryHeight(height: number): number {
-  return Math.max(MIN_SUMMARY_HEIGHT, Math.min(MAX_SUMMARY_HEIGHT, height));
+function getEventPreview(
+  event: ServerSentEvent,
+  resultKeyPath: string | null,
+  filterEventPreview: boolean,
+): string {
+  if (filterEventPreview && resultKeyPath != null) {
+    return (extractSseValueAtPath(event.data, resultKeyPath) ?? event.data).slice(0, 1000);
+  }
+
+  return event.data.slice(0, 1000);
 }
 
 function EventDetail({
+  applyJsonPath,
   event,
   index,
+  resultKeyPath,
   showLarge,
   showingLarge,
   setShowLarge,
   setShowingLarge,
   onClose,
 }: {
+  applyJsonPath: boolean;
   event: ServerSentEvent;
   index: number;
+  resultKeyPath: string | null;
   showLarge: boolean;
   showingLarge: boolean;
   setShowLarge: (v: boolean) => void;
   setShowingLarge: (v: boolean) => void;
   onClose: () => void;
 }) {
+  const detailText = useMemo(
+    () =>
+      applyJsonPath && resultKeyPath != null
+        ? (extractSseValueAtPath(event.data, resultKeyPath) ?? event.data)
+        : event.data,
+    [applyJsonPath, event.data, resultKeyPath],
+  );
   const language = useMemo<"text" | "json">(() => {
-    if (!event?.data) return "text";
-    return isJSON(event?.data) ? "json" : "text";
-  }, [event?.data]);
+    if (!detailText) return "text";
+    return isJSON(detailText) ? "json" : "text";
+  }, [detailText]);
 
   return (
     <div className="flex flex-col h-full">
@@ -254,7 +364,7 @@ function EventDetail({
         prefix={<EventLabels event={event} index={index} />}
         onClose={onClose}
       />
-      {!showLarge && event.data.length > 1000 * 1000 ? (
+      {!showLarge && detailText.length > 1000 * 1000 ? (
         <VStack space={2} className="italic text-text-subtlest">
           Message previews larger than 1MB are hidden
           <div>
@@ -276,7 +386,7 @@ function EventDetail({
           </div>
         </VStack>
       ) : (
-        <FormattedEditor language={language} text={event.data} />
+        <FormattedEditor language={language} text={detailText} />
       )}
     </div>
   );
@@ -301,14 +411,17 @@ function EventLabels({
 }) {
   return (
     <HStack space={1.5} alignItems="center" className={className}>
-      <InlineCode className={classNames("py-0", isActive && "bg-text-subtlest text-text")}>
-        {event.id ?? index}
-      </InlineCode>
-      {event.eventType && (
-        <InlineCode className={classNames("py-0", isActive && "bg-text-subtlest text-text")}>
-          {event.eventType}
-        </InlineCode>
-      )}
+      <EventLabel isActive={isActive}>{event.id ?? index}</EventLabel>
+      {event.eventType && <EventLabel isActive={isActive}>{event.eventType}</EventLabel>}
     </HStack>
+  );
+}
+
+function EventLabel({ children, isActive }: { children: ReactNode; isActive?: boolean }) {
+  return (
+    <InlineCode className={classNames("py-0", isActive && "relative overflow-hidden")}>
+      {isActive && <span className="absolute inset-0 bg-text opacity-5 pointer-events-none" />}
+      <span className="relative">{children}</span>
+    </InlineCode>
   );
 }

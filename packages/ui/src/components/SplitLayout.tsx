@@ -27,7 +27,7 @@ interface Props {
   resizeHandleClassName?: string;
 }
 
-const baseProperties = { minWidth: 0 };
+const baseProperties = { minHeight: 0, minWidth: 0 };
 const areaL = { ...baseProperties, gridArea: "left" };
 const areaR = { ...baseProperties, gridArea: "right" };
 const areaD = { ...baseProperties, gridArea: "drag" };
@@ -68,7 +68,7 @@ export function SplitLayout({
         ? `
             ' ${areaL.gridArea}' minmax(0,${1 - height}fr)
             ' ${areaD.gridArea}' 0
-            ' ${areaR.gridArea}' minmax(${minHeightPx}px,${height}fr)
+            ' ${areaR.gridArea}' minmax(0,${height}fr)
             / 1fr
           `
         : `
@@ -76,7 +76,7 @@ export function SplitLayout({
             / ${1 - width}fr    0                 ${width}fr
           `,
     };
-  }, [style, vertical, height, minHeightPx, width]);
+  }, [style, vertical, height, width]);
 
   const handleReset = useCallback(() => {
     if (vertical) setHeight(defaultRatio);
@@ -102,11 +102,11 @@ export function SplitLayout({
       const startHeight = containerHeight * height;
 
       if (vertical) {
-        const maxHeightPx = containerHeight - minHeightPx;
+        const maxHeightPx = Math.max(minHeightPx, containerHeight - minHeightPx);
         const newHeightPx = clamp(startHeight - (e.y - mouseStartY), minHeightPx, maxHeightPx);
         setHeight(newHeightPx / containerHeight);
       } else {
-        const maxWidthPx = containerWidth - minWidthPx;
+        const maxWidthPx = Math.max(minWidthPx, containerWidth - minWidthPx);
         const newWidthPx = clamp(startWidth - (e.x - mouseStartX), minWidthPx, maxWidthPx);
         setWidth(newWidthPx / containerWidth);
       }

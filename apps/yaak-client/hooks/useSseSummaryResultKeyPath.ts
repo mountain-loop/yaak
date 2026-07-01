@@ -1,64 +1,98 @@
-import { useLocalStorage } from "react-use";
+import type { HttpResponse } from "@yaakapp-internal/models";
+import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
+import { useMemo } from "react";
+import type { GenericCompletionConfig } from "../components/core/Editor/genericCompletion";
 import { useKeyValue } from "./useKeyValue";
 
-export const sseSummaryProviderOptions = [
-  {
-    label: "ChatGPT (OpenAI)",
-    resultKeyPath: "$.choices[0].delta.content",
-    value: "openai",
-  },
-  {
-    label: "Claude (Anthropic)",
-    resultKeyPath: "$.delta.text",
-    value: "anthropic",
-  },
-  {
-    label: "Gemini (Google)",
-    resultKeyPath: "$.candidates[0].content.parts[0].text",
-    value: "google",
-  },
-  {
-    label: "Custom",
-    resultKeyPath: null,
-    value: "custom",
-  },
-] as const;
+const OPENAI_CHAT_COMPLETIONS_RESULT_KEY_PATH = "$.choices[0].delta.content";
+const OPENAI_RESPONSES_RESULT_KEY_PATH = "$.delta";
+const ANTHROPIC_RESULT_KEY_PATH = "$.delta.text";
+const GOOGLE_RESULT_KEY_PATH = "$.candidates[0].content.parts[0].text";
 
-export type SseSummaryProvider = (typeof sseSummaryProviderOptions)[number]["value"];
+const sseSummaryResultKeyPathOptions: GenericCompletionOption[] = [
+  {
+    label: OPENAI_CHAT_COMPLETIONS_RESULT_KEY_PATH,
+    detail: "ChatGPT (OpenAI)",
+    type: "constant",
+    boost: 1,
+  },
+  {
+    label: OPENAI_RESPONSES_RESULT_KEY_PATH,
+    detail: "Responses (OpenAI)",
+    type: "constant",
+    boost: 1,
+  },
+  {
+    label: ANTHROPIC_RESULT_KEY_PATH,
+    detail: "Claude (Anthropic)",
+    type: "constant",
+    boost: 1,
+  },
+  {
+    label: GOOGLE_RESULT_KEY_PATH,
+    detail: "Gemini (Google)",
+    type: "constant",
+    boost: 1,
+  },
+];
 
-const DEFAULT_SSE_SUMMARY_PROVIDER = "openai";
-const DEFAULT_CUSTOM_SSE_SUMMARY_RESULT_KEY_PATH = "result";
+export const sseSummaryResultKeyPathAutocomplete: GenericCompletionConfig = {
+  minMatch: 0,
+  options: sseSummaryResultKeyPathOptions,
+};
 
-export function useSseSummaryResultKeyPath({
-  requestId,
-  workspaceId,
-}: {
-  requestId?: string;
-  workspaceId?: string;
-}) {
-  const [rawProvider, setProvider] = useLocalStorage<SseSummaryProvider>(
-    `sse_summary_provider::${requestId}`,
-    DEFAULT_SSE_SUMMARY_PROVIDER,
-  );
-  const customKeyPath = useKeyValue<string>({
-    key: ["sse_summary_custom_result_key_path", workspaceId ?? "n/a"],
-    fallback: DEFAULT_CUSTOM_SSE_SUMMARY_RESULT_KEY_PATH,
+export function useSseSummaryResultKeyPath({ response }: { response: HttpResponse }) {
+  const storedResultKeyPath = useKeyValue<string | null>({
+    namespace: "no_sync",
+    key: ["sse_summary_result_key_path", response.requestId],
+    fallback: null,
   });
-  const provider = isSseSummaryProvider(rawProvider) ? rawProvider : DEFAULT_SSE_SUMMARY_PROVIDER;
-  const preset = sseSummaryProviderOptions.find((option) => option.value === provider);
-  const resultKeyPath =
-    preset?.resultKeyPath ?? customKeyPath.value ?? DEFAULT_CUSTOM_SSE_SUMMARY_RESULT_KEY_PATH;
+  const enabled = useKeyValue<boolean | null>({
+    namespace: "no_sync",
+    key: ["sse_summary_result_key_path_enabled", response.requestId],
+    fallback: null,
+  });
+  const inferredResultKeyPath = useMemo(() => inferSseSummaryResultKeyPath(response), [response.url]);
+  const resultKeyPath = storedResultKeyPath.value ?? inferredResultKeyPath;
+  const trimmedResultKeyPath = resultKeyPath?.trim() ?? "";
+  const isEnabled = enabled.value ?? inferredResultKeyPath != null;
 
   return {
-    customResultKeyPath: customKeyPath.value ?? DEFAULT_CUSTOM_SSE_SUMMARY_RESULT_KEY_PATH,
-    isLoading: customKeyPath.isLoading,
-    provider,
-    resultKeyPath,
-    setCustomResultKeyPath: customKeyPath.set,
-    setProvider,
+    enabled: isEnabled,
+    inferredResultKeyPath,
+    resultKeyPath: isEnabled && trimmedResultKeyPath.length > 0 ? trimmedResultKeyPath : null,
+    resultKeyPathInputValue: resultKeyPath ?? "",
+    setEnabled: enabled.set,
+    setResultKeyPath: storedResultKeyPath.set,
   };
 }
 
-function isSseSummaryProvider(value: unknown): value is SseSummaryProvider {
-  return sseSummaryProviderOptions.some((option) => option.value === value);
+function inferSseSummaryResultKeyPath(response: HttpResponse): string | null {
+  let url: URL;
+  try {
+    url = new URL(response.url);
+  } catch {
+    return null;
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const pathname = url.pathname.toLowerCase();
+
+  if (hostname === "api.openai.com" && pathname === "/v1/chat/completions") {
+    return OPENAI_CHAT_COMPLETIONS_RESULT_KEY_PATH;
+  }
+  if (hostname === "api.openai.com" && pathname === "/v1/responses") {
+    return OPENAI_RESPONSES_RESULT_KEY_PATH;
+  }
+  if (hostname === "api.anthropic.com" && pathname === "/v1/messages") {
+    return ANTHROPIC_RESULT_KEY_PATH;
+  }
+  if (
+    hostname === "generativelanguage.googleapis.com" &&
+    pathname.includes(":streamgeneratecontent")
+  ) {
+    return GOOGLE_RESULT_KEY_PATH;
+  }
+
+  return null;
 }
