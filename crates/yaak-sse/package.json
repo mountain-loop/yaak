@@ -2,5 +2,11 @@
   "name": "@yaakapp-internal/sse",
   "version": "1.0.0",
   "private": true,
-  "main": "index.ts"
+  "dependencies": {
+    "jsonpath-plus": "^10.3.0"
+  },
+  "main": "index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
 }

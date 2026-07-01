@@ -9,6 +9,8 @@ import { CopyIconButton } from "../CopyIconButton";
 import { AutoScroller } from "./AutoScroller";
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
+import type { SelectProps } from "./Select";
+import { Select } from "./Select";
 import { Separator } from "./Separator";
 
 interface EventViewerProps<T> {
@@ -151,7 +153,7 @@ export function EventViewer<T>({
         layout="vertical"
         storageKey={splitLayoutStorageKey}
         defaultRatio={defaultRatio}
-        minHeightPx={10}
+        minHeightPx={72}
         firstSlot={({ style }) => (
           <div style={style} className="w-full h-full grid grid-rows-[auto_minmax(0,1fr)]">
             {header ?? <span aria-hidden />}
@@ -202,23 +204,38 @@ export function EventViewer<T>({
   );
 }
 
-export interface EventDetailAction {
-  /** Unique key for React */
-  key: string;
-  /** Button label */
-  label: string;
-  /** Optional icon */
-  icon?: ReactNode;
-  /** Click handler */
-  onClick: () => void;
-}
+export type EventDetailAction =
+  | {
+      type?: "button";
+      /** Unique key for React */
+      key: string;
+      /** Button label */
+      label: string;
+      /** Optional icon */
+      icon?: ReactNode;
+      /** Click handler */
+      onClick: () => void;
+    }
+  | {
+      type: "select";
+      /** Unique key for React */
+      key: string;
+      /** Select label */
+      label: string;
+      /** Selected value */
+      value: string;
+      /** Select options */
+      options: SelectProps<string>["options"];
+      /** Change handler */
+      onChange: (value: string) => void;
+    };
 
 interface EventDetailHeaderProps {
   title: string;
   prefix?: ReactNode;
   timestamp?: string;
   actions?: EventDetailAction[];
-  copyText?: string;
+  copyText?: string | (() => Promise<string | null>);
   onClose?: () => void;
 }
 
@@ -239,40 +256,56 @@ export function EventDetailHeader({
         <h3 className="font-semibold select-auto cursor-auto truncate">{title}</h3>
       </HStack>
       <HStack space={2} className="items-center">
-        {actions?.map((action) => (
-          <Button
-            key={action.key}
-            type="button"
-            variant="border"
-            size="xs"
-            onClick={action.onClick}
-          >
-            {action.icon}
-            {action.label}
-          </Button>
-        ))}
+        {actions?.map((action) =>
+          action.type === "select" ? (
+            <div key={action.key} className="w-32">
+              <Select
+                name={action.key}
+                label={action.label}
+                hideLabel
+                size="xs"
+                value={action.value}
+                options={action.options}
+                onChange={action.onChange}
+              />
+            </div>
+          ) : (
+            <Button
+              key={action.key}
+              type="button"
+              variant="border"
+              size="xs"
+              onClick={action.onClick}
+            >
+              {action.icon}
+              {action.label}
+            </Button>
+          ),
+        )}
         {copyText != null && (
           <CopyIconButton text={copyText} size="xs" title="Copy" variant="border" iconSize="sm" />
         )}
         {formattedTime && (
           <span className="text-text-subtlest font-mono text-editor ml-2">{formattedTime}</span>
         )}
-        <div
-          className={classNames(
-            copyText != null ||
-              formattedTime ||
-              ((actions ?? []).length > 0 && "border-l border-l-surface-highlight ml-2 pl-3"),
-          )}
-        >
-          <IconButton
-            color="custom"
-            className="text-text-subtle -mr-3"
-            size="xs"
-            icon="x"
-            title="Close event panel"
-            onClick={onClose}
-          />
-        </div>
+        {onClose != null && (
+          <div
+            className={classNames(
+              copyText != null ||
+                formattedTime ||
+                ((actions ?? []).length > 0 && "border-l border-l-surface-highlight ml-2 pl-3"),
+            )}
+          >
+            <IconButton
+              color="custom"
+              className="text-text-subtle -mr-3"
+              size="xs"
+              icon="x"
+              title="Close event panel"
+              onClick={onClose}
+            />
+          </div>
+        )}
       </HStack>
     </div>
   );
