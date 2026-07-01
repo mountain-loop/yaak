@@ -54,7 +54,7 @@ export function CommercialUseBanner({
     setSnoozedAt(JSON.stringify({ source, at: new Date().toISOString() })).catch(console.error);
   }, [setSnoozedAt, snoozed, source]);
 
-  if (!visible || isSnoozeLoading || snoozed) {
+  if (!visible || isSnoozeLoading || (snoozed && !snoozeStartedRef.current)) {
     return null;
   }
 
@@ -96,10 +96,10 @@ async function shouldShowCommercialUsePrompt(): Promise<boolean> {
 
   try {
     const license = await invoke<LicenseCheckStatus>("plugin:yaak-license|check");
-    return license.status !== "active" && license.status !== "trialing";
+    return license.status === "personal_use";
   } catch (err) {
     console.log("Failed to check license before commercial-use prompt", err);
-    return true;
+    return false;
   }
 }
 
