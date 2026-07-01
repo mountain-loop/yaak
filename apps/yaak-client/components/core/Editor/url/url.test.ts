@@ -1,39 +1,52 @@
 import { describe, expect, test } from "vite-plus/test";
 import { parser } from "./url";
 
-function placeholderStarts(input: string): number[] {
-  const positions: number[] = [];
+function expectValidParse(input: string) {
+  expect(parser.parse(input).toString()).not.toContain("⚠");
+}
+
+function placeholderValues(input: string): string[] {
+  const values: string[] = [];
   parser
     .parse(input)
     .cursor()
     .iterate((node) => {
-      if (node.name === "Placeholder") positions.push(node.from);
+      if (node.name === "Placeholder") values.push(input.slice(node.from, node.to));
     });
-  return positions;
+  return values;
 }
 
 describe("URL grammar Placeholder", () => {
-  test("recognized after `/`", () => {
-    const url = "https://x.com/users/:id";
-    const [pos] = placeholderStarts(url);
-    expect(url[pos - 1]).toBe("/");
+  test("recognizes path placeholders", () => {
+    expectValidParse("https://x.com/users/:id");
+    expect(placeholderValues("https://x.com/users/:id")).toEqual([":id"]);
   });
 
-  test("lexer over-emits a second Placeholder after a literal `:` (filter relies on this)", () => {
-    const url = "https://x.com/x/:id:def";
-    const positions = placeholderStarts(url);
-    expect(positions.length).toBe(2);
-    expect(url[positions[0] - 1]).toBe("/");
-    expect(url[positions[1] - 1]).not.toBe("/");
+  test("treats a colon suffix as literal path text", () => {
+    expectValidParse("https://yaak.app/x/echo/:foo:bar/baz");
+    expect(placeholderValues("https://yaak.app/x/echo/:foo:bar/baz")).toEqual([":foo"]);
   });
 
-  test("first segment of a path-only URL is a Placeholder, not eaten as Host", () => {
-    // Regression: without `Host?`, the first `:chip1` would be tokenized as Host
-    // (Host's char class includes `:` for `host:port`), leaving only `:chip2` as
-    // a Placeholder.
-    const url = "/:chip1/:chip2";
-    const positions = placeholderStarts(url);
-    expect(positions.length).toBe(2);
-    expect(url.slice(positions[0])).toMatch(/^:chip1/);
+  test("treats repeated colon suffixes as literal path text", () => {
+    expectValidParse("https://yaak.app/x/echo/:foo:bar:baz");
+    expect(placeholderValues("https://yaak.app/x/echo/:foo:bar:baz")).toEqual([":foo"]);
+  });
+
+  test("does not recognize a colon in the middle of a plain path segment", () => {
+    expectValidParse("https://yaak.app/x/echo/foo:bar/baz");
+    expect(placeholderValues("https://yaak.app/x/echo/foo:bar/baz")).toEqual([]);
+  });
+
+  test("does not recognize query parameters as path placeholders", () => {
+    expect(placeholderValues("https://yaak.app/x/echo/:foo?bar=ss&:bar=baz")).toEqual([":foo"]);
+  });
+
+  test("recognizes placeholders in a path fragment after a templated base URL", () => {
+    // Mixed Twig parsing can feed the URL parser only the text after a template tag,
+    // as in `${[ URL ]}/x/:foo/:hello`.
+    expect(placeholderValues("/x/hi:echo/:foo/:hello?bar=ss&:bar=baz")).toEqual([
+      ":foo",
+      ":hello",
+    ]);
   });
 });

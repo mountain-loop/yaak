@@ -4,6 +4,6 @@ export const
   Protocol = 2,
   Host = 3,
   Path = 4,
-  Placeholder = 5,
-  PathSegment = 6,
+  PathSegment = 5,
+  Placeholder = 6,
   Query = 7
