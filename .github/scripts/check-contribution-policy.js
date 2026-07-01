@@ -10,6 +10,8 @@ const REVIEWER_LOGIN = "gschier";
 const LARGE_DIFF_CHANGED_FILES = 20;
 const LARGE_DIFF_CHANGED_LINES = 800;
 const SUMMARY_TITLE_MAX_LENGTH = 80;
+const AUTOMATIC_PR_CREATED_AFTER = "2026-06-30T07:00:00.000Z";
+const AUTOMATIC_PR_CREATED_AFTER_LABEL = "June 30, 2026";
 
 const LABELS = {
   inScope: {
@@ -426,6 +428,10 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
   };
 }
 
+function wasCreatedBefore(value, cutoff) {
+  return Date.parse(value) < Date.parse(cutoff);
+}
+
 async function isOfficialMaintainer({ github, owner, repo, pr }) {
   if (MAINTAINER_LOGINS.has(pr.user.login)) {
     return true;
@@ -597,6 +603,7 @@ async function checkPullRequest({
   repo,
   pullNumber,
   dryRun,
+  skipCreatedBefore,
 }) {
   const response = await github.rest.pulls.get({
     owner,
@@ -605,6 +612,25 @@ async function checkPullRequest({
   });
   const pr = response.data;
   const issueNumber = pr.number;
+
+  if (
+    skipCreatedBefore != null &&
+    wasCreatedBefore(pr.created_at, skipCreatedBefore)
+  ) {
+    core.notice(
+      `Skipping contribution policy for PR #${pr.number} because it was created before ${AUTOMATIC_PR_CREATED_AFTER_LABEL}.`,
+    );
+    return {
+      blocked: false,
+      number: pr.number,
+      summary: summarizeResult({
+        pr,
+        skipped: true,
+        skipReason: `created before ${AUTOMATIC_PR_CREATED_AFTER_LABEL}`,
+      }),
+      skipped: true,
+    };
+  }
 
   if (pr.draft) {
     core.notice(`Skipping contribution policy for draft PR #${pr.number}.`);
@@ -730,6 +756,8 @@ async function run({ github, context, core }) {
     context.eventName === "workflow_dispatch" &&
     dryRunInput !== false &&
     dryRunInput !== "false";
+  const skipCreatedBefore =
+    payloadPr == null ? null : AUTOMATIC_PR_CREATED_AFTER;
   let pullNumbers;
 
   if (payloadPr != null) {
@@ -767,6 +795,7 @@ async function run({ github, context, core }) {
         repo,
         pullNumber: pr.number,
         dryRun,
+        skipCreatedBefore,
       }),
     );
   }
