@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { settingsAtom } from "@yaakapp-internal/models";
 import { useAtomValue } from "jotai";
-import { getResolvedTheme, getThemes } from "../lib/theme/themes";
+import { getResolvedTheme, getThemes } from "../lib/themes";
 import { usePluginsKey } from "./usePlugins";
 import { usePreferredAppearance } from "./usePreferredAppearance";
 

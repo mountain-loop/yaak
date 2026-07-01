@@ -1,6 +1,7 @@
 import { VStack } from "@yaakapp-internal/ui";
 import { useState } from "react";
 import { useLocalStorage } from "react-use";
+import { CommercialUseBanner } from "./CommercialUseBanner";
 import { Button } from "./core/Button";
 import { SelectFile } from "./SelectFile";
 
@@ -14,6 +15,8 @@ export function ImportDataDialog({ importData }: Props) {
 
   return (
     <VStack space={5} className="pb-4">
+      <CommercialUseBanner source="data-import" title="Importing work data?" />
+
       <VStack space={1}>
         <ul className="list-disc pl-5">
           <li>OpenAPI 3.0, 3.1</li>

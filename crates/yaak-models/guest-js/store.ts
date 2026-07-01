@@ -8,6 +8,8 @@ import { newStoreData } from "./util";
 
 let _store: JotaiStore | null = null;
 
+const pendingModelWrites = new Set<Promise<unknown>>();
+
 export function initModelStore(store: JotaiStore) {
   _store = store;
 
@@ -40,6 +42,23 @@ function mustStore(): JotaiStore {
   }
 
   return _store;
+}
+
+function trackModelWrite<T>(write: Promise<T>): Promise<T> {
+  const tracked = write.finally(() => {
+    pendingModelWrites.delete(tracked);
+  });
+
+  pendingModelWrites.add(tracked);
+  return tracked;
+}
+
+export async function flushAllModelWrites(): Promise<void> {
+  const results = await Promise.allSettled(pendingModelWrites);
+  const rejected = results.find((result) => result.status === "rejected");
+  if (rejected?.status === "rejected") {
+    throw rejected.reason;
+  }
 }
 
 let _activeWorkspaceId: string | null = null;
@@ -117,7 +136,7 @@ export async function patchModel<M extends AnyModel["model"], T extends ExtractM
 export async function updateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   model: T,
 ): Promise<string> {
-  return invoke<string>("models_upsert", { model });
+  return trackModelWrite(invoke<string>("models_upsert", { model }));
 }
 
 export async function deleteModelById<
@@ -134,7 +153,7 @@ export async function deleteModel<M extends AnyModel["model"], T extends Extract
   if (model == null) {
     throw new Error("Failed to delete null model");
   }
-  await invoke<string>("models_delete", { model });
+  await trackModelWrite(invoke<string>("models_delete", { model }));
 }
 
 export function duplicateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
@@ -174,19 +193,19 @@ export function duplicateModel<M extends AnyModel["model"], T extends ExtractMod
     }
   }
 
-  return invoke<string>("models_duplicate", { model: { ...model, name } });
+  return trackModelWrite(invoke<string>("models_duplicate", { model: { ...model, name } }));
 }
 
 export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, "model">,
 ): Promise<string> {
-  return invoke<string>("models_upsert", { model: patch });
+  return trackModelWrite(invoke<string>("models_upsert", { model: patch }));
 }
 
 export async function createWorkspaceModel<T extends Extract<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, "model" | "workspaceId">,
 ): Promise<string> {
-  return invoke<string>("models_upsert", { model: patch });
+  return trackModelWrite(invoke<string>("models_upsert", { model: patch }));
 }
 
 export function replaceModelsInStore<

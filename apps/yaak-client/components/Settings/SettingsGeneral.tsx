@@ -2,22 +2,15 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { patchModel, settingsAtom } from "@yaakapp-internal/models";
 import { Heading, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
-import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
 import { useCheckForUpdates } from "../../hooks/useCheckForUpdates";
 import { appInfo } from "../../lib/appInfo";
-import {
-  SETTING_FOLLOW_REDIRECTS,
-  SETTING_REQUEST_TIMEOUT,
-  SETTING_SEND_COOKIES,
-  SETTING_STORE_COOKIES,
-  SETTING_VALIDATE_CERTIFICATES,
-} from "../../lib/requestSettings";
 import { revealInFinderText } from "../../lib/reveal";
 import { CargoFeature } from "../CargoFeature";
+import { CommercialUseBanner } from "../CommercialUseBanner";
+import { DismissibleBanner } from "../core/DismissibleBanner";
 import { IconButton } from "../core/IconButton";
 import {
   ModelSettingRowBoolean,
-  ModelSettingRowNumber,
   ModelSettingSelectControl,
   SettingValue,
   SettingRow,
@@ -27,20 +20,29 @@ import {
   SettingsSection,
 } from "../core/SettingRow";
 
+const WORKSPACE_SETTINGS_MOVED_AT = "2026-06-30";
+
 export function SettingsGeneral() {
-  const workspace = useAtomValue(activeWorkspaceAtom);
   const settings = useAtomValue(settingsAtom);
   const checkForUpdates = useCheckForUpdates();
 
-  if (settings == null || workspace == null) {
+  if (settings == null) {
     return null;
   }
 
+  const showWorkspaceSettingsMovedBanner =
+    settings.createdAt.slice(0, 10) < WORKSPACE_SETTINGS_MOVED_AT;
+
   return (
     <VStack space={1.5} className="mb-4">
-      <div className="mb-4">
+      <div>
         <Heading>General</Heading>
-        <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
+        <p className="text-text-subtle">
+          Configure general settings for update behavior and more.
+        </p>
+      </div>
+      <div className="mt-3 mb-5">
+        <CommercialUseBanner source="settings-general" title="Using Yaak for work?" />
       </div>
       <SettingsList className="space-y-8">
         <CargoFeature feature="updater">
@@ -76,7 +78,9 @@ export function SettingsGeneral() {
               description="Choose whether updates are installed automatically or manually."
               name="autoupdate"
               value={settings.autoupdate ? "auto" : "manual"}
-              onChange={(v) => patchModel(settings, { autoupdate: v === "auto" })}
+              onChange={(v) =>
+                patchModel(settings, { autoupdate: v === "auto" })
+              }
               options={[
                 { label: "Automatic", value: "auto" },
                 { label: "Manual", value: "manual" },
@@ -108,54 +112,19 @@ export function SettingsGeneral() {
           </SettingsSection>
         </CargoFeature>
 
-        <SettingsSection
-          title={
-            <>
-              Workspace{" "}
-              <span className="inline-block bg-surface-highlight px-2 py-0.5 rounded text">
-                {workspace.name}
-              </span>
-            </>
-          }
-        >
-          <ModelSettingRowNumber
-            model={workspace}
-            modelKey={SETTING_REQUEST_TIMEOUT.modelKey}
-            title={SETTING_REQUEST_TIMEOUT.title}
-            description={SETTING_REQUEST_TIMEOUT.description}
-            placeholder={`${SETTING_REQUEST_TIMEOUT.defaultValue}`}
-            required
-            validate={(value) => Number.parseInt(value, 10) >= 0}
-          />
-
-          <ModelSettingRowBoolean
-            model={workspace}
-            modelKey={SETTING_VALIDATE_CERTIFICATES.modelKey}
-            title={SETTING_VALIDATE_CERTIFICATES.title}
-            description={SETTING_VALIDATE_CERTIFICATES.description}
-          />
-
-          <ModelSettingRowBoolean
-            model={workspace}
-            modelKey={SETTING_FOLLOW_REDIRECTS.modelKey}
-            title={SETTING_FOLLOW_REDIRECTS.title}
-            description={SETTING_FOLLOW_REDIRECTS.description}
-          />
-
-          <ModelSettingRowBoolean
-            model={workspace}
-            modelKey={SETTING_SEND_COOKIES.modelKey}
-            title={SETTING_SEND_COOKIES.title}
-            description={SETTING_SEND_COOKIES.description}
-          />
-
-          <ModelSettingRowBoolean
-            model={workspace}
-            modelKey={SETTING_STORE_COOKIES.modelKey}
-            title={SETTING_STORE_COOKIES.title}
-            description={SETTING_STORE_COOKIES.description}
-          />
-        </SettingsSection>
+        {showWorkspaceSettingsMovedBanner && (
+          <DismissibleBanner
+            id="workspace-settings-moved-2026-06-30"
+            color="info"
+            className="p-4 max-w-xl mx-auto"
+          >
+            <p>
+              Workspace specific settings have moved to{" "}
+              <b>Workspace Settings</b>, accessible from the workspace switcher
+              menu.
+            </p>
+          </DismissibleBanner>
+        )}
 
         <SettingsSection title="App Info">
           <SettingRow title="Version" description="Current Yaak version.">

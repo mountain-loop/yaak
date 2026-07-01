@@ -30,7 +30,8 @@ type Tok =
   | { kind: "EOF" };
 
 const isSpace = (c: string) => /\s/.test(c);
-const isIdent = (c: string) => /[A-Za-z0-9_\-./]/.test(c);
+const isWordStart = (c: string) => c !== "" && !isSpace(c) && !/[():"@-]/.test(c);
+const isWordChar = (c: string) => c !== "" && !isSpace(c) && !/[():"@]/.test(c);
 
 export function tokenize(input: string): Tok[] {
   const toks: Tok[] = [];
@@ -42,7 +43,13 @@ export function tokenize(input: string): Tok[] {
 
   const readWord = () => {
     let s = "";
-    while (i < n && isIdent(peek())) s += advance();
+    while (i < n && isWordChar(peek())) s += advance();
+    return s;
+  };
+
+  const readFieldValue = () => {
+    let s = "";
+    while (i < n && !isSpace(peek())) s += advance();
     return s;
   };
 
@@ -85,6 +92,9 @@ export function tokenize(input: string): Tok[] {
     if (c === ":") {
       toks.push({ kind: "COLON" });
       i++;
+      if (peek() && !isSpace(peek()) && peek() !== `"`) {
+        toks.push({ kind: "WORD", text: readFieldValue() });
+      }
       continue;
     }
     if (c === `"`) {
@@ -99,7 +109,7 @@ export function tokenize(input: string): Tok[] {
     }
 
     // WORD / AND / OR / NOT
-    if (isIdent(c)) {
+    if (isWordStart(c)) {
       const w = readWord();
       const upper = w.toUpperCase();
       if (upper === "AND") toks.push({ kind: "AND" });

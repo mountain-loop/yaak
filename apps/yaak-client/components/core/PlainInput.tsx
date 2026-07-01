@@ -1,6 +1,6 @@
 import { HStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import type { FocusEvent, HTMLAttributes, ReactNode } from "react";
+import type { FocusEvent, InputHTMLAttributes, ReactNode } from "react";
 import {
   forwardRef,
   useCallback,
@@ -28,10 +28,9 @@ export type PlainInputProps = Omit<
   | "extraExtensions"
   | "forcedEnvironmentId"
 > &
-  Pick<HTMLAttributes<HTMLInputElement>, "onKeyDownCapture"> & {
-    onFocusRaw?: HTMLAttributes<HTMLInputElement>["onFocus"];
+  Pick<InputHTMLAttributes<HTMLInputElement>, "inputMode" | "onKeyDownCapture" | "step"> & {
+    onFocusRaw?: InputHTMLAttributes<HTMLInputElement>["onFocus"];
     type?: "text" | "password" | "number";
-    step?: number;
     hideObscureToggle?: boolean;
     labelRightSlot?: ReactNode;
   };
@@ -52,6 +51,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     labelClassName,
     labelPosition = "top",
     labelRightSlot,
+    inputMode,
     leftSlot,
     name,
     onBlur,
@@ -64,6 +64,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     required,
     rightSlot,
     size = "md",
+    step,
     tint,
     type = "text",
     validate,
@@ -204,12 +205,14 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
+            inputMode={inputMode}
             onChange={(e) => handleChange(e.target.value)}
             onPaste={(e) => onPaste?.(e.clipboardData.getData("Text"))}
             className={classNames(commonClassName, "h-full disabled:opacity-disabled")}
             onFocus={handleFocus}
             onBlur={handleBlur}
             required={required}
+            step={step}
             placeholder={placeholder}
             onKeyDownCapture={onKeyDownCapture}
           />

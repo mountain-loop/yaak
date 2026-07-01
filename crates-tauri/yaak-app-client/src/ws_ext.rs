@@ -50,6 +50,37 @@ pub async fn cmd_ws_send<R: Runtime>(
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let connection = app_handle.db().get_websocket_connection(connection_id)?;
+
+    match send_websocket_message(&connection, environment_id, &app_handle, &window, &ws_manager)
+        .await
+    {
+        Ok(connection) => Ok(connection),
+        Err(e) => {
+            app_handle.db().upsert_websocket_event(
+                &WebsocketEvent {
+                    connection_id: connection.id.clone(),
+                    request_id: connection.request_id.clone(),
+                    workspace_id: connection.workspace_id.clone(),
+                    is_server: false,
+                    message_type: WebsocketEventType::Error,
+                    message: e.to_string().into(),
+                    ..Default::default()
+                },
+                &UpdateSource::from_window_label(window.label()),
+            )?;
+
+            Ok(connection)
+        }
+    }
+}
+
+async fn send_websocket_message<R: Runtime>(
+    connection: &WebsocketConnection,
+    environment_id: Option<&str>,
+    app_handle: &AppHandle<R>,
+    window: &WebviewWindow<R>,
+    ws_manager: &Mutex<WebsocketManager>,
+) -> Result<WebsocketConnection> {
     let unrendered_request = app_handle.db().get_websocket_request(&connection.request_id)?;
     let environment_chain = app_handle.db().resolve_environments(
         &unrendered_request.workspace_id,
@@ -91,7 +122,7 @@ pub async fn cmd_ws_send<R: Runtime>(
         &UpdateSource::from_window_label(window.label()),
     )?;
 
-    Ok(connection)
+    Ok(connection.clone())
 }
 
 #[command]
@@ -299,6 +330,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
             receive_tx,
             resolved_settings.validate_certificates.value,
             client_cert,
+            resolved_settings.request_message_size.value,
         )
         .await
     {

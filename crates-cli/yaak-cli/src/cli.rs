@@ -42,6 +42,12 @@ pub enum Commands {
     /// Authentication commands
     Auth(AuthArgs),
 
+    /// Import API data from Yaak, OpenAPI, Postman, Insomnia, Swagger, or cURL
+    Import(ImportArgs),
+
+    /// Export Yaak workspace data
+    Export(ExportArgs),
+
     /// Plugin development and publishing commands
     Plugin(PluginArgs),
 
@@ -90,6 +96,34 @@ pub struct SendArgs {
     /// Stop on first request failure when sending folders/workspaces
     #[arg(long, conflicts_with = "parallel")]
     pub fail_fast: bool,
+}
+
+#[derive(Args)]
+pub struct ImportArgs {
+    /// Path to the file to import
+    pub file: PathBuf,
+
+    /// Existing workspace ID to import into when supported by the importer
+    #[arg(long = "workspace-id", value_name = "WORKSPACE_ID")]
+    pub workspace_id: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ExportArgs {
+    /// Path to write the Yaak export JSON file
+    pub file: PathBuf,
+
+    /// Workspace IDs to export (defaults to the only workspace when exactly one exists)
+    #[arg(value_name = "WORKSPACE_ID")]
+    pub workspace_ids: Vec<String>,
+
+    /// Export all workspaces
+    #[arg(long, conflicts_with = "workspace_ids")]
+    pub all: bool,
+
+    /// Include private environments in the export
+    #[arg(long)]
+    pub include_private_environments: bool,
 }
 
 #[derive(Args)]
@@ -446,6 +480,10 @@ pub enum PluginCommands {
 
     /// Install a plugin from a local directory or from the registry
     Install(InstallPluginArgs),
+
+    /// Generate plugin metadata for the registry
+    #[command(hide = true)]
+    Metadata(PluginPathArg),
 
     /// Publish a Yaak plugin version to the plugin registry
     Publish(PluginPathArg),

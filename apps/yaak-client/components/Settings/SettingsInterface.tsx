@@ -8,6 +8,7 @@ import { useAtomValue } from "jotai";
 import { useState } from "react";
 import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
 import { showConfirm } from "../../lib/confirm";
+import { pricingUrl } from "../../lib/pricingUrl";
 import { invokeCmd } from "../../lib/tauri";
 import { CargoFeature } from "../CargoFeature";
 import { Button } from "../core/Button";
@@ -252,7 +253,9 @@ function LicenseSettings({ settings }: { settings: Settings }) {
                   </p>
                   <p>
                     Licenses help keep Yaak independent and sustainable.{" "}
-                    <Link href="https://yaak.app/pricing?s=badge">Purchase a License →</Link>
+                    <Link href={pricingUrl("app.license.badge-hide-confirm")}>
+                      Purchase a License →
+                    </Link>
                   </p>
                 </VStack>
               ),

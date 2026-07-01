@@ -16,6 +16,7 @@ interface Props {
   text: string;
   language: EditorProps["language"];
   stateKey: string | null;
+  filterStateKey?: string | null;
   pretty?: boolean;
   className?: string;
   onFilter?: (filter: string) => {
@@ -27,16 +28,25 @@ interface Props {
 
 const useFilterText = createGlobalState<Record<string, string | null>>({});
 
-export function TextViewer({ language, text, stateKey, pretty, className, onFilter }: Props) {
+export function TextViewer({
+  language,
+  text,
+  stateKey,
+  filterStateKey,
+  pretty,
+  className,
+  onFilter,
+}: Props) {
+  const filterKey = filterStateKey ?? stateKey;
   const [filterTextMap, setFilterTextMap] = useFilterText();
-  const filterText = stateKey ? (filterTextMap[stateKey] ?? null) : null;
+  const filterText = filterKey ? (filterTextMap[filterKey] ?? null) : null;
   const debouncedFilterText = useDebouncedValue(filterText);
   const setFilterText = useCallback(
     (v: string | null) => {
-      if (!stateKey) return;
-      setFilterTextMap((m) => ({ ...m, [stateKey]: v }));
+      if (!filterKey) return;
+      setFilterTextMap((m) => ({ ...m, [filterKey]: v }));
     },
-    [setFilterTextMap, stateKey],
+    [filterKey, setFilterTextMap],
   );
 
   const isSearching = filterText != null;
@@ -64,7 +74,7 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
       nodes.push(
         <div key="input" className="w-full !opacity-100">
           <Input
-            key={stateKey ?? "filter"}
+            key={filterKey ?? "filter"}
             validate={!filteredResponse.error}
             hideLabel
             autoFocus
@@ -76,7 +86,7 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
             defaultValue={filterText}
             onKeyDown={(e) => e.key === "Escape" && toggleSearch()}
             onChange={setFilterText}
-            stateKey={stateKey ? `filter.${stateKey}` : null}
+            stateKey={filterKey ? `filter.${filterKey}` : null}
           />
         </div>,
       );
@@ -97,12 +107,12 @@ export function TextViewer({ language, text, stateKey, pretty, className, onFilt
     return nodes;
   }, [
     canFilter,
+    filterKey,
     filterText,
     filteredResponse.error,
     filteredResponse.isPending,
     isSearching,
     language,
-    stateKey,
     setFilterText,
     toggleSearch,
   ]);

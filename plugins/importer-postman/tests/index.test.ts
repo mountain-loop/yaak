@@ -57,4 +57,34 @@ describe("importer-postman", () => {
       }),
     ]);
   });
+
+  test("Imports url.path when it is a string instead of an array", () => {
+    const result = convertPostman(
+      JSON.stringify({
+        info: {
+          name: "String Path Test",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        item: [
+          {
+            name: "String Path",
+            request: {
+              method: "GET",
+              url: {
+                host: ["example", "com"],
+                path: "foo/bar",
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        name: "String Path",
+        url: "example.com/foo/bar",
+      }),
+    ]);
+  });
 });

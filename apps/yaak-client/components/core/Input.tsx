@@ -290,10 +290,10 @@ function BaseInput({
         <HStack
           className={classNames(
             inputWrapperClassName,
-            "w-full min-w-0 px-2",
+            "flex-1 min-w-0 px-2",
             fullHeight && "h-full",
-            leftSlot ? "pl-0.5 -ml-2" : null,
-            rightSlot ? "pr-0.5 -mr-2" : null,
+            leftSlot ? "pl-0" : null,
+            rightSlot ? "pr-0" : null,
           )}
         >
           <Editor

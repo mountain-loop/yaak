@@ -12,7 +12,7 @@ export const parser = LRParser.deserialize({
   skippedNodes: [0],
   repeatNodeCount: 1,
   tokenData:
-    "$]VRVOYhYZ#[Z![h![!]#o!];'Sh;'S;=`#U<%lOhToVQPSSOYhYZ!UZ![h![!]!m!];'Sh;'S;=`#U<%lOhP!ZSQPO![!U!];'S!U;'S;=`!g<%lO!UP!jP;=`<%l!US!rSSSOY!mZ;'S!m;'S;=`#O<%lO!mS#RP;=`<%l!mT#XP;=`<%lhR#cSVQQPO![!U!];'S!U;'S;=`!g<%lO!UV#vVRQSSOYhYZ!UZ![h![!]!m!];'Sh;'S;=`#U<%lOh",
+    "%]VRVOYhYZ#[Z![h![!]#o!];'Sh;'S;=`#U<%lOhToVQPSSOYhYZ!UZ![h![!]!m!];'Sh;'S;=`#U<%lOhP!ZSQPO![!U!];'S!U;'S;=`!g<%lO!UP!jP;=`<%l!US!rSSSOY!mZ;'S!m;'S;=`#O<%lO!mS#RP;=`<%l!mT#XP;=`<%lhR#cSVQQPO![!U!];'S!U;'S;=`!g<%lO!UV#tYSSOXhXY$dYZ!UZphpq$dq![h![!]!m!];'Sh;'S;=`#U<%lOhV$mYQPRQSSOXhXY$dYZ!UZphpq$dq![h![!]!m!];'Sh;'S;=`#U<%lOh",
   tokenizers: [0, 1, 2],
   topRules: { pairs: [0, 1] },
   tokenPrec: 0,
