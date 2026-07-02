@@ -113,19 +113,19 @@ export const GraphQLDocsExplorer = memo(function GraphQLDocsExplorer({
               name={{ value: "query", color: "primary" }}
               item={qryItem}
               setItem={setActiveItem}
-              className="!my-0"
+              className="my-0!"
             />
             <GqlTypeRow
               name={{ value: "mutation", color: "primary" }}
               item={mutItem}
               setItem={setActiveItem}
-              className="!my-0"
+              className="my-0!"
             />
             <GqlTypeRow
               name={{ value: "subscription", color: "primary" }}
               item={subItem}
               setItem={setActiveItem}
-              className="!my-0"
+              className="my-0!"
             />
             <Subheading count={Object.keys(allTypes).length}>All Schema Types</Subheading>
             <DocMarkdown>{schema.description ?? null}</DocMarkdown>
@@ -192,7 +192,7 @@ function GraphQLExplorerHeader({
                     noTruncate
                     item={crumb}
                     setItem={setItem}
-                    className="!font-sans !text-sm flex-shrink-0"
+                    className="font-sans! text-sm! shrink-0"
                   />
                 )}
               </Fragment>
@@ -208,7 +208,7 @@ function GraphQLExplorerHeader({
           className="hidden @[10rem]:block"
         />
       </div>
-      <div className="ml-auto flex gap-1 [&>*]:text-text-subtle">
+      <div className="ml-auto flex gap-1 *:text-text-subtle">
         <IconButton icon="x" size="sm" title="Close documentation explorer" onClick={onClose} />
       </div>
     </nav>
@@ -528,7 +528,7 @@ function GqlTypeRow({
           <span className="text-text-subtle">:</span>{" "}
           <GqlTypeLink color="notice" item={returnItem} setItem={setItem} />
         </div>
-        <DocMarkdown className="!text-text-subtle mt-0.5">
+        <DocMarkdown className="text-text-subtle! mt-0.5">
           {item.type.description ?? null}
         </DocMarkdown>
       </div>
@@ -786,8 +786,8 @@ function GqlSchemaSearch({
       className={classNames(
         className,
         "relative flex items-center bg-surface z-20 min-w-0",
-        !focused && "max-w-[6rem] ml-auto",
-        focused && "!absolute top-0 left-1.5 right-1.5 bottom-0 pt-1.5",
+        !focused && "max-w-24 ml-auto",
+        focused && "absolute! top-0 left-1.5 right-1.5 bottom-0 pt-1.5",
       )}
     >
       <PlainInput
@@ -879,7 +879,7 @@ function SearchResult({
       ref={initRef}
       className={classNames(
         className,
-        "px-3 truncate w-full text-left h-sm rounded text-editor font-mono",
+        "px-3 truncate w-full text-left h-sm rounded-sm text-editor font-mono",
         isActive && "bg-surface-highlight",
       )}
       {...extraProps}
@@ -893,7 +893,7 @@ function Heading({ children }: { children: ReactNode }) {
 
 function DocMarkdown({ children, className }: { children: string | null; className?: string }) {
   return (
-    <Markdown className={classNames(className, "!text-text-subtle italic")}>{children}</Markdown>
+    <Markdown className={classNames(className, "text-text-subtle! italic")}>{children}</Markdown>
   );
 }
 

@@ -112,6 +112,7 @@
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.3",
+    "@tailwindcss/postcss": "^4.3.2",
     "@tauri-apps/cli": "^2.11.1",
     "@types/babel__core": "^7.20.5",
     "@vitejs/plugin-react": "^6.0.1",
@@ -120,6 +121,8 @@
     "dotenv-cli": "^11.0.0",
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
     "typescript": "^5.8.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^0.2.1",
     "vite-plus": "^0.2.1",

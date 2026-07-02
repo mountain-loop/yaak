@@ -566,7 +566,7 @@ export function PairEditorRow({
         title={pair.enabled ? "Disable item" : "Enable item"}
         disabled={isLast || disabled}
         checked={isLast ? false : !!pair.enabled}
-        className={classNames(isLast && "!opacity-disabled")}
+        className={classNames(isLast && "opacity-disabled!")}
         onChange={handleChangeEnabled}
       />
       {!isLast && !disableDrag ? (
@@ -586,7 +586,7 @@ export function PairEditorRow({
       <div
         className={classNames(
           "grid items-center",
-          "@xs:gap-2 @xs:!grid-rows-1 @xs:!grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
+          "@xs:gap-2 @xs:grid-rows-1! @xs:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]!",
           "gap-0.5 grid-cols-1 grid-rows-2",
         )}
       >
@@ -830,7 +830,7 @@ function MultilineEditDialog({
   const [value, setValue] = useState<string>(defaultValue);
   const language = languageFromContentType(contentType, value);
   return (
-    <div className="w-[100vw] max-w-[40rem] h-[50vh] max-h-full grid grid-rows-[minmax(0,1fr)_auto]">
+    <div className="w-screen max-w-160 h-[50vh] max-h-full grid grid-rows-[minmax(0,1fr)_auto]">
       <Editor
         heightMode="auto"
         defaultValue={defaultValue}

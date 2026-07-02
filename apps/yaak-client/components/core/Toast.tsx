@@ -54,11 +54,11 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           `x-theme-toast x-theme-toast--${color}`,
           "pointer-events-auto overflow-hidden",
           "relative pointer-events-auto bg-surface text-text rounded-lg",
-          "border border-border shadow-lg w-[25rem]",
+          "border border-border shadow-lg w-100",
         )}
       >
-        <div className="pl-3 py-3 pr-10 flex items-start gap-2 w-full max-h-[11rem] overflow-auto">
-          {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1 flex-shrink-0" />}
+        <div className="pl-3 py-3 pr-10 flex items-start gap-2 w-full max-h-44 overflow-auto">
+          {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1 shrink-0" />}
           <VStack space={2} className="w-full min-w-0">
             <div className="select-auto">{children}</div>
             {action?.({ hide: onClose })}
@@ -68,7 +68,7 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
         <IconButton
           color={color}
           variant="border"
-          className="opacity-60 border-0 !absolute top-2 right-2"
+          className="opacity-60 border-0 absolute! top-2 right-2"
           title="Dismiss"
           icon="x"
           onClick={onClose}

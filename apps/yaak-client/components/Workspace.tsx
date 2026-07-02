@@ -85,7 +85,7 @@ export function Workspace() {
         <div style={environmentBgStyle} className="absolute inset-0 opacity-[0.07]" />
         <div
           style={environmentBgStyle}
-          className="absolute left-0 right-0 -bottom-[1px] h-[1px] opacity-20"
+          className="absolute left-0 right-0 -bottom-px h-px opacity-20"
         />
       </div>
       <WorkspaceHeader className="pointer-events-none" floatingSidebar={floating} />
@@ -162,7 +162,7 @@ function WorkspaceBody() {
         // Delay the entering because the workspaces might load after a slight delay
         transition={{ delay: 0.5 }}
       >
-        <Banner color="warning" className="max-w-[30rem]">
+        <Banner color="warning" className="max-w-120">
           The active workspace was not found. Select a workspace from the header menu or report this
           bug to <FeedbackLink />
         </Banner>

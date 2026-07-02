@@ -116,7 +116,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
   const id = useRef(`input-${generateId()}`);
   const commonClassName = classNames(
     className,
-    "!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder",
+    "bg-transparent! min-w-0 w-full focus:outline-hidden placeholder:text-placeholder",
     "px-2 text-xs font-mono cursor-text",
   );
 
@@ -167,7 +167,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           "overflow-hidden",
           focused && !disabled ? "border-border-focus" : "border-border-subtle",
           disabled && "border-dotted",
-          hasChanged && "has-[:invalid]:border-danger", // For built-in HTML validation
+          hasChanged && "has-invalid:border-danger", // For built-in HTML validation
           size === "md" && "min-h-md",
           size === "sm" && "min-h-sm",
           size === "xs" && "min-h-xs",
@@ -225,7 +225,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
                 : `Obscure ${typeof label === "string" ? label : "field"}`
             }
             size="xs"
-            className="mr-0.5 group/obscure !h-auto my-0.5"
+            className="mr-0.5 group/obscure h-auto! my-0.5"
             iconClassName="group-hover/obscure:text"
             iconSize="sm"
             icon={obscured ? "eye" : "eye_closed"}

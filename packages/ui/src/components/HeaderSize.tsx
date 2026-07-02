@@ -67,7 +67,7 @@ export function HeaderSize({
       style={finalStyle}
       className={classNames(
         className,
-        "pt-[1px]", // Make up for bottom border
+        "pt-px", // Make up for bottom border
         "select-none relative flex items-center",
         "w-full border-b border-border-subtle min-w-0",
       )}

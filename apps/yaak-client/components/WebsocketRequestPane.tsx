@@ -217,7 +217,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                     title="Close connection"
                     icon="x"
                     iconColor="secondary"
-                    className="w-8 mr-0.5 !h-full"
+                    className="w-8 mr-0.5 h-full!"
                     onClick={handleCancel}
                   />
                 )
@@ -236,7 +236,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             ref={tabsRef}
             label="Request"
             tabs={tabs}
-            tabListClassName="mt-1 !mb-1.5"
+            tabListClassName="mt-1 mb-1.5!"
             storageKey={TABS_STORAGE_KEY}
             activeTabKey={activeRequestId}
           >
@@ -283,7 +283,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                   hideLabel
                   forceUpdateKey={forceUpdateKey}
                   defaultValue={activeRequest.name}
-                  className="font-sans !text-xl !px-0"
+                  className="font-sans text-xl! px-0!"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
                   onChange={(name) => patchModel(activeRequest, { name })}

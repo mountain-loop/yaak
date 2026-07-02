@@ -11,7 +11,7 @@ export function ColorIndicator({ color, onClick, className }: Props) {
   const style: CSSProperties = { backgroundColor: color ?? undefined };
   const finalClassName = classNames(
     className,
-    "inline-block w-[0.75em] h-[0.75em] rounded-full mr-1.5 border border-transparent flex-shrink-0",
+    "inline-block w-[0.75em] h-[0.75em] rounded-full mr-1.5 border border-transparent shrink-0",
   );
 
   if (onClick) {

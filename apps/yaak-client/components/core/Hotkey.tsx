@@ -30,7 +30,7 @@ export function HotkeyRaw({ labelParts, className, variant }: HotkeyRawProps) {
       className={classNames(
         className,
         variant === "with-bg" &&
-          "rounded bg-surface-highlight px-1 border border-border text-text-subtle",
+          "rounded-sm bg-surface-highlight px-1 border border-border text-text-subtle",
         variant === "text" && "text-text-subtlest",
       )}
     >

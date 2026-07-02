@@ -81,7 +81,7 @@ export function HttpMethodTagRaw({
         colored && m === "PATCH" && "text-notice",
         colored && m === "POST" && "text-success",
         colored && m === "DELETE" && "text-danger",
-        "font-mono flex-shrink-0 whitespace-pre",
+        "font-mono shrink-0 whitespace-pre",
         "pt-[0.15em]", // Fix for monospace font not vertically centering
       )}
     >

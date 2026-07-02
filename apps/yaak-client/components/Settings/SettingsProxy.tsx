@@ -56,7 +56,7 @@ export function SettingsProxy() {
               { label: "Custom proxy configuration", value: "enabled" },
               { label: "No proxy", value: "disabled" },
             ]}
-            selectClassName="!w-64"
+            selectClassName="w-64!"
           />
         </SettingsSection>
 
@@ -99,7 +99,7 @@ export function SettingsProxy() {
                 description="Comma-separated list of hosts that should bypass the proxy."
                 value={settings.proxy.bypass}
                 placeholder="127.0.0.1, *.example.com, localhost:3000"
-                inputWidthClassName="!w-96"
+                inputWidthClassName="w-96!"
                 onChange={(bypass) => patchProxy({ bypass })}
               />
             </SettingsSection>

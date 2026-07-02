@@ -57,7 +57,7 @@ export function EnvironmentEditDialog({ initialEnvironmentId, setRef }: Props) {
       defaultRatio={0.75}
       layout="horizontal"
       className="gap-0"
-      resizeHandleClassName="-translate-x-[1px]"
+      resizeHandleClassName="-translate-x-px"
       firstSlot={() => (
         <EnvironmentEditDialogSidebar
           selectedEnvironmentId={selectedEnvironment?.id ?? null}

@@ -74,13 +74,13 @@ export function Dialog({
             "relative bg-surface pointer-events-auto",
             "rounded-lg",
             "border border-border-subtle shadow-lg shadow-[rgba(0,0,0,0.1)]",
-            "min-h-[10rem]",
+            "min-h-40",
             "max-w-[calc(100vw-5rem)] max-h-[calc(100vh-5rem)]",
-            size === "sm" && "w-[30rem]",
-            size === "md" && "w-[50rem]",
-            size === "lg" && "w-[70rem]",
-            size === "full" && "w-[100vw] h-[100vh]",
-            size === "dynamic" && "min-w-[20rem] max-w-[100vw]",
+            size === "sm" && "w-120",
+            size === "md" && "w-200",
+            size === "lg" && "w-280",
+            size === "full" && "w-screen h-screen",
+            size === "dynamic" && "min-w-80 max-w-[100vw]",
           )}
         >
           {title ? (

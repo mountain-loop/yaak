@@ -324,7 +324,7 @@ function KeyRevealer({
 
 function HighlightedKey({ keyText, show }: { keyText: string; show: boolean }) {
   return (
-    <span className="text-xs font-mono [&_*]:cursor-auto [&_*]:select-text">
+    <span className="text-xs font-mono **:cursor-auto **:select-text">
       {show ? (
         keyText.split("").map((c, i) => {
           return (

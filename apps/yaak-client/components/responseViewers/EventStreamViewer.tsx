@@ -298,7 +298,7 @@ function SseSummaryFooter({
               <Markdown className="select-auto cursor-auto">{summary}</Markdown>
             </div>
           ) : (
-            <pre className="font-mono whitespace-pre-wrap break-words select-auto cursor-auto">
+            <pre className="font-mono whitespace-pre-wrap wrap-break-word select-auto cursor-auto">
               {summary}
             </pre>
           )

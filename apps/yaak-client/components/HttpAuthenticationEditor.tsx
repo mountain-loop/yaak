@@ -156,7 +156,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
                 title="Authentication Actions"
                 icon="settings"
                 size="xs"
-                className="!text-secondary"
+                className="text-secondary!"
               />
             </Dropdown>
           )}
