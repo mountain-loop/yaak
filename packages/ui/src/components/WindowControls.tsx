@@ -38,7 +38,7 @@ export function WindowControls({
       {!onlyX && (
         <>
           <Button
-            className="!h-full px-4 text-text-subtle hocus:text hocus:bg-surface-highlight rounded-none"
+            className="h-full! px-4 text-text-subtle hocus:text hocus:bg-surface-highlight rounded-none"
             color="custom"
             onClick={() => getCurrentWebviewWindow().minimize()}
           >
@@ -48,7 +48,7 @@ export function WindowControls({
             </svg>
           </Button>
           <Button
-            className="!h-full px-4 text-text-subtle hocus:text hocus:bg-surface-highlight rounded-none"
+            className="h-full! px-4 text-text-subtle hocus:text hocus:bg-surface-highlight rounded-none"
             color="custom"
             onClick={async () => {
               const w = getCurrentWebviewWindow();
@@ -81,7 +81,7 @@ export function WindowControls({
       )}
       <Button
         color="custom"
-        className="!h-full px-4 text-text-subtle rounded-none hocus:bg-danger hocus:text-text"
+        className="h-full! px-4 text-text-subtle rounded-none hocus:bg-danger hocus:text-text"
         onClick={() => getCurrentWebviewWindow().close()}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">

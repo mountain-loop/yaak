@@ -1,3 +1,5 @@
+@reference "../../../main.css";
+
 .cm-wrapper {
   @apply h-full overflow-hidden;
 
@@ -7,7 +9,7 @@
     /* Regular cursor */
 
     .cm-cursor {
-      @apply border-text !important;
+      @apply border-text!;
       /* Widen the cursor a bit */
       @apply border-l-[2px];
     }
@@ -15,8 +17,8 @@
     /* Vim-mode cursor */
 
     .cm-fat-cursor {
-      @apply outline-0 bg-text !important;
-      @apply text-surface !important;
+      @apply outline-0! bg-text!;
+      @apply text-surface!;
     }
 
     /* Matching bracket */
@@ -59,12 +61,12 @@
 
       * {
         @apply cursor-text;
-        @apply caret-transparent !important;
+        @apply caret-transparent!;
       }
     }
 
     .cm-selectionBackground {
-      @apply bg-selection !important;
+      @apply bg-selection!;
     }
 
     /* Fix WebKit/WKWebView rendering bug where selection layer leaves a ghost
@@ -88,7 +90,7 @@
     }
 
     .cm-gutter-lint {
-      @apply w-auto !important;
+      @apply w-auto!;
 
       .cm-gutterElement {
         @apply px-0;
@@ -111,7 +113,7 @@
       @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap cursor-default;
       @apply hover:border-border hover:text-text hover:bg-surface-highlight;
 
-      @apply inline border px-1 mx-[0.5px] rounded dark:shadow;
+      @apply inline border px-1 mx-[0.5px] rounded-sm dark:shadow;
 
       -webkit-text-security: none;
 
@@ -162,7 +164,7 @@
 
       &::-webkit-scrollbar-corner,
       &::-webkit-scrollbar {
-        @apply hidden !important;
+        @apply hidden!;
       }
     }
   }
@@ -189,16 +191,16 @@
 
 /* Style search matches */
 .cm-searchMatch {
-  @apply bg-transparent !important;
+  @apply bg-transparent!;
   @apply rounded-[2px] outline outline-1;
 
   &.cm-searchMatch-selected {
     @apply outline-text;
-    @apply bg-text !important;
+    @apply bg-text!;
 
     &,
     * {
-      @apply text-surface font-semibold !important;
+      @apply text-surface! font-semibold!;
     }
   }
 }
@@ -223,8 +225,8 @@
 }
 
 .cm-editor .fold-gutter-icon {
-  @apply pt-[0.25em] pl-[0.4em] px-[0.4em] h-4 rounded;
-  @apply cursor-default !important;
+  @apply pt-[0.25em] pl-[0.4em] px-[0.4em] h-4 rounded-sm;
+  @apply cursor-default!;
 }
 
 .cm-editor .fold-gutter-icon::after {
@@ -248,7 +250,7 @@
 .cm-editor .cm-foldPlaceholder {
   @apply px-2 border border-border-subtle bg-surface-highlight;
   @apply hover:text-text hover:border-border-subtle text-text;
-  @apply cursor-default !important;
+  @apply cursor-default!;
 }
 
 .cm-editor .cm-activeLineGutter {
@@ -277,7 +279,7 @@
 }
 
 .cm-tooltip-lint {
-  @apply font-mono text-editor rounded overflow-hidden bg-surface-highlight border border-border shadow !important;
+  @apply font-mono! text-editor! rounded-sm! overflow-hidden! bg-surface-highlight! border! border-border! shadow!;
 
   .cm-diagnostic-error {
     @apply border-l-danger px-4 py-2;
@@ -293,18 +295,18 @@
 }
 
 .cm-tooltip.cm-tooltip-hover {
-  @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto text-sm;
+  @apply shadow-lg bg-surface rounded-sm text-text-subtle border border-border-subtle z-50 pointer-events-auto text-sm;
   @apply p-1.5;
 
   /* Style the tooltip for popping up "open in browser" and other stuff */
 
   a,
   button {
-    @apply text-text hover:bg-surface-highlight w-full h-sm flex items-center px-2 rounded;
+    @apply text-text hover:bg-surface-highlight w-full h-sm flex items-center px-2 rounded-sm;
   }
 
   a {
-    @apply cursor-default !important;
+    @apply cursor-default!;
 
     &::after {
       @apply text-text bg-text h-3 w-3 ml-1;
@@ -319,10 +321,10 @@
 /* NOTE: Extra selector required to override default styles */
 .cm-tooltip.cm-tooltip-autocomplete,
 .cm-tooltip.cm-completionInfo {
-  @apply shadow-lg bg-surface rounded text-text-subtle border border-border-subtle z-50 pointer-events-auto;
+  @apply shadow-lg bg-surface rounded-sm text-text-subtle border border-border-subtle z-50 pointer-events-auto;
 
   & * {
-    @apply font-mono text-editor !important;
+    @apply font-mono! text-editor!;
   }
 
   .cm-completionIcon {
@@ -409,7 +411,7 @@
     }
 
     .cm-completionIcon {
-      @apply text-sm flex items-center pb-0.5 flex-shrink-0;
+      @apply text-sm flex items-center pb-0.5 shrink-0;
     }
 
     .cm-completionLabel {
@@ -427,7 +429,7 @@
 
   input,
   button {
-    @apply rounded-sm outline-none;
+    @apply rounded-sm outline-hidden;
   }
 
   button {
@@ -436,12 +438,12 @@
   }
 
   button[name="close"] {
-    @apply text-text-subtle hocus:text-text px-2 -mr-1.5 !important;
+    @apply text-text-subtle! hocus:text-text! px-2! -mr-1.5!;
   }
 
   input {
     @apply bg-surface border-border-subtle focus:border-border-focus;
-    @apply border outline-none;
+    @apply border outline-hidden;
   }
 
   input.cm-textfield {

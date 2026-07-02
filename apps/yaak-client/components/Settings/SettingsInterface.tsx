@@ -89,7 +89,7 @@ export function SettingsInterface() {
               <SettingSelectControl
                 name="uiFont"
                 label="Interface font"
-                selectClassName="!w-72"
+                selectClassName="w-72!"
                 value={settings.interfaceFont ?? NULL_FONT_VALUE}
                 defaultValue={NULL_FONT_VALUE}
                 options={[
@@ -106,7 +106,7 @@ export function SettingsInterface() {
             <SettingSelectControl
               name="interfaceFontSize"
               label="Interface Font Size"
-              selectClassName="!w-20"
+              selectClassName="w-20!"
               value={`${settings.interfaceFontSize}`}
               defaultValue="14"
               options={fontSizeOptions}
@@ -123,7 +123,7 @@ export function SettingsInterface() {
               <SettingSelectControl
                 name="editorFont"
                 label="Editor font"
-                selectClassName="!w-72"
+                selectClassName="w-72!"
                 value={settings.editorFont ?? NULL_FONT_VALUE}
                 defaultValue={NULL_FONT_VALUE}
                 options={[
@@ -139,7 +139,7 @@ export function SettingsInterface() {
             <SettingSelectControl
               name="editorFontSize"
               label="Editor Font Size"
-              selectClassName="!w-20"
+              selectClassName="w-20!"
               value={`${settings.editorFontSize}`}
               defaultValue="12"
               options={fontSizeOptions}

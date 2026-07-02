@@ -176,7 +176,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         size="sm"
         className={classNames(
           className,
-          "text !px-2 truncate",
+          "text px-2! truncate",
           workspace === null && "italic opacity-disabled",
         )}
         {...buttonProps}

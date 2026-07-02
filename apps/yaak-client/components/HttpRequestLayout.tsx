@@ -57,7 +57,7 @@ export function HttpRequestLayout({ activeRequest, style }: Props) {
           <GraphQLDocsExplorer
             requestId={activeRequest.id}
             schema={graphQLSchema}
-            className={classNames(orientation === "horizontal" && "!ml-0")}
+            className={classNames(orientation === "horizontal" && "ml-0!")}
             style={style}
           />
         )}

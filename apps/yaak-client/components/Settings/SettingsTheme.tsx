@@ -120,7 +120,7 @@ export function SettingsTheme() {
         <SettingsSection title="Preview">
           <VStack
             space={3}
-            className="mt-4 w-full bg-surface p-3 border border-dashed border-border-subtle rounded overflow-x-auto"
+            className="mt-4 w-full bg-surface p-3 border border-dashed border-border-subtle rounded-sm overflow-x-auto"
           >
             <HStack className="text" space={1.5}>
               <Icon icon={appearance === "dark" ? "moon" : "sun"} />

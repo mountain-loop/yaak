@@ -43,7 +43,7 @@ export function ResponseHeaders({ response }: Props) {
               <span className="select-text cursor-text">{response.url}</span>
               <IconButton
                 iconSize="sm"
-                className="inline-block w-auto !h-auto opacity-50 hover:opacity-100"
+                className="inline-block w-auto h-auto! opacity-50 hover:opacity-100"
                 icon="external_link"
                 onClick={() => openUrl(response.url)}
                 title="Open in browser"

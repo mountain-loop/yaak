@@ -17,7 +17,7 @@ export function ColorPicker({ onChange, color, className }: Props) {
     <div className={className}>
       <HexColorPicker
         color={color ?? undefined}
-        className="!w-full"
+        className="w-full!"
         onChange={(color) => {
           onChange(color);
           regenerateKey(); // To force input to change
@@ -96,7 +96,7 @@ export function ColorPickerWithThemeColors({ onChange, color, className }: Props
         <>
           <HexColorPicker
             color={color ?? undefined}
-            className="!w-full"
+            className="w-full!"
             onChange={(color) => {
               onChange(color);
               regenerateKey(); // To force input to change

@@ -588,7 +588,7 @@ function Sidebar({ className }: { className?: string }) {
               rightSlot={
                 filterText.text && (
                   <IconButton
-                    className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
+                    className="bg-transparent! h-auto! min-h-full opacity-50 hover:opacity-100 -mr-1"
                     icon="x"
                     title="Clear filter"
                     onClick={clearFilterText}
@@ -667,8 +667,8 @@ function Sidebar({ className }: { className?: string }) {
         <div className="p-3 text-sm text-center">
           {(emptyFilterSuggestions?.length ?? 0) > 0 ? (
             <EmptyStateText
-              wrapperClassName="!h-auto mb-auto"
-              className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
+              wrapperClassName="h-auto! mb-auto"
+              className="h-auto! py-3 px-3 text-text-subtle! text-sm leading-relaxed text-center"
             >
               <div>
                 No results, but found matches for{" "}
@@ -677,7 +677,7 @@ function Sidebar({ className }: { className?: string }) {
                     {i > 0 && " or "}
                     <button
                       type="button"
-                      className="max-w-full rounded align-middle focus-visible:outline focus-visible:outline-2 focus-visible:outline-info"
+                      className="max-w-full rounded-sm align-middle focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-info"
                       onClick={() => applyFilterExample(suggestion.filterText)}
                     >
                       <InlineCode className="inline-block max-w-36 truncate align-middle whitespace-nowrap transition-colors hover:border-border hover:bg-surface-active hover:text-text">
@@ -690,8 +690,8 @@ function Sidebar({ className }: { className?: string }) {
             </EmptyStateText>
           ) : (
             <EmptyStateText
-              wrapperClassName="!h-auto mb-auto"
-              className="!h-auto py-3 px-3 !text-text-subtle text-sm leading-relaxed text-center"
+              wrapperClassName="h-auto! mb-auto"
+              className="h-auto! py-3 px-3 text-text-subtle! text-sm leading-relaxed text-center"
             >
               <div>
                 No results for{" "}

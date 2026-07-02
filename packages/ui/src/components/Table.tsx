@@ -87,7 +87,7 @@ export function TableCell({
     <td
       className={classNames(
         className,
-        "py-2 [&:not(:first-child)]:pl-4 whitespace-nowrap",
+        "py-2 not-first:pl-4 whitespace-nowrap",
         align === "left" ? "text-left" : align === "center" ? "text-center" : "text-right",
       )}
     >
@@ -119,7 +119,7 @@ export function TableHeaderCell({
     <th
       className={classNames(
         className,
-        "whitespace-nowrap py-2 [&:not(:first-child)]:pl-4 text-left text-text-subtle",
+        "whitespace-nowrap py-2 not-first:pl-4 text-left text-text-subtle",
       )}
     >
       {children}

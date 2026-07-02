@@ -33,7 +33,7 @@ export function MarkdownEditor({
     <Editor
       hideGutter
       wrapLines
-      className={classNames(editorClassName, "[&_.cm-line]:!max-w-lg max-h-full")}
+      className={classNames(editorClassName, "[&_.cm-line]:max-w-lg! max-h-full")}
       language="markdown"
       defaultValue={defaultValue}
       onChange={onChange}
@@ -46,7 +46,7 @@ export function MarkdownEditor({
     defaultValue.length === 0 ? (
       <p className="text-text-subtlest">No description</p>
     ) : (
-      <div className="pr-1.5 overflow-y-auto max-h-full [&_*]:cursor-auto [&_*]:select-auto">
+      <div className="pr-1.5 overflow-y-auto max-h-full **:cursor-auto **:select-auto">
         <Markdown className="max-w-lg select-auto cursor-auto">{defaultValue}</Markdown>
       </div>
     );

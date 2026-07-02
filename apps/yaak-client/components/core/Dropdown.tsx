@@ -712,7 +712,7 @@ const Menu = forwardRef<Omit<DropdownRef, "open" | "isOpen" | "toggle" | "items"
         className={classNames(
           className,
           "x-theme-menu",
-          "outline-none my-1 pointer-events-auto z-40",
+          "outline-hidden my-1 pointer-events-auto z-40",
           "fixed",
         )}
       >
@@ -734,7 +734,7 @@ const Menu = forwardRef<Omit<DropdownRef, "open" | "isOpen" | "toggle" | "items"
           {filter && (
             <HStack
               space={2}
-              className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded font-mono h-xs"
+              className="pb-0.5 px-1.5 mb-2 text-sm border border-border-subtle mx-2 rounded-sm font-mono h-xs"
             >
               <Icon icon="search" size="xs" />
               <div className="text">{filter}</div>
@@ -916,24 +916,24 @@ function MenuItem({
         )
       }
       rightSlot={rightSlot && <div className="ml-auto pl-3">{rightSlot}</div>}
-      innerClassName="!text-left"
+      innerClassName="text-left!"
       color="custom"
       className={classNames(
         className,
         "h-xs", // More compact
-        "min-w-[8rem] outline-none px-2 mx-1.5 flex whitespace-nowrap",
-        "focus:bg-surface-highlight focus:text rounded focus:outline-none focus-visible:outline-1",
-        isParentOfActiveSubmenu && "bg-surface-highlight text rounded",
-        item.color === "danger" && "!text-danger",
-        item.color === "primary" && "!text-primary",
-        item.color === "success" && "!text-success",
-        item.color === "warning" && "!text-warning",
-        item.color === "notice" && "!text-notice",
-        item.color === "info" && "!text-info",
+        "min-w-32 outline-hidden px-2 mx-1.5 flex whitespace-nowrap",
+        "focus:bg-surface-highlight focus:text rounded-sm focus:outline-hidden focus-visible:outline-1",
+        isParentOfActiveSubmenu && "bg-surface-highlight text rounded-sm",
+        item.color === "danger" && "text-danger!",
+        item.color === "primary" && "text-primary!",
+        item.color === "success" && "text-success!",
+        item.color === "warning" && "text-warning!",
+        item.color === "notice" && "text-notice!",
+        item.color === "info" && "text-info!",
       )}
       {...props}
     >
-      <div className={classNames("truncate min-w-[5rem]")}>{item.label}</div>
+      <div className={classNames("truncate min-w-20")}>{item.label}</div>
     </Button>
   );
 }

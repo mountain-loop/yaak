@@ -59,7 +59,7 @@ function getDetail(
             label: `License expired ${formatDate(data.data.periodEnd, "MMM dd, yyyy")}`,
           },
           {
-            label: <div className="min-w-[12rem]">Renew License</div>,
+            label: <div className="min-w-48">Renew License</div>,
             leftSlot: <Icon icon="refresh" />,
             rightSlot: <Icon icon="external_link" size="sm" className="opacity-disabled" />,
             hidden: data.data.changesUrl == null,

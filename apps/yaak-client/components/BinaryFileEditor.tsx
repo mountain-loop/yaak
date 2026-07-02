@@ -38,7 +38,7 @@ export function BinaryFileEditor({
     <VStack space={2}>
       <SelectFile onChange={handleChange} filePath={filePath} />
       {filePath != null && mimeType !== contentType && !ignoreContentType.value && (
-        <Banner className="mt-3 !py-5">
+        <Banner className="mt-3 py-5!">
           <div className="mb-4 text-center">
             <div>Set Content-Type header</div>
             <InlineCode>{mimeType}</InlineCode> for current request?

@@ -56,7 +56,7 @@ export function SettingsGeneral() {
                   model={settings}
                   modelKey="updateChannel"
                   label="Update Channel"
-                  selectClassName="!w-full"
+                  selectClassName="w-full!"
                   options={[
                     { label: "Stable", value: "stable" },
                     { label: "Beta", value: "beta" },

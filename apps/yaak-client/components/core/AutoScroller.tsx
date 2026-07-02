@@ -72,7 +72,7 @@ export function AutoScroller<T>({
             size="sm"
             iconSize="md"
             variant="border"
-            className="!bg-surface z-10"
+            className="bg-surface! z-10"
             onClick={() => setAutoScroll((v) => !v)}
           />
         </div>
@@ -80,7 +80,7 @@ export function AutoScroller<T>({
       {header ?? <span aria-hidden />}
       <div
         ref={containerRef}
-        className="h-full w-full overflow-y-auto focus:outline-none"
+        className="h-full w-full overflow-y-auto focus:outline-hidden"
         onScroll={handleScroll}
         tabIndex={focusable ? 0 : undefined}
       >
