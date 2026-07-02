@@ -1,10 +1,17 @@
 import type { GrpcConnection } from "@yaakapp-internal/models";
 import { deleteModel } from "@yaakapp-internal/models";
 import { HStack, Icon } from "@yaakapp-internal/ui";
-import { formatDistanceToNowStrict } from "date-fns";
+import {
+  differenceInHours,
+  differenceInMinutes,
+  format,
+  isToday,
+  isYesterday,
+} from "date-fns";
 import { useDeleteGrpcConnections } from "../hooks/useDeleteGrpcConnections";
 import { pluralizeCount } from "../lib/pluralize";
-import { Dropdown } from "./core/Dropdown";
+import { Dropdown, type DropdownItem } from "./core/Dropdown";
+import { formatMillis } from "./core/HttpResponseDurationTag";
 import { IconButton } from "./core/IconButton";
 
 interface Props {
@@ -20,6 +27,63 @@ export function RecentGrpcConnectionsDropdown({
 }: Props) {
   const deleteAllConnections = useDeleteGrpcConnections(activeConnection?.requestId);
   const latestConnectionId = connections[0]?.id ?? "n/a";
+  const connectionHistoryItems: DropdownItem[] = [];
+  let lastHistoryGroup: string | null = null;
+  let hasRecentConnections = false;
+  let hasShownRecentEmptyState = false;
+  const now = new Date();
+
+  for (const c of connections) {
+    const createdAt = `${c.createdAt}Z`;
+    const createdAtDate = new Date(createdAt);
+    const minutesAgo = differenceInMinutes(now, createdAtDate);
+    const hoursAgo = differenceInHours(now, createdAtDate);
+    let historyGroup = format(createdAtDate, "MMM d, yyyy");
+    if (minutesAgo < 5) historyGroup = "Just now";
+    else if (minutesAgo < 15) historyGroup = "5 minutes ago";
+    else if (minutesAgo < 60) historyGroup = "15 minutes ago";
+    else if (hoursAgo < 3) historyGroup = "1 hour ago";
+    else if (hoursAgo < 6) historyGroup = "3 hours ago";
+    else if (isToday(createdAtDate)) historyGroup = "Today";
+    else if (isYesterday(createdAtDate)) historyGroup = "Yesterday";
+    else if (createdAtDate.getFullYear() === now.getFullYear()) historyGroup = format(createdAtDate, "MMM d");
+    const absoluteTime = format(createdAt, "MMM d, yyyy, h:mm:ss a O");
+
+    if (historyGroup === "Just now") {
+      hasRecentConnections = true;
+    } else if (!hasRecentConnections && !hasShownRecentEmptyState) {
+      connectionHistoryItems.push({
+        type: "content",
+        label: <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>,
+      });
+      hasShownRecentEmptyState = true;
+    }
+
+    if (historyGroup !== "Just now" && historyGroup !== lastHistoryGroup) {
+      connectionHistoryItems.push({
+        type: "separator",
+        label: <span title={absoluteTime}>{historyGroup}</span>,
+      });
+      lastHistoryGroup = historyGroup;
+    }
+
+    connectionHistoryItems.push({
+      label: (
+        <HStack space={2} className="text-sm" title={absoluteTime}>
+          <span className="font-mono">{formatMillis(c.elapsed)}</span>
+        </HStack>
+      ),
+      leftSlot: activeConnection?.id === c.id ? <Icon icon="check" /> : <Icon icon="empty" />,
+      onSelect: () => onPinnedConnectionId(c.id),
+    });
+  }
+
+  if (!hasRecentConnections && !hasShownRecentEmptyState) {
+    connectionHistoryItems.push({
+      type: "content",
+      label: <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>,
+    });
+  }
 
   return (
     <Dropdown
@@ -36,16 +100,7 @@ export function RecentGrpcConnectionsDropdown({
           disabled: connections.length === 0,
         },
         { type: "separator", label: "History" },
-        ...connections.map((c) => ({
-          label: (
-            <HStack space={2}>
-              {formatDistanceToNowStrict(`${c.createdAt}Z`)} ago &bull;{" "}
-              <span className="font-mono text-sm">{c.elapsed}ms</span>
-            </HStack>
-          ),
-          leftSlot: activeConnection?.id === c.id ? <Icon icon="check" /> : <Icon icon="empty" />,
-          onSelect: () => onPinnedConnectionId(c.id),
-        })),
+        ...connectionHistoryItems,
       ]}
     >
       <IconButton

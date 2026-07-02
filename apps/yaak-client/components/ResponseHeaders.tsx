@@ -1,5 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { HttpResponse } from "@yaakapp-internal/models";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { useMemo } from "react";
 import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
@@ -29,6 +30,14 @@ export function ResponseHeaders({ response }: Props) {
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner storageKey={`${response.requestId}.general`} summary={<h2>Info</h2>}>
         <KeyValueRows>
+          <KeyValueRow labelColor="secondary" label="Sent">
+            <time
+              dateTime={new Date(`${response.createdAt}Z`).toISOString()}
+              title={formatDistanceToNowStrict(`${response.createdAt}Z`, { addSuffix: true })}
+            >
+              {format(`${response.createdAt}Z`, "MMM d, yyyy, h:mm:ss a O")}
+            </time>
+          </KeyValueRow>
           <KeyValueRow labelColor="secondary" label="Request URL">
             <div className="flex items-center gap-1">
               <span className="select-text cursor-text">{response.url}</span>

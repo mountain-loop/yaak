@@ -4,10 +4,12 @@ import classNames from "classnames";
 import type { ComponentType, CSSProperties } from "react";
 import { lazy, Suspense, useMemo } from "react";
 import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
+import { useCopyHttpResponse } from "../hooks/useCopyHttpResponse";
 import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
 import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
 import { useResponseBodyBytes, useResponseBodyText } from "../hooks/useResponseBodyText";
 import { useResponseViewMode } from "../hooks/useResponseViewMode";
+import { useSaveResponse } from "../hooks/useSaveResponse";
 import { useTimelineViewMode } from "../hooks/useTimelineViewMode";
 import { getMimeTypeFromContentType } from "../lib/contentType";
 import { getContentTypeFromHeaders, getCookieCounts } from "../lib/model_util";
@@ -78,6 +80,8 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     activeResponse?.state === "closed" && redirectDropWarning != null;
 
   const cookieCounts = useMemo(() => getCookieCounts(responseEvents.data), [responseEvents.data]);
+  const saveResponse = useSaveResponse(activeResponse ?? null);
+  const copyResponse = useCopyHttpResponse(activeResponse ?? null);
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -92,6 +96,22 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
             ...(mimeType?.startsWith("image")
               ? []
               : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
+          ],
+          itemsAfter: [
+            {
+              label: "Save to File",
+              onSelect: saveResponse.mutate,
+              leftSlot: <Icon icon="save" />,
+              hidden: activeResponse == null || !!activeResponse.error,
+              disabled: activeResponse?.state !== "closed" && (activeResponse?.status ?? 0) >= 100,
+            },
+            {
+              label: "Copy Body",
+              onSelect: copyResponse.mutate,
+              leftSlot: <Icon icon="copy" />,
+              hidden: activeResponse == null || !!activeResponse.error,
+              disabled: activeResponse?.state !== "closed" && (activeResponse?.status ?? 0) >= 100,
+            },
           ],
         },
       },
@@ -135,12 +155,18 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
     ],
     [
       activeResponse?.headers,
+      activeResponse,
+      activeResponse?.error,
       activeResponse?.requestContentLength,
       activeResponse?.requestHeaders.length,
+      activeResponse?.state,
+      activeResponse?.status,
       cookieCounts.sent,
       cookieCounts.received,
+      copyResponse.mutate,
       mimeType,
       responseEvents.data?.length,
+      saveResponse.mutate,
       setViewMode,
       viewMode,
       timelineViewMode,

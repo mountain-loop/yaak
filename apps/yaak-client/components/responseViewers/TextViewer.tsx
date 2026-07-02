@@ -1,6 +1,6 @@
 import classNames from "classnames";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { Children, useCallback, useMemo } from "react";
 import { createGlobalState } from "react-use";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
 import { useFormatText } from "../../hooks/useFormatText";
@@ -19,6 +19,7 @@ interface Props {
   filterStateKey?: string | null;
   pretty?: boolean;
   className?: string;
+  footerActions?: ReactNode;
   onFilter?: (filter: string) => {
     data: string | null | undefined;
     isPending: boolean;
@@ -35,6 +36,7 @@ export function TextViewer({
   filterStateKey,
   pretty,
   className,
+  footerActions,
   onFilter,
 }: Props) {
   const filterKey = filterStateKey ?? stateKey;
@@ -66,7 +68,7 @@ export function TextViewer({
   const canFilter = onFilter && (language === "json" || language === "xml" || language === "html");
 
   const actions = useMemo<ReactNode[]>(() => {
-    const nodes: ReactNode[] = [];
+    const nodes: ReactNode[] = isSearching ? [] : Children.toArray(footerActions);
 
     if (!canFilter) return nodes;
 
@@ -107,6 +109,7 @@ export function TextViewer({
     return nodes;
   }, [
     canFilter,
+    footerActions,
     filterKey,
     filterText,
     filteredResponse.error,
