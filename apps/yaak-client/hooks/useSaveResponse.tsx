@@ -9,10 +9,12 @@ import { invokeCmd } from "../lib/tauri";
 import { showToast } from "../lib/toast";
 import { useFastMutation } from "./useFastMutation";
 
-export function useSaveResponse(response: HttpResponse) {
+export function useSaveResponse(response: HttpResponse | null) {
   return useFastMutation({
-    mutationKey: ["save_response", response.id],
+    mutationKey: ["save_response", response?.id],
     mutationFn: async () => {
+      if (response == null) return null;
+
       const request = getModel("http_request", response.requestId);
       if (request == null) return null;
 

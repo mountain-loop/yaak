@@ -5,6 +5,7 @@ import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
 import { IconButton } from "./core/IconButton";
 import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { formatAbsoluteTime, formatRelativeTime, parseTimestamp } from "./core/RelativeTime";
 
 interface Props {
   response: HttpResponse;
@@ -29,6 +30,14 @@ export function ResponseHeaders({ response }: Props) {
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner storageKey={`${response.requestId}.general`} summary={<h2>Info</h2>}>
         <KeyValueRows>
+          <KeyValueRow labelColor="secondary" label="Sent">
+            <time
+              dateTime={parseTimestamp(response.createdAt).toISOString()}
+              title={formatRelativeTime(response.createdAt)}
+            >
+              {formatAbsoluteTime(response.createdAt)}
+            </time>
+          </KeyValueRow>
           <KeyValueRow labelColor="secondary" label="Request URL">
             <div className="flex items-center gap-1">
               <span className="select-text cursor-text">{response.url}</span>

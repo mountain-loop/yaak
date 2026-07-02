@@ -1,11 +1,12 @@
 import type { GrpcConnection } from "@yaakapp-internal/models";
 import { deleteModel } from "@yaakapp-internal/models";
 import { HStack, Icon } from "@yaakapp-internal/ui";
-import { formatDistanceToNowStrict } from "date-fns";
 import { useDeleteGrpcConnections } from "../hooks/useDeleteGrpcConnections";
 import { pluralizeCount } from "../lib/pluralize";
-import { Dropdown } from "./core/Dropdown";
+import { Dropdown, type DropdownItem } from "./core/Dropdown";
+import { formatMillis } from "./core/HttpResponseDurationTag";
 import { IconButton } from "./core/IconButton";
+import { formatRelativeTimeGroup } from "./core/RelativeTime";
 
 interface Props {
   connections: GrpcConnection[];
@@ -20,6 +21,46 @@ export function RecentGrpcConnectionsDropdown({
 }: Props) {
   const deleteAllConnections = useDeleteGrpcConnections(activeConnection?.requestId);
   const latestConnectionId = connections[0]?.id ?? "n/a";
+  const connectionHistoryItems: DropdownItem[] = [];
+  let lastHistoryGroup: string | null = null;
+  let hasRecentConnections = false;
+  let hasShownRecentEmptyState = false;
+
+  for (const c of connections) {
+    const historyGroup = formatRelativeTimeGroup(c.createdAt);
+
+    if (historyGroup === "Just now") {
+      hasRecentConnections = true;
+    } else if (!hasRecentConnections && !hasShownRecentEmptyState) {
+      connectionHistoryItems.push({
+        type: "content",
+        label: <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>,
+      });
+      hasShownRecentEmptyState = true;
+    }
+
+    if (historyGroup !== "Just now" && historyGroup !== lastHistoryGroup) {
+      connectionHistoryItems.push({ type: "separator", label: historyGroup });
+      lastHistoryGroup = historyGroup;
+    }
+
+    connectionHistoryItems.push({
+      label: (
+        <HStack space={2} className="text-sm">
+          <span className="font-mono">{formatMillis(c.elapsed)}</span>
+        </HStack>
+      ),
+      leftSlot: activeConnection?.id === c.id ? <Icon icon="check" /> : <Icon icon="empty" />,
+      onSelect: () => onPinnedConnectionId(c.id),
+    });
+  }
+
+  if (!hasRecentConnections && !hasShownRecentEmptyState) {
+    connectionHistoryItems.push({
+      type: "content",
+      label: <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>,
+    });
+  }
 
   return (
     <Dropdown
@@ -36,16 +77,7 @@ export function RecentGrpcConnectionsDropdown({
           disabled: connections.length === 0,
         },
         { type: "separator", label: "History" },
-        ...connections.map((c) => ({
-          label: (
-            <HStack space={2}>
-              {formatDistanceToNowStrict(`${c.createdAt}Z`)} ago &bull;{" "}
-              <span className="font-mono text-sm">{c.elapsed}ms</span>
-            </HStack>
-          ),
-          leftSlot: activeConnection?.id === c.id ? <Icon icon="check" /> : <Icon icon="empty" />,
-          onSelect: () => onPinnedConnectionId(c.id),
-        })),
+        ...connectionHistoryItems,
       ]}
     >
       <IconButton
