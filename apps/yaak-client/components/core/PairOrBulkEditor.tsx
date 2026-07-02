@@ -26,7 +26,7 @@ export function PairOrBulkEditor({ preferenceName, ...props }: Props) {
           variant="border"
           title={useBulk ? "Enable form edit" : "Enable bulk edit"}
           className={classNames(
-            "transition-opacity opacity-0 group-hover:opacity-80 hover:!opacity-100 shadow",
+            "transition-opacity opacity-0 group-hover:opacity-80 hover:opacity-100! shadow",
             "bg-surface hover:text group-hover/wrapper:opacity-100",
           )}
           onClick={() => setUseBulk((b) => !b)}

@@ -1,3 +1,5 @@
+@reference "../main.css";
+
 .prose {
   @apply text-text;
 
@@ -98,7 +100,7 @@
     @apply text-notice hover:underline;
 
     * {
-      @apply text-notice !important;
+      @apply text-notice!;
     }
   }
 
@@ -113,12 +115,12 @@
   ol code,
   ul code {
     @apply text-xs bg-surface-active text-info font-normal whitespace-nowrap;
-    @apply px-1.5 py-0.5 rounded not-italic;
+    @apply px-1.5 py-0.5 rounded-sm not-italic;
     @apply select-text;
   }
 
   pre {
-    @apply bg-surface-highlight text-text !important;
+    @apply bg-surface-highlight! text-text!;
     @apply px-4 py-3 rounded-md;
     @apply overflow-auto whitespace-pre;
     @apply text-editor font-mono;
@@ -130,7 +132,7 @@
 
   .banner {
     @apply border border-dashed;
-    @apply border-border bg-surface-highlight text-text px-4 py-3 rounded text-base;
+    @apply border-border bg-surface-highlight text-text px-4 py-3 rounded-sm text-base;
 
     &::before {
       @apply block font-bold mb-1;
@@ -161,7 +163,7 @@
   }
 
   blockquote {
-    @apply italic py-3 pl-5 pr-3 border-l-8 border-surface-active text-lg text-text bg-surface-highlight rounded shadow-lg;
+    @apply italic py-3 pl-5 pr-3 border-l-8 border-surface-active text-lg text-text bg-surface-highlight rounded-sm shadow-lg;
 
     p {
       @apply m-0;

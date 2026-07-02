@@ -108,7 +108,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         rightSlot={
           <IconButton
             size="xs"
-            className="mr-0.5 !h-auto my-0.5"
+            className="mr-0.5 h-auto! my-0.5"
             icon="folder"
             title="Browse"
             onClick={handleSelectDirectory}

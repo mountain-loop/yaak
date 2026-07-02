@@ -189,7 +189,7 @@ export function ModelSettingRowBoolean<M extends AnyModel, K extends ModelKeyOfV
 
 export function SettingRowNumber({
   inputClassName,
-  inputWidthClassName = "!w-48",
+  inputWidthClassName = "w-48!",
   name,
   onChange,
   placeholder,
@@ -251,7 +251,7 @@ export function ModelSettingRowNumber<M extends AnyModel, K extends ModelKeyOfVa
 
 export function SettingRowText({
   inputClassName,
-  inputWidthClassName = "!w-80",
+  inputWidthClassName = "w-80!",
   name,
   onChange,
   placeholder,
@@ -358,7 +358,7 @@ export function SettingRowSelect<T extends string>({
   name,
   onChange,
   options,
-  selectClassName = "!w-48",
+  selectClassName = "w-48!",
   title,
   value,
   ...props
@@ -393,7 +393,7 @@ export function SettingSelectControl<T extends string>({
   name,
   onChange,
   options,
-  selectClassName = "!w-48",
+  selectClassName = "w-48!",
   value,
 }: {
   defaultValue?: T;

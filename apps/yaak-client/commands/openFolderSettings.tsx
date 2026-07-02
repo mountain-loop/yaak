@@ -10,7 +10,7 @@ export function openFolderSettings(folderId: string, tab?: FolderSettingsTab) {
     id: "folder-settings",
     title: null,
     size: "lg",
-    className: "h-[50rem]",
+    className: "h-200",
     noPadding: true,
     render: () => <FolderSettingsDialog folderId={folderId} tab={tab} />,
   });

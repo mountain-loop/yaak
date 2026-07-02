@@ -73,14 +73,14 @@ export function JsonBodyEditor({ forceUpdateKey, heightMode, request }: Props) {
   const actions = useMemo<EditorProps["actions"]>(
     () => [
       showBanner && (
-        <Banner color="notice" className="!opacity-100 h-sm !py-0 !px-2 flex items-center text-xs">
+        <Banner color="notice" className="opacity-100! h-sm py-0! px-2! flex items-center text-xs">
           <p className="inline-flex items-center gap-1 min-w-0">
             <span className="truncate">Auto-fix enabled</span>
             <Icon icon="arrow_right" size="sm" className="opacity-disabled" />
           </p>
         </Banner>
       ),
-      <div key="settings" className="!opacity-100 !shadow">
+      <div key="settings" className="opacity-100! shadow!">
         <Dropdown
           onOpen={handleDropdownOpen}
           items={

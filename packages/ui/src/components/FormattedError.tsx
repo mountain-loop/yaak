@@ -12,8 +12,8 @@ export function FormattedError({ children, className }: Props) {
       className={classNames(
         className,
         "cursor-text select-auto",
-        "[&_*]:cursor-text [&_*]:select-auto",
-        "font-mono text-sm w-full bg-surface-highlight p-3 rounded",
+        "**:cursor-text **:select-auto",
+        "font-mono text-sm w-full bg-surface-highlight p-3 rounded-sm",
         "whitespace-pre-wrap border border-danger border-dashed overflow-x-auto",
       )}
     >

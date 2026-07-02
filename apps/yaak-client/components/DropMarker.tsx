@@ -23,8 +23,8 @@ export const DropMarker = memo(
         <div
           className={classNames(
             "absolute bg-primary rounded-full",
-            orientation === "horizontal" && "left-2 right-2 -bottom-[0.1rem] h-[0.2rem]",
-            orientation === "vertical" && "-left-[0.1rem] top-0 bottom-0 w-[0.2rem]",
+            orientation === "horizontal" && "left-2 right-2 bottom-[-0.1rem] h-[0.2rem]",
+            orientation === "vertical" && "left-[-0.1rem] top-0 bottom-0 w-[0.2rem]",
           )}
         />
       </div>

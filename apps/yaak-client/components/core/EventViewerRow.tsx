@@ -24,8 +24,8 @@ export function EventViewerRow({
         onClick={onClick}
         className={classNames(
           "w-full grid grid-cols-[auto_minmax(0,1fr)_auto] gap-2 items-center text-left",
-          "px-1.5 h-xs font-mono text-editor cursor-default group focus:outline-none focus:text-text rounded",
-          isActive && "bg-surface-active !text-text",
+          "px-1.5 h-xs font-mono text-editor cursor-default group focus:outline-hidden focus:text-text rounded-sm",
+          isActive && "bg-surface-active text-text!",
           "text-text-subtle hover:text",
         )}
       >

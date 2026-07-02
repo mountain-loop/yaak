@@ -62,7 +62,7 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         size="sm"
         className={classNames(
           className,
-          "text !px-2 truncate",
+          "text px-2! truncate",
           !activeEnvironment && !hasBaseVars && "text-text-subtlest italic",
         )}
         // If no environments, the button simply opens the dialog.

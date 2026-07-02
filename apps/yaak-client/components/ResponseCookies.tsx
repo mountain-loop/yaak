@@ -167,7 +167,7 @@ export function ResponseCookies({ response }: Props) {
                     {cookie.value}
                   </span>
                   {cookie.isDeleted && (
-                    <span className="text-xs font-sans text-danger bg-danger/10 px-1.5 py-0.5 rounded">
+                    <span className="text-xs font-sans text-danger bg-danger/10 px-1.5 py-0.5 rounded-sm">
                       Deleted
                     </span>
                   )}

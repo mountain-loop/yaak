@@ -208,10 +208,10 @@ function InitializedTemplateFunctionDialog({
                 )}
               />
             </HStack>
-            <div className="relative w-full max-h-[10rem]">
+            <div className="relative w-full max-h-40">
               <InlineCode
                 className={classNames(
-                  "block whitespace-pre-wrap !select-text cursor-text max-h-[10rem] overflow-auto hide-scrollbars !border-text-subtlest",
+                  "block whitespace-pre-wrap select-text! cursor-text max-h-40 overflow-auto hide-scrollbars border-text-subtlest!",
                   tooLarge && "italic text-danger",
                 )}
               >
@@ -246,7 +246,7 @@ function InitializedTemplateFunctionDialog({
         ) : (
           <span />
         )}
-        <div className="flex justify-stretch w-full flex-grow gap-2 [&>*]:flex-1">
+        <div className="flex justify-stretch w-full grow gap-2 *:flex-1">
           {templateFunction.data.name === "secure" && (
             <Button variant="border" color="secondary" onClick={setupOrConfigureEncryption}>
               Reveal Encryption Key
@@ -271,7 +271,7 @@ TemplateFunctionDialog.show = (
   showDialog({
     id: `template-function-${Math.random()}`, // Allow multiple at once
     size: "md",
-    className: "h-[60rem]",
+    className: "h-240",
     noPadding: true,
     title: <InlineCode>{fn.name}(…)</InlineCode>,
     description: fn.description,

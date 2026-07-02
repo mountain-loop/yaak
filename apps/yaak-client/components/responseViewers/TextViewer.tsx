@@ -72,7 +72,7 @@ export function TextViewer({
 
     if (isSearching) {
       nodes.push(
-        <div key="input" className="w-full !opacity-100">
+        <div key="input" className="w-full opacity-100!">
           <Input
             key={filterKey ?? "filter"}
             validate={!filteredResponse.error}
@@ -100,7 +100,7 @@ export function TextViewer({
         icon={isSearching ? "x" : "filter"}
         title={isSearching ? "Close filter" : "Filter response"}
         onClick={toggleSearch}
-        className={classNames("border !border-border-subtle", isSearching && "!opacity-100")}
+        className={classNames("border border-border-subtle!", isSearching && "opacity-100!")}
       />,
     );
 

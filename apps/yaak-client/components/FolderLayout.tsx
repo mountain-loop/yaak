@@ -163,7 +163,7 @@ function HttpRequestCard({ request }: { request: HttpRequest }) {
 
   return (
     <div className="grid grid-rows-2 grid-cols-[minmax(0,1fr)] gap-2 overflow-hidden">
-      <code className="font-mono text-editor text-info border border-info rounded px-2.5 py-0.5 truncate w-full min-w-0">
+      <code className="font-mono text-editor text-info border border-info rounded-sm px-2.5 py-0.5 truncate w-full min-w-0">
         {request.method} {request.url}
       </code>
       {latestResponse ? (
@@ -190,7 +190,7 @@ function HttpRequestCard({ request }: { request: HttpRequest }) {
             className={classNames(
               "cursor-default select-none",
               "whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars",
-              "font-mono text-editor border rounded px-1.5 py-0.5 truncate w-full",
+              "font-mono text-editor border rounded-sm px-1.5 py-0.5 truncate w-full",
             )}
           >
             {latestResponse.state !== "closed" && <LoadingIcon size="sm" />}

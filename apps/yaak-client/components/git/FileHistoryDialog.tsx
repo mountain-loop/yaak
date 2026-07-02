@@ -117,7 +117,7 @@ function CommitListItem({
     <button
       type="button"
       className={classNames(
-        "w-full min-w-0 text-left rounded px-2 py-1.5",
+        "w-full min-w-0 text-left rounded-sm px-2 py-1.5",
         selected && "bg-surface-active",
       )}
       onClick={onSelect}

@@ -108,7 +108,7 @@ export function SelectFile({
             "rtl mr-1.5",
             inline && "w-full",
             filePath && inline && "font-mono text-xs",
-            isHovering && "!border-notice",
+            isHovering && "border-notice!",
           )}
           color={isHovering ? "primary" : "secondary"}
           onClick={handleClick}

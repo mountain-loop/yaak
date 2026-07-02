@@ -1,0 +1,124 @@
+@custom-variant dark (&:is([data-resolved-appearance="dark"] *));
+@custom-variant hocus (&:hover, &:focus-visible, &.focus:focus);
+@custom-variant focus-visible-or-class (&:focus-visible, &.focus:focus);
+
+@theme inline {
+  --font-mono:
+    var(--font-family-editor), JetBrains Mono, ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Fira Code, Ubuntu Mono, Consolas, Liberation Mono,
+    Courier New, DejaVu Sans Mono, Hack, monospace;
+  --font-sans:
+    var(--font-family-interface), Inter UI, -apple-system, BlinkMacSystemFont,
+    Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue,
+    sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol;
+  --font-serif: initial;
+
+  --text-*: initial;
+  --text-4xs: 0.6rem;
+  --text-3xs: 0.675rem;
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8rem;
+  --text-sm: 0.9rem;
+  --text-base: 1rem;
+  --text-lg: 1.12rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.5rem;
+  --text-5xl: 3rem;
+  --text-editor: var(--editor-font-size);
+  --text-shrink: 0.8em;
+
+  --shadow-*: initial;
+  --shadow: 0 1px 3px 0 var(--shadow);
+  --shadow-lg: 0 10px 15px -3px var(--shadow);
+
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-placeholder: var(--textSubtlest);
+  --color-shadow: var(--shadow);
+  --color-backdrop: var(--backdrop);
+  --color-selection: var(--selection);
+  --color-surface: var(--surface);
+  --color-surface-highlight: var(--surfaceHighlight);
+  --color-surface-active: var(--surfaceActive);
+  --color-text: var(--text);
+  --color-text-subtle: var(--textSubtle);
+  --color-text-subtlest: var(--textSubtlest);
+  --color-border: var(--border);
+  --color-border-subtle: var(--borderSubtle);
+  --color-border-focus: var(--borderFocus);
+  --color-primary: var(--primary);
+  --color-danger: var(--danger);
+  --color-secondary: var(--secondary);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-notice: var(--notice);
+  --color-warning: var(--warning);
+
+  --animate-blinkRing: blinkRing 150ms step-start 400ms infinite;
+
+  --opacity-disabled: 30%;
+
+  --height-2xs: 1.4rem;
+  --height-xs: 1.8rem;
+  --height-sm: 2rem;
+  --height-md: 2.3rem;
+  --height-lg: 2.6rem;
+
+  --width-2xs: 1.4rem;
+  --width-xs: 1.8rem;
+  --width-sm: 2rem;
+  --width-md: 2.3rem;
+  --width-lg: 2.6rem;
+
+  --min-height-2xs: 1.4rem;
+  --min-height-xs: 1.8rem;
+  --min-height-sm: 2rem;
+  --min-height-md: 2.3rem;
+  --min-height-lg: 2.6rem;
+
+  --min-width-2xs: 1.4rem;
+  --min-width-xs: 1.8rem;
+  --min-width-sm: 2rem;
+  --min-width-md: 2.3rem;
+  --min-width-lg: 2.6rem;
+
+  --leading-xs: calc(1.75rem - 2px);
+  --leading-sm: calc(2rem - 2px);
+  --leading-md: calc(2.5rem - 2px);
+
+  --transition-property-grid: grid;
+
+  @keyframes blinkRing {
+    0%,
+    49% {
+      --tw-ring-color: var(--primary);
+    }
+    50%,
+    99% {
+      --tw-ring-color: transparent;
+    }
+    100% {
+      --tw-ring-color: var(--primary);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}

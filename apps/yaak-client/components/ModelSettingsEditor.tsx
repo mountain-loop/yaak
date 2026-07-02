@@ -539,7 +539,7 @@ function NumberUnitInput({
       placeholder={placeholder}
       defaultValue={value}
       className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-      containerClassName="!w-48"
+      containerClassName="w-48!"
       validate={validate}
       rightSlot={
         <span className="flex self-stretch items-center border-l border-border-subtle px-2 text-xs font-medium text-text-subtle">

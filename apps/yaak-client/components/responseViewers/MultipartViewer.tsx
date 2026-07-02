@@ -63,7 +63,7 @@ export function MultipartViewer({ data, boundary, idPrefix = "multipart" }: Prop
             <div className="h-5 w-5 overflow-auto flex items-center justify-end">
               <ImageViewer
                 data={part.arrayBuffer}
-                className="ml-auto w-auto rounded overflow-hidden"
+                className="ml-auto w-auto rounded-sm overflow-hidden"
               />
             </div>
           ) : part.filename ? (
@@ -76,7 +76,7 @@ export function MultipartViewer({ data, boundary, idPrefix = "multipart" }: Prop
           // oxlint-disable-next-line react/no-array-index-key -- Nothing else to key on
           key={idPrefix + part.name + i}
           value={tabValue(part, i)}
-          className="pl-3 !pt-0"
+          className="pl-3 pt-0!"
         >
           <Part part={part} />
         </TabContent>

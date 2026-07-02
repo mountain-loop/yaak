@@ -167,7 +167,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
         <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
           <HStack
             className={classNames(
-              "text-text-subtle w-full flex-shrink-0",
+              "text-text-subtle w-full shrink-0",
               // Remove a bit of space because the tabs have lots too
               "-mb-1.5",
             )}
@@ -180,7 +180,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                   "whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars",
                 )}
               >
-                <HStack space={2} className="w-full flex-shrink-0">
+                <HStack space={2} className="w-full shrink-0">
                   {activeResponse.state !== "closed" && <LoadingIcon size="sm" />}
                   <HttpStatusTag showReason response={activeResponse} />
                   <span>&bull;</span>
@@ -194,7 +194,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 {shouldShowRedirectDropWarning ? (
                   <Tooltip
                     tabIndex={0}
-                    className="my-auto pl-3 flex-shrink-0 max-w-full justify-self-end overflow-hidden"
+                    className="my-auto pl-3 shrink-0 max-w-full justify-self-end overflow-hidden"
                     content={
                       <VStack alignItems="start" space={1} className="text-xs">
                         <span className="font-medium text-warning">
@@ -223,7 +223,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                     <span className="inline-flex min-w-0">
                       <PillButton
                         color="warning"
-                        className="font-sans text-sm !flex-shrink max-w-full"
+                        className="font-sans text-sm shrink! max-w-full"
                         innerClassName="flex items-center"
                         leftSlot={<Icon icon="alert_triangle" size="xs" color="warning" />}
                       >
@@ -236,7 +236,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 ) : (
                   <span />
                 )}
-                <div className="justify-self-end flex-shrink-0">
+                <div className="justify-self-end shrink-0">
                   <RecentHttpResponsesDropdown
                     responses={responses}
                     activeResponse={activeResponse}
@@ -249,7 +249,7 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
 
           <div className="overflow-hidden flex flex-col min-h-0">
             {activeResponse?.error && (
-              <Banner color="danger" className="mx-3 mt-1 flex-shrink-0">
+              <Banner color="danger" className="mx-3 mt-1 shrink-0">
                 {activeResponse.error}
               </Banner>
             )}

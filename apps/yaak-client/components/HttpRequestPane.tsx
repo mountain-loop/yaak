@@ -346,7 +346,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             onUrlChange={handleUrlChange}
             leftSlot={
               <div className="py-0.5">
-                <RequestMethodDropdown request={activeRequest} className="ml-0.5 !h-full" />
+                <RequestMethodDropdown request={activeRequest} className="ml-0.5 h-full!" />
               </div>
             }
             forceUpdateKey={updateKey}
@@ -456,7 +456,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                   hideLabel
                   forceUpdateKey={updateKey}
                   defaultValue={activeRequest.name}
-                  className="font-sans !text-xl !px-0"
+                  className="font-sans text-xl! px-0!"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
                   onChange={(name) => patchModel(activeRequest, { name })}

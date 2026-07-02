@@ -18,7 +18,7 @@ export function CountBadge({ count, count2, className, color, showZero }: Props)
       className={classNames(
         className,
         "flex items-center",
-        "opacity-70 border text-4xs rounded mb-0.5 px-1 ml-1 h-4 font-mono",
+        "opacity-70 border text-4xs rounded-sm mb-0.5 px-1 ml-1 h-4 font-mono",
         color == null && "border-border-subtle",
         color === "primary" && "text-primary",
         color === "secondary" && "text-secondary",

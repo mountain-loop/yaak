@@ -42,7 +42,7 @@ export function DetailsBanner({
   return (
     <Banner color={color} className={className}>
       <details className="group list-none" open={isOpen} onToggle={handleToggle} {...extraProps}>
-        <summary className="!cursor-default !select-none list-none flex items-center gap-3 focus:outline-none opacity-70">
+        <summary className="cursor-default! select-none! list-none flex items-center gap-3 focus:outline-hidden opacity-70">
           <div
             className={classNames(
               "transition-transform",

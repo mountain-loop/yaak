@@ -60,8 +60,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       type={type}
       className={classNames(
         className,
-        "group/button relative flex-shrink-0",
-        "!px-0",
+        "group/button relative shrink-0",
+        "px-0!",
         size === "md" && "w-md",
         size === "sm" && "w-sm",
         size === "xs" && "w-xs",
@@ -85,7 +85,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
           className={classNames(
             iconClassName,
             "group-hover/button:text-text",
-            confirmed && "!text-success",
+            confirmed && "text-success!",
             props.disabled && "opacity-70",
           )}
         />

@@ -27,7 +27,7 @@ export function Label({
       className={classNames(
         className,
         visuallyHidden && "sr-only",
-        "flex-shrink-0 text-sm",
+        "shrink-0 text-sm",
         "text-text-subtle whitespace-nowrap flex items-center gap-1 mb-0.5",
       )}
       {...props}

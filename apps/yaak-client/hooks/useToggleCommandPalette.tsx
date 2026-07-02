@@ -8,7 +8,7 @@ export function useToggleCommandPalette() {
       id: "command_palette",
       size: "dynamic",
       hideX: true,
-      className: "mb-auto mt-[4rem] !max-h-[min(30rem,calc(100vh-4rem))]",
+      className: "mb-auto mt-16 max-h-[min(30rem,calc(100vh-4rem))]!",
       vAlign: "top",
       noPadding: true,
       noScroll: true,
