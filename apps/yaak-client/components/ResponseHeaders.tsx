@@ -1,11 +1,11 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { HttpResponse } from "@yaakapp-internal/models";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { useMemo } from "react";
 import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
 import { IconButton } from "./core/IconButton";
 import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
-import { formatAbsoluteTime, formatRelativeTime, parseTimestamp } from "./core/RelativeTime";
 
 interface Props {
   response: HttpResponse;
@@ -32,10 +32,10 @@ export function ResponseHeaders({ response }: Props) {
         <KeyValueRows>
           <KeyValueRow labelColor="secondary" label="Sent">
             <time
-              dateTime={parseTimestamp(response.createdAt).toISOString()}
-              title={formatRelativeTime(response.createdAt)}
+              dateTime={new Date(`${response.createdAt}Z`).toISOString()}
+              title={formatDistanceToNowStrict(`${response.createdAt}Z`, { addSuffix: true })}
             >
-              {formatAbsoluteTime(response.createdAt)}
+              {format(`${response.createdAt}Z`, "MMM d, yyyy, h:mm:ss a O")}
             </time>
           </KeyValueRow>
           <KeyValueRow labelColor="secondary" label="Request URL">

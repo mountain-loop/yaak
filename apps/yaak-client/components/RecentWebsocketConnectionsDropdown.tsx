@@ -1,12 +1,18 @@
 import type { WebsocketConnection } from "@yaakapp-internal/models";
 import { deleteModel, getModel } from "@yaakapp-internal/models";
 import { HStack, Icon } from "@yaakapp-internal/ui";
+import {
+  differenceInHours,
+  differenceInMinutes,
+  format,
+  isToday,
+  isYesterday,
+} from "date-fns";
 import { deleteWebsocketConnections } from "../commands/deleteWebsocketConnections";
 import { pluralizeCount } from "../lib/pluralize";
 import { Dropdown, type DropdownItem } from "./core/Dropdown";
 import { formatMillis } from "./core/HttpResponseDurationTag";
 import { IconButton } from "./core/IconButton";
-import { formatRelativeTimeGroup } from "./core/RelativeTime";
 
 interface Props {
   connections: WebsocketConnection[];
@@ -24,9 +30,23 @@ export function RecentWebsocketConnectionsDropdown({
   let lastHistoryGroup: string | null = null;
   let hasRecentConnections = false;
   let hasShownRecentEmptyState = false;
+  const now = new Date();
 
   for (const c of connections) {
-    const historyGroup = formatRelativeTimeGroup(c.createdAt);
+    const createdAt = `${c.createdAt}Z`;
+    const createdAtDate = new Date(createdAt);
+    const minutesAgo = differenceInMinutes(now, createdAtDate);
+    const hoursAgo = differenceInHours(now, createdAtDate);
+    let historyGroup = format(createdAtDate, "MMM d, yyyy");
+    if (minutesAgo < 5) historyGroup = "Just now";
+    else if (minutesAgo < 15) historyGroup = "5 minutes ago";
+    else if (minutesAgo < 60) historyGroup = "15 minutes ago";
+    else if (hoursAgo < 3) historyGroup = "1 hour ago";
+    else if (hoursAgo < 6) historyGroup = "3 hours ago";
+    else if (isToday(createdAtDate)) historyGroup = "Today";
+    else if (isYesterday(createdAtDate)) historyGroup = "Yesterday";
+    else if (createdAtDate.getFullYear() === now.getFullYear()) historyGroup = format(createdAtDate, "MMM d");
+    const absoluteTime = format(createdAt, "MMM d, yyyy, h:mm:ss a O");
 
     if (historyGroup === "Just now") {
       hasRecentConnections = true;
@@ -39,13 +59,16 @@ export function RecentWebsocketConnectionsDropdown({
     }
 
     if (historyGroup !== "Just now" && historyGroup !== lastHistoryGroup) {
-      connectionHistoryItems.push({ type: "separator", label: historyGroup });
+      connectionHistoryItems.push({
+        type: "separator",
+        label: <span title={absoluteTime}>{historyGroup}</span>,
+      });
       lastHistoryGroup = historyGroup;
     }
 
     connectionHistoryItems.push({
       label: (
-        <HStack space={2} className="text-sm">
+        <HStack space={2} className="text-sm" title={absoluteTime}>
           <span className="font-mono">{formatMillis(c.elapsed)}</span>
         </HStack>
       ),
