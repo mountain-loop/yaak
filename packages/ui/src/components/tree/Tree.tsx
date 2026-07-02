@@ -670,8 +670,8 @@ function TreeInner<T extends { id: string }>(
           <div
             className={classNames(
               "[&_.tree-item.selected_.tree-item-inner]:text-text",
-              "[&_.tree-item.selected]:focus-within:bg-surface-active",
-              "[&_.tree-item.selected:not([data-context-menu-open])]:not-focus-within:bg-surface-highlight",
+              "focus-within:[&_.tree-item.selected]:bg-surface-active",
+              "not-focus-within:[&_.tree-item.selected:not([data-context-menu-open])]:bg-surface-highlight",
               "[&_.tree-item.selected[data-context-menu-open]]:bg-surface-active",
               // Round the items, but only if the ends of the selection.
               // Also account for the drop marker being in between items

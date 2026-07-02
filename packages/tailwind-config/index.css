@@ -3,7 +3,6 @@
 @custom-variant focus-visible-or-class (&:focus-visible, &.focus:focus);
 
 @theme inline {
-  --font-*: initial;
   --font-mono:
     var(--font-family-editor), JetBrains Mono, ui-monospace, SFMono-Regular,
     Menlo, Monaco, Fira Code, Ubuntu Mono, Consolas, Liberation Mono,
@@ -12,6 +11,7 @@
     var(--font-family-interface), Inter UI, -apple-system, BlinkMacSystemFont,
     Segoe UI, Roboto, Oxygen-Sans, Ubuntu, Cantarell, Helvetica Neue,
     sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol;
+  --font-serif: initial;
 
   --text-*: initial;
   --text-4xs: 0.6rem;
