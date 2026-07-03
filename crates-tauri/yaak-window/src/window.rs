@@ -26,7 +26,7 @@ pub struct CreateWindowConfig<'s> {
     pub navigation_tx: Option<mpsc::Sender<String>>,
     pub close_tx: Option<mpsc::Sender<()>>,
     pub data_dir_key: Option<String>,
-    pub visible: bool,
+    pub hidden: bool,
     pub hide_titlebar: bool,
     pub use_native_titlebar: bool,
 }
@@ -54,7 +54,7 @@ pub fn create_window<R: Runtime>(
         tauri::WebviewWindowBuilder::new(handle, config.label, WebviewUrl::App(config.url.into()))
             .title(config.title)
             .resizable(true)
-            .visible(config.visible)
+            .visible(!config.hidden)
             .fullscreen(false)
             .maximized(maximized)
             .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);

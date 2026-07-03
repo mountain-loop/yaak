@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Manager, Runtime, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Manager, Monitor, Runtime, WebviewWindow, WindowEvent};
 
 const WINDOW_STATE_FILE: &str = "window-state.json";
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(1000);
@@ -54,7 +54,11 @@ pub fn apply_saved_state<R: Runtime>(
     }
 
     if restore_position && state.has_position() {
-        *position = Some((state.x, state.y));
+        if is_position_visible(app_handle, state) {
+            *position = Some((state.x, state.y));
+        } else {
+            debug!("Ignoring saved window position for {state_key} because it is off-screen");
+        }
     }
 
     *maximized = state.maximized;
@@ -183,4 +187,32 @@ fn write_window_states(
 
     fs::write(state_path, serde_json::to_vec_pretty(states)?)?;
     Ok(())
+}
+
+fn is_position_visible<R: Runtime>(app_handle: &AppHandle<R>, state: WindowState) -> bool {
+    let Ok(monitors) = app_handle.available_monitors() else {
+        return true;
+    };
+
+    monitors.into_iter().any(|monitor| monitor_intersects_window(&monitor, state))
+}
+
+fn monitor_intersects_window(monitor: &Monitor, state: WindowState) -> bool {
+    let scale_factor = monitor.scale_factor();
+    let position = monitor.position().to_logical::<f64>(scale_factor);
+    let size = monitor.size().to_logical::<f64>(scale_factor);
+
+    let left = position.x;
+    let right = position.x + size.width;
+    let top = position.y;
+    let bottom = position.y + size.height;
+
+    [
+        (state.x, state.y),
+        (state.x + state.width, state.y),
+        (state.x, state.y + state.height),
+        (state.x + state.width, state.y + state.height),
+    ]
+    .into_iter()
+    .any(|(x, y)| x >= left && x < right && y >= top && y < bottom)
 }
