@@ -38,13 +38,19 @@ jobs:
             runtime: "wry"
             targets: ""
           - platform: "ubuntu-22.04"
-            args: '--bundles appimage --config ./tauri.release.conf.json --config ''{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'''
+            args: >-
+              --bundles appimage
+              --config ./tauri.release.conf.json
+              --config '{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false,"linux":{"appimage":{"files":{"/usr/lib/libfreebl3.chk":"/usr/lib/x86_64-linux-gnu/libfreebl3.chk","/usr/lib/libfreebl3.so":"/usr/lib/x86_64-linux-gnu/libfreebl3.so","/usr/lib/libfreeblpriv3.chk":"/usr/lib/x86_64-linux-gnu/libfreeblpriv3.chk","/usr/lib/libfreeblpriv3.so":"/usr/lib/x86_64-linux-gnu/libfreeblpriv3.so","/usr/lib/libsoftokn3.chk":"/usr/lib/x86_64-linux-gnu/nss/libsoftokn3.chk","/usr/lib/libsoftokn3.so":"/usr/lib/x86_64-linux-gnu/nss/libsoftokn3.so","/usr/lib/nss/libfreebl3.chk":"/usr/lib/x86_64-linux-gnu/nss/libfreebl3.chk","/usr/lib/nss/libfreebl3.so":"/usr/lib/x86_64-linux-gnu/nss/libfreebl3.so","/usr/lib/nss/libfreeblpriv3.chk":"/usr/lib/x86_64-linux-gnu/nss/libfreeblpriv3.chk","/usr/lib/nss/libfreeblpriv3.so":"/usr/lib/x86_64-linux-gnu/nss/libfreeblpriv3.so","/usr/lib/nss/libnssckbi.so":"/usr/lib/x86_64-linux-gnu/nss/libnssckbi.so","/usr/lib/nss/libnssdbm3.chk":"/usr/lib/x86_64-linux-gnu/nss/libnssdbm3.chk","/usr/lib/nss/libnssdbm3.so":"/usr/lib/x86_64-linux-gnu/nss/libnssdbm3.so","/usr/lib/nss/libsoftokn3.chk":"/usr/lib/x86_64-linux-gnu/nss/libsoftokn3.chk","/usr/lib/nss/libsoftokn3.so":"/usr/lib/x86_64-linux-gnu/nss/libsoftokn3.so"}}}}}'
             yaak_arch: "x64"
             os: "ubuntu"
             runtime: "cef"
             targets: ""
           - platform: "ubuntu-22.04-arm"
-            args: '--bundles appimage --config ./tauri.release.conf.json --config ''{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'''
+            args: >-
+              --bundles appimage
+              --config ./tauri.release.conf.json
+              --config '{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false,"linux":{"appimage":{"files":{"/usr/lib/libfreebl3.chk":"/usr/lib/aarch64-linux-gnu/libfreebl3.chk","/usr/lib/libfreebl3.so":"/usr/lib/aarch64-linux-gnu/libfreebl3.so","/usr/lib/libfreeblpriv3.chk":"/usr/lib/aarch64-linux-gnu/libfreeblpriv3.chk","/usr/lib/libfreeblpriv3.so":"/usr/lib/aarch64-linux-gnu/libfreeblpriv3.so","/usr/lib/libsoftokn3.chk":"/usr/lib/aarch64-linux-gnu/nss/libsoftokn3.chk","/usr/lib/libsoftokn3.so":"/usr/lib/aarch64-linux-gnu/nss/libsoftokn3.so","/usr/lib/nss/libfreebl3.chk":"/usr/lib/aarch64-linux-gnu/nss/libfreebl3.chk","/usr/lib/nss/libfreebl3.so":"/usr/lib/aarch64-linux-gnu/nss/libfreebl3.so","/usr/lib/nss/libfreeblpriv3.chk":"/usr/lib/aarch64-linux-gnu/nss/libfreeblpriv3.chk","/usr/lib/nss/libfreeblpriv3.so":"/usr/lib/aarch64-linux-gnu/nss/libfreeblpriv3.so","/usr/lib/nss/libnssckbi.so":"/usr/lib/aarch64-linux-gnu/nss/libnssckbi.so","/usr/lib/nss/libnssdbm3.chk":"/usr/lib/aarch64-linux-gnu/nss/libnssdbm3.chk","/usr/lib/nss/libnssdbm3.so":"/usr/lib/aarch64-linux-gnu/nss/libnssdbm3.so","/usr/lib/nss/libsoftokn3.chk":"/usr/lib/aarch64-linux-gnu/nss/libsoftokn3.chk","/usr/lib/nss/libsoftokn3.so":"/usr/lib/aarch64-linux-gnu/nss/libsoftokn3.so"}}}}}'
             yaak_arch: "arm64"
             os: "ubuntu"
             runtime: "cef"
@@ -95,7 +101,7 @@ jobs:
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils
 
       - name: Install Protoc for plugin-runtime
         uses: arduino/setup-protoc@v3
