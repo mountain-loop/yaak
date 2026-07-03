@@ -12,12 +12,8 @@ crate-type = ["staticlib", "cdylib", "lib"]
 
 [features]
 cargo-clippy = []
-default = ["wry"]
+default = []
 cef = ["tauri/cef"]
-#
-# Keep the system webview runtime as the default for local development and
-# non-Linux release jobs. Linux release builds opt into `cef` with
-# `--no-default-features`.
 wry = ["tauri/wry", "tauri/x11", "tauri/dbus"]
 updater = []
 license = ["yaak-license"]

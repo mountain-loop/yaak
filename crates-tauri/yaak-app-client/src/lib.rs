@@ -82,9 +82,14 @@ mod uri_scheme;
 mod window_menu;
 mod ws_ext;
 
+#[cfg(all(feature = "cef", feature = "wry"))]
+compile_error!("Features `cef` and `wry` are mutually exclusive. Enable exactly one Tauri runtime.");
+#[cfg(not(any(feature = "cef", feature = "wry")))]
+compile_error!("Enable one Tauri runtime feature: `cef` or `wry`.");
+
 #[cfg(feature = "cef")]
 type TauriRuntime = tauri::Cef;
-#[cfg(not(feature = "cef"))]
+#[cfg(all(not(feature = "cef"), feature = "wry"))]
 type TauriRuntime = tauri::Wry;
 
 fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {

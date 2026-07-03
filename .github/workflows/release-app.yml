@@ -14,33 +14,33 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest" # for Arm-based Macs (M1 and above).
-            args: "--target aarch64-apple-darwin"
+            args: '--target aarch64-apple-darwin --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "macos"
             targets: "aarch64-apple-darwin"
           - platform: "macos-latest" # for Intel-based Macs.
-            args: "--target x86_64-apple-darwin"
+            args: '--target x86_64-apple-darwin --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "macos"
             targets: "x86_64-apple-darwin"
           - platform: "ubuntu-22.04"
-            args: "--no-default-features --features updater,license,cef"
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","cef"]}}'''
             yaak_arch: "x64"
             os: "ubuntu"
             targets: ""
           - platform: "ubuntu-22.04-arm"
-            args: "--no-default-features --features updater,license,cef"
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","cef"]}}'''
             yaak_arch: "arm64"
             os: "ubuntu"
             targets: ""
           - platform: "windows-latest"
-            args: ""
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "windows"
             targets: ""
           # Windows ARM64
           - platform: "windows-latest"
-            args: "--target aarch64-pc-windows-msvc"
+            args: '--target aarch64-pc-windows-msvc --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "windows"
             targets: "aarch64-pc-windows-msvc"
@@ -105,7 +105,7 @@ jobs:
       - name: Run JS Tests
         run: vp test
       - name: Run Rust Tests
-        run: cargo test --all --exclude yaak-cli
+        run: cargo test --all --exclude yaak-cli --features yaak-app-client/wry
 
       - name: Set version
         run: npm run replace-version
@@ -164,7 +164,7 @@ jobs:
           releaseDraft: true
           prerelease: true
           projectPath: ./crates-tauri/yaak-app-client
-          args: "${{ matrix.args }} --config ./tauri.release.conf.json"
+          args: "${{ matrix.args }}"
 
       # Build a per-machine NSIS installer for enterprise deployment (PDQ, SCCM, Intune)
       - name: Build and upload machine-wide installer (Windows only)
@@ -181,7 +181,7 @@ jobs:
         run: |
           Get-ChildItem -Recurse -Path target -File -Filter "*.exe.sig" | Remove-Item -Force
           Push-Location crates-tauri/yaak-app-client
-          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          npx tauri bundle ${{ matrix.args }} --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
           Pop-Location
           $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
           $setupSig = "$($setup.FullName).sig"
