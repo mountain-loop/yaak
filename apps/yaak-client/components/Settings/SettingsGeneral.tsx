@@ -116,7 +116,7 @@ export function SettingsGeneral() {
           <DismissibleBanner
             id="workspace-settings-moved-2026-06-30"
             color="info"
-            className="p-4 max-w-xl mx-auto"
+            className="w-full p-4 max-w-xl mr-auto"
           >
             <p>
               Workspace specific settings have moved to{" "}
