@@ -24,12 +24,12 @@ jobs:
             os: "macos"
             targets: "x86_64-apple-darwin"
           - platform: "ubuntu-22.04"
-            args: ""
+            args: "--no-default-features --features updater,license,cef"
             yaak_arch: "x64"
             os: "ubuntu"
             targets: ""
           - platform: "ubuntu-22.04-arm"
-            args: ""
+            args: "--no-default-features --features updater,license,cef"
             yaak_arch: "arm64"
             os: "ubuntu"
             targets: ""
@@ -66,11 +66,18 @@ jobs:
           shared-key: ci
           cache-on-failure: true
 
+      - name: Cache CEF (Linux only)
+        if: matrix.os == 'ubuntu'
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/tauri-cef
+          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+
       - name: install dependencies (Linux only)
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Install Protoc for plugin-runtime
         uses: arduino/setup-protoc@v3
@@ -150,6 +157,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_TENANT_ID }}
         with:
+          tauriScript: "node ../../node_modules/@tauri-apps/cli/tauri.js"
           tagName: "v__VERSION__"
           releaseName: "Release __VERSION__"
           releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"

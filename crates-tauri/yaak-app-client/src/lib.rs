@@ -83,6 +83,11 @@ mod uri_scheme;
 mod window_menu;
 mod ws_ext;
 
+#[cfg(feature = "cef")]
+type TauriRuntime = tauri::Cef;
+#[cfg(not(feature = "cef"))]
+type TauriRuntime = tauri::Wry;
+
 fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
     #[allow(unused_variables)]
     let menu = window_menu::app_menu(win.app_handle())?;
@@ -1632,8 +1637,9 @@ async fn cmd_check_for_updates<R: Runtime>(
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg_attr(feature = "cef", tauri::cef_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default().plugin(
+    let mut builder = tauri::Builder::<TauriRuntime>::default().plugin(
         Builder::default()
             .targets([
                 Target::new(TargetKind::Stdout),
