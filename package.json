@@ -113,7 +113,7 @@
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/postcss": "^4.3.2",
-    "@tauri-apps/cli": "^2.11.1",
+    "@tauri-apps/cli": "npm:@tauri-apps/cli-cef@3.0.0-alpha.6",
     "@types/babel__core": "^7.20.5",
     "@vitejs/plugin-react": "^6.0.1",
     "@yaakapp/cli": "^0.5.1",

@@ -855,8 +855,6 @@ exports.plugin = {
         assert_eq!(metadata["apis"]["workspaceActions"]["items"][0]["label"], "Sync workspace");
         assert_eq!(metadata["apis"]["lifecycle"]["items"][0]["name"], "init");
         assert!(metadata["apis"]["templateFunctions"]["items"][0]["onRender"].is_null());
-        assert!(
-            metadata["apis"]["templateFunctions"]["items"][0]["args"][0]["dynamic"].is_null()
-        );
+        assert!(metadata["apis"]["templateFunctions"]["items"][0]["args"][0]["dynamic"].is_null());
     }
 }

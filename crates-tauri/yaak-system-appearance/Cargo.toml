@@ -1,0 +1,12 @@
+[package]
+name = "yaak-system-appearance"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[target.'cfg(target_os = "linux")'.dependencies]
+dark-light = "2.0.0"
+
+[dependencies]
+log = { workspace = true }
+tauri = { workspace = true }

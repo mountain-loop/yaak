@@ -13,6 +13,8 @@ crate-type = ["staticlib", "cdylib", "lib"]
 [features]
 cargo-clippy = []
 default = []
+cef = ["tauri/cef"]
+wry = ["tauri/wry", "tauri/x11", "tauri/dbus"]
 updater = []
 license = ["yaak-license"]
 
@@ -82,6 +84,7 @@ yaak-mac-window = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
+yaak-system-appearance = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }

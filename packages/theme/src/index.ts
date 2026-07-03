@@ -1,9 +1,12 @@
 export type { Appearance } from "./appearance";
 export {
+  subscribeToCSSAppearanceChange,
   getCSSAppearance,
   getWindowAppearance,
   resolveAppearance,
   subscribeToPreferredAppearance,
+  subscribeToPreferredAppearanceChange,
+  subscribeToSystemAppearanceChange,
   subscribeToWindowAppearanceChange,
 } from "./appearance";
 export { defaultDarkTheme, defaultLightTheme } from "./defaultThemes";

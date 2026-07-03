@@ -26,6 +26,7 @@ pub struct CreateWindowConfig<'s> {
     pub navigation_tx: Option<mpsc::Sender<String>>,
     pub close_tx: Option<mpsc::Sender<()>>,
     pub data_dir_key: Option<String>,
+    pub initialization_script: Option<String>,
     pub hidden: bool,
     pub hide_titlebar: bool,
     pub use_native_titlebar: bool,
@@ -58,6 +59,10 @@ pub fn create_window<R: Runtime>(
             .fullscreen(false)
             .maximized(maximized)
             .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+
+    if let Some(script) = config.initialization_script {
+        win_builder = win_builder.initialization_script(script);
+    }
 
     if let Some(key) = config.data_dir_key {
         #[cfg(not(target_os = "macos"))]
@@ -138,11 +143,12 @@ pub fn create_window<R: Runtime>(
     Ok(win)
 }
 
-pub fn create_main_window(
-    handle: &AppHandle,
+pub fn create_main_window<R: Runtime>(
+    handle: &AppHandle<R>,
     url: &str,
+    initialization_script: Option<String>,
     use_native_titlebar: bool,
-) -> tauri::Result<WebviewWindow> {
+) -> tauri::Result<WebviewWindow<R>> {
     let mut counter = 0;
     let label = loop {
         let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
@@ -165,6 +171,8 @@ pub fn create_main_window(
             100.0 + random::<f64>() * 20.0,
         )),
         restore_position: Some(counter == 0),
+        initialization_script,
+        hidden: true,
         hide_titlebar: true,
         use_native_titlebar,
         ..Default::default()
@@ -173,14 +181,15 @@ pub fn create_main_window(
     create_window(handle, config)
 }
 
-pub fn create_child_window(
-    parent_window: &WebviewWindow,
+pub fn create_child_window<R: Runtime>(
+    parent_window: &WebviewWindow<R>,
     url: &str,
     label: &str,
     title: &str,
     inner_size: (f64, f64),
+    initialization_script: Option<String>,
     use_native_titlebar: bool,
-) -> tauri::Result<WebviewWindow> {
+) -> tauri::Result<WebviewWindow<R>> {
     let app_handle = parent_window.app_handle();
     let state_key = label.to_string();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
@@ -202,6 +211,8 @@ pub fn create_child_window(
         url,
         inner_size: Some(inner_size),
         position: Some(position),
+        initialization_script,
+        hidden: true,
         hide_titlebar: true,
         use_native_titlebar,
         ..Default::default()
