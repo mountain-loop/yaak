@@ -470,11 +470,7 @@ async fn build_plugin_reply(
                         }
                     };
 
-                let names = cookie_jar
-                    .cookies
-                    .into_iter()
-                    .map(|c| c.name)
-                    .collect();
+                let names = cookie_jar.cookies.into_iter().map(|c| c.name).collect();
 
                 Some(InternalEventPayload::ListCookieNamesResponse(ListCookieNamesResponse {
                     names,
