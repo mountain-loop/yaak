@@ -684,6 +684,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         }
     })?;
     let body_path = params.response_dir.join(&response.id);
+    let response_body_path = body_path.to_string_lossy().to_string();
     let connected_response = HttpResponse {
         state: HttpResponseState::Connected,
         elapsed_headers: headers_elapsed,
@@ -693,7 +694,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         remote_addr: http_response.remote_addr.clone(),
         version: http_response.version.clone(),
         elapsed_dns: dns_elapsed.load(Ordering::Relaxed),
-        body_path: Some(body_path.to_string_lossy().to_string()),
+        body_path: Some(response_body_path.clone()),
         content_length: http_response.content_length.map(u64_to_i32),
         headers: http_response
             .headers
@@ -724,6 +725,8 @@ pub async fn send_http_request<T: TemplateCallback>(
     let mut body_stream =
         http_response.into_body_stream().map_err(SendHttpRequestError::ReadResponseBody)?;
     let mut response_body = Vec::new();
+    let mut read_buf = vec![0; 64 * 1024];
+    let collect_response_body = !persist_response && params.emit_response_body_chunks_to.is_none();
     let mut body_read_error = None;
     let mut written_bytes: usize = 0;
     let mut last_progress_update = started_at;
@@ -740,12 +743,12 @@ pub async fn send_http_request<T: TemplateCallback>(
                 _ = cancelled_rx.changed() => {
                     None
                 }
-                result = body_stream.read_buf(&mut response_body) => {
+                result = body_stream.read(&mut read_buf) => {
                     Some(result)
                 }
             }
         } else {
-            Some(body_stream.read_buf(&mut response_body).await)
+            Some(body_stream.read(&mut read_buf).await)
         };
 
         let Some(read_result) = read_result else {
@@ -756,17 +759,14 @@ pub async fn send_http_request<T: TemplateCallback>(
             Ok(0) => break,
             Ok(n) => {
                 written_bytes += n;
-                let start_idx = response_body.len() - n;
-                let chunk = &response_body[start_idx..];
+                let chunk = &read_buf[..n];
                 file.write_all(chunk).await.map_err(|source| {
                     SendHttpRequestError::WriteResponseBody { path: body_path.clone(), source }
                 })?;
-                file.flush().await.map_err(|source| SendHttpRequestError::WriteResponseBody {
-                    path: body_path.clone(),
-                    source,
-                })?;
                 if let Some(tx) = params.emit_response_body_chunks_to.as_ref() {
                     let _ = tx.send(chunk.to_vec());
+                } else if collect_response_body {
+                    response_body.extend_from_slice(chunk);
                 }
 
                 let now = Instant::now();
@@ -854,7 +854,7 @@ pub async fn send_http_request<T: TemplateCallback>(
 
     let compressed_length = http_response.content_length.unwrap_or(written_bytes as u64);
     let final_response = HttpResponse {
-        body_path: Some(body_path.to_string_lossy().to_string()),
+        body_path: Some(response_body_path),
         content_length: Some(usize_to_i32(written_bytes)),
         content_length_compressed: Some(u64_to_i32(compressed_length)),
         elapsed: duration_to_i32(started_at.elapsed()),
