@@ -12,6 +12,10 @@ crate-type = ["staticlib", "cdylib", "lib"]
 [build-dependencies]
 tauri-build = { version = "2.6.1", features = [] }
 
+[features]
+default = ["wry"]
+wry = ["tauri/wry", "tauri/x11", "tauri/dbus"]
+
 [dependencies]
 log = { workspace = true }
 serde_json = { workspace = true }

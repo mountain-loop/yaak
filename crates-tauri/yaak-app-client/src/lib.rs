@@ -82,6 +82,14 @@ mod uri_scheme;
 mod window_menu;
 mod ws_ext;
 
+#[cfg(not(any(feature = "cef", feature = "wry")))]
+compile_error!("Enable one Tauri runtime feature: `cef` or `wry`.");
+
+#[cfg(feature = "cef")]
+type TauriRuntime = tauri::Cef;
+#[cfg(all(not(feature = "cef"), feature = "wry"))]
+type TauriRuntime = tauri::Wry;
+
 fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
     #[allow(unused_variables)]
     let menu = window_menu::app_menu(win.app_handle())?;
@@ -150,6 +158,22 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
     Ok(())
 }
 
+fn initial_appearance_script<R: Runtime>(app_handle: &AppHandle<R>) -> Option<String> {
+    use yaak_system_appearance::{Appearance, InitialAppearanceSource};
+
+    let settings = app_handle.db().get_settings();
+    let (appearance, source) = match settings.appearance.as_str() {
+        "dark" => (Appearance::Dark, InitialAppearanceSource::Settings),
+        "light" => (Appearance::Light, InitialAppearanceSource::Settings),
+        _ => (
+            yaak_system_appearance::system_appearance()?,
+            InitialAppearanceSource::LinuxSystem,
+        ),
+    };
+
+    Some(yaak_system_appearance::initialization_script(appearance, source))
+}
+
 /// Extension trait for easily creating a PluginContext from a WebviewWindow
 pub trait PluginContextExt<R: Runtime> {
     fn plugin_context(&self) -> PluginContext;
@@ -177,7 +201,7 @@ struct AppMetaData {
 }
 
 #[tauri::command]
-async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
+async fn cmd_metadata<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<AppMetaData> {
     let app_data_dir = app_handle.path().app_data_dir()?;
     let app_log_dir = app_handle.path().app_log_dir()?;
     let vendored_plugin_dir =
@@ -962,7 +986,7 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     mut request: HttpRequest,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
-    window: WebviewWindow,
+    window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
 ) -> YaakResult<HttpResponse> {
     let response = HttpResponse::default();
@@ -1588,20 +1612,22 @@ async fn cmd_get_workspace_meta<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_new_child_window(
-    parent_window: WebviewWindow,
+async fn cmd_new_child_window<R: Runtime>(
+    parent_window: WebviewWindow<R>,
     url: &str,
     label: &str,
     title: &str,
     inner_size: (f64, f64),
 ) -> YaakResult<()> {
     let use_native_titlebar = parent_window.app_handle().db().get_settings().use_native_titlebar;
+    let initialization_script = initial_appearance_script(&parent_window.app_handle());
     let win = yaak_window::window::create_child_window(
         &parent_window,
         url,
         label,
         title,
         inner_size,
+        initialization_script,
         use_native_titlebar,
     )?;
     setup_window_menu(&win)?;
@@ -1609,9 +1635,15 @@ async fn cmd_new_child_window(
 }
 
 #[tauri::command]
-async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> YaakResult<()> {
+async fn cmd_new_main_window<R: Runtime>(app_handle: AppHandle<R>, url: &str) -> YaakResult<()> {
     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
-    let win = yaak_window::window::create_main_window(&app_handle, url, use_native_titlebar)?;
+    let initialization_script = initial_appearance_script(&app_handle);
+    let win = yaak_window::window::create_main_window(
+        &app_handle,
+        url,
+        initialization_script,
+        use_native_titlebar,
+    )?;
     setup_window_menu(&win)?;
     Ok(())
 }
@@ -1631,8 +1663,9 @@ async fn cmd_check_for_updates<R: Runtime>(
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[cfg_attr(feature = "cef", tauri::cef_entry_point)]
 pub fn run() {
-    let mut builder = tauri::Builder::default().plugin(
+    let mut builder = tauri::Builder::<TauriRuntime>::default().plugin(
         Builder::default()
             .targets([
                 Target::new(TargetKind::Stdout),
@@ -1706,6 +1739,10 @@ pub fn run() {
                 app.state::<yaak_models::query_manager::QueryManager>().inner().clone();
             let app_id = app.config().identifier.to_string();
             app.manage(yaak_crypto::manager::EncryptionManager::new(query_manager, app_id));
+            #[cfg(target_os = "linux")]
+            if let Some(state) = yaak_system_appearance::watch(app.app_handle().clone()) {
+                app.manage(state);
+            }
 
             {
                 let app_handle = app.app_handle().clone();
@@ -1894,9 +1931,11 @@ pub fn run() {
             match event {
                 RunEvent::Ready => {
                     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
+                    let initialization_script = initial_appearance_script(app_handle);
                     if let Ok(win) = yaak_window::window::create_main_window(
                         app_handle,
                         "/",
+                        initialization_script,
                         use_native_titlebar,
                     ) {
                         let _ = setup_window_menu(&win);
@@ -1917,6 +1956,13 @@ pub fn run() {
                     });
                 }
                 RunEvent::WindowEvent { event: WindowEvent::Focused(true), label, .. } => {
+                    #[cfg(target_os = "linux")]
+                    if let Some(state) =
+                        app_handle.try_state::<yaak_system_appearance::SystemAppearanceState>()
+                    {
+                        yaak_system_appearance::emit_change(app_handle, &state);
+                    }
+
                     if cfg!(feature = "updater") {
                         // Run update check whenever the window is focused
                         let w = app_handle.get_webview_window(&label).unwrap();

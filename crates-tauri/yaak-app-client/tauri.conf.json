@@ -6,7 +6,8 @@
     "beforeBuildCommand": "npm --prefix ../.. run client:tauri-before-build",
     "beforeDevCommand": "npm --prefix ../.. run client:tauri-before-dev",
     "devUrl": "http://localhost:1420",
-    "frontendDist": "../../dist/apps/yaak-client"
+    "frontendDist": "../../dist/apps/yaak-client",
+    "features": ["wry"]
   },
   "app": {
     "withGlobalTauri": false,

@@ -14,33 +14,33 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest" # for Arm-based Macs (M1 and above).
-            args: "--target aarch64-apple-darwin"
+            args: '--target aarch64-apple-darwin --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "macos"
             targets: "aarch64-apple-darwin"
           - platform: "macos-latest" # for Intel-based Macs.
-            args: "--target x86_64-apple-darwin"
+            args: '--target x86_64-apple-darwin --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "macos"
             targets: "x86_64-apple-darwin"
           - platform: "ubuntu-22.04"
-            args: ""
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","cef"]}}'''
             yaak_arch: "x64"
             os: "ubuntu"
             targets: ""
           - platform: "ubuntu-22.04-arm"
-            args: ""
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","cef"]}}'''
             yaak_arch: "arm64"
             os: "ubuntu"
             targets: ""
           - platform: "windows-latest"
-            args: ""
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "windows"
             targets: ""
           # Windows ARM64
           - platform: "windows-latest"
-            args: "--target aarch64-pc-windows-msvc"
+            args: '--target aarch64-pc-windows-msvc --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "windows"
             targets: "aarch64-pc-windows-msvc"
@@ -66,11 +66,18 @@ jobs:
           shared-key: ci
           cache-on-failure: true
 
+      - name: Cache CEF (Linux only)
+        if: matrix.os == 'ubuntu'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tauri-cef
+          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+
       - name: install dependencies (Linux only)
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
       - name: Install Protoc for plugin-runtime
         uses: arduino/setup-protoc@v3
@@ -98,7 +105,7 @@ jobs:
       - name: Run JS Tests
         run: vp test
       - name: Run Rust Tests
-        run: cargo test --all --exclude yaak-cli
+        run: cargo test --all --exclude yaak-cli --features yaak-app-client/wry
 
       - name: Set version
         run: npm run replace-version
@@ -150,13 +157,14 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_TENANT_ID }}
         with:
+          tauriScript: "node ../../node_modules/@tauri-apps/cli/tauri.js"
           tagName: "v__VERSION__"
           releaseName: "Release __VERSION__"
           releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"
           releaseDraft: true
           prerelease: true
           projectPath: ./crates-tauri/yaak-app-client
-          args: "${{ matrix.args }} --config ./tauri.release.conf.json"
+          args: "${{ matrix.args }}"
 
       # Build a per-machine NSIS installer for enterprise deployment (PDQ, SCCM, Intune)
       - name: Build and upload machine-wide installer (Windows only)
@@ -173,7 +181,7 @@ jobs:
         run: |
           Get-ChildItem -Recurse -Path target -File -Filter "*.exe.sig" | Remove-Item -Force
           Push-Location crates-tauri/yaak-app-client
-          npx tauri bundle ${{ matrix.args }} --bundles nsis --config ./tauri.release.conf.json --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          npx tauri bundle ${{ matrix.args }} --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
           Pop-Location
           $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
           $setupSig = "$($setup.FullName).sig"

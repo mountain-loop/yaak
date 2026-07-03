@@ -29,10 +29,7 @@ pub async fn delete_and_uninstall(
         let db = query_manager.connect();
         db.delete_plugin_by_id(plugin_id, &update_source)?
     };
-    if let Err(err) = plugin_manager
-        .uninstall(plugin_context, plugin.directory.as_str())
-        .await
-    {
+    if let Err(err) = plugin_manager.uninstall(plugin_context, plugin.directory.as_str()).await {
         if !matches!(err, PluginNotFoundErr(_)) {
             return Err(err);
         }
