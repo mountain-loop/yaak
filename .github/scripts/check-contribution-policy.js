@@ -10,8 +10,7 @@ const REVIEWER_LOGIN = "gschier";
 const LARGE_DIFF_CHANGED_FILES = 20;
 const LARGE_DIFF_CHANGED_LINES = 800;
 const SUMMARY_TITLE_MAX_LENGTH = 80;
-const AUTOMATIC_PR_CREATED_AFTER = "2026-06-30T07:00:00.000Z";
-const AUTOMATIC_PR_CREATED_AFTER_LABEL = "June 30, 2026";
+const MIN_AUTOMATIC_PR_NUMBER = 494;
 
 const LABELS = {
   inScope: {
@@ -179,6 +178,18 @@ function analyzePullRequest(pr) {
       blockers: [],
       changedFiles,
       desiredLabels: [LABELS.inScope.name],
+      largeDiff,
+      status: "in_scope",
+      templateUsed,
+      totalChangedLines,
+    };
+  }
+
+  if (labelNames.has(LABELS.explicitPermission.name)) {
+    return {
+      blockers: [],
+      changedFiles,
+      desiredLabels: [LABELS.explicitPermission.name],
       largeDiff,
       status: "in_scope",
       templateUsed,
@@ -428,10 +439,6 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
   };
 }
 
-function wasCreatedBefore(value, cutoff) {
-  return Date.parse(value) < Date.parse(cutoff);
-}
-
 async function isOfficialMaintainer({ github, owner, repo, pr }) {
   if (MAINTAINER_LOGINS.has(pr.user.login)) {
     return true;
@@ -603,7 +610,7 @@ async function checkPullRequest({
   repo,
   pullNumber,
   dryRun,
-  skipCreatedBefore,
+  minimumAutomaticPullNumber,
 }) {
   const response = await github.rest.pulls.get({
     owner,
@@ -614,11 +621,11 @@ async function checkPullRequest({
   const issueNumber = pr.number;
 
   if (
-    skipCreatedBefore != null &&
-    wasCreatedBefore(pr.created_at, skipCreatedBefore)
+    minimumAutomaticPullNumber != null &&
+    pr.number < minimumAutomaticPullNumber
   ) {
     core.notice(
-      `Skipping contribution policy for PR #${pr.number} because it was created before ${AUTOMATIC_PR_CREATED_AFTER_LABEL}.`,
+      `Skipping contribution policy for PR #${pr.number} because automatic checks start at PR #${minimumAutomaticPullNumber}.`,
     );
     return {
       blocked: false,
@@ -626,7 +633,7 @@ async function checkPullRequest({
       summary: summarizeResult({
         pr,
         skipped: true,
-        skipReason: `created before ${AUTOMATIC_PR_CREATED_AFTER_LABEL}`,
+        skipReason: `before automatic rollout PR #${minimumAutomaticPullNumber}`,
       }),
       skipped: true,
     };
@@ -756,8 +763,8 @@ async function run({ github, context, core }) {
     context.eventName === "workflow_dispatch" &&
     dryRunInput !== false &&
     dryRunInput !== "false";
-  const skipCreatedBefore =
-    payloadPr == null ? null : AUTOMATIC_PR_CREATED_AFTER;
+  const minimumAutomaticPullNumber =
+    payloadPr == null ? null : MIN_AUTOMATIC_PR_NUMBER;
   let pullNumbers;
 
   if (payloadPr != null) {
@@ -795,7 +802,7 @@ async function run({ github, context, core }) {
         repo,
         pullNumber: pr.number,
         dryRun,
-        skipCreatedBefore,
+        minimumAutomaticPullNumber,
       }),
     );
   }
