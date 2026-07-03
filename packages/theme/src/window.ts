@@ -166,6 +166,9 @@ function toastColorVariables(theme: Theme, color: YaakColor): CSSVariables {
 
 function bannerColorVariables(theme: Theme, color: YaakColor): CSSVariables {
   return completeFullColorVariables(theme, {
+    text: color.desaturate(0.5).lift(0.12).css(),
+    textSubtle: color.desaturate(0.58).lift(0.04).translucify(0.04).css(),
+    textSubtlest: color.desaturate(0.65).translucify(0.18).css(),
     surface: color.translucify(0.95).css(),
     surfaceHighlight: color.translucify(0.85).css(),
     border: color.lift(0.3).translucify(0.8).css(),

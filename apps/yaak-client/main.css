@@ -1,6 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "../../packages/tailwind-config/index.css";
+@source "../../packages/ui/src";
 
 @layer base {
   html,
@@ -50,7 +50,7 @@
 
   a,
   a[href] * {
-    @apply cursor-pointer !important;
+    @apply cursor-pointer!;
   }
 
   table th {
@@ -72,14 +72,14 @@
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      @apply opacity-40 !important;
+      @apply opacity-40!;
     }
   }
 
   .hide-scrollbars {
     &::-webkit-scrollbar-corner,
     &::-webkit-scrollbar {
-      @apply hidden !important;
+      @apply hidden!;
     }
   }
 

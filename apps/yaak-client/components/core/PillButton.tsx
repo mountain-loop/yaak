@@ -7,7 +7,7 @@ export function PillButton({ className, ...props }: ButtonProps) {
     <Button
       size="2xs"
       variant="border"
-      className={classNames(className, "!rounded-full mx-1 !px-3")}
+      className={classNames(className, "rounded-full! mx-1 px-3!")}
       {...props}
     />
   );

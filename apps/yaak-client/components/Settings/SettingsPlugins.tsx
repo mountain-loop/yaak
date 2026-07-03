@@ -211,7 +211,7 @@ function PluginTableRow({
   return (
     <TableRow>
       {showCheckbox && (
-        <TableCell className="!py-0">
+        <TableCell className="py-0!">
           <Checkbox
             hideLabel
             title={plugin?.enabled ? "Disable plugin" : "Enable plugin"}
@@ -249,7 +249,7 @@ function PluginTableRow({
           )}
         </HStack>
       </TableCell>
-      <TableCell className="!py-0">
+      <TableCell className="py-0!">
         <HStack justifyContent="end" space={1.5}>
           {plugin != null && latestVersion != null ? (
             <Button

@@ -162,7 +162,7 @@ export function GrpcRequestPane({
         className={classNames(
           "grid grid-cols-[minmax(0,1fr)_auto] gap-1.5",
           paneWidth === 0 && "opacity-0",
-          paneWidth > 0 && paneWidth < 400 && "!grid-cols-1",
+          paneWidth > 0 && paneWidth < 400 && "grid-cols-1!",
         )}
       >
         <UrlBar
@@ -201,7 +201,7 @@ export function GrpcRequestPane({
               rightSlot={<Icon size="sm" icon="chevron_down" />}
               disabled={isStreaming || services == null}
               className={classNames(
-                "font-mono text-editor min-w-[5rem] !ring-0",
+                "font-mono text-editor min-w-20 ring-0!",
                 paneWidth < 400 && "flex-1",
               )}
             >
@@ -259,7 +259,7 @@ export function GrpcRequestPane({
       <Tabs
         label="Request"
         tabs={tabs}
-        tabListClassName="mt-1 !mb-1.5"
+        tabListClassName="mt-1 mb-1.5!"
         storageKey="grpc_request_tabs"
         activeTabKey={activeRequest.id}
       >
@@ -296,7 +296,7 @@ export function GrpcRequestPane({
               hideLabel
               forceUpdateKey={forceUpdateKey}
               defaultValue={activeRequest.name}
-              className="font-sans !text-xl !px-0"
+              className="font-sans text-xl! px-0!"
               containerClassName="border-0"
               placeholder={resolvedModelName(activeRequest)}
               onChange={(name) => patchModel(activeRequest, { name })}

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Yaak Changelog"
+  short_description: "Generate Yaak changelog releases"
+  default_prompt: "Use $yaak-changelog to create or update a Yaak changelog release from GitHub release notes."
+
+policy:
+  allow_implicit_invocation: true

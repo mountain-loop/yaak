@@ -439,7 +439,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           name="command"
           label="Command"
           placeholder="Search or type a command"
-          className="font-sans !text-base"
+          className="font-sans text-base!"
           defaultValue={command}
           onChange={handleSetCommand}
           onKeyDownCapture={handleKeyDown}
@@ -448,7 +448,7 @@ export function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
       <div className="h-full px-1.5 overflow-y-auto pt-2 pb-1">
         {filteredGroups.map((g) => (
           <div key={g.key} className="mb-1.5 w-full">
-            <Heading level={2} className="!text-xs uppercase px-1.5 h-sm flex items-center">
+            <Heading level={2} className="text-xs! uppercase px-1.5 h-sm flex items-center">
               {g.label}
             </Heading>
             {g.items.map((v) => (
@@ -491,7 +491,7 @@ function CommandPaletteItem({
       color="custom"
       justify="start"
       className={classNames(
-        "w-full h-sm flex items-center rounded px-1.5",
+        "w-full h-sm flex items-center rounded-sm px-1.5",
         "hover:text-text",
         active && "bg-surface-highlight",
         !active && "text-text-subtle",

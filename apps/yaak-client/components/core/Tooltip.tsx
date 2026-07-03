@@ -116,7 +116,7 @@ export function Tooltip({ children, className, content, tabIndex, size = "md" }:
         role="button"
         aria-describedby={openState ? id.current : undefined}
         tabIndex={tabIndex ?? -1}
-        className={classNames(className, "flex-grow-0 flex items-center")}
+        className={classNames(className, "grow-0 flex items-center")}
         onClick={handleToggleImmediate}
         onMouseEnter={handleOpen}
         onMouseLeave={handleClose}
@@ -141,10 +141,10 @@ function Triangle({ className, position }: { className?: string; position: "top"
       shapeRendering="crispEdges"
       className={classNames(
         className,
-        "absolute z-50 left-[calc(50%-0.4rem)] h-[0.5rem] w-[0.8rem]",
+        "absolute z-50 left-[calc(50%-0.4rem)] h-2 w-[0.8rem]",
         isBottom
-          ? "border-t-[2px] border-surface-highlight -bottom-[calc(0.5rem-3px)] mb-2"
-          : "border-b-[2px] border-surface-highlight -top-[calc(0.5rem-3px)] mt-2",
+          ? "border-t-2 border-surface-highlight -bottom-[calc(0.5rem-3px)] mb-2"
+          : "border-b-2 border-surface-highlight -top-[calc(0.5rem-3px)] mt-2",
       )}
     >
       <title>Triangle</title>

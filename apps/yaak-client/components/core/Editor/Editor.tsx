@@ -282,6 +282,22 @@ function EditorInner({
     [disableTabIndent],
   );
 
+  // Update read-only
+  const readOnlyCompartment = useRef(new Compartment());
+  useEffect(
+    function configureReadOnly() {
+      if (cm.current === null) return;
+      const current = readOnlyCompartment.current.get(cm.current.view.state) ?? emptyExtension;
+      const next = readOnly ? readonlyExtensions : emptyExtension;
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (current === next) return;
+
+      const effects = readOnlyCompartment.current.reconfigure(next);
+      cm.current?.view.dispatch({ effects });
+    },
+    [readOnly],
+  );
+
   const onClickFunction = useCallback(
     async (fn: TemplateFunction, tagValue: string, startPos: number) => {
       const show = () => {
@@ -394,9 +410,9 @@ function EditorInner({
           keymapCompartment.current.of(
             keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
           ),
+          readOnlyCompartment.current.of(readOnly ? readonlyExtensions : emptyExtension),
           ...getExtensions({
             container,
-            readOnly,
             singleLine,
             hideGutter,
             stateKey,
@@ -470,7 +486,7 @@ function EditorInner({
   const decoratedActions = useMemo(() => {
     const results = [];
     const actionClassName = classNames(
-      "bg-surface transition-opacity transform-gpu opacity-0 group-hover:opacity-100 hover:!opacity-100 shadow",
+      "bg-surface transition-opacity transform-gpu opacity-0 group-hover:opacity-100 hover:opacity-100! shadow",
     );
 
     if (format) {
@@ -553,7 +569,6 @@ function EditorInner({
 function getExtensions({
   stateKey,
   container,
-  readOnly,
   singleLine,
   hideGutter,
   onChange,
@@ -562,7 +577,7 @@ function getExtensions({
   onFocus,
   onBlur,
   onKeyDown,
-}: Pick<EditorProps, "singleLine" | "readOnly" | "hideGutter"> & {
+}: Pick<EditorProps, "singleLine" | "hideGutter"> & {
   stateKey: EditorProps["stateKey"];
   container: HTMLDivElement | null;
   onChange: RefObject<EditorProps["onChange"]>;
@@ -612,7 +627,6 @@ function getExtensions({
     keymap.of(singleLine ? defaultKeymap.filter((k) => k.key !== "Enter") : defaultKeymap),
     ...(singleLine ? [singleLineExtensions()] : []),
     ...(!singleLine ? multiLineExtensions({ hideGutter }) : []),
-    ...(readOnly ? readonlyExtensions : []),
 
     // ------------------------ //
     // Things that must be last //

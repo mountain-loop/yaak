@@ -77,8 +77,8 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
 
   const actions = useMemo<EditorProps["actions"]>(
     () => [
-      <div key="actions" className="flex flex-row !opacity-100 !shadow">
-        <div key="introspection" className="!opacity-100">
+      <div key="actions" className="flex flex-row opacity-100! shadow!">
+        <div key="introspection" className="opacity-100!">
           {schema === undefined ? null /* Initializing */ : (
             <Dropdown
               items={[
@@ -217,7 +217,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
         stateKey={`graphql_body.${request.id}`}
         {...extraEditorProps}
       />
-      <div className="grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 min-h-[5rem]">
+      <div className="grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1 min-h-20">
         <Separator dashed className="pb-1">
           Variables
         </Separator>

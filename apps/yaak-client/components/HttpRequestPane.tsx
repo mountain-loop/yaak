@@ -19,6 +19,7 @@ import { useSendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
 import { deepEqualAtom } from "../lib/atoms";
 import { languageFromContentType } from "../lib/contentType";
 import { generateId } from "../lib/generateId";
+import { extractPathPlaceholders } from "../lib/pathPlaceholders";
 import {
   BODY_TYPE_BINARY,
   BODY_TYPE_FORM_MULTIPART,
@@ -131,9 +132,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
-    const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
-      (m) => m[1] ?? "",
-    );
+    const placeholderNames = extractPathPlaceholders(activeRequest.url);
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
@@ -347,7 +346,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             onUrlChange={handleUrlChange}
             leftSlot={
               <div className="py-0.5">
-                <RequestMethodDropdown request={activeRequest} className="ml-0.5 !h-full" />
+                <RequestMethodDropdown request={activeRequest} className="ml-0.5 h-full!" />
               </div>
             }
             forceUpdateKey={updateKey}
@@ -457,7 +456,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                   hideLabel
                   forceUpdateKey={updateKey}
                   defaultValue={activeRequest.name}
-                  className="font-sans !text-xl !px-0"
+                  className="font-sans text-xl! px-0!"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
                   onChange={(name) => patchModel(activeRequest, { name })}

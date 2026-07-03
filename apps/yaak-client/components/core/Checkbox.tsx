@@ -39,10 +39,10 @@ export function Checkbox({
         <input
           aria-hidden
           className={classNames(
-            "appearance-none flex-shrink-0 border border-border",
+            "appearance-none shrink-0 border border-border",
             size === "sm" && "w-4 h-4",
             size === "md" && "w-5 h-5",
-            "rounded outline-none ring-0",
+            "rounded-sm outline-hidden ring-0",
             !disabled && "hocus:border-border-focus hocus:bg-focus/[5%]",
             disabled && "border-dotted",
           )}

@@ -126,7 +126,7 @@ export function GrpcEditor({
 
   const actions = useMemo(
     () => [
-      <div key="reflection" className={classNames(services == null && "!opacity-100")}>
+      <div key="reflection" className={classNames(services == null && "opacity-100!")}>
         <Button
           size="xs"
           color={

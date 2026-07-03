@@ -84,12 +84,12 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center gap-3 px-6 pr-10 mt-4 mb-2 min-w-0 text-xl">
-        <Icon icon="folder_cog" size="lg" color="secondary" className="flex-shrink-0" />
+        <Icon icon="folder_cog" size="lg" color="secondary" className="shrink-0" />
         <div className="flex items-center gap-1.5 font-semibold text-text min-w-0 overflow-hidden flex-1">
           {breadcrumbs.map((item, index) => (
             <Fragment key={item.id}>
               {index > 0 && (
-                <Icon icon="chevron_right" size="lg" className="opacity-50 flex-shrink-0" />
+                <Icon icon="chevron_right" size="lg" className="opacity-50 shrink-0" />
               )}
               <span className="text-text-subtle truncate min-w-0" title={item.name}>
                 {item.name}
@@ -97,7 +97,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
             </Fragment>
           ))}
           {breadcrumbs.length > 0 && (
-            <Icon icon="chevron_right" size="lg" className="opacity-50 flex-shrink-0" />
+            <Icon icon="chevron_right" size="lg" className="opacity-50 shrink-0" />
           )}
           <span className="whitespace-nowrap" title={folder.name}>
             {folder.name}
@@ -149,7 +149,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
               <InlineCode className="flex gap-1 items-center text-primary pl-2.5">
                 {folder.id}
                 <CopyIconButton
-                  className="opacity-70 !text-primary"
+                  className="opacity-70 text-primary!"
                   size="2xs"
                   iconSize="sm"
                   title="Copy folder ID"

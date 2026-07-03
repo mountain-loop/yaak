@@ -31,7 +31,7 @@ export function HttpResponseDurationTag({ response }: Props) {
   );
 }
 
-function formatMillis(ms: number) {
+export function formatMillis(ms: number) {
   if (ms < 1000) {
     return `${ms} ms`;
   }

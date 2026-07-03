@@ -53,19 +53,17 @@ function pathParameters(
         if (node.name === "Text") {
           // Find the `url` node and then jump into it to find the placeholders
           for (let i = node.from; i < node.to; i++) {
-            const innerTree = syntaxTree(view.state).resolveInner(i);
+            const innerTree = tree.resolveInner(i);
             if (innerTree.node.name === "url") {
-              innerTree.toTree().iterate({
-                enter(node) {
-                  if (node.name !== "Placeholder") return;
-                  const globalFrom = innerTree.node.from + node.from;
-                  const globalTo = innerTree.node.from + node.to;
-                  const rawText = view.state.doc.sliceString(globalFrom, globalTo);
-                  const onClick = () => onClickPathParameter(rawText);
-                  const widget = new PathPlaceholderWidget(rawText, globalFrom, onClick);
-                  const deco = Decoration.replace({ widget, inclusive: false });
-                  widgets.push(deco.range(globalFrom, globalTo));
-                },
+              innerTree.node.cursor().iterate((node) => {
+                if (node.name !== "Placeholder") return;
+                const globalFrom = node.from;
+                const globalTo = node.to;
+                const rawText = view.state.doc.sliceString(globalFrom, globalTo);
+                const onClick = () => onClickPathParameter(rawText);
+                const widget = new PathPlaceholderWidget(rawText, globalFrom, onClick);
+                const deco = Decoration.replace({ widget, inclusive: false });
+                widgets.push(deco.range(globalFrom, globalTo));
               });
               break;
             }

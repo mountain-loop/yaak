@@ -66,7 +66,7 @@ export function MoveToWorkspaceDialog({ onDone, requests, activeWorkspaceId }: P
               <Button
                 size="xs"
                 color="secondary"
-                className="mr-auto min-w-[5rem]"
+                className="mr-auto min-w-20"
                 onClick={async () => {
                   await router.navigate({
                     to: "/workspaces/$workspaceId",

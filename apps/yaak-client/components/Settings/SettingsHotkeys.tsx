@@ -341,7 +341,7 @@ function RecordHotkeyDialog({ label, onSave, onCancel }: RecordHotkeyDialogProps
           }}
           className={classNames(
             "flex items-center justify-center",
-            "px-4 py-2 rounded-lg bg-surface-highlight border outline-none cursor-default w-full",
+            "px-4 py-2 rounded-lg bg-surface-highlight border outline-hidden cursor-default w-full",
             "border-border-subtle focus:border-border-focus",
           )}
         >

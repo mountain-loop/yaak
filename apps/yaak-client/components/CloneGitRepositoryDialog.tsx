@@ -4,6 +4,7 @@ import { Banner, VStack } from "@yaakapp-internal/ui";
 import { useState } from "react";
 import { openWorkspaceFromSyncDir } from "../commands/openWorkspaceFromSyncDir";
 import { appInfo } from "../lib/appInfo";
+import { CommercialUseBanner } from "./CommercialUseBanner";
 import { showErrorToast } from "../lib/toast";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
@@ -89,6 +90,8 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         </Banner>
       )}
 
+      <CommercialUseBanner source="git-clone" title="Using Git for work?" />
+
       <PlainInput
         required
         label="Repository URL"
@@ -105,7 +108,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         rightSlot={
           <IconButton
             size="xs"
-            className="mr-0.5 !h-auto my-0.5"
+            className="mr-0.5 h-auto! my-0.5"
             icon="folder"
             title="Browse"
             onClick={handleSelectDirectory}

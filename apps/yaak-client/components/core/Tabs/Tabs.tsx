@@ -342,7 +342,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
       <div
         className={classNames(
           layout === "horizontal" && "flex flex-col w-full pb-3 mb-auto",
-          layout === "vertical" && "flex flex-row flex-shrink-0 w-full",
+          layout === "vertical" && "flex flex-row shrink-0 w-full",
         )}
       >
         {tabButtons}
@@ -456,9 +456,9 @@ function TabButton({
           onChangeValue?.(tab.value);
         },
     className: classNames(
-      "flex items-center rounded whitespace-nowrap",
-      "!px-2 ml-[1px]",
-      "outline-none",
+      "flex items-center rounded-sm whitespace-nowrap",
+      "px-2! ml-px",
+      "outline-hidden",
       "ring-none",
       "focus-visible-or-class:outline-2",
       addBorders && "border focus-visible:bg-surface-highlight",
@@ -468,7 +468,7 @@ function TabButton({
         : layout === "vertical"
           ? "border-border-subtle"
           : "border-transparent",
-      layout === "horizontal" && "min-w-[10rem]",
+      layout === "horizontal" && "min-w-40",
       isDragging && "opacity-50",
       overlay && "opacity-80",
     ),

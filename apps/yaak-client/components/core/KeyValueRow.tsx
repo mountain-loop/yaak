@@ -73,7 +73,7 @@ export function KeyValueRow({
     <>
       <td
         className={classNames(
-          "select-none py-0.5 pr-2 h-full max-w-[10rem]",
+          "select-none py-0.5 pr-2 h-full max-w-40",
           align === "top" && "align-top",
           align === "middle" && "align-middle",
           labelClassName,
@@ -86,12 +86,12 @@ export function KeyValueRow({
       </td>
       <td
         className={classNames(
-          "select-none py-0.5 break-all max-w-[15rem]",
+          "select-none py-0.5 break-all max-w-60",
           align === "top" && "align-top",
           align === "middle" && "align-middle",
         )}
       >
-        <div className="select-text cursor-text max-h-[12rem] overflow-y-auto grid grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div className="select-text cursor-text max-h-48 overflow-y-auto grid grid-cols-[auto_minmax(0,1fr)_auto]">
           {leftSlot ?? <span aria-hidden />}
           {children}
           {resolvedRightSlot ? (

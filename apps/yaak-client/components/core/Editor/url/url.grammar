@@ -1,6 +1,13 @@
-@top url { Protocol? Host Path? Query? }
+// Host is optional so URLs starting with `/` go straight to Path. Without this,
+// the parser error-recovers past the leading `/` and consumes the first segment as
+// Host (since Host's char class includes `:` for `host:port`), eating an initial
+// `:name` placeholder like `/:foo/:bar`.
+@top url { Protocol? Host? Path? Query? }
 
-Path { ("/" (Placeholder | PathSegment))+ }
+Path { ("/" PathSegment)+ }
+
+Placeholder { ":" pathChars }
+PathSegment { Placeholder (":" pathChars)* | pathChars (":" pathChars)* }
 
 Query { "?" queryPair ("&" queryPair)* }
 
@@ -9,9 +16,7 @@ Query { "?" queryPair ("&" queryPair)* }
     Host { $[a-zA-Z0-9-_.:\[\]]+ }
     @precedence { Protocol, Host }
 
-    Placeholder { ":" ![/?#]+ }
-    PathSegment { ![?#/]+ }
-    @precedence { Placeholder, PathSegment }
+    pathChars { ![/?#:]+ }
 
     queryPair { ($[a-zA-Z0-9]+ ("=" $[a-zA-Z0-9]*)?) }
 }

@@ -16,6 +16,7 @@ import { resolvedModelName } from "../../lib/resolvedModelName";
 import { showConfirm } from "../../lib/confirm";
 import { showErrorToast } from "../../lib/toast";
 import { sync } from "../../init/sync";
+import { CommercialUseBanner } from "../CommercialUseBanner";
 import { Button } from "../core/Button";
 import type { CheckboxProps } from "../core/Checkbox";
 import { Checkbox } from "../core/Checkbox";
@@ -205,7 +206,8 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         layout="horizontal"
         defaultRatio={0.6}
         firstSlot={({ style }) => (
-          <div style={style} className="h-full px-4">
+          <div style={style} className="h-full px-4 grid grid-rows-[auto_minmax(0,1fr)] gap-3">
+            <CommercialUseBanner source="git-commit" title="Using Git for work?" />
             <SplitLayout
               storageKey="commit-vertical"
               layout="vertical"
@@ -239,7 +241,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
               secondSlot={({ style: innerStyle }) => (
                 <div style={innerStyle} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
                   <Input
-                    className="!text-base font-sans rounded-md"
+                    className="text-base! font-sans rounded-md"
                     placeholder="Commit message..."
                     onChange={setMessage}
                     stateKey={null}
@@ -323,7 +325,7 @@ function TreeNodeChildren({
         )}
       >
         {isSelected && (
-          <div className="absolute -left-[100vw] right-0 top-0 bottom-0 bg-surface-active opacity-30 -z-10" />
+          <div className="absolute left-[-100vw] right-0 top-0 bottom-0 bg-surface-active opacity-30 -z-10" />
         )}
         <Checkbox
           checked={checked}
@@ -356,7 +358,7 @@ function TreeNodeChildren({
           {node.status.status !== "current" && (
             <InlineCode
               className={classNames(
-                "py-0 bg-transparent w-[6rem] text-center shrink-0",
+                "py-0 bg-transparent w-24 text-center shrink-0",
                 node.status.status === "modified" && "text-info",
                 node.status.status === "untracked" && "text-success",
                 node.status.status === "removed" && "text-danger",
@@ -398,7 +400,7 @@ function ExternalTreeNode({
   return (
     <Checkbox
       fullWidth
-      className="h-xs w-full hover:bg-surface-highlight rounded px-1 group"
+      className="h-xs w-full hover:bg-surface-highlight rounded-sm px-1 group"
       checked={entry.staged}
       onChange={() => onCheck(entry)}
       title={
@@ -407,7 +409,7 @@ function ExternalTreeNode({
           <div className="truncate">{entry.relaPath}</div>
           <InlineCode
             className={classNames(
-              "py-0 ml-auto bg-transparent w-[6rem] text-center",
+              "py-0 ml-auto bg-transparent w-24 text-center",
               entry.status === "modified" && "text-info",
               entry.status === "untracked" && "text-success",
               entry.status === "removed" && "text-danger",

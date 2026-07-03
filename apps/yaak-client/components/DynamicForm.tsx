@@ -204,7 +204,7 @@ function FormInputs<T extends Record<string, JsonPrimitive>>({
               <div key={i + stateKey}>
                 <DetailsBanner
                   summary={input.label}
-                  className={classNames("!mb-auto", disabled && "opacity-disabled")}
+                  className={classNames("mb-auto!", disabled && "opacity-disabled")}
                 >
                   <div className="mt-3">
                     <FormInputsStack
@@ -300,7 +300,7 @@ function TextArg({
     onChange,
     name: arg.name,
     multiLine: arg.multiLine,
-    className: arg.multiLine ? "min-h-[4rem]" : undefined,
+    className: arg.multiLine ? "min-h-16" : undefined,
     defaultValue: value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value,
     required: !arg.optional,
     disabled: arg.disabled,
@@ -359,7 +359,7 @@ function EditorArg({
         className={classNames(
           "border border-border rounded-md overflow-hidden px-2 py-1",
           "focus-within:border-border-focus",
-          !arg.rows && "max-h-[10rem]", // So it doesn't take up too much space
+          !arg.rows && "max-h-40", // So it doesn't take up too much space
         )}
         style={arg.rows ? { height: `${arg.rows * 1.4 + 0.75}rem` } : undefined}
       >
@@ -372,7 +372,7 @@ function EditorArg({
           onChange={onChange}
           hideGutter
           heightMode="auto"
-          className="min-h-[3rem]"
+          className="min-h-12"
           defaultValue={value === DYNAMIC_FORM_NULL_ARG ? arg.defaultValue : value}
           placeholder={arg.placeholder ?? undefined}
           autocompleteFunctions={autocompleteFunctions}
@@ -392,7 +392,7 @@ function EditorArg({
                     id: "id",
                     size: "full",
                     title: arg.readOnly ? "View Value" : "Edit Value",
-                    className: "!max-w-[50rem] !max-h-[60rem]",
+                    className: "max-w-200! max-h-240!",
                     description: arg.label && (
                       <Label
                         htmlFor={id}

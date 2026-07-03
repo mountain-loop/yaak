@@ -34,7 +34,10 @@ fn replace_path_placeholder(p: &HttpUrlParameter, url: &str) -> String {
         return url.to_string();
     }
 
-    let re = regex::Regex::new(format!("(/){}([/?#]|$)", p.name).as_str()).unwrap();
+    // A path placeholder is terminated by `/`, `?`, `#`, end-of-string, or a literal `:`.
+    // The `:` boundary is what lets `/:id:increment-importance` substitute the `:id`
+    // placeholder while leaving `:increment-importance` as literal text.
+    let re = regex::Regex::new(format!("(/){}([/?#:]|$)", p.name).as_str()).unwrap();
     let result = re
         .replace_all(url, |cap: &regex::Captures| {
             format!(
@@ -80,6 +83,18 @@ mod placeholder_tests {
         assert_eq!(
             replace_path_placeholder(&p, "https://example.com/:foo?:foo"),
             "https://example.com/xxx?:foo",
+        );
+    }
+
+    #[test]
+    fn placeholder_followed_by_literal_colon() {
+        // AIP-136-style custom method: `:id` is the placeholder, `:increment-importance`
+        // is literal text in the same path segment.
+        let p =
+            HttpUrlParameter { name: ":id".into(), value: "42".into(), enabled: true, id: None };
+        assert_eq!(
+            replace_path_placeholder(&p, "https://example.com/tasks/:id:increment-importance"),
+            "https://example.com/tasks/42:increment-importance",
         );
     }
 

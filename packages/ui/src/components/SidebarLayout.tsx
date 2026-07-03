@@ -130,7 +130,7 @@ export function SidebarLayout({
       </div>
       <ResizeHandle
         style={drag}
-        className="-translate-x-[1px]"
+        className="-translate-x-px"
         justify="end"
         side="right"
         onResizeStart={handleResizeStart}

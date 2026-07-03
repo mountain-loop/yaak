@@ -21,6 +21,7 @@ import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
 import { deepEqualAtom } from "../lib/atoms";
 import { languageFromContentType } from "../lib/contentType";
 import { generateId } from "../lib/generateId";
+import { extractPathPlaceholders } from "../lib/pathPlaceholders";
 import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { CountBadge } from "./core/CountBadge";
@@ -83,9 +84,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   );
 
   const { urlParameterPairs, urlParametersKey } = useMemo(() => {
-    const placeholderNames = Array.from(activeRequest.url.matchAll(/\/(:[^/]+)/g)).map(
-      (m) => m[1] ?? "",
-    );
+    const placeholderNames = extractPathPlaceholders(activeRequest.url);
     const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
     const items: Pair[] = [...nonEmptyParameters];
     for (const name of placeholderNames) {
@@ -218,7 +217,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                     title="Close connection"
                     icon="x"
                     iconColor="secondary"
-                    className="w-8 mr-0.5 !h-full"
+                    className="w-8 mr-0.5 h-full!"
                     onClick={handleCancel}
                   />
                 )
@@ -237,7 +236,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
             ref={tabsRef}
             label="Request"
             tabs={tabs}
-            tabListClassName="mt-1 !mb-1.5"
+            tabListClassName="mt-1 mb-1.5!"
             storageKey={TABS_STORAGE_KEY}
             activeTabKey={activeRequestId}
           >
@@ -284,7 +283,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
                   hideLabel
                   forceUpdateKey={forceUpdateKey}
                   defaultValue={activeRequest.name}
-                  className="font-sans !text-xl !px-0"
+                  className="font-sans text-xl! px-0!"
                   containerClassName="border-0"
                   placeholder={resolvedModelName(activeRequest)}
                   onChange={(name) => patchModel(activeRequest, { name })}

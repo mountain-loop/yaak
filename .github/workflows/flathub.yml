@@ -1,7 +1,12 @@
 name: Update Flathub
+
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish to Flathub
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -10,8 +15,6 @@ jobs:
   update-flathub:
     name: Update Flathub manifest
     runs-on: ubuntu-latest
-    # Only run for stable releases (skip betas/pre-releases)
-    if: ${{ !github.event.release.prerelease }}
     steps:
       - name: Checkout app repo
         uses: actions/checkout@v4
@@ -39,7 +42,7 @@ jobs:
           git clone --depth 1 https://github.com/flatpak/flatpak-builder-tools flatpak/flatpak-builder-tools
 
       - name: Run update-manifest.sh
-        run: bash flatpak/update-manifest.sh "${{ github.event.release.tag_name }}" flathub-repo
+        run: bash flatpak/update-manifest.sh "${{ inputs.tag }}" flathub-repo
 
       - name: Commit and push to Flathub
         working-directory: flathub-repo
@@ -48,5 +51,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && echo "No changes to commit" && exit 0
-          git commit -m "Update to ${{ github.event.release.tag_name }}"
+          git commit -m "Update to ${{ inputs.tag }}"
           git push
