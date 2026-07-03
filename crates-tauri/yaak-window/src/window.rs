@@ -119,11 +119,11 @@ pub fn create_window<R: Runtime>(
     Ok(win)
 }
 
-pub fn create_main_window(
-    handle: &AppHandle,
+pub fn create_main_window<R: Runtime>(
+    handle: &AppHandle<R>,
     url: &str,
     use_native_titlebar: bool,
-) -> tauri::Result<WebviewWindow> {
+) -> tauri::Result<WebviewWindow<R>> {
     let mut counter = 0;
     let label = loop {
         let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
@@ -152,14 +152,14 @@ pub fn create_main_window(
     create_window(handle, config)
 }
 
-pub fn create_child_window(
-    parent_window: &WebviewWindow,
+pub fn create_child_window<R: Runtime>(
+    parent_window: &WebviewWindow<R>,
     url: &str,
     label: &str,
     title: &str,
     inner_size: (f64, f64),
     use_native_titlebar: bool,
-) -> tauri::Result<WebviewWindow> {
+) -> tauri::Result<WebviewWindow<R>> {
     let app_handle = parent_window.app_handle();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
     let scale_factor = parent_window.scale_factor()?;

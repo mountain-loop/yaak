@@ -183,7 +183,7 @@ struct AppMetaData {
 }
 
 #[tauri::command]
-async fn cmd_metadata(app_handle: AppHandle) -> YaakResult<AppMetaData> {
+async fn cmd_metadata<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<AppMetaData> {
     let app_data_dir = app_handle.path().app_data_dir()?;
     let app_log_dir = app_handle.path().app_log_dir()?;
     let vendored_plugin_dir =
@@ -968,7 +968,7 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     mut request: HttpRequest,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
-    window: WebviewWindow,
+    window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
 ) -> YaakResult<HttpResponse> {
     let response = HttpResponse::default();
@@ -1594,8 +1594,8 @@ async fn cmd_get_workspace_meta<R: Runtime>(
 }
 
 #[tauri::command]
-async fn cmd_new_child_window(
-    parent_window: WebviewWindow,
+async fn cmd_new_child_window<R: Runtime>(
+    parent_window: WebviewWindow<R>,
     url: &str,
     label: &str,
     title: &str,
@@ -1615,7 +1615,7 @@ async fn cmd_new_child_window(
 }
 
 #[tauri::command]
-async fn cmd_new_main_window(app_handle: AppHandle, url: &str) -> YaakResult<()> {
+async fn cmd_new_main_window<R: Runtime>(app_handle: AppHandle<R>, url: &str) -> YaakResult<()> {
     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
     let win = yaak_window::window::create_main_window(&app_handle, url, use_native_titlebar)?;
     setup_window_menu(&win)?;
