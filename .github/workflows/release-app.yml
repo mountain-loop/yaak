@@ -70,7 +70,7 @@ jobs:
         if: matrix.os == 'ubuntu'
         uses: actions/cache@v4
         with:
-          path: ~/.local/share/tauri-cef
+          path: ~/.cache/tauri-cef
           key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
 
       - name: install dependencies (Linux only)
