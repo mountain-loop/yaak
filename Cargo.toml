@@ -31,6 +31,7 @@ members = [
   "crates-tauri/yaak-fonts",
   "crates-tauri/yaak-license",
   "crates-tauri/yaak-mac-window",
+  "crates-tauri/yaak-system-appearance",
   "crates-tauri/yaak-tauri-utils",
   "crates-tauri/yaak-window",
 ]
@@ -88,6 +89,7 @@ yaak-proxy-lib = { path = "crates-proxy/yaak-proxy-lib" }
 yaak-fonts = { path = "crates-tauri/yaak-fonts" }
 yaak-license = { path = "crates-tauri/yaak-license" }
 yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
+yaak-system-appearance = { path = "crates-tauri/yaak-system-appearance" }
 yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
 yaak-window = { path = "crates-tauri/yaak-window" }
 

@@ -88,6 +88,7 @@ yaak-mac-window = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
+yaak-system-appearance = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }

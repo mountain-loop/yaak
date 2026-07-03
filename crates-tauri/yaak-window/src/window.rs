@@ -26,6 +26,7 @@ pub struct CreateWindowConfig<'s> {
     pub navigation_tx: Option<mpsc::Sender<String>>,
     pub close_tx: Option<mpsc::Sender<()>>,
     pub data_dir_key: Option<String>,
+    pub initialization_script: Option<String>,
     pub hidden: bool,
     pub hide_titlebar: bool,
     pub use_native_titlebar: bool,
@@ -58,6 +59,10 @@ pub fn create_window<R: Runtime>(
             .fullscreen(false)
             .maximized(maximized)
             .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+
+    if let Some(script) = config.initialization_script {
+        win_builder = win_builder.initialization_script(script);
+    }
 
     if let Some(key) = config.data_dir_key {
         #[cfg(not(target_os = "macos"))]
@@ -141,6 +146,7 @@ pub fn create_window<R: Runtime>(
 pub fn create_main_window<R: Runtime>(
     handle: &AppHandle<R>,
     url: &str,
+    initialization_script: Option<String>,
     use_native_titlebar: bool,
 ) -> tauri::Result<WebviewWindow<R>> {
     let mut counter = 0;
@@ -165,6 +171,8 @@ pub fn create_main_window<R: Runtime>(
             100.0 + random::<f64>() * 20.0,
         )),
         restore_position: Some(counter == 0),
+        initialization_script,
+        hidden: true,
         hide_titlebar: true,
         use_native_titlebar,
         ..Default::default()
@@ -179,6 +187,7 @@ pub fn create_child_window<R: Runtime>(
     label: &str,
     title: &str,
     inner_size: (f64, f64),
+    initialization_script: Option<String>,
     use_native_titlebar: bool,
 ) -> tauri::Result<WebviewWindow<R>> {
     let app_handle = parent_window.app_handle();
@@ -202,6 +211,8 @@ pub fn create_child_window<R: Runtime>(
         url,
         inner_size: Some(inner_size),
         position: Some(position),
+        initialization_script,
+        hidden: true,
         hide_titlebar: true,
         use_native_titlebar,
         ..Default::default()
