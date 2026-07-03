@@ -8,5 +8,7 @@ publish = false
 log = { workspace = true }
 md5 = "0.8.0"
 rand = "0.9.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tauri = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
