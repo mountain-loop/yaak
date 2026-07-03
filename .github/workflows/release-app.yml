@@ -17,32 +17,50 @@ jobs:
             args: '--target aarch64-apple-darwin --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "macos"
+            runtime: "wry"
             targets: "aarch64-apple-darwin"
           - platform: "macos-latest" # for Intel-based Macs.
             args: '--target x86_64-apple-darwin --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "macos"
+            runtime: "wry"
             targets: "x86_64-apple-darwin"
           - platform: "ubuntu-22.04"
-            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","cef"]}}'''
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "ubuntu"
+            runtime: "wry"
             targets: ""
           - platform: "ubuntu-22.04-arm"
-            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","cef"]}}'''
+            args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "ubuntu"
+            runtime: "wry"
+            targets: ""
+          - platform: "ubuntu-22.04"
+            args: '--bundles appimage --config ./tauri.release.conf.json --config ''{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'''
+            yaak_arch: "x64"
+            os: "ubuntu"
+            runtime: "cef"
+            targets: ""
+          - platform: "ubuntu-22.04-arm"
+            args: '--bundles appimage --config ./tauri.release.conf.json --config ''{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'''
+            yaak_arch: "arm64"
+            os: "ubuntu"
+            runtime: "cef"
             targets: ""
           - platform: "windows-latest"
             args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "windows"
+            runtime: "wry"
             targets: ""
           # Windows ARM64
           - platform: "windows-latest"
             args: '--target aarch64-pc-windows-msvc --config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "windows"
+            runtime: "wry"
             targets: "aarch64-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 40
@@ -67,7 +85,7 @@ jobs:
           cache-on-failure: true
 
       - name: Cache CEF (Linux only)
-        if: matrix.os == 'ubuntu'
+        if: matrix.os == 'ubuntu' && matrix.runtime == 'cef'
         uses: actions/cache@v4
         with:
           path: ~/.cache/tauri-cef

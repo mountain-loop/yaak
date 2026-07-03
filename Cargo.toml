@@ -54,7 +54,7 @@ tauri = { version = "2.11.1", default-features = false, features = [
   "dynamic-acl",
 ] }
 tauri-plugin = "2.6.1"
-tauri-plugin-dialog = "2.7.1"
+tauri-plugin-dialog = { version = "2.7.1", default-features = false }
 tauri-plugin-shell = "2.3.5"
 thiserror = "2.0.17"
 tokio = "1.48.0"
