@@ -26,7 +26,6 @@ use tauri::{Manager, WindowEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Builder, Target, TargetKind, log};
-use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
@@ -1677,13 +1676,6 @@ pub fn run() {
     builder = builder
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
-        // Don't restore StateFlags::DECORATIONS because we want to be able to toggle them on/off on a restart
-        // We could* make this work if we toggled them in the frontend before the window closes, but, this is nicer.
-        .plugin(
-            tauri_plugin_window_state::Builder::new()
-                .with_state_flags(StateFlags::all() - StateFlags::DECORATIONS)
-                .build(),
-        )
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -1958,13 +1950,6 @@ pub fn run() {
                             warn!("Failed to check for notifications {}", e)
                         }
                     });
-                }
-                RunEvent::WindowEvent { event: WindowEvent::CloseRequested { .. }, .. } => {
-                    if let Err(e) = app_handle.save_window_state(StateFlags::all()) {
-                        warn!("Failed to save window state {e:?}");
-                    } else {
-                        info!("Saved window state");
-                    };
                 }
                 _ => {}
             };
