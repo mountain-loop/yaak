@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { readFile } from "@tauri-apps/plugin-fs";
 import type { GraphQlIntrospection, HttpRequest } from "@yaakapp-internal/models";
 import type { GraphQLSchema, IntrospectionQuery } from "graphql";
 import { buildClientSchema, getIntrospectionQuery } from "graphql";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { tryBuildIntrospectionFromFile } from "../lib/graphqlSchema";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
 import { getResponseBodyText } from "../lib/responseBody";
 import { sendEphemeralRequest } from "../lib/sendEphemeralRequest";
@@ -99,6 +101,35 @@ export function useIntrospectGraphQL(
     await upsertIntrospection(null);
   }, [upsertIntrospection]);
 
+  const loadFromFile = useCallback(
+    async (path: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      try {
+        setIsLoading(true);
+        setError(undefined);
+
+        const bytes = await readFile(path);
+        const fileContent = new TextDecoder().decode(bytes);
+        const result = tryBuildIntrospectionFromFile(fileContent);
+
+        if ("error" in result) {
+          setError(result.error);
+          return { ok: false, error: result.error };
+        }
+
+        await upsertIntrospection(result.content);
+        return { ok: true };
+        // oxlint-disable-next-line no-explicit-any
+      } catch (err: any) {
+        const message = String("message" in err ? err.message : err);
+        setError(message);
+        return { ok: false, error: message };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [upsertIntrospection],
+  );
+
   useEffect(() => {
     if (introspection.data?.content == null || introspection.data.content === "") {
       return;
@@ -112,7 +143,7 @@ export function useIntrospectGraphQL(
     }
   }, [introspection.data?.content]);
 
-  return { schema, isLoading, error, refetch, clear };
+  return { schema, isLoading, error, refetch, clear, loadFromFile };
 }
 
 function useIntrospectionResult(request: HttpRequest) {
