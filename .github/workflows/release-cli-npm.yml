@@ -2,7 +2,7 @@ name: Release CLI to NPM
 
 on:
   push:
-    tags: [yaak-cli-*]
+    tags: [v*]
   workflow_dispatch:
     inputs:
       version:
@@ -118,7 +118,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="$WORKFLOW_VERSION"
           else
-            VERSION="${GITHUB_REF_NAME#yaak-cli-}"
+            VERSION="${GITHUB_REF_NAME}"
           fi
           VERSION="${VERSION#v}"
           echo "Building yaak version: $VERSION"
@@ -175,7 +175,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="$WORKFLOW_VERSION"
           else
-            VERSION="${GITHUB_REF_NAME#yaak-cli-}"
+            VERSION="${GITHUB_REF_NAME}"
           fi
           VERSION="${VERSION#v}"
           if [[ "$VERSION" == *-* ]]; then
