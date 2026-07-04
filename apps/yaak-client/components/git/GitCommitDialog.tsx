@@ -12,6 +12,7 @@ import { Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal
 import classNames from "classnames";
 import { useCallback, useMemo, useState } from "react";
 import { modelToYaml } from "../../lib/diffYaml";
+import { trackFeatureUsage } from "../../lib/featureFeedback";
 import { resolvedModelName } from "../../lib/resolvedModelName";
 import { showConfirm } from "../../lib/confirm";
 import { showErrorToast } from "../../lib/toast";
@@ -55,6 +56,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     setCommitError(null);
     try {
       await commit.mutateAsync({ message });
+      trackFeatureUsage("git-sync");
       onDone();
     } catch (err) {
       setCommitError(String(err));
@@ -66,6 +68,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     try {
       const r = await commitAndPush.mutateAsync({ message });
       handlePushResult(r);
+      trackFeatureUsage("git-sync");
       onDone();
     } catch (err) {
       showErrorToast({

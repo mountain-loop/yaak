@@ -402,6 +402,7 @@ export type Settings = {
   themeLight: string;
   updateChannel: string;
   hideLicenseBadge: boolean;
+  hideFeedbackPrompts: boolean;
   autoupdate: boolean;
   autoDownloadUpdates: boolean;
   checkNotifications: boolean;

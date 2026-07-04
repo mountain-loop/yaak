@@ -37,6 +37,11 @@ export function showToast({
   return id;
 }
 
+export function hideToastById(id: string) {
+  const toast = jotaiStore.get(toastsAtom).find((t) => t.id === id);
+  if (toast) hideToast(toast);
+}
+
 export function hideToast(toHide: ToastInstance) {
   jotaiStore.set(toastsAtom, (all) => {
     const t = all.find((t) => t.uniqueKey === toHide.uniqueKey);

@@ -15,6 +15,12 @@ export interface ToastProps {
   action?: (args: { hide: () => void }) => ReactNode;
   icon?: ShowToastRequest["icon"] | null;
   color?: ShowToastRequest["color"];
+  // Grow with the content (up to the viewport) instead of scrolling internally
+  // past the default max height
+  dynamicHeight?: boolean;
+  // Hide the close button, for toasts that render their own dismiss action.
+  // Escape still closes the toast
+  hideDismiss?: boolean;
 }
 
 const ICONS: Record<NonNullable<ToastProps["color"] | "custom">, IconProps["icon"] | null> = {
@@ -28,7 +34,17 @@ const ICONS: Record<NonNullable<ToastProps["color"] | "custom">, IconProps["icon
   warning: "alert_triangle",
 };
 
-export function Toast({ children, open, onClose, timeout, action, icon, color }: ToastProps) {
+export function Toast({
+  children,
+  open,
+  onClose,
+  timeout,
+  action,
+  icon,
+  color,
+  dynamicHeight,
+  hideDismiss,
+}: ToastProps) {
   useKey(
     "Escape",
     () => {
@@ -57,7 +73,13 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           "border border-border shadow-lg w-100",
         )}
       >
-        <div className="pl-3 py-3 pr-10 flex items-start gap-2 w-full max-h-44 overflow-auto">
+        <div
+          className={classNames(
+            "pl-3 py-3 flex items-start gap-2 w-full overflow-auto",
+            hideDismiss ? "pr-3" : "pr-10",
+            dynamicHeight ? "max-h-[80vh]" : "max-h-44",
+          )}
+        >
           {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1 shrink-0" />}
           <VStack space={2} className="w-full min-w-0">
             <div className="select-auto">{children}</div>
@@ -65,14 +87,16 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           </VStack>
         </div>
 
-        <IconButton
-          color={color}
-          variant="border"
-          className="opacity-60 border-0 absolute! top-2 right-2"
-          title="Dismiss"
-          icon="x"
-          onClick={onClose}
-        />
+        {!hideDismiss && (
+          <IconButton
+            color={color}
+            variant="border"
+            className="opacity-60 border-0 absolute! top-2 right-2"
+            title="Dismiss"
+            icon="x"
+            onClick={onClose}
+          />
+        )}
 
         {timeout != null && (
           <div className="w-full absolute bottom-0 left-0 right-0">

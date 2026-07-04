@@ -10,6 +10,7 @@ import {
 } from "date-fns";
 import { useDeleteHttpResponses } from "../hooks/useDeleteHttpResponses";
 import { useKeyValue } from "../hooks/useKeyValue";
+import { trackFeatureUsage } from "../lib/featureFeedback";
 import { DismissibleBanner } from "./core/DismissibleBanner";
 import { Dropdown, type DropdownItem } from "./core/Dropdown";
 import { formatMillis } from "./core/HttpResponseDurationTag";
@@ -92,7 +93,10 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
         </HStack>
       ),
       leftSlot: activeResponse?.id === r.id ? <Icon icon="check" /> : <Icon icon="empty" />,
-      onSelect: () => onPinnedResponseId(r.id),
+      onSelect: () => {
+        if (r.id !== latestResponseId) trackFeatureUsage("response-history");
+        onPinnedResponseId(r.id);
+      },
     });
   }
 
