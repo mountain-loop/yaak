@@ -20,6 +20,7 @@ import { deepEqualAtom } from "../lib/atoms";
 import { languageFromContentType } from "../lib/contentType";
 import { generateId } from "../lib/generateId";
 import { extractPathPlaceholders } from "../lib/pathPlaceholders";
+import { convertRequestBody } from "../lib/requestBodyConversion";
 import {
   BODY_TYPE_BINARY,
   BODY_TYPE_FORM_MULTIPART,
@@ -195,7 +196,14 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
               });
             };
 
-            const patch: Partial<HttpRequest> = { bodyType };
+            const patch: Partial<HttpRequest> = {
+              bodyType,
+              body: convertRequestBody({
+                body: activeRequest.body,
+                fromBodyType: activeRequest.bodyType,
+                toBodyType: bodyType,
+              }),
+            };
             let newContentType: string | null | undefined;
             if (bodyType === BODY_TYPE_NONE) {
               newContentType = null;
