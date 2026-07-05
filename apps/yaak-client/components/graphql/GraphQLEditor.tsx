@@ -105,6 +105,7 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
       return;
     }
 
+    // Keep the saved body aligned with the visible default, so send/copy use the selected operation.
     const operationName = operationNames[0];
     if (currentBody.operationName === operationName) {
       return;

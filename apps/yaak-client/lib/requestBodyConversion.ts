@@ -62,8 +62,12 @@ function toGraphQLBody(body: Body): GraphQLBody | null {
   }
 
   if (typeof body.text === "string") {
-    const parsed = parseJsonObject(body.text);
-    if (parsed != null) {
+    try {
+      const parsed: unknown = JSON.parse(body.text);
+      if (!isRecord(parsed)) {
+        return null;
+      }
+
       if (typeof parsed.query !== "string") {
         return null;
       }
@@ -78,9 +82,9 @@ function toGraphQLBody(body: Body): GraphQLBody | null {
       }
 
       return result;
+    } catch {
+      return { query: body.text, variables: undefined };
     }
-
-    return { query: body.text, variables: undefined };
   }
 
   return null;
@@ -180,11 +184,6 @@ function stringifyFormValue(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
   return JSON.stringify(value);
-}
-
-function parseJsonObject(text: string): Record<string, unknown> | null {
-  const parsed = parseJson(text);
-  return isRecord(parsed) ? parsed : null;
 }
 
 function parseJson(text: string): unknown | null {

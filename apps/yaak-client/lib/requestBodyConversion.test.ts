@@ -116,6 +116,18 @@ describe("convertRequestBody", () => {
     });
   });
 
+  test("preserves JSON arrays and primitives when converting to GraphQL", () => {
+    for (const text of [JSON.stringify([1, 2, 3]), JSON.stringify("query"), "123", "null"]) {
+      const body = convertRequestBody({
+        fromBodyType: BODY_TYPE_JSON,
+        toBodyType: BODY_TYPE_GRAPHQL,
+        body: { text },
+      });
+
+      expect(body).toEqual({ text });
+    }
+  });
+
   test("preserves text when converting to binary cannot build a file body", () => {
     const body = convertRequestBody({
       fromBodyType: BODY_TYPE_JSON,
