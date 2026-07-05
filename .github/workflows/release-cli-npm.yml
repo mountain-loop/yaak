@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   prepare-vendored-assets:
+    if: github.repository == 'mountain-loop/yaak'
     name: Prepare vendored plugin assets
     runs-on: ubuntu-latest
 

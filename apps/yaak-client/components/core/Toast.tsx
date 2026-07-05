@@ -3,6 +3,7 @@ import { Icon, type IconProps, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import * as m from "motion/react-m";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKey } from "react-use";
 import { IconButton } from "./IconButton";
 
@@ -15,6 +16,12 @@ export interface ToastProps {
   action?: (args: { hide: () => void }) => ReactNode;
   icon?: ShowToastRequest["icon"] | null;
   color?: ShowToastRequest["color"];
+  // Grow with the content (up to the viewport) instead of scrolling internally
+  // past the default max height
+  dynamicHeight?: boolean;
+  // Hide the close button, for toasts that render their own dismiss action.
+  // Escape still closes the toast
+  hideDismiss?: boolean;
 }
 
 const ICONS: Record<NonNullable<ToastProps["color"] | "custom">, IconProps["icon"] | null> = {
@@ -28,7 +35,47 @@ const ICONS: Record<NonNullable<ToastProps["color"] | "custom">, IconProps["icon
   warning: "alert_triangle",
 };
 
-export function Toast({ children, open, onClose, timeout, action, icon, color }: ToastProps) {
+export function Toast({
+  children,
+  open,
+  onClose,
+  timeout,
+  action,
+  icon,
+  color,
+  dynamicHeight,
+  hideDismiss,
+}: ToastProps) {
+  const onCloseRef = useRef(onClose);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoHideCanceled, setAutoHideCanceled] = useState(false);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const cancelAutoHide = useCallback(() => {
+    if (timeoutRef.current == null) return;
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setAutoHideCanceled(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open || timeout == null || autoHideCanceled) return;
+
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      onCloseRef.current();
+    }, timeout);
+
+    return () => {
+      if (timeoutRef.current == null) return;
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    };
+  }, [autoHideCanceled, open, timeout]);
+
   useKey(
     "Escape",
     () => {
@@ -56,8 +103,17 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           "relative pointer-events-auto bg-surface text-text rounded-lg",
           "border border-border shadow-lg w-100",
         )}
+        onFocusCapture={cancelAutoHide}
+        onKeyDownCapture={cancelAutoHide}
+        onPointerDownCapture={cancelAutoHide}
       >
-        <div className="pl-3 py-3 pr-10 flex items-start gap-2 w-full max-h-44 overflow-auto">
+        <div
+          className={classNames(
+            "pl-3 py-3 flex items-start gap-2 w-full overflow-auto",
+            hideDismiss ? "pr-3" : "pr-10",
+            dynamicHeight ? "max-h-[80vh]" : "max-h-44",
+          )}
+        >
           {toastIcon && <Icon icon={toastIcon} color={color} className="mt-1 shrink-0" />}
           <VStack space={2} className="w-full min-w-0">
             <div className="select-auto">{children}</div>
@@ -65,16 +121,18 @@ export function Toast({ children, open, onClose, timeout, action, icon, color }:
           </VStack>
         </div>
 
-        <IconButton
-          color={color}
-          variant="border"
-          className="opacity-60 border-0 absolute! top-2 right-2"
-          title="Dismiss"
-          icon="x"
-          onClick={onClose}
-        />
+        {!hideDismiss && (
+          <IconButton
+            color={color}
+            variant="border"
+            className="opacity-60 border-0 absolute! top-2 right-2"
+            title="Dismiss"
+            icon="x"
+            onClick={onClose}
+          />
+        )}
 
-        {timeout != null && (
+        {timeout != null && !autoHideCanceled && (
           <div className="w-full absolute bottom-0 left-0 right-0">
             <m.div
               className="bg-surface-highlight h-[3px]"

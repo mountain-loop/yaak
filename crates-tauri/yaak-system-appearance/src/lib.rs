@@ -1,13 +1,18 @@
 use std::sync::{Arc, Mutex};
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
 use log::{debug, warn};
-use tauri::{AppHandle, Emitter, Runtime};
+#[cfg(target_os = "linux")]
+use tauri::Emitter;
+use tauri::{AppHandle, Runtime};
 
 pub const INITIAL_APPEARANCE_GLOBAL: &str = "__YAAK_INITIAL_APPEARANCE__";
 pub const INITIAL_APPEARANCE_SOURCE_GLOBAL: &str = "__YAAK_INITIAL_APPEARANCE_SOURCE__";
 pub const SYSTEM_APPEARANCE_CHANGE_EVENT: &str = "system_appearance_change";
 
+#[cfg(target_os = "linux")]
 const SYSTEM_APPEARANCE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -42,6 +47,8 @@ impl InitialAppearanceSource {
 
 #[derive(Clone)]
 pub struct SystemAppearanceState {
+    // Only read by the Linux polling thread
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     last_appearance: Arc<Mutex<Option<Appearance>>>,
 }
 

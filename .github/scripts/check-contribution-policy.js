@@ -53,16 +53,25 @@ const MANAGED_LABEL_NAMES = [
   ...new Set(Object.values(LABELS).map((label) => label.name)),
 ];
 
+// Each checkbox lists its current label first, followed by legacy labels still
+// accepted from PRs opened against older versions of the template.
 const CHECKBOXES = {
-  bugFix: "This PR is a bug fix.",
-  explicitPermission:
+  bugFix: ["This PR is a bug fix."],
+  explicitPermission: [
     "If this PR is not a bug fix, I linked the feedback item where @gschier explicitly gave me permission to work on it.",
-  readContributing:
+  ],
+  readContributing: [
     "I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).",
-  testedLocally: "I tested this change locally.",
-  testsUpdated: "I added or updated tests when reasonable.",
-  screenshotsAdded:
+  ],
+  testedLocally: ["I tested this change locally."],
+  testsUpdated: [
+    "I added or updated tests, or tests are not reasonable for this change.",
+    "I added or updated tests when reasonable.",
+  ],
+  screenshotsAdded: [
+    "I added screenshots or recordings, or this change does not affect the UI.",
     "I added screenshots or recordings for UI changes when reasonable.",
+  ],
 };
 
 function escapeRegExp(value) {
@@ -102,8 +111,8 @@ function normalizeCheckboxLabel(label) {
     .trim();
 }
 
-function checkboxState(body, label) {
-  const expectedLabel = normalizeCheckboxLabel(label);
+function checkboxState(body, labels) {
+  const expectedLabels = new Set(labels.map(normalizeCheckboxLabel));
 
   for (const line of body.split("\n")) {
     const match = line.match(/^\s*[-*]\s*\[([ xX])\]\s*(.*?)\s*$/i);
@@ -112,7 +121,7 @@ function checkboxState(body, label) {
       continue;
     }
 
-    if (normalizeCheckboxLabel(match[2]) === expectedLabel) {
+    if (expectedLabels.has(normalizeCheckboxLabel(match[2]))) {
       return match[1].toLowerCase() === "x";
     }
   }
@@ -255,7 +264,8 @@ function analyzePullRequest(pr) {
     if (states.testsUpdated !== true) {
       blockers.push({
         label: LABELS.policyUnmet.name,
-        message: "Confirm that tests were added or updated when reasonable.",
+        message:
+          "Confirm that tests were added or updated, or that tests are not reasonable for this change. Check the box either way.",
       });
     }
 
@@ -263,7 +273,7 @@ function analyzePullRequest(pr) {
       blockers.push({
         label: LABELS.policyUnmet.name,
         message:
-          "Confirm that screenshots or recordings were added for UI changes when reasonable.",
+          "Confirm that screenshots or recordings were added, or that this change does not affect the UI. Check the box either way.",
       });
     }
   }

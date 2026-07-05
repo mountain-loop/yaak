@@ -71,6 +71,7 @@ function ActualEventStreamViewer({ response }: Props) {
     summary.data.fragmentCount === 0 &&
     !summary.isFetching &&
     summary.error == null;
+
   const filterEventPreviews = showExtractedText && filterEventPreviewsSetting.value === true;
   const applyToDetails = showExtractedText && applyToDetailsSetting.value === true;
   const renderMarkdown = showExtractedText && renderMarkdownSetting.value === true;

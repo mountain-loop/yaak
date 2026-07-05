@@ -30,6 +30,7 @@ permissions:
 
 jobs:
   check:
+    if: github.repository == 'mountain-loop/yaak'
     name: Check contribution policy
     runs-on: ubuntu-latest
     steps:

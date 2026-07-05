@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   update-flathub:
+    if: github.repository == 'mountain-loop/yaak'
     name: Update Flathub manifest
     runs-on: ubuntu-latest
     steps:

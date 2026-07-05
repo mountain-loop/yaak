@@ -65,6 +65,7 @@ use yaak_tls::find_client_certificate;
 mod commands;
 mod encoding;
 mod error;
+mod feedback;
 mod git_ext;
 mod git_watcher;
 mod grpc;
@@ -290,6 +291,16 @@ async fn cmd_render_template<R: Runtime>(
     )
     .await?;
     Ok(result)
+}
+
+#[tauri::command]
+async fn cmd_send_feedback<R: Runtime>(
+    app_handle: AppHandle<R>,
+    feature: String,
+    text: String,
+) -> YaakResult<()> {
+    feedback::send_feedback(&app_handle, feature, text).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1665,6 +1676,14 @@ async fn cmd_check_for_updates<R: Runtime>(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[cfg_attr(feature = "cef", tauri::cef_entry_point)]
 pub fn run() {
+    // GUI apps launched via Finder/launchd inherit a 256 open-file soft limit on macOS
+    // (1024 on most Linux desktops). SQLite WAL connections hold ~3 fds each, so raise
+    // the limit toward the hard cap before opening any DB pools.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if let Err(e) = rlimit::increase_nofile_limit(10240) {
+        eprintln!("Failed to raise open-file limit: {e}");
+    }
+
     let mut builder = tauri::Builder::<TauriRuntime>::default().plugin(
         Builder::default()
             .targets([
@@ -1819,6 +1838,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_dismiss_notification,
             cmd_export_data,
+            cmd_send_feedback,
             cmd_http_request_body,
             cmd_http_response_body,
             cmd_format_json,

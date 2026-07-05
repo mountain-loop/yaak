@@ -48,6 +48,7 @@ type TauriCmd =
   | "cmd_save_response"
   | "cmd_secure_template"
   | "cmd_send_ephemeral_request"
+  | "cmd_send_feedback"
   | "cmd_send_http_request"
   | "cmd_template_function_summaries"
   | "cmd_template_function_config"
