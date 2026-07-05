@@ -3,7 +3,7 @@ import { extractSseValueAtPath, type ServerSentEvent } from "@yaakapp-internal/s
 import { HStack, Icon, InlineCode, SplitLayout, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useKeyValue } from "../../hooks/useKeyValue";
 import { useFormatText } from "../../hooks/useFormatText";
 import { useResponseBodyEventSource } from "../../hooks/useResponseBodyEventSource";
@@ -13,7 +13,6 @@ import {
   useSseSummaryResultKeyPath,
 } from "../../hooks/useSseSummaryResultKeyPath";
 import { isJSON } from "../../lib/contentType";
-import { trackFeatureUsage } from "../../lib/featureFeedback";
 import { EmptyStateText } from "../EmptyStateText";
 import { Markdown } from "../Markdown";
 import { Button } from "../core/Button";
@@ -72,15 +71,6 @@ function ActualEventStreamViewer({ response }: Props) {
     summary.data.fragmentCount === 0 &&
     !summary.isFetching &&
     summary.error == null;
-  // The component remounts per response (keyed above), so this counts at most
-  // one use for each response that successfully extracts summary text
-  const hasSummaryFragments = showExtractedText && (summary.data?.fragmentCount ?? 0) > 0;
-  const [trackedSummaryUse, setTrackedSummaryUse] = useState<boolean>(false);
-  useEffect(() => {
-    if (!hasSummaryFragments || trackedSummaryUse) return;
-    setTrackedSummaryUse(true);
-    trackFeatureUsage("sse-summary");
-  }, [hasSummaryFragments, trackedSummaryUse]);
 
   const filterEventPreviews = showExtractedText && filterEventPreviewsSetting.value === true;
   const applyToDetails = showExtractedText && applyToDetailsSetting.value === true;

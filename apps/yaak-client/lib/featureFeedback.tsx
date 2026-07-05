@@ -1,20 +1,11 @@
 import { settingsAtom } from "@yaakapp-internal/models";
 import { FeedbackToast } from "../components/FeedbackToast";
+import { appInfo } from "./appInfo";
+import type { FeedbackFeature } from "./featureFeedbackConstants";
+import { dialogsAtom } from "./dialog";
 import { jotaiStore } from "./jotai";
 import { getKeyValue, setKeyValue } from "./keyValueStore";
 import { showToast } from "./toast";
-
-// Feature keys are sent to the server and used to group feedback for analysis.
-// NEVER rename a key once it has shipped, or historical feedback will be split
-// across the old and new names.
-export const FEEDBACK_FEATURES = {
-  "cookie-editor": "How is cookie editing working for you?",
-  "response-history": "How is the new response history menu working for you?",
-  "sse-summary": "How is extracted text for event streams working for you?",
-  "git-sync": "How is Git sync working for you?",
-} as const;
-
-export type FeedbackFeature = keyof typeof FEEDBACK_FEATURES;
 
 interface FeatureFeedbackState {
   uses: number;
@@ -30,12 +21,18 @@ const PROMPT_AFTER_USES = 3;
 // Show at most one feedback prompt per app session to stay unobtrusive
 let promptedThisSession = false;
 
+const currentStates: Partial<Record<FeedbackFeature, FeatureFeedbackState>> = {};
+
 const kvArgs = (feature: FeedbackFeature) => ({
   namespace: "global",
   key: ["feature-feedback", feature],
 });
 
 function getFeatureFeedbackState(feature: FeedbackFeature): FeatureFeedbackState {
+  if (currentStates[feature] != null) {
+    return currentStates[feature];
+  }
+
   return getKeyValue<FeatureFeedbackState>({
     ...kvArgs(feature),
     fallback: { uses: 0, done: false },
@@ -44,14 +41,51 @@ function getFeatureFeedbackState(feature: FeedbackFeature): FeatureFeedbackState
 
 function patchFeatureFeedbackState(feature: FeedbackFeature, patch: Partial<FeatureFeedbackState>) {
   const value = { ...getFeatureFeedbackState(feature), ...patch };
+  currentStates[feature] = value;
   setKeyValue({ ...kvArgs(feature), value }).catch(console.error);
+}
+
+function markFeatureFeedbackDone(feature: FeedbackFeature) {
+  patchFeatureFeedbackState(feature, { done: true });
+}
+
+function showFeedbackToast(feature: FeedbackFeature) {
+  if (!jotaiStore.get(settingsAtom).promptFeedback) return;
+
+  showToast({
+    id: `feature-feedback-${feature}`,
+    timeout: FEEDBACK_PROMPT_TIMEOUT_MS,
+    dynamicHeight: true,
+    hideDismiss: true,
+    message: (
+      <FeedbackToast feature={feature} onDone={() => markFeatureFeedbackDone(feature)} />
+    ),
+  });
+}
+
+function showFeedbackToastWhenReady(feature: FeedbackFeature) {
+  setTimeout(() => {
+    if (!jotaiStore.get(settingsAtom).promptFeedback) return;
+
+    if (jotaiStore.get(dialogsAtom).length === 0) {
+      showFeedbackToast(feature);
+      return;
+    }
+
+    const unsubscribe = jotaiStore.sub(dialogsAtom, () => {
+      if (jotaiStore.get(dialogsAtom).length > 0) return;
+
+      unsubscribe();
+      showFeedbackToast(feature);
+    });
+  }, FEEDBACK_PROMPT_DELAY_MS);
 }
 
 // Record a successful use of a feature, and prompt for feedback on the Nth use.
 // Nothing is ever sent to the server from here; showing the toast is local-only
 // and a submission only happens when the user clicks Send in it.
 export function trackFeatureUsage(feature: FeedbackFeature) {
-  if (jotaiStore.get(settingsAtom).hideFeedbackPrompts) return;
+  if (appInfo.featureLicense !== true || !jotaiStore.get(settingsAtom).promptFeedback) return;
 
   const state = getFeatureFeedbackState(feature);
   if (state.done) return;
@@ -59,22 +93,9 @@ export function trackFeatureUsage(feature: FeedbackFeature) {
   const uses = state.uses + 1;
   const shouldPrompt = uses >= PROMPT_AFTER_USES && !promptedThisSession;
 
-  // Mark done when prompting so the toast can only ever appear once, even if
-  // the app quits before the user interacts with it
-  patchFeatureFeedbackState(feature, { uses, done: shouldPrompt });
+  patchFeatureFeedbackState(feature, { uses });
   if (!shouldPrompt) return;
 
   promptedThisSession = true;
-
-  setTimeout(() => {
-    if (jotaiStore.get(settingsAtom).hideFeedbackPrompts) return;
-
-    showToast({
-      id: `feature-feedback-${feature}`,
-      timeout: FEEDBACK_PROMPT_TIMEOUT_MS,
-      dynamicHeight: true,
-      hideDismiss: true,
-      message: <FeedbackToast feature={feature} />,
-    });
-  }, FEEDBACK_PROMPT_DELAY_MS);
+  showFeedbackToastWhenReady(feature);
 }

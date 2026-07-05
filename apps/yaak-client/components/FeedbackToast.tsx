@@ -1,7 +1,7 @@
 import { HStack, VStack } from "@yaakapp-internal/ui";
-import { useState } from "react";
-import type { FeedbackFeature } from "../lib/featureFeedback";
-import { FEEDBACK_FEATURES } from "../lib/featureFeedback";
+import { useRef, useState } from "react";
+import type { FeedbackFeature } from "../lib/featureFeedbackConstants";
+import { FEEDBACK_FEATURES } from "../lib/featureFeedbackConstants";
 import { invokeCmd } from "../lib/tauri";
 import { hideToastById, showToast } from "../lib/toast";
 import { Button } from "./core/Button";
@@ -9,18 +9,29 @@ import { Input } from "./core/Input";
 
 interface Props {
   feature: FeedbackFeature;
+  onDone: () => void;
 }
 
-export function FeedbackToast({ feature }: Props) {
+export function FeedbackToast({ feature, onDone }: Props) {
   const [text, setText] = useState<string>("");
+  const [sent, setSent] = useState(false);
+  const sentRef = useRef(false);
 
   const handleDismiss = () => {
+    onDone();
     hideToastById(`feature-feedback-${feature}`);
   };
 
   const handleSend = () => {
+    const trimmedText = text.trim();
+    if (sentRef.current || trimmedText.length === 0) return;
+
+    sentRef.current = true;
+    setSent(true);
+    onDone();
+
     // Fire-and-forget; failures are intentionally ignored
-    invokeCmd("cmd_send_feedback", { feature, text: text.trim() }).catch(() => {});
+    invokeCmd("cmd_send_feedback", { feature, text: trimmedText }).catch(() => {});
     showToast({
       id: `feature-feedback-${feature}`,
       timeout: 3000,
@@ -54,7 +65,7 @@ export function FeedbackToast({ feature }: Props) {
         <Button
           size="xs"
           color="primary"
-          disabled={text.trim().length === 0}
+          disabled={sent || text.trim().length === 0}
           onClick={handleSend}
         >
           Send

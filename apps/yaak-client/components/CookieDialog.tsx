@@ -13,7 +13,6 @@ import {
   useState,
 } from "react";
 import { showDialog } from "../lib/dialog";
-import { trackFeatureUsage } from "../lib/featureFeedback";
 import { jotaiStore } from "../lib/jotai";
 import { cookieDomain } from "../lib/model_util";
 import {
@@ -132,7 +131,6 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
     });
 
     void patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
-    trackFeatureUsage("cookie-editor");
     setSelectedCookieKey(nextCookieKey);
     setEditingCookieKey(null);
     setDraftCookie(null);

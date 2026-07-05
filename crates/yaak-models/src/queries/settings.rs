@@ -38,7 +38,7 @@ impl<'a> ClientDb<'a> {
             autoupdate: true,
             colored_methods: false,
             hide_license_badge: false,
-            hide_feedback_prompts: false,
+            prompt_feedback: true,
             auto_download_updates: true,
             check_notifications: true,
             hotkeys: HashMap::new(),

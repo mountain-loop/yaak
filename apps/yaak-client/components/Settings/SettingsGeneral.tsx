@@ -102,19 +102,23 @@ export function SettingsGeneral() {
               description="Periodically ping Yaak servers to check for relevant notifications."
             />
 
-            <ModelSettingRowBoolean
-              model={settings}
-              modelKey="hideFeedbackPrompts"
-              title="Never ask for feedback"
-              description="Hide the rare one-time prompts asking how new features are working."
-            />
-
             <SettingRowBoolean
               title="Send anonymous usage statistics"
               description="Yaak is local-first and does not collect analytics or usage data."
               disabled
               checked={false}
               onChange={() => {}}
+            />
+          </SettingsSection>
+        </CargoFeature>
+
+        <CargoFeature feature="license">
+          <SettingsSection title="Feedback">
+            <SettingRowBoolean
+              title="Prompt for feedback"
+              description="Show rare one-time prompts asking how new features are working."
+              checked={settings.promptFeedback}
+              onChange={(promptFeedback) => patchModel(settings, { promptFeedback })}
             />
           </SettingsSection>
         </CargoFeature>

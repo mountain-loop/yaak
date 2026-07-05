@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, warn};
 use serde::Serialize;
 use tauri::{AppHandle, Runtime, is_dev};
 use yaak_api::{ApiClientKind, yaak_api_client};
@@ -32,9 +32,29 @@ pub async fn send_feedback<R: Runtime>(app_handle: &AppHandle<R>, feature: Strin
         }
     };
 
-    match client.post(build_url("/app-feedback")).json(&payload).send().await {
-        Ok(resp) => debug!("Sent feedback with status {}", resp.status()),
-        Err(e) => debug!("Failed to send feedback: {e:?}"),
+    let url = build_url("/app-feedback");
+    debug!(
+        "Sending feature feedback to {url}: feature={}, app_version={}, os={}, text_len={}",
+        payload.feature,
+        payload.app_version,
+        payload.os,
+        payload.text.len()
+    );
+
+    match client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            if status.is_success() {
+                debug!("Sent feature feedback with status {status}");
+            } else {
+                let body = resp
+                    .text()
+                    .await
+                    .unwrap_or_else(|e| format!("<failed to read response body: {e:?}>"));
+                warn!("Failed to send feature feedback with status {status}: {body}");
+            }
+        }
+        Err(e) => warn!("Failed to send feature feedback: {e:?}"),
     }
 }
 
