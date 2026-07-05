@@ -30,25 +30,25 @@ export function convertRequestBody({
   }
 
   if (toBodyType === BODY_TYPE_GRAPHQL) {
-    return toGraphQLBody(body);
+    return toGraphQLBody(body) ?? body;
   }
 
   if (toBodyType === BODY_TYPE_FORM_URLENCODED || toBodyType === BODY_TYPE_FORM_MULTIPART) {
-    return toFormBody(body);
+    return toFormBody(body) ?? body;
   }
 
   if (toBodyType === BODY_TYPE_BINARY) {
-    return typeof body.filePath === "string" ? { filePath: body.filePath } : {};
+    return typeof body.filePath === "string" ? { filePath: body.filePath } : body;
   }
 
-  return toTextBody(body, fromBodyType, toBodyType);
+  return toTextBody(body, fromBodyType, toBodyType) ?? body;
 }
 
 export function normalizeGraphQLBody(body: Body): GraphQLBody {
-  return toGraphQLBody(body);
+  return toGraphQLBody(body) ?? { query: "", variables: undefined };
 }
 
-function toGraphQLBody(body: Body): GraphQLBody {
+function toGraphQLBody(body: Body): GraphQLBody | null {
   if (typeof body.query === "string") {
     const result: GraphQLBody = {
       query: body.query,
@@ -64,7 +64,11 @@ function toGraphQLBody(body: Body): GraphQLBody {
   if (typeof body.text === "string") {
     const parsed = parseJsonObject(body.text);
     if (parsed != null) {
-      const query = typeof parsed.query === "string" ? parsed.query : "";
+      if (typeof parsed.query !== "string") {
+        return null;
+      }
+
+      const query = parsed.query;
       const variables =
         parsed.variables == null ? undefined : JSON.stringify(parsed.variables, null, 2);
 
@@ -79,10 +83,10 @@ function toGraphQLBody(body: Body): GraphQLBody {
     return { query: body.text, variables: undefined };
   }
 
-  return { query: "", variables: undefined };
+  return null;
 }
 
-function toFormBody(body: Body): Body {
+function toFormBody(body: Body): Body | null {
   if (Array.isArray(body.form)) {
     return {
       form: body.form.map((p) => ({
@@ -97,10 +101,10 @@ function toFormBody(body: Body): Body {
     };
   }
 
-  return { form: [] };
+  return null;
 }
 
-function toTextBody(body: Body, fromBodyType: BodyType, toBodyType: BodyType): Body {
+function toTextBody(body: Body, fromBodyType: BodyType, toBodyType: BodyType): Body | null {
   const sendJsonComments =
     typeof body.sendJsonComments === "boolean" ? { sendJsonComments: body.sendJsonComments } : {};
 
@@ -136,7 +140,7 @@ function toTextBody(body: Body, fromBodyType: BodyType, toBodyType: BodyType): B
     return { text: body.filePath };
   }
 
-  return { text: "" };
+  return null;
 }
 
 function formBodyToUrlEncodedText(form: unknown[]): string {

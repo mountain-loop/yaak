@@ -44,6 +44,10 @@ export function parseGraphQLJsonBody({
     return null;
   }
 
+  if (hasExtraGraphQLEnvelopeFields(body)) {
+    return null;
+  }
+
   const signals = getGraphQLDetectionSignals(body, url);
   const score = signals.reduce((total, signal) => total + signal.score, 0);
   const hasGraphQLDocument = signals.some((signal) => signal.requiresGraphQLDocument);
@@ -61,6 +65,11 @@ export function parseGraphQLJsonBody({
   }
 
   return result;
+}
+
+function hasExtraGraphQLEnvelopeFields(body: Record<string, unknown>): boolean {
+  const allowedKeys = new Set(["query", "variables", "operationName"]);
+  return Object.keys(body).some((key) => !allowedKeys.has(key));
 }
 
 function getGraphQLDetectionSignals(

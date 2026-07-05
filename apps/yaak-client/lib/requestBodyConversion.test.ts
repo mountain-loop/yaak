@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
+  BODY_TYPE_BINARY,
   BODY_TYPE_FORM_URLENCODED,
   BODY_TYPE_GRAPHQL,
   BODY_TYPE_JSON,
+  BODY_TYPE_NONE,
   BODY_TYPE_OTHER,
   BODY_TYPE_XML,
 } from "./model_util";
@@ -90,7 +92,7 @@ describe("convertRequestBody", () => {
     });
   });
 
-  test("does not convert XML text to form pairs", () => {
+  test("preserves text when converting to form bodies cannot build form pairs", () => {
     const body = convertRequestBody({
       fromBodyType: BODY_TYPE_XML,
       toBodyType: BODY_TYPE_FORM_URLENCODED,
@@ -98,7 +100,41 @@ describe("convertRequestBody", () => {
     });
 
     expect(body).toEqual({
-      form: [],
+      text: "a=1&b=two+words",
     });
+  });
+
+  test("preserves JSON text that is not a GraphQL envelope", () => {
+    const body = convertRequestBody({
+      fromBodyType: BODY_TYPE_JSON,
+      toBodyType: BODY_TYPE_GRAPHQL,
+      body: { text: JSON.stringify({ name: "Yaak" }) },
+    });
+
+    expect(body).toEqual({
+      text: JSON.stringify({ name: "Yaak" }),
+    });
+  });
+
+  test("preserves text when converting to binary cannot build a file body", () => {
+    const body = convertRequestBody({
+      fromBodyType: BODY_TYPE_JSON,
+      toBodyType: BODY_TYPE_BINARY,
+      body: { text: '{ "name": "Yaak" }' },
+    });
+
+    expect(body).toEqual({
+      text: '{ "name": "Yaak" }',
+    });
+  });
+
+  test("clears body when converting to no body", () => {
+    const body = convertRequestBody({
+      fromBodyType: BODY_TYPE_JSON,
+      toBodyType: BODY_TYPE_NONE,
+      body: { text: '{ "name": "Yaak" }' },
+    });
+
+    expect(body).toEqual({});
   });
 });

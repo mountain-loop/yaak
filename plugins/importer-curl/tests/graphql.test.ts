@@ -102,6 +102,21 @@ describe("isGraphQLJsonBody", () => {
     });
   });
 
+  test("does not detect GraphQL envelopes with extra fields", () => {
+    const args = {
+      mimeType: "application/json",
+      text: JSON.stringify({
+        query: "query Search($id: ID!) { node(id: $id) { id } }",
+        variables: { id: "123" },
+        extensions: { persistedQuery: { version: 1, sha256Hash: "abc123" } },
+      }),
+      url: "https://api.example.com/graphql",
+    };
+
+    expect(isGraphQLJsonBody(args)).toBe(false);
+    expect(parseGraphQLJsonBody(args)).toBeNull();
+  });
+
   test("ignores invalid JSON and non-object JSON", () => {
     expect(
       isGraphQLJsonBody({
