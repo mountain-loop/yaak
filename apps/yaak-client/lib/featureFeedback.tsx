@@ -21,7 +21,8 @@ const PROMPT_AFTER_USES = 3;
 // Show at most one feedback prompt per app session to stay unobtrusive
 let promptedThisSession = false;
 
-const currentStates: Partial<Record<FeedbackFeature, FeatureFeedbackState>> = {};
+const lastTrackedAt: Partial<Record<FeedbackFeature, number>> = {};
+const FEATURE_USE_DEBOUNCE_MS = 10_000;
 
 const kvArgs = (feature: FeedbackFeature) => ({
   namespace: "global",
@@ -29,10 +30,6 @@ const kvArgs = (feature: FeedbackFeature) => ({
 });
 
 function getFeatureFeedbackState(feature: FeedbackFeature): FeatureFeedbackState {
-  if (currentStates[feature] != null) {
-    return currentStates[feature];
-  }
-
   return getKeyValue<FeatureFeedbackState>({
     ...kvArgs(feature),
     fallback: { uses: 0, done: false },
@@ -41,7 +38,6 @@ function getFeatureFeedbackState(feature: FeedbackFeature): FeatureFeedbackState
 
 function patchFeatureFeedbackState(feature: FeedbackFeature, patch: Partial<FeatureFeedbackState>) {
   const value = { ...getFeatureFeedbackState(feature), ...patch };
-  currentStates[feature] = value;
   setKeyValue({ ...kvArgs(feature), value }).catch(console.error);
 }
 
@@ -86,6 +82,12 @@ function showFeedbackToastWhenReady(feature: FeedbackFeature) {
 // and a submission only happens when the user clicks Send in it.
 export function trackFeatureUsage(feature: FeedbackFeature) {
   if (appInfo.featureLicense !== true || !jotaiStore.get(settingsAtom).promptFeedback) return;
+
+  const now = Date.now();
+  if (lastTrackedAt[feature] != null && now - lastTrackedAt[feature] < FEATURE_USE_DEBOUNCE_MS) {
+    return;
+  }
+  lastTrackedAt[feature] = now;
 
   const state = getFeatureFeedbackState(feature);
   if (state.done) return;
