@@ -1,50 +1,39 @@
 ---
-description: Generate formatted release notes for Yaak releases
-allowed-tools: Bash(git tag:*)
+description: Ship a Yaak release (notes are generated from changelog items)
 ---
 
-Generate formatted release notes for Yaak releases by analyzing git history and pull request descriptions.
+Release notes are NOT written by hand anymore. They are generated from the
+changelog release items on yaak.app when a release ships. Never edit GitHub
+release bodies directly — the changelog items are the single source of truth.
 
-## What to do
+Terminology: a "changelog release" is the draft on yaak.app (managed via the
+yaak MCP release_* tools). A "GitHub release" is the artifact record CI
+creates; you only ever publish its draft, never write its notes.
 
-1. Identifies the version tag and previous version
-2. Retrieves all commits between versions
-   - If the version is a beta version, it retrieves commits between the beta version and previous beta version
-   - If the version is a stable version, it retrieves commits between the stable version and the previous stable version
-3. Fetches PR descriptions for linked issues to find:
-   - Feedback URLs (feedback.yaak.app)
-   - Additional context and descriptions
-   - Installation links for plugins
-4. Formats the release notes using the standard Yaak format:
-   - Changelog badge at the top
-   - Bulleted list of changes with PR links
-   - Feedback links where available
-   - Full changelog comparison link at the bottom
+## Release process
 
-## Output Format
+1. **Keep the draft changelog release current** (yaak MCP): as user-facing PRs
+   merge, add items with `release_add_item` — link the feedback post and/or PR
+   and titles derive automatically. Only MERGED changes; open PRs must wait.
+   CLI changes are included with a "CLI:" title prefix. Internal tooling and
+   dependency bumps never get items. Check state with `release_get <version>`
+   (items show which beta they shipped in, or "pending").
 
-The skill generates markdown-formatted release notes following this structure:
+2. **Tag the release** (`v<version>` or `v<version>-beta.N`). CI builds
+   artifacts, creates a DRAFT GitHub release, and publishes the CLI to npm at
+   the same version.
 
-```markdown
-[![Changelog](https://img.shields.io/badge/Changelog-VERSION-blue)](https://yaak.app/changelog/VERSION)
+3. **Publish the draft GitHub release** (the only GitHub step — this is when
+   binaries go public). Leave the body empty and the prerelease flag as-is;
+   both are handled next.
 
-- Feature/fix description in by @username [#123](https://github.com/mountain-loop/yaak/pull/123)
-- [Linked feedback item](https://feedback.yaak.app/p/item) by @username in [#456](https://github.com/mountain-loop/yaak/pull/456)
-- A simple item that doesn't have a feedback or PR link
+4. **Ship via the yaak MCP**:
+   - Beta: `release_ship_beta <version>` — writes the GitHub pre-release notes
+     from that beta's items, sets the prerelease flag, moves linked feedback
+     posts to released_beta with featured comments, and stamps items.
+   - Stable: `release_publish <version>` — writes full notes with the
+     changelog link, marks the GitHub release as a full release, makes the
+     yaak.app changelog page live, and moves linked posts to released.
 
-**Full Changelog**: https://github.com/mountain-loop/yaak/compare/vPREV...vCURRENT
-```
-
-**IMPORTANT**: Always add a blank lines around the markdown code fence and output the markdown code block last
-**IMPORTANT**: PRs by `@gschier` should not mention the @username
-**IMPORTANT**: These are app release notes. Exclude CLI-only changes (commits prefixed with `cli:` or only touching `crates-cli/`) since the CLI has its own release process.
-
-## After Generating Release Notes
-
-After outputting the release notes, ask the user if they would like to create a draft GitHub release with these notes. If they confirm, create the release using:
-
-```bash
-gh release create <tag> --draft --prerelease --title "Release <version>" --notes '<release notes>'
-```
-
-**IMPORTANT**: The release title format is "Release XXXX" where XXXX is the version WITHOUT the `v` prefix. For example, tag `v2026.2.1-beta.1` gets title "Release 2026.2.1-beta.1".
+Both ship commands verify the GitHub release exists first and are safe to
+re-run (already-shipped posts and items are skipped).
