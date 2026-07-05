@@ -1676,6 +1676,14 @@ async fn cmd_check_for_updates<R: Runtime>(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 #[cfg_attr(feature = "cef", tauri::cef_entry_point)]
 pub fn run() {
+    // GUI apps launched via Finder/launchd inherit a 256 open-file soft limit on macOS
+    // (1024 on most Linux desktops). SQLite WAL connections hold ~3 fds each, so raise
+    // the limit toward the hard cap before opening any DB pools.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    if let Err(e) = rlimit::increase_nofile_limit(10240) {
+        eprintln!("Failed to raise open-file limit: {e}");
+    }
+
     let mut builder = tauri::Builder::<TauriRuntime>::default().plugin(
         Builder::default()
             .targets([

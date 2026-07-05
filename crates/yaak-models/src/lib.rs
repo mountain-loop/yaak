@@ -54,11 +54,15 @@ pub fn init_standalone(
         create_dir_all(parent)?;
     }
 
-    // Main database pool
+    // Main database pool. Sized for concurrent in-flight queries, not concurrent app
+    // features — connections are held per-statement, so even heavy fan-out (e.g. many
+    // gRPC streams) only needs a handful at once. Keep max_size modest: WAL connections
+    // hold ~3 file descriptors each, and macOS GUI apps get a 256 fd soft limit.
     info!("Initializing app database {db_path:?}");
     let manager = sqlite_file_manager(db_path);
     let pool = Pool::builder()
-        .max_size(100)
+        .max_size(20)
+        .min_idle(Some(2))
         .connection_timeout(Duration::from_secs(10))
         .build(manager)
         .map_err(|e| Error::Database(e.to_string()))?;
@@ -70,7 +74,8 @@ pub fn init_standalone(
     // Blob database pool
     let blob_manager = sqlite_file_manager(blob_path);
     let blob_pool = Pool::builder()
-        .max_size(50)
+        .max_size(10)
+        .min_idle(Some(1))
         .connection_timeout(Duration::from_secs(10))
         .build(blob_manager)
         .map_err(|e| Error::Database(e.to_string()))?;
