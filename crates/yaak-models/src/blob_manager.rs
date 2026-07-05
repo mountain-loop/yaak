@@ -5,7 +5,6 @@ use log::{debug, info};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, params};
-use std::sync::{Arc, Mutex};
 
 static BLOB_MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/blob_migrations");
 
@@ -25,23 +24,21 @@ impl BodyChunk {
 }
 
 /// Manages the blob database connection pool.
+// Pool is internally synchronized — don't wrap it in a Mutex. A Mutex held across the
+// blocking `get()` serializes every blob access behind the slowest waiter, freezing the
+// whole app whenever the pool is exhausted.
 #[derive(Debug, Clone)]
 pub struct BlobManager {
-    pool: Arc<Mutex<Pool<SqliteConnectionManager>>>,
+    pool: Pool<SqliteConnectionManager>,
 }
 
 impl BlobManager {
     pub fn new(pool: Pool<SqliteConnectionManager>) -> Self {
-        Self { pool: Arc::new(Mutex::new(pool)) }
+        Self { pool }
     }
 
     pub fn connect(&self) -> BlobContext {
-        let conn = self
-            .pool
-            .lock()
-            .expect("Failed to gain lock on blob DB")
-            .get()
-            .expect("Failed to get blob DB connection from pool");
+        let conn = self.pool.get().expect("Failed to get blob DB connection from pool");
         BlobContext { conn }
     }
 }
