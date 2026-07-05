@@ -10,7 +10,6 @@ import { DismissibleBanner } from "./core/DismissibleBanner";
 const COMMERCIAL_USE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 const COMMERCIAL_USE_BANNER_MESSAGE =
   "Personal use of Yaak is free. If you’re using Yaak at work, please purchase a license.";
-const hiddenBanner = <span aria-hidden className="block h-0 w-0 shrink-0 overflow-hidden" />;
 
 export function CommercialUseBanner({
   source,
@@ -56,7 +55,7 @@ export function CommercialUseBanner({
   }, [setSnoozedAt, snoozed, source]);
 
   if (!visible || isSnoozeLoading || (snoozed && !snoozeStartedRef.current)) {
-    return hiddenBanner;
+    return null;
   }
 
   return (

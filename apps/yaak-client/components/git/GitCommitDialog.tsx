@@ -209,9 +209,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         layout="horizontal"
         defaultRatio={0.6}
         firstSlot={({ style }) => (
-          <div style={style} className="h-full px-4 grid grid-rows-[auto_minmax(0,1fr)] gap-3">
+          <div style={style} className="h-full px-4 flex flex-col gap-3">
             <CommercialUseBanner source="git-commit" title="Using Git for work?" />
             <SplitLayout
+              className="min-h-0 flex-1"
               storageKey="commit-vertical"
               layout="vertical"
               defaultRatio={0.35}
@@ -242,7 +243,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                 </div>
               )}
               secondSlot={({ style: innerStyle }) => (
-                <div style={innerStyle} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
+                <div
+                  style={innerStyle}
+                  className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2"
+                >
                   <Input
                     className="text-base! font-sans rounded-md"
                     placeholder="Commit message..."
