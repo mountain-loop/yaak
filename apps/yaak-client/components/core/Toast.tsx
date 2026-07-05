@@ -3,6 +3,7 @@ import { Icon, type IconProps, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import * as m from "motion/react-m";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKey } from "react-use";
 import { IconButton } from "./IconButton";
 
@@ -45,6 +46,36 @@ export function Toast({
   dynamicHeight,
   hideDismiss,
 }: ToastProps) {
+  const onCloseRef = useRef(onClose);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoHideCanceled, setAutoHideCanceled] = useState(false);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const cancelAutoHide = useCallback(() => {
+    if (timeoutRef.current == null) return;
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setAutoHideCanceled(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open || timeout == null || autoHideCanceled) return;
+
+    timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = null;
+      onCloseRef.current();
+    }, timeout);
+
+    return () => {
+      if (timeoutRef.current == null) return;
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    };
+  }, [autoHideCanceled, open, timeout]);
+
   useKey(
     "Escape",
     () => {
@@ -72,6 +103,9 @@ export function Toast({
           "relative pointer-events-auto bg-surface text-text rounded-lg",
           "border border-border shadow-lg w-100",
         )}
+        onFocusCapture={cancelAutoHide}
+        onKeyDownCapture={cancelAutoHide}
+        onPointerDownCapture={cancelAutoHide}
       >
         <div
           className={classNames(
@@ -98,7 +132,7 @@ export function Toast({
           />
         )}
 
-        {timeout != null && (
+        {timeout != null && !autoHideCanceled && (
           <div className="w-full absolute bottom-0 left-0 right-0">
             <m.div
               className="bg-surface-highlight h-[3px]"

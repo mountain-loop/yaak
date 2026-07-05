@@ -28,9 +28,6 @@ export function showToast({
 
   setTimeout(() => {
     const newToast: ToastInstance = { id, uniqueKey, timeout, ...props };
-    if (timeout != null) {
-      setTimeout(() => hideToast(newToast), timeout);
-    }
     jotaiStore.set(toastsAtom, (prev) => [...prev, newToast]);
   }, delay);
 

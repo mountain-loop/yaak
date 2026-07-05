@@ -21,6 +21,9 @@ interface FeatureFeedbackState {
   done: boolean;
 }
 
+const FEEDBACK_PROMPT_DELAY_MS = 1500;
+const FEEDBACK_PROMPT_TIMEOUT_MS = 8000;
+
 // Ask once the user has used a feature enough times to have formed an opinion
 const PROMPT_AFTER_USES = 3;
 
@@ -62,11 +65,16 @@ export function trackFeatureUsage(feature: FeedbackFeature) {
   if (!shouldPrompt) return;
 
   promptedThisSession = true;
-  showToast({
-    id: `feature-feedback-${feature}`,
-    timeout: null,
-    dynamicHeight: true,
-    hideDismiss: true,
-    message: <FeedbackToast feature={feature} />,
-  });
+
+  setTimeout(() => {
+    if (jotaiStore.get(settingsAtom).hideFeedbackPrompts) return;
+
+    showToast({
+      id: `feature-feedback-${feature}`,
+      timeout: FEEDBACK_PROMPT_TIMEOUT_MS,
+      dynamicHeight: true,
+      hideDismiss: true,
+      message: <FeedbackToast feature={feature} />,
+    });
+  }, FEEDBACK_PROMPT_DELAY_MS);
 }
