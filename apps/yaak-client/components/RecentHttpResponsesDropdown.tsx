@@ -92,7 +92,9 @@ export const RecentHttpResponsesDropdown = function ResponsePane({
         </HStack>
       ),
       leftSlot: activeResponse?.id === r.id ? <Icon icon="check" /> : <Icon icon="empty" />,
-      onSelect: () => onPinnedResponseId(r.id),
+      onSelect: () => {
+        onPinnedResponseId(r.id);
+      },
     });
   }
 

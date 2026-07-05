@@ -28,13 +28,15 @@ export function showToast({
 
   setTimeout(() => {
     const newToast: ToastInstance = { id, uniqueKey, timeout, ...props };
-    if (timeout != null) {
-      setTimeout(() => hideToast(newToast), timeout);
-    }
     jotaiStore.set(toastsAtom, (prev) => [...prev, newToast]);
   }, delay);
 
   return id;
+}
+
+export function hideToastById(id: string) {
+  const toast = jotaiStore.get(toastsAtom).find((t) => t.id === id);
+  if (toast) hideToast(toast);
 }
 
 export function hideToast(toHide: ToastInstance) {

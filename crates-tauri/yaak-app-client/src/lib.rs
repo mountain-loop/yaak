@@ -65,6 +65,7 @@ use yaak_tls::find_client_certificate;
 mod commands;
 mod encoding;
 mod error;
+mod feedback;
 mod git_ext;
 mod git_watcher;
 mod grpc;
@@ -290,6 +291,16 @@ async fn cmd_render_template<R: Runtime>(
     )
     .await?;
     Ok(result)
+}
+
+#[tauri::command]
+async fn cmd_send_feedback<R: Runtime>(
+    app_handle: AppHandle<R>,
+    feature: String,
+    text: String,
+) -> YaakResult<()> {
+    feedback::send_feedback(&app_handle, feature, text).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -1819,6 +1830,7 @@ pub fn run() {
             cmd_delete_send_history,
             cmd_dismiss_notification,
             cmd_export_data,
+            cmd_send_feedback,
             cmd_http_request_body,
             cmd_http_response_body,
             cmd_format_json,

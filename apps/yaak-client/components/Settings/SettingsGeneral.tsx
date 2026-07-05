@@ -112,6 +112,17 @@ export function SettingsGeneral() {
           </SettingsSection>
         </CargoFeature>
 
+        <CargoFeature feature="license">
+          <SettingsSection title="Feedback">
+            <SettingRowBoolean
+              title="Prompt for feedback"
+              description="Show rare one-time prompts asking how new features are working."
+              checked={settings.promptFeedback}
+              onChange={(promptFeedback) => patchModel(settings, { promptFeedback })}
+            />
+          </SettingsSection>
+        </CargoFeature>
+
         {showWorkspaceSettingsMovedBanner && (
           <DismissibleBanner
             id="workspace-settings-moved-2026-06-30"
