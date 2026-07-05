@@ -562,6 +562,30 @@ describe("importer-curl", () => {
     });
   });
 
+  test("Imports GraphQL JSON data as a GraphQL request", () => {
+    expect(
+      convertCurl(
+        `curl 'https://yaak.app/graphql' -H 'Content-Type: application/json' --data-raw $'{"query":"query Search($id: ID\\u0021) { node(id: $id) { id } }","variables":{"id":"123"}}'`,
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app/graphql",
+            method: "POST",
+            headers: [{ name: "Content-Type", value: "application/json", enabled: true }],
+            bodyType: "graphql",
+            body: {
+              query: "query Search($id: ID!) { node(id: $id) { id } }",
+              variables: '{\n  "id": "123"\n}',
+            },
+          }),
+        ],
+      },
+    });
+  });
+
   test("Imports data with multiple escape sequences", () => {
     expect(
       convertCurl(

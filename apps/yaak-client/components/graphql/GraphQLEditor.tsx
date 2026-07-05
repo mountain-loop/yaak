@@ -14,6 +14,7 @@ import { Editor } from "../core/Editor/LazyEditor";
 import { Banner, FormattedError, Icon } from "@yaakapp-internal/ui";
 import { Separator } from "../core/Separator";
 import { tryFormatGraphql } from "../../lib/formatters";
+import { normalizeGraphQLBody } from "../../lib/requestBodyConversion";
 import { showGraphQLDocExplorerAtom } from "./graphqlAtoms";
 
 type Props = Pick<EditorProps, "heightMode" | "className" | "forceUpdateKey"> & {
@@ -38,16 +39,11 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
   const [currentBody, setCurrentBody] = useStateWithDeps<{
     query: string;
     variables: string | undefined;
+    operationName?: string;
   }>(() => {
     // Migrate text bodies to GraphQL format
     // NOTE: This is how GraphQL used to be stored
-    if ("text" in request.body) {
-      const b = tryParseJson(request.body.text, {});
-      const variables = JSON.stringify(b.variables || undefined, null, 2);
-      return { query: b.query ?? "", variables };
-    }
-
-    return { query: request.body.query ?? "", variables: request.body.variables ?? "" };
+    return normalizeGraphQLBody(request.body);
   }, [extraEditorProps.forceUpdateKey]);
 
   const [isDocOpenRecord, setGraphqlDocStateAtomValue] = useAtom(showGraphQLDocExplorerAtom);
@@ -55,8 +51,8 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
 
   const handleChangeQuery = useCallback(
     (query: string) => {
-      setCurrentBody(({ variables }) => {
-        const newBody = { query, variables };
+      setCurrentBody(({ variables, operationName }) => {
+        const newBody = { query, variables, operationName };
         onChange(newBody);
         return newBody;
       });
@@ -66,8 +62,8 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
 
   const handleChangeVariables = useCallback(
     (variables: string) => {
-      setCurrentBody(({ query }) => {
-        const newBody = { query, variables: variables || undefined };
+      setCurrentBody(({ query, operationName }) => {
+        const newBody = { query, variables: variables || undefined, operationName };
         onChange(newBody);
         return newBody;
       });
@@ -235,12 +231,4 @@ function GraphQLEditorInner({ request, onChange, baseRequest, ...extraEditorProp
       </div>
     </div>
   );
-}
-
-function tryParseJson(text: string, fallback: unknown) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return fallback;
-  }
 }
