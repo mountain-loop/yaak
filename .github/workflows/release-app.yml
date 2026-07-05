@@ -5,6 +5,7 @@ on:
 
 jobs:
   build-artifacts:
+    if: github.repository == 'mountain-loop/yaak'
     permissions:
       contents: write
 

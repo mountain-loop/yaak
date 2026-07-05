@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   publish-npm:
+    if: github.repository == 'mountain-loop/yaak'
     name: Publish @yaakapp/api
     runs-on: ubuntu-latest
     permissions:
