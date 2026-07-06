@@ -44,6 +44,19 @@ export function initGlobalListeners() {
         color: "danger",
         timeout: null,
         message: `Failed to load plugin "${name}": ${err}`,
+        action: ({ hide }) => (
+          <Button
+            size="xs"
+            color="danger"
+            variant="border"
+            onClick={() => {
+              hide();
+              openSettings.mutate("plugins:installed");
+            }}
+          >
+            Manage Plugins
+          </Button>
+        ),
       });
     }
   });
@@ -153,7 +166,7 @@ function showUpdateInstalledToast(version: string) {
     action: ({ hide }) => (
       <ButtonInfiniteLoading
         size="xs"
-        className="mr-auto min-w-[5rem]"
+        className="mr-auto min-w-20"
         color="primary"
         loadingChildren="Restarting..."
         onClick={() => {
@@ -193,7 +206,7 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
         <ButtonInfiniteLoading
           size="xs"
           color="info"
-          className="min-w-[10rem]"
+          className="min-w-40"
           loadingChildren={downloaded ? "Installing..." : "Downloading..."}
           onClick={async () => {
             await emit<UpdateResponse>(replyEventId, {
@@ -246,7 +259,7 @@ function showPluginUpdatesToast(updateInfo: PluginUpdateNotification) {
         <ButtonInfiniteLoading
           size="xs"
           color="info"
-          className="min-w-[5rem]"
+          className="min-w-20"
           loadingChildren="Updating..."
           onClick={async () => {
             const updated = await updateAllPlugins();
@@ -298,7 +311,7 @@ function showNotificationToast(n: YaakNotification) {
         <Button
           size="xs"
           color={stringToColor(n.color) ?? undefined}
-          className="mr-auto min-w-[5rem]"
+          className="mr-auto min-w-20"
           rightSlot={<Icon icon="external_link" />}
           onClick={() => {
             hide();

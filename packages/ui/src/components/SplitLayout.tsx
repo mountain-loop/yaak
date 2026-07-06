@@ -27,7 +27,7 @@ interface Props {
   resizeHandleClassName?: string;
 }
 
-const baseProperties = { minWidth: 0 };
+const baseProperties = { minHeight: 0, minWidth: 0 };
 const areaL = { ...baseProperties, gridArea: "left" };
 const areaR = { ...baseProperties, gridArea: "right" };
 const areaD = { ...baseProperties, gridArea: "drag" };
@@ -60,23 +60,25 @@ export function SplitLayout({
   const size = useContainerSize(containerRef);
   const verticalBasedOnSize = size.width !== 0 && size.width < STACK_VERTICAL_WIDTH;
   const vertical = layout !== "horizontal" && (layout === "vertical" || verticalBasedOnSize);
+  const renderedWidth = clampSplitRatio(width, minWidthPx, size.width);
+  const renderedHeight = secondSlot ? clampSplitRatio(height, minHeightPx, size.height) : 0;
 
   const styles = useMemo<CSSProperties>(() => {
     return {
       ...style,
       gridTemplate: vertical
         ? `
-            ' ${areaL.gridArea}' minmax(0,${1 - height}fr)
+            ' ${areaL.gridArea}' minmax(0,${1 - renderedHeight}fr)
             ' ${areaD.gridArea}' 0
-            ' ${areaR.gridArea}' minmax(${minHeightPx}px,${height}fr)
+            ' ${areaR.gridArea}' minmax(0,${renderedHeight}fr)
             / 1fr
           `
         : `
             ' ${areaL.gridArea} ${areaD.gridArea} ${areaR.gridArea}' minmax(0,1fr)
-            / ${1 - width}fr    0                 ${width}fr
+            / ${1 - renderedWidth}fr    0                 ${renderedWidth}fr
           `,
     };
-  }, [style, vertical, height, minHeightPx, width]);
+  }, [style, vertical, renderedHeight, renderedWidth]);
 
   const handleReset = useCallback(() => {
     if (vertical) setHeight(defaultRatio);
@@ -96,22 +98,36 @@ export function SplitLayout({
       const containerHeight =
         $c.clientHeight - Number.parseFloat(paddingTop) - Number.parseFloat(paddingBottom);
 
+      if ((vertical && containerHeight <= 0) || (!vertical && containerWidth <= 0)) {
+        return;
+      }
+
       const mouseStartX = e.xStart;
       const mouseStartY = e.yStart;
-      const startWidth = containerWidth * width;
-      const startHeight = containerHeight * height;
+      const startWidth = containerWidth * renderedWidth;
+      const startHeight = containerHeight * renderedHeight;
 
       if (vertical) {
-        const maxHeightPx = containerHeight - minHeightPx;
-        const newHeightPx = clamp(startHeight - (e.y - mouseStartY), minHeightPx, maxHeightPx);
+        const minHeight = Math.min(minHeightPx, containerHeight);
+        const maxHeightPx = Math.max(minHeight, containerHeight - minHeightPx);
+        const newHeightPx = clamp(startHeight - (e.y - mouseStartY), minHeight, maxHeightPx);
         setHeight(newHeightPx / containerHeight);
       } else {
-        const maxWidthPx = containerWidth - minWidthPx;
-        const newWidthPx = clamp(startWidth - (e.x - mouseStartX), minWidthPx, maxWidthPx);
+        const minWidth = Math.min(minWidthPx, containerWidth);
+        const maxWidthPx = Math.max(minWidth, containerWidth - minWidthPx);
+        const newWidthPx = clamp(startWidth - (e.x - mouseStartX), minWidth, maxWidthPx);
         setWidth(newWidthPx / containerWidth);
       }
     },
-    [width, height, vertical, minHeightPx, setHeight, minWidthPx, setWidth],
+    [
+      renderedWidth,
+      renderedHeight,
+      vertical,
+      minHeightPx,
+      setHeight,
+      minWidthPx,
+      setWidth,
+    ],
   );
 
   return (
@@ -139,4 +155,14 @@ export function SplitLayout({
       )}
     </div>
   );
+}
+
+function clampSplitRatio(ratio: number, minPx: number, containerPx: number): number {
+  if (containerPx <= 0 || minPx <= 0) {
+    return ratio;
+  }
+
+  const minRatio = Math.min(1, minPx / containerPx);
+  const maxRatio = minRatio >= 0.5 ? minRatio : 1 - minRatio;
+  return clamp(ratio, minRatio, maxRatio);
 }

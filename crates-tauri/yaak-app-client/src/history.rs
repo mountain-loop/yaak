@@ -2,7 +2,7 @@ use crate::models_ext::QueryManagerExt;
 use chrono::{NaiveDateTime, Utc};
 use log::debug;
 use std::sync::OnceLock;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Runtime, is_dev};
 use yaak_models::util::UpdateSource;
 
 const NAMESPACE: &str = "analytics";
@@ -35,6 +35,10 @@ pub fn get_or_upsert_launch_info<R: Runtime>(app_handle: &AppHandle<R>) -> &Laun
             // The rest will be set below
             ..Default::default()
         };
+
+        if is_dev() {
+            info.current_version = "0.0.1".to_string();
+        }
 
         app_handle
             .with_tx(|tx| {

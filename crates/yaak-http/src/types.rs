@@ -191,12 +191,16 @@ fn build_url(r: &HttpRequest) -> String {
 fn append_graphql_query_params(url: &str, body: &BTreeMap<String, serde_json::Value>) -> String {
     let query = get_str_map(body, "query").to_string();
     let variables = strip_json_comments(&get_str_map(body, "variables"));
+    let operation_name = get_str_map(body, "operationName").to_string();
     let mut params = vec![("query".to_string(), query)];
     if !variables.trim().is_empty() {
         params.push(("variables".to_string(), variables));
     }
+    if !operation_name.trim().is_empty() {
+        params.push(("operationName".to_string(), operation_name));
+    }
     // Strip existing query/variables params to avoid duplicates
-    let url = strip_query_params(url, &["query", "variables"]);
+    let url = strip_query_params(url, &["query", "variables", "operationName"]);
     append_query_params(&url, params)
 }
 
@@ -329,23 +333,30 @@ fn build_graphql_body(
 ) -> Option<SendableBodyWithMeta> {
     let query = get_str_map(body, "query");
     let variables = strip_json_comments(&get_str_map(body, "variables"));
+    let operation_name = get_str_map(body, "operationName");
 
     if method.to_lowercase() == "get" {
         // GraphQL GET requests use query parameters, not a body
         return None;
     }
 
-    let body = if variables.trim().is_empty() {
-        format!(r#"{{"query":{}}}"#, serde_json::to_string(&query).unwrap_or_default())
-    } else {
-        format!(
-            r#"{{"query":{},"variables":{}}}"#,
-            serde_json::to_string(&query).unwrap_or_default(),
-            variables
-        )
-    };
+    let mut body = serde_json::Map::new();
+    body.insert("query".to_string(), serde_json::Value::String(query.to_string()));
+    if !variables.trim().is_empty() {
+        body.insert(
+            "variables".to_string(),
+            serde_json::from_str(&variables)
+                .unwrap_or_else(|_| serde_json::Value::String(variables)),
+        );
+    }
+    if !operation_name.trim().is_empty() {
+        body.insert(
+            "operationName".to_string(),
+            serde_json::Value::String(operation_name.to_string()),
+        );
+    }
 
-    Some(SendableBodyWithMeta::Bytes(Bytes::from(body)))
+    Some(SendableBodyWithMeta::Bytes(Bytes::from(serde_json::to_string(&body).unwrap_or_default())))
 }
 
 async fn build_multipart_body(
@@ -520,6 +531,33 @@ mod tests {
 
         let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?foo=bar&baz=qux");
+    }
+
+    #[test]
+    fn test_build_url_replaces_graphql_operation_name_from_body() {
+        let mut body = BTreeMap::new();
+        body.insert("query".to_string(), json!("query Foo { foo } query Bar { bar }"));
+        body.insert("operationName".to_string(), json!("Bar"));
+
+        let r = HttpRequest {
+            method: "GET".to_string(),
+            body_type: Some("graphql".to_string()),
+            body,
+            url: "https://example.com/graphql".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "operationName".to_string(),
+                value: "Foo".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r);
+        assert_eq!(
+            result,
+            "https://example.com/graphql?query=query%20Foo%20%7B%20foo%20%7D%20query%20Bar%20%7B%20bar%20%7D&operationName=Bar",
+        );
     }
 
     #[test]
@@ -880,9 +918,34 @@ mod tests {
         let result = build_graphql_body("POST", &body);
         match result {
             Some(SendableBodyWithMeta::Bytes(bytes)) => {
-                let expected =
-                    r#"{"query":"{ user(id: $id) { name } }","variables":{"id": "123"}}"#;
-                assert_eq!(bytes, Bytes::from(expected));
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+                    json!({
+                        "query": "{ user(id: $id) { name } }",
+                        "variables": { "id": "123" },
+                    }),
+                );
+            }
+            _ => panic!("Expected Some(SendableBody::Bytes)"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_graphql_body_with_operation_name() {
+        let mut body = BTreeMap::new();
+        body.insert("query".to_string(), json!("query Search { viewer { id } }"));
+        body.insert("operationName".to_string(), json!("Search"));
+
+        let result = build_graphql_body("POST", &body);
+        match result {
+            Some(SendableBodyWithMeta::Bytes(bytes)) => {
+                assert_eq!(
+                    serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+                    json!({
+                        "query": "query Search { viewer { id } }",
+                        "operationName": "Search",
+                    }),
+                );
             }
             _ => panic!("Expected Some(SendableBody::Bytes)"),
         }

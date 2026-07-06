@@ -1,5 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, InlineCode } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useAuthTab } from "../hooks/useAuthTab";
 import { useHeadersTab } from "../hooks/useHeadersTab";
@@ -112,7 +112,9 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
               onCreateNewWorkspace={hide}
               onChange={({ filePath }) => patchModel(workspaceMeta, { settingSyncDir: filePath })}
             />
-            <WorkspaceEncryptionSetting layout="settings" size="xs" />
+            <div className="mt-4">
+              <WorkspaceEncryptionSetting layout="settings" size="xs" />
+            </div>
           </SettingsSection>
           <ModelSettingsEditor model={workspace} showSectionTitles />
         </SettingsList>
@@ -125,7 +127,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
             placeholder="Workspace Name"
             label="Name"
             defaultValue={workspace.name}
-            className="!text-base font-sans"
+            className="text-base! font-sans"
             onChange={(name) => patchModel(workspace, { name })}
           />
 
@@ -159,7 +161,7 @@ export function WorkspaceSettingsDialog({ workspaceId, hide, tab }: Props) {
             <InlineCode className="flex gap-1 items-center text-primary pl-2.5">
               {workspaceId}
               <CopyIconButton
-                className="opacity-70 !text-primary"
+                className="opacity-70 text-primary!"
                 size="2xs"
                 iconSize="sm"
                 title="Copy workspace ID"
@@ -180,7 +182,7 @@ WorkspaceSettingsDialog.show = (workspaceId: string, tab?: WorkspaceSettingsTab)
   showDialog({
     id: "workspace-settings",
     size: "lg",
-    className: "h-[calc(100vh-5rem)] !max-h-[50rem]",
+    className: "h-[calc(100vh-5rem)] max-h-200!",
     noPadding: true,
     render: ({ hide }) => (
       <WorkspaceSettingsDialog workspaceId={workspaceId} hide={hide} tab={tab} />

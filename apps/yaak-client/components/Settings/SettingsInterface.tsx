@@ -8,6 +8,7 @@ import { useAtomValue } from "jotai";
 import { useState } from "react";
 import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
 import { showConfirm } from "../../lib/confirm";
+import { pricingUrl } from "../../lib/pricingUrl";
 import { invokeCmd } from "../../lib/tauri";
 import { CargoFeature } from "../CargoFeature";
 import { Button } from "../core/Button";
@@ -88,7 +89,7 @@ export function SettingsInterface() {
               <SettingSelectControl
                 name="uiFont"
                 label="Interface font"
-                selectClassName="!w-72"
+                selectClassName="w-72!"
                 value={settings.interfaceFont ?? NULL_FONT_VALUE}
                 defaultValue={NULL_FONT_VALUE}
                 options={[
@@ -105,7 +106,7 @@ export function SettingsInterface() {
             <SettingSelectControl
               name="interfaceFontSize"
               label="Interface Font Size"
-              selectClassName="!w-20"
+              selectClassName="w-20!"
               value={`${settings.interfaceFontSize}`}
               defaultValue="14"
               options={fontSizeOptions}
@@ -122,7 +123,7 @@ export function SettingsInterface() {
               <SettingSelectControl
                 name="editorFont"
                 label="Editor font"
-                selectClassName="!w-72"
+                selectClassName="w-72!"
                 value={settings.editorFont ?? NULL_FONT_VALUE}
                 defaultValue={NULL_FONT_VALUE}
                 options={[
@@ -138,7 +139,7 @@ export function SettingsInterface() {
             <SettingSelectControl
               name="editorFontSize"
               label="Editor Font Size"
-              selectClassName="!w-20"
+              selectClassName="w-20!"
               value={`${settings.editorFontSize}`}
               defaultValue="12"
               options={fontSizeOptions}
@@ -252,7 +253,9 @@ function LicenseSettings({ settings }: { settings: Settings }) {
                   </p>
                   <p>
                     Licenses help keep Yaak independent and sustainable.{" "}
-                    <Link href="https://yaak.app/pricing?s=badge">Purchase a License →</Link>
+                    <Link href={pricingUrl("app.license.badge-hide-confirm")}>
+                      Purchase a License →
+                    </Link>
                   </p>
                 </VStack>
               ),

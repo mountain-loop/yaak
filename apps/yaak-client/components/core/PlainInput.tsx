@@ -1,6 +1,6 @@
 import { HStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import type { FocusEvent, HTMLAttributes, ReactNode } from "react";
+import type { FocusEvent, InputHTMLAttributes, ReactNode } from "react";
 import {
   forwardRef,
   useCallback,
@@ -28,10 +28,9 @@ export type PlainInputProps = Omit<
   | "extraExtensions"
   | "forcedEnvironmentId"
 > &
-  Pick<HTMLAttributes<HTMLInputElement>, "onKeyDownCapture"> & {
-    onFocusRaw?: HTMLAttributes<HTMLInputElement>["onFocus"];
+  Pick<InputHTMLAttributes<HTMLInputElement>, "inputMode" | "onKeyDownCapture" | "step"> & {
+    onFocusRaw?: InputHTMLAttributes<HTMLInputElement>["onFocus"];
     type?: "text" | "password" | "number";
-    step?: number;
     hideObscureToggle?: boolean;
     labelRightSlot?: ReactNode;
   };
@@ -52,6 +51,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     labelClassName,
     labelPosition = "top",
     labelRightSlot,
+    inputMode,
     leftSlot,
     name,
     onBlur,
@@ -64,6 +64,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
     required,
     rightSlot,
     size = "md",
+    step,
     tint,
     type = "text",
     validate,
@@ -115,7 +116,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
   const id = useRef(`input-${generateId()}`);
   const commonClassName = classNames(
     className,
-    "!bg-transparent min-w-0 w-full focus:outline-none placeholder:text-placeholder",
+    "bg-transparent! min-w-0 w-full focus:outline-hidden placeholder:text-placeholder",
     "px-2 text-xs font-mono cursor-text",
   );
 
@@ -166,7 +167,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
           "overflow-hidden",
           focused && !disabled ? "border-border-focus" : "border-border-subtle",
           disabled && "border-dotted",
-          hasChanged && "has-[:invalid]:border-danger", // For built-in HTML validation
+          hasChanged && "has-invalid:border-danger", // For built-in HTML validation
           size === "md" && "min-h-md",
           size === "sm" && "min-h-sm",
           size === "xs" && "min-h-xs",
@@ -204,12 +205,14 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
             autoComplete="off"
             autoCapitalize="off"
             autoCorrect="off"
+            inputMode={inputMode}
             onChange={(e) => handleChange(e.target.value)}
             onPaste={(e) => onPaste?.(e.clipboardData.getData("Text"))}
             className={classNames(commonClassName, "h-full disabled:opacity-disabled")}
             onFocus={handleFocus}
             onBlur={handleBlur}
             required={required}
+            step={step}
             placeholder={placeholder}
             onKeyDownCapture={onKeyDownCapture}
           />
@@ -222,7 +225,7 @@ export const PlainInput = forwardRef<{ focus: () => void }, PlainInputProps>(fun
                 : `Obscure ${typeof label === "string" ? label : "field"}`
             }
             size="xs"
-            className="mr-0.5 group/obscure !h-auto my-0.5"
+            className="mr-0.5 group/obscure h-auto! my-0.5"
             iconClassName="group-hover/obscure:text"
             iconSize="sm"
             icon={obscured ? "eye" : "eye_closed"}

@@ -72,7 +72,7 @@ export function Overlay({
               onClick={onClose}
               className={classNames(
                 "absolute inset-0",
-                variant === "default" && "bg-backdrop backdrop-blur-sm",
+                variant === "default" && "bg-backdrop backdrop-blur-xs",
               )}
             />
 

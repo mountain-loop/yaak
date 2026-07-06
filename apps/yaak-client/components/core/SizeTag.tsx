@@ -1,14 +1,16 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
+import classNames from "classnames";
 
 interface Props {
+  className?: string;
   contentLength: number;
   contentLengthCompressed?: number | null;
 }
 
-export function SizeTag({ contentLength, contentLengthCompressed }: Props) {
+export function SizeTag({ className, contentLength, contentLengthCompressed }: Props) {
   return (
     <span
-      className="font-mono"
+      className={classNames("font-mono", className)}
       title={
         `${contentLength} bytes` +
         (contentLengthCompressed ? `\n${contentLengthCompressed} bytes compressed` : "")

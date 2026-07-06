@@ -28,13 +28,15 @@ export function showToast({
 
   setTimeout(() => {
     const newToast: ToastInstance = { id, uniqueKey, timeout, ...props };
-    if (timeout != null) {
-      setTimeout(() => hideToast(newToast), timeout);
-    }
     jotaiStore.set(toastsAtom, (prev) => [...prev, newToast]);
   }, delay);
 
   return id;
+}
+
+export function hideToastById(id: string) {
+  const toast = jotaiStore.get(toastsAtom).find((t) => t.id === id);
+  if (toast) hideToast(toast);
 }
 
 export function hideToast(toHide: ToastInstance) {
@@ -61,7 +63,7 @@ export function showErrorToast<T>({
     message: (
       <div className="w-full">
         <h2 className="text-lg font-bold mb-2">{title}</h2>
-        <div className="whitespace-pre-wrap break-words">{String(message)}</div>
+        <div className="whitespace-pre-wrap wrap-break-word">{String(message)}</div>
       </div>
     ),
   });

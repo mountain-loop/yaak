@@ -119,9 +119,11 @@ pub async fn fill_pool_from_reflection(
     metadata: &BTreeMap<String, String>,
     validate_certificates: bool,
     client_cert: Option<ClientCertificateConfig>,
+    max_message_size: usize,
 ) -> Result<DescriptorPool> {
     let mut pool = DescriptorPool::new();
-    let mut client = AutoReflectionClient::new(uri, validate_certificates, client_cert)?;
+    let mut client =
+        AutoReflectionClient::new(uri, validate_certificates, client_cert, max_message_size)?;
 
     for service in list_services(&mut client, metadata).await? {
         if service == "grpc.reflection.v1alpha.ServerReflection" {
@@ -192,6 +194,7 @@ pub(crate) async fn reflect_types_for_message(
     json: &str,
     metadata: &BTreeMap<String, String>,
     client_cert: Option<ClientCertificateConfig>,
+    max_message_size: usize,
 ) -> Result<()> {
     // 1. Collect all Any types in the JSON
     let mut extra_types = Vec::new();
@@ -201,7 +204,7 @@ pub(crate) async fn reflect_types_for_message(
         return Ok(()); // nothing to do
     }
 
-    let mut client = AutoReflectionClient::new(uri, false, client_cert)?;
+    let mut client = AutoReflectionClient::new(uri, false, client_cert, max_message_size)?;
     for extra_type in extra_types {
         {
             let guard = pool.read().await;
@@ -239,6 +242,7 @@ pub(crate) async fn reflect_types_for_dynamic_message(
     message: &DynamicMessage,
     metadata: &BTreeMap<String, String>,
     client_cert: Option<ClientCertificateConfig>,
+    max_message_size: usize,
 ) -> Result<()> {
     let mut extra_types = HashSet::new();
     collect_any_types_from_dynamic_message(message, &mut extra_types);
@@ -247,7 +251,7 @@ pub(crate) async fn reflect_types_for_dynamic_message(
         return Ok(());
     }
 
-    let mut client = AutoReflectionClient::new(uri, false, client_cert)?;
+    let mut client = AutoReflectionClient::new(uri, false, client_cert, max_message_size)?;
     for extra_type in extra_types {
         {
             let guard = pool.read().await;

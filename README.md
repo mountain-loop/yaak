@@ -57,8 +57,8 @@ Built with [Tauri](https://tauri.app), Rust, and React, it’s fast, lightweight
 ## Contribution Policy
 
 > [!IMPORTANT]
-> Community PRs are currently limited to bug fixes and small-scope improvements.
-> If your PR is out of scope, link an approved feedback item from [yaak.app/feedback](https://yaak.app/feedback).
+> Community PRs are currently limited to bug fixes.
+> If your PR is not a bug fix, link the [feedback item](https://yaak.app/feedback) where @gschier explicitly gave you permission to work on it.
 > See [`CONTRIBUTING.md`](CONTRIBUTING.md) for policy details and [`DEVELOPMENT.md`](DEVELOPMENT.md) for local setup.
 
 ## Useful Resources

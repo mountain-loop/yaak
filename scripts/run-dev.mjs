@@ -69,6 +69,10 @@ const config = JSON.stringify({
 const normalizedAdditionalArgs = [];
 for (let i = 0; i < additionalArgs.length; i++) {
   const arg = additionalArgs[i];
+  if (arg === "--") {
+    normalizedAdditionalArgs.push(arg, ...additionalArgs.slice(i + 1));
+    break;
+  }
   if (arg === "--config" && i + 1 < additionalArgs.length) {
     const value = additionalArgs[i + 1];
     const isInlineJson = value.trimStart().startsWith("{");

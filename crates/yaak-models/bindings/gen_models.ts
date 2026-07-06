@@ -109,6 +109,7 @@ export type Folder = {
   settingValidateCertificates: InheritedBoolSetting;
   settingFollowRedirects: InheritedBoolSetting;
   settingRequestTimeout: InheritedIntSetting;
+  settingRequestMessageSize: InheritedIntSetting;
 };
 
 export type GraphQlIntrospection = {
@@ -184,6 +185,7 @@ export type GrpcRequest = {
    */
   url: string;
   settingValidateCertificates: InheritedBoolSetting;
+  settingRequestMessageSize: InheritedIntSetting;
 };
 
 export type HttpRequest = {
@@ -400,6 +402,7 @@ export type Settings = {
   themeLight: string;
   updateChannel: string;
   hideLicenseBadge: boolean;
+  promptFeedback: boolean;
   autoupdate: boolean;
   autoDownloadUpdates: boolean;
   checkNotifications: boolean;
@@ -456,7 +459,8 @@ export type WebsocketEvent = {
   messageType: WebsocketEventType;
 };
 
-export type WebsocketEventType = "binary" | "close" | "frame" | "open" | "ping" | "pong" | "text";
+export type WebsocketEventType =
+  "binary" | "close" | "error" | "frame" | "open" | "ping" | "pong" | "text";
 
 export type WebsocketMessageType = "text" | "binary";
 
@@ -482,6 +486,7 @@ export type WebsocketRequest = {
   settingSendCookies: InheritedBoolSetting;
   settingStoreCookies: InheritedBoolSetting;
   settingValidateCertificates: InheritedBoolSetting;
+  settingRequestMessageSize: InheritedIntSetting;
 };
 
 export type Workspace = {
@@ -498,6 +503,7 @@ export type Workspace = {
   settingValidateCertificates: boolean;
   settingFollowRedirects: boolean;
   settingRequestTimeout: number;
+  settingRequestMessageSize: number;
   settingDnsOverrides: Array<DnsOverride>;
   settingSendCookies: boolean;
   settingStoreCookies: boolean;

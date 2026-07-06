@@ -1,6 +1,6 @@
 import classNames from "classnames";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { Children, useCallback, useMemo } from "react";
 import { createGlobalState } from "react-use";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
 import { useFormatText } from "../../hooks/useFormatText";
@@ -19,6 +19,7 @@ interface Props {
   filterStateKey?: string | null;
   pretty?: boolean;
   className?: string;
+  footerActions?: ReactNode;
   onFilter?: (filter: string) => {
     data: string | null | undefined;
     isPending: boolean;
@@ -35,6 +36,7 @@ export function TextViewer({
   filterStateKey,
   pretty,
   className,
+  footerActions,
   onFilter,
 }: Props) {
   const filterKey = filterStateKey ?? stateKey;
@@ -66,13 +68,13 @@ export function TextViewer({
   const canFilter = onFilter && (language === "json" || language === "xml" || language === "html");
 
   const actions = useMemo<ReactNode[]>(() => {
-    const nodes: ReactNode[] = [];
+    const nodes: ReactNode[] = isSearching ? [] : Children.toArray(footerActions);
 
     if (!canFilter) return nodes;
 
     if (isSearching) {
       nodes.push(
-        <div key="input" className="w-full !opacity-100">
+        <div key="input" className="w-full opacity-100!">
           <Input
             key={filterKey ?? "filter"}
             validate={!filteredResponse.error}
@@ -100,13 +102,14 @@ export function TextViewer({
         icon={isSearching ? "x" : "filter"}
         title={isSearching ? "Close filter" : "Filter response"}
         onClick={toggleSearch}
-        className={classNames("border !border-border-subtle", isSearching && "!opacity-100")}
+        className={classNames("border border-border-subtle!", isSearching && "opacity-100!")}
       />,
     );
 
     return nodes;
   }, [
     canFilter,
+    footerActions,
     filterKey,
     filterText,
     filteredResponse.error,

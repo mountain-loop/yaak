@@ -43,7 +43,7 @@ export function RadioCards<T extends string>({
             />
             <div
               className={classNames(
-                "mt-1 w-4 h-4 flex-shrink-0 rounded-full border",
+                "mt-1 w-4 h-4 shrink-0 rounded-full border",
                 "flex items-center justify-center",
                 selected ? "border-focus" : "border-border",
               )}

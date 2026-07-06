@@ -10,14 +10,17 @@ import { HStack, Icon, InlineCode } from "@yaakapp-internal/ui";
 import { useCallback } from "react";
 import { openFolderSettings } from "../commands/openFolderSettings";
 import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
+import { useAuthDropdownOptions } from "../hooks/useAuthTab";
 import { useHttpAuthenticationConfig } from "../hooks/useHttpAuthenticationConfig";
 import { useInheritedAuthentication } from "../hooks/useInheritedAuthentication";
 import { useRenderTemplate } from "../hooks/useRenderTemplate";
 import { resolvedModelName } from "../lib/resolvedModelName";
+import { Button } from "./core/Button";
 import { Dropdown, type DropdownItem } from "./core/Dropdown";
 import { IconButton } from "./core/IconButton";
 import { Input, type InputProps } from "./core/Input";
 import { Link } from "./core/Link";
+import { RadioDropdown } from "./core/RadioDropdown";
 import { SegmentedControl } from "./core/SegmentedControl";
 import { DynamicForm } from "./DynamicForm";
 import { EmptyStateText } from "./EmptyStateText";
@@ -35,7 +38,8 @@ export function HttpAuthenticationEditor({ model }: Props) {
   );
 
   const handleChange = useCallback(
-    async (authentication: Record<string, unknown>) => await patchModel(model, { authentication }),
+    async (authentication: Record<string, unknown>) =>
+      await patchModel(model, { authentication }),
     [model],
   );
 
@@ -47,7 +51,8 @@ export function HttpAuthenticationEditor({ model }: Props) {
     return (
       <EmptyStateText>
         <p>
-          Auth plugin not found for <InlineCode>{model.authenticationType}</InlineCode>
+          Auth plugin not found for{" "}
+          <InlineCode>{model.authenticationType}</InlineCode>
         </p>
       </EmptyStateText>
     );
@@ -56,11 +61,20 @@ export function HttpAuthenticationEditor({ model }: Props) {
   if (inheritedAuth == null) {
     if (model.model === "workspace" || model.model === "folder") {
       return (
-        <EmptyStateText className="flex-col gap-1">
-          <p>
-            Apply auth to all requests in <strong>{resolvedModelName(model)}</strong>
-          </p>
-          <Link href="https://yaak.app/docs/using-yaak/request-inheritance">Documentation</Link>
+        <EmptyStateText className="flex-col gap-3">
+          <div className="not-italic flex flex-col items-center gap-3 text-center">
+            <p className="max-w-md text-sm text-text-subtle">
+              Choose an auth method to apply it to all requests in{" "}
+              <strong className="font-semibold text-text-subtle">
+                {resolvedModelName(model)}
+              </strong>
+              .
+            </p>
+            <AuthenticationTypeDropdown model={model} />
+            <Link href="https://yaak.app/docs/using-yaak/request-inheritance">
+              Documentation
+            </Link>
+          </div>
         </EmptyStateText>
       );
     }
@@ -83,7 +97,8 @@ export function HttpAuthenticationEditor({ model }: Props) {
             type="submit"
             className="underline hover:text-text"
             onClick={() => {
-              if (inheritedAuth.model === "folder") openFolderSettings(inheritedAuth.id, "auth");
+              if (inheritedAuth.model === "folder")
+                openFolderSettings(inheritedAuth.id, "auth");
               else openWorkspaceSettings("auth");
             }}
           >
@@ -103,7 +118,8 @@ export function HttpAuthenticationEditor({ model }: Props) {
             hideLabel
             name="enabled"
             value={
-              model.authentication.disabled === false || model.authentication.disabled == null
+              model.authentication.disabled === false ||
+              model.authentication.disabled == null
                 ? "__TRUE__"
                 : model.authentication.disabled === true
                   ? "__FALSE__"
@@ -140,7 +156,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
                 title="Authentication Actions"
                 icon="settings"
                 size="xs"
-                className="!text-secondary"
+                className="text-secondary!"
               />
             </Dropdown>
           )}
@@ -151,7 +167,9 @@ export function HttpAuthenticationEditor({ model }: Props) {
               className="w-full"
               stateKey={`auth.${model.id}.dynamic`}
               value={model.authentication.disabled}
-              onChange={(v) => handleChange({ ...model.authentication, disabled: v })}
+              onChange={(v) =>
+                handleChange({ ...model.authentication, disabled: v })
+              }
             />
           </div>
         )}
@@ -166,6 +184,33 @@ export function HttpAuthenticationEditor({ model }: Props) {
         onChange={handleChange}
       />
     </div>
+  );
+}
+
+function AuthenticationTypeDropdown({ model }: Props) {
+  const options = useAuthDropdownOptions(model);
+
+  if (options == null) return null;
+
+  return (
+    <RadioDropdown
+      items={options.items}
+      itemsAfter={options.itemsAfter}
+      itemsBefore={options.itemsBefore}
+      value={options.value}
+      onChange={options.onChange}
+    >
+      <Button
+        color="secondary"
+        variant="border"
+        size="sm"
+        rightSlot={
+          <Icon icon="chevron_down" size="sm" className="text-text-subtle" />
+        }
+      >
+        Select Auth
+      </Button>
+    </RadioDropdown>
   );
 }
 
@@ -198,7 +243,11 @@ function AuthenticationDisabledInput({
       rightSlot={
         <div className="px-1 flex items-center">
           <div className="rounded-full bg-surface-highlight text-xs px-1.5 py-0.5 text-text-subtle whitespace-nowrap">
-            {rendered.isPending ? "loading" : rendered.data ? "enabled" : "disabled"}
+            {rendered.isPending
+              ? "loading"
+              : rendered.data
+                ? "enabled"
+                : "disabled"}
           </div>
         </div>
       }

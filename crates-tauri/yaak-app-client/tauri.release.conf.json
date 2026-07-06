@@ -1,6 +1,6 @@
 {
   "build": {
-    "features": ["updater", "license"]
+    "features": ["updater", "license", "wry"]
   },
   "app": {
     "security": {

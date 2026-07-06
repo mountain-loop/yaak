@@ -1,6 +1,6 @@
 import { useGitFileDiffForCommit, useGitLog, useGitMutations } from "@yaakapp-internal/git";
 import type { GitCommit } from "@yaakapp-internal/git";
-import { InlineCode, SplitLayout } from "@yaakapp-internal/ui";
+import { SplitLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -117,7 +117,7 @@ function CommitListItem({
     <button
       type="button"
       className={classNames(
-        "w-full min-w-0 text-left rounded px-2 py-1.5",
+        "w-full min-w-0 text-left rounded-sm px-2 py-1.5",
         selected && "bg-surface-active",
       )}
       onClick={onSelect}

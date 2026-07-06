@@ -37,11 +37,29 @@ async fn main() {
 
     let exit_code = match command {
         Commands::Auth(args) => commands::auth::run(args).await,
+        Commands::Import(args) => {
+            let mut context = CliContext::new(data_dir.clone(), app_id);
+            let execution_context = CliExecutionContext {
+                workspace_id: args.workspace_id.clone(),
+                ..CliExecutionContext::default()
+            };
+            context.init_plugins(execution_context).await;
+            let exit_code = commands::import_export::run_import(&context, args).await;
+            context.shutdown().await;
+            exit_code
+        }
+        Commands::Export(args) => {
+            let context = CliContext::new(data_dir.clone(), app_id);
+            let exit_code = commands::import_export::run_export(&context, args);
+            context.shutdown().await;
+            exit_code
+        }
         Commands::Plugin(args) => match args.command {
             PluginCommands::Build(args) => commands::plugin::run_build(args).await,
             PluginCommands::Dev(args) => commands::plugin::run_dev(args).await,
             PluginCommands::Generate(args) => commands::plugin::run_generate(args).await,
             PluginCommands::Publish(args) => commands::plugin::run_publish(args).await,
+            PluginCommands::Metadata(args) => commands::plugin::run_metadata(args).await,
             PluginCommands::Install(install_args) => {
                 let mut context = CliContext::new(data_dir.clone(), app_id);
                 context.init_plugins(CliExecutionContext::default()).await;

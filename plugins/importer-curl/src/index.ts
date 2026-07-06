@@ -8,6 +8,7 @@ import type {
   Workspace,
 } from "@yaakapp/api";
 import { split } from "shlex";
+import { parseGraphQLJsonBody } from "./graphql";
 
 type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 
@@ -464,6 +465,8 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   let body = {};
   let bodyType: string | null = null;
   const bodyAsGET = getPairValue(flagsByName, false, ["G", "get"]);
+  const hasDataBody = dataParameters.length > 0 && !bodyAsGET;
+  const hasFormBody = multipartFormDataFromRaw != null || formDataParams.length > 0;
 
   if (multipartFormDataFromRaw) {
     // Handle multipart form data parsed from --data-raw (Chrome DevTools format)
@@ -491,15 +494,21 @@ function importCommand(parseEntries: string[], workspaceId: string) {
       enabled: true,
     });
   } else if (dataParameters.length > 0) {
-    bodyType =
-      mimeType === "application/json" || mimeType === "text/xml" || mimeType === "text/plain"
-        ? mimeType
-        : "other";
-    body = {
-      text: dataParameters
-        .map(({ name, value }) => (name && value ? `${name}=${value}` : name || value))
-        .join("&"),
-    };
+    const text = dataParameters
+      .map(({ name, value }) => (name && value ? `${name}=${value}` : name || value))
+      .join("&");
+    const graphqlBody = parseGraphQLJsonBody({ mimeType, text, url });
+
+    if (graphqlBody != null) {
+      bodyType = "graphql";
+      body = graphqlBody;
+    } else if (mimeType === "application/json" || mimeType === "text/xml" || mimeType === "text/plain") {
+      bodyType = mimeType;
+      body = { text };
+    } else {
+      bodyType = "other";
+      body = { text };
+    }
   } else if (formDataParams.length) {
     bodyType = mimeType ?? "multipart/form-data";
     body = {
@@ -517,8 +526,8 @@ function importCommand(parseEntries: string[], workspaceId: string) {
   // Method
   let method = getPairValue(flagsByName, "", ["X", "request"]).toUpperCase();
 
-  if (method === "" && body) {
-    method = "text" in body || "form" in body ? "POST" : "GET";
+  if (method === "") {
+    method = hasDataBody || hasFormBody ? "POST" : "GET";
   }
 
   const request: ExportResources["httpRequests"][0] = {

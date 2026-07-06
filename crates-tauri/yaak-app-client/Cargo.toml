@@ -13,6 +13,8 @@ crate-type = ["staticlib", "cdylib", "lib"]
 [features]
 cargo-clippy = []
 default = []
+cef = ["tauri/cef", "tauri-plugin-dialog/xdg-portal"]
+wry = ["tauri/wry", "tauri/x11", "tauri/dbus", "tauri-plugin-dialog/gtk3"]
 updater = []
 license = ["yaak-license"]
 
@@ -21,6 +23,9 @@ tauri-build = { version = "2.6.1", features = [] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+rlimit = "0.11" # Raise the launchd 256 open-file soft limit at startup
 
 [dependencies]
 charset = "0.1.5"
@@ -59,7 +64,6 @@ tauri-plugin-os = "2.3.2"
 tauri-plugin-shell = { workspace = true }
 tauri-plugin-single-instance = { version = "2.4.2", features = ["deep-link"] }
 tauri-plugin-updater = "2.10.1"
-tauri-plugin-window-state = "2.4.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
@@ -83,6 +87,7 @@ yaak-mac-window = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
+yaak-system-appearance = { workspace = true }
 yaak-sync = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }

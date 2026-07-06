@@ -92,7 +92,7 @@ export function SegmentedControl<T extends string>({
                 role="radio"
                 tabIndex={isSelected ? 0 : -1}
                 className={classNames(
-                  isActive && "!text-text",
+                  isActive && "text-text!",
                   "focus:ring-1 focus:ring-border-focus",
                 )}
                 onClick={() => onChange(o.value)}
@@ -111,8 +111,8 @@ export function SegmentedControl<T extends string>({
                 role="radio"
                 tabIndex={isSelected ? 0 : -1}
                 className={classNames(
-                  isActive && "!text-text",
-                  "!px-1.5 !w-auto",
+                  isActive && "text-text!",
+                  "px-1.5! w-auto!",
                   "focus:ring-border-focus",
                 )}
                 title={o.label}

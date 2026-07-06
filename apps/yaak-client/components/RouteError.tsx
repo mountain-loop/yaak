@@ -10,7 +10,7 @@ export default function RouteError({ error }: { error: unknown }) {
     typeof error === "object" && error != null && "stack" in error ? String(error.stack) : null;
   return (
     <div className="flex items-center justify-center h-full">
-      <VStack space={5} className="w-[50rem] !h-auto">
+      <VStack space={5} className="w-200 h-auto!">
         <Heading>Route Error 🔥</Heading>
         <FormattedError>
           {message}

@@ -130,7 +130,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
       return key !== nextCookieKey;
     });
 
-    patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
+    void patchModel(cookieJar, { cookies: [...nextCookies, nextCookie] });
     setSelectedCookieKey(nextCookieKey);
     setEditingCookieKey(null);
     setDraftCookie(null);
@@ -155,7 +155,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
           rightSlot={
             filter.length > 0 && (
               <IconButton
-                className="!bg-transparent !h-auto min-h-full opacity-50 hover:opacity-100 -mr-1"
+                className="bg-transparent! h-auto! min-h-full opacity-50 hover:opacity-100 -mr-1"
                 icon="x"
                 title="Clear filter"
                 onClick={() => {
@@ -210,7 +210,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                           setEditingCookieKey(null);
                           setDraftCookie(null);
                           setDraftExpiresInput("");
-                          patchModel(cookieJar, { cookies: [] });
+                          void patchModel(cookieJar, { cookies: [] });
                         }}
                       />
                     </TableHeaderCell>
@@ -239,7 +239,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                         <TableCell className={classNames("pl-2", isSelected && "rounded-l")}>
                           {c.name}
                         </TableCell>
-                        <TruncatedWideTableCell className="min-w-[10rem]">
+                        <TruncatedWideTableCell className="min-w-40">
                           {c.value}
                         </TruncatedWideTableCell>
                         <TableCell>{cookieDomain(c)}</TableCell>
@@ -276,7 +276,7 @@ export const CookieDialog = ({ cookieJarId }: Props) => {
                                 setDraftCookie(null);
                                 setDraftExpiresInput("");
                               }
-                              patchModel(cookieJar, {
+                              void patchModel(cookieJar, {
                                 cookies: cookieJar.cookies.filter(
                                   (c2: Cookie) => cookieKey(c2) !== key,
                                 ),
@@ -547,7 +547,7 @@ function CookieEditor({
 }
 
 function CookieKeyValueRow({ labelClassName, ...props }: ComponentProps<typeof KeyValueRow>) {
-  return <KeyValueRow labelClassName={classNames("w-[7rem]", labelClassName)} {...props} />;
+  return <KeyValueRow labelClassName={classNames("w-28", labelClassName)} {...props} />;
 }
 
 function CookieTextInput({
@@ -570,6 +570,8 @@ function CookieTextInput({
   return (
     <input
       autoFocus={autoFocus}
+      autoCapitalize="off"
+      autoCorrect="off"
       className={cookieInputClassName}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
@@ -585,7 +587,9 @@ function CookieTextInput({
 function CookieTextarea({ onChange, value }: { onChange: (value: string) => void; value: string }) {
   return (
     <textarea
-      className={classNames(cookieInputClassName, "min-h-[5rem] resize-y")}
+      autoCapitalize="off"
+      autoCorrect="off"
+      className={classNames(cookieInputClassName, "min-h-20 resize-y")}
       onChange={(event) => onChange(event.target.value)}
       value={value}
     />
@@ -596,7 +600,7 @@ const NEW_COOKIE_KEY = "__new-cookie__";
 const NON_EMPTY_INPUT_PATTERN = ".*\\S.*";
 const cookieInputClassName = classNames(
   "x-theme-input w-full min-w-0 min-h-sm rounded-md bg-transparent",
-  "border border-border-subtle outline-none",
+  "border border-border-subtle outline-hidden",
   "px-2 text-xs font-mono cursor-text placeholder:text-placeholder",
   "focus:border-border-focus invalid:border-danger",
   "disabled:opacity-disabled disabled:border-dotted",

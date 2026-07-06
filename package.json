@@ -112,23 +112,25 @@
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.3",
-    "@tauri-apps/cli": "^2.11.1",
+    "@tailwindcss/postcss": "^4.3.2",
+    "@tauri-apps/cli": "npm:@tauri-apps/cli-cef@3.0.0-alpha.6",
     "@types/babel__core": "^7.20.5",
     "@vitejs/plugin-react": "^6.0.1",
-    "@yaakapp/cli": "^0.5.1",
+    "@yaakapp/cli": "latest",
     "babel-plugin-react-compiler": "^1.0.0",
     "dotenv-cli": "^11.0.0",
     "nodejs-file-downloader": "^4.13.0",
     "npm-run-all": "^4.1.5",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.2",
     "typescript": "^5.8.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
-    "vite-plus": "^0.1.20",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.20"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.2.1",
+    "vite-plus": "^0.2.1",
+    "vitest": "^4.1.9"
   },
   "overrides": {
     "js-yaml": "^4.1.1",
-    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.20"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.2.1"
   },
   "packageManager": "npm@11.11.1"
 }

@@ -2,6 +2,7 @@ pub mod auth;
 pub mod cookie_jar;
 pub mod environment;
 pub mod folder;
+pub mod import_export;
 pub mod plugin;
 pub mod request;
 pub mod send;

@@ -201,7 +201,7 @@ function BaseInput({
   const id = useRef(`input-${generateId()}`);
   const editorClassName = classNames(
     className,
-    "!bg-transparent min-w-0 h-auto w-full focus:outline-none placeholder:text-placeholder",
+    "bg-transparent! min-w-0 h-auto w-full focus:outline-hidden placeholder:text-placeholder",
   );
 
   const isValid = useMemo(() => {
@@ -264,7 +264,7 @@ function BaseInput({
           "border",
           focused && !disabled ? "border-border-focus" : "border-border",
           disabled && "border-dotted",
-          !isValid && hasChanged && "!border-danger",
+          !isValid && hasChanged && "border-danger!",
           size === "md" && "min-h-md",
           size === "sm" && "min-h-sm",
           size === "xs" && "min-h-xs",
@@ -318,6 +318,7 @@ function BaseInput({
               editorClassName,
               multiLine && size === "md" && "py-1.5",
               multiLine && size === "sm" && "py-1",
+              multiLine && (size === "xs" || size === "2xs") && "py-0.5",
             )}
             onFocus={handleFocus}
             onBlur={handleBlur}
@@ -333,7 +334,7 @@ function BaseInput({
                 : `Obscure ${typeof label === "string" ? label : "field"}`
             }
             size="xs"
-            className={classNames("mr-0.5 !h-auto my-0.5", disabled && "opacity-disabled")}
+            className={classNames("mr-0.5 h-auto! my-0.5", disabled && "opacity-disabled")}
             color={tint}
             // iconClassName={classNames(
             //   tint === 'primary' && 'text-primary',
@@ -548,9 +549,9 @@ function EncryptionInput({
             color={tint}
             aria-label="Configure encryption"
             className={classNames(
-              "flex items-center justify-center !h-full !px-1",
+              "flex items-center justify-center h-full! px-1!",
               "opacity-70", // Makes it a bit subtler
-              props.disabled && "!opacity-disabled",
+              props.disabled && "opacity-disabled!",
             )}
           >
             <HStack space={0.5}>

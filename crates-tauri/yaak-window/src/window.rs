@@ -1,3 +1,4 @@
+use crate::window_state;
 use log::info;
 use rand::random;
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WindowEvent};
@@ -11,18 +12,22 @@ const MIN_WINDOW_HEIGHT: f64 = 300.0;
 
 pub const MAIN_WINDOW_PREFIX: &str = "main_";
 const OTHER_WINDOW_PREFIX: &str = "other_";
+const MAIN_WINDOW_STATE_KEY: &str = "main";
 
 #[derive(Default, Debug)]
 pub struct CreateWindowConfig<'s> {
     pub url: &'s str,
     pub label: &'s str,
     pub title: &'s str,
+    pub state_key: Option<String>,
     pub inner_size: Option<(f64, f64)>,
     pub position: Option<(f64, f64)>,
+    pub restore_position: Option<bool>,
     pub navigation_tx: Option<mpsc::Sender<String>>,
     pub close_tx: Option<mpsc::Sender<()>>,
     pub data_dir_key: Option<String>,
-    pub visible: bool,
+    pub initialization_script: Option<String>,
+    pub hidden: bool,
     pub hide_titlebar: bool,
     pub use_native_titlebar: bool,
 }
@@ -32,14 +37,32 @@ pub fn create_window<R: Runtime>(
     config: CreateWindowConfig,
 ) -> tauri::Result<WebviewWindow<R>> {
     info!("Create new window label={}", config.label);
+    let state_key = config.state_key.clone().unwrap_or_else(|| config.label.to_string());
+    let restore_position = config.restore_position.unwrap_or(true);
+    let mut inner_size = config.inner_size;
+    let mut position = config.position;
+    let mut maximized = false;
+    window_state::apply_saved_state(
+        handle,
+        &state_key,
+        &mut inner_size,
+        &mut position,
+        &mut maximized,
+        restore_position,
+    );
 
     let mut win_builder =
         tauri::WebviewWindowBuilder::new(handle, config.label, WebviewUrl::App(config.url.into()))
             .title(config.title)
             .resizable(true)
-            .visible(config.visible)
+            .visible(!config.hidden)
             .fullscreen(false)
+            .maximized(maximized)
             .min_inner_size(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT);
+
+    if let Some(script) = config.initialization_script {
+        win_builder = win_builder.initialization_script(script);
+    }
 
     if let Some(key) = config.data_dir_key {
         #[cfg(not(target_os = "macos"))]
@@ -61,13 +84,13 @@ pub fn create_window<R: Runtime>(
         }
     }
 
-    if let Some((w, h)) = config.inner_size {
+    if let Some((w, h)) = inner_size {
         win_builder = win_builder.inner_size(w, h);
     } else {
         win_builder = win_builder.inner_size(600.0, 600.0);
     }
 
-    if let Some((x, y)) = config.position {
+    if let Some((x, y)) = position {
         win_builder = win_builder.position(x, y);
     } else {
         win_builder = win_builder.center();
@@ -103,6 +126,7 @@ pub fn create_window<R: Runtime>(
     }
 
     let win = win_builder.build()?;
+    window_state::track_window(&win, &state_key);
 
     if let Some(tx) = config.close_tx {
         win.on_window_event(move |event| match event {
@@ -119,11 +143,12 @@ pub fn create_window<R: Runtime>(
     Ok(win)
 }
 
-pub fn create_main_window(
-    handle: &AppHandle,
+pub fn create_main_window<R: Runtime>(
+    handle: &AppHandle<R>,
     url: &str,
+    initialization_script: Option<String>,
     use_native_titlebar: bool,
-) -> tauri::Result<WebviewWindow> {
+) -> tauri::Result<WebviewWindow<R>> {
     let mut counter = 0;
     let label = loop {
         let label = format!("{MAIN_WINDOW_PREFIX}{counter}");
@@ -138,12 +163,16 @@ pub fn create_main_window(
         url,
         label: label.as_str(),
         title: "Yaak",
+        state_key: Some(MAIN_WINDOW_STATE_KEY.to_string()),
         inner_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
         position: Some((
             // Offset by random amount so it's easier to differentiate
             100.0 + random::<f64>() * 20.0,
             100.0 + random::<f64>() * 20.0,
         )),
+        restore_position: Some(counter == 0),
+        initialization_script,
+        hidden: true,
         hide_titlebar: true,
         use_native_titlebar,
         ..Default::default()
@@ -152,15 +181,17 @@ pub fn create_main_window(
     create_window(handle, config)
 }
 
-pub fn create_child_window(
-    parent_window: &WebviewWindow,
+pub fn create_child_window<R: Runtime>(
+    parent_window: &WebviewWindow<R>,
     url: &str,
     label: &str,
     title: &str,
     inner_size: (f64, f64),
+    initialization_script: Option<String>,
     use_native_titlebar: bool,
-) -> tauri::Result<WebviewWindow> {
+) -> tauri::Result<WebviewWindow<R>> {
     let app_handle = parent_window.app_handle();
+    let state_key = label.to_string();
     let label = format!("{OTHER_WINDOW_PREFIX}_{label}");
     let scale_factor = parent_window.scale_factor()?;
 
@@ -176,9 +207,12 @@ pub fn create_child_window(
     let config = CreateWindowConfig {
         label: label.as_str(),
         title,
+        state_key: Some(state_key),
         url,
         inner_size: Some(inner_size),
         position: Some(position),
+        initialization_script,
+        hidden: true,
         hide_titlebar: true,
         use_native_titlebar,
         ..Default::default()

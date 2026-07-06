@@ -66,7 +66,7 @@
     "react-markdown": "^10.1.0",
     "react-pdf": "^10.0.1",
     "react-syntax-highlighter": "^16.1.0",
-    "react-use": "^17.6.0",
+    "react-use": "^17.6.1",
     "rehype-stringify": "^10.0.1",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
@@ -79,8 +79,6 @@
   "devDependencies": {
     "@lezer/generator": "^1.8.0",
     "@rolldown/plugin-babel": "^0.2.3",
-    "@tailwindcss/container-queries": "^0.1.1",
-    "@tailwindcss/nesting": "^0.0.0-insiders.565cd3e",
     "@tanstack/router-plugin": "^1.127.5",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^24.0.13",
@@ -94,19 +92,15 @@
     "@vitejs/plugin-react": "^6.0.1",
     "@yaakapp-internal/theme": "^1.0.0",
     "@yaakapp-internal/ui": "^1.0.0",
-    "autoprefixer": "^10.4.21",
     "babel-plugin-react-compiler": "^1.0.0",
     "decompress": "^4.2.1",
     "internal-ip": "^8.0.0",
-    "postcss": "^8.5.14",
-    "postcss-nesting": "^13.0.2",
     "rollup": "^4.60.3",
-    "tailwindcss": "^3.4.17",
-    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.20",
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.2.1",
     "vite-plugin-static-copy": "^3.3.0",
     "vite-plugin-svgr": "^4.5.0",
     "vite-plugin-top-level-await": "^1.5.0",
     "vite-plugin-wasm": "^3.5.0",
-    "vite-plus": "^0.1.20"
+    "vite-plus": "^0.2.1"
   }
 }

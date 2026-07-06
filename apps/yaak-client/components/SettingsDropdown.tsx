@@ -7,6 +7,7 @@ import { useExportData } from "../hooks/useExportData";
 import { appInfo } from "../lib/appInfo";
 import { showDialog } from "../lib/dialog";
 import { importData } from "../lib/importData";
+import { pricingUrl } from "../lib/pricingUrl";
 import type { DropdownRef } from "./core/Dropdown";
 import { Dropdown } from "./core/Dropdown";
 import { Icon } from "@yaakapp-internal/ui";
@@ -76,7 +77,8 @@ export function SettingsDropdown() {
           hidden: check.data == null || check.data.status === "active",
           leftSlot: <Icon icon="circle_dollar_sign" />,
           rightSlot: <Icon icon="external_link" color="success" className="opacity-60" />,
-          onSelect: () => openUrl("https://yaak.app/pricing"),
+          onSelect: () =>
+            openUrl(pricingUrl(`app.menu.purchase.${check.data?.status ?? "unknown"}`)),
         },
         {
           label: "Install CLI",

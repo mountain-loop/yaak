@@ -101,7 +101,7 @@ export function ResizeHandle({
       {isResizing && (
         <div
           className={classNames(
-            "fixed -left-[100vw] -right-[100vw] -top-[100vh] -bottom-[100vh]",
+            "fixed left-[-100vw] right-[-100vw] top-[-100vh] bottom-[-100vh]",
             vertical && "cursor-row-resize",
             !vertical && "cursor-col-resize",
           )}
