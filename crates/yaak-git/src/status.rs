@@ -12,6 +12,9 @@ use yaak_sync::models::SyncModel;
 #[ts(export, export_to = "gen_git.ts")]
 pub struct GitStatusSummary {
     pub path: String,
+    /// The status directory relative to the repo root ("" when it IS the root).
+    /// Useful for displaying entry paths relative to the sync directory
+    pub rela_dir: String,
     pub head_ref: Option<String>,
     pub head_ref_shorthand: Option<String>,
     pub entries: Vec<GitStatusEntry>,
@@ -163,6 +166,9 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
 
     Ok(GitStatusSummary {
         entries,
+        rela_dir: repo_relative_dir(&repo, dir)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default(),
         path: branch_info.path,
         head_ref: branch_info.head_ref,
         head_ref_shorthand: branch_info.head_ref_shorthand,
@@ -274,15 +280,21 @@ fn git_status_from_raw(status: git2::Status) -> Option<(GitStatus, bool)> {
 /// containing repo is large (e.g. a sync dir inside a monorepo). No-op when
 /// `dir` is the repo root.
 fn scope_status_to_dir(opts: &mut git2::StatusOptions, repo: &git2::Repository, dir: &Path) {
-    let Some(workdir) = repo.workdir() else {
-        return;
-    };
-    let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-    if let Ok(rela) = canonical_dir.strip_prefix(workdir) {
-        if !rela.as_os_str().is_empty() {
-            opts.pathspec(rela);
-        }
+    if let Some(rela) = repo_relative_dir(repo, dir) {
+        opts.pathspec(rela);
     }
+}
+
+/// The path of `dir` relative to the repo root, or None when `dir` is the
+/// root itself (or outside the repo)
+fn repo_relative_dir(repo: &git2::Repository, dir: &Path) -> Option<std::path::PathBuf> {
+    let workdir = repo.workdir()?;
+    let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let rela = canonical_dir.strip_prefix(workdir).ok()?;
+    if rela.as_os_str().is_empty() {
+        return None;
+    }
+    Some(rela.to_path_buf())
 }
 
 fn model_id_from_rela_path(path: &Path) -> Option<String> {
@@ -332,12 +344,14 @@ mod tests {
 
         // The commit dialog's status only reports the sync directory
         let status = git_status(&sync_dir).unwrap();
+        assert_eq!(status.rela_dir, "sync");
         let mut paths: Vec<&str> = status.entries.iter().map(|e| e.rela_path.as_str()).collect();
         paths.sort();
         assert_eq!(paths, vec!["sync/README.md", "sync/yaak.req_1.yaml"]);
 
         // Status on the repo root reports everything
         let status = git_status(tmp.path()).unwrap();
+        assert_eq!(status.rela_dir, "");
         assert_eq!(status.entries.len(), 3);
     }
 }
