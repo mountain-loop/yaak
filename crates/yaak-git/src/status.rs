@@ -166,9 +166,7 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
 
     Ok(GitStatusSummary {
         entries,
-        rela_dir: repo_relative_dir(&repo, dir)
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default(),
+        rela_dir: repo_relative_dir(&repo, dir).unwrap_or_default(),
         path: branch_info.path,
         head_ref: branch_info.head_ref,
         head_ref_shorthand: branch_info.head_ref_shorthand,
@@ -285,16 +283,21 @@ fn scope_status_to_dir(opts: &mut git2::StatusOptions, repo: &git2::Repository, 
     }
 }
 
-/// The path of `dir` relative to the repo root, or None when `dir` is the
-/// root itself (or outside the repo)
-fn repo_relative_dir(repo: &git2::Repository, dir: &Path) -> Option<std::path::PathBuf> {
+/// The path of `dir` relative to the repo root as a forward-slash string
+/// (Git pathspecs use forward slashes even on Windows), or None when `dir`
+/// is the root itself (or outside the repo). Both sides are canonicalized so
+/// symlinked paths compare consistently.
+fn repo_relative_dir(repo: &git2::Repository, dir: &Path) -> Option<String> {
     let workdir = repo.workdir()?;
+    let workdir = workdir.canonicalize().unwrap_or_else(|_| workdir.to_path_buf());
     let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-    let rela = canonical_dir.strip_prefix(workdir).ok()?;
+    let rela = canonical_dir.strip_prefix(&workdir).ok()?;
     if rela.as_os_str().is_empty() {
         return None;
     }
-    Some(rela.to_path_buf())
+    let parts: Vec<String> =
+        rela.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+    Some(parts.join("/"))
 }
 
 fn model_id_from_rela_path(path: &Path) -> Option<String> {
