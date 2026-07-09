@@ -52,9 +52,9 @@ pub struct PluginManager {
     dev_mode: bool,
     /// Errors from plugin initialization, retrievable once via `take_init_errors`.
     init_errors: Arc<Mutex<Vec<(String, String)>>>,
-    /// Fires with the exit status if the runtime dies unexpectedly after startup,
-    /// retrievable once via `take_runtime_crash_rx`.
-    runtime_crash_rx: Arc<Mutex<Option<mpsc::Receiver<String>>>>,
+    /// Set to the exit status if the runtime dies unexpectedly, observable
+    /// via `runtime_crash_rx`.
+    runtime_crash_rx: tokio::sync::watch::Receiver<Option<String>>,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -86,19 +86,12 @@ impl PluginManager {
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
-        let (unexpected_exit_tx, mut unexpected_exit_rx) = mpsc::channel::<String>(1);
-        let (runtime_crash_tx, runtime_crash_rx) = mpsc::channel::<String>(1);
-        let (runtime_dead_tx, runtime_dead_rx) = tokio::sync::watch::channel(false);
-
-        // The app is still usable without the plugin runtime (just missing
-        // features), so an unexpected exit unblocks startup and is surfaced
-        // to the user rather than taking the app down.
-        tokio::spawn(async move {
-            if let Some(status) = unexpected_exit_rx.recv().await {
-                let _ = runtime_dead_tx.send(true);
-                let _ = runtime_crash_tx.send(status).await;
-            }
-        });
+        // Set to the exit status if the runtime dies unexpectedly. The app is
+        // still usable without the plugin runtime (just missing features), so
+        // this unblocks startup and is surfaced to the user rather than
+        // taking the app down.
+        let (unexpected_exit_tx, unexpected_exit_rx) =
+            tokio::sync::watch::channel::<Option<String>>(None);
         let ws_service =
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
@@ -112,7 +105,7 @@ impl PluginManager {
             installed_plugin_dir,
             dev_mode,
             init_errors: Default::default(),
-            runtime_crash_rx: Arc::new(Mutex::new(Some(runtime_crash_rx))),
+            runtime_crash_rx: unexpected_exit_rx.clone(),
         };
 
         // Forward events to subscribers
@@ -150,7 +143,7 @@ impl PluginManager {
         let addr = listener.local_addr().expect("Failed to get local address");
 
         // 1. Wait for the Node.js runtime to connect, or for it to die trying
-        let mut init_dead_rx = runtime_dead_rx.clone();
+        let mut init_dead_rx = unexpected_exit_rx.clone();
         let init_plugins_task = tokio::spawn(async move {
             tokio::select! {
                 result = client_connect_rx.changed() => match result {
@@ -163,7 +156,7 @@ impl PluginManager {
                         warn!("Failed to receive from client connection rx {e:?}");
                     }
                 },
-                _ = init_dead_rx.wait_for(|dead| *dead) => {
+                _ = init_dead_rx.wait_for(|status| status.is_some()) => {
                     warn!("Plugin runtime exited before connecting; continuing without plugins");
                 }
             }
@@ -188,7 +181,7 @@ impl PluginManager {
         info!("Waiting for plugins to initialize");
         init_plugins_task.await.map_err(|e| PluginErr(e.to_string()))?;
 
-        if *runtime_dead_rx.borrow() {
+        if unexpected_exit_rx.borrow().is_some() {
             warn!("Skipping plugin initialization because the runtime is not running");
             return Ok(plugin_manager);
         }
@@ -230,10 +223,10 @@ impl PluginManager {
         std::mem::take(&mut *self.init_errors.lock().await)
     }
 
-    /// Take the receiver that fires with the exit status if the plugin runtime
-    /// dies unexpectedly after startup. Can only be taken once.
-    pub async fn take_runtime_crash_rx(&self) -> Option<mpsc::Receiver<String>> {
-        self.runtime_crash_rx.lock().await.take()
+    /// A receiver that is set to the exit status if the plugin runtime dies
+    /// unexpectedly.
+    pub fn runtime_crash_rx(&self) -> tokio::sync::watch::Receiver<Option<String>> {
+        self.runtime_crash_rx.clone()
     }
 
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)

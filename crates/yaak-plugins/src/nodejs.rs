@@ -16,7 +16,7 @@ use yaak_common::command::new_xplatform_command;
 /// * `addr` - Socket address for the plugin runtime to connect to
 /// * `kill_rx` - Channel to signal shutdown
 /// * `killed_tx` - Notified once the runtime is killed after a shutdown signal
-/// * `unexpected_exit_tx` - Notified with the exit status if the runtime exits
+/// * `unexpected_exit_tx` - Set to the exit status if the runtime exits
 ///   without being asked to
 pub async fn start_nodejs_plugin_runtime(
     node_bin_path: &Path,
@@ -24,7 +24,7 @@ pub async fn start_nodejs_plugin_runtime(
     addr: SocketAddr,
     kill_rx: &Receiver<bool>,
     killed_tx: oneshot::Sender<()>,
-    unexpected_exit_tx: tokio::sync::mpsc::Sender<String>,
+    unexpected_exit_tx: tokio::sync::watch::Sender<Option<String>>,
 ) -> Result<()> {
     // HACK: Remove UNC prefix for Windows paths to pass to sidecar
     let plugin_runtime_main_str =
@@ -78,7 +78,7 @@ pub async fn start_nodejs_plugin_runtime(
             status = child.wait() => {
                 let status = status.map(|s| s.to_string()).unwrap_or_else(|e| e.to_string());
                 error!("Plugin runtime exited unexpectedly ({status})");
-                let _ = unexpected_exit_tx.send(status).await;
+                let _ = unexpected_exit_tx.send(Some(status));
             }
             closed = async { kill_rx.wait_for(|b| *b == true).await.is_err() } => {
                 if closed {

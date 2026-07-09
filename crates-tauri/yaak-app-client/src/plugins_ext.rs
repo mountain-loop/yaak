@@ -315,14 +315,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 .await
                 .expect("Failed to start plugin runtime");
 
-                // Surface unexpected runtime crashes (after startup) to the user
-                let mut crash_rx = manager
-                    .take_runtime_crash_rx()
-                    .await
-                    .expect("runtime crash receiver already taken");
+                // Surface unexpected runtime crashes to the user
+                let mut crash_rx = manager.runtime_crash_rx();
                 let app_handle_crash = app_handle_clone.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Some(status) = crash_rx.recv().await {
+                    if crash_rx.wait_for(|status| status.is_some()).await.is_ok() {
+                        let status = crash_rx.borrow().clone().unwrap_or_default();
                         // The crash may happen during startup, before any window or
                         // frontend listener exists — wait so the toast isn't lost
                         while app_handle_crash.webview_windows().is_empty() {
