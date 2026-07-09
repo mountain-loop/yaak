@@ -280,6 +280,9 @@ fn git_status_from_raw(status: git2::Status) -> Option<(GitStatus, bool)> {
 fn scope_status_to_dir(opts: &mut git2::StatusOptions, repo: &git2::Repository, dir: &Path) {
     if let Some(rela) = repo_relative_dir(repo, dir) {
         opts.pathspec(rela);
+        // Match the path literally (exact or directory prefix) instead of as
+        // a glob — directory names can contain pattern characters like [ or *
+        opts.disable_pathspec_match(true);
     }
 }
 
@@ -332,6 +335,23 @@ mod tests {
         // Status on the repo root reports everything
         let status = git_worktree_status(tmp.path()).unwrap();
         assert_eq!(status.entries.len(), 2);
+    }
+
+    #[test]
+    fn test_worktree_status_scoped_literal_dir_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+
+        // A directory name that is also a valid glob pattern ([1] matches "1")
+        let sync_dir = tmp.path().join("sync[1]");
+        std::fs::create_dir(&sync_dir).unwrap();
+        std::fs::write(sync_dir.join("yaak.req_1.yaml"), "inside").unwrap();
+        std::fs::create_dir(tmp.path().join("sync1")).unwrap();
+        std::fs::write(tmp.path().join("sync1").join("decoy.txt"), "glob match").unwrap();
+
+        let status = git_worktree_status(&sync_dir).unwrap();
+        let paths: Vec<&str> = status.entries.iter().map(|e| e.rela_path.as_str()).collect();
+        assert_eq!(paths, vec!["sync[1]/yaak.req_1.yaml"]);
     }
 
     #[test]
