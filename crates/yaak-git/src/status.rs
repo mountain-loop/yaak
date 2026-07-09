@@ -290,7 +290,7 @@ fn scope_status_to_dir(opts: &mut git2::StatusOptions, repo: &git2::Repository, 
 /// (Git pathspecs use forward slashes even on Windows), or None when `dir`
 /// is the root itself (or outside the repo). Both sides are canonicalized so
 /// symlinked paths compare consistently.
-fn repo_relative_dir(repo: &git2::Repository, dir: &Path) -> Option<String> {
+pub(crate) fn repo_relative_dir(repo: &git2::Repository, dir: &Path) -> Option<String> {
     let workdir = repo.workdir()?;
     let workdir = workdir.canonicalize().unwrap_or_else(|_| workdir.to_path_buf());
     let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());

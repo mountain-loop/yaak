@@ -52,12 +52,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const [message, setMessage] = useState<string>("");
   const [selectedEntry, setSelectedEntry] = useState<GitStatusEntry | null>(null);
 
-  const stagedPaths = () => allEntries.filter((e) => e.staged).map((e) => e.relaPath);
-
   const handleCreateCommit = async () => {
     setCommitError(null);
     try {
-      await commit.mutateAsync({ message, paths: stagedPaths() });
+      await commit.mutateAsync({ message });
       trackFeatureUsage("git-sync");
       onDone();
     } catch (err) {
@@ -68,7 +66,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
   const handleCreateCommitAndPush = async () => {
     setIsPushing(true);
     try {
-      const r = await commitAndPush.mutateAsync({ message, paths: stagedPaths() });
+      const r = await commitAndPush.mutateAsync({ message });
       handlePushResult(r);
       trackFeatureUsage("git-sync");
       onDone();
