@@ -250,12 +250,12 @@ export const gitMutations = (dir: string, callbacks: GitCallbacks) => {
       mutationFn: (args) => invoke("cmd_git_checkout", { dir, ...args }),
       onSuccess,
     }),
-    commit: createFastMutation<void, string, { message: string }>({
+    commit: createFastMutation<void, string, { message: string; paths: string[] }>({
       mutationKey: ["git", "commit", dir],
       mutationFn: (args) => invoke("cmd_git_commit", { dir, ...args }),
       onSuccess,
     }),
-    commitAndPush: createFastMutation<PushResult, string, { message: string }>({
+    commitAndPush: createFastMutation<PushResult, string, { message: string; paths: string[] }>({
       mutationKey: ["git", "commit_push", dir],
       mutationFn: async (args) => {
         await invoke("cmd_git_commit", { dir, ...args });

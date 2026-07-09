@@ -107,8 +107,8 @@ pub async fn cmd_git_clone(url: &str, dir: &Path) -> Result<CloneResult> {
 }
 
 #[command]
-pub async fn cmd_git_commit(dir: &Path, message: &str) -> Result<()> {
-    Ok(git_commit(dir, message).await?)
+pub async fn cmd_git_commit(dir: &Path, message: &str, paths: Vec<String>) -> Result<()> {
+    Ok(git_commit(dir, message, &paths).await?)
 }
 
 #[command]
