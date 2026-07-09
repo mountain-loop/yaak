@@ -19,7 +19,12 @@ export type GitStatus = "untracked" | "conflict" | "current" | "modified" | "rem
 
 export type GitStatusEntry = { relaPath: string, status: GitStatus, staged: boolean, prev: SyncModel | null, next: SyncModel | null, };
 
-export type GitStatusSummary = { path: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
+export type GitStatusSummary = { path: string, 
+/**
+ * The status directory relative to the repo root ("" when it IS the root).
+ * Useful for displaying entry paths relative to the sync directory
+ */
+relaDir: string, headRef: string | null, headRefShorthand: string | null, entries: Array<GitStatusEntry>, origins: Array<string>, localBranches: Array<string>, remoteBranches: Array<string>, ahead: number, behind: number, };
 
 export type GitWorktreeStatus = { entries: Array<GitWorktreeStatusEntry>, };
 
