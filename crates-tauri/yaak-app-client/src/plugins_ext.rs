@@ -28,7 +28,7 @@ use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
 };
-use yaak_plugins::events::PluginContext;
+use yaak_plugins::events::{Color, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::get_plugin_meta;
@@ -314,6 +314,28 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 )
                 .await
                 .expect("Failed to start plugin runtime");
+
+                // Surface unexpected runtime crashes (after startup) to the user
+                let mut crash_rx = manager
+                    .take_runtime_crash_rx()
+                    .await
+                    .expect("runtime crash receiver already taken");
+                let app_handle_crash = app_handle_clone.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Some(status) = crash_rx.recv().await {
+                        let _ = app_handle_crash.emit(
+                            "show_toast",
+                            ShowToastRequest {
+                                message: format!(
+                                    "Plugin runtime crashed ({status}). Plugins won't work until Yaak is restarted"
+                                ),
+                                color: Some(Color::Danger),
+                                icon: None,
+                                timeout: None,
+                            },
+                        );
+                    }
+                });
 
                 app_handle_clone.manage(manager);
             });

@@ -28,6 +28,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
@@ -52,6 +53,9 @@ pub struct PluginManager {
     dev_mode: bool,
     /// Errors from plugin initialization, retrievable once via `take_init_errors`.
     init_errors: Arc<Mutex<Vec<(String, String)>>>,
+    /// Fires with the exit status if the runtime dies unexpectedly after startup,
+    /// retrievable once via `take_runtime_crash_rx`.
+    runtime_crash_rx: Arc<Mutex<Option<mpsc::Receiver<String>>>>,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -83,6 +87,24 @@ impl PluginManager {
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
+        let (unexpected_exit_tx, mut unexpected_exit_rx) = mpsc::channel::<String>(1);
+        let (runtime_crash_tx, runtime_crash_rx) = mpsc::channel::<String>(1);
+        let runtime_connected = Arc::new(AtomicBool::new(false));
+
+        // An unexpected runtime exit before it ever connects means the app can
+        // never become functional — abort loudly instead of hanging on startup.
+        // After that, report it so the app can show a user-facing error.
+        let runtime_connected_for_exit = runtime_connected.clone();
+        tokio::spawn(async move {
+            if let Some(status) = unexpected_exit_rx.recv().await {
+                if runtime_connected_for_exit.load(Ordering::SeqCst) {
+                    let _ = runtime_crash_tx.send(status).await;
+                } else {
+                    error!("Plugin runtime exited during startup; aborting");
+                    std::process::exit(1);
+                }
+            }
+        });
         let ws_service =
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
@@ -96,6 +118,7 @@ impl PluginManager {
             installed_plugin_dir,
             dev_mode,
             init_errors: Default::default(),
+            runtime_crash_rx: Arc::new(Mutex::new(Some(runtime_crash_rx))),
         };
 
         // Forward events to subscribers
@@ -137,6 +160,7 @@ impl PluginManager {
             match client_connect_rx.changed().await {
                 Ok(_) => {
                     info!("Plugin runtime client connected!");
+                    runtime_connected.store(true, Ordering::SeqCst);
                     // Note: initialize_all_plugins is now called separately by the app
                     // after setting up the plugin list
                 }
@@ -159,6 +183,7 @@ impl PluginManager {
             addr,
             &kill_server_rx,
             killed_tx,
+            unexpected_exit_tx,
         )
         .await?;
         info!("Waiting for plugins to initialize");
@@ -199,6 +224,12 @@ impl PluginManager {
     /// Returns a list of `(plugin_directory, error_message)` pairs.
     pub async fn take_init_errors(&self) -> Vec<(String, String)> {
         std::mem::take(&mut *self.init_errors.lock().await)
+    }
+
+    /// Take the receiver that fires with the exit status if the plugin runtime
+    /// dies unexpectedly after startup. Can only be taken once.
+    pub async fn take_runtime_crash_rx(&self) -> Option<mpsc::Receiver<String>> {
+        self.runtime_crash_rx.lock().await.take()
     }
 
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)
