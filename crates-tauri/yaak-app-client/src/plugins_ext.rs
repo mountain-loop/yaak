@@ -323,12 +323,16 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 let app_handle_crash = app_handle_clone.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Some(status) = crash_rx.recv().await {
+                        // The crash may happen during startup, before any window or
+                        // frontend listener exists — wait so the toast isn't lost
+                        while app_handle_crash.webview_windows().is_empty() {
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                        }
+                        tokio::time::sleep(Duration::from_secs(3)).await;
                         let _ = app_handle_crash.emit(
                             "show_toast",
                             ShowToastRequest {
-                                message: format!(
-                                    "Plugin runtime crashed ({status}). Plugins won't work until Yaak is restarted"
-                                ),
+                                message: format!("Plugin runtime crashed ({status})"),
                                 color: Some(Color::Danger),
                                 icon: None,
                                 timeout: None,

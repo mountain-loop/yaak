@@ -28,7 +28,6 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::fs::read_dir;
 use tokio::net::TcpListener;
@@ -89,20 +88,15 @@ impl PluginManager {
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
         let (unexpected_exit_tx, mut unexpected_exit_rx) = mpsc::channel::<String>(1);
         let (runtime_crash_tx, runtime_crash_rx) = mpsc::channel::<String>(1);
-        let runtime_connected = Arc::new(AtomicBool::new(false));
+        let (runtime_dead_tx, runtime_dead_rx) = tokio::sync::watch::channel(false);
 
-        // An unexpected runtime exit before it ever connects means the app can
-        // never become functional — abort loudly instead of hanging on startup.
-        // After that, report it so the app can show a user-facing error.
-        let runtime_connected_for_exit = runtime_connected.clone();
+        // The app is still usable without the plugin runtime (just missing
+        // features), so an unexpected exit unblocks startup and is surfaced
+        // to the user rather than taking the app down.
         tokio::spawn(async move {
             if let Some(status) = unexpected_exit_rx.recv().await {
-                if runtime_connected_for_exit.load(Ordering::SeqCst) {
-                    let _ = runtime_crash_tx.send(status).await;
-                } else {
-                    error!("Plugin runtime exited during startup; aborting");
-                    std::process::exit(1);
-                }
+                let _ = runtime_dead_tx.send(true);
+                let _ = runtime_crash_tx.send(status).await;
             }
         });
         let ws_service =
@@ -155,17 +149,22 @@ impl PluginManager {
         let listener = TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener");
         let addr = listener.local_addr().expect("Failed to get local address");
 
-        // 1. Wait for Node.js runtime to connect
+        // 1. Wait for the Node.js runtime to connect, or for it to die trying
+        let mut init_dead_rx = runtime_dead_rx.clone();
         let init_plugins_task = tokio::spawn(async move {
-            match client_connect_rx.changed().await {
-                Ok(_) => {
-                    info!("Plugin runtime client connected!");
-                    runtime_connected.store(true, Ordering::SeqCst);
-                    // Note: initialize_all_plugins is now called separately by the app
-                    // after setting up the plugin list
-                }
-                Err(e) => {
-                    warn!("Failed to receive from client connection rx {e:?}");
+            tokio::select! {
+                result = client_connect_rx.changed() => match result {
+                    Ok(_) => {
+                        info!("Plugin runtime client connected!");
+                        // Note: initialize_all_plugins is now called separately by the app
+                        // after setting up the plugin list
+                    }
+                    Err(e) => {
+                        warn!("Failed to receive from client connection rx {e:?}");
+                    }
+                },
+                _ = init_dead_rx.wait_for(|dead| *dead) => {
+                    warn!("Plugin runtime exited before connecting; continuing without plugins");
                 }
             }
         });
@@ -188,6 +187,11 @@ impl PluginManager {
         .await?;
         info!("Waiting for plugins to initialize");
         init_plugins_task.await.map_err(|e| PluginErr(e.to_string()))?;
+
+        if *runtime_dead_rx.borrow() {
+            warn!("Skipping plugin initialization because the runtime is not running");
+            return Ok(plugin_manager);
+        }
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
         let db = query_manager.connect();
