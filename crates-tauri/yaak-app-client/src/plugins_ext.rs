@@ -28,7 +28,7 @@ use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
 };
-use yaak_plugins::events::PluginContext;
+use yaak_plugins::events::{Color, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::get_plugin_meta;
@@ -314,6 +314,30 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 )
                 .await
                 .expect("Failed to start plugin runtime");
+
+                // Surface unexpected runtime crashes to the user
+                let mut crash_rx = manager.runtime_crash_rx();
+                let app_handle_crash = app_handle_clone.clone();
+                tauri::async_runtime::spawn(async move {
+                    if crash_rx.wait_for(|status| status.is_some()).await.is_ok() {
+                        let status = crash_rx.borrow().clone().unwrap_or_default();
+                        // The crash may happen during startup, before any window or
+                        // frontend listener exists — wait so the toast isn't lost
+                        while app_handle_crash.webview_windows().is_empty() {
+                            tokio::time::sleep(Duration::from_millis(500)).await;
+                        }
+                        tokio::time::sleep(Duration::from_secs(3)).await;
+                        let _ = app_handle_crash.emit(
+                            "show_toast",
+                            ShowToastRequest {
+                                message: format!("Plugin runtime crashed ({status})"),
+                                color: Some(Color::Danger),
+                                icon: None,
+                                timeout: None,
+                            },
+                        );
+                    }
+                });
 
                 app_handle_clone.manage(manager);
             });

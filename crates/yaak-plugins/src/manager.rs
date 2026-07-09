@@ -52,6 +52,9 @@ pub struct PluginManager {
     dev_mode: bool,
     /// Errors from plugin initialization, retrievable once via `take_init_errors`.
     init_errors: Arc<Mutex<Vec<(String, String)>>>,
+    /// Set to the exit status if the runtime dies unexpectedly, observable
+    /// via `runtime_crash_rx`.
+    runtime_crash_rx: tokio::sync::watch::Receiver<Option<String>>,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -83,6 +86,12 @@ impl PluginManager {
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
+        // Set to the exit status if the runtime dies unexpectedly. The app is
+        // still usable without the plugin runtime (just missing features), so
+        // this unblocks startup and is surfaced to the user rather than
+        // taking the app down.
+        let (unexpected_exit_tx, unexpected_exit_rx) =
+            tokio::sync::watch::channel::<Option<String>>(None);
         let ws_service =
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
@@ -96,6 +105,7 @@ impl PluginManager {
             installed_plugin_dir,
             dev_mode,
             init_errors: Default::default(),
+            runtime_crash_rx: unexpected_exit_rx.clone(),
         };
 
         // Forward events to subscribers
@@ -132,16 +142,22 @@ impl PluginManager {
         let listener = TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener");
         let addr = listener.local_addr().expect("Failed to get local address");
 
-        // 1. Wait for Node.js runtime to connect
+        // 1. Wait for the Node.js runtime to connect, or for it to die trying
+        let mut init_dead_rx = unexpected_exit_rx.clone();
         let init_plugins_task = tokio::spawn(async move {
-            match client_connect_rx.changed().await {
-                Ok(_) => {
-                    info!("Plugin runtime client connected!");
-                    // Note: initialize_all_plugins is now called separately by the app
-                    // after setting up the plugin list
-                }
-                Err(e) => {
-                    warn!("Failed to receive from client connection rx {e:?}");
+            tokio::select! {
+                result = client_connect_rx.changed() => match result {
+                    Ok(_) => {
+                        info!("Plugin runtime client connected!");
+                        // Note: initialize_all_plugins is now called separately by the app
+                        // after setting up the plugin list
+                    }
+                    Err(e) => {
+                        warn!("Failed to receive from client connection rx {e:?}");
+                    }
+                },
+                _ = init_dead_rx.wait_for(|status| status.is_some()) => {
+                    warn!("Plugin runtime exited before connecting; continuing without plugins");
                 }
             }
         });
@@ -159,10 +175,16 @@ impl PluginManager {
             addr,
             &kill_server_rx,
             killed_tx,
+            unexpected_exit_tx,
         )
         .await?;
         info!("Waiting for plugins to initialize");
         init_plugins_task.await.map_err(|e| PluginErr(e.to_string()))?;
+
+        if unexpected_exit_rx.borrow().is_some() {
+            warn!("Skipping plugin initialization because the runtime is not running");
+            return Ok(plugin_manager);
+        }
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
         let db = query_manager.connect();
@@ -199,6 +221,12 @@ impl PluginManager {
     /// Returns a list of `(plugin_directory, error_message)` pairs.
     pub async fn take_init_errors(&self) -> Vec<(String, String)> {
         std::mem::take(&mut *self.init_errors.lock().await)
+    }
+
+    /// A receiver that is set to the exit status if the plugin runtime dies
+    /// unexpectedly.
+    pub fn runtime_crash_rx(&self) -> tokio::sync::watch::Receiver<Option<String>> {
+        self.runtime_crash_rx.clone()
     }
 
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)
