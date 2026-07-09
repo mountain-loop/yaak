@@ -82,13 +82,8 @@ pub enum GitStatus {
 
 pub fn git_worktree_status(dir: &Path) -> crate::error::Result<GitWorktreeStatus> {
     let repo = open_repo(dir)?;
-    let mut opts = git2::StatusOptions::new();
-    opts.include_ignored(false)
-        .include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .include_unmodified(false);
-
-    scope_status_to_dir(&mut opts, &repo, dir);
+    let mut opts = scoped_status_options(&repo, dir);
+    opts.include_unmodified(false);
 
     let mut entries = Vec::new();
     for entry in repo.statuses(Some(&mut opts))?.into_iter() {
@@ -120,12 +115,8 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
     let branch_info = git_branch_info_for_repo(&repo, dir)?;
     let head_tree = repo.head().ok().and_then(|head| head.peel_to_tree().ok());
 
-    let mut opts = git2::StatusOptions::new();
-    opts.include_ignored(false)
-        .include_untracked(true) // Include untracked
-        .recurse_untracked_dirs(true) // Show all untracked
-        .include_unmodified(true); // Include unchanged
-    scope_status_to_dir(&mut opts, &repo, dir);
+    let mut opts = scoped_status_options(&repo, dir);
+    opts.include_unmodified(true); // Include unchanged
 
     // TODO: Support renames
 
@@ -273,17 +264,21 @@ fn git_status_from_raw(status: git2::Status) -> Option<(GitStatus, bool)> {
     Some((status, staged))
 }
 
-/// Scope a status walk to `dir` when it's a subdirectory of the repo. Yaak
-/// only cares about the sync directory, and a full walk is expensive when the
-/// containing repo is large (e.g. a sync dir inside a monorepo). No-op when
-/// `dir` is the repo root.
-fn scope_status_to_dir(opts: &mut git2::StatusOptions, repo: &git2::Repository, dir: &Path) {
+/// Construct StatusOptions for a walk scoped to `dir`. Yaak only cares about
+/// the sync directory, and a full walk is expensive when the containing repo
+/// is large (e.g. a sync dir inside a monorepo); scoping is a no-op when
+/// `dir` is the repo root. Always build status walks through this so a new
+/// call site can't forget the scoping.
+pub(crate) fn scoped_status_options(repo: &git2::Repository, dir: &Path) -> git2::StatusOptions {
+    let mut opts = git2::StatusOptions::new();
+    opts.include_ignored(false).include_untracked(true).recurse_untracked_dirs(true);
     if let Some(rela) = repo_relative_dir(repo, dir) {
         opts.pathspec(rela);
         // Match the path literally (exact or directory prefix) instead of as
         // a glob — directory names can contain pattern characters like [ or *
         opts.disable_pathspec_match(true);
     }
+    opts
 }
 
 /// The path of `dir` relative to the repo root as a forward-slash string

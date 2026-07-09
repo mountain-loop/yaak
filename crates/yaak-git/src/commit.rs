@@ -5,28 +5,24 @@ use crate::status::repo_relative_dir;
 use log::info;
 use std::path::Path;
 
-/// Commit the staged changes within `dir` (their current worktree content).
-/// Scoping the commit to the sync directory means files staged outside of it
-/// (e.g. elsewhere in a containing monorepo) are never swept into a Yaak
-/// commit — they stay staged for the user's own next commit.
+/// Commit the staged changes within `dir` (their current worktree content,
+/// matching what the commit dialog displays). Scoping the commit to the sync
+/// directory means files staged outside of it (e.g. elsewhere in a containing
+/// monorepo) are never swept into a Yaak commit — they stay staged for the
+/// user's own next commit.
 pub async fn git_commit(dir: &Path, message: &str) -> crate::error::Result<()> {
     let repo = open_repo(dir)?;
     let rela_dir = repo_relative_dir(&repo, dir);
 
-    let mut cmd = new_binary_command(dir).await?;
-    cmd.args(["commit", "--message", message]);
-
-    // When the sync dir is the repo root, every staged file is within it and
-    // a plain whole-index commit is already correct
-    if rela_dir.is_some() {
-        let staged = staged_files(dir).await?;
-        let scoped = filter_paths_to_dir(staged, rela_dir.as_deref());
-        if scoped.is_empty() {
-            return Err(GenericError("No staged changes to commit".to_string()));
-        }
-        cmd.arg("--");
-        cmd.args(scoped);
+    let staged = staged_files(dir).await?;
+    let scoped = filter_paths_to_dir(staged, rela_dir.as_deref());
+    if scoped.is_empty() {
+        return Err(GenericError("No staged changes to commit".to_string()));
     }
+
+    let mut cmd = new_binary_command(dir).await?;
+    cmd.args(["commit", "--message", message, "--"]);
+    cmd.args(scoped);
 
     let out = cmd.output().await?;
 
