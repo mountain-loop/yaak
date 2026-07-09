@@ -85,6 +85,8 @@ pub fn git_worktree_status(dir: &Path) -> crate::error::Result<GitWorktreeStatus
         .recurse_untracked_dirs(true)
         .include_unmodified(false);
 
+    scope_status_to_dir(&mut opts, &repo, dir);
+
     let mut entries = Vec::new();
     for entry in repo.statuses(Some(&mut opts))?.into_iter() {
         let Some(rela_path) = entry.path() else {
@@ -120,6 +122,7 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
         .include_untracked(true) // Include untracked
         .recurse_untracked_dirs(true) // Show all untracked
         .include_unmodified(true); // Include unchanged
+    scope_status_to_dir(&mut opts, &repo, dir);
 
     // TODO: Support renames
 
@@ -266,6 +269,22 @@ fn git_status_from_raw(status: git2::Status) -> Option<(GitStatus, bool)> {
     Some((status, staged))
 }
 
+/// Scope a status walk to `dir` when it's a subdirectory of the repo. Yaak
+/// only cares about the sync directory, and a full walk is expensive when the
+/// containing repo is large (e.g. a sync dir inside a monorepo). No-op when
+/// `dir` is the repo root.
+fn scope_status_to_dir(opts: &mut git2::StatusOptions, repo: &git2::Repository, dir: &Path) {
+    let Some(workdir) = repo.workdir() else {
+        return;
+    };
+    let canonical_dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    if let Ok(rela) = canonical_dir.strip_prefix(workdir) {
+        if !rela.as_os_str().is_empty() {
+            opts.pathspec(rela);
+        }
+    }
+}
+
 fn model_id_from_rela_path(path: &Path) -> Option<String> {
     let ext = path.extension()?.to_str()?;
     if ext != "yaml" && ext != "yml" && ext != "json" {
@@ -273,4 +292,52 @@ fn model_id_from_rela_path(path: &Path) -> Option<String> {
     }
 
     path.file_stem()?.to_str()?.strip_prefix("yaak.").map(String::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_worktree_status_scoped_to_subdir() {
+        let tmp = tempfile::tempdir().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+
+        let sync_dir = tmp.path().join("sync");
+        std::fs::create_dir(&sync_dir).unwrap();
+        std::fs::write(sync_dir.join("yaak.req_1.yaml"), "inside").unwrap();
+        std::fs::write(tmp.path().join("outside.txt"), "outside").unwrap();
+
+        // Status on a subdirectory only reports that subdirectory
+        let status = git_worktree_status(&sync_dir).unwrap();
+        let paths: Vec<&str> = status.entries.iter().map(|e| e.rela_path.as_str()).collect();
+        assert_eq!(paths, vec!["sync/yaak.req_1.yaml"]);
+        assert_eq!(status.entries[0].model_id.as_deref(), Some("req_1"));
+
+        // Status on the repo root reports everything
+        let status = git_worktree_status(tmp.path()).unwrap();
+        assert_eq!(status.entries.len(), 2);
+    }
+
+    #[test]
+    fn test_status_scoped_to_subdir() {
+        let tmp = tempfile::tempdir().unwrap();
+        git2::Repository::init(tmp.path()).unwrap();
+
+        let sync_dir = tmp.path().join("sync");
+        std::fs::create_dir(&sync_dir).unwrap();
+        std::fs::write(sync_dir.join("yaak.req_1.yaml"), "inside").unwrap();
+        std::fs::write(sync_dir.join("README.md"), "external, but in sync dir").unwrap();
+        std::fs::write(tmp.path().join("outside.txt"), "outside").unwrap();
+
+        // The commit dialog's status only reports the sync directory
+        let status = git_status(&sync_dir).unwrap();
+        let mut paths: Vec<&str> = status.entries.iter().map(|e| e.rela_path.as_str()).collect();
+        paths.sort();
+        assert_eq!(paths, vec!["sync/README.md", "sync/yaak.req_1.yaml"]);
+
+        // Status on the repo root reports everything
+        let status = git_status(tmp.path()).unwrap();
+        assert_eq!(status.entries.len(), 3);
+    }
 }

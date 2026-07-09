@@ -37,13 +37,24 @@ pub(crate) async fn watch_git_worktree_status<R: Runtime>(
     let mut watcher = notify::recommended_watcher(tx)
         .map_err(|e| Error::GenericError(format!("Failed to watch Git repository: {e}")))?;
 
+    // Watch only the directory Yaak syncs to, not the whole worktree — the
+    // containing repo may be huge and busy (e.g. a sync dir inside a monorepo),
+    // and watching it all burns CPU re-checking status for unrelated changes
     watcher
-        .watch(&workdir, notify::RecursiveMode::Recursive)
-        .map_err(|e| Error::GenericError(format!("Failed to watch Git worktree: {e}")))?;
-    if gitdir != workdir {
+        .watch(&repo_dir, notify::RecursiveMode::Recursive)
+        .map_err(|e| Error::GenericError(format!("Failed to watch Git sync directory: {e}")))?;
+
+    // Watch the git metadata that affects branch/status info: the top-level
+    // gitdir files (HEAD, index, packed-refs) and refs. Not the whole gitdir,
+    // since .git/objects churns constantly during fetches and gc
+    watcher
+        .watch(&gitdir, notify::RecursiveMode::NonRecursive)
+        .map_err(|e| Error::GenericError(format!("Failed to watch Git metadata: {e}")))?;
+    let refs_dir = gitdir.join("refs");
+    if refs_dir.exists() {
         watcher
-            .watch(&gitdir, notify::RecursiveMode::Recursive)
-            .map_err(|e| Error::GenericError(format!("Failed to watch Git metadata: {e}")))?;
+            .watch(&refs_dir, notify::RecursiveMode::Recursive)
+            .map_err(|e| Error::GenericError(format!("Failed to watch Git refs: {e}")))?;
     }
 
     let (async_tx, mut async_rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(100);
