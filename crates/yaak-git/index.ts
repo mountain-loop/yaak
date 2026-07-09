@@ -66,13 +66,7 @@ export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
 
 export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktreeStatus) => void) {
   const channel = new Channel<GitWorktreeStatus>();
-  channel.onmessage = (status) => {
-    // Watch events also fire for Git metadata changes (e.g. an external
-    // fetch updating refs), which affect branch info, not just worktree
-    // status. Events are coalesced on the backend, so this stays cheap
-    void queryClient.invalidateQueries({ queryKey: ["git", "branch_info", dir] });
-    callback(status);
-  };
+  channel.onmessage = callback;
   const unlistenPromise = invoke<GitWatchResult>("cmd_git_watch_worktree_status", {
     dir,
     channel,
