@@ -1,3 +1,4 @@
+use super::conflict_free_name;
 use crate::client_db::ClientDb;
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Result;
@@ -62,14 +63,19 @@ impl<'a> ClientDb<'a> {
     pub fn duplicate_folder(&self, src_folder: &Folder, source: &UpdateSource) -> Result<Folder> {
         let fid = &src_folder.id;
 
-        let new_folder = self.upsert_folder(
-            &Folder {
-                id: "".into(),
-                sort_priority: src_folder.sort_priority + 0.001,
-                ..src_folder.clone()
-            },
-            source,
-        )?;
+        let mut folder = Folder {
+            id: "".into(),
+            sort_priority: src_folder.sort_priority + 0.001,
+            ..src_folder.clone()
+        };
+        let sibling_names = self
+            .list_folders(&folder.workspace_id)?
+            .into_iter()
+            .filter(|f| f.folder_id == folder.folder_id)
+            .map(|f| f.name)
+            .collect::<Vec<_>>();
+        folder.name = conflict_free_name(&folder.name, &sibling_names);
+        let new_folder = self.upsert_folder(&folder, source)?;
 
         for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
             self.upsert_http_request(
