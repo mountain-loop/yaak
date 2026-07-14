@@ -37,7 +37,7 @@ export async function getImplicit(
     authorizationUrl: authorizationUrlRaw,
   };
   const token = await getToken(ctx, tokenArgs);
-  if (token != null && !isTokenExpired(token)) {
+  if (token != null && !isTokenExpired(token, tokenName)) {
     return token;
   }
 

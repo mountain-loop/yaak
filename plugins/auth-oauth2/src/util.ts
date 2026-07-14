@@ -1,11 +1,14 @@
 import jwt from "jsonwebtoken";
 import type { AccessToken } from "./store";
 
-export function isTokenExpired(token: AccessToken) {
+export function isTokenExpired(
+  token: AccessToken,
+  tokenName: "access_token" | "id_token" = "access_token",
+) {
   // Fall back to the JWT's own exp claim for tokens stored without an expiry
-  // (eg. from a token response that had no expires_in)
-  const expiresAt =
-    token.expiresAt ?? jwtExpiresAt(token.response.access_token ?? token.response.id_token);
+  // (eg. from a token response that had no expires_in). Decode the same token
+  // that gets sent as the credential.
+  const expiresAt = token.expiresAt ?? jwtExpiresAt(token.response[tokenName]);
   return expiresAt != null && Date.now() > expiresAt;
 }
 

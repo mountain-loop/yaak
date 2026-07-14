@@ -136,6 +136,16 @@ describe("isTokenExpired", () => {
       false,
     );
   });
+
+  test("checks the token that is used as the credential", () => {
+    // Expired id_token credential is not masked by an opaque access_token
+    const token = {
+      response: { access_token: "opaque-token", id_token: jwtWithExp(-60) },
+      expiresAt: null,
+    };
+    expect(isTokenExpired(token, "id_token")).toBe(true);
+    expect(isTokenExpired(token, "access_token")).toBe(false);
+  });
 });
 
 describe("jwtExpiresAt", () => {

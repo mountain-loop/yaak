@@ -67,6 +67,7 @@ export async function getAuthorizationCode(
     clientId,
     clientSecret,
     credentialsInBody,
+    tokenName,
   });
   if (token != null) {
     return token;

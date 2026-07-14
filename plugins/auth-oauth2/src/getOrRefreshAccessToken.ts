@@ -13,6 +13,7 @@ export async function getOrRefreshAccessToken(
     credentialsInBody,
     clientId,
     clientSecret,
+    tokenName,
     forceRefresh,
   }: {
     scope: string | null;
@@ -20,6 +21,7 @@ export async function getOrRefreshAccessToken(
     credentialsInBody: boolean;
     clientId: string;
     clientSecret: string;
+    tokenName?: "access_token" | "id_token";
     forceRefresh?: boolean;
   },
 ): Promise<AccessToken | null> {
@@ -28,7 +30,7 @@ export async function getOrRefreshAccessToken(
     return null;
   }
 
-  const isExpired = isTokenExpired(token);
+  const isExpired = isTokenExpired(token, tokenName);
 
   // Return the current access token if it's still valid
   if (!isExpired && !forceRefresh) {
