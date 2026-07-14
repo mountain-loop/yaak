@@ -1,3 +1,5 @@
+/* oxlint-disable no-explicit-any */
+
 export function isJSObject(obj: unknown) {
   return Object.prototype.toString.call(obj) === "[object Object]";
 }
@@ -11,6 +13,91 @@ export function convertId(id: string): string {
     return id;
   }
   return `GENERATE_ID::${id}`;
+}
+
+export function importHttpBodyAndHeaders(obj: any) {
+  const { headers } = importHeaders(obj);
+  const { body, bodyType } = importHttpBody(obj.body);
+  const mimeType = typeof obj.body?.mimeType === "string" ? obj.body.mimeType.trim() : "";
+
+  if (
+    bodyType != null &&
+    mimeType !== "" &&
+    !headers.some((header: { name: string }) => header.name.toLowerCase() === "content-type")
+  ) {
+    headers.push({ enabled: true, name: "Content-Type", value: mimeType });
+  }
+
+  return { body, bodyType, headers };
+}
+
+export function importHeaders(obj: any) {
+  const headers = (obj.headers ?? [])
+    .map((header: any) => ({
+      enabled: !header.disabled,
+      name: header.name ?? "",
+      value: header.value ?? "",
+    }))
+    .filter(({ name, value }: any) => name !== "" || value !== "");
+  return { headers } as const;
+}
+
+function importHttpBody(rawBody: any) {
+  const mimeType = typeof rawBody?.mimeType === "string" ? rawBody.mimeType.trim() : "";
+  const normalizedMimeType = mimeType.split(";", 1)[0]?.toLowerCase() ?? "";
+
+  if (normalizedMimeType === "application/octet-stream") {
+    return { bodyType: "binary", body: { filePath: rawBody.fileName ?? "" } };
+  }
+
+  if (normalizedMimeType === "application/x-www-form-urlencoded") {
+    return {
+      bodyType: "application/x-www-form-urlencoded",
+      body: {
+        form: (rawBody.params ?? []).map((parameter: any) => ({
+          enabled: !parameter.disabled,
+          name: parameter.name ?? "",
+          value: parameter.value ?? "",
+        })),
+      },
+    };
+  }
+
+  if (normalizedMimeType === "multipart/form-data") {
+    return {
+      bodyType: "multipart/form-data",
+      body: {
+        form: (rawBody.params ?? []).map((parameter: any) => ({
+          enabled: !parameter.disabled,
+          name: parameter.name ?? "",
+          value: parameter.value ?? "",
+          file: parameter.fileName ?? null,
+        })),
+      },
+    };
+  }
+
+  if (normalizedMimeType === "application/graphql") {
+    return { bodyType: "graphql", body: { text: rawBody.text ?? "" } };
+  }
+
+  if (normalizedMimeType === "application/json" || normalizedMimeType.endsWith("+json")) {
+    return { bodyType: "application/json", body: { text: rawBody.text ?? "" } };
+  }
+
+  if (
+    normalizedMimeType === "text/xml" ||
+    normalizedMimeType === "application/xml" ||
+    normalizedMimeType.endsWith("+xml")
+  ) {
+    return { bodyType: "text/xml", body: { text: rawBody.text ?? "" } };
+  }
+
+  if (typeof rawBody?.text === "string") {
+    return { bodyType: "other", body: { text: rawBody.text } };
+  }
+
+  return { bodyType: null, body: {} };
 }
 
 export function deleteUndefinedAttrs<T>(obj: T): T {
