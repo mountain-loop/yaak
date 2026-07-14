@@ -185,7 +185,7 @@ jobs:
           tauriScript: "node ../../node_modules/@tauri-apps/cli/tauri.js"
           tagName: "v__VERSION__"
           releaseName: "Release __VERSION__"
-          releaseBody: "[Changelog __VERSION__](https://yaak.app/blog/__VERSION__)"
+          releaseBody: "<!-- generated-by-yaak-releases -->"
           releaseDraft: true
           prerelease: true
           projectPath: ./crates-tauri/yaak-app-client

@@ -18,3 +18,7 @@ url = "2"
 yaak-common = { workspace = true }
 yaak-models = { workspace = true }
 yaak-sync = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -230,11 +230,12 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                   />
                   {externalEntries.find((e) => e.status !== "current") && (
                     <>
-                      <Separator className="mt-3 mb-1">External file changes</Separator>
+                      <Separator className="mt-3 mb-1">Other files</Separator>
                       {externalEntries.map((entry) => (
                         <ExternalTreeNode
                           key={entry.relaPath + entry.status}
                           entry={entry}
+                          relaDir={status.data?.relaDir ?? ""}
                           onCheck={checkEntry}
                         />
                       ))}
@@ -395,14 +396,21 @@ function TreeNodeChildren({
 
 function ExternalTreeNode({
   entry,
+  relaDir,
   onCheck,
 }: {
   entry: GitStatusEntry;
+  relaDir: string;
   onCheck: (entry: GitStatusEntry) => void;
 }) {
   if (entry.status === "current") {
     return null;
   }
+
+  // Show paths relative to the sync directory when inside it
+  const displayPath = entry.relaPath.startsWith(`${relaDir}/`)
+    ? entry.relaPath.slice(relaDir.length + 1)
+    : entry.relaPath;
 
   return (
     <Checkbox
@@ -413,7 +421,7 @@ function ExternalTreeNode({
       title={
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 w-full items-center">
           <Icon color="secondary" icon="file_code" />
-          <div className="truncate">{entry.relaPath}</div>
+          <div className="truncate">{displayPath}</div>
           <InlineCode
             className={classNames(
               "py-0 ml-auto bg-transparent w-24 text-center",

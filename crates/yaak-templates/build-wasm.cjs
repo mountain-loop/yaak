@@ -1,5 +1,6 @@
 const { execSync } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 if (process.env.SKIP_WASM_BUILD === "1") {
@@ -7,7 +8,18 @@ if (process.env.SKIP_WASM_BUILD === "1") {
   return;
 }
 
-execSync("wasm-pack build --target bundler", { stdio: "inherit" });
+// Remap machine-specific paths that rustc embeds into the binary (panic
+// location strings), so builds are reproducible across machines
+const sysroot = execSync("rustc --print sysroot").toString().trim();
+const cargoHome = process.env.CARGO_HOME ?? path.join(os.homedir(), ".cargo");
+
+execSync("wasm-pack build --target bundler", {
+  stdio: "inherit",
+  env: {
+    ...process.env,
+    RUSTFLAGS: `--remap-path-prefix=${cargoHome}=/cargo --remap-path-prefix=${sysroot}=/rustc`,
+  },
+});
 
 // Rewrite the generated entry to use Vite's ?init import style instead of
 // the ES Module Integration style that wasm-pack generates, which Vite/rolldown
