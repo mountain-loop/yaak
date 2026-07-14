@@ -1,7 +1,31 @@
+import jwt from "jsonwebtoken";
 import type { AccessToken } from "./store";
 
 export function isTokenExpired(token: AccessToken) {
-  return token.expiresAt && Date.now() > token.expiresAt;
+  // Fall back to the JWT's own exp claim for tokens stored without an expiry
+  // (eg. from a token response that had no expires_in)
+  const expiresAt =
+    token.expiresAt ?? jwtExpiresAt(token.response.access_token ?? token.response.id_token);
+  return expiresAt != null && Date.now() > expiresAt;
+}
+
+/**
+ * Get the expiry timestamp (ms) from a JWT's `exp` claim, or null if the token
+ * is not a JWT or has no `exp`.
+ */
+export function jwtExpiresAt(token: string | undefined): number | null {
+  if (!token) return null;
+
+  try {
+    const payload = jwt.decode(token);
+    if (payload != null && typeof payload === "object" && typeof payload.exp === "number") {
+      return payload.exp * 1000;
+    }
+  } catch {
+    // Opaque (non-JWT) token
+  }
+
+  return null;
 }
 
 export function extractCode(urlStr: string, redirectUri: string | null): string | null {

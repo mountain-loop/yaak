@@ -1,5 +1,6 @@
+import jwt from "jsonwebtoken";
 import { describe, expect, test } from "vite-plus/test";
-import { extractCode } from "../src/util";
+import { extractCode, isTokenExpired, jwtExpiresAt } from "../src/util";
 
 describe("extractCode", () => {
   test("extracts code from query when same origin + path", () => {
@@ -105,5 +106,47 @@ describe("extractCode", () => {
     const url = "https://app.example.com/cb#state=xyz&code=abc";
     const redirect = "https://app.example.com/cb";
     expect(extractCode(url, redirect)).toBe("abc");
+  });
+});
+
+describe("isTokenExpired", () => {
+  const jwtWithExp = (expSecondsFromNow: number) =>
+    jwt.sign({ exp: Math.floor(Date.now() / 1000) + expSecondsFromNow }, "test-secret");
+
+  test("uses stored expiresAt when present", () => {
+    expect(isTokenExpired({ response: { access_token: "x" }, expiresAt: Date.now() - 1000 })).toBe(
+      true,
+    );
+    expect(isTokenExpired({ response: { access_token: "x" }, expiresAt: Date.now() + 10000 })).toBe(
+      false,
+    );
+  });
+
+  test("falls back to JWT exp claim when expiresAt is null", () => {
+    expect(
+      isTokenExpired({ response: { access_token: jwtWithExp(-60) }, expiresAt: null }),
+    ).toBe(true);
+    expect(
+      isTokenExpired({ response: { access_token: jwtWithExp(60) }, expiresAt: null }),
+    ).toBe(false);
+  });
+
+  test("treats opaque tokens without expiresAt as non-expiring", () => {
+    expect(isTokenExpired({ response: { access_token: "opaque-token" }, expiresAt: null })).toBe(
+      false,
+    );
+  });
+});
+
+describe("jwtExpiresAt", () => {
+  test("extracts exp claim in milliseconds", () => {
+    const exp = Math.floor(Date.now() / 1000) + 300;
+    expect(jwtExpiresAt(jwt.sign({ exp }, "test-secret"))).toBe(exp * 1000);
+  });
+
+  test("returns null for non-JWT or missing tokens", () => {
+    expect(jwtExpiresAt("not-a-jwt")).toBeNull();
+    expect(jwtExpiresAt(undefined)).toBeNull();
+    expect(jwtExpiresAt(jwt.sign({ foo: "bar" }, "test-secret"))).toBeNull();
   });
 });
