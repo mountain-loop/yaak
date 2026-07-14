@@ -37,7 +37,7 @@ export async function getImplicit(
     authorizationUrl: authorizationUrlRaw,
   };
   const token = await getToken(ctx, tokenArgs);
-  if (token != null && !isTokenExpired(token)) {
+  if (token != null && !isTokenExpired(token, tokenName)) {
     return token;
   }
 
@@ -137,7 +137,7 @@ async function getTokenViaEmbeddedBrowser(
 
         const response = Object.fromEntries(params) as unknown as AccessTokenRawResponse;
         try {
-          resolve(storeToken(ctx, tokenArgs, response));
+          resolve(storeToken(ctx, tokenArgs, response, tokenName));
         } catch (err) {
           reject(err);
         }
@@ -195,5 +195,5 @@ async function extractImplicitToken(
     response.id_token = idToken;
   }
 
-  return storeToken(ctx, tokenArgs, response);
+  return storeToken(ctx, tokenArgs, response, tokenName);
 }
