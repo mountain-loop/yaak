@@ -1,4 +1,4 @@
-use super::dedupe_headers;
+use super::{conflict_free_name, dedupe_headers};
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
@@ -44,6 +44,13 @@ impl<'a> ClientDb<'a> {
         let mut http_request = http_request.clone();
         http_request.id = "".to_string();
         http_request.sort_priority = http_request.sort_priority + 0.001;
+        let sibling_names = self
+            .list_http_requests(&http_request.workspace_id)?
+            .into_iter()
+            .filter(|m| m.folder_id == http_request.folder_id)
+            .map(|m| m.name)
+            .collect::<Vec<_>>();
+        http_request.name = conflict_free_name(&http_request.name, &sibling_names);
         self.upsert(&http_request, source)
     }
 

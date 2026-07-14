@@ -1,3 +1,4 @@
+use super::conflict_free_name;
 use crate::client_db::ClientDb;
 use crate::error::Error::{MissingBaseEnvironment, MultipleBaseEnvironments};
 use crate::error::Result;
@@ -88,6 +89,12 @@ impl<'a> ClientDb<'a> {
     ) -> Result<Environment> {
         let mut environment = environment.clone();
         environment.id = "".to_string();
+        let sibling_names = self
+            .list_environments_dangerous(&environment.workspace_id)?
+            .into_iter()
+            .map(|e| e.name)
+            .collect::<Vec<_>>();
+        environment.name = conflict_free_name(&environment.name, &sibling_names);
         self.upsert_environment(&environment, source)
     }
 
