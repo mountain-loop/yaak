@@ -949,14 +949,24 @@ async fn persist_request_body_stream(
 ) -> std::result::Result<usize, String> {
     let mut chunk_index: i32 = 0;
     let mut total_bytes = 0usize;
+
+    // Stream reads arrive in small (eg. 8-16 KiB) pieces, so accumulate them into
+    // full-size chunks to avoid thousands of tiny inserts for large bodies
+    let mut buf: Vec<u8> = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
     while let Some(data) = rx.recv().await {
         total_bytes += data.len();
-        if data.is_empty() {
-            continue;
+        buf.extend_from_slice(&data);
+        while buf.len() >= REQUEST_BODY_CHUNK_SIZE {
+            let data = buf.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
+            let chunk = BodyChunk::new(&body_id, chunk_index, data);
+            blob_manager.connect().insert_chunk(&chunk).map_err(|e| e.to_string())?;
+            chunk_index += 1;
         }
-        let chunk = BodyChunk::new(&body_id, chunk_index, data);
+    }
+
+    if !buf.is_empty() {
+        let chunk = BodyChunk::new(&body_id, chunk_index, buf);
         blob_manager.connect().insert_chunk(&chunk).map_err(|e| e.to_string())?;
-        chunk_index += 1;
     }
 
     Ok(total_bytes)
