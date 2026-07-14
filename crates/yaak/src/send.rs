@@ -511,7 +511,10 @@ pub async fn send_http_request<T: TemplateCallback>(
             .map_err(SendHttpRequestError::PrepareSendableRequest)?;
     }
 
-    let request_content_length = sendable_body_length(sendable_request.body.as_ref());
+    let request_content_length = match sendable_request.body.as_ref() {
+        Some(SendableBody::Bytes(_)) => sendable_body_length(sendable_request.body.as_ref()),
+        Some(SendableBody::Stream { .. }) | None => None,
+    };
     let mut response = params.existing_response.unwrap_or_default();
     response.request_id = params.request.id.clone();
     response.workspace_id = params.request.workspace_id.clone();
@@ -811,25 +814,11 @@ pub async fn send_http_request<T: TemplateCallback>(
     })?;
     drop(body_stream);
 
-    if let Some(task) = request_body_capture_task.take() {
-        match task.await {
-            Ok(Ok(total)) => {
-                response.request_content_length = Some(usize_to_i32(total));
-            }
-            Ok(Err(err)) => request_body_capture_error = Some(err),
-            Err(err) => request_body_capture_error = Some(err.to_string()),
-        }
-    }
-
     if let Some(err) = request_body_capture_error.take() {
         response.error = Some(append_error_message(
             response.error.take(),
             format!("Request succeeded but failed to store request body: {err}"),
         ));
-    }
-
-    if let Err(join_err) = event_handle.await {
-        warn!("Failed to join response event task: {}", join_err);
     }
 
     if let Some(err) = body_read_error {
@@ -849,6 +838,16 @@ pub async fn send_http_request<T: TemplateCallback>(
             cookie_jar.as_mut(),
             cookie_behavior.store.as_ref(),
         )?;
+        if let Some(task) = request_body_capture_task.take() {
+            match task.await {
+                Ok(Ok(_)) => {}
+                Ok(Err(err)) => warn!("Failed to store request body after response error: {err}"),
+                Err(err) => warn!("Failed to join request body capture task: {err}"),
+            }
+        }
+        if let Err(join_err) = event_handle.await {
+            warn!("Failed to join response event task: {}", join_err);
+        }
         return Err(err);
     }
 
@@ -874,6 +873,49 @@ pub async fn send_http_request<T: TemplateCallback>(
     }
 
     persist_cookie_jar(params.query_manager, cookie_jar.as_mut(), cookie_behavior.store.as_ref())?;
+
+    // Request-body history can be much larger than the response. It should not keep the
+    // response in a loading state after the network/response-body work has completed.
+    if let Some(task) = request_body_capture_task.take() {
+        let mut update_response = false;
+        match task.await {
+            Ok(Ok(total)) => {
+                let total = Some(usize_to_i32(total));
+                if response.request_content_length != total {
+                    response.request_content_length = total;
+                    update_response = true;
+                }
+            }
+            Ok(Err(err)) => {
+                response.error = Some(append_error_message(
+                    response.error.take(),
+                    format!("Request succeeded but failed to store request body: {err}"),
+                ));
+                update_response = true;
+            }
+            Err(err) => {
+                response.error = Some(append_error_message(
+                    response.error.take(),
+                    format!("Request succeeded but failed to store request body: {err}"),
+                ));
+                update_response = true;
+            }
+        }
+
+        if update_response && persist_response {
+            response = params
+                .query_manager
+                .connect()
+                .upsert_http_response(&response, &params.update_source, params.blob_manager)
+                .map_err(SendHttpRequestError::PersistResponse)?;
+        }
+    }
+
+    // Timeline events are useful history, but they should not keep the response in a loading state
+    // after the network/response-body work has completed.
+    if let Err(join_err) = event_handle.await {
+        warn!("Failed to join response event task: {}", join_err);
+    }
 
     Ok(SendHttpRequestResult { rendered_request, response, response_body })
 }
