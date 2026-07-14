@@ -113,5 +113,5 @@ export async function getOrRefreshAccessToken(
     refresh_token: response.refresh_token ?? token.response.refresh_token,
   };
 
-  return storeToken(ctx, tokenArgs, newResponse);
+  return storeToken(ctx, tokenArgs, newResponse, tokenName);
 }
