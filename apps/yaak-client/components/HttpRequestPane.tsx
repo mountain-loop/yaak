@@ -39,6 +39,7 @@ import { BinaryFileEditor } from "./BinaryFileEditor";
 import { ConfirmLargeRequestBody } from "./ConfirmLargeRequestBody";
 import { CountBadge } from "./core/CountBadge";
 import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import { getUrlCompletionConfig } from "./core/Editor/url/completion";
 import { Editor } from "./core/Editor/LazyEditor";
 import { InlineCode } from "@yaakapp-internal/ui";
 import type { Pair } from "./core/PairEditor";
@@ -285,16 +286,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);
 
   const autocomplete: GenericCompletionConfig = useMemo(
-    () => ({
-      minMatch: 3,
-      options:
-        autocompleteUrls.length > 0
-          ? autocompleteUrls
-          : [
-              { label: "http://", type: "constant" },
-              { label: "https://", type: "constant" },
-            ],
-    }),
+    () => getUrlCompletionConfig(autocompleteUrls),
     [autocompleteUrls],
   );
 
