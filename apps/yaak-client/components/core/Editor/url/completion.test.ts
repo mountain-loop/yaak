@@ -23,15 +23,15 @@ describe("applyUrlCompletion", () => {
 });
 
 describe("getUrlCompletionConfig", () => {
-  test("adds URL replacement behavior to protocol and saved URL options", () => {
-    const protocolConfig = getUrlCompletionConfig([]);
-    const savedUrlConfig = getUrlCompletionConfig([{ label: "https://example.com" }]);
+  test("always includes protocols alongside saved URL options", () => {
+    const config = getUrlCompletionConfig([{ label: "https://example.com" }]);
 
-    expect(protocolConfig.options).toHaveLength(2);
-    expect(protocolConfig.options.every((option) => option.apply === applyUrlCompletion)).toBe(
-      true,
-    );
-    expect(savedUrlConfig.options[0]?.apply).toBe(applyUrlCompletion);
+    expect(config.options.map((option) => option.label)).toEqual([
+      "http://",
+      "https://",
+      "https://example.com",
+    ]);
+    expect(config.options.every((option) => option.apply === applyUrlCompletion)).toBe(true);
   });
 });
 
