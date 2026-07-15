@@ -26,6 +26,7 @@ import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { CountBadge } from "./core/CountBadge";
 import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import { getUrlCompletionConfig } from "./core/Editor/url/completion";
 import { Editor } from "./core/Editor/LazyEditor";
 import { IconButton } from "./core/IconButton";
 import type { Pair } from "./core/PairEditor";
@@ -130,16 +131,7 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
   const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);
 
   const autocomplete: GenericCompletionConfig = useMemo(
-    () => ({
-      minMatch: 3,
-      options:
-        autocompleteUrls.length > 0
-          ? autocompleteUrls
-          : [
-              { label: "http://", type: "constant" },
-              { label: "https://", type: "constant" },
-            ],
-    }),
+    () => getUrlCompletionConfig(autocompleteUrls),
     [autocompleteUrls],
   );
 
