@@ -16,12 +16,7 @@ export function getUrlCompletionConfig(
   options: GenericCompletionOption[],
   minMatch = 3,
 ): GenericCompletionConfig {
-  const urlOptions = [
-    ...protocolOptions,
-    ...options.filter(
-      (option) => !protocolOptions.some((protocol) => protocol.label === option.label),
-    ),
-  ];
+  const urlOptions = options.length > 0 ? options : protocolOptions;
   return {
     minMatch,
     options: urlOptions.map<GenericCompletion>((option) => ({
