@@ -2,9 +2,17 @@ import type { CompletionContext } from "@codemirror/autocomplete";
 import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
 import { defaultBoost } from "./twig/completion";
 
+/**
+ * A completion option that may insert text different from its display label.
+ * When `apply` is set, the autocomplete and the suggestion dropdown show
+ * `label` but insert `apply` (e.g. a friendly "Chrome (Windows)" label that
+ * inserts the full User-Agent string).
+ */
+export type GenericCompletionOptionWithApply = GenericCompletionOption & { apply?: string };
+
 export interface GenericCompletionConfig {
   minMatch?: number;
-  options: GenericCompletionOption[];
+  options: GenericCompletionOptionWithApply[];
 }
 
 /**

@@ -7,6 +7,7 @@ import { clamp, Heading, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useState } from "react";
 import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
+import { useHeaderDropdownsEnabled } from "../../hooks/useHeaderDropdownsEnabled";
 import { showConfirm } from "../../lib/confirm";
 import { pricingUrl } from "../../lib/pricingUrl";
 import { invokeCmd } from "../../lib/tauri";
@@ -42,6 +43,7 @@ export function SettingsInterface() {
   const workspace = useAtomValue(activeWorkspaceAtom);
   const settings = useAtomValue(settingsAtom);
   const fonts = useFonts();
+  const [headerDropdownsEnabled, setHeaderDropdownsEnabled] = useHeaderDropdownsEnabled();
 
   if (settings == null || workspace == null) {
     return null;
@@ -171,6 +173,12 @@ export function SettingsInterface() {
             modelKey="coloredMethods"
             title="Colorize request methods"
             description="Use method-specific colors for HTTP request methods."
+          />
+          <SettingRowBoolean
+            checked={headerDropdownsEnabled}
+            title="Header suggestion dropdowns"
+            description="Show a dropdown button on header fields to pick common names and values."
+            onChange={setHeaderDropdownsEnabled}
           />
         </SettingsSection>
 
