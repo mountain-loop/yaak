@@ -219,7 +219,7 @@ function ActualEventStreamViewer({ response }: Props) {
                 <SseSummaryFooter
                   style={style}
                   error={summary.error ? String(summary.error) : null}
-                  isLoading={summary.isLoading}
+                  isLoading={summary.isLoading && summary.data == null}
                   onRenderMarkdownChange={renderMarkdownSetting.set}
                   renderMarkdown={renderMarkdown}
                   resultKeyPath={summarySettings.resultKeyPath ?? ""}
