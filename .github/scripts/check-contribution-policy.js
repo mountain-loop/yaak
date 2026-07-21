@@ -630,6 +630,22 @@ async function checkPullRequest({
   const pr = response.data;
   const issueNumber = pr.number;
 
+  if (pr.user.type === "Bot") {
+    core.notice(
+      `Skipping contribution policy for bot PR #${pr.number} from @${pr.user.login}.`,
+    );
+    return {
+      blocked: false,
+      number: pr.number,
+      summary: summarizeResult({
+        pr,
+        skipped: true,
+        skipReason: `bot @${pr.user.login}`,
+      }),
+      skipped: true,
+    };
+  }
+
   if (
     minimumAutomaticPullNumber != null &&
     pr.number < minimumAutomaticPullNumber
