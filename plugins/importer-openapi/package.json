@@ -10,10 +10,10 @@
     "test": "vp test --run tests"
   },
   "dependencies": {
-    "openapi-to-postmanv2": "^5.8.0",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
-    "@types/openapi-to-postmanv2": "^5.0.0"
+    "@types/openapi-to-postmanv2": "^5.0.0",
+    "openapi-to-postmanv2": "^5.8.0"
   }
 }
