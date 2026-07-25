@@ -1,4 +1,5 @@
 import { startCompletion } from "@codemirror/autocomplete";
+import { debounce } from "@yaakapp-internal/lib";
 import { defaultKeymap, historyField, indentWithTab } from "@codemirror/commands";
 import { foldState, forceParsing } from "@codemirror/language";
 import type { EditorStateConfig, Extension } from "@codemirror/state";
@@ -381,6 +382,7 @@ function EditorInner({
   const initEditorRef = useCallback(
     function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
+        flushCachedEditorState(stateKey);
         cm.current?.view.destroy();
         cm.current = null;
         return;
@@ -639,7 +641,7 @@ function getExtensions({
         onChange.current?.(update.state.doc.toString());
       }
 
-      saveCachedEditorState(stateKey, update.state);
+      saveCachedEditorStateDebounced(stateKey, update.state);
     }),
   ];
 }
@@ -651,6 +653,27 @@ const placeholderElFromText = (text: string | undefined) => {
   el.innerHTML = text ? text.replaceAll("\n", "<br/>") : " ";
   return el;
 };
+
+// Serializing the state (full doc + history) and md5-ing the doc is too
+// expensive to do on every update (each keystroke and cursor move), so
+// debounce it per state key and flush when the editor unmounts.
+const SAVE_STATE_DEBOUNCE_MS = 500;
+const stateSavers = new Map<string, ReturnType<typeof debounce>>();
+
+function saveCachedEditorStateDebounced(stateKey: string | null, state: EditorState) {
+  if (!stateKey) return;
+  let saver = stateSavers.get(stateKey);
+  if (saver == null) {
+    saver = debounce((s: EditorState) => saveCachedEditorState(stateKey, s), SAVE_STATE_DEBOUNCE_MS);
+    stateSavers.set(stateKey, saver);
+  }
+  saver(state);
+}
+
+function flushCachedEditorState(stateKey: string | null) {
+  if (!stateKey) return;
+  stateSavers.get(stateKey)?.flush();
+}
 
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;

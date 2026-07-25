@@ -1,12 +1,11 @@
 import type { HttpRequest } from "@yaakapp-internal/models";
-import { getModel, patchModel } from "@yaakapp-internal/models";
+import { getModel, patchModel, patchModelDebounced } from "@yaakapp-internal/models";
 import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
 import classNames from "classnames";
 import { atom, useAtomValue } from "jotai";
 import type { CSSProperties } from "react";
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
-import { activeRequestIdAtom } from "../hooks/useActiveRequestId";
-import { allRequestsAtom } from "../hooks/useAllRequests";
+import { allRequestUrlsAtom } from "../hooks/useAllRequests";
 import { useAuthTab } from "../hooks/useAuthTab";
 import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
 import { useHeadersTab } from "../hooks/useHeadersTab";
@@ -16,7 +15,6 @@ import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
 import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
 import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
 import { useSendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
-import { deepEqualAtom } from "../lib/atoms";
 import { languageFromContentType } from "../lib/contentType";
 import { generateId } from "../lib/generateId";
 import { derivePathPlaceholderPairs, renamePathPlaceholder } from "../lib/pathPlaceholders";
@@ -76,15 +74,12 @@ const TAB_SETTINGS = "settings";
 const TAB_DESCRIPTION = "description";
 const TABS_STORAGE_KEY = "http_request_tabs";
 
-const nonActiveRequestUrlsAtom = atom((get) => {
-  const activeRequestId = get(activeRequestIdAtom);
-  const requests = get(allRequestsAtom);
-  return requests
-    .filter((r) => r.id !== activeRequestId)
-    .map((r): GenericCompletionOption => ({ type: "constant", label: r.url }));
-});
-
-const memoNotActiveRequestUrlsAtom = deepEqualAtom(nonActiveRequestUrlsAtom);
+// Derived from the identity-stable URL list so this only recomputes when a URL
+// actually changes. The active request's own URL is included, but exact matches
+// are filtered out at completion time by genericCompletion.
+const requestUrlOptionsAtom = atom((get): GenericCompletionOption[] =>
+  get(allRequestUrlsAtom).map((url) => ({ type: "constant", label: url })),
+);
 
 export function HttpRequestPane({ style, fullHeight, className, activeRequest }: Props) {
   const activeRequestId = activeRequest.id;
@@ -286,16 +281,16 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   const { mutate: importCurl } = useImportCurl();
 
   const handleBodyChange = useCallback(
-    (body: HttpRequest["body"]) => patchModel(activeRequest, { body }),
+    (body: HttpRequest["body"]) => patchModelDebounced(activeRequest, { body }),
     [activeRequest],
   );
 
   const handleBodyTextChange = useCallback(
-    (text: string) => patchModel(activeRequest, { body: { ...activeRequest.body, text } }),
+    (text: string) => patchModelDebounced(activeRequest, { body: { ...activeRequest.body, text } }),
     [activeRequest],
   );
 
-  const autocompleteUrls = useAtomValue(memoNotActiveRequestUrlsAtom);
+  const autocompleteUrls = useAtomValue(requestUrlOptionsAtom);
 
   const autocomplete: GenericCompletionConfig = useMemo(
     () => getUrlCompletionConfig(autocompleteUrls),
@@ -335,7 +330,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   const handleUrlChange = useCallback(
-    (url: string) => patchModel(activeRequest, { url }),
+    (url: string) => patchModelDebounced(activeRequest, { url }),
     [activeRequest],
   );
 
@@ -381,7 +376,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
                 headers={activeRequest.headers}
                 stateKey={`headers.${activeRequest.id}`}
-                onChange={(headers) => patchModel(activeRequest, { headers })}
+                onChange={(headers) => patchModelDebounced(activeRequest, { headers })}
               />
             </TabContent>
             <TabContent value={TAB_PARAMS}>
@@ -389,7 +384,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                 stateKey={`params.${activeRequest.id}`}
                 forceUpdateKey={forceUpdateKey + urlParametersKey}
                 pairs={urlParameterPairs}
-                onChange={(urlParameters) => patchModel(activeRequest, { urlParameters })}
+                onChange={(urlParameters) => patchModelDebounced(activeRequest, { urlParameters })}
               />
             </TabContent>
             <TabContent value={TAB_SETTINGS}>
@@ -441,7 +436,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
                     requestId={activeRequest.id}
                     contentType={contentType}
                     body={activeRequest.body}
-                    onChange={(body) => patchModel(activeRequest, { body })}
+                    onChange={(body) => patchModelDebounced(activeRequest, { body })}
                     onChangeContentType={handleContentTypeChange}
                   />
                 ) : typeof activeRequest.bodyType === "string" ? (

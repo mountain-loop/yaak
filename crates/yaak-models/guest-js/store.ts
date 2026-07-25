@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { debounce } from "@yaakapp-internal/lib";
 import { AnyModel, ModelPayload } from "../bindings/gen_models";
 import { modelStoreDataAtom } from "./atoms";
 import { ExtractModel, JotaiStore, ModelStoreData } from "./types";
@@ -11,6 +12,9 @@ const pendingModelWrites = new Set<Promise<unknown>>();
 
 export function initModelStore(store: JotaiStore) {
   _store = store;
+
+  // Don't lose debounced patches if the window closes while one is pending
+  window.addEventListener("beforeunload", flushAllPendingPatches);
 
   getCurrentWebviewWindow()
     .listen<ModelPayload>("model_write", ({ payload }) => {
@@ -53,10 +57,66 @@ function trackModelWrite<T>(write: Promise<T>): Promise<T> {
 }
 
 export async function flushAllModelWrites(): Promise<void> {
+  flushAllPendingPatches();
   const results = await Promise.allSettled(pendingModelWrites);
   const rejected = results.find((result) => result.status === "rejected");
   if (rejected?.status === "rejected") {
     throw rejected.reason;
+  }
+}
+
+const PATCH_DEBOUNCE_MS = 400;
+
+interface PendingPatch {
+  model: AnyModel["model"];
+  id: string;
+  patch: Record<string, unknown>;
+  write: ReturnType<typeof debounce>;
+}
+
+const pendingPatches = new Map<string, PendingPatch>();
+
+/**
+ * Like patchModel, but coalesces rapid patches to the same model (eg. one per
+ * keystroke) into a single write. Later fields overwrite earlier ones, so it's
+ * only safe for whole-value fields like url, body, or headers. Pending patches
+ * flush after a short delay, and flushAllModelWrites() (called before sends and
+ * duplicates) flushes them immediately.
+ */
+export function patchModelDebounced<
+  M extends AnyModel["model"],
+  T extends ExtractModel<AnyModel, M>,
+>(base: Pick<T, "id" | "model">, patch: Partial<T>): void {
+  const key = `${base.model}.${base.id}`;
+  let pending = pendingPatches.get(key);
+  if (pending == null) {
+    pending = {
+      model: base.model,
+      id: base.id,
+      patch: {},
+      write: debounce(() => writePendingPatch(key), PATCH_DEBOUNCE_MS),
+    };
+    pendingPatches.set(key, pending);
+  }
+  pending.patch = { ...pending.patch, ...patch };
+  pending.write();
+}
+
+function writePendingPatch(key: string) {
+  const pending = pendingPatches.get(key);
+  if (pending == null) return;
+  pendingPatches.delete(key);
+  try {
+    void patchModelById(pending.model, pending.id, pending.patch);
+  } catch (err) {
+    // Model may have been deleted while the patch was pending
+    console.warn("Failed to flush pending patch", key, err);
+  }
+}
+
+export function flushAllPendingPatches() {
+  for (const pending of Array.from(pendingPatches.values())) {
+    pending.write.flush();
   }
 }
 

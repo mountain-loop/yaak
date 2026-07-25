@@ -1,4 +1,5 @@
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from "@dnd-kit/core";
+import type { Virtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
   MeasuringStrategy,
@@ -23,7 +24,7 @@ import {
 } from "react";
 import { useKey, useKeyPressEvent } from "react-use";
 import { computeSideForDragMove } from "../../lib/dnd";
-import { useStore } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from "./atoms";
 import { type CollapsedAtom, CollapsedAtomContext } from "./context";
 import type { ContextMenuRenderer, JotaiStore, SelectableTreeNode, TreeNode } from "./common";
@@ -87,7 +88,27 @@ function TreeInner<T extends { id: string }>(
 ) {
   const store = useStore();
   const treeRef = useRef<HTMLDivElement>(null);
+  const virtualizerRef = useRef<Virtualizer<HTMLElement, Element> | null>(null);
+  const getScrollElement = useCallback(() => treeRef.current, []);
+  const handleVirtualizerReady = useCallback((v: Virtualizer<HTMLElement, Element>) => {
+    virtualizerRef.current = v;
+  }, []);
   const selectableItems = useSelectableItems(root);
+
+  // Only render nodes that are actually visible (not filtered out, and not
+  // inside a collapsed folder). Mounting every node regardless of visibility
+  // makes large workspaces unusable: thousands of hidden TreeItems each run
+  // their dnd/context hooks on every tree commit just to return null.
+  const collapsedMap = useAtomValue(collapsedAtom);
+  const visibleItems = useMemo(() => {
+    return selectableItems.filter((i) => {
+      if (i.node.hidden) return false;
+      for (let p = i.node.parent; p != null; p = p.parent) {
+        if (collapsedMap[p.item.id]) return false;
+      }
+      return true;
+    });
+  }, [selectableItems, collapsedMap]);
   const [showContextMenu, setShowContextMenu] = useState<{
     items: unknown[];
     x: number;
@@ -125,16 +146,28 @@ function TreeInner<T extends { id: string }>(
   }, []);
 
   const tryFocus = useCallback(() => {
-    const $el = treeRef.current?.querySelector<HTMLButtonElement>(
-      '.tree-item button[tabindex="0"]',
-    );
-    if ($el == null) {
+    const find = () =>
+      treeRef.current?.querySelector<HTMLButtonElement>('.tree-item button[tabindex="0"]');
+    const $el = find();
+    if ($el != null) {
+      // preventScroll so scrolling stays single-sourced (focus() implicitly
+      // scrolls, which fights the virtualizer's scrollToIndex)
+      $el.focus({ preventScroll: true });
+      $el.scrollIntoView({ block: "nearest" });
+      return true;
+    }
+
+    // The focused row may be virtualized out of range. Scroll it into range,
+    // then focus it once it has mounted.
+    const lastFocusedId = store.get(focusIdsFamily(treeId)).lastId;
+    const index = visibleItems.findIndex((i) => i.node.item.id === lastFocusedId);
+    if (index < 0) {
       return false;
     }
-    $el.focus();
-    $el.scrollIntoView({ block: "nearest" });
+    virtualizerRef.current?.scrollToIndex(index, { align: "auto" });
+    requestAnimationFrame(() => find()?.focus({ preventScroll: true }));
     return true;
-  }, []);
+  }, [store, treeId, visibleItems]);
 
   const ensureTabbableItem = useCallback(() => {
     const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
@@ -448,8 +481,8 @@ function TreeInner<T extends { id: string }>(
         store.set(hoveredParentFamily(treeId), {
           parentId: root.item.id,
           parentDepth: root.depth,
-          index: selectableItems.length,
-          childIndex: selectableItems.length,
+          index: visibleItems.length,
+          childIndex: visibleItems.length,
         });
         return;
       }
@@ -477,8 +510,8 @@ function TreeInner<T extends { id: string }>(
 
       const item = node.item;
       let hoveredParent = node.parent;
-      const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
-      const hovered = selectableItems[dragIndex]?.node ?? null;
+      const dragIndex = visibleItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
+      const hovered = visibleItems[dragIndex]?.node ?? null;
       const hoveredIndex = dragIndex + (side === "before" ? 0 : 1);
       let hoveredChildIndex = overSelectableItem.index + (side === "before" ? 0 : 1);
 
@@ -509,7 +542,7 @@ function TreeInner<T extends { id: string }>(
         });
       }
     },
-    [root.depth, root.item.id, selectableItems, treeId],
+    [root.depth, root.item.id, selectableItems, treeId, visibleItems],
   );
 
   const handleDragStart = useCallback(
@@ -680,12 +713,18 @@ function TreeInner<T extends { id: string }>(
               "[&_.tree-item.selected+.drop-marker+.tree-item.selected]:rounded-t-none",
               "[&_.tree-item.selected:has(+.tree-item.selected)]:rounded-b-none",
               "[&_.tree-item.selected:has(+.drop-marker+.tree-item.selected)]:rounded-b-none",
+              // Virtualized rows are wrapped in .tree-row divs, so the sibling
+              // relationships above need wrapper-aware equivalents
+              "[&_.tree-row:has(.tree-item.selected)+.tree-row_.tree-item.selected]:rounded-t-none",
+              "[&_.tree-row:has(.tree-item.selected):has(+.tree-row_.tree-item.selected)_.tree-item.selected]:rounded-b-none",
             )}
           >
             <TreeItemList
               addTreeItemRef={handleAddTreeItemRef}
-              nodes={selectableItems}
+              nodes={visibleItems}
               treeId={treeId}
+              getScrollElement={getScrollElement}
+              onVirtualizerReady={handleVirtualizerReady}
               {...treeItemListProps}
             />
           </div>
