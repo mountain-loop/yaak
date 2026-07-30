@@ -20,6 +20,7 @@ import {
 } from "./context";
 import type { TreeNode } from "./common";
 import { getNodeKey } from "./common";
+import { isImeCompositionEvent } from "./keyboard";
 import type { TreeProps } from "./Tree";
 import { TreeIndentGuide } from "./TreeIndentGuide";
 
@@ -170,6 +171,8 @@ function TreeItem_<T extends { id: string }>({
   const handleEditKeyDown = useCallback(
     async (e: ReactKeyboardEvent<HTMLInputElement>) => {
       e.stopPropagation(); // Don't trigger other tree keys (like arrows)
+      if (isImeCompositionEvent(e.nativeEvent)) return;
+
       switch (e.key) {
         case "Enter":
           if (editing) {
