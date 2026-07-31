@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: lts/*
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -157,7 +157,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: lts/*
           registry-url: https://registry.npmjs.org
 
       - name: Download binary artifacts
