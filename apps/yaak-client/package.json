@@ -57,7 +57,7 @@
     "lucide-react": "^0.525.0",
     "mime": "^4.0.4",
     "motion": "^12.4.7",
-    "nanoid": "^5.0.9",
+    "nanoid": "^5.1.16",
     "papaparse": "^5.4.1",
     "parse-color": "^1.0.0",
     "react": "^19.2.0",
