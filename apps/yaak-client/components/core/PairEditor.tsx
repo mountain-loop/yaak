@@ -53,7 +53,7 @@ export type PairEditorProps = {
   nameValidate?: InputProps["validate"];
   noScroll?: boolean;
   onChange: (pairs: PairWithId[]) => void;
-  pairs: Pair[];
+  pairs: EditablePair[];
   stateKey: InputProps["stateKey"];
   setRef?: (n: PairEditorHandle) => void;
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
@@ -72,12 +72,34 @@ export type Pair = {
   contentType?: string;
   filename?: string;
   isFile?: boolean;
-  readOnlyName?: boolean;
 };
 
 export type PairWithId = Pair & {
   id: string;
 };
+
+/**
+ * A pair as handed to the editor. Adds behaviour that only the editor cares about, so the plain
+ * `Pair` stays the shape that gets written to models.
+ */
+export type EditablePair = Pair & {
+  /**
+   * When set, name edits are held until the field blurs and then committed through this, instead
+   * of calling `onChange` on every keystroke. Return false to reject the new name, which reverts
+   * the field. For names that can't be written directly, like a URL path placeholder that lives
+   * in the URL itself.
+   */
+  commitName?: (name: string) => boolean;
+};
+
+type EditablePairWithId = EditablePair & {
+  id: string;
+};
+
+/** Strip the editor-only fields, so they can never reach a model write */
+function toPairData({ commitName: _commitName, ...pair }: EditablePairWithId): PairWithId {
+  return pair;
+}
 
 /** Max number of pairs to show before prompting the user to reveal the rest */
 const MAX_INITIAL_PAIRS = 30;
@@ -106,8 +128,8 @@ export function PairEditor({
   setRef,
 }: PairEditorProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState<PairWithId | null>(null);
-  const [pairs, setPairs] = useState<PairWithId[]>([]);
+  const [isDragging, setIsDragging] = useState<EditablePairWithId | null>(null);
+  const [pairs, setPairs] = useState<EditablePairWithId[]>([]);
   const [showAll, toggleShowAll] = useToggle(false);
   // NOTE: Use local force update key because we trigger an effect on forceUpdateKey change. If
   //  we simply pass forceUpdateKey to the editor, the data set by useEffect will be stale.
@@ -147,7 +169,7 @@ export function PairEditor({
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only care about forceUpdateKey
   useEffect(() => {
     // Remove empty headers on initial render and ensure they all have valid ids (pairs didn't use to have IDs)
-    const newPairs: PairWithId[] = [];
+    const newPairs: EditablePairWithId[] = [];
     for (let i = 0; i < originalPairs.length; i++) {
       const p = originalPairs[i];
       if (!p) continue; // Make TS happy
@@ -166,10 +188,10 @@ export function PairEditor({
   }, [forceUpdateKey]);
 
   const setPairsAndSave = useCallback(
-    (fn: (pairs: PairWithId[]) => PairWithId[]) => {
+    (fn: (pairs: EditablePairWithId[]) => EditablePairWithId[]) => {
       setPairs((oldPairs) => {
         const pairs = fn(oldPairs);
-        onChange(pairs);
+        onChange(pairs.map(toPairData));
         return pairs;
       });
     },
@@ -177,7 +199,7 @@ export function PairEditor({
   );
 
   const handleChange = useCallback(
-    (pair: PairWithId) =>
+    (pair: EditablePairWithId) =>
       setPairsAndSave((pairs) => pairs.map((p) => (pair.id !== p.id ? p : pair))),
     [setPairsAndSave],
   );
@@ -362,14 +384,14 @@ export function PairEditor({
 
 type PairEditorRowProps = {
   className?: string;
-  pair: PairWithId;
+  pair: EditablePairWithId;
   forceFocusNamePairId?: string | null;
   forceFocusValuePairId?: string | null;
-  onChange?: (pair: PairWithId) => void;
-  onDelete?: (pair: PairWithId, focusPrevious: boolean) => void;
-  onFocusName?: (pair: PairWithId) => void;
-  onFocusValue?: (pair: PairWithId) => void;
-  onSubmit?: (pair: PairWithId) => void;
+  onChange?: (pair: EditablePairWithId) => void;
+  onDelete?: (pair: EditablePairWithId, focusPrevious: boolean) => void;
+  onFocusName?: (pair: EditablePairWithId) => void;
+  onFocusValue?: (pair: EditablePairWithId) => void;
+  onSubmit?: (pair: EditablePairWithId) => void;
   isLast?: boolean;
   disabled?: boolean;
   disableDrag?: boolean;
@@ -471,10 +493,36 @@ export function PairEditorRow({
     [onChange, pair],
   );
 
+  // The name being typed into a deferred-commit field, before it's committed or reverted
+  const pendingName = useRef<string | null>(null);
+
   const handleChangeName = useMemo(
-    () => (name: string) => onChange?.({ ...pair, name }),
+    () => (name: string) => {
+      // Keep the edit local until commit. Writing on every keystroke would reset the editor from
+      // beneath the cursor, since the pairs are derived from the name being edited.
+      if (pair.commitName != null) pendingName.current = name;
+      else onChange?.({ ...pair, name });
+    },
     [onChange, pair],
   );
+
+  const revertName = useCallback(() => {
+    const nameInput = nameInputRef.current;
+    if (nameInput != null) {
+      const changes = { from: 0, to: nameInput.value().length, insert: pair.name };
+      nameInput.dispatch({ changes });
+    }
+    pendingName.current = null;
+  }, [pair.name]);
+
+  const handleBlurName = useCallback(() => {
+    if (pair.commitName == null) return;
+
+    const name = pendingName.current;
+    pendingName.current = null;
+    if (name == null || name === pair.name) return;
+    if (!pair.commitName(name)) revertName();
+  }, [pair, revertName]);
 
   const handleChangeValueText = useMemo(
     () => (value: string) => onChange?.({ ...pair, value, isFile: false }),
@@ -596,7 +644,7 @@ export function PairEditorRow({
           stateKey={`name.${pair.id}.${stateKey}`}
           disabled={disabled}
           wrapLines={false}
-          readOnly={pair.readOnlyName || isDraggingGlobal}
+          readOnly={isDraggingGlobal}
           size="sm"
           required={!isLast && !!pair.enabled && !!pair.value}
           validate={nameValidate}
@@ -606,6 +654,7 @@ export function PairEditorRow({
           defaultValue={pair.name}
           label="Name"
           name={`name[${index}]`}
+          onBlur={handleBlurName}
           onChange={handleChangeName}
           onFocus={handleFocusName}
           placeholder={namePlaceholder ?? "name"}
@@ -808,7 +857,7 @@ function FileActionsDropdown({
   );
 }
 
-function emptyPair(): PairWithId {
+function emptyPair(): EditablePairWithId {
   return ensurePairId({ enabled: true, name: "", value: "" });
 }
 

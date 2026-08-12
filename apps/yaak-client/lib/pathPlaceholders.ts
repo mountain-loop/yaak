@@ -1,3 +1,6 @@
+import type { HttpUrlParameter } from "@yaakapp-internal/models";
+import type { EditablePair } from "../components/core/PairEditor";
+
 /**
  * Extract `:name`-style path placeholders from a URL string.
  *
@@ -11,4 +14,83 @@
  */
 export function extractPathPlaceholders(url: string): string[] {
   return Array.from(url.matchAll(/\/(:[^/?#:]+)/g)).map((m) => m[1] ?? "");
+}
+
+/**
+ * Build the rows for the Params tab: the request's URL parameters, plus a row for each path
+ * placeholder in the URL that doesn't have one yet. A placeholder that appears more than once
+ * in the URL still gets a single row.
+ *
+ * Only placeholder rows get a `commitName`, which makes the editor hold name edits until blur and
+ * hand them to `renamePlaceholder` instead of writing on every keystroke — renaming has to rewrite
+ * the URL too. `renamePlaceholder` returns false to reject the new name, which reverts the field.
+ *
+ * `urlParametersKey` changes whenever the URL's placeholders do, and is used to reset the pair
+ * editor so derived rows appear and disappear along with the URL.
+ */
+export function derivePathPlaceholderPairs(
+  url: string,
+  urlParameters: HttpUrlParameter[],
+  renamePlaceholder: (oldName: string, newName: string) => boolean,
+): { urlParameterPairs: EditablePair[]; urlParametersKey: string } {
+  const placeholderNames = extractPathPlaceholders(url);
+  const commitNameFor = (oldName: string) => (newName: string) =>
+    renamePlaceholder(oldName, newName);
+
+  // NOTE: Copy each parameter because `commitName` is UI-only. Adding it in place would mutate the
+  //  persisted model.
+  const urlParameterPairs: EditablePair[] = urlParameters
+    .filter((p) => p.name || p.value)
+    .map((p) =>
+      placeholderNames.includes(p.name) ? { ...p, commitName: commitNameFor(p.name) } : { ...p },
+    );
+
+  for (const name of placeholderNames) {
+    if (urlParameterPairs.some((p) => p.name === name)) continue;
+    urlParameterPairs.push({
+      name,
+      value: "",
+      enabled: true,
+      commitName: commitNameFor(name),
+      // NOTE: Derived from the name instead of generated, so re-deriving doesn't hand the same row
+      //  a new identity every time (which loses the row's editor state and focus)
+      id: `path-placeholder:${name}`,
+    });
+  }
+
+  return { urlParameterPairs, urlParametersKey: placeholderNames.join(",") };
+}
+
+/**
+ * Compute the patch for renaming a path placeholder: every occurrence replaced in the URL, and
+ * the matching URL parameter renamed so the user's value follows along. Both have to be applied
+ * together, or the value detaches from the placeholder.
+ *
+ * Returns `null` when the rename can't be applied, meaning the caller should leave the model
+ * alone. That's the case when the new name wouldn't parse as a placeholder anymore (empty, or
+ * containing `/`, `?`, `#`, `:`, or whitespace) or when it's already used by another placeholder
+ * in the URL. A missing leading `:` is added rather than rejected, since focusing the name field
+ * selects all of its text and typing over it is the natural way to rename.
+ */
+export function renamePathPlaceholder(
+  model: { url: string; urlParameters: HttpUrlParameter[] },
+  oldName: string,
+  newName: string,
+): { url: string; urlParameters: HttpUrlParameter[] } | null {
+  const name = newName.startsWith(":") ? newName : `:${newName}`;
+  if (!/^:[^/?#:\s]+$/.test(name)) return null;
+
+  const placeholderNames = extractPathPlaceholders(model.url);
+  if (!placeholderNames.includes(oldName)) return null;
+  if (name !== oldName && placeholderNames.includes(name)) return null;
+
+  const pattern = new RegExp(`(/)${escapeRegExp(oldName)}(?=[/?#:]|$)`, "g");
+  return {
+    url: model.url.replace(pattern, (_match, slash: string) => `${slash}${name}`),
+    urlParameters: model.urlParameters.map((p) => (p.name === oldName ? { ...p, name } : p)),
+  };
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

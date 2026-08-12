@@ -20,8 +20,7 @@ import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEdit
 import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
 import { deepEqualAtom } from "../lib/atoms";
 import { languageFromContentType } from "../lib/contentType";
-import { generateId } from "../lib/generateId";
-import { extractPathPlaceholders } from "../lib/pathPlaceholders";
+import { derivePathPlaceholderPairs, renamePathPlaceholder } from "../lib/pathPlaceholders";
 import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { CountBadge } from "./core/CountBadge";
@@ -29,7 +28,6 @@ import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import { getUrlCompletionConfig } from "./core/Editor/url/completion";
 import { Editor } from "./core/Editor/LazyEditor";
 import { IconButton } from "./core/IconButton";
-import type { Pair } from "./core/PairEditor";
 import { PlainInput } from "./core/PlainInput";
 import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
 import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
@@ -84,20 +82,27 @@ export function WebsocketRequestPane({ style, fullHeight, className, activeReque
     [],
   );
 
-  const { urlParameterPairs, urlParametersKey } = useMemo(() => {
-    const placeholderNames = extractPathPlaceholders(activeRequest.url);
-    const nonEmptyParameters = activeRequest.urlParameters.filter((p) => p.name || p.value);
-    const items: Pair[] = [...nonEmptyParameters];
-    for (const name of placeholderNames) {
-      const item = items.find((p) => p.name === name);
-      if (item) {
-        item.readOnlyName = true;
-      } else {
-        items.push({ name, value: "", enabled: true, readOnlyName: true, id: generateId() });
-      }
-    }
-    return { urlParameterPairs: items, urlParametersKey: placeholderNames.join(",") };
-  }, [activeRequest.url, activeRequest.urlParameters]);
+  // Renaming a path placeholder has to rewrite the URL and rename the parameter together, or the
+  // value detaches from the placeholder
+  const handleRenamePathPlaceholder = useCallback(
+    (oldName: string, newName: string) => {
+      const patch = renamePathPlaceholder(activeRequest, oldName, newName);
+      if (patch == null) return false; // Unusable name, so the editor reverts the field
+      void patchModel(activeRequest, patch);
+      return true;
+    },
+    [activeRequest],
+  );
+
+  const { urlParameterPairs, urlParametersKey } = useMemo(
+    () =>
+      derivePathPlaceholderPairs(
+        activeRequest.url,
+        activeRequest.urlParameters,
+        handleRenamePathPlaceholder,
+      ),
+    [activeRequest.url, activeRequest.urlParameters, handleRenamePathPlaceholder],
+  );
 
   const tabs = useMemo<TabItem[]>(() => {
     return [
