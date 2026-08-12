@@ -37,14 +37,17 @@ import { RadioDropdown } from "./RadioDropdown";
 
 export interface PairEditorHandle {
   /**
-   * Focus a row's name field, returning whether focus landed. It won't when the row isn't mounted
-   * yet, or when the editor is hidden (eg. sitting in an inactive tab), since focus doesn't stick
-   * to a `display: none` element.
+   * Focus a row's name field once it's able to take focus. Focus can't land immediately when the
+   * row isn't mounted yet or the editor is hidden — eg. sitting in a tab that's still becoming
+   * active — so this retries for up to ~1s. A newer focus request cancels a pending one.
    */
-  focusName(id: string): boolean;
-  /** Focus a row's value field. See {@link PairEditorHandle.focusName} for the return value. */
-  focusValue(id: string): boolean;
+  focusName(id: string): void;
+  /** Focus a row's value field. See {@link PairEditorHandle.focusName} for timing. */
+  focusValue(id: string): void;
 }
+
+/** ~1s at 60fps, plenty for a tab switch to land without spinning forever if it never does */
+const MAX_FOCUS_ATTEMPTS = 60;
 
 export type PairEditorProps = {
   allowFileValues?: boolean;
@@ -143,16 +146,38 @@ export function PairEditor({
 
   const rowsRef = useRef<Record<string, RowHandle | null>>({});
 
+  const pendingFocusFrame = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (pendingFocusFrame.current != null) cancelAnimationFrame(pendingFocusFrame.current);
+    },
+    [],
+  );
+
+  const focusWhenReady = useCallback((id: string, field: "name" | "value") => {
+    if (pendingFocusFrame.current != null) cancelAnimationFrame(pendingFocusFrame.current);
+
+    let attemptsLeft = MAX_FOCUS_ATTEMPTS;
+    const attempt = () => {
+      pendingFocusFrame.current = null;
+      const row = rowsRef.current[id];
+      const landed = field === "name" ? row?.focusName() : row?.focusValue();
+      if (landed || --attemptsLeft <= 0) return;
+      pendingFocusFrame.current = requestAnimationFrame(attempt);
+    };
+    attempt();
+  }, []);
+
   const handle = useMemo<PairEditorHandle>(
     () => ({
       focusName(id: string) {
-        return rowsRef.current[id]?.focusName() ?? false;
+        focusWhenReady(id, "name");
       },
       focusValue(id: string) {
-        return rowsRef.current[id]?.focusValue() ?? false;
+        focusWhenReady(id, "value");
       },
     }),
-    [],
+    [focusWhenReady],
   );
 
   const initPairEditorRow = useCallback(
