@@ -50,6 +50,19 @@ const formatArg: TemplateFunctionArg = {
   type: "text",
 };
 
+const formatDocsBanner: TemplateFunctionArg = {
+  type: "banner",
+  color: "info",
+  inputs: [
+    {
+      type: "markdown",
+      content:
+        "Uses [date-fns format tokens](https://date-fns.org/docs/format), " +
+        "not dayjs or Moment. Wrap literal text in single quotes to escape it.",
+    },
+  ],
+};
+
 export const plugin: PluginDefinition = {
   templateFunctions: [
     {
@@ -82,7 +95,7 @@ export const plugin: PluginDefinition = {
     {
       name: "timestamp.format",
       description: "Format a date using a date-fns format string",
-      args: [dateArg, formatArg],
+      args: [formatDocsBanner, dateArg, formatArg],
       previewArgs: [formatArg.name],
       onRender: async (_ctx, args) => formatDatetime(args.values),
     },
