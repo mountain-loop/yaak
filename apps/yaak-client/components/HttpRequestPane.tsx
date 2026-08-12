@@ -1,5 +1,5 @@
 import type { HttpRequest } from "@yaakapp-internal/models";
-import { patchModel } from "@yaakapp-internal/models";
+import { getModel, patchModel } from "@yaakapp-internal/models";
 import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
 import classNames from "classnames";
 import { atom, useAtomValue } from "jotai";
@@ -133,15 +133,21 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
   );
 
   // Renaming a path placeholder has to rewrite the URL and rename the parameter together, or the
-  // value detaches from the placeholder
+  // value detaches from the placeholder.
+  // NOTE: Reads the request fresh rather than closing over `activeRequest`. The row that calls this
+  //  holds onto it until the URL's placeholders change, so a captured request would go stale and
+  //  patch its parameter list back over newer edits.
   const handleRenamePathPlaceholder = useCallback(
     (oldName: string, newName: string) => {
-      const patch = renamePathPlaceholder(activeRequest, oldName, newName);
+      const request = getModel("http_request", activeRequestId);
+      if (request == null) return false;
+
+      const patch = renamePathPlaceholder(request, oldName, newName);
       if (patch == null) return false; // Unusable name, so the editor reverts the field
-      void patchModel(activeRequest, patch);
+      void patchModel(request, patch);
       return true;
     },
-    [activeRequest],
+    [activeRequestId],
   );
 
   const { urlParameterPairs, urlParametersKey } = useMemo(
