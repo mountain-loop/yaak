@@ -36,8 +36,14 @@ import type { RadioDropdownItem } from "./RadioDropdown";
 import { RadioDropdown } from "./RadioDropdown";
 
 export interface PairEditorHandle {
-  focusName(id: string): void;
-  focusValue(id: string): void;
+  /**
+   * Focus a row's name field, returning whether focus landed. It won't when the row isn't mounted
+   * yet, or when the editor is hidden (eg. sitting in an inactive tab), since focus doesn't stick
+   * to a `display: none` element.
+   */
+  focusName(id: string): boolean;
+  /** Focus a row's value field. See {@link PairEditorHandle.focusName} for the return value. */
+  focusValue(id: string): boolean;
 }
 
 export type PairEditorProps = {
@@ -140,10 +146,10 @@ export function PairEditor({
   const handle = useMemo<PairEditorHandle>(
     () => ({
       focusName(id: string) {
-        rowsRef.current[id]?.focusName();
+        return rowsRef.current[id]?.focusName() ?? false;
       },
       focusValue(id: string) {
-        rowsRef.current[id]?.focusValue();
+        return rowsRef.current[id]?.focusValue() ?? false;
       },
     }),
     [],
@@ -419,8 +425,8 @@ type PairEditorRowProps = {
 >;
 
 interface RowHandle {
-  focusName(): void;
-  focusValue(): void;
+  focusName(): boolean;
+  focusValue(): boolean;
 }
 
 export function PairEditorRow({
@@ -458,9 +464,11 @@ export function PairEditorRow({
   const handle = useRef<RowHandle>({
     focusName() {
       nameInputRef.current?.focus();
+      return nameInputRef.current?.isFocused() ?? false;
     },
     focusValue() {
       valueInputRef.current?.focus();
+      return valueInputRef.current?.isFocused() ?? false;
     },
   });
 
