@@ -183,6 +183,21 @@ export function PairEditor({
       newPairs.push(ensurePairId(p));
     }
 
+    // When the reset holds the exact same rows (eg. renaming a URL path placeholder, which keeps
+    // every row id), swap the data in without rebuilding the row editors. Unfocused inputs re-seed
+    // themselves when `defaultValue` changes, and a rebuild would drop the user's focus and
+    // selection — like tabbing from a placeholder's name into its value.
+    const trailingPair = pairs[pairs.length - 1];
+    const sameRows =
+      trailingPair != null &&
+      isPairEmpty(trailingPair) &&
+      pairs.length === newPairs.length + 1 &&
+      newPairs.every((p, i) => p.id === pairs[i]?.id);
+    if (sameRows) {
+      setPairs([...newPairs, trailingPair]);
+      return;
+    }
+
     // Add empty last pair if there is none
     const lastPair = newPairs[newPairs.length - 1];
     if (lastPair == null || !isPairEmpty(lastPair)) {

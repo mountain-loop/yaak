@@ -45,16 +45,18 @@ export function derivePathPlaceholderPairs(
       placeholderNames.includes(p.name) ? { ...p, commitName: commitNameFor(p.name) } : { ...p },
     );
 
-  for (const name of placeholderNames) {
+  const uniquePlaceholderNames = [...new Set(placeholderNames)];
+  for (const [index, name] of uniquePlaceholderNames.entries()) {
     if (urlParameterPairs.some((p) => p.name === name)) continue;
     urlParameterPairs.push({
       name,
       value: "",
       enabled: true,
       commitName: commitNameFor(name),
-      // NOTE: Derived from the name instead of generated, so re-deriving doesn't hand the same row
-      //  a new identity every time (which loses the row's editor state and focus)
-      id: `path-placeholder:${name}`,
+      // NOTE: Derived from the placeholder's position instead of generated, so neither re-deriving
+      //  nor renaming hands the row a new identity. The pair editor keys rows by id, so a changed
+      //  id remounts the row and drops the user's focus.
+      id: `path-placeholder:${index}`,
     });
   }
 

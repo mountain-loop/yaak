@@ -99,6 +99,14 @@ describe("derivePathPlaceholderPairs", () => {
     expect(first.urlParameterPairs[0]?.id).toEqual(second.urlParameterPairs[0]?.id);
   });
 
+  test("keeps a derived row's id stable across a rename", () => {
+    const before = derivePathPlaceholderPairs("/a/:x/b/:y", [], neverRename);
+    const after = derivePathPlaceholderPairs("/a/:x2/b/:y", [], neverRename);
+    expect(after.urlParameterPairs.map((p) => p.id)).toEqual(
+      before.urlParameterPairs.map((p) => p.id),
+    );
+  });
+
   test("keys off the placeholder names", () => {
     expect(derivePathPlaceholderPairs("/a/:x/b/:y", [], neverRename).urlParametersKey).toEqual(
       ":x,:y",
