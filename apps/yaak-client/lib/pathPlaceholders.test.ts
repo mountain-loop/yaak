@@ -99,6 +99,16 @@ describe("derivePathPlaceholderPairs", () => {
     expect(first.urlParameterPairs[0]?.id).toEqual(second.urlParameterPairs[0]?.id);
   });
 
+  test("derived row ids avoid colliding with a persisted derived id", () => {
+    // A derived id sticks to the parameter once the user gives the row a value. If its placeholder
+    // is then renamed away in the URL bar, the parameter survives as a stray still holding the id,
+    // and the replacement placeholder's row must not collide with it.
+    const stray = { name: ":old", value: "42", enabled: true, id: "path-placeholder:0" };
+    const { urlParameterPairs } = derivePathPlaceholderPairs("/pets/:new", [stray], neverRename);
+    const ids = urlParameterPairs.map((p) => p.id);
+    expect(new Set(ids).size).toEqual(ids.length);
+  });
+
   test("keeps a derived row's id stable across a rename", () => {
     const before = derivePathPlaceholderPairs("/a/:x/b/:y", [], neverRename);
     const after = derivePathPlaceholderPairs("/a/:x2/b/:y", [], neverRename);

@@ -45,19 +45,23 @@ export function derivePathPlaceholderPairs(
       placeholderNames.includes(p.name) ? { ...p, commitName: commitNameFor(p.name) } : { ...p },
     );
 
+  // NOTE: Ids are derived from the placeholder's position instead of generated, so neither
+  //  re-deriving nor renaming hands a row a new identity. The pair editor keys rows by id, so a
+  //  changed id remounts the row and drops the user's focus.
+  //
+  //  A derived id sticks to the parameter once the user gives the row a value, so a parameter that
+  //  outlives its placeholder (renamed away in the URL bar) still holds one. Skip past taken ids
+  //  so a new placeholder at that position can't collide with it.
+  const takenIds = new Set(urlParameterPairs.map((p) => p.id));
   const uniquePlaceholderNames = [...new Set(placeholderNames)];
   for (const [index, name] of uniquePlaceholderNames.entries()) {
     if (urlParameterPairs.some((p) => p.name === name)) continue;
-    urlParameterPairs.push({
-      name,
-      value: "",
-      enabled: true,
-      commitName: commitNameFor(name),
-      // NOTE: Derived from the placeholder's position instead of generated, so neither re-deriving
-      //  nor renaming hands the row a new identity. The pair editor keys rows by id, so a changed
-      //  id remounts the row and drops the user's focus.
-      id: `path-placeholder:${index}`,
-    });
+
+    let id = `path-placeholder:${index}`;
+    for (let bump = index + 1; takenIds.has(id); bump++) id = `path-placeholder:${bump}`;
+    takenIds.add(id);
+
+    urlParameterPairs.push({ name, value: "", enabled: true, commitName: commitNameFor(name), id });
   }
 
   return { urlParameterPairs, urlParametersKey: placeholderNames.join(",") };
