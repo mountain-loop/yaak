@@ -15,7 +15,6 @@ import { HStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { GraphQLSchema } from "graphql";
 import { useAtomValue } from "jotai";
-import { md5 } from "js-md5";
 import type { ReactNode, RefObject } from "react";
 import {
   Children,
@@ -33,6 +32,7 @@ import { useEnvironmentVariables } from "../../../hooks/useEnvironmentVariables"
 import { eventMatchesHotkey } from "../../../hooks/useHotKey";
 import { useRequestEditor } from "../../../hooks/useRequestEditor";
 import { useTemplateFunctionCompletionOptions } from "../../../hooks/useTemplateFunctions";
+import { docFingerprint } from "../../../lib/docFingerprint";
 import { editEnvironment } from "../../../lib/editEnvironment";
 import { tryFormatJson, tryFormatXml } from "../../../lib/formatters";
 import { jotaiStore } from "../../../lib/jotai";
@@ -656,9 +656,9 @@ function saveCachedEditorState(stateKey: string | null, state: EditorState | nul
   if (!stateKey || state == null) return;
   const stateObj = state.toJSON(stateFields);
 
-  // Save state in sessionStorage by removing doc and saving the hash of it instead.
+  // Save state in sessionStorage by removing doc and saving a fingerprint of it instead.
   // This will be checked on restore and put back in if it matches.
-  stateObj.docHash = md5(stateObj.doc);
+  stateObj.docHash = docFingerprint(stateObj.doc);
   stateObj.doc = undefined;
 
   try {
@@ -678,7 +678,7 @@ function getCachedEditorState(doc: string, stateKey: string | null) {
     const { docHash, ...state } = JSON.parse(stateStr);
 
     // Ensure the doc matches the one that was used to save the state
-    if (docHash !== md5(doc)) {
+    if (docHash !== docFingerprint(doc)) {
       return null;
     }
 

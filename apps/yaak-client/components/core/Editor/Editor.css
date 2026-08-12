@@ -253,6 +253,12 @@
   @apply cursor-default!;
 }
 
+.cm-editor .cm-largeValue {
+  @apply px-2 mx-0.5 rounded border border-border-subtle bg-surface-highlight;
+  @apply text-text-subtle text-sm cursor-pointer align-middle;
+  @apply hover:text-text hover:border-border;
+}
+
 .cm-editor .cm-activeLineGutter {
   @apply bg-transparent text-text-subtle;
 }
