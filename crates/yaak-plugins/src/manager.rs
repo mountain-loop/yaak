@@ -247,7 +247,8 @@ impl PluginManager {
     pub async fn list_bundled_plugin_dirs(&self) -> Result<Vec<String>> {
         let plugins_dir = self.get_plugins_dir();
         info!("Loading bundled plugins from {plugins_dir:?}");
-        read_plugins_dir(&plugins_dir).await
+        let dirs = read_plugins_dir(&plugins_dir).await?;
+        Ok(dirs.into_iter().filter(|dir| !is_removed_bundled_plugin_dir(dir)).collect())
     }
 
     pub async fn resolve_plugins_for_runtime_from_db(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
@@ -1173,6 +1174,23 @@ fn prefer_plugin(candidate: &Plugin, existing: &Plugin) -> bool {
     candidate.created_at > existing.created_at
 }
 
+/// Bundled plugin directories that shipped in past versions and no longer exist. Updates
+/// can leave these behind on disk, where they'd be discovered as bundled plugins and load
+/// alongside the plugin that replaced them, producing duplicate actions in menus.
+///
+/// Ignoring them here also drops any plugin rows users already have, because bundled rows
+/// whose directory isn't in this list are filtered out by `resolve_plugins_for_runtime`.
+///
+/// `exporter-curl` was renamed to `action-copy-curl` in 19ffcd18, which is why affected
+/// installs show "Copy as cURL" twice.
+const REMOVED_BUNDLED_PLUGIN_DIRS: &[&str] = &["exporter-curl"];
+
+/// Whether a plugin directory path is one of the known-removed bundled plugins.
+fn is_removed_bundled_plugin_dir(dir: &str) -> bool {
+    let name = dir.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or_default();
+    REMOVED_BUNDLED_PLUGIN_DIRS.contains(&name)
+}
+
 async fn read_plugins_dir(dir: &PathBuf) -> Result<Vec<String>> {
     let mut result = read_dir(dir).await?;
     let mut dirs: Vec<String> = vec![];
@@ -1197,4 +1215,31 @@ fn fix_windows_paths(p: &PathBuf) -> String {
 
     // 2. Convert backslashes to forward slashes for Node.js compatibility
     PathBuf::from(safe_path).to_slash_lossy().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_removed_bundled_plugin_dir;
+
+    #[test]
+    fn ignores_removed_bundled_plugins() {
+        assert!(is_removed_bundled_plugin_dir(
+            "/Applications/Yaak.app/vendored/plugins/exporter-curl"
+        ));
+        // Windows paths are slash-normalized before reaching here, but handle both
+        assert!(is_removed_bundled_plugin_dir(
+            r"C:\Users\me\AppData\Local\Yaak\vendored\plugins\exporter-curl"
+        ));
+        assert!(is_removed_bundled_plugin_dir("vendored/plugins/exporter-curl/"));
+    }
+
+    #[test]
+    fn keeps_current_bundled_plugins() {
+        assert!(!is_removed_bundled_plugin_dir(
+            "/Applications/Yaak.app/vendored/plugins/action-copy-curl"
+        ));
+        assert!(!is_removed_bundled_plugin_dir("vendored/plugins/importer-curl"));
+        // Must match the whole directory name, not a substring
+        assert!(!is_removed_bundled_plugin_dir("vendored/plugins/my-exporter-curl"));
+    }
 }
