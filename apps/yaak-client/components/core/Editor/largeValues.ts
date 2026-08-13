@@ -70,21 +70,22 @@ class LargeValueWidget extends WidgetType {
     const length = this.to - this.from;
 
     const el = document.createElement("span");
-    el.className = "large-value-tag";
+    // The same neutral tag styling a path parameter uses. The theme scope matters: these
+    // tokens resolve against the tag palette, not the editor's ambient one, where a
+    // tag-sized border is meant to be near invisible.
+    el.className = "x-theme-templateTag x-theme-templateTag--secondary template-tag";
 
     const label = document.createElement("span");
     label.textContent = `${formatSize(length)} hidden…`;
     el.appendChild(label);
 
-    const copy = document.createElement("button");
-    copy.type = "button";
+    // A span rather than a button: a button's box model makes the line taller. It keeps the
+    // role and name so assistive tech still sees it as an action.
+    const copy = document.createElement("span");
+    copy.role = "button";
     copy.className = "large-value-tag-copy";
     copy.title = `Copy hidden text (${length.toLocaleString()} characters)`;
     copy.ariaLabel = copy.title;
-    // Deliberately out of the tab order. A response can hold many of these, and the whole body
-    // is already reachable from the pane's own copy and save buttons, or by selecting it: the
-    // text never left the document, so a selection copies what the tag hides along with it.
-    copy.tabIndex = -1;
     // Lucide's `copy` icon, inlined because the widget builds its DOM synchronously and
     // rendering React here would leave it empty while CodeMirror measures line heights
     copy.innerHTML =
@@ -92,8 +93,7 @@ class LargeValueWidget extends WidgetType {
       'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
       'aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>' +
       '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
-    // Keep the editor from moving the cursor when the button is pressed, but copy on click so
-    // it also works when the button is reached by keyboard
+    // Keep the editor from moving the cursor when the button is pressed
     copy.addEventListener("mousedown", (e) => {
       e.preventDefault();
       e.stopPropagation();

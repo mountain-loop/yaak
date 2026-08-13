@@ -108,40 +108,12 @@
       }
     }
 
-    /* Shape shared by inline widgets, so they read as the same kind of thing */
-    .template-tag,
-    .large-value-tag {
-      @apply inline border px-1 mx-[0.5px] rounded-sm dark:shadow;
-      @apply whitespace-nowrap cursor-default;
-
-      /* These are buttons, so don't inherit the user agent's font or alignment */
-      font: inherit;
-      text-align: inherit;
-    }
-
-    .large-value-tag {
-      /* Colors of its own, so it doesn't read as a template tag */
-      @apply bg-surface-highlight text-text-subtle border-border-subtle;
-
-      * {
-        @apply cursor-default;
-      }
-
-      /* Only the button does anything, so only the button reacts */
-      .large-value-tag-copy {
-        @apply inline-flex items-center align-middle ml-1 cursor-pointer!;
-        @apply text-text-subtlest hover:text-text;
-
-        svg {
-          @apply w-[0.9em] h-[0.9em];
-        }
-      }
-    }
-
     .template-tag {
       /* Colors */
-      @apply bg-surface text-text-subtle border-border-subtle;
+      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap cursor-default;
       @apply hover:border-border hover:text-text hover:bg-surface-highlight;
+
+      @apply inline border px-1 mx-[0.5px] rounded-sm dark:shadow;
 
       -webkit-text-security: none;
 
@@ -164,6 +136,16 @@
         .fn-bracket {
           @apply text-text-subtle opacity-30;
         }
+      }
+    }
+
+    /* Sits inside a .template-tag, and is the only part of a large-value tag that acts */
+    .large-value-tag-copy {
+      @apply inline-flex items-center align-middle ml-1 cursor-pointer!;
+      @apply text-text-subtlest hover:text-text;
+
+      svg {
+        @apply w-[0.9em] h-[0.9em];
       }
     }
 

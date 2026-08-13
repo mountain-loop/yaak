@@ -34,11 +34,7 @@ class TemplateTagWidget extends WidgetType {
   }
 
   toDOM() {
-    // A button so it carries a role and a name for assistive tech. Kept out of the tab order:
-    // a single field can hold many tags, and Tab already means something in the editor.
-    const elt = document.createElement("button");
-    elt.type = "button";
-    elt.tabIndex = -1;
+    const elt = document.createElement("span");
     elt.className = `x-theme-templateTag template-tag ${
       this.option.invalid
         ? "x-theme-templateTag--danger"

@@ -22,10 +22,7 @@ class PathPlaceholderWidget extends WidgetType {
   }
 
   toDOM() {
-    // See TemplateTagWidget: a button for the role and name, but not a tab stop
-    const elt = document.createElement("button");
-    elt.type = "button";
-    elt.tabIndex = -1;
+    const elt = document.createElement("span");
     elt.className = "x-theme-templateTag x-theme-templateTag--secondary template-tag";
     elt.textContent = this.rawText;
     elt.addEventListener("click", this.#clickListenerCallback);
