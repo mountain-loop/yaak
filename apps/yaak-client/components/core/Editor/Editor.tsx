@@ -430,7 +430,7 @@ function EditorInner({
               : []),
         ];
 
-        const cachedJsonState = getCachedEditorState(defaultValue ?? "", stateKey);
+        const cachedJsonState = getCachedEditorState(defaultValue ?? "", stateKey, !!readOnly);
 
         const doc = `${defaultValue ?? ""}`;
         const config: EditorStateConfig = { extensions, doc };
@@ -658,7 +658,9 @@ function saveCachedEditorState(stateKey: string | null, state: EditorState | nul
 
   // Save state in sessionStorage by removing doc and saving a fingerprint of it instead.
   // This will be checked on restore and put back in if it matches.
-  stateObj.docHash = docFingerprint(stateObj.doc);
+  // Editable documents get the exact hash, so a collision can never restore undo history
+  // belonging to other content
+  stateObj.docHash = docFingerprint(stateObj.doc, { exact: !state.readOnly });
   stateObj.doc = undefined;
 
   try {
@@ -668,7 +670,7 @@ function saveCachedEditorState(stateKey: string | null, state: EditorState | nul
   }
 }
 
-function getCachedEditorState(doc: string, stateKey: string | null) {
+function getCachedEditorState(doc: string, stateKey: string | null, readOnly: boolean) {
   if (stateKey == null) return;
 
   try {
@@ -678,7 +680,7 @@ function getCachedEditorState(doc: string, stateKey: string | null) {
     const { docHash, ...state } = JSON.parse(stateStr);
 
     // Ensure the doc matches the one that was used to save the state
-    if (docHash !== docFingerprint(doc)) {
+    if (docHash !== docFingerprint(doc, { exact: !readOnly })) {
       return null;
     }
 

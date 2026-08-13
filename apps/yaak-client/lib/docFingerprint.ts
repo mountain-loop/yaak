@@ -4,20 +4,22 @@ import { md5 } from "js-md5";
 const SAMPLE_CHARS = 512;
 
 /**
- * A cheap stand-in for hashing a whole document.
+ * Identifies a document, so a cached editor state is never restored onto different content.
  *
- * The editor caches undo history, folds and selection in sessionStorage, keyed by a hash of
- * the document so a stale entry is never restored onto different content. Hashing the whole
- * document costs about 4 ms per megabyte, and it is paid on every editor update as well as on
- * restore, which is a lot of work to protect a fold position.
+ * Hashing the whole document costs about 4 ms per megabyte and is paid on every editor update
+ * as well as on restore, which is a lot of work for a document nobody can edit.
  *
- * Sampling the ends and the middle alongside the exact length is enough: two different
- * documents would have to agree on length and all three samples to collide, and the cost of a
- * collision is a fold or cursor landing where it doesn't belong. Documents small enough to
- * hash outright still are.
+ * `exact` decides how much certainty that buys. Editable documents get a full hash, because a
+ * collision there would restore undo history belonging to other content and let an undo write
+ * nonsense into the body. Read-only documents get a sampled one: they hold the megabyte-sized
+ * responses this exists for, their history can never be applied, and the worst a collision can
+ * do is put a fold or the cursor in the wrong place.
+ *
+ * Sampling still pins the exact length plus three windows, so a colliding pair has to agree on
+ * all four and differ only in between. Documents small enough to hash outright still are.
  */
-export function docFingerprint(text: string): string {
-  if (text.length <= SAMPLE_CHARS * 3) {
+export function docFingerprint(text: string, { exact }: { exact: boolean }): string {
+  if (exact || text.length <= SAMPLE_CHARS * 3) {
     return `${text.length}:${md5(text)}`;
   }
 

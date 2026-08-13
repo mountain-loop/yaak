@@ -89,8 +89,11 @@ describe("token collapsing, with a grammar", () => {
     expect(doc.slice(ranges[0]!.to)).toContain('"size":12}');
   });
 
+  // Small enough that the parse always finishes inside PARSE_TIMEOUT_MS, even on a slow
+  // machine. With a bigger body this falls back to the column cut, which is by design but
+  // makes the assertion depend on how fast the runner is.
   test("keeps every key visible in a minified body with several large values", () => {
-    const chunk = "B".repeat(200_000);
+    const chunk = "B".repeat(20_000);
     const doc = `{${["a", "b", "c", "d", "e"].map((k) => `"${k}":"${chunk}"`).join(",")}}`;
     const state = jsonState(doc);
     const ranges = collapsedRanges(state);

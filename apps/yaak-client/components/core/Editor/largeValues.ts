@@ -88,8 +88,13 @@ class LargeValueWidget extends WidgetType {
       'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
       'aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>' +
       '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+    // Keep the editor from moving the cursor when the button is pressed, but copy on click so
+    // it also works when the button is reached by keyboard
     copy.addEventListener("mousedown", (e) => {
-      // Keep the editor from moving the cursor when the button is used
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    copy.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
       copyToClipboard(view.state.sliceDoc(this.from, this.to));
