@@ -318,6 +318,7 @@ function BaseInput({
               editorClassName,
               multiLine && size === "md" && "py-1.5",
               multiLine && size === "sm" && "py-1",
+              multiLine && (size === "xs" || size === "2xs") && "py-0.5",
             )}
             onFocus={handleFocus}
             onBlur={handleBlur}

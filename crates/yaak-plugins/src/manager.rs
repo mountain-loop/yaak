@@ -52,6 +52,9 @@ pub struct PluginManager {
     dev_mode: bool,
     /// Errors from plugin initialization, retrievable once via `take_init_errors`.
     init_errors: Arc<Mutex<Vec<(String, String)>>>,
+    /// Set to the exit status if the runtime dies unexpectedly, observable
+    /// via `runtime_crash_rx`.
+    runtime_crash_rx: tokio::sync::watch::Receiver<Option<String>>,
 }
 
 /// Callback for plugin initialization events (e.g., toast notifications)
@@ -83,6 +86,12 @@ impl PluginManager {
 
         let (client_disconnect_tx, mut client_disconnect_rx) = mpsc::channel(128);
         let (client_connect_tx, mut client_connect_rx) = tokio::sync::watch::channel(false);
+        // Set to the exit status if the runtime dies unexpectedly. The app is
+        // still usable without the plugin runtime (just missing features), so
+        // this unblocks startup and is surfaced to the user rather than
+        // taking the app down.
+        let (unexpected_exit_tx, unexpected_exit_rx) =
+            tokio::sync::watch::channel::<Option<String>>(None);
         let ws_service =
             PluginRuntimeServerWebsocket::new(events_tx, client_disconnect_tx, client_connect_tx);
 
@@ -96,6 +105,7 @@ impl PluginManager {
             installed_plugin_dir,
             dev_mode,
             init_errors: Default::default(),
+            runtime_crash_rx: unexpected_exit_rx.clone(),
         };
 
         // Forward events to subscribers
@@ -132,16 +142,22 @@ impl PluginManager {
         let listener = TcpListener::bind(listen_addr).await.expect("Failed to bind TCP listener");
         let addr = listener.local_addr().expect("Failed to get local address");
 
-        // 1. Wait for Node.js runtime to connect
+        // 1. Wait for the Node.js runtime to connect, or for it to die trying
+        let mut init_dead_rx = unexpected_exit_rx.clone();
         let init_plugins_task = tokio::spawn(async move {
-            match client_connect_rx.changed().await {
-                Ok(_) => {
-                    info!("Plugin runtime client connected!");
-                    // Note: initialize_all_plugins is now called separately by the app
-                    // after setting up the plugin list
-                }
-                Err(e) => {
-                    warn!("Failed to receive from client connection rx {e:?}");
+            tokio::select! {
+                result = client_connect_rx.changed() => match result {
+                    Ok(_) => {
+                        info!("Plugin runtime client connected!");
+                        // Note: initialize_all_plugins is now called separately by the app
+                        // after setting up the plugin list
+                    }
+                    Err(e) => {
+                        warn!("Failed to receive from client connection rx {e:?}");
+                    }
+                },
+                _ = init_dead_rx.wait_for(|status| status.is_some()) => {
+                    warn!("Plugin runtime exited before connecting; continuing without plugins");
                 }
             }
         });
@@ -159,10 +175,16 @@ impl PluginManager {
             addr,
             &kill_server_rx,
             killed_tx,
+            unexpected_exit_tx,
         )
         .await?;
         info!("Waiting for plugins to initialize");
         init_plugins_task.await.map_err(|e| PluginErr(e.to_string()))?;
+
+        if unexpected_exit_rx.borrow().is_some() {
+            warn!("Skipping plugin initialization because the runtime is not running");
+            return Ok(plugin_manager);
+        }
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
         let db = query_manager.connect();
@@ -201,6 +223,12 @@ impl PluginManager {
         std::mem::take(&mut *self.init_errors.lock().await)
     }
 
+    /// A receiver that is set to the exit status if the plugin runtime dies
+    /// unexpectedly.
+    pub fn runtime_crash_rx(&self) -> tokio::sync::watch::Receiver<Option<String>> {
+        self.runtime_crash_rx.clone()
+    }
+
     /// Get the vendored plugin directory path (resolves dev mode path if applicable)
     pub fn get_plugins_dir(&self) -> PathBuf {
         if self.dev_mode {
@@ -219,7 +247,8 @@ impl PluginManager {
     pub async fn list_bundled_plugin_dirs(&self) -> Result<Vec<String>> {
         let plugins_dir = self.get_plugins_dir();
         info!("Loading bundled plugins from {plugins_dir:?}");
-        read_plugins_dir(&plugins_dir).await
+        let dirs = read_plugins_dir(&plugins_dir).await?;
+        Ok(dirs.into_iter().filter(|dir| !is_removed_bundled_plugin_dir(dir)).collect())
     }
 
     pub async fn resolve_plugins_for_runtime_from_db(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
@@ -1070,7 +1099,7 @@ impl PluginManager {
                 &InternalEventPayload::ImportRequest(ImportRequest {
                     content: content.to_string(),
                 }),
-                Duration::from_secs(5),
+                Duration::from_secs(60),
             )
             .await?;
 
@@ -1145,6 +1174,23 @@ fn prefer_plugin(candidate: &Plugin, existing: &Plugin) -> bool {
     candidate.created_at > existing.created_at
 }
 
+/// Bundled plugin directories that shipped in past versions and no longer exist. Updates
+/// can leave these behind on disk, where they'd be discovered as bundled plugins and load
+/// alongside the plugin that replaced them, producing duplicate actions in menus.
+///
+/// Ignoring them here also drops any plugin rows users already have, because bundled rows
+/// whose directory isn't in this list are filtered out by `resolve_plugins_for_runtime`.
+///
+/// `exporter-curl` was renamed to `action-copy-curl` in 19ffcd18, which is why affected
+/// installs show "Copy as cURL" twice.
+const REMOVED_BUNDLED_PLUGIN_DIRS: &[&str] = &["exporter-curl"];
+
+/// Whether a plugin directory path is one of the known-removed bundled plugins.
+fn is_removed_bundled_plugin_dir(dir: &str) -> bool {
+    let name = dir.trim_end_matches(['/', '\\']).rsplit(['/', '\\']).next().unwrap_or_default();
+    REMOVED_BUNDLED_PLUGIN_DIRS.contains(&name)
+}
+
 async fn read_plugins_dir(dir: &PathBuf) -> Result<Vec<String>> {
     let mut result = read_dir(dir).await?;
     let mut dirs: Vec<String> = vec![];
@@ -1169,4 +1215,31 @@ fn fix_windows_paths(p: &PathBuf) -> String {
 
     // 2. Convert backslashes to forward slashes for Node.js compatibility
     PathBuf::from(safe_path).to_slash_lossy().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_removed_bundled_plugin_dir;
+
+    #[test]
+    fn ignores_removed_bundled_plugins() {
+        assert!(is_removed_bundled_plugin_dir(
+            "/Applications/Yaak.app/vendored/plugins/exporter-curl"
+        ));
+        // Windows paths are slash-normalized before reaching here, but handle both
+        assert!(is_removed_bundled_plugin_dir(
+            r"C:\Users\me\AppData\Local\Yaak\vendored\plugins\exporter-curl"
+        ));
+        assert!(is_removed_bundled_plugin_dir("vendored/plugins/exporter-curl/"));
+    }
+
+    #[test]
+    fn keeps_current_bundled_plugins() {
+        assert!(!is_removed_bundled_plugin_dir(
+            "/Applications/Yaak.app/vendored/plugins/action-copy-curl"
+        ));
+        assert!(!is_removed_bundled_plugin_dir("vendored/plugins/importer-curl"));
+        // Must match the whole directory name, not a substring
+        assert!(!is_removed_bundled_plugin_dir("vendored/plugins/my-exporter-curl"));
+    }
 }

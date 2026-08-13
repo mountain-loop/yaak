@@ -93,6 +93,7 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
     const body = {
       query: request.body.query || "",
       variables: maybeParseJSON(request.body.variables, undefined),
+      operationName: request.body.operationName || undefined,
     };
     xs.push("--data", quote(JSON.stringify(body)));
     xs.push(NEWLINE);

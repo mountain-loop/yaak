@@ -13,8 +13,8 @@ import { userAgents } from "../lib/data/userAgents";
 import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
 import type {
+  GenericCompletion,
   GenericCompletionConfig,
-  GenericCompletionOptionWithApply,
 } from "./core/Editor/genericCompletion";
 import type { InputProps } from "./core/Input";
 import type { Pair, PairEditorProps } from "./core/PairEditor";
@@ -150,7 +150,7 @@ const valueType = (pair: Pair): InputProps["type"] => {
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {
   const name = headerName.toLowerCase().trim();
-  const options: GenericCompletionOptionWithApply[] =
+  const options: GenericCompletion[] =
     headerOptionsMap[name]?.map((o) =>
       typeof o === "string"
         ? {

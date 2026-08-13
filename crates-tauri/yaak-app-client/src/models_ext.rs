@@ -194,20 +194,31 @@ pub(crate) fn models_delete<R: Runtime>(
 #[tauri::command]
 pub(crate) fn models_duplicate<R: Runtime>(
     window: WebviewWindow<R>,
-    model: AnyModel,
+    model_type: String,
+    model_id: String,
 ) -> Result<String> {
     use yaak_models::error::Error::GenericError;
 
     // Use transaction for duplications because it might recurse
     window.with_tx(|tx| {
         let source = &UpdateSource::from_window_label(window.label());
-        let id = match model {
-            AnyModel::Environment(m) => tx.duplicate_environment(&m, source)?.id,
-            AnyModel::Folder(m) => tx.duplicate_folder(&m, source)?.id,
-            AnyModel::GrpcRequest(m) => tx.duplicate_grpc_request(&m, source)?.id,
-            AnyModel::HttpRequest(m) => tx.duplicate_http_request(&m, source)?.id,
-            AnyModel::WebsocketRequest(m) => tx.duplicate_websocket_request(&m, source)?.id,
-            a => return Err(GenericError(format!("Cannot duplicate AnyModel {a:?})"))),
+        // Fetch the model fresh from the DB so the duplicate doesn't come from
+        // a stale frontend snapshot
+        let id = match model_type.as_str() {
+            "environment" => {
+                tx.duplicate_environment(&tx.get_environment(&model_id)?, source)?.id
+            }
+            "folder" => tx.duplicate_folder(&tx.get_folder(&model_id)?, source)?.id,
+            "grpc_request" => {
+                tx.duplicate_grpc_request(&tx.get_grpc_request(&model_id)?, source)?.id
+            }
+            "http_request" => {
+                tx.duplicate_http_request(&tx.get_http_request(&model_id)?, source)?.id
+            }
+            "websocket_request" => {
+                tx.duplicate_websocket_request(&tx.get_websocket_request(&model_id)?, source)?.id
+            }
+            t => return Err(GenericError(format!("Cannot duplicate model type {t}"))),
         };
 
         Ok(id)

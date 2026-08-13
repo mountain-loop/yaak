@@ -1,4 +1,7 @@
 {
+  "build": {
+    "features": ["updater", "license", "wry"]
+  },
   "app": {
     "security": {
       "capabilities": [

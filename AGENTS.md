@@ -1,2 +1,2 @@
-- Tag safety: app releases use `v*` tags and CLI releases use `yaak-cli-*` tags; always confirm which one is requested before retagging.
+- Tag safety: app AND CLI releases both ship from `v*` tags (the CLI is version-locked to the app and publishes to npm on every app tag); `@yaakapp/api` uses `yaak-api-*` tags. Always confirm which is requested before retagging.
 - Do not commit, push, or tag without explicit approval

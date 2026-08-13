@@ -1,9 +1,10 @@
 import { generateId } from "../../lib/generateId";
 import type { Pair, PairWithId } from "./PairEditor";
 
-export function ensurePairId(p: Pair): PairWithId {
+// NOTE: Generic so callers keep whatever they passed in (eg. an EditablePair stays editable)
+export function ensurePairId<T extends Pair>(p: T): T & PairWithId {
   if (typeof p.id === "string") {
-    return p as PairWithId;
+    return p as T & PairWithId;
   }
   return { ...p, id: p.id ?? generateId() };
 }

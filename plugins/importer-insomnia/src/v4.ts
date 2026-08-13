@@ -1,6 +1,6 @@
 /* oxlint-disable no-explicit-any */
 import type { PartialImportResources } from "@yaakapp/api";
-import { convertId, convertTemplateSyntax, isJSObject } from "./common";
+import { convertId, convertTemplateSyntax, importHttpBodyAndHeaders, isJSObject } from "./common";
 
 export function convertInsomniaV4(parsed: any) {
   if (!Array.isArray(parsed.resources)) return null;
@@ -64,38 +64,6 @@ export function convertInsomniaV4(parsed: any) {
 }
 
 function importHttpRequest(r: any, workspaceId: string): PartialImportResources["httpRequests"][0] {
-  let bodyType: string | null = null;
-  let body = {};
-  if (r.body.mimeType === "application/octet-stream") {
-    bodyType = "binary";
-    body = { filePath: r.body.fileName ?? "" };
-  } else if (r.body?.mimeType === "application/x-www-form-urlencoded") {
-    bodyType = "application/x-www-form-urlencoded";
-    body = {
-      form: (r.body.params ?? []).map((p: any) => ({
-        enabled: !p.disabled,
-        name: p.name ?? "",
-        value: p.value ?? "",
-      })),
-    };
-  } else if (r.body?.mimeType === "multipart/form-data") {
-    bodyType = "multipart/form-data";
-    body = {
-      form: (r.body.params ?? []).map((p: any) => ({
-        enabled: !p.disabled,
-        name: p.name ?? "",
-        value: p.value ?? "",
-        file: p.fileName ?? null,
-      })),
-    };
-  } else if (r.body?.mimeType === "application/graphql") {
-    bodyType = "graphql";
-    body = { text: r.body.text ?? "" };
-  } else if (r.body?.mimeType === "application/json") {
-    bodyType = "application/json";
-    body = { text: r.body.text ?? "" };
-  }
-
   let authenticationType: string | null = null;
   let authentication = {};
   if (r.authentication.type === "bearer") {
@@ -127,18 +95,10 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
       name: p.name ?? "",
       value: p.value ?? "",
     })),
-    body,
-    bodyType,
+    ...importHttpBodyAndHeaders(r),
     authentication,
     authenticationType,
     method: r.method,
-    headers: (r.headers ?? [])
-      .map((h: any) => ({
-        enabled: !h.disabled,
-        name: h.name ?? "",
-        value: h.value ?? "",
-      }))
-      .filter(({ name, value }: any) => name !== "" || value !== ""),
   };
 }
 

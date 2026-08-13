@@ -42,10 +42,25 @@ const expressionArg: TemplateFunctionArg = {
 const formatArg: TemplateFunctionArg = {
   name: "format",
   label: "Format String",
-  description: "Format string to describe the output (eg. 'yyyy-MM-dd at HH:mm:ss')",
+  description:
+    "date-fns format string to describe the output (eg. \"yyyy-MM-dd 'at' HH:mm:ss\"). " +
+    "Wrap literal text in single quotes to escape it",
   optional: true,
   placeholder: "yyyy-MM-dd HH:mm:ss",
   type: "text",
+};
+
+const formatDocsBanner: TemplateFunctionArg = {
+  type: "banner",
+  color: "info",
+  inputs: [
+    {
+      type: "markdown",
+      content:
+        "Uses [date-fns format tokens](https://date-fns.org/docs/format), " +
+        "not dayjs or Moment. Wrap literal text in single quotes to escape it.",
+    },
+  ],
 };
 
 export const plugin: PluginDefinition = {
@@ -79,8 +94,8 @@ export const plugin: PluginDefinition = {
     },
     {
       name: "timestamp.format",
-      description: "Format a date using a dayjs-compatible format string",
-      args: [dateArg, formatArg],
+      description: "Format a date using a date-fns format string",
+      args: [formatDocsBanner, dateArg, formatArg],
       previewArgs: [formatArg.name],
       onRender: async (_ctx, args) => formatDatetime(args.values),
     },

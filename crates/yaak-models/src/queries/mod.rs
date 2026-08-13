@@ -1,6 +1,7 @@
 pub mod any_request;
 mod batch;
 mod cookie_jars;
+mod duplicate_name;
 mod environments;
 mod folders;
 mod graphql_introspections;
@@ -22,6 +23,7 @@ mod websocket_requests;
 mod workspace_metas;
 pub mod workspaces;
 pub use model_changes::PersistedModelChange;
+pub(crate) use duplicate_name::conflict_free_name;
 
 const MAX_HISTORY_ITEMS: usize = 20;
 

@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   update-flathub:
+    if: github.repository == 'mountain-loop/yaak'
     name: Update Flathub manifest
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +35,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Install source generators
         run: |

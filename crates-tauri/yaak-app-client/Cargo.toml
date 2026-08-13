@@ -13,8 +13,8 @@ crate-type = ["staticlib", "cdylib", "lib"]
 [features]
 cargo-clippy = []
 default = []
-cef = ["tauri/cef"]
-wry = ["tauri/wry", "tauri/x11", "tauri/dbus"]
+cef = ["tauri/cef", "tauri-plugin-dialog/xdg-portal"]
+wry = ["tauri/wry", "tauri/x11", "tauri/dbus", "tauri-plugin-dialog/gtk3"]
 updater = []
 license = ["yaak-license"]
 
@@ -23,6 +23,9 @@ tauri-build = { version = "2.6.1", features = [] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu installation to work
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+rlimit = "0.11" # Raise the launchd 256 open-file soft limit at startup
 
 [dependencies]
 charset = "0.1.5"

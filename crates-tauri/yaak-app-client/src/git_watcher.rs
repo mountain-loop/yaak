@@ -32,18 +32,37 @@ pub(crate) async fn watch_git_worktree_status<R: Runtime>(
     let repo_dir = dir.to_path_buf();
     let workdir = paths.workdir;
     let gitdir = paths.gitdir;
+    let commondir = paths.commondir;
 
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher = notify::recommended_watcher(tx)
         .map_err(|e| Error::GenericError(format!("Failed to watch Git repository: {e}")))?;
 
+    // Watch only the directory Yaak syncs to, not the whole worktree — the
+    // containing repo may be huge and busy (e.g. a sync dir inside a monorepo),
+    // and watching it all burns CPU re-checking status for unrelated changes
     watcher
-        .watch(&workdir, notify::RecursiveMode::Recursive)
-        .map_err(|e| Error::GenericError(format!("Failed to watch Git worktree: {e}")))?;
-    if gitdir != workdir {
+        .watch(&repo_dir, notify::RecursiveMode::Recursive)
+        .map_err(|e| Error::GenericError(format!("Failed to watch Git sync directory: {e}")))?;
+
+    // Watch the git metadata that affects branch/status info: the top-level
+    // gitdir files (HEAD, index) and refs. Not the whole gitdir, since
+    // .git/objects churns constantly during fetches and gc. Refs and
+    // packed-refs live in the common dir, which only differs from the gitdir
+    // for linked worktrees
+    watcher
+        .watch(&gitdir, notify::RecursiveMode::NonRecursive)
+        .map_err(|e| Error::GenericError(format!("Failed to watch Git metadata: {e}")))?;
+    if commondir != gitdir {
         watcher
-            .watch(&gitdir, notify::RecursiveMode::Recursive)
-            .map_err(|e| Error::GenericError(format!("Failed to watch Git metadata: {e}")))?;
+            .watch(&commondir, notify::RecursiveMode::NonRecursive)
+            .map_err(|e| Error::GenericError(format!("Failed to watch Git common dir: {e}")))?;
+    }
+    let refs_dir = commondir.join("refs");
+    if refs_dir.exists() {
+        watcher
+            .watch(&refs_dir, notify::RecursiveMode::Recursive)
+            .map_err(|e| Error::GenericError(format!("Failed to watch Git refs: {e}")))?;
     }
 
     let (async_tx, mut async_rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(100);
@@ -70,6 +89,7 @@ pub(crate) async fn watch_git_worktree_status<R: Runtime>(
                         &repo_dir,
                         &workdir,
                         &gitdir,
+                        &commondir,
                         &channel,
                     ).await;
                 }
@@ -98,9 +118,10 @@ async fn handle_git_watch_event(
     repo_dir: &Path,
     workdir: &Path,
     gitdir: &Path,
+    commondir: &Path,
     channel: &Channel<GitWorktreeStatus>,
 ) {
-    if !is_relevant_git_watch_event(event_res, repo_dir, workdir, gitdir) {
+    if !is_relevant_git_watch_event(event_res, repo_dir, workdir, gitdir, commondir) {
         return;
     }
 
@@ -111,7 +132,7 @@ async fn handle_git_watch_event(
     loop {
         select! {
             Some(event_res) = async_rx.recv() => {
-                let _ = is_relevant_git_watch_event(event_res, repo_dir, workdir, gitdir);
+                let _ = is_relevant_git_watch_event(event_res, repo_dir, workdir, gitdir, commondir);
             }
             _ = &mut settle_window => {
                 break;
@@ -127,6 +148,7 @@ fn is_relevant_git_watch_event(
     repo_dir: &Path,
     workdir: &Path,
     gitdir: &Path,
+    commondir: &Path,
 ) -> bool {
     let event = match event_res {
         Ok(event) => event,
@@ -137,7 +159,7 @@ fn is_relevant_git_watch_event(
     };
 
     for path in event.paths {
-        if path.strip_prefix(gitdir).is_ok() {
+        if path.strip_prefix(gitdir).is_ok() || path.strip_prefix(commondir).is_ok() {
             return true;
         }
 

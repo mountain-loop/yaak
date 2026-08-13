@@ -66,6 +66,25 @@ describe("exporter-curl", () => {
     );
   });
 
+  test("Exports POST with GraphQL operation name", async () => {
+    expect(
+      await convertToCurl({
+        url: "https://yaak.app",
+        method: "POST",
+        bodyType: "graphql",
+        body: {
+          query: "query Foo { foo } query Bar { bar }",
+          operationName: "Foo",
+        },
+      }),
+    ).toEqual(
+      [
+        `curl -X POST 'https://yaak.app'`,
+        `--data '{"query":"query Foo { foo } query Bar { bar }","operationName":"Foo"}'`,
+      ].join(" \\\n  "),
+    );
+  });
+
   test("Exports POST with GraphQL data no variables", async () => {
     expect(
       await convertToCurl({

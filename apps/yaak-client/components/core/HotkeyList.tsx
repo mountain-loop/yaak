@@ -18,7 +18,10 @@ export const HotkeyList = ({ hotkeys, bottomSlot, className }: Props) => {
         {hotkeys.map((hotkey) => (
           <Fragment key={hotkey}>
             <HotkeyLabel className="truncate" action={hotkey} />
-            <Hotkey className="ml-4" action={hotkey} />
+            {/* Keep this grid cell when Hotkey renders nothing so later rows stay aligned. */}
+            <div className="ml-4">
+              <Hotkey action={hotkey} />
+            </div>
           </Fragment>
         ))}
         {bottomSlot}

@@ -12,6 +12,7 @@ import { Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal
 import classNames from "classnames";
 import { useCallback, useMemo, useState } from "react";
 import { modelToYaml } from "../../lib/diffYaml";
+import { trackFeatureUsage } from "../../lib/featureFeedback";
 import { resolvedModelName } from "../../lib/resolvedModelName";
 import { showConfirm } from "../../lib/confirm";
 import { showErrorToast } from "../../lib/toast";
@@ -55,6 +56,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     setCommitError(null);
     try {
       await commit.mutateAsync({ message });
+      trackFeatureUsage("git-sync");
       onDone();
     } catch (err) {
       setCommitError(String(err));
@@ -66,6 +68,7 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
     try {
       const r = await commitAndPush.mutateAsync({ message });
       handlePushResult(r);
+      trackFeatureUsage("git-sync");
       onDone();
     } catch (err) {
       showErrorToast({
@@ -206,9 +209,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
         layout="horizontal"
         defaultRatio={0.6}
         firstSlot={({ style }) => (
-          <div style={style} className="h-full px-4 grid grid-rows-[auto_minmax(0,1fr)] gap-3">
+          <div style={style} className="h-full px-4 flex flex-col gap-3">
             <CommercialUseBanner source="git-commit" title="Using Git for work?" />
             <SplitLayout
+              className="min-h-0 flex-1"
               storageKey="commit-vertical"
               layout="vertical"
               defaultRatio={0.35}
@@ -226,11 +230,12 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                   />
                   {externalEntries.find((e) => e.status !== "current") && (
                     <>
-                      <Separator className="mt-3 mb-1">External file changes</Separator>
+                      <Separator className="mt-3 mb-1">Other files</Separator>
                       {externalEntries.map((entry) => (
                         <ExternalTreeNode
                           key={entry.relaPath + entry.status}
                           entry={entry}
+                          relaDir={status.data?.relaDir ?? ""}
                           onCheck={checkEntry}
                         />
                       ))}
@@ -239,7 +244,10 @@ export function GitCommitDialog({ syncDir, onDone, workspace }: Props) {
                 </div>
               )}
               secondSlot={({ style: innerStyle }) => (
-                <div style={innerStyle} className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2">
+                <div
+                  style={innerStyle}
+                  className="grid grid-rows-[minmax(0,1fr)_auto] gap-3 pb-2"
+                >
                   <Input
                     className="text-base! font-sans rounded-md"
                     placeholder="Commit message..."
@@ -388,14 +396,21 @@ function TreeNodeChildren({
 
 function ExternalTreeNode({
   entry,
+  relaDir,
   onCheck,
 }: {
   entry: GitStatusEntry;
+  relaDir: string;
   onCheck: (entry: GitStatusEntry) => void;
 }) {
   if (entry.status === "current") {
     return null;
   }
+
+  // Show paths relative to the sync directory when inside it
+  const displayPath = entry.relaPath.startsWith(`${relaDir}/`)
+    ? entry.relaPath.slice(relaDir.length + 1)
+    : entry.relaPath;
 
   return (
     <Checkbox
@@ -406,7 +421,7 @@ function ExternalTreeNode({
       title={
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 w-full items-center">
           <Icon color="secondary" icon="file_code" />
-          <div className="truncate">{entry.relaPath}</div>
+          <div className="truncate">{displayPath}</div>
           <InlineCode
             className={classNames(
               "py-0 ml-auto bg-transparent w-24 text-center",

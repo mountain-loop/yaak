@@ -71,6 +71,7 @@ function ActualEventStreamViewer({ response }: Props) {
     summary.data.fragmentCount === 0 &&
     !summary.isFetching &&
     summary.error == null;
+
   const filterEventPreviews = showExtractedText && filterEventPreviewsSetting.value === true;
   const applyToDetails = showExtractedText && applyToDetailsSetting.value === true;
   const renderMarkdown = showExtractedText && renderMarkdownSetting.value === true;
@@ -218,7 +219,7 @@ function ActualEventStreamViewer({ response }: Props) {
                 <SseSummaryFooter
                   style={style}
                   error={summary.error ? String(summary.error) : null}
-                  isLoading={summary.isLoading}
+                  isLoading={summary.isLoading && summary.data == null}
                   onRenderMarkdownChange={renderMarkdownSetting.set}
                   renderMarkdown={renderMarkdown}
                   resultKeyPath={summarySettings.resultKeyPath ?? ""}

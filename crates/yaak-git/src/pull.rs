@@ -21,8 +21,11 @@ pub enum PullResult {
 
 fn has_uncommitted_changes(dir: &Path) -> Result<bool> {
     let repo = open_repo(dir)?;
-    let mut opts = git2::StatusOptions::new();
-    opts.include_ignored(false).include_untracked(false);
+    // Scoped to the sync directory: uncommitted changes elsewhere in a
+    // containing monorepo shouldn't block pulling. Git itself still refuses
+    // a merge that would clobber uncommitted files outside the sync dir
+    let mut opts = crate::status::scoped_status_options(&repo, dir);
+    opts.include_untracked(false);
     let statuses = repo.statuses(Some(&mut opts))?;
     Ok(statuses.iter().any(|e| e.status() != git2::Status::CURRENT))
 }
