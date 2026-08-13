@@ -113,6 +113,10 @@
     .large-value-tag {
       @apply inline border px-1 mx-[0.5px] rounded-sm dark:shadow;
       @apply whitespace-nowrap cursor-default;
+
+      /* These are buttons, so don't inherit the user agent's font or alignment */
+      font: inherit;
+      text-align: inherit;
     }
 
     .large-value-tag {
