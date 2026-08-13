@@ -118,7 +118,20 @@
     .large-value-tag {
       /* Colors of its own, so it doesn't read as a template tag */
       @apply bg-surface-highlight text-text-subtle border-border-subtle;
-      @apply hover:border-border hover:text-text;
+
+      * {
+        @apply cursor-default;
+      }
+
+      /* Only the button does anything, so only the button reacts */
+      .large-value-tag-copy {
+        @apply inline-flex items-center align-middle ml-1 cursor-pointer!;
+        @apply text-text-subtlest hover:text-text;
+
+        svg {
+          @apply w-[0.9em] h-[0.9em];
+        }
+      }
     }
 
     .template-tag {

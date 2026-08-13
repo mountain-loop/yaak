@@ -5,7 +5,7 @@ import { StateField } from "@codemirror/state";
 import type { Tree as SyntaxTree } from "@lezer/common";
 import type { DecorationSet } from "@codemirror/view";
 import { Decoration, EditorView, WidgetType } from "@codemirror/view";
-import { LargeValueDialog } from "../../LargeValueDialog";
+import { copyToClipboard } from "../../../lib/copy";
 
 /**
  * How much of a line may be rendered before the rest is collapsed.
@@ -41,8 +41,8 @@ export const COLLAPSE_TOKEN_CHARS = 5_000;
  * 2. Collapse whatever is still past the column limit. This needs no grammar, so it covers
  *    plain text, undelimited tokens, and any line that is simply long.
  *
- * Nothing leaves the document. Copy, filter and save all still see the full text; the tag
- * opens exactly what it hides in {@link LargeValueDialog}.
+ * Nothing leaves the document. Copy, filter and save all still see the full text, and the tag
+ * carries a button that copies exactly what it hides.
  *
  * Read-only editors only. Hiding part of a document someone is editing would mean editing
  * text they can't see.
@@ -68,16 +68,34 @@ class LargeValueWidget extends WidgetType {
 
   toDOM(view: EditorView) {
     const length = this.to - this.from;
+
     const el = document.createElement("span");
     el.className = "large-value-tag";
-    el.textContent = `${formatSize(length)} hidden…`;
-    el.title = `View full value (${length.toLocaleString()} characters)`;
-    el.addEventListener("mousedown", (e) => {
-      // Keep the editor from putting a cursor behind the dialog
+
+    const label = document.createElement("span");
+    label.textContent = `${formatSize(length)} hidden…`;
+    el.appendChild(label);
+
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "large-value-tag-copy";
+    copy.title = `Copy hidden text (${length.toLocaleString()} characters)`;
+    copy.ariaLabel = copy.title;
+    // Lucide's `copy` icon, inlined because the widget builds its DOM synchronously and
+    // rendering React here would leave it empty while CodeMirror measures line heights
+    copy.innerHTML =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+      'aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>' +
+      '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+    copy.addEventListener("mousedown", (e) => {
+      // Keep the editor from moving the cursor when the button is used
       e.preventDefault();
       e.stopPropagation();
-      LargeValueDialog.show(view.state.sliceDoc(this.from, this.to));
+      copyToClipboard(view.state.sliceDoc(this.from, this.to));
     });
+    el.appendChild(copy);
+
     return el;
   }
 

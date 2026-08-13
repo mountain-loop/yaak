@@ -9,7 +9,7 @@ import {
   MAX_VISIBLE_LINE_CHARS,
 } from "./largeValues";
 
-vi.mock("../../LargeValueDialog", () => ({ LargeValueDialog: { show: () => {} } }));
+vi.mock("../../../lib/copy", () => ({ copyToClipboard: () => {} }));
 
 const BIG = "A".repeat(1_000_000);
 
