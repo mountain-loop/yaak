@@ -1,7 +1,5 @@
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import { Icon } from "@yaakapp-internal/ui";
-import { createElement } from "react";
 import type { EditorState, Extension, Range } from "@codemirror/state";
 import type { Tree as SyntaxTree } from "@lezer/common";
 import type { DecorationSet, ViewUpdate } from "@codemirror/view";
@@ -186,26 +184,6 @@ class LargeValueWidget extends WidgetType {
   }
 
   /**
-   * How the hidden text is written, which is the thing worth knowing about it — that it is
-   * base64 explains why it reads as gibberish far better than its length does.
-   *
-   * A value we couldn't identify may still be plainly encoded, so it is checked here too: an
-   * unrecognised format and an unrecognised encoding are different things to be told.
-   */
-  private encodingLabel(view: EditorView): string {
-    const size = `${(this.to - this.from).toLocaleString()} chars`;
-    if (this.sniffed?.encoding === "percent") {
-      return `Percent-encoded · ${size}`;
-    }
-
-    const to = Math.min(this.valueFrom + SNIFF_HEAD_CHARS, this.to);
-    const encoded =
-      this.sniffed?.encoding === "base64" ||
-      isEncodedRun(view.state.sliceDoc(this.valueFrom, to), 0);
-    return encoded ? `Base64 · ${size}` : size;
-  }
-
-  /**
    * Copy, view and save, in a menu opened against the button.
    *
    * Everything the menu needs is pulled in on click. The editor loads on every response, and
@@ -216,7 +194,7 @@ class LargeValueWidget extends WidgetType {
     view: EditorView,
     rect: Pick<DOMRect, "top" | "bottom" | "left" | "right">,
   ) {
-    const [{ showContextMenu }, { showLargeValueDialog }, { copyValue, saveValue }] =
+    const [{ showContextMenu }, { showLargeValueDialog }, { encodingLabel, largeValueActions }] =
       await Promise.all([
         import("../../../lib/contextMenu"),
         import("../../LargeValueDialog"),
@@ -226,6 +204,10 @@ class LargeValueWidget extends WidgetType {
     const { sniffed } = this;
     // Sliced when an action runs rather than now, so opening the menu never touches the value
     const value = () => view.state.sliceDoc(this.valueFrom, this.to);
+    const head = view.state.sliceDoc(
+      this.valueFrom,
+      Math.min(this.valueFrom + SNIFF_HEAD_CHARS, this.to),
+    );
 
     showContextMenu({
       id: "large-value",
@@ -233,26 +215,14 @@ class LargeValueWidget extends WidgetType {
       triggerPosition: { x: rect.left, y: rect.bottom },
       triggerRect: rect,
       items: [
-        { type: "separator", label: this.encodingLabel(view) },
-        {
-          label: sniffed == null ? "View" : `View ${sniffed.label}`,
-          leftSlot: createElement(Icon, { icon: "eye" }),
-          onSelect: () => showLargeValueDialog({ text: value(), sniffed }),
-        },
-        {
-          label: sniffed?.mime.startsWith("image/") ? "Copy Image" : "Copy",
-          leftSlot: createElement(Icon, { icon: "copy" }),
-          // The text is exactly what the tag stands in for, which under the column rule is only
-          // the tail. An image goes on the clipboard as a picture instead, so it can be pasted
-          // somewhere that takes one.
-          onSelect: () => copyValue(value(), sniffed, view.state.sliceDoc(this.from, this.to)),
-        },
-        {
-          label: "Save to File",
-          leftSlot: createElement(Icon, { icon: "download" }),
-          onSelect: () =>
-            fireAndForget(saveValue(value(), sniffed, sniffed?.label.toLowerCase() ?? "value")),
-        },
+        { type: "separator", label: encodingLabel(head, sniffed, this.to - this.from) },
+        ...largeValueActions({
+          value,
+          sniffed,
+          // Exactly what the tag stands in for, which under the column rule is only the tail
+          copyText: () => view.state.sliceDoc(this.from, this.to),
+          onView: () => showLargeValueDialog({ text: value(), sniffed }),
+        }),
       ],
     });
   }

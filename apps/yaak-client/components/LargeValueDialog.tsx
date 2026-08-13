@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { SniffedValue } from "./core/Editor/sniffValue";
 import { showDialog } from "../lib/dialog";
-import { decodeValue } from "../lib/largeValue";
+import { decodeValue, largeValueActions } from "../lib/largeValue";
+import { Dropdown } from "./core/Dropdown";
 import { AudioViewer } from "./responseViewers/AudioViewer";
 import { ImageViewer } from "./responseViewers/ImageViewer";
 import { SvgViewer } from "./responseViewers/SvgViewer";
@@ -100,6 +101,33 @@ function DecodedSvg({ bytes }: { bytes: Uint8Array }) {
 function DecodedText({ bytes }: { bytes: Uint8Array }) {
   const text = useMemo(() => new TextDecoder().decode(bytes), [bytes]);
   return <PagedText text={text} />;
+}
+
+/**
+ * The same menu the tag in the editor carries, minus the one entry that would only reopen this.
+ *
+ * It lives in the dialog's title rather than above the content, which would cost a band of
+ * whitespace the width of the dialog to hold one small button.
+ */
+function LargeValueActions({ text, sniffed }: Props) {
+  const items = useMemo(
+    () =>
+      largeValueActions({
+        value: () => text,
+        sniffed,
+        // The tag copies only what it hides; in here, what you see is the whole value
+        copyText: () => text,
+      }),
+    [text, sniffed],
+  );
+
+  return (
+    <Dropdown items={items}>
+      <Button size="xs" variant="border" forDropdown>
+        Actions
+      </Button>
+    </Dropdown>
+  );
 }
 
 type Viewer = "image" | "svg" | "audio" | "video" | "pdf" | "text";
@@ -231,8 +259,16 @@ export function showLargeValueDialog({ text, sniffed }: Props) {
     id: "large-value",
     size: "lg",
     className: "h-[calc(100vh-10rem)]",
-    title: sniffed == null ? "Hidden Value" : `${sniffed.label} Value`,
-    description: `${formatSize(text.length)} of the response`,
+    // Everything in one line: the same words the tag uses, and the same menu it carries. A
+    // separate description and a row of its own for the button cost three bands to say this.
+    title: (
+      <HStack space={3} alignItems="center">
+        <span>
+          {sniffed == null ? "Hidden Value" : sniffed.label} · {formatSize(text.length)}
+        </span>
+        <LargeValueActions text={text} sniffed={sniffed} />
+      </HStack>
+    ),
     render: () => <LargeValueDialog text={text} sniffed={sniffed} />,
   });
 }

@@ -1,9 +1,80 @@
 import { save } from "@tauri-apps/plugin-dialog";
+import { Icon } from "@yaakapp-internal/ui";
 import mime from "mime";
+import { createElement } from "react";
+import type { DropdownItem } from "../components/core/Dropdown";
 import type { SniffedValue } from "../components/core/Editor/sniffValue";
+import { isEncodedRun } from "../components/core/Editor/sniffValue";
 import { copyToClipboard } from "./copy";
+import { fireAndForget } from "./fireAndForget";
 import { invokeCmd } from "./tauri";
 import { showToast } from "./toast";
+
+/**
+ * How the value is written, which is the thing worth knowing about it — that it is base64
+ * explains why it reads as gibberish far better than its length does.
+ *
+ * A value we couldn't identify may still be plainly encoded, so it is checked here too: an
+ * unrecognised format and an unrecognised encoding are different things to be told.
+ *
+ * `head` need only be the first {@link SNIFF_HEAD_CHARS} characters of the value.
+ */
+export function encodingLabel(head: string, sniffed: SniffedValue | null, chars: number): string {
+  const size = `${chars.toLocaleString()} chars`;
+  if (sniffed?.encoding === "percent") {
+    return `Percent-encoded · ${size}`;
+  }
+  const encoded = sniffed?.encoding === "base64" || isEncodedRun(head, sniffed?.offset ?? 0);
+  return encoded ? `Base64 · ${size}` : size;
+}
+
+interface ActionOptions {
+  /** The whole value. A function, so opening a menu never copies megabytes to build it. */
+  value: () => string;
+  sniffed: SniffedValue | null;
+  /** What to copy. The tag copies only what it hides; the viewer copies what it shows. */
+  copyText: () => string;
+  /** Left out inside the viewer itself, where there is nothing further to open */
+  onView?: () => void;
+}
+
+/**
+ * The things you can do with a collapsed value, as menu items.
+ *
+ * Shared so the tag in the editor and the dialog it opens offer the same list, rather than
+ * drifting apart.
+ */
+export function largeValueActions({
+  value,
+  sniffed,
+  copyText,
+  onView,
+}: ActionOptions): DropdownItem[] {
+  const items: DropdownItem[] = [];
+
+  if (onView != null) {
+    items.push({
+      label: sniffed == null ? "View" : `View ${sniffed.label}`,
+      leftSlot: createElement(Icon, { icon: "eye" }),
+      onSelect: onView,
+    });
+  }
+
+  items.push({
+    label: sniffed?.mime.startsWith("image/") ? "Copy Image" : "Copy",
+    leftSlot: createElement(Icon, { icon: "copy" }),
+    onSelect: () => copyValue(value(), sniffed, copyText()),
+  });
+
+  items.push({
+    label: "Save to File",
+    leftSlot: createElement(Icon, { icon: "download" }),
+    onSelect: () =>
+      fireAndForget(saveValue(value(), sniffed, sniffed?.label.toLowerCase() ?? "value")),
+  });
+
+  return items;
+}
 
 /** The payload, with the `data:` header taken off. */
 function payloadOf(text: string, sniffed: SniffedValue): string {
