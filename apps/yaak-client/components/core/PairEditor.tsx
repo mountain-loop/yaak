@@ -25,7 +25,7 @@ import { Checkbox } from "./Checkbox";
 import type { DropdownItem } from "./Dropdown";
 import { Dropdown } from "./Dropdown";
 import type { EditorProps } from "./Editor/Editor";
-import type { GenericCompletion, GenericCompletionConfig } from "./Editor/genericCompletion";
+import type { GenericCompletionConfig } from "./Editor/genericCompletion";
 import { Editor } from "./Editor/LazyEditor";
 import { Icon } from "@yaakapp-internal/ui";
 import { IconButton } from "./IconButton";
@@ -647,31 +647,9 @@ export function PairEditorRow({
     [setDraggableRef, setDroppableRef],
   );
 
-  // Insert a chosen suggestion into one of the inputs. Dispatching the change
-  // fires the editor's onChange (which updates the pair), and focusing handles
-  // the "add a new empty row" behavior when picking on the last row.
-  const replaceInputValue = useCallback((ref: typeof nameInputRef, value: string) => {
-    const input = ref.current;
-    if (input == null) return;
-    input.dispatch({ changes: { from: 0, to: input.value().length, insert: value } });
-    input.focus();
-  }, []);
-
-  const handleSelectName = useCallback(
-    (value: string) => replaceInputValue(nameInputRef, value),
-    [replaceInputValue],
-  );
-  const handleSelectValue = useCallback(
-    (value: string) => replaceInputValue(valueInputRef, value),
-    [replaceInputValue],
-  );
-
-  const nameOptions = nameAutocomplete?.options ?? [];
-  const valueOptions = valueAutocomplete?.(pair.name)?.options ?? [];
   // Skip the trailing placeholder row. It exists to start a new pair, so a picker there would
-  // imply it's already a real row.
-  const showNameDropdown = !disabled && !isLast && nameOptions.length > 0;
-  const showValueDropdown = !disabled && !isLast && valueOptions.length > 0;
+  // imply it's already a real row. `Input` handles the rest, including having no options to show.
+  const showOptionsPicker = !isLast;
 
   return (
     <div
@@ -735,11 +713,7 @@ export function PairEditorRow({
           autocomplete={nameAutocomplete}
           autocompleteVariables={nameAutocompleteVariables}
           autocompleteFunctions={nameAutocompleteFunctions}
-          rightSlot={
-            showNameDropdown ? (
-              <OptionsPickerDropdown options={nameOptions} onSelect={handleSelectName} />
-            ) : undefined
-          }
+          showOptionsPicker={showOptionsPicker}
         />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pair.isFile ? (
@@ -784,11 +758,7 @@ export function PairEditorRow({
               autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariablesFiltered}
-              rightSlot={
-                showValueDropdown ? (
-                  <OptionsPickerDropdown options={valueOptions} onSelect={handleSelectValue} />
-                ) : undefined
-              }
+              showOptionsPicker={showOptionsPicker}
             />
           )}
         </div>
@@ -941,56 +911,6 @@ function FileActionsDropdown({
         className="text-text-subtlest"
       />
     </RadioDropdown>
-  );
-}
-
-/**
- * Small chevron button rendered inside a name/value input that opens a dropdown
- * of the same options used for inline autocomplete. Lets users browse and pick a
- * value without knowing what to type. Shows `label` but inserts `apply` when
- * present (e.g. a friendly User-Agent label).
- *
- * Skipped in the tab order: once focus is in the input, inline autocomplete offers
- * the same options, so the button would only add a stop between the name and value
- * fields. Hidden entirely in a narrow editor, where the inputs need the width more
- * than the affordance. The outer element restores the right padding that `Input`
- * drops whenever a `rightSlot` is present, so hiding the button doesn't leave the
- * text flush against the border.
- */
-function OptionsPickerDropdown({
-  options,
-  onSelect,
-}: {
-  options: GenericCompletion[];
-  onSelect: (value: string) => void;
-}) {
-  const items = useMemo<DropdownItem[]>(
-    () =>
-      options.map((o) => ({
-        label: o.label,
-        onSelect: () => onSelect(typeof o.apply === "string" ? o.apply : o.label),
-      })),
-    [options, onSelect],
-  );
-
-  // Both wrappers are flex so the button still stretches to the input's height. `Dropdown` clones
-  // its child rather than wrapping it, so the button used to be a direct flex child of the input
-  // row, which is what `h-auto` stretches against.
-  return (
-    <div className="flex pr-2 @[24rem]:pr-0">
-      <div className="hidden @[24rem]:flex">
-        <Dropdown items={items}>
-          <IconButton
-            tabIndex={-1}
-            iconSize="sm"
-            size="xs"
-            icon="chevron_down"
-            title="Show suggestions"
-            className="mr-0.5 !h-auto my-0.5 text-text-subtlest"
-          />
-        </Dropdown>
-      </div>
-    </div>
   );
 }
 
