@@ -62,7 +62,8 @@ export function largeValueActions({
 
   // Two ways to copy a picture, because either can be the one you wanted: the image to paste
   // somewhere that takes one, or the text to paste back into a request
-  if (isCopyableImage(sniffed)) {
+  const image = isCopyableImage(sniffed);
+  if (image) {
     items.push({
       label: "Copy Image",
       leftSlot: createElement(Icon, { icon: "copy" }),
@@ -72,7 +73,9 @@ export function largeValueActions({
 
   items.push({
     label: sniffed?.encoding === "base64" ? "Copy Base64" : "Copy",
-    leftSlot: createElement(Icon, { icon: "code" }),
+    // Second of a pair reads as one thing with two options, so it keeps the indent without
+    // repeating the icon above it
+    leftSlot: createElement(Icon, { icon: image ? "empty" : "copy" }),
     onSelect: () => copyToClipboard(copyText()),
   });
 
