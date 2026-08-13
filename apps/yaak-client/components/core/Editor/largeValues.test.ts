@@ -1,15 +1,15 @@
 import { EditorState } from "@codemirror/state";
 import { jsonc } from "@shopify/lang-jsonc";
 import { text } from "./text/extension";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import {
+  COLLAPSE_MEDIA_CHARS,
   COLLAPSE_TOKEN_CHARS,
-  largeValueField,
+  collapseDecorations,
   largeValues,
   MAX_VISIBLE_LINE_CHARS,
 } from "./largeValues";
-
-vi.mock("../../../lib/copy", () => ({ copyToClipboard: () => {} }));
+import type { SniffedValue } from "./sniffValue";
 
 const BIG = "A".repeat(1_000_000);
 
@@ -19,9 +19,19 @@ const jsonState = (doc: string) => EditorState.create({ doc, extensions: [jsonc(
 /** Without a grammar, so only the column rule applies */
 const plainState = (doc: string) => EditorState.create({ doc, extensions: largeValues });
 
+/**
+ * The decorations as if the whole document were on screen.
+ *
+ * In the editor the plugin passes the viewport instead, which is the same call with narrower
+ * ranges — the rules themselves don't know the difference.
+ */
+function decorationsFor(state: EditorState) {
+  return collapseDecorations(state, [{ from: 0, to: state.doc.length }]);
+}
+
 function collapsedRanges(state: EditorState) {
   const ranges: { from: number; to: number }[] = [];
-  const iter = state.field(largeValueField).decorations.iter();
+  const iter = decorationsFor(state).iter();
   while (iter.value != null) {
     ranges.push({ from: iter.from, to: iter.to });
     iter.next();
@@ -191,6 +201,67 @@ describe("undelimited tokens", () => {
   });
 });
 
+describe("sniffing the collapsed value", () => {
+  /** The widget standing in for each collapse, in document order */
+  function widgets(state: EditorState) {
+    const found: { valueFrom: number; sniffed: SniffedValue | null }[] = [];
+    const iter = decorationsFor(state).iter();
+    while (iter.value != null) {
+      found.push(iter.value.spec.widget);
+      iter.next();
+    }
+    return found;
+  }
+
+  /** A base64 value that starts with a PNG signature and runs on well past the limits */
+  function pngBase64(length = 1_000_000) {
+    const bytes = new Uint8Array(length);
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  test("names the format of a base64 value inside JSON", () => {
+    const state = jsonState(`{"image":"${pngBase64()}"}`);
+    expect(widgets(state)[0]?.sniffed).toMatchObject({ mime: "image/png", label: "PNG" });
+  });
+
+  test("names the format of a data URI", () => {
+    const doc = `{"image":"data:image/jpeg;base64,${BIG}"}`;
+    expect(widgets(jsonState(doc))[0]?.sniffed).toMatchObject({ label: "JPEG" });
+  });
+
+  test("names nothing when the value is just text", () => {
+    expect(widgets(jsonState(`{"image":"${BIG}"}`))[0]?.sniffed).toBeNull();
+    expect(widgets(plainState(BIG))[0]?.sniffed).toBeNull();
+  });
+
+  test("reads a column cut from the start of its line, not from the cut", () => {
+    // A body that is nothing but one base64 blob: the tail is hidden, but the value it
+    // belongs to begins at the start of the line, which is where the signature is
+    const state = plainState(pngBase64());
+    const [widget] = widgets(state);
+
+    expect(widget?.valueFrom).toBe(0);
+    expect(widget?.sniffed).toMatchObject({ label: "PNG" });
+  });
+
+  test("reads a token collapse from the value itself", () => {
+    const doc = `{"image":"${pngBase64()}"}`;
+    const [widget] = widgets(jsonState(doc));
+
+    // Just past the opening quote, so the signature is the first thing it sees
+    expect(widget?.valueFrom).toBe(doc.indexOf('"', doc.indexOf("image") + 6) + 1);
+    expect(widget?.sniffed).toMatchObject({ label: "PNG" });
+  });
+
+  test("names nothing when a column cut lands mid-line after other text", () => {
+    const state = plainState(`some prefix text ${pngBase64()}`);
+    expect(widgets(state)[0]?.sniffed).toBeNull();
+  });
+});
+
 describe("recomputing", () => {
   test("updates when the document changes", () => {
     const state = plainState('{"image":"short"}');
@@ -200,5 +271,103 @@ describe("recomputing", () => {
       changes: { from: 0, to: state.doc.length, insert: BIG },
     }).state;
     expect(collapsedRanges(next)).toHaveLength(1);
+  });
+});
+
+describe("media collapsing, below the length rules", () => {
+  /** A real PNG signature, at a size that no length rule would touch */
+  function png(bytes: number) {
+    const b = new Uint8Array(bytes);
+    b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    let binary = "";
+    for (const byte of b) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  /** Well under every length threshold, so only the media rule can collapse it */
+  const SMALL = png(3_000);
+
+  test("collapses a small image on a short line", () => {
+    expect(SMALL.length).toBeLessThan(MAX_VISIBLE_LINE_CHARS);
+    expect(SMALL.length).toBeLessThan(COLLAPSE_TOKEN_CHARS);
+
+    const state = jsonState(`{\n  "avatar": "${SMALL}"\n}`);
+    const ranges = collapsedRanges(state);
+
+    expect(ranges).toHaveLength(1);
+    expect(state.sliceDoc(ranges[0]!.from, ranges[0]!.to)).toBe(SMALL);
+  });
+
+  test("names it, so the tag can say what it is", () => {
+    const state = jsonState(`{"avatar":"${SMALL}"}`);
+    const iter = decorationsFor(state).iter();
+    expect(iter.value?.spec.widget.sniffed).toMatchObject({ mime: "image/png", label: "PNG" });
+  });
+
+  test("leaves a value of the same size alone when nothing recognises it", () => {
+    // The only difference from the case above is what the bytes turn out to be
+    const prose = "x".repeat(SMALL.length);
+    expect(collapsedRanges(jsonState(`{"note":"${prose}"}`))).toEqual([]);
+  });
+
+  test("leaves anything under the media threshold alone, recognised or not", () => {
+    const tiny = png(400);
+    expect(tiny.length).toBeLessThan(COLLAPSE_MEDIA_CHARS);
+    expect(collapsedRanges(jsonState(`{"icon":"${tiny}"}`))).toEqual([]);
+  });
+
+  test("leaves text alone even when its first bytes match a signature", () => {
+    // `Qk0` decodes to `BM`, the whole of the BMP signature. Two bytes come up by chance often
+    // enough that the sniff alone must not be allowed to hide something.
+    const prose = `Qk0 ${"the quick brown fox jumps over the lazy dog. ".repeat(40)}`;
+    expect(prose.length).toBeGreaterThan(COLLAPSE_MEDIA_CHARS);
+    expect(collapsedRanges(jsonState(`{"note":"${prose}"}`))).toEqual([]);
+  });
+
+  test("still collapses it once it is long enough to be a rendering problem", () => {
+    // Past the length rule the sniff no longer decides anything, so this is hidden for its size
+    const prose = "Qk0 " + "words and more words ".repeat(COLLAPSE_TOKEN_CHARS);
+    expect(collapsedRanges(jsonState(`{"note":"${prose}"}`))).toHaveLength(1);
+  });
+
+  test("collapses a data URI on a short line", () => {
+    const state = jsonState(`{"avatar":"data:image/jpeg;base64,${SMALL}"}`);
+    expect(collapsedRanges(state)).toHaveLength(1);
+  });
+
+  test("still leaves an ordinary document completely untouched", () => {
+    const doc = Array.from({ length: 5_000 }, (_, i) => `  { "id": ${i}, "name": "item" },`).join(
+      "\n",
+    );
+    expect(collapsedRanges(jsonState(doc))).toEqual([]);
+  });
+});
+
+describe("viewport scoping", () => {
+  const doc = () => {
+    const value = "A".repeat(COLLAPSE_TOKEN_CHARS * 2);
+    return `{\n${["a", "b", "c"].map((k) => `  "${k}": "${value}"`).join(",\n")}\n}`;
+  };
+
+  test("decorates only the ranges it is given", () => {
+    const state = jsonState(doc());
+    const secondLine = state.doc.line(3);
+
+    const all = collapseDecorations(state, [{ from: 0, to: state.doc.length }]);
+    const one = collapseDecorations(state, [{ from: secondLine.from, to: secondLine.to }]);
+
+    expect(all.size).toBe(3);
+    expect(one.size).toBe(1);
+  });
+
+  test("covers a line the range only partly overlaps", () => {
+    // The viewport can start mid-line; the collapse still has to span the whole value
+    const state = jsonState(doc());
+    const line = state.doc.line(2);
+    const partial = collapseDecorations(state, [{ from: line.from + 5, to: line.from + 6 }]);
+
+    expect(partial.size).toBe(1);
+    const iter = partial.iter();
+    expect(iter.to).toBeGreaterThan(line.from + 6);
   });
 });

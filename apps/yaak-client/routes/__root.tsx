@@ -12,6 +12,9 @@ import { queryClient } from "../lib/queryClient";
 
 const Toasts = lazy(() => import("../components/Toasts").then((m) => ({ default: m.Toasts })));
 const Dialogs = lazy(() => import("../components/Dialogs").then((m) => ({ default: m.Dialogs })));
+const ContextMenus = lazy(() =>
+  import("../components/ContextMenus").then((m) => ({ default: m.ContextMenus })),
+);
 
 export const Route = createRootRoute({
   component: RouteComponent,
@@ -29,6 +32,7 @@ function RouteComponent() {
             <Suspense>
               <Toasts />
               <Dialogs />
+              <ContextMenus />
             </Suspense>
             <Layout />
             <GlobalHooks />

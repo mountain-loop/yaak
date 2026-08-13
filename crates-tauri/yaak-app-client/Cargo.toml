@@ -28,6 +28,7 @@ openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu inst
 rlimit = "0.11" # Raise the launchd 256 open-file soft limit at startup
 
 [dependencies]
+base64 = "0.22.1" # For writing values the editor only ever held encoded
 charset = "0.1.5"
 chrono = { workspace = true, features = ["serde"] }
 cookie = "0.18.1"

@@ -233,23 +233,33 @@ export const Dropdown = forwardRef<DropdownRef, DropdownProps>(function Dropdown
 
 export interface ContextMenuProps {
   triggerPosition: { x: number; y: number } | null;
+  /**
+   * The box the menu belongs to, when the trigger has one.
+   *
+   * Placement aligns to the trigger's left or right edge depending on the room beside it, so a
+   * menu opened from an element wants its real rect. Without one the position is treated as a
+   * zero-width point, which is right for a menu opened at the cursor and wrong for one opened
+   * from a button.
+   */
+  triggerRect?: Pick<DOMRect, "top" | "bottom" | "left" | "right">;
   className?: string;
   items: DropdownProps["items"];
   onClose: () => void;
 }
 
 export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function ContextMenu(
-  { triggerPosition, className, items, onClose },
+  { triggerPosition, triggerRect, className, items, onClose },
   ref,
 ) {
   const triggerShape = useMemo(
-    () => ({
-      top: triggerPosition?.y ?? 0,
-      bottom: triggerPosition?.y ?? 0,
-      left: triggerPosition?.x ?? 0,
-      right: triggerPosition?.x ?? 0,
-    }),
-    [triggerPosition],
+    () =>
+      triggerRect ?? {
+        top: triggerPosition?.y ?? 0,
+        bottom: triggerPosition?.y ?? 0,
+        left: triggerPosition?.x ?? 0,
+        right: triggerPosition?.x ?? 0,
+      },
+    [triggerPosition, triggerRect],
   );
 
   if (triggerPosition == null) return null;
@@ -259,6 +269,9 @@ export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function Co
       isOpen={true} // Always open because we return null if not
       className={className}
       defaultSelectedIndex={null}
+      // A menu opened from an element points back at it. One opened at the cursor has nothing
+      // to point at, so it goes without.
+      showTriangle={triggerRect != null}
       ref={ref}
       items={items}
       onClose={onClose}

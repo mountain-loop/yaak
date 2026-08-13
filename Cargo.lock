@@ -10982,6 +10982,7 @@ dependencies = [
 name = "yaak-app-client"
 version = "0.0.0"
 dependencies = [
+ "base64 0.22.1",
  "charset",
  "chrono",
  "cookie",
