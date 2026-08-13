@@ -60,10 +60,20 @@ export function largeValueActions({
     });
   }
 
+  // Two ways to copy a picture, because either can be the one you wanted: the image to paste
+  // somewhere that takes one, or the text to paste back into a request
+  if (isCopyableImage(sniffed)) {
+    items.push({
+      label: "Copy Image",
+      leftSlot: createElement(Icon, { icon: "copy" }),
+      onSelect: () => copyImage(value(), sniffed, copyText()),
+    });
+  }
+
   items.push({
-    label: sniffed?.mime.startsWith("image/") ? "Copy Image" : "Copy",
-    leftSlot: createElement(Icon, { icon: "copy" }),
-    onSelect: () => copyValue(value(), sniffed, copyText()),
+    label: sniffed?.encoding === "base64" ? "Copy Base64" : "Copy",
+    leftSlot: createElement(Icon, { icon: "code" }),
+    onSelect: () => copyToClipboard(copyText()),
   });
 
   items.push({
@@ -167,15 +177,15 @@ async function toPngBlob(text: string, sniffed: SniffedValue): Promise<Blob> {
 }
 
 /**
- * Copies the value: the picture itself when it is one, and the text it stands for otherwise.
+ * Puts the picture on the clipboard, so it can be pasted anywhere that takes an image.
  *
  * Not awaited, and deliberately so. The webview only allows a clipboard write that starts inside
  * the click that asked for it, and decoding a few megabytes takes longer than that lasts — so
  * the item is handed the still-pending promise rather than a finished blob.
  */
-export function copyValue(text: string, sniffed: SniffedValue | null, hidden: string) {
-  if (!isCopyableImage(sniffed) || typeof ClipboardItem === "undefined") {
-    copyToClipboard(hidden);
+export function copyImage(text: string, sniffed: SniffedValue, fallback: string) {
+  if (typeof ClipboardItem === "undefined") {
+    copyToClipboard(fallback);
     return;
   }
 
@@ -195,7 +205,7 @@ export function copyValue(text: string, sniffed: SniffedValue | null, hidden: st
       // Anything from a webview that won't take an image to a file we couldn't decode. The
       // encoded text is always there to fall back on.
       console.error("Failed to copy image, copying text instead", err);
-      copyToClipboard(hidden);
+      copyToClipboard(fallback);
     });
 }
 
