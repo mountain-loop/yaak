@@ -53,12 +53,6 @@ export type PairEditorProps = {
   allowFileValues?: boolean;
   allowMultilineValues?: boolean;
   className?: string;
-  /**
-   * Show a dropdown picker button next to the name/value inputs, populated from
-   * the same options as the inline autocomplete. Pickers only render for fields
-   * that actually have options.
-   */
-  enableOptionsDropdown?: boolean;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string;
   nameAutocomplete?: GenericCompletionConfig;
@@ -123,7 +117,6 @@ export function PairEditor({
   allowFileValues,
   allowMultilineValues,
   className,
-  enableOptionsDropdown,
   forcedEnvironmentId,
   forceUpdateKey,
   nameAutocomplete,
@@ -376,7 +369,6 @@ export function PairEditor({
                   allowFileValues={allowFileValues}
                   allowMultilineValues={allowMultilineValues}
                   className="py-1"
-                  enableOptionsDropdown={enableOptionsDropdown}
                   forcedEnvironmentId={forcedEnvironmentId}
                   forceUpdateKey={localForceUpdateKey}
                   index={i}
@@ -456,7 +448,6 @@ type PairEditorRowProps = {
   PairEditorProps,
   | "allowFileValues"
   | "allowMultilineValues"
-  | "enableOptionsDropdown"
   | "forcedEnvironmentId"
   | "forceUpdateKey"
   | "nameAutocomplete"
@@ -484,7 +475,6 @@ export function PairEditorRow({
   className,
   disableDrag,
   disabled,
-  enableOptionsDropdown,
   forceUpdateKey,
   forcedEnvironmentId,
   index,
@@ -678,8 +668,10 @@ export function PairEditorRow({
 
   const nameOptions = nameAutocomplete?.options ?? [];
   const valueOptions = valueAutocomplete?.(pair.name)?.options ?? [];
-  const showNameDropdown = !!enableOptionsDropdown && !disabled && nameOptions.length > 0;
-  const showValueDropdown = !!enableOptionsDropdown && !disabled && valueOptions.length > 0;
+  // Skip the trailing placeholder row. It exists to start a new pair, so a picker there would
+  // imply it's already a real row.
+  const showNameDropdown = !disabled && !isLast && nameOptions.length > 0;
+  const showValueDropdown = !disabled && !isLast && valueOptions.length > 0;
 
   return (
     <div
@@ -816,8 +808,10 @@ export function PairEditorRow({
           <IconButton
             iconSize="sm"
             size="xs"
-            icon={isLast || disabled ? "empty" : "chevron_down"}
-            title="Select form data type"
+            // Ellipsis rather than a chevron: the name and value fields now carry chevrons for
+            // picking a suggestion, and this menu acts on the row instead of filling in a field.
+            icon={isLast || disabled ? "empty" : "ellipsis_vertical"}
+            title="More actions"
             className="text-text-subtlest"
           />
         </Dropdown>
@@ -941,7 +935,8 @@ function FileActionsDropdown({
       <IconButton
         iconSize="sm"
         size="xs"
-        icon="chevron_down"
+        // Matches the plain row menu, so the actions column reads the same for file and text rows
+        icon="ellipsis_vertical"
         title="Select form data type"
         className="text-text-subtlest"
       />
@@ -954,6 +949,13 @@ function FileActionsDropdown({
  * of the same options used for inline autocomplete. Lets users browse and pick a
  * value without knowing what to type. Shows `label` but inserts `apply` when
  * present (e.g. a friendly User-Agent label).
+ *
+ * Skipped in the tab order: once focus is in the input, inline autocomplete offers
+ * the same options, so the button would only add a stop between the name and value
+ * fields. Hidden entirely in a narrow editor, where the inputs need the width more
+ * than the affordance. The outer element restores the right padding that `Input`
+ * drops whenever a `rightSlot` is present, so hiding the button doesn't leave the
+ * text flush against the border.
  */
 function OptionsPickerDropdown({
   options,
@@ -971,16 +973,24 @@ function OptionsPickerDropdown({
     [options, onSelect],
   );
 
+  // Both wrappers are flex so the button still stretches to the input's height. `Dropdown` clones
+  // its child rather than wrapping it, so the button used to be a direct flex child of the input
+  // row, which is what `h-auto` stretches against.
   return (
-    <Dropdown items={items}>
-      <IconButton
-        iconSize="sm"
-        size="xs"
-        icon="chevron_down"
-        title="Show suggestions"
-        className="mr-0.5 !h-auto my-0.5 text-text-subtlest"
-      />
-    </Dropdown>
+    <div className="flex pr-2 @[24rem]:pr-0">
+      <div className="hidden @[24rem]:flex">
+        <Dropdown items={items}>
+          <IconButton
+            tabIndex={-1}
+            iconSize="sm"
+            size="xs"
+            icon="chevron_down"
+            title="Show suggestions"
+            className="mr-0.5 !h-auto my-0.5 text-text-subtlest"
+          />
+        </Dropdown>
+      </div>
+    </div>
   );
 }
 

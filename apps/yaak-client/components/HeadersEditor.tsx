@@ -1,6 +1,5 @@
 import type { HttpRequestHeader } from "@yaakapp-internal/models";
 import { HStack } from "@yaakapp-internal/ui";
-import { useHeaderDropdownsEnabled } from "../hooks/useHeaderDropdownsEnabled";
 import { acceptLanguages } from "../lib/data/acceptLanguages";
 import { cacheControlDirectives } from "../lib/data/cacheControl";
 import { charsets } from "../lib/data/charsets";
@@ -12,10 +11,7 @@ import { mimeTypes } from "../lib/data/mimetypes";
 import { userAgents } from "../lib/data/userAgents";
 import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
-import type {
-  GenericCompletion,
-  GenericCompletionConfig,
-} from "./core/Editor/genericCompletion";
+import type { GenericCompletion, GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import type { InputProps } from "./core/Input";
 import type { Pair, PairEditorProps } from "./core/PairEditor";
 import { PairEditorRow } from "./core/PairEditor";
@@ -40,7 +36,6 @@ export function HeadersEditor({
   onChange,
   forceUpdateKey,
 }: Props) {
-  const [headerDropdownsEnabled] = useHeaderDropdownsEnabled();
   // Get header names defined at current level (case-insensitive)
   const currentHeaderNames = new Set(
     headers.filter((h) => h.name).map((h) => h.name.toLowerCase()),
@@ -92,7 +87,6 @@ export function HeadersEditor({
         </DetailsBanner>
       )}
       <PairOrBulkEditor
-        enableOptionsDropdown={headerDropdownsEnabled}
         forceUpdateKey={forceUpdateKey}
         nameAutocomplete={nameAutocomplete}
         nameAutocompleteFunctions

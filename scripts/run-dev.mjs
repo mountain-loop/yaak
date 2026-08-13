@@ -39,6 +39,7 @@ const appConfigs = {
     defaultPort: "1420",
     tauriConfig: "tauri.conf.json",
     tauriDevConfig: "tauri.development.conf.json",
+    tauriWorktreeConfig: "tauri.worktree.conf.json",
   },
   proxy: {
     appDir: "crates-tauri/yaak-app-proxy",
@@ -47,6 +48,7 @@ const appConfigs = {
     defaultPort: "2420",
     tauriConfig: "tauri.conf.json",
     tauriDevConfig: "tauri.development.conf.json",
+    tauriWorktreeConfig: "tauri.worktree.conf.json",
   },
 };
 
@@ -86,6 +88,14 @@ for (let i = 0; i < additionalArgs.length; i++) {
   normalizedAdditionalArgs.push(arg);
 }
 
+// Tauri only auto-merges platform-specific config names, so the per-worktree config
+// written by the post-checkout hook has to be passed explicitly. It's gitignored, so
+// it's normally absent in the main checkout.
+const worktreeConfigArgs = [];
+if (fs.existsSync(path.join(rootDir, appConfig.appDir, appConfig.tauriWorktreeConfig))) {
+  worktreeConfigArgs.push("--config", appConfig.tauriWorktreeConfig);
+}
+
 const args = [
   "dev",
   "--no-watch",
@@ -93,6 +103,7 @@ const args = [
   appConfig.tauriConfig,
   "--config",
   appConfig.tauriDevConfig,
+  ...worktreeConfigArgs,
   "--config",
   config,
   ...normalizedAdditionalArgs,
