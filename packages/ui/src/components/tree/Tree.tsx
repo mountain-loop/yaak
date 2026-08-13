@@ -89,7 +89,19 @@ function TreeInner<T extends { id: string }>(
   const store = useStore();
   const treeRef = useRef<HTMLDivElement>(null);
   const virtualizerRef = useRef<Virtualizer<HTMLElement, Element> | null>(null);
-  const getScrollElement = useCallback(() => treeRef.current, []);
+
+  // The scroll container is tracked in state as well as a ref, so the virtualizer re-resolves it
+  // once it exists. React attaches refs and runs layout effects child-first, so TreeItemList's
+  // effects run before this ancestor's ref is set: on a fresh mount a ref-only getScrollElement
+  // returns null, and the virtualizer renders nothing until some later render happens to wake it
+  // up. Usually one does, which is why this only showed when the tree remounted into settled data
+  // (filtering down to no results and back).
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const setTreeRef = useCallback((el: HTMLDivElement | null) => {
+    treeRef.current = el;
+    setScrollEl(el);
+  }, []);
+  const getScrollElement = useCallback(() => scrollEl, [scrollEl]);
   const handleVirtualizerReady = useCallback((v: Virtualizer<HTMLElement, Element>) => {
     virtualizerRef.current = v;
   }, []);
@@ -687,7 +699,7 @@ function TreeInner<T extends { id: string }>(
         autoScroll
       >
         <div
-          ref={treeRef}
+          ref={setTreeRef}
           className={classNames(
             className,
             "outline-hidden h-full",
