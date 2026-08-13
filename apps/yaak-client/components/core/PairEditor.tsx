@@ -647,6 +647,10 @@ export function PairEditorRow({
     [setDraggableRef, setDroppableRef],
   );
 
+  // Skip the trailing placeholder row. It exists to start a new pair, so a picker there would
+  // imply it's already a real row. `Input` handles the rest, including having no options to show.
+  const showOptionsPicker = !isLast;
+
   return (
     <div
       ref={handleSetRef}
@@ -709,6 +713,7 @@ export function PairEditorRow({
           autocomplete={nameAutocomplete}
           autocompleteVariables={nameAutocompleteVariables}
           autocompleteFunctions={nameAutocompleteFunctions}
+          showOptionsPicker={showOptionsPicker}
         />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
           {pair.isFile ? (
@@ -753,6 +758,7 @@ export function PairEditorRow({
               autocomplete={valueAutocomplete?.(pair.name)}
               autocompleteFunctions={valueAutocompleteFunctions}
               autocompleteVariables={valueAutocompleteVariablesFiltered}
+              showOptionsPicker={showOptionsPicker}
             />
           )}
         </div>
@@ -772,8 +778,10 @@ export function PairEditorRow({
           <IconButton
             iconSize="sm"
             size="xs"
-            icon={isLast || disabled ? "empty" : "chevron_down"}
-            title="Select form data type"
+            // Ellipsis rather than a chevron: the name and value fields now carry chevrons for
+            // picking a suggestion, and this menu acts on the row instead of filling in a field.
+            icon={isLast || disabled ? "empty" : "ellipsis_vertical"}
+            title="More actions"
             className="text-text-subtlest"
           />
         </Dropdown>
@@ -897,7 +905,8 @@ function FileActionsDropdown({
       <IconButton
         iconSize="sm"
         size="xs"
-        icon="chevron_down"
+        // Matches the plain row menu, so the actions column reads the same for file and text rows
+        icon="ellipsis_vertical"
         title="Select form data type"
         className="text-text-subtlest"
       />

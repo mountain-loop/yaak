@@ -22,6 +22,7 @@ import { Button } from "./Button";
 import type { DropdownItem } from "./Dropdown";
 import { Dropdown } from "./Dropdown";
 import type { EditorProps } from "./Editor/Editor";
+import type { GenericCompletion } from "./Editor/genericCompletion";
 import { Editor } from "./Editor/LazyEditor";
 import { IconButton } from "./IconButton";
 import { IconTooltip } from "./IconTooltip";
@@ -63,6 +64,13 @@ export type InputProps = Pick<
   placeholder?: string;
   required?: boolean;
   rightSlot?: ReactNode;
+  /**
+   * Show a chevron that opens the `autocomplete` options as a menu, so a value can be picked
+   * without knowing what to type. Opt-in, because plenty of inputs pass `autocomplete` without
+   * wanting the affordance (the URL bar completes from history, and a chevron there would be
+   * noise). Renders nothing when there are no options to show.
+   */
+  showOptionsPicker?: boolean;
   size?: "2xs" | "xs" | "sm" | "md" | "auto";
   stateKey: EditorProps["stateKey"];
   extraExtensions?: EditorProps["extraExtensions"];
@@ -115,6 +123,7 @@ function BaseInput({
   readOnly,
   required,
   rightSlot,
+  showOptionsPicker,
   size = "md",
   stateKey,
   tint,
@@ -155,6 +164,17 @@ function BaseInput({
     }),
     [],
   );
+
+  // Replace the whole value with a picked option. Dispatching runs it through the editor's
+  // onChange, same as typing, so callers see one consistent change path.
+  const insertOption = useCallback((value: string) => {
+    const view = editorRef.current;
+    if (view == null) return;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+    view.focus();
+  }, []);
+
+  const pickerOptions = showOptionsPicker && !disabled ? (props.autocomplete?.options ?? []) : [];
 
   const setEditorRef = useCallback(
     (h: EditorView | null) => {
@@ -350,9 +370,52 @@ function BaseInput({
             onClick={() => setObscured((o) => !o)}
           />
         )}
+        {pickerOptions.length > 0 && (
+          <OptionsPickerDropdown options={pickerOptions} onSelect={insertOption} />
+        )}
         {rightSlot}
       </HStack>
     </div>
+  );
+}
+
+/**
+ * Chevron that opens the input's autocomplete options as a menu, for browsing values rather than
+ * typing them. Shows `label` but inserts `apply` when set, so a long value can be listed under a
+ * short name (e.g. a User-Agent).
+ *
+ * Skipped in the tab order: once focus is in the input, inline autocomplete offers the same
+ * options, so this would only add a stop between fields. Hidden when the nearest container is
+ * narrow and the input needs the width more — written as a `max` query so it stays visible for
+ * inputs that have no container ancestor at all.
+ */
+function OptionsPickerDropdown({
+  options,
+  onSelect,
+}: {
+  options: GenericCompletion[];
+  onSelect: (value: string) => void;
+}) {
+  const items = useMemo<DropdownItem[]>(
+    () =>
+      options.map((o) => ({
+        label: o.label,
+        onSelect: () => onSelect(typeof o.apply === "string" ? o.apply : o.label),
+      })),
+    [options, onSelect],
+  );
+
+  return (
+    <Dropdown items={items}>
+      <IconButton
+        tabIndex={-1}
+        iconSize="sm"
+        size="xs"
+        icon="chevron_down"
+        title="Show suggestions"
+        className="mr-0.5 h-auto! my-0.5 text-text-subtlest @max-[24rem]:hidden"
+      />
+    </Dropdown>
   );
 }
 

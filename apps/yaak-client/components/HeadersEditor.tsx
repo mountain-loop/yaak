@@ -1,14 +1,17 @@
 import type { HttpRequestHeader } from "@yaakapp-internal/models";
-import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
 import { HStack } from "@yaakapp-internal/ui";
+import { acceptLanguages } from "../lib/data/acceptLanguages";
+import { cacheControlDirectives } from "../lib/data/cacheControl";
 import { charsets } from "../lib/data/charsets";
 import { connections } from "../lib/data/connections";
 import { encodings } from "../lib/data/encodings";
+import type { HeaderValuePreset } from "../lib/data/headerValuePresets";
 import { headerNames } from "../lib/data/headerNames";
 import { mimeTypes } from "../lib/data/mimetypes";
+import { userAgents } from "../lib/data/userAgents";
 import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
-import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
+import type { GenericCompletion, GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import type { InputProps } from "./core/Input";
 import type { Pair, PairEditorProps } from "./core/PairEditor";
 import { PairEditorRow } from "./core/PairEditor";
@@ -105,12 +108,21 @@ export function HeadersEditor({
 
 const MIN_MATCH = 3;
 
-const headerOptionsMap: Record<string, string[]> = {
+const headerOptionsMap: Record<string, HeaderValuePreset[]> = {
   "content-type": mimeTypes,
   accept: ["*/*", ...mimeTypes],
   "accept-encoding": encodings,
+  "content-encoding": encodings,
   connection: connections,
   "accept-charset": charsets,
+  "accept-language": acceptLanguages,
+  "cache-control": cacheControlDirectives,
+  "user-agent": userAgents,
+  pragma: ["no-cache"],
+  te: ["trailers", "compress", "deflate", "gzip"],
+  dnt: ["1", "0"],
+  "upgrade-insecure-requests": ["1"],
+  "x-requested-with": ["XMLHttpRequest"],
 };
 
 const valueType = (pair: Pair): InputProps["type"] => {
@@ -132,12 +144,22 @@ const valueType = (pair: Pair): InputProps["type"] => {
 
 const valueAutocomplete = (headerName: string): GenericCompletionConfig | undefined => {
   const name = headerName.toLowerCase().trim();
-  const options: GenericCompletionOption[] =
-    headerOptionsMap[name]?.map((o) => ({
-      label: o,
-      type: "constant",
-      boost: 1, // Put above other completions
-    })) ?? [];
+  const options: GenericCompletion[] =
+    headerOptionsMap[name]?.map((o) =>
+      typeof o === "string"
+        ? {
+            label: o,
+            type: "constant",
+            boost: 1, // Put above other completions
+          }
+        : {
+            // Show the short label but insert the full value (e.g. User-Agent)
+            label: o.label,
+            apply: o.value,
+            type: "constant",
+            boost: 1,
+          },
+    ) ?? [];
   return { minMatch: MIN_MATCH, options };
 };
 
