@@ -39,9 +39,18 @@ interface Signature {
   magic: readonly (number | null)[];
 }
 
-/** A magic number written as the ASCII it reads as, with `?` for a byte that varies. */
+/**
+ * A magic number written as the ASCII it reads as, with `?` for a byte that varies.
+ *
+ * Indexed rather than iterated, because a signature is a sequence of bytes: one character here
+ * is one byte, and splitting into code points would be the wrong unit for that.
+ */
 function ascii(pattern: string): (number | null)[] {
-  return [...pattern].map((c) => (c === "?" ? null : c.charCodeAt(0)));
+  const bytes: (number | null)[] = [];
+  for (let i = 0; i < pattern.length; i++) {
+    bytes.push(pattern[i] === "?" ? null : pattern.charCodeAt(i));
+  }
+  return bytes;
 }
 
 const SIGNATURES: readonly Signature[] = [

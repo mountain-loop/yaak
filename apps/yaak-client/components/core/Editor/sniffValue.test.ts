@@ -15,7 +15,14 @@ function base64Of(magic: number[], length = 2_000): string {
   return btoa(binary);
 }
 
-const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
+/** One character, one byte. These are all ASCII signatures. */
+function ascii(s: string): number[] {
+  const bytes: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    bytes.push(s.charCodeAt(i));
+  }
+  return bytes;
+}
 
 /** Four bytes no signature looks at: a RIFF chunk length, or an ISO-BMFF box size */
 const IGNORED = [0x00, 0x00, 0x00, 0x20];
