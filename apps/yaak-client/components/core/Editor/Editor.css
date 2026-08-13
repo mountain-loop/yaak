@@ -121,6 +121,16 @@
         @apply cursor-default;
       }
 
+      /* An icon button any tag can carry, like the copy on a large value */
+      .tag-action {
+        @apply inline-flex items-center align-middle ml-1 cursor-pointer!;
+        @apply text-text-subtlest hover:text-text;
+
+        svg {
+          @apply w-[0.9em] h-[0.9em];
+        }
+      }
+
       .fn {
         @apply inline-block;
         .fn-inner {
@@ -136,16 +146,6 @@
         .fn-bracket {
           @apply text-text-subtle opacity-30;
         }
-      }
-    }
-
-    /* Sits inside a .template-tag, and is the only part of a large-value tag that acts */
-    .large-value-tag-copy {
-      @apply inline-flex items-center align-middle ml-1 cursor-pointer!;
-      @apply text-text-subtlest hover:text-text;
-
-      svg {
-        @apply w-[0.9em] h-[0.9em];
       }
     }
 

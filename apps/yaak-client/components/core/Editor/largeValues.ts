@@ -83,7 +83,7 @@ class LargeValueWidget extends WidgetType {
     // role and name so assistive tech still sees it as an action.
     const copy = document.createElement("span");
     copy.role = "button";
-    copy.className = "large-value-tag-copy";
+    copy.className = "tag-action";
     copy.title = `Copy hidden text (${length.toLocaleString()} characters)`;
     copy.ariaLabel = copy.title;
     // Lucide's `copy` icon, inlined because the widget builds its DOM synchronously and
