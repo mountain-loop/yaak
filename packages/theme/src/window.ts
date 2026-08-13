@@ -147,8 +147,13 @@ function normalizeColorVariables(theme: Theme, vars: CSSVariables): CSSVariables
 
 function templateTagColorVariables(theme: Theme, color: YaakColor): CSSVariables {
   return completeFullColorVariables(theme, {
-    text: color.liftMax().lower(0.05).css(),
-    textSubtle: color.liftMax().lower(0.08).css(),
+    // Lift toward the foreground, but not all the way. liftMax() pushes lightness to an
+    // extreme, and the two extremes don't behave alike: lightening past the sRGB gamut clips
+    // to a still-tinted color, while darkening to zero lightness collapses every hue to black.
+    // That's why tags kept their color in dark mode and turned black in light. Stopping short
+    // keeps the hue in both, and still clears 6:1 against the tag's own surface.
+    text: color.lift(0.6).css(),
+    textSubtle: color.lift(0.5).css(),
     textSubtlest: color.css(),
     surface: color.lower(0.2).translucify(0.8).css(),
     border: color.translucify(0.6).css(),
