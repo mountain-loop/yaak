@@ -27,7 +27,7 @@ import { computeSideForDragMove } from "../../lib/dnd";
 import { useAtomValue, useStore } from "jotai";
 import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from "./atoms";
 import { type CollapsedAtom, CollapsedAtomContext } from "./context";
-import type { ContextMenuRenderer, JotaiStore, SelectableTreeNode, TreeNode } from "./common";
+import type { ContextMenuRenderer, TreeNode } from "./common";
 import { closestVisibleNode, equalSubtree, getSelectedItems, hasAncestor } from "./common";
 import { TreeDragOverlay } from "./TreeDragOverlay";
 import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from "./TreeItem";
@@ -277,11 +277,8 @@ function TreeInner<T extends { id: string }>(
       store.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
 
       if (shiftKey) {
-        const validSelectableItems = getValidSelectableItems(store, collapsedAtom, selectableItems);
-        const anchorIndex = validSelectableItems.findIndex(
-          (i) => i.node.item.id === anchorSelectedId,
-        );
-        const currIndex = validSelectableItems.findIndex((v) => v.node.item.id === item.id);
+        const anchorIndex = visibleItems.findIndex((i) => i.node.item.id === anchorSelectedId);
+        const currIndex = visibleItems.findIndex((v) => v.node.item.id === item.id);
 
         // Nothing was selected yet, so just select this item
         if (selectedIds.length === 0 || anchorIndex === -1 || currIndex === -1) {
@@ -292,14 +289,14 @@ function TreeInner<T extends { id: string }>(
 
         if (currIndex > anchorIndex) {
           // Selecting down
-          const itemsToSelect = validSelectableItems.slice(anchorIndex, currIndex + 1);
+          const itemsToSelect = visibleItems.slice(anchorIndex, currIndex + 1);
           setSelected(
             itemsToSelect.map((v) => v.node.item.id),
             true,
           );
         } else if (currIndex < anchorIndex) {
           // Selecting up
-          const itemsToSelect = validSelectableItems.slice(currIndex, anchorIndex + 1);
+          const itemsToSelect = visibleItems.slice(currIndex, anchorIndex + 1);
           setSelected(
             itemsToSelect.map((v) => v.node.item.id),
             true,
@@ -322,7 +319,7 @@ function TreeInner<T extends { id: string }>(
         store.set(focusIdsFamily(treeId), (prev) => ({ ...prev, anchorId: item.id }));
       }
     },
-    [selectableItems, setSelected, treeId],
+    [setSelected, treeId, visibleItems],
   );
 
   const handleClick = useCallback<NonNullable<TreeItemProps<T>["onClick"]>>(
@@ -340,27 +337,25 @@ function TreeInner<T extends { id: string }>(
   const selectPrevItem = useCallback(
     (e: TreeItemClickEvent) => {
       const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
-      const validSelectableItems = getValidSelectableItems(store, collapsedAtom, selectableItems);
-      const index = validSelectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
-      const item = validSelectableItems[index - 1];
+      const index = visibleItems.findIndex((i) => i.node.item.id === lastSelectedId);
+      const item = visibleItems[index - 1];
       if (item != null) {
         handleSelect(item.node.item, e);
       }
     },
-    [handleSelect, selectableItems, treeId],
+    [handleSelect, treeId, visibleItems],
   );
 
   const selectNextItem = useCallback(
     (e: TreeItemClickEvent) => {
       const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
-      const validSelectableItems = getValidSelectableItems(store, collapsedAtom, selectableItems);
-      const index = validSelectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
-      const item = validSelectableItems[index + 1];
+      const index = visibleItems.findIndex((i) => i.node.item.id === lastSelectedId);
+      const item = visibleItems[index + 1];
       if (item != null) {
         handleSelect(item.node.item, e);
       }
     },
-    [handleSelect, selectableItems, treeId],
+    [handleSelect, treeId, visibleItems],
   );
 
   const selectParentItem = useCallback(
@@ -769,21 +764,4 @@ function DropRegionAfterList({
   const { setNodeRef } = useDroppable({ id });
   // biome-ignore lint/a11y/noStaticElementInteractions: Meh
   return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
-}
-
-function getValidSelectableItems<T extends { id: string }>(
-  store: JotaiStore,
-  collapsedAtom: CollapsedAtom,
-  selectableItems: SelectableTreeNode<T>[],
-) {
-  const collapsed = store.get(collapsedAtom);
-  return selectableItems.filter((i) => {
-    if (i.node.hidden) return false;
-    let p = i.node.parent;
-    while (p) {
-      if (collapsed[p.item.id]) return false;
-      p = p.parent;
-    }
-    return true;
-  });
 }

@@ -1,4 +1,9 @@
-import { type GrpcRequest, type HttpRequestHeader, patchModel, patchModelDebounced} from "@yaakapp-internal/models";
+import {
+  type GrpcRequest,
+  type HttpRequestHeader,
+  patchModel,
+  patchModelDebounced,
+} from "@yaakapp-internal/models";
 import { HStack, Icon, useContainerSize, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties } from "react";

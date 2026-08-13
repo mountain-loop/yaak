@@ -120,6 +120,30 @@ export function flushAllPendingPatches() {
   }
 }
 
+/**
+ * Apply a model's pending patch, if it has one that hasn't been written yet.
+ *
+ * The store only moves forward when the backend echoes a write back, so between a keystroke and
+ * its debounced write the stored copy is behind what the user typed. Reading through the pending
+ * patch keeps that window invisible to the imperative readers below, which are the ones that go
+ * on to write the model back.
+ */
+function withPendingPatch<T>(model: T | null): T | null {
+  if (model == null || pendingPatches.size === 0) return model;
+  const { model: modelType, id } = model as { model?: string; id?: string };
+  const pending = pendingPatches.get(`${modelType}.${id}`);
+  return pending == null ? model : ({ ...model, ...pending.patch } as T);
+}
+
+/** Drop a model's pending patch and cancel its scheduled write */
+function consumePendingPatch(model: AnyModel["model"], id: string) {
+  const key = `${model}.${id}`;
+  const pending = pendingPatches.get(key);
+  if (pending == null) return;
+  pending.write.cancel();
+  pendingPatches.delete(key);
+}
+
 let _activeWorkspaceId: string | null = null;
 
 export async function changeModelStoreWorkspace(workspaceId: string | null) {
@@ -156,7 +180,7 @@ export function getModel<M extends AnyModel["model"], T extends ExtractModel<Any
   const types: ReadonlyArray<M> = Array.isArray(modelType) ? modelType : [modelType];
   for (const t of types) {
     let v = data[t][id];
-    if (v?.model === t) return v as T;
+    if (v?.model === t) return withPendingPatch(v as T);
   }
   return null;
 }
@@ -166,7 +190,7 @@ export function getAnyModel(id: string): AnyModel | null {
   for (const t of Object.keys(data)) {
     // oxlint-disable-next-line no-explicit-any -- dynamic key access
     let v = (data as any)[t]?.[id];
-    if (v?.model === t) return v;
+    if (v?.model === t) return withPendingPatch(v);
   }
   return null;
 }
@@ -176,10 +200,16 @@ export function patchModelById<M extends AnyModel["model"], T extends ExtractMod
   id: string,
   patch: Partial<T> | ((prev: T) => T),
 ): Promise<string> {
+  // Reads through any pending debounced patch, so the merge below can't put a stale value back
+  // over something the user has already typed
   let prev = getModel<M, T>(model, id);
   if (prev == null) {
     throw new Error(`Failed to get model to patch id=${id} model=${model}`);
   }
+
+  // `prev` already carries the pending patch, so this write supersedes it. Leaving it queued
+  // would let it land afterwards and undo whatever this write decided.
+  consumePendingPatch(model, id);
 
   const newModel = typeof patch === "function" ? patch(prev) : { ...prev, ...patch };
   return updateModel(newModel);
