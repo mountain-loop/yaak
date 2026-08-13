@@ -1,4 +1,5 @@
 import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
+import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { EditorState, Extension, Range } from "@codemirror/state";
 import { StateField } from "@codemirror/state";
 import type { Tree as SyntaxTree } from "@lezer/common";
@@ -16,13 +17,10 @@ import { LargeValueDialog } from "../../LargeValueDialog";
 export const MAX_VISIBLE_LINE_CHARS = 10_000;
 
 /**
- * A token longer than this on an over-long line is collapsed on its own, ahead of the column
+ * A quoted value longer than this on an over-long line is collapsed whole, ahead of the column
  * cut, so the structure around it stays visible. Needs a grammar to find.
  */
 export const COLLAPSE_TOKEN_CHARS = 5_000;
-
-/** How much of a collapsed range stays visible at each end */
-export const COLLAPSE_KEEP_CHARS = 100;
 
 /**
  * Keeps over-long lines from reaching layout, which is what makes the editor stall on a
@@ -37,51 +35,48 @@ export const COLLAPSE_KEEP_CHARS = 100;
  * Two rules, applied only to lines over {@link MAX_VISIBLE_LINE_CHARS}, so ordinary documents
  * are untouched:
  *
- * 1. Collapse individual tokens over {@link COLLAPSE_TOKEN_CHARS}. For a language with a
- *    grammar this is the whole base64 string, so everything around it stays readable. A
- *    minified body with several large values keeps all of its keys visible.
+ * 1. Collapse quoted values over {@link COLLAPSE_TOKEN_CHARS} whole, so a base64 string reads
+ *    as `"image": "999.8 KB hidden…"` with its key intact. A minified body with several large values
+ *    keeps every one of its keys. Needs a grammar to find the value.
  * 2. Collapse whatever is still past the column limit. This needs no grammar, so it covers
- *    plain text and any line that isn't one big token.
+ *    plain text, undelimited tokens, and any line that is simply long.
  *
- * Nothing leaves the document. Copy, filter and save all still see the full text; the hidden
- * part is reachable through {@link LargeValueDialog}.
+ * Nothing leaves the document. Copy, filter and save all still see the full text; the tag
+ * opens exactly what it hides in {@link LargeValueDialog}.
  *
  * Read-only editors only. Hiding part of a document someone is editing would mean editing
  * text they can't see.
  */
 
+/** A hidden range. The tag stands in for exactly this text, and the dialog shows it. */
 interface Collapse {
-  /** Bounds of the hidden part */
-  hiddenFrom: number;
-  hiddenTo: number;
-  /** Bounds of the whole value, including any visible ends, for the dialog */
-  valueFrom: number;
-  valueTo: number;
+  from: number;
+  to: number;
 }
 
 class LargeValueWidget extends WidgetType {
-  constructor(private readonly collapse: Collapse) {
+  constructor(
+    private readonly from: number,
+    private readonly to: number,
+  ) {
     super();
   }
 
   eq(other: LargeValueWidget) {
-    return (
-      other.collapse.hiddenFrom === this.collapse.hiddenFrom &&
-      other.collapse.hiddenTo === this.collapse.hiddenTo
-    );
+    return other.from === this.from && other.to === this.to;
   }
 
   toDOM(view: EditorView) {
-    const { hiddenFrom, hiddenTo, valueFrom, valueTo } = this.collapse;
+    const length = this.to - this.from;
     const el = document.createElement("span");
-    el.className = "cm-largeValue";
-    el.textContent = `⋯ ${(hiddenTo - hiddenFrom).toLocaleString()} characters hidden ⋯`;
-    el.title = "View full value";
+    el.className = "large-value-tag";
+    el.textContent = `${formatSize(length)} hidden…`;
+    el.title = `View full value (${length.toLocaleString()} characters)`;
     el.addEventListener("mousedown", (e) => {
       // Keep the editor from putting a cursor behind the dialog
       e.preventDefault();
       e.stopPropagation();
-      LargeValueDialog.show(view.state.sliceDoc(valueFrom, valueTo));
+      LargeValueDialog.show(view.state.sliceDoc(this.from, this.to));
     });
     return el;
   }
@@ -135,8 +130,16 @@ function treeForLongLines(state: EditorState, longLines: Line[]): SyntaxTree {
   return ensureSyntaxTree(state, lastLine.to, PARSE_TIMEOUT_MS) ?? syntaxTree(state);
 }
 
-/** Tokens on this line big enough to collapse on their own, in document order. */
-function findLargeTokens(tree: SyntaxTree, line: Line): Collapse[] {
+const QUOTES = ['"', "'", "`"];
+
+/**
+ * Quoted values on this line big enough to collapse whole, in document order.
+ *
+ * Everything between the quotes goes, so a long string reads as `"image": "<tag>"` and the key
+ * still tells you what it is. Undelimited tokens are left to the column cut instead: replacing
+ * one whole would leave the line with nothing on it but a tag.
+ */
+function findLargeTokens(state: EditorState, tree: SyntaxTree, line: Line): Collapse[] {
   const collapses: Collapse[] = [];
 
   tree.iterate({
@@ -148,12 +151,13 @@ function findLargeTokens(tree: SyntaxTree, line: Line): Collapse[] {
       // Only leaves, so we collapse the string itself rather than the object holding it
       if (node.node.firstChild != null) return true;
 
-      const valueFrom = Math.max(node.from, line.from);
-      const valueTo = Math.min(node.to, line.to);
-      const hiddenFrom = valueFrom + COLLAPSE_KEEP_CHARS;
-      const hiddenTo = valueTo - COLLAPSE_KEEP_CHARS;
-      if (hiddenTo > hiddenFrom) {
-        collapses.push({ hiddenFrom, hiddenTo, valueFrom, valueTo });
+      const from = Math.max(node.from, line.from);
+      const to = Math.min(node.to, line.to);
+      const open = state.sliceDoc(from, from + 1);
+      const quoted = to - from >= 2 && QUOTES.includes(open) && state.sliceDoc(to - 1, to) === open;
+
+      if (quoted && to - 1 > from + 1) {
+        collapses.push({ from: from + 1, to: to - 1 });
       }
       return false;
     },
@@ -171,7 +175,7 @@ function findColumnCut(line: Line, tokens: Collapse[]): number {
   let pos = line.from;
 
   for (const token of [...tokens, null]) {
-    const segmentEnd = token == null ? line.to : token.hiddenFrom;
+    const segmentEnd = token == null ? line.to : token.from;
     if (segmentEnd > pos) {
       if (visible + (segmentEnd - pos) > MAX_VISIBLE_LINE_CHARS) {
         return pos + (MAX_VISIBLE_LINE_CHARS - visible);
@@ -179,23 +183,23 @@ function findColumnCut(line: Line, tokens: Collapse[]): number {
       visible += segmentEnd - pos;
     }
     if (token != null) {
-      pos = token.hiddenTo;
+      pos = token.to;
     }
   }
 
   return -1;
 }
 
-function collapsesForLine(tree: SyntaxTree, line: Line): Collapse[] {
-  const tokens = findLargeTokens(tree, line);
+function collapsesForLine(state: EditorState, tree: SyntaxTree, line: Line): Collapse[] {
+  const tokens = findLargeTokens(state, tree, line);
   const cut = findColumnCut(line, tokens);
   if (cut < 0) {
     return tokens;
   }
 
   // The cut always lands in a visible stretch, so it never splits a token collapse
-  const kept = tokens.filter((t) => t.hiddenTo <= cut);
-  kept.push({ hiddenFrom: cut, hiddenTo: line.to, valueFrom: cut, valueTo: line.to });
+  const kept = tokens.filter((t) => t.to <= cut);
+  kept.push({ from: cut, to: line.to });
   return kept;
 }
 
@@ -207,13 +211,8 @@ function buildDecorations(state: EditorState, longLines: Line[]): DecorationSet 
   const tree = treeForLongLines(state, longLines);
   const ranges: Range<Decoration>[] = [];
   for (const line of longLines) {
-    for (const collapse of collapsesForLine(tree, line)) {
-      ranges.push(
-        Decoration.replace({ widget: new LargeValueWidget(collapse) }).range(
-          collapse.hiddenFrom,
-          collapse.hiddenTo,
-        ),
-      );
+    for (const { from, to } of collapsesForLine(state, tree, line)) {
+      ranges.push(Decoration.replace({ widget: new LargeValueWidget(from, to) }).range(from, to));
     }
   }
   return Decoration.set(ranges);

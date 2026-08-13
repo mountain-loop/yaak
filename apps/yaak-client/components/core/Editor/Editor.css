@@ -108,12 +108,23 @@
       }
     }
 
+    /* Shape shared by inline widgets, so they read as the same kind of thing */
+    .template-tag,
+    .large-value-tag {
+      @apply inline border px-1 mx-[0.5px] rounded-sm dark:shadow;
+      @apply whitespace-nowrap cursor-default;
+    }
+
+    .large-value-tag {
+      /* Colors of its own, so it doesn't read as a template tag */
+      @apply bg-surface-highlight text-text-subtle border-border-subtle;
+      @apply hover:border-border hover:text-text;
+    }
+
     .template-tag {
       /* Colors */
-      @apply bg-surface text-text-subtle border-border-subtle whitespace-nowrap cursor-default;
+      @apply bg-surface text-text-subtle border-border-subtle;
       @apply hover:border-border hover:text-text hover:bg-surface-highlight;
-
-      @apply inline border px-1 mx-[0.5px] rounded-sm dark:shadow;
 
       -webkit-text-security: none;
 
@@ -251,12 +262,6 @@
   @apply px-2 border border-border-subtle bg-surface-highlight;
   @apply hover:text-text hover:border-border-subtle text-text;
   @apply cursor-default!;
-}
-
-.cm-editor .cm-largeValue {
-  @apply px-2 mx-0.5 rounded border border-border-subtle bg-surface-highlight;
-  @apply text-text-subtle text-sm cursor-pointer align-middle;
-  @apply hover:text-text hover:border-border;
 }
 
 .cm-editor .cm-activeLineGutter {
