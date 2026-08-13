@@ -16,6 +16,8 @@ export interface ContextMenuInstance {
   triggerPosition: { x: number; y: number };
   /** The trigger's box, when it has one, so placement can align to its edges */
   triggerRect?: Pick<DOMRect, "top" | "bottom" | "left" | "right">;
+  /** The element it belongs to, so clicking that doesn't read as a click outside */
+  triggerEl?: HTMLElement | null;
   items: DropdownItem[];
 }
 
@@ -23,6 +25,20 @@ export const contextMenusAtom = atom<ContextMenuInstance[]>([]);
 
 export function showContextMenu({ id, ...props }: ContextMenuInstance) {
   jotaiStore.set(contextMenusAtom, (m) => [...m.filter((c) => c.id !== id), { id, ...props }]);
+}
+
+/**
+ * Opens the menu, or closes it if this one is already open.
+ *
+ * What a trigger wants: pressing it a second time should put the menu away. Same shape as
+ * {@link toggleDialog}.
+ */
+export function toggleContextMenu({ id, ...props }: ContextMenuInstance) {
+  if (jotaiStore.get(contextMenusAtom).some((c) => c.id === id)) {
+    hideContextMenu(id);
+  } else {
+    showContextMenu({ id, ...props });
+  }
 }
 
 export function hideContextMenu(id: string) {

@@ -1,6 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { jsonc } from "@shopify/lang-jsonc";
 import { text } from "./text/extension";
+import { twig } from "./twig/extension";
 import { describe, expect, test } from "vite-plus/test";
 import {
   COLLAPSE_MEDIA_CHARS,
@@ -256,9 +257,15 @@ describe("sniffing the collapsed value", () => {
     expect(widget?.sniffed).toMatchObject({ label: "PNG" });
   });
 
-  test("names nothing when a column cut lands mid-line after other text", () => {
-    const state = plainState(`some prefix text ${pngBase64()}`);
-    expect(widgets(state)[0]?.sniffed).toBeNull();
+  test("finds a run that starts partway through a line, and names it", () => {
+    // No grammar here, and the value is not the whole line. The run is found by its alphabet,
+    // so the prefix stays on screen and the blob is still named.
+    const prefix = "some prefix text ";
+    const state = plainState(`${prefix}${pngBase64()}`);
+    const [widget] = widgets(state);
+
+    expect(widget?.valueFrom).toBe(prefix.length);
+    expect(widget?.sniffed).toMatchObject({ label: "PNG" });
   });
 });
 
@@ -340,6 +347,126 @@ describe("media collapsing, below the length rules", () => {
       "\n",
     );
     expect(collapsedRanges(jsonState(doc))).toEqual([]);
+  });
+});
+
+describe("media rule only, for a document being edited", () => {
+  /** What an editable editor gets: rule 2 alone */
+  function editableRanges(state: EditorState) {
+    const ranges: { from: number; to: number }[] = [];
+    const iter = collapseDecorations(state, [{ from: 0, to: state.doc.length }], "media").iter();
+    while (iter.value != null) {
+      ranges.push({ from: iter.from, to: iter.to });
+      iter.next();
+    }
+    return ranges;
+  }
+
+  function png(bytes: number) {
+    const b = new Uint8Array(bytes);
+    b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    let binary = "";
+    for (const byte of b) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  test("collapses a pasted image, the one thing it is for", () => {
+    const value = png(3_000);
+    const state = jsonState(`{\n  "avatar": "${value}"\n}`);
+
+    expect(editableRanges(state)).toHaveLength(1);
+    expect(state.sliceDoc(editableRanges(state)[0]!.from, editableRanges(state)[0]!.to)).toBe(
+      value,
+    );
+  });
+
+  test("leaves a long value alone when nothing can name it", () => {
+    // Rule 1 would take this on a stalling line. Editing it is plausible, so it stays.
+    const doc = `{"blob":"${"Z".repeat(COLLAPSE_TOKEN_CHARS * 3)}"}`;
+    expect(doc.length).toBeGreaterThan(MAX_VISIBLE_LINE_CHARS);
+    expect(editableRanges(jsonState(doc))).toEqual([]);
+  });
+
+  test("never cuts at the column limit, which would strand text out of reach", () => {
+    // Rule 3 territory: a minified body with no value big enough to collapse on its own
+    const doc = `[${Array.from({ length: 4_000 }, (_, i) => `"word-${i}"`).join(",")}]`;
+    expect(doc.length).toBeGreaterThan(MAX_VISIBLE_LINE_CHARS);
+    expect(editableRanges(jsonState(doc))).toEqual([]);
+    // The read-only rules still cut it
+    expect(collapsedRanges(jsonState(doc))).toHaveLength(1);
+  });
+
+  test("never swallows a template tag, collapsing only the run beside it", () => {
+    // A brace is not in the base64 alphabet, so the run starts after the tag and the tag stays
+    // on screen where it can still be read and edited
+    const tag = "{{ image }}";
+    const doc = `{"avatar":"${tag}${png(3_000)}"}`;
+    const ranges = editableRanges(jsonState(doc));
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]!.from).toBe(doc.indexOf(tag) + tag.length);
+    expect(doc.slice(ranges[0]!.from, ranges[0]!.to)).not.toContain("{");
+  });
+
+  test("finds a data URI whole, header and all", () => {
+    const value = `data:image/jpeg;base64,${png(3_000)}`;
+    const doc = `{"avatar":"${value}"}`;
+    const ranges = editableRanges(jsonState(doc));
+
+    expect(ranges).toHaveLength(1);
+    expect(doc.slice(ranges[0]!.from, ranges[0]!.to)).toBe(value);
+  });
+
+  test("hides no line break, so the plugin may provide it from the viewport", () => {
+    const state = jsonState(`{\n  "a": "${png(3_000)}",\n  "b": 1\n}`);
+    for (const { from, to } of editableRanges(state)) {
+      expect(state.sliceDoc(from, to)).not.toContain("\n");
+    }
+  });
+});
+
+describe("templated fields, where the grammar is an overlay", () => {
+  // Every editable field mixes its language with twig, which mounts the base language as an
+  // overlay. Overlays are not traversed by `Tree.iterate`, so a rule that walks the tree sees
+  // one enormous Text node and finds nothing. Rule 2 reads the text instead, and this is the
+  // case that has to keep working: an image pasted into a JSON request body.
+  const twigState = (doc: string) =>
+    EditorState.create({
+      doc,
+      extensions: [
+        twig({
+          base: jsonc(),
+          environmentVariables: [],
+          completionOptions: [],
+          onClickVariable: () => {},
+          onClickMissingVariable: () => {},
+          onClickPathParameter: () => {},
+          extraExtensions: [],
+        }),
+        largeValues,
+      ],
+    });
+
+  function png(bytes: number) {
+    const b = new Uint8Array(bytes);
+    b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    let binary = "";
+    for (const byte of b) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  test("collapses a pasted image in a templated body", () => {
+    const value = png(3_000);
+    const state = twigState(`{\n  "avatar": "${value}"\n}`);
+    const ranges: { from: number; to: number }[] = [];
+    const iter = collapseDecorations(state, [{ from: 0, to: state.doc.length }], "media").iter();
+    while (iter.value != null) {
+      ranges.push({ from: iter.from, to: iter.to });
+      iter.next();
+    }
+
+    expect(ranges).toHaveLength(1);
+    expect(state.sliceDoc(ranges[0]!.from, ranges[0]!.to)).toBe(value);
   });
 });
 

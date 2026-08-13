@@ -242,13 +242,20 @@ export interface ContextMenuProps {
    * from a button.
    */
   triggerRect?: Pick<DOMRect, "top" | "bottom" | "left" | "right">;
+  /**
+   * The element the menu belongs to, so a click on it doesn't count as a click outside.
+   *
+   * Without this the trigger gets both: the outside-click handler closes the menu on mousedown,
+   * then the trigger's own click opens it again, and pressing it looks like it does nothing.
+   */
+  triggerRef?: RefObject<HTMLElement | null>;
   className?: string;
   items: DropdownProps["items"];
   onClose: () => void;
 }
 
 export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function ContextMenu(
-  { triggerPosition, triggerRect, className, items, onClose },
+  { triggerPosition, triggerRect, triggerRef, className, items, onClose },
   ref,
 ) {
   const triggerShape = useMemo(
@@ -275,6 +282,7 @@ export const ContextMenu = forwardRef<DropdownRef, ContextMenuProps>(function Co
       ref={ref}
       items={items}
       onClose={onClose}
+      triggerRef={triggerRef}
       triggerShape={triggerShape}
     />
   );
@@ -290,7 +298,9 @@ interface MenuProps {
   fullWidth?: boolean;
   isOpen: boolean;
   items: DropdownItem[];
-  triggerRef?: RefObject<HTMLButtonElement | null>;
+  // Any element, not just a button: a menu can be opened from anything, and this is only ever
+  // used to ask whether a click landed on the trigger
+  triggerRef?: RefObject<HTMLElement | null>;
   isSubmenu?: boolean;
 }
 

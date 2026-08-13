@@ -59,7 +59,7 @@ import { pluralizeCount } from "../../../lib/pluralize";
 import { showGraphQLDocExplorerAtom } from "../../graphql/graphqlAtoms";
 import type { EditorProps } from "./Editor";
 import { jsonParseLinter } from "./json-lint";
-import { largeValues } from "./largeValues";
+import { largeValues, mediaValues } from "./largeValues";
 import { pairs } from "./pairs/extension";
 import { searchMatchCount } from "./searchMatchCount";
 import { text } from "./text/extension";
@@ -259,9 +259,18 @@ export const baseExtensions = [
 export const readonlyExtensions = [
   EditorState.readOnly.of(true),
   EditorView.contentAttributes.of({ tabindex: "-1" }),
-  // Read-only only, so we never hide part of a document someone is editing
+  // Nobody is editing this, so every rule applies
   largeValues,
 ];
+
+/**
+ * The counterpart for a document being edited.
+ *
+ * Only encoded media collapses here: it is pasted rather than typed, and replaced rather than
+ * edited, so a tag stands in for it without hiding anything anyone meant to read. The rules that
+ * hide text by length alone stay out. See {@link mediaValues}.
+ */
+export const editableExtensions = [mediaValues];
 
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
   search({ top: true }),

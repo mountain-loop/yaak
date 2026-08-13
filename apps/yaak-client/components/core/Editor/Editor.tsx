@@ -43,6 +43,7 @@ import { IconButton } from "../IconButton";
 import "./Editor.css";
 import {
   baseExtensions,
+  editableExtensions,
   getLanguageExtension,
   multiLineExtensions,
   readonlyExtensions,
@@ -289,7 +290,7 @@ function EditorInner({
     function configureReadOnly() {
       if (cm.current === null) return;
       const current = readOnlyCompartment.current.get(cm.current.view.state) ?? emptyExtension;
-      const next = readOnly ? readonlyExtensions : emptyExtension;
+      const next = readOnly ? readonlyExtensions : editableExtensions;
       // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
       if (current === next) return;
 
@@ -412,7 +413,7 @@ function EditorInner({
           keymapCompartment.current.of(
             keymapExtensions[settings.editorKeymap] ?? keymapExtensions.default,
           ),
-          readOnlyCompartment.current.of(readOnly ? readonlyExtensions : emptyExtension),
+          readOnlyCompartment.current.of(readOnly ? readonlyExtensions : editableExtensions),
           ...getExtensions({
             container,
             singleLine,

@@ -64,9 +64,21 @@ export const COLLAPSE_MEDIA_CHARS = 1_000;
  * gives its format up in the first dozen bytes — so the tag can name the format and open the
  * value in the matching viewer without any of it being read. See {@link sniffValue}.
  *
- * Read-only editors only. Hiding part of a document someone is editing would mean editing
- * text they can't see.
+ * An editable document gets rule 2 alone, as {@link mediaValues}. Encoded media is never typed
+ * by hand: it arrives pasted, and the only edit anyone makes to it is replacing it wholesale,
+ * which the tag already supports — {@link EditorView.atomicRanges} makes it delete as one unit.
+ * So collapsing it hides nothing anyone was going to read. The other two rules stay out, since
+ * they hide text by length alone, without being able to say what it is: under rule 3 a minified
+ * body would become uneditable past the column limit, which really would be editing text you
+ * can't see.
  */
+
+/**
+ * Which of the three rules to apply.
+ *
+ * `media` is the subset safe for a document being edited: collapse only what we can name.
+ */
+export type CollapseRules = "all" | "media";
 
 /**
  * A hidden range, the value it belongs to, and what that value turned out to be.
@@ -101,7 +113,7 @@ const CHEVRON_DOWN =
  * A span with a role rather than a real button, because a button's box model makes the line
  * taller — the one thing this extension exists to keep from happening.
  */
-function makeTagButton(el: HTMLElement, title: string, onOpen: (at: DOMRect) => void) {
+function makeTagButton(el: HTMLElement, title: string, onOpen: () => void) {
   el.role = "button";
   el.ariaHasPopup = "menu";
   el.tabIndex = 0;
@@ -116,13 +128,13 @@ function makeTagButton(el: HTMLElement, title: string, onOpen: (at: DOMRect) => 
   el.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    onOpen(el.getBoundingClientRect());
+    onOpen();
   });
   el.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     e.stopPropagation();
-    onOpen(el.getBoundingClientRect());
+    onOpen();
   });
 }
 
@@ -177,7 +189,7 @@ class LargeValueWidget extends WidgetType {
     makeTagButton(
       el,
       this.sniffed == null ? "Value actions" : `${this.sniffed.label} actions`,
-      (rect) => fireAndForget(this.openMenu(view, rect)),
+      () => fireAndForget(this.openMenu(view, el)),
     );
 
     return el;
@@ -190,11 +202,8 @@ class LargeValueWidget extends WidgetType {
    * neither the React menu nor the viewers behind the dialog are worth carrying until someone
    * asks for them.
    */
-  private async openMenu(
-    view: EditorView,
-    rect: Pick<DOMRect, "top" | "bottom" | "left" | "right">,
-  ) {
-    const [{ showContextMenu }, { showLargeValueDialog }, { encodingLabel, largeValueActions }] =
+  private async openMenu(view: EditorView, tag: HTMLElement) {
+    const [{ toggleContextMenu }, { showLargeValueDialog }, { encodingLabel, largeValueActions }] =
       await Promise.all([
         import("../../../lib/contextMenu"),
         import("../../LargeValueDialog"),
@@ -209,11 +218,13 @@ class LargeValueWidget extends WidgetType {
       Math.min(this.valueFrom + SNIFF_HEAD_CHARS, this.to),
     );
 
-    showContextMenu({
+    // The whole tag, so the menu can align to whichever edge has room beside it
+    const rect = tag.getBoundingClientRect();
+    toggleContextMenu({
       id: "large-value",
-      // The whole tag, so the menu can align to whichever edge has room beside it
       triggerPosition: { x: rect.left, y: rect.bottom },
       triggerRect: rect,
+      triggerEl: tag,
       items: [
         { type: "separator", label: encodingLabel(head, sniffed, this.to - this.from) },
         ...largeValueActions({
@@ -344,25 +355,68 @@ function treeForLines(state: EditorState, lines: Line[]): SyntaxTree {
 
 const QUOTES = ['"', "'", "`"];
 
+/** A run of base64, long enough to be worth looking at. Nothing else can be encoded media. */
+const ENCODED_RUN = new RegExp(`[A-Za-z0-9+/=_-]{${COLLAPSE_MEDIA_CHARS},}`, "g");
+
+/** The header that turns a bare run into a data URI, when one sits right before it. */
+const DATA_URI_HEAD = /data:[^,;\s"']*(?:;[^,;\s"']*)*;base64,$/;
+
 /**
- * Quoted values on this line worth collapsing, in document order.
+ * Encoded media on this line, found by reading the text rather than the grammar.
  *
- * Everything between the quotes goes, so a long string reads as `"image": "<tag>"` and the key
- * still tells you what it is. Undelimited tokens are left to the column cut instead: replacing
- * one whole would leave the line with nothing on it but a tag.
+ * Deliberately grammar-free. Every editable field in the app mixes its language with the twig
+ * parser, which mounts the base language as an *overlay*, and overlays are not traversed by
+ * `Tree.iterate` — so a rule that walks the tree finds one enormous `Text` node and nothing
+ * inside it. Rule 2 has to work in those fields above all, since that is where images get
+ * pasted, and a run of base64 is a text pattern anyway: no grammar can describe it better than
+ * the alphabet does.
+ *
+ * A `data:` header is picked up by looking backwards from the run, so the whole URI collapses
+ * as one thing and its declared type is what names it.
  */
-function findCollapsibleTokens(state: EditorState, tree: SyntaxTree, line: Line): Collapse[] {
+function findMediaRuns(state: EditorState, line: Line): Collapse[] {
+  const text = state.sliceDoc(line.from, line.to);
   const collapses: Collapse[] = [];
-  // Length alone only hides things on a line that would stall without it. On a line that renders
-  // fine, being long is not a reason to hide something we can't even name.
-  const stalls = line.to - line.from > MAX_VISIBLE_LINE_CHARS;
+
+  ENCODED_RUN.lastIndex = 0;
+  for (let m = ENCODED_RUN.exec(text); m != null; m = ENCODED_RUN.exec(text)) {
+    let start = m.index;
+    // A data URI's own header breaks the alphabet, so the run starts after it
+    const header = DATA_URI_HEAD.exec(text.slice(0, start));
+    if (header != null) {
+      start = header.index;
+    }
+
+    const valueFrom = line.from + start;
+    const valueTo = line.from + m.index + m[0].length;
+    const head = state.sliceDoc(valueFrom, Math.min(valueFrom + SNIFF_HEAD_CHARS, valueTo));
+    const sniffed = sniffValue(head);
+
+    // Only hide what we can name. A short magic number matches by chance now and then, so the
+    // run itself has to look encoded too.
+    if (sniffed != null && sniffed.encoding === "base64" && isEncodedRun(head, sniffed.offset)) {
+      collapses.push({ from: valueFrom, to: valueTo, valueFrom, sniffed });
+    }
+  }
+
+  return collapses;
+}
+
+/**
+ * Quoted values big enough to be a rendering problem on their own, whatever they hold.
+ *
+ * Needs the grammar, to find where the value starts and ends, and so only runs for a document
+ * nobody is editing — which is also the only place this rule applies.
+ */
+function findLargeTokens(state: EditorState, tree: SyntaxTree, line: Line): Collapse[] {
+  const collapses: Collapse[] = [];
 
   tree.iterate({
     from: line.from,
     to: line.to,
     enter: (node) => {
       // A node this small can't contain anything worth collapsing, and neither can its children
-      if (node.to - node.from < COLLAPSE_MEDIA_CHARS) return false;
+      if (node.to - node.from < COLLAPSE_TOKEN_CHARS) return false;
       // Only leaves, so we collapse the string itself rather than the object holding it
       if (node.node.firstChild != null) return true;
 
@@ -375,26 +429,32 @@ function findCollapsibleTokens(state: EditorState, tree: SyntaxTree, line: Line)
       // Everything inside the quotes. The whole value is hidden, so it is its own value range
       const valueFrom = from + 1;
       const valueTo = to - 1;
-      if (valueTo <= valueFrom) return false;
+      if (valueTo - valueFrom < COLLAPSE_TOKEN_CHARS) return false;
 
-      // The head is all it takes, so this never reads the value it describes
       const head = state.sliceDoc(valueFrom, Math.min(valueFrom + SNIFF_HEAD_CHARS, valueTo));
-      const sniffed = sniffValue(head);
-
-      // Big enough to be a rendering problem on its own, or something we can both name and be
-      // sure is encoded — a short magic number matches by chance, and hiding text would be worse
-      // than showing base64
-      const oversized = stalls && valueTo - valueFrom >= COLLAPSE_TOKEN_CHARS;
-      const media =
-        sniffed != null && sniffed.encoding === "base64" && isEncodedRun(head, sniffed.offset);
-      if (oversized || media) {
-        collapses.push({ from: valueFrom, to: valueTo, valueFrom, sniffed });
-      }
+      collapses.push({ from: valueFrom, to: valueTo, valueFrom, sniffed: sniffValue(head) });
       return false;
     },
   });
 
   return collapses;
+}
+
+/**
+ * Both rules' findings as one list, in document order, with nothing overlapping.
+ *
+ * A big quoted base64 value satisfies both rules, and two decorations over the same text is an
+ * error. The token wins where they collide, because its range stops at the quotes and so leaves
+ * the structure around it readable.
+ */
+function mergeCollapses(tokens: Collapse[], runs: Collapse[]): Collapse[] {
+  const merged = [...tokens];
+  for (const run of runs) {
+    if (!tokens.some((t) => run.from < t.to && t.from < run.to)) {
+      merged.push(run);
+    }
+  }
+  return merged.sort((a, b) => a.from - b.from);
 }
 
 /**
@@ -421,10 +481,21 @@ function findColumnCut(line: Line, tokens: Collapse[]): number {
   return -1;
 }
 
-function collapsesForLine(state: EditorState, tree: SyntaxTree, line: Line): Collapse[] {
-  const tokens = findCollapsibleTokens(state, tree, line);
-  if (line.to - line.from <= MAX_VISIBLE_LINE_CHARS) {
-    return tokens; // Short enough to render, so there is nothing left to cut
+function collapsesForLine(
+  state: EditorState,
+  tree: SyntaxTree,
+  line: Line,
+  rules: CollapseRules,
+): Collapse[] {
+  const runs = findMediaRuns(state, line);
+  // Length alone only hides things on a line that would stall without it, and never in a
+  // document being edited, where hiding text by size would put it out of reach
+  const stalls = rules === "all" && line.to - line.from > MAX_VISIBLE_LINE_CHARS;
+  const tokens = mergeCollapses(stalls ? findLargeTokens(state, tree, line) : [], runs);
+
+  // Short enough to render, so there is nothing left to cut
+  if (!stalls) {
+    return tokens;
   }
 
   const cut = findColumnCut(line, tokens);
@@ -450,6 +521,7 @@ function collapsesForLine(state: EditorState, tree: SyntaxTree, line: Line): Col
 export function collapseDecorations(
   state: EditorState,
   ranges: readonly { from: number; to: number }[],
+  rules: CollapseRules = "all",
 ): DecorationSet {
   const lines = collapsibleLines(state, ranges);
   if (lines.length === 0) {
@@ -459,7 +531,7 @@ export function collapseDecorations(
   const tree = treeForLines(state, lines);
   const decorations: Range<Decoration>[] = [];
   for (const line of lines) {
-    for (const { from, to, valueFrom, sniffed } of collapsesForLine(state, tree, line)) {
+    for (const { from, to, valueFrom, sniffed } of collapsesForLine(state, tree, line, rules)) {
       const widget = new LargeValueWidget(from, to, valueFrom, sniffed);
       decorations.push(Decoration.replace({ widget }).range(from, to));
     }
@@ -473,30 +545,40 @@ export function collapseDecorations(
  * Recomputed when the document changes, when the viewport moves, and when background parsing
  * advances — a value can only be found once the grammar has reached it.
  */
-const largeValuePlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
+function collapsePlugin(rules: CollapseRules) {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
 
-    constructor(view: EditorView) {
-      this.decorations = collapseDecorations(view.state, view.visibleRanges);
-    }
-
-    update(update: ViewUpdate) {
-      if (
-        update.docChanged ||
-        update.viewportChanged ||
-        syntaxTree(update.startState) !== syntaxTree(update.state)
-      ) {
-        this.decorations = collapseDecorations(update.view.state, update.view.visibleRanges);
+      constructor(view: EditorView) {
+        this.decorations = collapseDecorations(view.state, view.visibleRanges, rules);
       }
-    }
-  },
-  {
-    decorations: (v) => v.decorations,
-    // Step the cursor over a placeholder instead of stranding it inside
-    provide: (plugin) =>
-      EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
-  },
-);
 
-export const largeValues: Extension = [largeValuePlugin];
+      update(update: ViewUpdate) {
+        if (
+          update.docChanged ||
+          update.viewportChanged ||
+          syntaxTree(update.startState) !== syntaxTree(update.state)
+        ) {
+          this.decorations = collapseDecorations(
+            update.view.state,
+            update.view.visibleRanges,
+            rules,
+          );
+        }
+      }
+    },
+    {
+      decorations: (v) => v.decorations,
+      // Step the cursor over a placeholder instead of stranding it inside, and delete it whole
+      provide: (plugin) =>
+        EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none),
+    },
+  );
+}
+
+/** All three rules. For a document nobody is editing. */
+export const largeValues: Extension = [collapsePlugin("all")];
+
+/** Only what we can name, which is the part that is safe to hide while someone is editing. */
+export const mediaValues: Extension = [collapsePlugin("media")];
