@@ -14,6 +14,7 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: ["**/node_modules/**", "**/flatpak/**"],
+    // Nested git worktrees live under .claude, and their tests are not this checkout's
+    exclude: ["**/node_modules/**", "**/flatpak/**", "**/.claude/**"],
   },
 });
