@@ -113,7 +113,7 @@ const CHEVRON_DOWN =
  * A span with a role rather than a real button, because a button's box model makes the line
  * taller — the one thing this extension exists to keep from happening.
  */
-function makeTagButton(el: HTMLElement, title: string, onOpen: (at: DOMRect) => void) {
+function makeTagButton(el: HTMLElement, title: string, onOpen: () => void) {
   el.role = "button";
   el.ariaHasPopup = "menu";
   el.tabIndex = 0;
@@ -128,13 +128,13 @@ function makeTagButton(el: HTMLElement, title: string, onOpen: (at: DOMRect) => 
   el.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    onOpen(el.getBoundingClientRect());
+    onOpen();
   });
   el.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" && e.key !== " ") return;
     e.preventDefault();
     e.stopPropagation();
-    onOpen(el.getBoundingClientRect());
+    onOpen();
   });
 }
 
@@ -189,7 +189,7 @@ class LargeValueWidget extends WidgetType {
     makeTagButton(
       el,
       this.sniffed == null ? "Value actions" : `${this.sniffed.label} actions`,
-      (rect) => fireAndForget(this.openMenu(view, rect)),
+      () => fireAndForget(this.openMenu(view, el)),
     );
 
     return el;
@@ -202,11 +202,8 @@ class LargeValueWidget extends WidgetType {
    * neither the React menu nor the viewers behind the dialog are worth carrying until someone
    * asks for them.
    */
-  private async openMenu(
-    view: EditorView,
-    rect: Pick<DOMRect, "top" | "bottom" | "left" | "right">,
-  ) {
-    const [{ showContextMenu }, { showLargeValueDialog }, { encodingLabel, largeValueActions }] =
+  private async openMenu(view: EditorView, tag: HTMLElement) {
+    const [{ toggleContextMenu }, { showLargeValueDialog }, { encodingLabel, largeValueActions }] =
       await Promise.all([
         import("../../../lib/contextMenu"),
         import("../../LargeValueDialog"),
@@ -221,11 +218,13 @@ class LargeValueWidget extends WidgetType {
       Math.min(this.valueFrom + SNIFF_HEAD_CHARS, this.to),
     );
 
-    showContextMenu({
+    // The whole tag, so the menu can align to whichever edge has room beside it
+    const rect = tag.getBoundingClientRect();
+    toggleContextMenu({
       id: "large-value",
-      // The whole tag, so the menu can align to whichever edge has room beside it
       triggerPosition: { x: rect.left, y: rect.bottom },
       triggerRect: rect,
+      triggerEl: tag,
       items: [
         { type: "separator", label: encodingLabel(head, sniffed, this.to - this.from) },
         ...largeValueActions({
