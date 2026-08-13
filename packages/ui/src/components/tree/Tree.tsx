@@ -130,6 +130,28 @@ function TreeInner<T extends { id: string }>(
   const handleAddTreeItemRef = useCallback((item: T, r: TreeItemHandle | null) => {
     if (r == null) {
       delete treeItemRefs.current[item.id];
+
+      // Keep keyboard focus inside the tree when the focused row is virtualized away.
+      //
+      // Scrolling the focused row out of the window destroys the button holding focus, and the
+      // browser drops focus to the body rather than moving it anywhere. Everything keyboard-driven
+      // is gated on the tree containing document.activeElement (arrow navigation here, rename,
+      // delete, duplicate and the context menu in the consumer), so the entire keyboard interface
+      // would go dead until the user clicked a row again. They all act on the selected id rather
+      // than the focused element, so parking focus on the container is enough to keep them live.
+      //
+      // NOTE: This has to hang off the unmount rather than a render or a focusout. Scrolling
+      //  re-renders the list, not this component, and removing a focused element doesn't reliably
+      //  fire focusout.
+      requestAnimationFrame(() => {
+        const el = treeRef.current;
+        if (el == null) return;
+        const active = document.activeElement;
+        const focusWasDropped = active == null || active === document.body || !active.isConnected;
+        if (focusWasDropped) {
+          el.focus({ preventScroll: true });
+        }
+      });
     } else {
       treeItemRefs.current[item.id] = r;
     }
@@ -232,13 +254,42 @@ function TreeInner<T extends { id: string }>(
     [treeId, tryFocus],
   );
 
+  /**
+   * Run something against a row's handle, scrolling the row into view first when it isn't
+   * mounted.
+   *
+   * Virtualized rows only have a handle while they're in the window, but the row these act on is
+   * the selected one, which the user is free to scroll away from before hitting a hotkey. Without
+   * this, renaming an off-screen row silently does nothing and the context menu has no rect to
+   * open against.
+   */
+  const withTreeItem = useCallback(
+    (id: string, action: (handle: TreeItemHandle) => void) => {
+      const mounted = treeItemRefs.current[id];
+      if (mounted != null) {
+        action(mounted);
+        return;
+      }
+
+      const index = visibleItems.findIndex((i) => i.node.item.id === id);
+      if (index < 0) return;
+
+      virtualizerRef.current?.scrollToIndex(index, { align: "auto" });
+      requestAnimationFrame(() => {
+        const handle = treeItemRefs.current[id];
+        if (handle != null) action(handle);
+      });
+    },
+    [visibleItems],
+  );
+
   const treeHandle = useMemo<TreeHandle>(
     () => ({
       treeId,
       focus: tryFocus,
       hasFocus: hasFocus,
       getSelectedItems: () => getSelectedItems(store, treeId, selectableItems),
-      renameItem: (id) => treeItemRefs.current[id]?.rename(),
+      renameItem: (id) => withTreeItem(id, (handle) => handle.rename()),
       selectItem: (id, focus) => {
         if (store.get(selectedIdsFamily(treeId)).includes(id)) {
           // Already selected
@@ -252,12 +303,14 @@ function TreeInner<T extends { id: string }>(
         const items = getSelectedItems(store, treeId, selectableItems);
         const menuItems = await getContextMenu(items);
         const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
-        const rect = lastSelectedId ? treeItemRefs.current[lastSelectedId]?.rect() : null;
-        if (rect == null) return;
-        setShowContextMenu({ items: menuItems, x: rect.x, y: rect.y });
+        if (lastSelectedId == null) return;
+        withTreeItem(lastSelectedId, (handle) => {
+          const rect = handle.rect();
+          setShowContextMenu({ items: menuItems, x: rect.x, y: rect.y });
+        });
       },
     }),
-    [getContextMenu, hasFocus, selectableItems, setSelected, treeId, tryFocus],
+    [getContextMenu, hasFocus, selectableItems, setSelected, treeId, tryFocus, withTreeItem],
   );
 
   useImperativeHandle(ref, (): TreeHandle => treeHandle, [treeHandle]);
@@ -700,6 +753,9 @@ function TreeInner<T extends { id: string }>(
       >
         <div
           ref={setTreeRef}
+          // Focusable so the container can hold focus when the focused row unmounts. Not reachable
+          // by tabbing, since the rows themselves are what's tabbable.
+          tabIndex={-1}
           className={classNames(
             className,
             "outline-hidden h-full",
