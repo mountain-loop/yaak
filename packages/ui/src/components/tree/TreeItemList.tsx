@@ -1,7 +1,9 @@
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useAtomValue } from "jotai";
 import type { CSSProperties } from "react";
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { draggingIdsFamily } from "./atoms";
 import type { SelectableTreeNode } from "./common";
 import type { TreeProps } from "./Tree";
 import { TreeDropMarker } from "./TreeDropMarker";
@@ -116,6 +118,61 @@ function VirtualTreeItemList<T extends { id: string }>({
     onVirtualizerReady?.(virtualizer);
   }, [virtualizer, onVirtualizerReady]);
 
+  const virtualItems = virtualizer.getVirtualItems();
+
+  // Rows being dragged stay mounted even after they scroll out of the window.
+  //
+  // dnd-kit keeps a live reference to the node being dragged and re-measures it whenever that
+  // node is replaced. Its scroll adjustment is a delta against a baseline captured when that rect
+  // was last measured, and re-measuring resets the baseline to wherever the list happens to be
+  // scrolled right then, discarding the scroll accumulated so far. Letting the dragged row unmount
+  // mid-drag therefore corrupts every coordinate dnd-kit derives, by a bit more each time it
+  // happens, which is why the drop indicator drifts further the longer a drag autoscrolls.
+  const draggingIds = useAtomValue(draggingIdsFamily(treeId));
+  const pinnedIndexes = useMemo(() => {
+    if (draggingIds.length === 0) return [];
+    const rendered = new Set(virtualItems.map((v) => v.index));
+    const out: number[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node == null || rendered.has(i)) continue;
+      if (draggingIds.includes(node.node.item.id)) out.push(i);
+    }
+    return out;
+    // biome-ignore lint/correctness/useExhaustiveDependencies: keyed off the rendered range
+  }, [draggingIds, nodes, virtualItems]);
+
+  const renderRow = (index: number, start: number, measure: boolean) => {
+    const child = nodes[index];
+    if (child == null) return null;
+    return (
+      <div
+        // Key by item so window shifts don't remount rows unnecessarily
+        key={getItemKey(child.node.item)}
+        ref={measure ? virtualizer.measureElement : undefined}
+        data-index={index}
+        className="tree-row"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          transform: `translateY(${start - scrollMargin}px)`,
+        }}
+      >
+        <TreeItem
+          treeId={treeId}
+          setRef={addTreeItemRef}
+          node={child.node}
+          getItemKey={getItemKey}
+          depth={forceDepth == null ? child.depth : forceDepth}
+          {...props}
+        />
+        <TreeDropMarker node={child.node} treeId={treeId} index={index + 1} />
+      </div>
+    );
+  };
+
   return (
     <ul
       ref={listRef}
@@ -123,36 +180,12 @@ function VirtualTreeItemList<T extends { id: string }>({
       className={className}
     >
       <TreeDropMarker node={null} treeId={treeId} index={0} />
-      {virtualizer.getVirtualItems().map((virtualItem) => {
-        const child = nodes[virtualItem.index];
-        if (child == null) return null;
-        return (
-          <div
-            // Key by item so window shifts don't remount rows unnecessarily
-            key={getItemKey(child.node.item)}
-            ref={virtualizer.measureElement}
-            data-index={virtualItem.index}
-            className="tree-row"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-            }}
-          >
-            <TreeItem
-              treeId={treeId}
-              setRef={addTreeItemRef}
-              node={child.node}
-              getItemKey={getItemKey}
-              depth={forceDepth == null ? child.depth : forceDepth}
-              {...props}
-            />
-            <TreeDropMarker node={child.node} treeId={treeId} index={virtualItem.index + 1} />
-          </div>
-        );
-      })}
+      {virtualItems.map((virtualItem) => renderRow(virtualItem.index, virtualItem.start, true))}
+      {/* NOTE: Not measured. Measuring an out-of-window row would write its size into the
+          virtualizer's cache under an index the window isn't tracking. */}
+      {pinnedIndexes.map((index) =>
+        renderRow(index, virtualizer.measurementsCache[index]?.start ?? 0, false),
+      )}
     </ul>
   );
 }
