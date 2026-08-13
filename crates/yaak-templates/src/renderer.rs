@@ -135,6 +135,10 @@ async fn render_value<T: TemplateCallback>(
     opt: &RenderOptions,
     depth: usize,
 ) -> Result<String> {
+    if depth > MAX_DEPTH {
+        return opt.error_behavior.handle(Err(RenderStackExceededError));
+    }
+
     let v = match val {
         Val::Str { text } => {
             let r = Box::pin(parse_and_render_at_depth(&text, vars, cb, opt, depth)).await?;
@@ -154,7 +158,7 @@ async fn render_value<T: TemplateCallback>(
                     Val::Bool { value } => serde_json::Value::Bool(value),
                     Val::Null => serde_json::Value::Null,
                     _ => serde_json::Value::String(
-                        Box::pin(render_value(a.value, vars, cb, opt, depth)).await?,
+                        Box::pin(render_value(a.value, vars, cb, opt, depth + 1)).await?,
                     ),
                 };
                 resolved_args.insert(a.name, v);
@@ -495,6 +499,50 @@ mod parse_and_render_tests {
             }
         }
         assert_eq!(parse_and_render(template, &vars, &CB {}, &opt).await?, result.to_string());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rejects_nested_function_args_beyond_max_depth() -> Result<()> {
+        struct CB {}
+        impl TemplateCallback for CB {
+            async fn run(
+                &self,
+                _fn_name: &str,
+                args: HashMap<String, serde_json::Value>,
+            ) -> Result<String> {
+                Ok(args["value"].as_str().unwrap_or_default().to_string())
+            }
+
+            fn transform_arg(
+                &self,
+                _fn_name: &str,
+                _arg_name: &str,
+                arg_value: &str,
+            ) -> Result<String> {
+                Ok(arg_value.to_string())
+            }
+        }
+
+        let nested_beyond_limit = (0..=super::MAX_DEPTH)
+            .fold("'ok'".to_string(), |value, _| format!("identity(value={value})"));
+        let template_beyond_limit = format!("${{[ {nested_beyond_limit} ]}}");
+        let vars = HashMap::new();
+
+        assert_eq!(
+            parse_and_render(&template_beyond_limit, &vars, &CB {}, &RenderOptions::throw()).await,
+            Err(RenderStackExceededError)
+        );
+        assert_eq!(
+            parse_and_render(
+                &template_beyond_limit,
+                &vars,
+                &CB {},
+                &RenderOptions::return_empty(),
+            )
+            .await,
+            Ok(String::new())
+        );
         Ok(())
     }
 
