@@ -45,6 +45,7 @@ type TauriCmd =
   | "cmd_plugin_init_errors"
   | "cmd_reload_plugins"
   | "cmd_render_template"
+  | "cmd_save_base64_to_binary"
   | "cmd_save_response"
   | "cmd_secure_template"
   | "cmd_send_ephemeral_request"

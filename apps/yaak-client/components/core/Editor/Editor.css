@@ -121,14 +121,22 @@
         @apply cursor-default;
       }
 
-      /* An icon button any tag can carry, like the copy on a large value */
+      /* The chevron on a tag that opens a menu. The tag itself is the button, so this is
+         only the affordance that says so. */
       .tag-action {
-        @apply inline-flex items-center align-middle ml-1 cursor-pointer!;
-        @apply text-text-subtlest hover:text-text;
+        @apply inline-flex items-center align-middle ml-1;
+        @apply text-text-subtlest;
 
         svg {
           @apply w-[0.9em] h-[0.9em];
         }
+      }
+
+      /* A preview of the value a tag stands for. Sized before the image loads, so arriving
+         never changes the line's height. */
+      .tag-thumbnail {
+        @apply inline-block align-middle mr-1 rounded-xs;
+        @apply w-[1.1em] h-[1.1em] object-cover bg-surface-highlight;
       }
 
       .fn {
