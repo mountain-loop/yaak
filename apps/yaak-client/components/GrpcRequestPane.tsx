@@ -1,4 +1,9 @@
-import { type GrpcRequest, type HttpRequestHeader, patchModel } from "@yaakapp-internal/models";
+import {
+  type GrpcRequest,
+  type HttpRequestHeader,
+  patchModel,
+  patchModelDebounced,
+} from "@yaakapp-internal/models";
 import { HStack, Icon, useContainerSize, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties } from "react";
@@ -75,11 +80,13 @@ export function GrpcRequestPane({
   const { width: paneWidth } = useContainerSize(urlContainerEl);
 
   const handleChangeUrl = useCallback(
-    (url: string) => patchModel(activeRequest, { url }),
+    (url: string) => patchModelDebounced(activeRequest, { url }),
     [activeRequest],
   );
 
   const handleChangeMessage = useCallback(
+    // Not debounced: handleSend reads message from the store, so a pending
+    // debounced patch would send stale text
     (message: string) => patchModel(activeRequest, { message }),
     [activeRequest],
   );
@@ -146,12 +153,12 @@ export function GrpcRequestPane({
   );
 
   const handleMetadataChange = useCallback(
-    (metadata: HttpRequestHeader[]) => patchModel(activeRequest, { metadata }),
+    (metadata: HttpRequestHeader[]) => patchModelDebounced(activeRequest, { metadata }),
     [activeRequest],
   );
 
   const handleDescriptionChange = useCallback(
-    (description: string) => patchModel(activeRequest, { description }),
+    (description: string) => patchModelDebounced(activeRequest, { description }),
     [activeRequest],
   );
 
@@ -299,7 +306,7 @@ export function GrpcRequestPane({
               className="font-sans text-xl! px-0!"
               containerClassName="border-0"
               placeholder={resolvedModelName(activeRequest)}
-              onChange={(name) => patchModel(activeRequest, { name })}
+              onChange={(name) => patchModelDebounced(activeRequest, { name })}
             />
             <MarkdownEditor
               name="request-description"

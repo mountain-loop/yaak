@@ -6,21 +6,19 @@ import { useMemo } from "react";
 export function useParentFolders(m: Folder | HttpRequest | GrpcRequest | WebsocketRequest | null) {
   const folders = useAtomValue(foldersAtom);
 
-  return useMemo(() => getParentFolders(folders, m), [folders, m]);
+  // Key on folderId, not the model itself, so edits to the model (eg. every URL
+  // keystroke replacing the active request) don't produce a new array identity
+  const folderId = m?.folderId ?? null;
+  return useMemo(() => getParentFolders(folders, folderId), [folders, folderId]);
 }
 
-function getParentFolders(
-  folders: Folder[],
-  currentModel: Folder | HttpRequest | GrpcRequest | WebsocketRequest | null,
-): Folder[] {
-  if (currentModel == null) return [];
+function getParentFolders(folders: Folder[], folderId: string | null): Folder[] {
+  if (folderId == null) return [];
 
-  const parentFolder = currentModel.folderId
-    ? folders.find((f) => f.id === currentModel.folderId)
-    : null;
+  const parentFolder = folders.find((f) => f.id === folderId);
   if (parentFolder == null) {
     return [];
   }
 
-  return [parentFolder, ...getParentFolders(folders, parentFolder)];
+  return [parentFolder, ...getParentFolders(folders, parentFolder.folderId ?? null)];
 }

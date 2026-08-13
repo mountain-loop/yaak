@@ -8,6 +8,7 @@ import { emacs } from "@replit/codemirror-emacs";
 import { vim } from "@replit/codemirror-vim";
 
 import { vscodeKeymap } from "@replit/codemirror-vscode-keymap";
+import { debounce } from "@yaakapp-internal/lib";
 import type { EditorKeymap } from "@yaakapp-internal/models";
 import { settingsAtom } from "@yaakapp-internal/models";
 import type { EditorLanguage, TemplateFunction } from "@yaakapp-internal/plugins";
@@ -381,6 +382,7 @@ function EditorInner({
   const initEditorRef = useCallback(
     function initEditorRef(container: HTMLDivElement | null) {
       if (container === null) {
+        flushCachedEditorState(stateKey);
         cm.current?.view.destroy();
         cm.current = null;
         return;
@@ -639,7 +641,7 @@ function getExtensions({
         onChange.current?.(update.state.doc.toString());
       }
 
-      saveCachedEditorState(stateKey, update.state);
+      saveCachedEditorStateDebounced(stateKey, update.state);
     }),
   ];
 }
@@ -651,6 +653,44 @@ const placeholderElFromText = (text: string | undefined) => {
   el.innerHTML = text ? text.replaceAll("\n", "<br/>") : " ";
   return el;
 };
+
+// Caching the state is too expensive to do on every update (every keystroke and cursor move),
+// so debounce it per state key and flush when the editor unmounts.
+//
+// The cost scales with the document, and every update pays it in full:
+//   - `state.toJSON` flattens the whole rope into a string, ~0.13 ms per 200 KB
+//   - the fingerprint is an exact md5 for editable documents, ~0.3 ms per 200 KB. `docFingerprint`
+//     only samples read-only ones, so editing a large body still hashes all of it
+//   - `sessionStorage.setItem` is synchronous and blocks the main thread
+// Typing in a 200 KB body costs ~0.4 ms per keystroke before the storage write, and a 1 MB one
+// ~2.3 ms. Read-only documents skip most of the hashing but still serialize, which is the larger
+// half once documents get into the megabytes.
+const SAVE_STATE_DEBOUNCE_MS = 500;
+const stateSavers = new Map<string, ReturnType<typeof debounce>>();
+
+function saveCachedEditorStateDebounced(stateKey: string | null, state: EditorState) {
+  if (!stateKey) return;
+  let saver = stateSavers.get(stateKey);
+  if (saver == null) {
+    saver = debounce(
+      (s: EditorState) => saveCachedEditorState(stateKey, s),
+      SAVE_STATE_DEBOUNCE_MS,
+    );
+    stateSavers.set(stateKey, saver);
+  }
+  saver(state);
+}
+
+// NOTE: Only called when an editor unmounts, so the saver is dropped rather than left in the map
+//  for every state key the session has ever shown. A pending saver holds the last EditorState,
+//  which holds the whole document.
+function flushCachedEditorState(stateKey: string | null) {
+  if (!stateKey) return;
+  const saver = stateSavers.get(stateKey);
+  if (saver == null) return;
+  saver.flush();
+  stateSavers.delete(stateKey);
+}
 
 function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
   if (!stateKey || state == null) return;

@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { emit } from "@tauri-apps/api/event";
 import type { GrpcConnection, GrpcRequest } from "@yaakapp-internal/models";
+import { flushAllModelWrites } from "@yaakapp-internal/models";
 import { jotaiStore } from "../lib/jotai";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
 import { invokeCmd } from "../lib/tauri";
@@ -22,8 +23,14 @@ export function useGrpc(
 
   const go = useMutation<void, string>({
     mutationKey: ["grpc_go", conn?.id],
-    mutationFn: () =>
-      invokeCmd<void>("cmd_grpc_go", { requestId, environmentId: environment?.id, protoFiles }),
+    mutationFn: async () => {
+      await flushAllModelWrites(); // The backend reads the request from the DB
+      return invokeCmd<void>("cmd_grpc_go", {
+        requestId,
+        environmentId: environment?.id,
+        protoFiles,
+      });
+    },
   });
 
   const send = useMutation({

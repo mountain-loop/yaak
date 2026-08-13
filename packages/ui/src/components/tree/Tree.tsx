@@ -1,4 +1,5 @@
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from "@dnd-kit/core";
+import type { Virtualizer } from "@tanstack/react-virtual";
 import {
   DndContext,
   MeasuringStrategy,
@@ -23,10 +24,10 @@ import {
 } from "react";
 import { useKey, useKeyPressEvent } from "react-use";
 import { computeSideForDragMove } from "../../lib/dnd";
-import { useStore } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import { draggingIdsFamily, focusIdsFamily, hoveredParentFamily, selectedIdsFamily } from "./atoms";
 import { type CollapsedAtom, CollapsedAtomContext } from "./context";
-import type { ContextMenuRenderer, JotaiStore, SelectableTreeNode, TreeNode } from "./common";
+import type { ContextMenuRenderer, TreeNode } from "./common";
 import { closestVisibleNode, equalSubtree, getSelectedItems, hasAncestor } from "./common";
 import { TreeDragOverlay } from "./TreeDragOverlay";
 import type { TreeItemClickEvent, TreeItemHandle, TreeItemProps } from "./TreeItem";
@@ -87,7 +88,39 @@ function TreeInner<T extends { id: string }>(
 ) {
   const store = useStore();
   const treeRef = useRef<HTMLDivElement>(null);
+  const virtualizerRef = useRef<Virtualizer<HTMLElement, Element> | null>(null);
+
+  // The scroll container is tracked in state as well as a ref, so the virtualizer re-resolves it
+  // once it exists. React attaches refs and runs layout effects child-first, so TreeItemList's
+  // effects run before this ancestor's ref is set: on a fresh mount a ref-only getScrollElement
+  // returns null, and the virtualizer renders nothing until some later render happens to wake it
+  // up. Usually one does, which is why this only showed when the tree remounted into settled data
+  // (filtering down to no results and back).
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const setTreeRef = useCallback((el: HTMLDivElement | null) => {
+    treeRef.current = el;
+    setScrollEl(el);
+  }, []);
+  const getScrollElement = useCallback(() => scrollEl, [scrollEl]);
+  const handleVirtualizerReady = useCallback((v: Virtualizer<HTMLElement, Element>) => {
+    virtualizerRef.current = v;
+  }, []);
   const selectableItems = useSelectableItems(root);
+
+  // Only render nodes that are actually visible (not filtered out, and not
+  // inside a collapsed folder). Mounting every node regardless of visibility
+  // makes large workspaces unusable: thousands of hidden TreeItems each run
+  // their dnd/context hooks on every tree commit just to return null.
+  const collapsedMap = useAtomValue(collapsedAtom);
+  const visibleItems = useMemo(() => {
+    return selectableItems.filter((i) => {
+      if (i.node.hidden) return false;
+      for (let p = i.node.parent; p != null; p = p.parent) {
+        if (collapsedMap[p.item.id]) return false;
+      }
+      return true;
+    });
+  }, [selectableItems, collapsedMap]);
   const [showContextMenu, setShowContextMenu] = useState<{
     items: unknown[];
     x: number;
@@ -97,6 +130,28 @@ function TreeInner<T extends { id: string }>(
   const handleAddTreeItemRef = useCallback((item: T, r: TreeItemHandle | null) => {
     if (r == null) {
       delete treeItemRefs.current[item.id];
+
+      // Keep keyboard focus inside the tree when the focused row is virtualized away.
+      //
+      // Scrolling the focused row out of the window destroys the button holding focus, and the
+      // browser drops focus to the body rather than moving it anywhere. Everything keyboard-driven
+      // is gated on the tree containing document.activeElement (arrow navigation here, rename,
+      // delete, duplicate and the context menu in the consumer), so the entire keyboard interface
+      // would go dead until the user clicked a row again. They all act on the selected id rather
+      // than the focused element, so parking focus on the container is enough to keep them live.
+      //
+      // NOTE: This has to hang off the unmount rather than a render or a focusout. Scrolling
+      //  re-renders the list, not this component, and removing a focused element doesn't reliably
+      //  fire focusout.
+      requestAnimationFrame(() => {
+        const el = treeRef.current;
+        if (el == null) return;
+        const active = document.activeElement;
+        const focusWasDropped = active == null || active === document.body || !active.isConnected;
+        if (focusWasDropped) {
+          el.focus({ preventScroll: true });
+        }
+      });
     } else {
       treeItemRefs.current[item.id] = r;
     }
@@ -125,16 +180,28 @@ function TreeInner<T extends { id: string }>(
   }, []);
 
   const tryFocus = useCallback(() => {
-    const $el = treeRef.current?.querySelector<HTMLButtonElement>(
-      '.tree-item button[tabindex="0"]',
-    );
-    if ($el == null) {
+    const find = () =>
+      treeRef.current?.querySelector<HTMLButtonElement>('.tree-item button[tabindex="0"]');
+    const $el = find();
+    if ($el != null) {
+      // preventScroll so scrolling stays single-sourced (focus() implicitly
+      // scrolls, which fights the virtualizer's scrollToIndex)
+      $el.focus({ preventScroll: true });
+      $el.scrollIntoView({ block: "nearest" });
+      return true;
+    }
+
+    // The focused row may be virtualized out of range. Scroll it into range,
+    // then focus it once it has mounted.
+    const lastFocusedId = store.get(focusIdsFamily(treeId)).lastId;
+    const index = visibleItems.findIndex((i) => i.node.item.id === lastFocusedId);
+    if (index < 0) {
       return false;
     }
-    $el.focus();
-    $el.scrollIntoView({ block: "nearest" });
+    virtualizerRef.current?.scrollToIndex(index, { align: "auto" });
+    requestAnimationFrame(() => find()?.focus({ preventScroll: true }));
     return true;
-  }, []);
+  }, [store, treeId, visibleItems]);
 
   const ensureTabbableItem = useCallback(() => {
     const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
@@ -187,13 +254,42 @@ function TreeInner<T extends { id: string }>(
     [treeId, tryFocus],
   );
 
+  /**
+   * Run something against a row's handle, scrolling the row into view first when it isn't
+   * mounted.
+   *
+   * Virtualized rows only have a handle while they're in the window, but the row these act on is
+   * the selected one, which the user is free to scroll away from before hitting a hotkey. Without
+   * this, renaming an off-screen row silently does nothing and the context menu has no rect to
+   * open against.
+   */
+  const withTreeItem = useCallback(
+    (id: string, action: (handle: TreeItemHandle) => void) => {
+      const mounted = treeItemRefs.current[id];
+      if (mounted != null) {
+        action(mounted);
+        return;
+      }
+
+      const index = visibleItems.findIndex((i) => i.node.item.id === id);
+      if (index < 0) return;
+
+      virtualizerRef.current?.scrollToIndex(index, { align: "auto" });
+      requestAnimationFrame(() => {
+        const handle = treeItemRefs.current[id];
+        if (handle != null) action(handle);
+      });
+    },
+    [visibleItems],
+  );
+
   const treeHandle = useMemo<TreeHandle>(
     () => ({
       treeId,
       focus: tryFocus,
       hasFocus: hasFocus,
       getSelectedItems: () => getSelectedItems(store, treeId, selectableItems),
-      renameItem: (id) => treeItemRefs.current[id]?.rename(),
+      renameItem: (id) => withTreeItem(id, (handle) => handle.rename()),
       selectItem: (id, focus) => {
         if (store.get(selectedIdsFamily(treeId)).includes(id)) {
           // Already selected
@@ -207,12 +303,14 @@ function TreeInner<T extends { id: string }>(
         const items = getSelectedItems(store, treeId, selectableItems);
         const menuItems = await getContextMenu(items);
         const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
-        const rect = lastSelectedId ? treeItemRefs.current[lastSelectedId]?.rect() : null;
-        if (rect == null) return;
-        setShowContextMenu({ items: menuItems, x: rect.x, y: rect.y });
+        if (lastSelectedId == null) return;
+        withTreeItem(lastSelectedId, (handle) => {
+          const rect = handle.rect();
+          setShowContextMenu({ items: menuItems, x: rect.x, y: rect.y });
+        });
       },
     }),
-    [getContextMenu, hasFocus, selectableItems, setSelected, treeId, tryFocus],
+    [getContextMenu, hasFocus, selectableItems, setSelected, treeId, tryFocus, withTreeItem],
   );
 
   useImperativeHandle(ref, (): TreeHandle => treeHandle, [treeHandle]);
@@ -244,11 +342,8 @@ function TreeInner<T extends { id: string }>(
       store.set(focusIdsFamily(treeId), (prev) => ({ ...prev, lastId: item.id }));
 
       if (shiftKey) {
-        const validSelectableItems = getValidSelectableItems(store, collapsedAtom, selectableItems);
-        const anchorIndex = validSelectableItems.findIndex(
-          (i) => i.node.item.id === anchorSelectedId,
-        );
-        const currIndex = validSelectableItems.findIndex((v) => v.node.item.id === item.id);
+        const anchorIndex = visibleItems.findIndex((i) => i.node.item.id === anchorSelectedId);
+        const currIndex = visibleItems.findIndex((v) => v.node.item.id === item.id);
 
         // Nothing was selected yet, so just select this item
         if (selectedIds.length === 0 || anchorIndex === -1 || currIndex === -1) {
@@ -259,14 +354,14 @@ function TreeInner<T extends { id: string }>(
 
         if (currIndex > anchorIndex) {
           // Selecting down
-          const itemsToSelect = validSelectableItems.slice(anchorIndex, currIndex + 1);
+          const itemsToSelect = visibleItems.slice(anchorIndex, currIndex + 1);
           setSelected(
             itemsToSelect.map((v) => v.node.item.id),
             true,
           );
         } else if (currIndex < anchorIndex) {
           // Selecting up
-          const itemsToSelect = validSelectableItems.slice(currIndex, anchorIndex + 1);
+          const itemsToSelect = visibleItems.slice(currIndex, anchorIndex + 1);
           setSelected(
             itemsToSelect.map((v) => v.node.item.id),
             true,
@@ -289,7 +384,7 @@ function TreeInner<T extends { id: string }>(
         store.set(focusIdsFamily(treeId), (prev) => ({ ...prev, anchorId: item.id }));
       }
     },
-    [selectableItems, setSelected, treeId],
+    [setSelected, treeId, visibleItems],
   );
 
   const handleClick = useCallback<NonNullable<TreeItemProps<T>["onClick"]>>(
@@ -307,27 +402,25 @@ function TreeInner<T extends { id: string }>(
   const selectPrevItem = useCallback(
     (e: TreeItemClickEvent) => {
       const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
-      const validSelectableItems = getValidSelectableItems(store, collapsedAtom, selectableItems);
-      const index = validSelectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
-      const item = validSelectableItems[index - 1];
+      const index = visibleItems.findIndex((i) => i.node.item.id === lastSelectedId);
+      const item = visibleItems[index - 1];
       if (item != null) {
         handleSelect(item.node.item, e);
       }
     },
-    [handleSelect, selectableItems, treeId],
+    [handleSelect, treeId, visibleItems],
   );
 
   const selectNextItem = useCallback(
     (e: TreeItemClickEvent) => {
       const lastSelectedId = store.get(focusIdsFamily(treeId)).lastId;
-      const validSelectableItems = getValidSelectableItems(store, collapsedAtom, selectableItems);
-      const index = validSelectableItems.findIndex((i) => i.node.item.id === lastSelectedId);
-      const item = validSelectableItems[index + 1];
+      const index = visibleItems.findIndex((i) => i.node.item.id === lastSelectedId);
+      const item = visibleItems[index + 1];
       if (item != null) {
         handleSelect(item.node.item, e);
       }
     },
-    [handleSelect, selectableItems, treeId],
+    [handleSelect, treeId, visibleItems],
   );
 
   const selectParentItem = useCallback(
@@ -448,8 +541,8 @@ function TreeInner<T extends { id: string }>(
         store.set(hoveredParentFamily(treeId), {
           parentId: root.item.id,
           parentDepth: root.depth,
-          index: selectableItems.length,
-          childIndex: selectableItems.length,
+          index: visibleItems.length,
+          childIndex: visibleItems.length,
         });
         return;
       }
@@ -477,8 +570,8 @@ function TreeInner<T extends { id: string }>(
 
       const item = node.item;
       let hoveredParent = node.parent;
-      const dragIndex = selectableItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
-      const hovered = selectableItems[dragIndex]?.node ?? null;
+      const dragIndex = visibleItems.findIndex((n) => n.node.item.id === item.id) ?? -1;
+      const hovered = visibleItems[dragIndex]?.node ?? null;
       const hoveredIndex = dragIndex + (side === "before" ? 0 : 1);
       let hoveredChildIndex = overSelectableItem.index + (side === "before" ? 0 : 1);
 
@@ -509,7 +602,7 @@ function TreeInner<T extends { id: string }>(
         });
       }
     },
-    [root.depth, root.item.id, selectableItems, treeId],
+    [root.depth, root.item.id, selectableItems, treeId, visibleItems],
   );
 
   const handleDragStart = useCallback(
@@ -659,7 +752,10 @@ function TreeInner<T extends { id: string }>(
         autoScroll
       >
         <div
-          ref={treeRef}
+          ref={setTreeRef}
+          // Focusable so the container can hold focus when the focused row unmounts. Not reachable
+          // by tabbing, since the rows themselves are what's tabbable.
+          tabIndex={-1}
           className={classNames(
             className,
             "outline-hidden h-full",
@@ -680,12 +776,18 @@ function TreeInner<T extends { id: string }>(
               "[&_.tree-item.selected+.drop-marker+.tree-item.selected]:rounded-t-none",
               "[&_.tree-item.selected:has(+.tree-item.selected)]:rounded-b-none",
               "[&_.tree-item.selected:has(+.drop-marker+.tree-item.selected)]:rounded-b-none",
+              // Virtualized rows are wrapped in .tree-row divs, so the sibling
+              // relationships above need wrapper-aware equivalents
+              "[&_.tree-row:has(.tree-item.selected)+.tree-row_.tree-item.selected]:rounded-t-none",
+              "[&_.tree-row:has(.tree-item.selected):has(+.tree-row_.tree-item.selected)_.tree-item.selected]:rounded-b-none",
             )}
           >
             <TreeItemList
               addTreeItemRef={handleAddTreeItemRef}
-              nodes={selectableItems}
+              nodes={visibleItems}
               treeId={treeId}
+              getScrollElement={getScrollElement}
+              onVirtualizerReady={handleVirtualizerReady}
               {...treeItemListProps}
             />
           </div>
@@ -730,21 +832,4 @@ function DropRegionAfterList({
   const { setNodeRef } = useDroppable({ id });
   // biome-ignore lint/a11y/noStaticElementInteractions: Meh
   return <div ref={setNodeRef} onContextMenu={onContextMenu} />;
-}
-
-function getValidSelectableItems<T extends { id: string }>(
-  store: JotaiStore,
-  collapsedAtom: CollapsedAtom,
-  selectableItems: SelectableTreeNode<T>[],
-) {
-  const collapsed = store.get(collapsedAtom);
-  return selectableItems.filter((i) => {
-    if (i.node.hidden) return false;
-    let p = i.node.parent;
-    while (p) {
-      if (collapsed[p.item.id]) return false;
-      p = p.parent;
-    }
-    return true;
-  });
 }

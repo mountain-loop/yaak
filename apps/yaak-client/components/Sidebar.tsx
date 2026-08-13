@@ -112,6 +112,7 @@ function Sidebar({ className }: { className?: string }) {
   const treeId = `tree.${activeWorkspaceId ?? "unknown"}`;
   const filterText = useAtomValue(sidebarFilterAtom);
   const [tree, allFields, emptyFilterSuggestions] = useAtomValue(sidebarTreeAtom) ?? [];
+
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
   const filterRef = useRef<InputHandle>(null);
@@ -724,7 +725,11 @@ function Sidebar({ className }: { className?: string }) {
   );
 }
 
-export default Sidebar;
+// Memoized so route navigations (which re-render the workspace layout) don't
+// re-render the sidebar subtree. In large workspaces a sidebar re-render is
+// very expensive: it re-renders DndContext, whose context churn re-renders
+// every visible TreeItem regardless of their memo comparators.
+export default memo(Sidebar);
 
 function getGitContextMenuItems({
   items,
