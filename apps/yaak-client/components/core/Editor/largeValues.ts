@@ -81,6 +81,10 @@ class LargeValueWidget extends WidgetType {
     copy.className = "large-value-tag-copy";
     copy.title = `Copy hidden text (${length.toLocaleString()} characters)`;
     copy.ariaLabel = copy.title;
+    // Deliberately out of the tab order. A response can hold many of these, and the whole body
+    // is already reachable from the pane's own copy and save buttons, or by selecting it: the
+    // text never left the document, so a selection copies what the tag hides along with it.
+    copy.tabIndex = -1;
     // Lucide's `copy` icon, inlined because the widget builds its DOM synchronously and
     // rendering React here would leave it empty while CodeMirror measures line heights
     copy.innerHTML =
