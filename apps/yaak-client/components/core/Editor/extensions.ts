@@ -59,6 +59,7 @@ import { pluralizeCount } from "../../../lib/pluralize";
 import { showGraphQLDocExplorerAtom } from "../../graphql/graphqlAtoms";
 import type { EditorProps } from "./Editor";
 import { jsonParseLinter } from "./json-lint";
+import { largeValues } from "./largeValues";
 import { pairs } from "./pairs/extension";
 import { searchMatchCount } from "./searchMatchCount";
 import { text } from "./text/extension";
@@ -258,6 +259,8 @@ export const baseExtensions = [
 export const readonlyExtensions = [
   EditorState.readOnly.of(true),
   EditorView.contentAttributes.of({ tabindex: "-1" }),
+  // Read-only only, so we never hide part of a document someone is editing
+  largeValues,
 ];
 
 export const multiLineExtensions = ({ hideGutter }: { hideGutter?: boolean }) => [
