@@ -36,6 +36,7 @@ async fn main() {
     version_check::maybe_check_for_updates().await;
 
     let exit_code = match command {
+        Commands::Agent(args) => commands::agent::run(args),
         Commands::Auth(args) => commands::auth::run(args).await,
         Commands::Import(args) => {
             let mut context = CliContext::new(data_dir.clone(), app_id);

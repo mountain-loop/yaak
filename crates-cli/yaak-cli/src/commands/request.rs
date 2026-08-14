@@ -119,7 +119,7 @@ fn enrich_schema_guidance(schema: &mut Value, request_type: RequestSchemaType) {
     if let Some(url_schema) = properties.get_mut("url").and_then(Value::as_object_mut) {
         append_description(
             url_schema,
-            "For path segments like `/foo/:id/comments/:commentId`, put concrete values in `urlParameters` using names without `:` (for example `id`, `commentId`).",
+            "For path segments like `/foo/:id/comments/:commentId`, put concrete values in `urlParameters` using names that keep the leading `:` (for example `:id`, `:commentId`). A name without the `:` is sent as a query string parameter instead, leaving the placeholder in the path.",
         );
     }
 }

@@ -11,6 +11,7 @@ use std::path::PathBuf;
   - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
   - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
   - Deletion requires confirmation (--yes for non-interactive environments)
+  - Run `yaak agent install` to install the Yaak skill for AI coding agents
   "#)]
 pub struct Cli {
     /// Use a custom data directory
@@ -39,6 +40,9 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Install Yaak skills for AI coding agents
+    Agent(AgentArgs),
+
     /// Authentication commands
     Auth(AuthArgs),
 
@@ -82,6 +86,35 @@ pub enum Commands {
 
     /// Environment commands
     Environment(EnvironmentArgs),
+}
+
+#[derive(Args)]
+pub struct AgentArgs {
+    #[command(subcommand)]
+    pub command: AgentCommands,
+}
+
+#[derive(Subcommand)]
+pub enum AgentCommands {
+    /// Install the Yaak skill so coding agents know how to drive the CLI
+    #[command(alias = "update", alias = "add")]
+    Install {
+        /// Overwrite skill files you have edited locally
+        #[arg(long)]
+        force: bool,
+
+        /// Install for specific agents instead of all detected ones
+        #[arg(long = "agent", value_name = "AGENT")]
+        agent: Option<Vec<String>>,
+    },
+
+    /// Remove the Yaak skill
+    #[command(alias = "uninstall", alias = "rm")]
+    Remove {
+        /// Remove for specific agents instead of all detected ones
+        #[arg(long = "agent", value_name = "AGENT")]
+        agent: Option<Vec<String>>,
+    },
 }
 
 #[derive(Args)]

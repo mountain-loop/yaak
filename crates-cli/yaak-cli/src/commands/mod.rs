@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod auth;
 pub mod cookie_jar;
 pub mod environment;
