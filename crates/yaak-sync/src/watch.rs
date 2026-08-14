@@ -27,7 +27,10 @@ pub async fn watch_directory<F>(
 where
     F: Fn(WatchEvent) + Send + 'static,
 {
-    let dir = dir.to_owned();
+    // Canonicalize so reported event paths match the watched root. Notify reports
+    // resolved paths, so watching through a symlink (e.g. /tmp -> /private/tmp on
+    // macOS) would otherwise make every strip_prefix below fail.
+    let dir = dir.canonicalize().unwrap_or_else(|_| dir.to_owned());
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let mut watcher = notify::recommended_watcher(tx)?;
 
@@ -41,9 +44,12 @@ where
         }
     });
 
+    watcher.watch(&dir, notify::RecursiveMode::Recursive)?;
+    info!("Watching directory {:?}", dir);
+
     tokio::spawn(async move {
-        watcher.watch(&dir, notify::RecursiveMode::Recursive).expect("Failed to watch directory");
-        info!("Watching directory {:?}", dir);
+        // Keep the watcher alive for the lifetime of the task
+        let _watcher = watcher;
 
         loop {
             select! {
@@ -53,7 +59,7 @@ where
                         Ok(event) => {
                             // Filter out any ignored directories and see if we still get a result
                             let paths = event.paths.into_iter()
-                                .map(|p| p.strip_prefix(&dir).unwrap().to_path_buf())
+                                .map(|p| p.strip_prefix(&dir).unwrap_or(&p).to_path_buf())
                                 .filter(|p| !p.starts_with(".git") && !p.starts_with("node_modules"))
                                 .collect::<Vec<PathBuf>>();
 
