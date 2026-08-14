@@ -1,0 +1,47 @@
+[package]
+name = "yaak-server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "yaak-bridge"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["ws", "macros"] }
+charset = "0.1"
+chrono = { workspace = true }
+clap = { version = "4", features = ["derive", "env"] }
+dirs = "6"
+env_logger = "0.11"
+eventsource-client = { git = "https://github.com/yaakapp/rust-eventsource-client", version = "0.14.0" }
+futures = "0.3"
+include_dir = "0.7"
+log = { workspace = true }
+mime_guess = "2"
+pretty_graphql = "0.2"
+rand = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_urlencoded = "0.7"
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "io-util",
+  "net",
+  "signal",
+  "time",
+  "sync",
+] }
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+yaak = { workspace = true }
+yaak-common = { workspace = true }
+yaak-core = { workspace = true }
+yaak-crypto = { workspace = true }
+yaak-http = { workspace = true }
+yaak-models = { workspace = true }
+yaak-plugins = { workspace = true }
+yaak-rpc = { workspace = true }
+yaak-sse = { workspace = true }
+yaak-templates = { workspace = true }
