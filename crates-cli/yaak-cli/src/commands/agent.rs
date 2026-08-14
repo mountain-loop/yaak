@@ -98,45 +98,36 @@ fn write_skill(dir: &Path) -> CommandResult {
     fs::create_dir_all(&parent)
         .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
 
-    // Build the new copy alongside the old one and swap it in with a rename, so a
-    // failure part way through leaves the working skill untouched rather than
-    // deleting it. Staging lives in the same directory to keep the rename atomic.
-    let staging = parent.join(format!(".{SKILL_NAME}.tmp-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&staging);
-
-    if let Err(error) = stage_skill(&staging) {
-        let _ = fs::remove_dir_all(&staging);
-        return Err(error);
-    }
-
+    // Move the working copy aside before writing, so a failure part way through can
+    // put it back instead of leaving nothing behind. The destination has to be vacated
+    // either way: `rename` cannot replace a non-empty directory.
     let previous = parent.join(format!(".{SKILL_NAME}.old-{}", std::process::id()));
     let _ = fs::remove_dir_all(&previous);
 
     let had_previous = dir.exists();
-    if had_previous && let Err(error) = fs::rename(dir, &previous) {
-        let _ = fs::remove_dir_all(&staging);
-        return Err(format!("Failed to replace {}: {error}", dir.display()));
+    if had_previous {
+        fs::rename(dir, &previous)
+            .map_err(|e| format!("Failed to replace {}: {e}", dir.display()))?;
     }
 
-    match fs::rename(&staging, dir) {
+    match write_files(dir) {
         Ok(()) => {
             let _ = fs::remove_dir_all(&previous);
             Ok(())
         }
         Err(error) => {
-            // Put the working copy back rather than leaving nothing behind.
+            let _ = fs::remove_dir_all(dir);
             if had_previous {
                 let _ = fs::rename(&previous, dir);
             }
-            let _ = fs::remove_dir_all(&staging);
-            Err(format!("Failed to install into {}: {error}", dir.display()))
+            Err(error)
         }
     }
 }
 
-fn stage_skill(staging: &Path) -> CommandResult {
+fn write_files(dir: &Path) -> CommandResult {
     for file in walk(&SKILL_DIR) {
-        let destination = staging.join(file.path());
+        let destination = dir.join(file.path());
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
@@ -145,7 +136,7 @@ fn stage_skill(staging: &Path) -> CommandResult {
             .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
     }
 
-    fs::write(staging.join(VERSION_FILE), version::cli_version())
+    fs::write(dir.join(VERSION_FILE), version::cli_version())
         .map_err(|e| format!("Failed to write skill version: {e}"))
 }
 
