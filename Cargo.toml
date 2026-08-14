@@ -25,6 +25,8 @@ members = [
   "crates-proxy/yaak-proxy-lib",
   # CLI crates
   "crates-cli/yaak-cli",
+  # Headless server crates
+  "crates-server/yaak-server",
   # Tauri-specific crates
   "crates-tauri/yaak-app-client",
   "crates-tauri/yaak-app-proxy",
