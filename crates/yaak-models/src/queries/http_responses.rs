@@ -30,29 +30,33 @@ impl<'a> ClientDb<'a> {
         self.find_many(HttpResponseIden::WorkspaceId, workspace_id, limit)
     }
 
+    /// Returns the number of responses deleted.
     pub fn delete_all_http_responses_for_request(
         &self,
         request_id: &str,
         source: &UpdateSource,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let responses = self.list_http_responses_for_request(request_id, None)?;
+        let count = responses.len();
         for m in responses {
             self.delete(&m, source)?;
         }
-        Ok(())
+        Ok(count)
     }
 
+    /// Returns the number of responses deleted.
     pub fn delete_all_http_responses_for_workspace(
         &self,
         workspace_id: &str,
         source: &UpdateSource,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let responses =
             self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, workspace_id, None)?;
+        let count = responses.len();
         for m in responses {
             self.delete(&m, source)?;
         }
-        Ok(())
+        Ok(count)
     }
 
     pub fn delete_http_response(

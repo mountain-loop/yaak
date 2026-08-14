@@ -107,6 +107,47 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType, pretty: bool)
     Ok(())
 }
 
+/// `request create` only builds HTTP requests, but `request schema` will happily hand
+/// out gRPC and WebSocket schemas. Without this, a gRPC payload deserializes into an
+/// HttpRequest with its unknown fields dropped, quietly producing a broken request
+/// (the gRPC method name lands in `method`, and `service` disappears).
+fn reject_non_http_payload(payload: &Value, context: &str) -> CommandResult {
+    let Some(object) = payload.as_object() else {
+        return Ok(());
+    };
+
+    if let Some(model) = object.get("model").and_then(Value::as_str)
+        && !model.is_empty()
+        && model != "http_request"
+    {
+        return Err(format!(
+            "{context} only supports HTTP requests, but the payload has \"model\": \"{model}\". The CLI cannot work with {model} requests yet; use the Yaak app instead."
+        ));
+    }
+
+    let known: std::collections::BTreeSet<String> = serde_json::to_value(schema_for!(HttpRequest))
+        .ok()
+        .and_then(|schema| schema.get("properties").and_then(Value::as_object).cloned())
+        .map(|properties| properties.keys().cloned().collect())
+        .unwrap_or_default();
+
+    if known.is_empty() {
+        return Ok(());
+    }
+
+    let unknown: Vec<&str> =
+        object.keys().filter(|key| !known.contains(*key)).map(String::as_str).collect();
+
+    if !unknown.is_empty() {
+        return Err(format!(
+            "{context} got fields that are not part of an HTTP request: {}. If this is a gRPC or WebSocket request, the CLI cannot work with it yet. Run `yaak request schema http` for the valid fields.",
+            unknown.join(", ")
+        ));
+    }
+
+    Ok(())
+}
+
 fn enrich_schema_guidance(schema: &mut Value, request_type: RequestSchemaType) {
     if !matches!(request_type, RequestSchemaType::Http) {
         return;
@@ -119,7 +160,21 @@ fn enrich_schema_guidance(schema: &mut Value, request_type: RequestSchemaType) {
     if let Some(url_schema) = properties.get_mut("url").and_then(Value::as_object_mut) {
         append_description(
             url_schema,
-            "For path segments like `/foo/:id/comments/:commentId`, put concrete values in `urlParameters` using names without `:` (for example `id`, `commentId`).",
+            "For path segments like `/foo/:id/comments/:commentId`, put concrete values in `urlParameters` using names that keep the leading `:` (for example `:id`, `:commentId`). A name without the `:` is sent as a query string parameter instead, leaving the placeholder in the path.",
+        );
+    }
+
+    if let Some(body_type_schema) = properties.get_mut("bodyType").and_then(Value::as_object_mut) {
+        append_description(
+            body_type_schema,
+            "Known values: `application/json`, `text/xml`, `application/x-www-form-urlencoded`, `multipart/form-data`, `graphql`, `binary`, `other`, or null for no body. This selects how `body` is encoded; it does NOT add a `Content-Type` header. Add that header yourself, matching the body type (`other` pairs with `text/plain` and `graphql` with `application/json`). Multipart is the exception: its header is generated at send time to carry the boundary.",
+        );
+    }
+
+    if let Some(body_schema) = properties.get_mut("body").and_then(Value::as_object_mut) {
+        append_description(
+            body_schema,
+            "Shape depends on `bodyType`. Text-ish types (`application/json`, `text/xml`, `other`) use `{\"text\": \"...\"}` where the value is a string, so JSON bodies are a JSON string containing JSON. Form types use `{\"form\": [{\"name\": \"a\", \"value\": \"1\", \"enabled\": true}]}`, and a multipart entry may use `file` (an absolute path) and `contentType` instead of `value`. `binary` uses `{\"filePath\": \"/abs/path\"}`. `graphql` uses `{\"query\": \"...\", \"variables\": \"{}\", \"operationName\": \"\"}` where `variables` is a string of JSON.",
         );
     }
 }
@@ -353,6 +408,7 @@ fn create(
         }
 
         validate_create_id(&payload, "request")?;
+        reject_non_http_payload(&payload, "request create")?;
         let mut request: HttpRequest = serde_json::from_value(payload)
             .map_err(|e| format!("Failed to parse request create JSON: {e}"))?;
         let fallback_workspace_id = if workspace_id_arg.is_none() && request.workspace_id.is_empty()
@@ -401,6 +457,7 @@ fn create(
 fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) -> CommandResult {
     let patch = parse_required_json(json, json_input, "request update")?;
     let id = require_id(&patch, "request update")?;
+    reject_non_http_payload(&patch, "request update")?;
 
     let existing = ctx
         .db()
@@ -493,14 +550,24 @@ async fn send_http_request_by_id(
             }
         }
     });
+    // Verbose mode has a second writer on stdout (the event task above), and the two
+    // race: the body could land in the middle of the headers, or run onto the same
+    // line as the status. So buffer the body while verbose and write it once the
+    // events are done. Without -v nothing else writes, so stream it straight through.
     let body_handle = tokio::task::spawn_blocking(move || {
+        let mut buffered = Vec::new();
         let mut stdout = std::io::stdout();
         while let Some(chunk) = body_chunk_rx.blocking_recv() {
+            if verbose {
+                buffered.extend_from_slice(&chunk);
+                continue;
+            }
             if stdout.write_all(&chunk).is_err() {
                 break;
             }
             let _ = stdout.flush();
         }
+        buffered
     });
     let response_dir = ctx.data_dir().join("responses");
 
@@ -522,8 +589,16 @@ async fn send_http_request_by_id(
     })
     .await;
 
+    // Await the events first so every `*`, `>`, and `<` line is out before the body.
     let _ = event_handle.await;
-    let _ = body_handle.await;
+    if let Ok(buffered) = body_handle.await
+        && !buffered.is_empty()
+    {
+        let mut stdout = std::io::stdout();
+        let _ = stdout.write_all(&buffered);
+        let _ = stdout.flush();
+    }
+
     result.map_err(|e| e.to_string())?;
     Ok(())
 }

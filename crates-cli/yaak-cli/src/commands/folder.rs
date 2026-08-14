@@ -5,7 +5,9 @@ use crate::utils::json::{
     apply_merge_patch, is_json_shorthand, merge_workspace_id_arg, parse_optional_json,
     parse_required_json, require_id, validate_create_id,
 };
+use crate::utils::schema::append_agent_hints;
 use crate::utils::workspace::resolve_workspace_id;
+use schemars::schema_for;
 use yaak_models::models::Folder;
 use yaak_models::util::UpdateSource;
 
@@ -14,6 +16,7 @@ type CommandResult<T = ()> = std::result::Result<T, String>;
 pub fn run(ctx: &CliContext, args: FolderArgs) -> i32 {
     let result = match args.command {
         FolderCommands::List { workspace_id } => list(ctx, workspace_id.as_deref()),
+        FolderCommands::Schema { pretty } => schema(pretty),
         FolderCommands::Show { folder_id } => show(ctx, &folder_id),
         FolderCommands::Create { workspace_id, name, json } => {
             create(ctx, workspace_id, name, json)
@@ -29,6 +32,18 @@ pub fn run(ctx: &CliContext, args: FolderArgs) -> i32 {
             1
         }
     }
+}
+
+fn schema(pretty: bool) -> CommandResult {
+    let mut schema = serde_json::to_value(schema_for!(Folder))
+        .map_err(|e| format!("Failed to serialize folder schema: {e}"))?;
+    append_agent_hints(&mut schema);
+
+    let output =
+        if pretty { serde_json::to_string_pretty(&schema) } else { serde_json::to_string(&schema) }
+            .map_err(|e| format!("Failed to format folder schema JSON: {e}"))?;
+    println!("{output}");
+    Ok(())
 }
 
 fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {

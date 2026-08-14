@@ -1,17 +1,17 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+pub const AGENT_HINTS: &str = r#"Agent Hints:
+  - Template variable syntax is ${[ my_var ]}, not {{ ... }}
+  - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
+  - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
+  - Deletion requires confirmation (--yes for non-interactive environments)"#;
+
 #[derive(Parser)]
 #[command(name = "yaak")]
 #[command(about = "Yaak CLI - API client from the command line")]
 #[command(version = crate::version::cli_version())]
 #[command(disable_help_subcommand = true)]
-#[command(after_help = r#"Agent Hints:
-  - Template variable syntax is ${[ my_var ]}, not {{ ... }}
-  - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
-  - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
-  - Deletion requires confirmation (--yes for non-interactive environments)
-  "#)]
 pub struct Cli {
     /// Use a custom data directory
     #[arg(long, global = true)]
@@ -39,6 +39,9 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Install Yaak skills for AI coding agents
+    Agent(AgentArgs),
+
     /// Authentication commands
     Auth(AuthArgs),
 
@@ -82,6 +85,105 @@ pub enum Commands {
 
     /// Environment commands
     Environment(EnvironmentArgs),
+
+    /// Template function commands
+    #[command(alias = "func")]
+    TemplateFunction(TemplateFunctionArgs),
+
+    /// Response commands
+    Response(ResponseArgs),
+}
+
+#[derive(Args)]
+pub struct ResponseArgs {
+    #[command(subcommand)]
+    pub command: ResponseCommands,
+}
+
+#[derive(Subcommand)]
+pub enum ResponseCommands {
+    /// List stored responses for a request or workspace
+    List {
+        /// Request or workspace ID (optional when exactly one workspace exists)
+        id: Option<String>,
+
+        /// Maximum number of responses to return, newest first
+        #[arg(long)]
+        limit: Option<u64>,
+    },
+
+    /// Show a response as JSON, including status, timing, and headers
+    Show {
+        /// Response ID, or a request ID to use its most recent response
+        id: String,
+    },
+
+    /// Write a stored response body to stdout
+    Body {
+        /// Response ID, or a request ID to use its most recent response
+        id: String,
+    },
+
+    /// Delete stored responses for a request or workspace
+    Delete {
+        /// Request or workspace ID
+        id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
+}
+
+#[derive(Args)]
+pub struct TemplateFunctionArgs {
+    #[command(subcommand)]
+    pub command: TemplateFunctionCommands,
+}
+
+#[derive(Subcommand)]
+pub enum TemplateFunctionCommands {
+    /// List template functions provided by installed plugins
+    List {
+        /// Only show functions whose name contains this text
+        #[arg(value_name = "FILTER")]
+        filter: Option<String>,
+    },
+
+    /// Show a template function's arguments as JSON
+    Show {
+        /// Template function name (for example: response.body.path)
+        name: String,
+
+        /// Pretty-print JSON output
+        #[arg(long)]
+        pretty: bool,
+    },
+}
+
+#[derive(Args)]
+pub struct AgentArgs {
+    #[command(subcommand)]
+    pub command: AgentCommands,
+}
+
+#[derive(Subcommand)]
+pub enum AgentCommands {
+    /// Install the Yaak skill so coding agents know how to drive the CLI
+    #[command(alias = "update", alias = "add")]
+    Install {
+        /// Install for specific agents instead of all detected ones
+        #[arg(long = "agent", value_name = "AGENT")]
+        agent: Option<Vec<String>>,
+    },
+
+    /// Remove the Yaak skill
+    #[command(alias = "uninstall", alias = "rm")]
+    Remove {
+        /// Remove for specific agents instead of all detected ones
+        #[arg(long = "agent", value_name = "AGENT")]
+        agent: Option<Vec<String>>,
+    },
 }
 
 #[derive(Args)]
@@ -326,6 +428,13 @@ pub enum FolderCommands {
     List {
         /// Workspace ID (optional when exactly one workspace exists)
         workspace_id: Option<String>,
+    },
+
+    /// Output JSON schema for folder create/update payloads
+    Schema {
+        /// Pretty-print schema JSON output
+        #[arg(long)]
+        pretty: bool,
     },
 
     /// Show a folder as JSON
