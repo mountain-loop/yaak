@@ -3,7 +3,7 @@
 //! This module provides the Tauri commands for sync functionality.
 
 use crate::error::Result;
-use crate::models_ext::QueryManagerExt;
+use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use chrono::Utc;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,8 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
     workspace_id: &str,
 ) -> Result<()> {
     let db = app_handle.db();
-    let sync_state_ops = apply_sync_ops(&db, workspace_id, sync_dir, sync_ops)?;
+    let blobs = app_handle.blob_manager();
+    let sync_state_ops = apply_sync_ops(&db, &blobs, workspace_id, sync_dir, sync_ops)?;
     apply_sync_state_ops(&db, workspace_id, sync_dir, sync_state_ops)?;
     Ok(())
 }

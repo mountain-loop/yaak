@@ -33,8 +33,8 @@ const syncAfterModelWrite = eagerDebounceAsync(sync, 1000);
  * simply add long-lived subscribers for the lifetime of the app.
  */
 function initModelListeners() {
-  listenToTauriEvent<ModelPayload>("model_write", (p) => {
-    if (isModelRelevant(p.payload.model)) syncAfterModelWrite();
+  listenToTauriEvent<ModelPayload[]>("model_writes", (p) => {
+    if (p.payload.some((payload) => isModelRelevant(payload.model))) syncAfterModelWrite();
   });
 }
 

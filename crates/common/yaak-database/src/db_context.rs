@@ -160,6 +160,24 @@ impl<'a> DbContext<'a> {
         Ok((m, created))
     }
 
+    /// Bulk-delete all rows matching a column value with a single statement.
+    /// Returns the number of rows deleted.
+    pub fn delete_many<M>(
+        &self,
+        col: impl IntoColumnRef,
+        value: impl Into<SimpleExpr>,
+    ) -> Result<usize>
+    where
+        M: UpsertModelInfo,
+    {
+        let (sql, params) = Query::delete()
+            .from_table(M::table_name())
+            .cond_where(Expr::col(col).eq(value))
+            .build_rusqlite(SqliteQueryBuilder);
+        let count = self.conn.execute(sql.as_str(), &*params.as_params())?;
+        Ok(count)
+    }
+
     /// Delete a model by its ID. Returns the number of rows deleted.
     pub fn delete<M>(&self, m: &M) -> Result<usize>
     where

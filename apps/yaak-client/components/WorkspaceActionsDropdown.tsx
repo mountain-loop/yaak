@@ -16,6 +16,7 @@ import { useCreateWorkspace } from "../hooks/useCreateWorkspace";
 import { useDeleteSendHistory } from "../hooks/useDeleteSendHistory";
 import { useWorkspaceActions } from "../hooks/useWorkspaceActions";
 import { showDialog } from "../lib/dialog";
+import { importData } from "../lib/importData";
 import { jotaiStore } from "../lib/jotai";
 import { revealInFinderText } from "../lib/reveal";
 import { CloneGitRepositoryDialog } from "./CloneGitRepositoryDialog";
@@ -89,6 +90,11 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
             label: "Clone Git Repository",
             leftSlot: <Icon icon="hard_drive_download" />,
             onSelect: openCloneGitRepositoryDialog,
+          },
+          {
+            label: "Import Data",
+            leftSlot: <Icon icon="folder_input" />,
+            onSelect: () => importData.mutate(),
           },
         ],
       },

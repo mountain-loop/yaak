@@ -79,6 +79,15 @@ impl BlobContext {
         Ok(chunks)
     }
 
+    /// List all distinct body IDs in the blob database.
+    pub fn list_body_ids(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare("SELECT DISTINCT body_id FROM body_chunks")?;
+        let ids = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<std::result::Result<Vec<String>, _>>()?;
+        Ok(ids)
+    }
+
     /// Delete all chunks for a body.
     pub fn delete_chunks(&self, body_id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM body_chunks WHERE body_id = ?1", params![body_id])?;

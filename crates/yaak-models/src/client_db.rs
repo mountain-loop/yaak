@@ -65,6 +65,21 @@ impl<'a> ClientDb<'a> {
         Ok(self.ctx.find_many(col, value, limit)?)
     }
 
+    /// Bulk-delete all rows matching a column value WITHOUT recording model
+    /// changes or emitting events. Only use for cascades whose deletion is
+    /// implied by a recorded parent delete (e.g. workspace children — see
+    /// [`ModelChangeEvent::Delete`]).
+    pub(crate) fn delete_many_untracked<M>(
+        &self,
+        col: impl IntoColumnRef,
+        value: impl Into<SimpleExpr>,
+    ) -> Result<usize>
+    where
+        M: UpsertModelInfo,
+    {
+        Ok(self.ctx.delete_many::<M>(col, value)?)
+    }
+
     // --- Write operations (with event recording) ---
 
     pub(crate) fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>

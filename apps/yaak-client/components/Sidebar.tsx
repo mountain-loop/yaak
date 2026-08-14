@@ -1,5 +1,6 @@
 import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { debounce } from "@yaakapp-internal/lib";
 import { gitMutations } from "@yaakapp-internal/git";
 import type { GitStatus } from "@yaakapp-internal/git";
@@ -131,11 +132,17 @@ function Sidebar({ className }: { className?: string }) {
     if (!didFocus) filterRef.current?.focus();
   }, []);
 
-  // Focus any new sidebar models when created
-  useListenToTauriEvent<ModelPayload>("model_write", ({ payload }) => {
-    if (!isSidebarLeafModel(payload.model)) return;
-    if (!(payload.change.type === "upsert" && payload.change.created)) return;
-    treeRef.current?.selectItem(payload.model.id, true);
+  // Focus new sidebar models created by the user in this window. Writes from other
+  // sources (import, sync, CLI) can carry thousands of models and shouldn't move
+  // the selection.
+  useListenToTauriEvent<ModelPayload[]>("model_writes", ({ payload: payloads }) => {
+    for (const payload of payloads) {
+      if (payload.updateSource.type !== "window") continue;
+      if (payload.updateSource.label !== getCurrentWebviewWindow().label) continue;
+      if (!isSidebarLeafModel(payload.model)) continue;
+      if (!(payload.change.type === "upsert" && payload.change.created)) continue;
+      treeRef.current?.selectItem(payload.model.id, true);
+    }
   });
 
   useEffect(() => {

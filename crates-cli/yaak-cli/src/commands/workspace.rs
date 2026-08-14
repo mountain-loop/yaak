@@ -131,7 +131,7 @@ fn delete(ctx: &CliContext, workspace_id: &str, yes: bool) -> CommandResult {
 
     let deleted = ctx
         .db()
-        .delete_workspace_by_id(workspace_id, &UpdateSource::Sync)
+        .delete_workspace_by_id(workspace_id, &UpdateSource::Sync, ctx.blob_manager())
         .map_err(|e| format!("Failed to delete workspace: {e}"))?;
     println!("Deleted workspace: {}", deleted.id);
     Ok(())

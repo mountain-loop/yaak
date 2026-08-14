@@ -14,7 +14,7 @@ use yaak_models::client_db::ClientDb;
 use yaak_models::error::Result;
 use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
-use yaak_models::util::UpdateSource;
+use yaak_models::util::{ModelPayload, UpdateSource};
 use yaak_plugins::manager::PluginManager;
 
 const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
@@ -57,6 +57,7 @@ fn drain_model_changes_batch<R: Runtime>(
     }
 
     let fetched_count = changes.len();
+    let mut batch: Vec<ModelPayload> = Vec::with_capacity(fetched_count);
     for change in changes {
         cursor.created_at = change.created_at;
         cursor.id = change.id;
@@ -66,8 +67,14 @@ fn drain_model_changes_batch<R: Runtime>(
         if matches!(change.payload.update_source, UpdateSource::Window { .. }) {
             continue;
         }
-        if let Err(err) = app_handle.emit("model_write", change.payload) {
-            error!("Failed to emit model_write event: {err:?}");
+        batch.push(change.payload);
+    }
+
+    // Emit as a single batch so bulk writes (imports, sync, CLI) don't flood the
+    // frontend with per-model events.
+    if !batch.is_empty() {
+        if let Err(err) = app_handle.emit("model_writes", batch) {
+            error!("Failed to emit model_writes event: {err:?}");
         }
     }
 
@@ -162,33 +169,39 @@ pub(crate) fn models_upsert<R: Runtime>(
     Ok(id)
 }
 
+// Async so cascading deletes (e.g. a workspace with thousands of requests) run on a
+// blocking thread instead of stalling the main thread and all other IPC.
 #[tauri::command]
-pub(crate) fn models_delete<R: Runtime>(
+pub(crate) async fn models_delete<R: Runtime>(
     window: WebviewWindow<R>,
     model: AnyModel,
 ) -> Result<String> {
     use yaak_models::error::Error::GenericError;
 
-    let blobs = window.blob_manager();
-    // Use transaction for deletions because it might recurse
-    window.with_tx(|tx| {
-        let source = &UpdateSource::from_window_label(window.label());
-        let id = match model {
-            AnyModel::CookieJar(m) => tx.delete_cookie_jar(&m, source)?.id,
-            AnyModel::Environment(m) => tx.delete_environment(&m, source)?.id,
-            AnyModel::Folder(m) => tx.delete_folder(&m, source)?.id,
-            AnyModel::GrpcConnection(m) => tx.delete_grpc_connection(&m, source)?.id,
-            AnyModel::GrpcRequest(m) => tx.delete_grpc_request(&m, source)?.id,
-            AnyModel::HttpRequest(m) => tx.delete_http_request(&m, source)?.id,
-            AnyModel::HttpResponse(m) => tx.delete_http_response(&m, source, &blobs)?.id,
-            AnyModel::Plugin(m) => tx.delete_plugin(&m, source)?.id,
-            AnyModel::WebsocketConnection(m) => tx.delete_websocket_connection(&m, source)?.id,
-            AnyModel::WebsocketRequest(m) => tx.delete_websocket_request(&m, source)?.id,
-            AnyModel::Workspace(m) => tx.delete_workspace(&m, source)?.id,
-            a => return Err(GenericError(format!("Cannot delete AnyModel {a:?})"))),
-        };
-        Ok(id)
+    tauri::async_runtime::spawn_blocking(move || {
+        let blobs = window.blob_manager();
+        // Use transaction for deletions because it might recurse
+        window.with_tx(|tx| {
+            let source = &UpdateSource::from_window_label(window.label());
+            let id = match model {
+                AnyModel::CookieJar(m) => tx.delete_cookie_jar(&m, source)?.id,
+                AnyModel::Environment(m) => tx.delete_environment(&m, source)?.id,
+                AnyModel::Folder(m) => tx.delete_folder(&m, source)?.id,
+                AnyModel::GrpcConnection(m) => tx.delete_grpc_connection(&m, source)?.id,
+                AnyModel::GrpcRequest(m) => tx.delete_grpc_request(&m, source)?.id,
+                AnyModel::HttpRequest(m) => tx.delete_http_request(&m, source)?.id,
+                AnyModel::HttpResponse(m) => tx.delete_http_response(&m, source, &blobs)?.id,
+                AnyModel::Plugin(m) => tx.delete_plugin(&m, source)?.id,
+                AnyModel::WebsocketConnection(m) => tx.delete_websocket_connection(&m, source)?.id,
+                AnyModel::WebsocketRequest(m) => tx.delete_websocket_request(&m, source)?.id,
+                AnyModel::Workspace(m) => tx.delete_workspace(&m, source, &blobs)?.id,
+                a => return Err(GenericError(format!("Cannot delete AnyModel {a:?})"))),
+            };
+            Ok(id)
+        })
     })
+    .await
+    .map_err(|e| GenericError(format!("Delete task failed: {e}")))?
 }
 
 #[tauri::command]
@@ -364,6 +377,20 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
             let poll_query_manager = query_manager.clone();
 
+            // GC response bodies orphaned by cascade deletes, which historically
+            // didn't clean the blob DB or responses directory
+            let gc_query_manager = query_manager.clone();
+            let gc_blob_manager = blob_manager.clone();
+            let gc_responses_dir = app_path.join("responses");
+            tauri::async_runtime::spawn_blocking(move || {
+                let db = gc_query_manager.connect();
+                match db.delete_orphaned_response_bodies(&gc_blob_manager, &gc_responses_dir) {
+                    Ok(0) => {}
+                    Ok(n) => log::info!("Deleted {n} orphaned response bodies"),
+                    Err(e) => error!("Failed to delete orphaned response bodies: {e:?}"),
+                }
+            });
+
             app_handle.manage(query_manager);
             app_handle.manage(blob_manager);
 
@@ -378,12 +405,22 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             // current sync-model UX snappy, while DB polling handles external writers (CLI).
             let app_handle_local = app_handle.clone();
             tauri::async_runtime::spawn(async move {
-                for payload in rx {
-                    if !matches!(payload.update_source, UpdateSource::Window { .. }) {
+                while let Ok(payload) = rx.recv() {
+                    let mut batch: Vec<ModelPayload> = Vec::new();
+                    if matches!(payload.update_source, UpdateSource::Window { .. }) {
+                        batch.push(payload);
+                    }
+                    // Coalesce any writes already queued into the same emit
+                    while let Ok(next) = rx.try_recv() {
+                        if matches!(next.update_source, UpdateSource::Window { .. }) {
+                            batch.push(next);
+                        }
+                    }
+                    if batch.is_empty() {
                         continue;
                     }
-                    if let Err(err) = app_handle_local.emit("model_write", payload) {
-                        error!("Failed to emit local model_write event: {err:?}");
+                    if let Err(err) = app_handle_local.emit("model_writes", batch) {
+                        error!("Failed to emit local model_writes event: {err:?}");
                     }
                 }
             });
