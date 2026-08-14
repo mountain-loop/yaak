@@ -17,26 +17,76 @@ export function initModelStore(store: JotaiStore) {
   window.addEventListener("beforeunload", flushAllPendingPatches);
 
   getCurrentWebviewWindow()
-    .listen<ModelPayload>("model_write", ({ payload }) => {
-      if (shouldIgnoreModel(payload)) return;
-
+    .listen<ModelPayload[]>("model_writes", ({ payload: payloads }) => {
       mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
-        if (payload.change.type === "upsert") {
-          return {
-            ...prev,
-            [payload.model.model]: {
-              ...prev[payload.model.model],
-              [payload.model.id]: payload.model,
-            },
-          };
-        } else {
-          const modelData = { ...prev[payload.model.model] };
-          delete modelData[payload.model.id];
-          return { ...prev, [payload.model.model]: modelData };
+        // Apply the entire batch in one update, cloning each touched bucket only
+        // once. Bulk writes (imports, sync, CLI) can carry hundreds of models.
+        const next = { ...prev };
+        const clonedBuckets = new Set<AnyModel["model"]>();
+        let changed = false;
+
+        for (const payload of payloads) {
+          if (shouldIgnoreModel(payload)) continue;
+
+          if (payload.change.type === "upsert") {
+            const modelType = payload.model.model;
+            if (!clonedBuckets.has(modelType)) {
+              next[modelType] = { ...next[modelType] } as never;
+              clonedBuckets.add(modelType);
+            }
+            (next[modelType] as Record<string, AnyModel>)[payload.model.id] = payload.model;
+            changed = true;
+          } else {
+            changed = applyModelDelete(next, clonedBuckets, payload.model) || changed;
+          }
         }
+
+        return changed ? next : prev;
       });
     })
     .catch(console.error);
+}
+
+function deleteFromBucket(
+  next: ModelStoreData,
+  clonedBuckets: Set<AnyModel["model"]>,
+  modelType: AnyModel["model"],
+  id: string,
+): boolean {
+  if ((next[modelType] as Record<string, AnyModel>)[id] == null) return false;
+  if (!clonedBuckets.has(modelType)) {
+    next[modelType] = { ...next[modelType] } as never;
+    clonedBuckets.add(modelType);
+  }
+  delete (next[modelType] as Record<string, AnyModel>)[id];
+  return true;
+}
+
+/**
+ * Apply a model delete to store data, mutating `next` in place (buckets are
+ * cloned once, tracked via `clonedBuckets`). A workspace delete implies its
+ * entire subtree: the backend bulk-deletes children and records/emits only the
+ * workspace event (see ModelChangeEvent), so prune them here.
+ */
+function applyModelDelete(
+  next: ModelStoreData,
+  clonedBuckets: Set<AnyModel["model"]>,
+  model: AnyModel,
+): boolean {
+  let changed = deleteFromBucket(next, clonedBuckets, model.model, model.id);
+
+  if (model.model === "workspace") {
+    for (const modelType of Object.keys(next) as AnyModel["model"][]) {
+      const bucket = next[modelType] as Record<string, AnyModel>;
+      for (const [id, m] of Object.entries(bucket)) {
+        if ("workspaceId" in m && m.workspaceId === model.id) {
+          changed = deleteFromBucket(next, clonedBuckets, modelType, id) || changed;
+        }
+      }
+    }
+  }
+
+  return changed;
 }
 
 function mustStore(): JotaiStore {
@@ -243,6 +293,15 @@ export async function deleteModel<M extends AnyModel["model"], T extends Extract
     throw new Error("Failed to delete null model");
   }
   await trackModelWrite(invoke<string>("models_delete", { model }));
+
+  // Apply the delete locally right away so callers can rely on the store once the
+  // promise resolves. The backend echo arrives async, so anything that reads the
+  // store immediately after awaiting (e.g. redirecting away from a deleted
+  // workspace) would otherwise race it. The echo re-applying later is a no-op.
+  mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
+    const next = { ...prev };
+    return applyModelDelete(next, new Set(), model as AnyModel) ? next : prev;
+  });
 }
 
 export async function duplicateModel<

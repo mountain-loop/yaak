@@ -12,10 +12,12 @@ function setFonts(settings: Settings) {
   );
 }
 
-listen<ModelPayload>("model_write", async (event) => {
-  if (event.payload.change.type !== "upsert") return;
-  if (event.payload.model.model !== "settings") return;
-  setFonts(event.payload.model);
+listen<ModelPayload[]>("model_writes", async (event) => {
+  for (const payload of event.payload) {
+    if (payload.change.type !== "upsert") continue;
+    if (payload.model.model !== "settings") continue;
+    setFonts(payload.model);
+  }
 }).catch(console.error);
 
 fireAndForget(getSettings().then((settings) => setFonts(settings)));

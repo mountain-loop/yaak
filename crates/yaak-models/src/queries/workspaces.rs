@@ -1,10 +1,16 @@
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
-    AnyModel, EnvironmentIden, FolderIden, GrpcRequestIden, HttpRequestHeader, HttpRequestIden,
-    ResolvedHttpRequestSettings, ResolvedSetting, WebsocketRequestIden, Workspace, WorkspaceIden,
+    AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
+    GraphQlIntrospection, GraphQlIntrospectionIden, GrpcConnection, GrpcConnectionIden, GrpcEvent,
+    GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader, HttpRequestIden,
+    HttpResponse, HttpResponseEvent, HttpResponseEventIden, HttpResponseIden,
+    ResolvedHttpRequestSettings, ResolvedSetting, SyncState, SyncStateIden, WebsocketConnection,
+    WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden, WebsocketRequest,
+    WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
 };
 use crate::util::UpdateSource;
+use log::warn;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -32,30 +38,50 @@ impl<'a> ClientDb<'a> {
         Ok(workspaces)
     }
 
+    /// Delete a workspace and everything in it.
+    ///
+    /// Children are bulk-deleted with one statement per table and are NOT
+    /// individually recorded in model_changes or emitted as events — the single
+    /// workspace delete event implies the subtree (see [`ModelChangeEvent::Delete`]).
+    /// This keeps huge workspaces (thousands of requests) fast and avoids
+    /// flooding event consumers.
     pub fn delete_workspace(
         &self,
         workspace: &Workspace,
         source: &UpdateSource,
     ) -> Result<Workspace> {
-        for m in self.find_many(HttpRequestIden::WorkspaceId, &workspace.id, None)? {
-            self.delete_http_request(&m, source)?;
+        let wid = workspace.id.as_str();
+
+        // Response bodies can live on disk; remove them before dropping the rows
+        for m in self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, wid, None)? {
+            if let Some(p) = m.body_path {
+                if let Err(e) = std::fs::remove_file(&p) {
+                    warn!("Failed to delete response body file {p:?}: {e}");
+                }
+            }
         }
 
-        for m in self.find_many(GrpcRequestIden::WorkspaceId, &workspace.id, None)? {
-            self.delete_grpc_request(&m, source)?;
-        }
-
-        for m in self.find_many(WebsocketRequestIden::FolderId, &workspace.id, None)? {
-            self.delete_websocket_request(&m, source)?;
-        }
-
-        for m in self.find_many(FolderIden::WorkspaceId, &workspace.id, None)? {
-            self.delete_folder(&m, source)?;
-        }
-
-        for m in self.find_many(EnvironmentIden::WorkspaceId, &workspace.id, None)? {
-            self.delete_environment(&m, source)?;
-        }
+        self.delete_many_untracked::<HttpResponseEvent>(HttpResponseEventIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<HttpResponse>(HttpResponseIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<HttpRequest>(HttpRequestIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<GrpcEvent>(GrpcEventIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<GrpcConnection>(GrpcConnectionIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<GrpcRequest>(GrpcRequestIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<WebsocketEvent>(WebsocketEventIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<WebsocketConnection>(
+            WebsocketConnectionIden::WorkspaceId,
+            wid,
+        )?;
+        self.delete_many_untracked::<WebsocketRequest>(WebsocketRequestIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<GraphQlIntrospection>(
+            GraphQlIntrospectionIden::WorkspaceId,
+            wid,
+        )?;
+        self.delete_many_untracked::<Folder>(FolderIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<Environment>(EnvironmentIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<CookieJar>(CookieJarIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<SyncState>(SyncStateIden::WorkspaceId, wid)?;
+        self.delete_many_untracked::<WorkspaceMeta>(WorkspaceMetaIden::WorkspaceId, wid)?;
 
         self.delete(workspace, source)
     }

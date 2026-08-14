@@ -46,11 +46,13 @@ async function configureThemeAndShow() {
 }
 
 // Listen for settings changes, the re-compute theme
-listen<ModelPayload>("model_write", async (event) => {
-  if (event.payload.change.type !== "upsert") return;
-
-  const model = event.payload.model.model;
-  if (model !== "settings" && model !== "plugin") return;
+listen<ModelPayload[]>("model_writes", async (event) => {
+  const relevant = event.payload.some(
+    (p) =>
+      p.change.type === "upsert" &&
+      (p.model.model === "settings" || p.model.model === "plugin"),
+  );
+  if (!relevant) return;
   await configureThemeAndShow();
 }).catch(console.error);
 
