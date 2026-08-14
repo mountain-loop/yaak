@@ -3,15 +3,15 @@ import { platform } from "@yaakapp-internal/platform";
 import type { RpcSchema } from "@yaakapp-internal/tauri-client";
 
 /**
- * Every backend command the app can call: the generated wire schema (one field
- * per `RpcRouter` registration on the Rust side), plus host plugin commands
- * that ride outside the envelope. A typo'd or unregistered command name is a
- * compile error.
+ * Every backend command the app can call: the generated wire schema, one field
+ * per `RpcRouter` registration on the Rust side. A typo'd or unregistered
+ * command name is a compile error. Host plugin commands (license, fonts,
+ * mac-window) don't appear here — each lives behind its own package's facade.
  *
  * `RpcSchema` also carries each command's request and response payload types;
  * adopting them at call sites is an incremental follow-up.
  */
-type AppCmd = keyof RpcSchema | "plugin:yaak-license|check";
+type AppCmd = keyof RpcSchema;
 
 /** Call a backend command. */
 export function rpc<T>(cmd: AppCmd, payload?: RpcPayload): Promise<T> {

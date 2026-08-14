@@ -1,10 +1,9 @@
-import type { LicenseCheckStatus } from "@yaakapp-internal/license";
+import { checkLicense } from "@yaakapp-internal/license";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useKeyValue } from "../hooks/useKeyValue";
 import { appInfo } from "../lib/appInfo";
 import { pricingUrl } from "../lib/pricingUrl";
 import { DismissibleBanner } from "./core/DismissibleBanner";
-import { rpc } from "../lib/rpc";
 import { platform } from "@yaakapp-internal/platform";
 
 const COMMERCIAL_USE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -95,7 +94,7 @@ async function shouldShowCommercialUsePrompt(): Promise<boolean> {
   }
 
   try {
-    const license = await rpc<LicenseCheckStatus>("plugin:yaak-license|check");
+    const license = await checkLicense();
     return license.status === "personal_use";
   } catch (err) {
     console.log("Failed to check license before commercial-use prompt", err);
