@@ -27,6 +27,7 @@ export function initModelStore(store: JotaiStore) {
 
         for (const payload of payloads) {
           if (shouldIgnoreModel(payload)) continue;
+          if (isUnsafeObjectKey(payload.model.model)) continue;
           if (isUnsafeObjectKey(payload.model.id)) continue;
 
           if (payload.change.type === "upsert") {
@@ -63,6 +64,7 @@ function deleteFromBucket(
   modelType: AnyModel["model"],
   id: string,
 ): boolean {
+  if (isUnsafeObjectKey(modelType)) return false;
   if (isUnsafeObjectKey(id)) return false;
   if (!Object.prototype.hasOwnProperty.call(next[modelType], id)) return false;
   if (!clonedBuckets.has(modelType)) {
