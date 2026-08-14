@@ -2,6 +2,7 @@ export type { Appearance } from "./appearance";
 export {
   subscribeToCSSAppearanceChange,
   getCSSAppearance,
+  getSystemAppearance,
   getWindowAppearance,
   resolveAppearance,
   subscribeToPreferredAppearance,

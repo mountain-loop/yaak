@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 dark-light = "2.0.0"
 
 [dependencies]
