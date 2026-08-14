@@ -83,14 +83,38 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
         if !dir.exists() {
             continue;
         }
-        match fs::remove_dir_all(&dir) {
-            Ok(()) => {
-                removed += 1;
-                ui::success(&format!("Removed {}", dir.display()));
+
+        // Delete only what we wrote and the user has not since changed. Anything they
+        // edited or added is theirs, and uninstalling is not a reason to lose it.
+        let manifest = read_manifest(&dir);
+        let mut kept = Vec::new();
+        for (relative, written) in &manifest.files {
+            let path = dir.join(relative);
+            match fs::read(&path) {
+                Ok(on_disk) if sha256(&on_disk) == *written => {
+                    if let Err(error) = fs::remove_file(&path) {
+                        ui::warning_stderr(&format!(
+                            "Failed to remove {}: {error}",
+                            path.display()
+                        ));
+                    }
+                }
+                Ok(_) => kept.push(relative.clone()),
+                Err(_) => {} // Already gone
             }
-            Err(error) => {
-                ui::warning_stderr(&format!("Failed to remove {}: {error}", dir.display()))
+        }
+
+        let _ = fs::remove_file(dir.join(MANIFEST_NAME));
+        prune_empty_dirs(&dir);
+
+        removed += 1;
+        if dir.exists() {
+            ui::success(&format!("Removed the Yaak skill from {}", dir.display()));
+            for path in kept {
+                ui::warning(&format!("  kept your edited {path}"));
             }
+        } else {
+            ui::success(&format!("Removed {}", dir.display()));
         }
     }
 
@@ -98,6 +122,32 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
         ui::info("No Yaak skill was installed");
     }
     Ok(())
+}
+
+/// Remove empty directories depth-first, including `dir` itself when nothing is left.
+fn prune_empty_dirs(dir: &Path) {
+    prune_empty_dirs_below(dir);
+    if is_empty_dir(dir) {
+        let _ = fs::remove_dir(dir);
+    }
+}
+
+/// Same, but always keeps `dir` itself.
+fn prune_empty_dirs_below(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            prune_empty_dirs(&path);
+        }
+    }
+}
+
+fn is_empty_dir(dir: &Path) -> bool {
+    fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_none())
 }
 
 enum WriteOutcome {
@@ -136,6 +186,22 @@ fn write_skill(dir: &Path, force: bool) -> CommandResult<WriteOutcome> {
             .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
         manifest.files.insert(relative, digest);
     }
+
+    // Drop files an earlier version shipped that this one no longer does, so a stale
+    // reference can't sit alongside the refreshed guidance. Files the user has since
+    // edited are left behind and stop being tracked; they belong to them now.
+    for (relative, written) in &previous.files {
+        if manifest.files.contains_key(relative) {
+            continue;
+        }
+        let path = dir.join(relative);
+        if fs::read(&path).is_ok_and(|on_disk| sha256(&on_disk) == *written)
+            && let Err(error) = fs::remove_file(&path)
+        {
+            ui::warning_stderr(&format!("Failed to remove stale {}: {error}", path.display()));
+        }
+    }
+    prune_empty_dirs_below(dir);
 
     let manifest_json = serde_json::to_string_pretty(&manifest)
         .map_err(|e| format!("Failed to serialize skill manifest: {e}"))?;
