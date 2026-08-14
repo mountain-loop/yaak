@@ -70,7 +70,7 @@ jobs:
             runtime: "wry"
             targets: "aarch64-pc-windows-msvc"
     runs-on: ${{ matrix.platform }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - name: Checkout yaakapp/app
         uses: actions/checkout@v4
