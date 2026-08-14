@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+import { platform } from "@yaakapp-internal/platform";
 import { Fonts } from "./bindings/gen_fonts";
 
 export async function listFonts() {
-  return invoke<Fonts>("plugin:yaak-fonts|list", {});
+  return platform.rpc<Fonts>("plugin:yaak-fonts|list", {});
 }
 
 export function useFonts() {

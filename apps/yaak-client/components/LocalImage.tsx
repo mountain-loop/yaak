@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { resolveResource } from "@tauri-apps/api/path";
 import classNames from "classnames";
+import { platform } from "@yaakapp-internal/platform";
 
 interface Props {
   src: string;
@@ -12,8 +11,8 @@ export function LocalImage({ src: srcPath, className }: Props) {
   const src = useQuery({
     queryKey: ["local-image", srcPath],
     queryFn: async () => {
-      const p = await resolveResource(srcPath);
-      return convertFileSrc(p);
+      const p = await platform.files.resolveResource(srcPath);
+      return platform.files.url(p);
     },
   });
 

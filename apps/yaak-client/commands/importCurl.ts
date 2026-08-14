@@ -5,7 +5,7 @@ import { createFastMutation } from "../hooks/useFastMutation";
 import { wasUpdatedExternally } from "../hooks/useRequestUpdateKey";
 import { createRequestAndNavigate } from "../lib/createRequestAndNavigate";
 import { jotaiStore } from "../lib/jotai";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { showToast } from "../lib/toast";
 
 export function looksLikeCurl(text: string) {
@@ -20,7 +20,7 @@ export const importCurl = createFastMutation<
   mutationKey: ["import_curl"],
   mutationFn: async ({ overwriteRequestId, command }) => {
     const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-    const importedRequest: HttpRequest = await invokeCmd("cmd_curl_to_request", {
+    const importedRequest: HttpRequest = await rpc("cmd_curl_to_request", {
       command,
       workspaceId,
     });

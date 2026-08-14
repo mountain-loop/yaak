@@ -1,6 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "@yaakapp-internal/models";
+import { rpc } from "./rpc";
 
 export function getSettings(): Promise<Settings> {
-  return invoke<Settings>("models_get_settings");
+  return rpc<Settings>("models_get_settings");
 }

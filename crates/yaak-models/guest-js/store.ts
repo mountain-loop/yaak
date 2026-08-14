@@ -1,5 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { platform } from "@yaakapp-internal/platform";
 import { debounce } from "@yaakapp-internal/lib";
 import { AnyModel, ModelPayload } from "../bindings/gen_models";
 import { modelStoreDataAtom } from "./atoms";
@@ -16,37 +15,35 @@ export function initModelStore(store: JotaiStore) {
   // Don't lose debounced patches if the window closes while one is pending
   window.addEventListener("beforeunload", flushAllPendingPatches);
 
-  getCurrentWebviewWindow()
-    .listen<ModelPayload[]>("model_writes", ({ payload: payloads }) => {
-      mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
-        // Apply the entire batch in one update, cloning each touched bucket only
-        // once. Bulk writes (imports, sync, CLI) can carry hundreds of models.
-        const next = { ...prev };
-        const clonedBuckets = new Set<AnyModel["model"]>();
-        let changed = false;
+  platform.listen<ModelPayload[]>("model_writes", (payloads) => {
+    mustStore().set(modelStoreDataAtom, (prev: ModelStoreData) => {
+      // Apply the entire batch in one update, cloning each touched bucket only
+      // once. Bulk writes (imports, sync, CLI) can carry hundreds of models.
+      const next = { ...prev };
+      const clonedBuckets = new Set<AnyModel["model"]>();
+      let changed = false;
 
-        for (const payload of payloads) {
-          if (shouldIgnoreModel(payload)) continue;
-          if (isUnsafeObjectKey(payload.model.model)) continue;
-          if (isUnsafeObjectKey(payload.model.id)) continue;
+      for (const payload of payloads) {
+        if (shouldIgnoreModel(payload)) continue;
+        if (isUnsafeObjectKey(payload.model.model)) continue;
+        if (isUnsafeObjectKey(payload.model.id)) continue;
 
-          if (payload.change.type === "upsert") {
-            const modelType = payload.model.model;
-            if (!clonedBuckets.has(modelType)) {
-              next[modelType] = { ...next[modelType] } as never;
-              clonedBuckets.add(modelType);
-            }
-            (next[modelType] as Record<string, AnyModel>)[payload.model.id] = payload.model;
-            changed = true;
-          } else {
-            changed = applyModelDelete(next, clonedBuckets, payload.model) || changed;
+        if (payload.change.type === "upsert") {
+          const modelType = payload.model.model;
+          if (!clonedBuckets.has(modelType)) {
+            next[modelType] = { ...next[modelType] } as never;
+            clonedBuckets.add(modelType);
           }
+          (next[modelType] as Record<string, AnyModel>)[payload.model.id] = payload.model;
+          changed = true;
+        } else {
+          changed = applyModelDelete(next, clonedBuckets, payload.model) || changed;
         }
+      }
 
-        return changed ? next : prev;
-      });
-    })
-    .catch(console.error);
+      return changed ? next : prev;
+    });
+  });
 }
 
 /**
@@ -211,7 +208,7 @@ let _activeWorkspaceId: string | null = null;
 
 export async function changeModelStoreWorkspace(workspaceId: string | null) {
   console.log("Syncing models with new workspace", workspaceId);
-  const workspaceModelsStr = await invoke<string>("models_workspace_models", {
+  const workspaceModelsStr = await platform.rpc<string>("models_workspace_models", {
     workspaceId, // NOTE: if no workspace id provided, it will just fetch global models
   });
   const workspaceModels = JSON.parse(workspaceModelsStr) as AnyModel[];
@@ -288,7 +285,7 @@ export async function patchModel<M extends AnyModel["model"], T extends ExtractM
 export async function updateModel<M extends AnyModel["model"], T extends ExtractModel<AnyModel, M>>(
   model: T,
 ): Promise<string> {
-  return trackModelWrite(invoke<string>("models_upsert", { model }));
+  return trackModelWrite(platform.rpc<string>("models_upsert", { model }));
 }
 
 export async function deleteModelById<
@@ -305,7 +302,7 @@ export async function deleteModel<M extends AnyModel["model"], T extends Extract
   if (model == null) {
     throw new Error("Failed to delete null model");
   }
-  await trackModelWrite(invoke<string>("models_delete", { model }));
+  await trackModelWrite(platform.rpc<string>("models_delete", { model }));
 
   // Apply the delete locally right away so callers can rely on the store once the
   // promise resolves. The backend echo arrives async, so anything that reads the
@@ -331,20 +328,20 @@ export async function duplicateModel<
   await flushAllModelWrites();
 
   return trackModelWrite(
-    invoke<string>("models_duplicate", { modelType: model.model, modelId: model.id }),
+    platform.rpc<string>("models_duplicate", { modelType: model.model, modelId: model.id }),
   );
 }
 
 export async function createGlobalModel<T extends Exclude<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, "model">,
 ): Promise<string> {
-  return trackModelWrite(invoke<string>("models_upsert", { model: patch }));
+  return trackModelWrite(platform.rpc<string>("models_upsert", { model: patch }));
 }
 
 export async function createWorkspaceModel<T extends Extract<AnyModel, { workspaceId: string }>>(
   patch: Partial<T> & Pick<T, "model" | "workspaceId">,
 ): Promise<string> {
-  return trackModelWrite(invoke<string>("models_upsert", { model: patch }));
+  return trackModelWrite(platform.rpc<string>("models_upsert", { model: patch }));
 }
 
 export function replaceModelsInStore<
@@ -399,7 +396,7 @@ function shouldIgnoreModel({ model, updateSource }: ModelPayload) {
   }
 
   // Never ignore same-window updates
-  if (updateSource.label === getCurrentWebviewWindow().label) {
+  if (updateSource.label === platform.window.label) {
     return false;
   }
 

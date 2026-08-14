@@ -1,5 +1,4 @@
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { open } from "@tauri-apps/plugin-dialog";
+import { platform } from "@yaakapp-internal/platform";
 import { HStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import mime from "mime";
@@ -41,7 +40,7 @@ export function SelectFile({
   ...props
 }: Props) {
   const handleClick = async () => {
-    const filePath = await open({
+    const filePath = await platform.dialog.open({
       title: directory ? "Select Folder" : "Select File",
       multiple: false,
       directory,
@@ -64,32 +63,21 @@ export function SelectFile({
   // NOTE: This doesn't work for Windows since native drag-n-drop can't work at the same tmie
   //  as browser drag-n-drop.
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    const setup = async () => {
-      const webview = getCurrentWebviewWindow();
-      unlisten = await webview.onDragDropEvent((event) => {
-        if (event.payload.type === "over") {
-          const p = event.payload.position;
-          const r = ref.current?.getBoundingClientRect();
-          if (r == null) return;
-          const isOver = p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
-          console.log("IS OVER", isOver);
-          setIsHovering(isOver);
-        } else if (event.payload.type === "drop" && isHovering) {
-          console.log("User dropped", event.payload.paths);
-          const p = event.payload.paths[0];
-          if (p) onChange({ filePath: p, contentType: null });
-          setIsHovering(false);
-        } else {
-          console.log("File drop cancelled");
-          setIsHovering(false);
-        }
-      });
-    };
-    setup().catch(console.error);
-    return () => {
-      if (unlisten) unlisten();
-    };
+    return platform.window.onDragDrop((event) => {
+      if (event.type === "over") {
+        const p = event.position;
+        const r = ref.current?.getBoundingClientRect();
+        if (r == null) return;
+        const isOver = p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
+        setIsHovering(isOver);
+      } else if (event.type === "drop" && isHovering) {
+        const p = event.paths[0];
+        if (p) onChange({ filePath: p, contentType: null });
+        setIsHovering(false);
+      } else {
+        setIsHovering(false);
+      }
+    });
   }, [isHovering, onChange]);
 
   const filePathWithNameOverride = nameOverride ? `${filePath} (${nameOverride})` : filePath;

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { RenderPurpose } from "@yaakapp-internal/plugins";
 import { useAtomValue } from "jotai";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { useActiveEnvironment } from "./useActiveEnvironment";
 import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
@@ -49,7 +49,7 @@ export async function renderTemplate({
   purpose: RenderPurpose;
   ignoreError?: boolean;
 }): Promise<string> {
-  return invokeCmd("cmd_render_template", {
+  return rpc("cmd_render_template", {
     template,
     workspaceId,
     environmentId,
@@ -67,5 +67,5 @@ export async function decryptTemplate({
   workspaceId: string;
   environmentId: string | null;
 }): Promise<string> {
-  return invokeCmd("cmd_decrypt_template", { template, workspaceId, environmentId });
+  return rpc("cmd_decrypt_template", { template, workspaceId, environmentId });
 }

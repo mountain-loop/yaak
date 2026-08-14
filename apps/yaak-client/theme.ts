@@ -1,6 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type as osType } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 import { setWindowTheme } from "@yaakapp-internal/mac-window";
 import type { ModelPayload } from "@yaakapp-internal/models";
 import type { Appearance } from "@yaakapp-internal/theme";
@@ -17,7 +15,7 @@ import { getResolvedTheme } from "./lib/themes";
 //  a good appearance guess so we're not waiting too long
 let preferredAppearance: Appearance = getInitialAppearance();
 let linuxSystemAppearanceAvailable =
-  osType() === "linux" && window.__YAAK_INITIAL_APPEARANCE_SOURCE__ === "linux-system";
+  platform.osType() === "linux" && window.__YAAK_INITIAL_APPEARANCE_SOURCE__ === "linux-system";
 let configureThemeGeneration = 0;
 let windowShown = false;
 
@@ -41,20 +39,20 @@ async function configureThemeAndShow() {
     windowShown = true;
     // To prevent theme flashing, the backend hides new windows by default, so we
     // need to show it here, after configuring the theme for the first time.
-    await getCurrentWebviewWindow().show();
+    await platform.window.show();
   }
 }
 
 // Listen for settings changes, the re-compute theme
-listen<ModelPayload[]>("model_writes", async (event) => {
-  const relevant = event.payload.some(
+platform.listen<ModelPayload[]>("model_writes", async (payloads) => {
+  const relevant = payloads.some(
     (p) =>
       p.change.type === "upsert" &&
       (p.model.model === "settings" || p.model.model === "plugin"),
   );
   if (!relevant) return;
   await configureThemeAndShow();
-}).catch(console.error);
+});
 
 async function configureTheme(): Promise<boolean> {
   const generation = ++configureThemeGeneration;

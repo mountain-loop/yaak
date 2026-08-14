@@ -1,6 +1,6 @@
-import { type } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 
-const os = type();
+const os = platform.osType();
 export const revealInFinderText =
   os === "macos"
     ? "Reveal in Finder"

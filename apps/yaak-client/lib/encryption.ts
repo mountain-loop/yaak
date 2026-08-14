@@ -2,7 +2,7 @@ import { parseTemplate } from "@yaakapp-internal/templates";
 import { activeEnvironmentIdAtom } from "../hooks/useActiveEnvironment";
 import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import { jotaiStore } from "./jotai";
-import { invokeCmd } from "./tauri";
+import { rpc } from "./rpc";
 
 export function analyzeTemplate(template: string): "global_secured" | "local_secured" | "insecure" {
   let secureTags = 0;
@@ -39,7 +39,7 @@ export async function convertTemplateToInsecure(template: string) {
 
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom) ?? "n/a";
   const environmentId = jotaiStore.get(activeEnvironmentIdAtom) ?? null;
-  return invokeCmd<string>("cmd_decrypt_template", { template, workspaceId, environmentId });
+  return rpc<string>("cmd_decrypt_template", { template, workspaceId, environmentId });
 }
 
 export async function convertTemplateToSecure(template: string): Promise<string> {
@@ -53,5 +53,5 @@ export async function convertTemplateToSecure(template: string): Promise<string>
 
   const workspaceId = jotaiStore.get(activeWorkspaceIdAtom) ?? "n/a";
   const environmentId = jotaiStore.get(activeEnvironmentIdAtom) ?? null;
-  return invokeCmd<string>("cmd_secure_template", { template, workspaceId, environmentId });
+  return rpc<string>("cmd_secure_template", { template, workspaceId, environmentId });
 }

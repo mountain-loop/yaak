@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 import { settingsAtom, workspacesAtom } from "@yaakapp-internal/models";
 import { Banner, HeaderSize, HStack, SidebarLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
@@ -53,7 +53,7 @@ export function Workspace() {
 
   const workspaces = useAtomValue(workspacesAtom);
   const settings = useAtomValue(settingsAtom);
-  const osType = type();
+  const osType = platform.osType();
   const [width, setWidth] = useSidebarWidth();
   const [sidebarHidden, setSidebarHidden] = useSidebarHidden();
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useFloatingSidebarHidden();

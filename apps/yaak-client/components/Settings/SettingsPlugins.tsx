@@ -1,5 +1,4 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Plugin } from "@yaakapp-internal/models";
 import { patchModel, pluginsAtom } from "@yaakapp-internal/models";
 import type { PluginVersion } from "@yaakapp-internal/plugins";
@@ -39,6 +38,7 @@ import { PlainInput } from "../core/PlainInput";
 import { TabContent, Tabs } from "../core/Tabs/Tabs";
 import { EmptyStateText } from "../EmptyStateText";
 import { SelectFile } from "../SelectFile";
+import { platform } from "@yaakapp-internal/platform";
 
 interface SettingsPluginsProps {
   defaultSubtab?: string;
@@ -113,7 +113,7 @@ export function SettingsPlugins({ defaultSubtab }: SettingsPluginsProps) {
                   icon="help"
                   title="View documentation"
                   onClick={() =>
-                    openUrl("https://yaak.app/docs/plugin-development/plugins-quick-start")
+                    platform.openUrl("https://yaak.app/docs/plugin-development/plugins-quick-start")
                   }
                 />
               </HStack>

@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 import { HStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
@@ -66,7 +66,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName} help={help}>
         {label}
       </Label>
-      {type() === "macos" && !filterable ? (
+      {platform.osType() === "macos" && !filterable ? (
         <HStack
           space={2}
           className={classNames(

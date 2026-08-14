@@ -1,18 +1,11 @@
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { platform } from "@yaakapp-internal/platform";
 import { useEffect, useState } from "react";
-import { fireAndForget } from "../lib/fireAndForget";
 
 export function useWindowFocus() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    const unlisten = getCurrentWebviewWindow().onFocusChanged((e) => {
-      setVisible(e.payload);
-    });
-
-    return () => {
-      fireAndForget(unlisten.then((fn) => fn()));
-    };
+    return platform.window.onFocusChanged(setVisible);
   }, []);
 
   return visible;

@@ -3,7 +3,7 @@ import type { AnyModel, ModelPayload } from "@yaakapp-internal/models";
 import { watchWorkspaceFiles } from "@yaakapp-internal/sync";
 import { syncWorkspace } from "../commands/commands";
 import { activeWorkspaceIdAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
-import { listenToTauriEvent } from "../hooks/useListenToTauriEvent";
+import { platform } from "@yaakapp-internal/platform";
 import { jotaiStore } from "../lib/jotai";
 
 export function initSync() {
@@ -33,8 +33,8 @@ const syncAfterModelWrite = eagerDebounceAsync(sync, 1000);
  * simply add long-lived subscribers for the lifetime of the app.
  */
 function initModelListeners() {
-  listenToTauriEvent<ModelPayload[]>("model_writes", (p) => {
-    if (p.payload.some((payload) => isModelRelevant(payload.model))) syncAfterModelWrite();
+  platform.listen<ModelPayload[]>("model_writes", (payloads) => {
+    if (payloads.some((payload) => isModelRelevant(payload.model))) syncAfterModelWrite();
   });
 }
 

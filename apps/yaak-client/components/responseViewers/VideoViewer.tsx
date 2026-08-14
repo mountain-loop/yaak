@@ -1,5 +1,5 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { platform } from "@yaakapp-internal/platform";
 
 interface Props {
   bodyPath?: string;
@@ -12,7 +12,7 @@ export function VideoViewer({ bodyPath, data, mimeType }: Props) {
 
   useEffect(() => {
     if (bodyPath) {
-      setSrc(convertFileSrc(bodyPath));
+      setSrc(platform.files.url(bodyPath));
     } else if (data) {
       // As in AudioViewer: a media element trusts the declared type instead of sniffing
       const blob = new Blob([new Uint8Array(data)], { type: mimeType ?? "video/mp4" });

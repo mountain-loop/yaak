@@ -1,5 +1,5 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { platform } from "@yaakapp-internal/platform";
 
 interface Props {
   bodyPath?: string;
@@ -12,7 +12,7 @@ export function AudioViewer({ bodyPath, data, mimeType }: Props) {
 
   useEffect(() => {
     if (bodyPath) {
-      setSrc(convertFileSrc(bodyPath));
+      setSrc(platform.files.url(bodyPath));
     } else if (data) {
       // The type matters here in a way it doesn't for an image: a media element goes by what
       // the blob declares rather than sniffing it, so an Ogg labelled as MP3 won't play

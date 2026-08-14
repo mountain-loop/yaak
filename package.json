@@ -12,6 +12,7 @@
     "packages/tailwind-config",
     "packages/model-store",
     "packages/common-lib",
+    "packages/platform",
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
     "plugins-external/mcp-server",

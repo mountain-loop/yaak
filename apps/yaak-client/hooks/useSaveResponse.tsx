@@ -1,13 +1,13 @@
-import { save } from "@tauri-apps/plugin-dialog";
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { getModel } from "@yaakapp-internal/models";
 import mime from "mime";
 import slugify from "slugify";
 import { InlineCode } from "@yaakapp-internal/ui";
 import { getContentTypeFromHeaders } from "../lib/model_util";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { showToast } from "../lib/toast";
 import { useFastMutation } from "./useFastMutation";
+import { platform } from "@yaakapp-internal/platform";
 
 export function useSaveResponse(response: HttpResponse | null) {
   return useFastMutation({
@@ -21,11 +21,11 @@ export function useSaveResponse(response: HttpResponse | null) {
       const contentType = getContentTypeFromHeaders(response.headers) ?? "unknown";
       const ext = mime.getExtension(contentType);
       const slug = slugify(request.name || "response", { lower: true });
-      const filepath = await save({
+      const filepath = await platform.dialog.save({
         defaultPath: ext ? `${slug}.${ext}` : slug,
         title: "Save Response",
       });
-      await invokeCmd("cmd_save_response", { responseId: response.id, filepath });
+      await rpc("cmd_save_response", { responseId: response.id, filepath });
       showToast({
         message: (
           <>

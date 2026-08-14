@@ -6,7 +6,7 @@ import type {
   WorkspaceAction,
 } from "@yaakapp-internal/plugins";
 import { useMemo } from "react";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { usePluginsKey } from "./usePlugins";
 
 export type CallableWorkspaceAction = Pick<WorkspaceAction, "label" | "icon"> & {
@@ -30,7 +30,7 @@ export function useWorkspaceActions() {
 }
 
 export async function getWorkspaceActions() {
-  const responses = await invokeCmd<GetWorkspaceActionsResponse[]>("cmd_workspace_actions");
+  const responses = await rpc<GetWorkspaceActionsResponse[]>("cmd_workspace_actions");
   const actions = responses.flatMap((r) =>
     r.actions.map((a, i) => ({
       label: a.label,
@@ -41,7 +41,7 @@ export async function getWorkspaceActions() {
           pluginRefId: r.pluginRefId,
           args: { workspace },
         };
-        await invokeCmd("cmd_call_workspace_action", { req: payload });
+        await rpc("cmd_call_workspace_action", { req: payload });
       },
     })),
   );

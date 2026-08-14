@@ -6,7 +6,7 @@ import type {
   GrpcRequestAction,
 } from "@yaakapp-internal/plugins";
 import { useMemo } from "react";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { getGrpcProtoFiles } from "./useGrpcProtoFiles";
 import { usePluginsKey } from "./usePlugins";
 
@@ -33,7 +33,7 @@ export function useGrpcRequestActions() {
 }
 
 export async function getGrpcRequestActions() {
-  const responses = await invokeCmd<GetGrpcRequestActionsResponse[]>("cmd_grpc_request_actions");
+  const responses = await rpc<GetGrpcRequestActionsResponse[]>("cmd_grpc_request_actions");
 
   return responses.flatMap((r) =>
     r.actions.map((a, i) => ({
@@ -46,7 +46,7 @@ export async function getGrpcRequestActions() {
           pluginRefId: r.pluginRefId,
           args: { grpcRequest, protoFiles },
         };
-        await invokeCmd("cmd_call_grpc_request_action", { req: payload });
+        await rpc("cmd_call_grpc_request_action", { req: payload });
       },
     })),
   );

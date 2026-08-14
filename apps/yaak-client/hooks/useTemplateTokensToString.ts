@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Tokens } from "@yaakapp-internal/templates";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 
 export function useTemplateTokensToString(tokens: Tokens) {
   return useQuery<string>({
@@ -11,5 +11,5 @@ export function useTemplateTokensToString(tokens: Tokens) {
 }
 
 export async function templateTokensToString(tokens: Tokens): Promise<string> {
-  return invokeCmd("cmd_template_tokens_to_string", { tokens });
+  return rpc("cmd_template_tokens_to_string", { tokens });
 }

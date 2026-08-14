@@ -6,7 +6,7 @@ import type {
   GetFolderActionsResponse,
 } from "@yaakapp-internal/plugins";
 import { useMemo } from "react";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { usePluginsKey } from "./usePlugins";
 
 export type CallableFolderAction = Pick<FolderAction, "label" | "icon"> & {
@@ -30,7 +30,7 @@ export function useFolderActions() {
 }
 
 export async function getFolderActions() {
-  const responses = await invokeCmd<GetFolderActionsResponse[]>("cmd_folder_actions");
+  const responses = await rpc<GetFolderActionsResponse[]>("cmd_folder_actions");
   const actions = responses.flatMap((r) =>
     r.actions.map((a, i) => ({
       label: a.label,
@@ -41,7 +41,7 @@ export async function getFolderActions() {
           pluginRefId: r.pluginRefId,
           args: { folder },
         };
-        await invokeCmd("cmd_call_folder_action", { req: payload });
+        await rpc("cmd_call_folder_action", { req: payload });
       },
     })),
   );

@@ -1,4 +1,3 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import type { LicenseCheckStatus } from "@yaakapp-internal/license";
 import { useLicense } from "@yaakapp-internal/license";
 import { settingsAtom } from "@yaakapp-internal/models";
@@ -14,6 +13,7 @@ import type { ButtonProps } from "./core/Button";
 import { Dropdown, type DropdownItem } from "./core/Dropdown";
 import { Icon } from "@yaakapp-internal/ui";
 import { PillButton } from "./core/PillButton";
+import { platform } from "@yaakapp-internal/platform";
 
 const dismissedAtom = atomWithKVStorage<string | null>("dismissed_license_expired", null);
 
@@ -52,7 +52,7 @@ function getDetail(
             leftSlot: <Icon icon="gift" />,
             rightSlot: <Icon icon="external_link" size="sm" className="opacity-disabled" />,
             hidden: data.data.changes === 0 || data.data.changesUrl == null,
-            onSelect: () => openUrl(data.data.changesUrl ?? ""),
+            onSelect: () => platform.openUrl(data.data.changesUrl ?? ""),
           },
           {
             type: "separator",
@@ -63,7 +63,7 @@ function getDetail(
             leftSlot: <Icon icon="refresh" />,
             rightSlot: <Icon icon="external_link" size="sm" className="opacity-disabled" />,
             hidden: data.data.changesUrl == null,
-            onSelect: () => openUrl(data.data.billingUrl),
+            onSelect: () => platform.openUrl(data.data.billingUrl),
           },
           {
             label: "Enter License Key",

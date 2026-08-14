@@ -1,6 +1,5 @@
 import { useSearch } from "@tanstack/react-router";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { type } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
 import { HeaderSize, HStack, Icon } from "@yaakapp-internal/ui";
@@ -60,7 +59,7 @@ export default function Settings({ hide }: Props) {
       hide();
     } else {
       // It's being shown in a window, so close the window
-      await getCurrentWebviewWindow().close();
+      await platform.window.close();
     }
   });
 
@@ -75,7 +74,7 @@ export default function Settings({ hide }: Props) {
           onlyXWindowControl
           size="md"
           className="x-theme-appHeader bg-surface text-text-subtle flex items-center justify-center border-b border-border-subtle text-sm font-semibold"
-          osType={type()}
+          osType={platform.osType()}
           hideWindowControls={settings.hideWindowControls}
           useNativeTitlebar={settings.useNativeTitlebar}
           interfaceScale={settings.interfaceScale}
@@ -85,7 +84,7 @@ export default function Settings({ hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(type() === "macos" ? "text-center" : "pl-2")}>Settings</div>
+            <div className={classNames(platform.osType() === "macos" ? "text-center" : "pl-2")}>Settings</div>
           </HStack>
         </HeaderSize>
       )}

@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { GrpcConnection, GrpcEvent } from "@yaakapp-internal/models";
 import {
   grpcConnectionsAtom,
@@ -11,6 +10,7 @@ import { useEffect, useMemo } from "react";
 import { fireAndForget } from "../lib/fireAndForget";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { activeRequestIdAtom } from "./useActiveRequestId";
+import { rpc } from "../lib/rpc";
 
 const pinnedGrpcConnectionIdsAtom = atomWithKVStorage<Record<string, string | null>>(
   "pinned-grpc-connection-ids",
@@ -71,7 +71,7 @@ export function useGrpcEvents(connectionId: string | null) {
 
     // Fetch events from database, filtering out events from other connections and merging atomically
     fireAndForget(
-      invoke<GrpcEvent[]>("models_grpc_events", { connectionId }).then((events) =>
+      rpc<GrpcEvent[]>("models_grpc_events", { connectionId }).then((events) =>
         mergeModelsInStore("grpc_event", events, (e) => e.connectionId === connectionId),
       ),
     );

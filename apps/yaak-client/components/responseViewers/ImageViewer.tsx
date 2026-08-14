@@ -1,6 +1,6 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
 import classNames from "classnames";
 import { useEffect, useState } from "react";
+import { platform } from "@yaakapp-internal/platform";
 
 type Props = { className?: string; mimeType?: string } & (
   | {
@@ -18,7 +18,7 @@ export function ImageViewer({ className, mimeType, ...props }: Props) {
 
   useEffect(() => {
     if (bodyPath != null) {
-      setSrc(convertFileSrc(bodyPath));
+      setSrc(platform.files.url(bodyPath));
     } else if (data != null) {
       const blob = new Blob([data], { type: mimeType ?? "image/png" });
       const url = URL.createObjectURL(blob);

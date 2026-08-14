@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { WebsocketConnection, WebsocketEvent } from "@yaakapp-internal/models";
 import {
   mergeModelsInStore,
@@ -12,6 +11,7 @@ import { fireAndForget } from "../lib/fireAndForget";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { jotaiStore } from "../lib/jotai";
 import { activeRequestIdAtom } from "./useActiveRequestId";
+import { rpc } from "../lib/rpc";
 
 const pinnedWebsocketConnectionIdAtom = atomWithKVStorage<Record<string, string | null>>(
   "pinned-websocket-connection-ids",
@@ -58,7 +58,7 @@ export function useWebsocketEvents(connectionId: string | null) {
 
     // Fetch events from database, filtering out events from other connections and merging atomically
     fireAndForget(
-      invoke<WebsocketEvent[]>("models_websocket_events", { connectionId }).then((events) =>
+      rpc<WebsocketEvent[]>("models_websocket_events", { connectionId }).then((events) =>
         mergeModelsInStore("websocket_event", events, (e) => e.connectionId === connectionId),
       ),
     );

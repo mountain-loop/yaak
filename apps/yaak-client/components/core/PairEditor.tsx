@@ -9,7 +9,6 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { basename } from "@tauri-apps/api/path";
 import classNames from "classnames";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WrappedEnvironmentVariable } from "../../hooks/useEnvironmentVariables";
@@ -34,6 +33,7 @@ import { Input } from "./Input";
 import { ensurePairId } from "./PairEditor.util";
 import type { RadioDropdownItem } from "./RadioDropdown";
 import { RadioDropdown } from "./RadioDropdown";
+import { platform } from "@yaakapp-internal/platform";
 
 export interface PairEditorHandle {
   /**
@@ -851,7 +851,7 @@ function FileActionsDropdown({
         leftSlot: <Icon icon="file_code" />,
         onSelect: async () => {
           console.log("PAIR", pair);
-          const defaultFilename = await basename(pair.value ?? "");
+          const defaultFilename = await platform.files.basename(pair.value ?? "");
           const filename = await showPrompt({
             id: "filename",
             title: "Override Filename",

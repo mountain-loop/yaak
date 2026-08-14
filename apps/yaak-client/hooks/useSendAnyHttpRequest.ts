@@ -1,6 +1,6 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { flushAllModelWrites } from "@yaakapp-internal/models";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { getActiveCookieJar } from "./useActiveCookieJar";
 import { getActiveEnvironment } from "./useActiveEnvironment";
 import { createFastMutation, useFastMutation } from "./useFastMutation";
@@ -12,7 +12,7 @@ async function sendAnyHttpRequestById(id: string | null): Promise<HttpResponse |
 
   await flushAllModelWrites();
 
-  return invokeCmd("cmd_send_http_request", {
+  return rpc("cmd_send_http_request", {
     requestId: id,
     environmentId: getActiveEnvironment()?.id,
     cookieJarId: getActiveCookieJar()?.id,

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { HttpResponse } from "@yaakapp-internal/models";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 
 export function useHttpRequestBody(response: HttpResponse | null) {
   return useQuery({
@@ -18,7 +18,7 @@ export async function getRequestBodyText(response: HttpResponse | null) {
     return null;
   }
 
-  const data = await invokeCmd<number[] | null>("cmd_http_request_body", {
+  const data = await rpc<number[] | null>("cmd_http_request_body", {
     responseId: response.id,
   });
 
