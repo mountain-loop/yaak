@@ -3,7 +3,7 @@ import type { GetHttpAuthenticationSummaryResponse } from "@yaakapp-internal/plu
 import { atom, useAtomValue } from "jotai";
 import { useState } from "react";
 import { jotaiStore } from "../lib/jotai";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { showErrorToast } from "../lib/toast";
 import { usePluginsKey } from "./usePlugins";
 
@@ -31,7 +31,7 @@ export function useSubscribeHttpAuthentication() {
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
       try {
-        const result = await invokeCmd<GetHttpAuthenticationSummaryResponse[]>(
+        const result = await rpc<GetHttpAuthenticationSummaryResponse[]>(
           "cmd_get_http_authentication_summaries",
         );
         setNumResults(result.length);

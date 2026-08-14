@@ -1,4 +1,3 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { useMemo } from "react";
@@ -6,6 +5,7 @@ import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
 import { IconButton } from "./core/IconButton";
 import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { platform } from "@yaakapp-internal/platform";
 
 interface Props {
   response: HttpResponse;
@@ -45,7 +45,7 @@ export function ResponseHeaders({ response }: Props) {
                 iconSize="sm"
                 className="inline-block w-auto h-auto! opacity-50 hover:opacity-100"
                 icon="external_link"
-                onClick={() => openUrl(response.url)}
+                onClick={() => platform.openUrl(response.url)}
                 title="Open in browser"
               />
             </div>

@@ -9,7 +9,7 @@ import { showDialog } from "./dialog";
 import { jotaiStore } from "./jotai";
 import { pluralizeCount } from "./pluralize";
 import { router } from "./router";
-import { invokeCmd } from "./tauri";
+import { rpc } from "./rpc";
 
 export const importData = createFastMutation({
   mutationKey: ["import_data"],
@@ -50,7 +50,7 @@ export const importData = createFastMutation({
 
 async function performImport(filePath: string): Promise<boolean> {
   const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
-  const imported = await invokeCmd<BatchUpsertResult>("cmd_import_data", {
+  const imported = await rpc<BatchUpsertResult>("cmd_import_data", {
     filePath,
     workspaceId: activeWorkspace?.id,
   });

@@ -5,10 +5,10 @@ import {
   resolveAppearance,
   type Appearance,
 } from "@yaakapp-internal/theme";
-import { invokeCmd } from "./tauri";
+import { rpc } from "./rpc";
 
 export async function getThemes() {
-  const themes = (await invokeCmd<GetThemesResponse[]>("cmd_get_themes")).flatMap((t) => t.themes);
+  const themes = (await rpc<GetThemesResponse[]>("cmd_get_themes")).flatMap((t) => t.themes);
   themes.sort((a, b) => a.label.localeCompare(b.label));
   // Remove duplicates, in case multiple plugins provide the same theme
   const uniqueThemes = Array.from(new Map(themes.map((t) => [t.id, t])).values());

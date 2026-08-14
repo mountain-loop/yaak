@@ -6,7 +6,7 @@ import type {
 import { atom, useAtomValue, useSetAtom } from "jotai";
 import { useMemo, useState } from "react";
 import type { TwigCompletionOption } from "../components/core/Editor/twig/completion";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { usePluginsKey } from "./usePlugins";
 
 const templateFunctionsAtom = atom<TemplateFunction[]>([]);
@@ -49,7 +49,7 @@ export function useSubscribeTemplateFunctions() {
     refetchInterval: numFns > 0 ? Number.POSITIVE_INFINITY : 1000,
     refetchOnMount: true,
     queryFn: async () => {
-      const result = await invokeCmd<GetTemplateFunctionSummaryResponse[]>(
+      const result = await rpc<GetTemplateFunctionSummaryResponse[]>(
         "cmd_template_function_summaries",
       );
       setNumFns(result.length);

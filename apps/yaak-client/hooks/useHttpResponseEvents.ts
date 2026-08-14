@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { HttpResponse, HttpResponseEvent } from "@yaakapp-internal/models";
 import {
   httpResponseEventsAtom,
@@ -8,6 +7,7 @@ import {
 import { useAtomValue } from "jotai";
 import { useEffect } from "react";
 import { fireAndForget } from "../lib/fireAndForget";
+import { rpc } from "../lib/rpc";
 
 export function useHttpResponseEvents(response: HttpResponse | null) {
   const allEvents = useAtomValue(httpResponseEventsAtom);
@@ -20,7 +20,7 @@ export function useHttpResponseEvents(response: HttpResponse | null) {
 
     // Fetch events from database, filtering out events from other responses and merging atomically
     fireAndForget(
-      invoke<HttpResponseEvent[]>("cmd_get_http_response_events", { responseId: response.id }).then(
+      rpc<HttpResponseEvent[]>("cmd_get_http_response_events", { responseId: response.id }).then(
         (events) =>
           mergeModelsInStore("http_response_event", events, (e) => e.responseId === response.id),
       ),

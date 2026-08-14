@@ -1,5 +1,5 @@
-import { getIdentifier } from "@tauri-apps/api/app";
-import { invokeCmd } from "./tauri";
+import { platform } from "@yaakapp-internal/platform";
+import { rpc } from "./rpc";
 
 export interface AppInfo {
   isDev: boolean;
@@ -16,8 +16,8 @@ export interface AppInfo {
 }
 
 export const appInfo = {
-  ...(await invokeCmd("cmd_metadata")),
-  identifier: await getIdentifier(),
+  ...(await rpc("cmd_metadata")),
+  identifier: await platform.appIdentifier(),
 } as AppInfo;
 
 console.log("App info", appInfo);

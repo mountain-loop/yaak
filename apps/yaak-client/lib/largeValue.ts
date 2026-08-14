@@ -1,4 +1,3 @@
-import { save } from "@tauri-apps/plugin-dialog";
 import { Icon } from "@yaakapp-internal/ui";
 import mime from "mime";
 import { createElement } from "react";
@@ -7,8 +6,9 @@ import type { SniffedValue } from "../components/core/Editor/sniffValue";
 import { isEncodedRun } from "../components/core/Editor/sniffValue";
 import { copyToClipboard } from "./copy";
 import { fireAndForget } from "./fireAndForget";
-import { invokeCmd } from "./tauri";
+import { rpc } from "./rpc";
 import { showToast } from "./toast";
+import { platform } from "@yaakapp-internal/platform";
 
 /**
  * How the value is written, which is the thing worth knowing about it — that it is base64
@@ -229,7 +229,7 @@ function toBase64(bytes: Uint8Array): string {
  */
 export async function saveValue(text: string, sniffed: SniffedValue | null, name: string) {
   const ext = sniffed == null ? "txt" : (mime.getExtension(sniffed.mime) ?? "bin");
-  const filepath = await save({ defaultPath: `${name}.${ext}`, title: "Save Value" });
+  const filepath = await platform.dialog.save({ defaultPath: `${name}.${ext}`, title: "Save Value" });
   if (filepath == null) {
     return; // Cancelled
   }
@@ -241,6 +241,6 @@ export async function saveValue(text: string, sniffed: SniffedValue | null, name
         ? normalizeBase64(payloadOf(text, sniffed))
         : toBase64(decodeValue(text, sniffed));
 
-  await invokeCmd("cmd_save_base64_to_binary", { filepath, data });
+  await rpc("cmd_save_base64_to_binary", { filepath, data });
   showToast({ message: `Saved to ${filepath}` });
 }

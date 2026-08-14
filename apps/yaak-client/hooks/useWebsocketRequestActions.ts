@@ -6,7 +6,7 @@ import type {
   WebsocketRequestAction,
 } from "@yaakapp-internal/plugins";
 import { useMemo } from "react";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { usePluginsKey } from "./usePlugins";
 
 export type CallableWebSocketRequestAction = Pick<WebsocketRequestAction, "label" | "icon"> & {
@@ -30,7 +30,7 @@ export function useWebsocketRequestActions() {
 }
 
 export async function getWebsocketRequestActions() {
-  const responses = await invokeCmd<GetWebsocketRequestActionsResponse[]>(
+  const responses = await rpc<GetWebsocketRequestActionsResponse[]>(
     "cmd_websocket_request_actions",
   );
   const actions = responses.flatMap((r) =>
@@ -43,7 +43,7 @@ export async function getWebsocketRequestActions() {
           pluginRefId: r.pluginRefId,
           args: { websocketRequest },
         };
-        await invokeCmd("cmd_call_websocket_request_action", { req: payload });
+        await rpc("cmd_call_websocket_request_action", { req: payload });
       },
     })),
   );

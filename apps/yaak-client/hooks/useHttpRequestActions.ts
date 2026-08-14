@@ -6,7 +6,7 @@ import type {
   HttpRequestAction,
 } from "@yaakapp-internal/plugins";
 import { useMemo } from "react";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { usePluginsKey } from "./usePlugins";
 
 export type CallableHttpRequestAction = Pick<HttpRequestAction, "label" | "icon"> & {
@@ -30,7 +30,7 @@ export function useHttpRequestActions() {
 }
 
 export async function getHttpRequestActions() {
-  const responses = await invokeCmd<GetHttpRequestActionsResponse[]>("cmd_http_request_actions");
+  const responses = await rpc<GetHttpRequestActionsResponse[]>("cmd_http_request_actions");
   const actions = responses.flatMap((r) =>
     r.actions.map((a, i) => ({
       label: a.label,
@@ -41,7 +41,7 @@ export async function getHttpRequestActions() {
           pluginRefId: r.pluginRefId,
           args: { httpRequest },
         };
-        await invokeCmd("cmd_call_http_request_action", { req: payload });
+        await rpc("cmd_call_http_request_action", { req: payload });
       },
     })),
   );

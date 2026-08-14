@@ -8,7 +8,7 @@ import { showAlert } from "../lib/alert";
 import { showConfirmDelete } from "../lib/confirm";
 import { jotaiStore } from "../lib/jotai";
 import { pluralizeCount } from "../lib/pluralize";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 import { useFastMutation } from "./useFastMutation";
 
@@ -45,7 +45,7 @@ export function useDeleteSendHistory() {
       if (!confirmed) return false;
 
       const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
-      await invokeCmd("cmd_delete_send_history", { workspaceId });
+      await rpc("cmd_delete_send_history", { workspaceId });
       return true;
     },
   });

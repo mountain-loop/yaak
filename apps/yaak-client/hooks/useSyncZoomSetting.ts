@@ -1,5 +1,5 @@
 import { useHotKey } from "./useHotKey";
-import { useListenToTauriEvent } from "./useListenToTauriEvent";
+import { usePlatformEvent } from "./usePlatformEvent";
 import { useZoom } from "./useZoom";
 
 export function useSyncZoomSetting() {
@@ -8,9 +8,9 @@ export function useSyncZoomSetting() {
   // shortcuts for Windows/Linux
   const zoom = useZoom();
   useHotKey("app.zoom_in", zoom.zoomIn);
-  useListenToTauriEvent("zoom_in", zoom.zoomIn);
+  usePlatformEvent("zoom_in", zoom.zoomIn);
   useHotKey("app.zoom_out", zoom.zoomOut);
-  useListenToTauriEvent("zoom_out", zoom.zoomOut);
+  usePlatformEvent("zoom_out", zoom.zoomOut);
   useHotKey("app.zoom_reset", zoom.zoomReset);
-  useListenToTauriEvent("zoom_reset", zoom.zoomReset);
+  usePlatformEvent("zoom_reset", zoom.zoomReset);
 }

@@ -1,6 +1,5 @@
 import type { Extension } from "@codemirror/state";
 import { Compartment } from "@codemirror/state";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { debounce } from "@yaakapp-internal/lib";
 import { gitMutations } from "@yaakapp-internal/git";
 import type { GitStatus } from "@yaakapp-internal/git";
@@ -44,7 +43,8 @@ import { getFolderActions } from "../hooks/useFolderActions";
 import { getGrpcRequestActions } from "../hooks/useGrpcRequestActions";
 import { useHotKey } from "../hooks/useHotKey";
 import { getHttpRequestActions } from "../hooks/useHttpRequestActions";
-import { useListenToTauriEvent } from "../hooks/useListenToTauriEvent";
+import { platform } from "@yaakapp-internal/platform";
+import { usePlatformEvent } from "../hooks/usePlatformEvent";
 import { getModelAncestors } from "../hooks/useModelAncestors";
 import { sendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
 import { useSidebarHidden } from "../hooks/useSidebarHidden";
@@ -135,10 +135,10 @@ function Sidebar({ className }: { className?: string }) {
   // Focus new sidebar models created by the user in this window. Writes from other
   // sources (import, sync, CLI) can carry thousands of models and shouldn't move
   // the selection.
-  useListenToTauriEvent<ModelPayload[]>("model_writes", ({ payload: payloads }) => {
+  usePlatformEvent<ModelPayload[]>("model_writes", (payloads) => {
     for (const payload of payloads) {
       if (payload.updateSource.type !== "window") continue;
-      if (payload.updateSource.label !== getCurrentWebviewWindow().label) continue;
+      if (payload.updateSource.label !== platform.window.label) continue;
       if (!isSidebarLeafModel(payload.model)) continue;
       if (!(payload.change.type === "upsert" && payload.change.created)) continue;
       treeRef.current?.selectItem(payload.model.id, true);

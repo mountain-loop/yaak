@@ -1,6 +1,6 @@
 import "./main.css";
 import { RouterProvider } from "@tanstack/react-router";
-import { type } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 import { changeModelStoreWorkspace, initModelStore } from "@yaakapp-internal/models";
 import { setPlatformOnDocument } from "@yaakapp-internal/theme";
 import { StrictMode } from "react";
@@ -11,7 +11,7 @@ import { initGlobalListeners } from "./lib/initGlobalListeners";
 import { jotaiStore } from "./lib/jotai";
 import { router } from "./lib/router";
 
-const osType = type();
+const osType = platform.osType();
 setPlatformOnDocument(osType);
 
 window.addEventListener("keydown", (e) => {

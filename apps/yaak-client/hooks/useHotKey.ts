@@ -1,4 +1,4 @@
-import { type } from "@tauri-apps/plugin-os";
+import { platform } from "@yaakapp-internal/platform";
 import { debounce } from "@yaakapp-internal/lib";
 import { settingsAtom } from "@yaakapp-internal/models";
 import { atom, useAtomValue } from "jotai";
@@ -102,7 +102,7 @@ const defaultHotkeysOther: Record<HotkeyAction, string[]> = {
 
 /** Get the default hotkeys for the current platform */
 export const defaultHotkeys: Record<HotkeyAction, string[]> =
-  type() === "macos" ? defaultHotkeysMac : defaultHotkeysOther;
+  platform.osType() === "macos" ? defaultHotkeysMac : defaultHotkeysOther;
 
 /** Atom that provides the effective hotkeys by merging defaults with user settings */
 export const hotkeysAtom = atom((get) => {
@@ -318,7 +318,7 @@ export function getHotkeyScope(action: HotkeyAction): string {
 }
 
 export function formatHotkeyString(trigger: string): string[] {
-  const os = type();
+  const os = platform.osType();
   const parts = trigger.split("+");
   const labelParts: string[] = [];
 

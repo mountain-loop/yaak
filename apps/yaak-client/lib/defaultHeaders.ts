@@ -1,8 +1,8 @@
 import type { HttpRequestHeader } from "@yaakapp-internal/models";
-import { invokeCmd } from "./tauri";
+import { rpc } from "./rpc";
 
 /**
  * Global default headers fetched from the backend.
  * These are static and fetched once on module load.
  */
-export const defaultHeaders: HttpRequestHeader[] = await invokeCmd("cmd_default_headers");
+export const defaultHeaders: HttpRequestHeader[] = await rpc("cmd_default_headers");

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { invoke } from "@tauri-apps/api/core";
+
 import type { GraphQlIntrospection, HttpRequest } from "@yaakapp-internal/models";
 import type { GraphQLSchema, IntrospectionQuery } from "graphql";
 import { buildClientSchema, getIntrospectionQuery } from "graphql";
@@ -9,6 +9,7 @@ import { getResponseBodyText } from "../lib/responseBody";
 import { sendEphemeralRequest } from "../lib/sendEphemeralRequest";
 import { useActiveEnvironment } from "./useActiveEnvironment";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
+import { rpc } from "../lib/rpc";
 
 const introspectionRequestBody = JSON.stringify({
   query: getIntrospectionQuery(),
@@ -32,7 +33,7 @@ export function useIntrospectGraphQL(
 
   const upsertIntrospection = useCallback(
     async (content: string | null) => {
-      const v = await invoke<GraphQlIntrospection>("models_upsert_graphql_introspection", {
+      const v = await rpc<GraphQlIntrospection>("models_upsert_graphql_introspection", {
         requestId: baseRequest.id,
         workspaceId: baseRequest.workspaceId,
         content: content ?? "",
@@ -119,7 +120,7 @@ function useIntrospectionResult(request: HttpRequest) {
   return useQuery({
     queryKey: ["introspection", request.id],
     queryFn: async () =>
-      invoke<GraphQlIntrospection | null>("models_get_graphql_introspection", {
+      rpc<GraphQlIntrospection | null>("models_get_graphql_introspection", {
         requestId: request.id,
       }),
   });

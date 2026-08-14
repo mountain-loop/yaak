@@ -1,12 +1,12 @@
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import "./PdfViewer.css";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import { useContainerSize } from "@yaakapp-internal/ui";
 import { fireAndForget } from "../../lib/fireAndForget";
+import { platform } from "@yaakapp-internal/platform";
 
 fireAndForget(
   import("react-pdf").then(({ pdfjs }) => {
@@ -37,7 +37,7 @@ export function PdfViewer({ bodyPath, data }: Props) {
   // `Document` renders its "Failed to load PDF file" state for that frame before recovering
   const src = useMemo(() => {
     if (bodyPath) {
-      return convertFileSrc(bodyPath);
+      return platform.files.url(bodyPath);
     }
     if (data) {
       // Create a copy to avoid "Buffer is already detached" errors

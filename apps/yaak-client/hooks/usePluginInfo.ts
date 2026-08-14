@@ -4,7 +4,7 @@ import { pluginsAtom } from "@yaakapp-internal/models";
 import type { PluginMetadata } from "@yaakapp-internal/plugins";
 import { useAtomValue } from "jotai";
 import { queryClient } from "../lib/queryClient";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 
 function pluginInfoKey(id: string | null, plugin: Plugin | null) {
   return ["plugin_info", id ?? "n/a", plugin?.updatedAt ?? "n/a"];
@@ -19,7 +19,7 @@ export function usePluginInfo(id: string | null) {
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: () => {
       if (id == null) return null;
-      return invokeCmd<PluginMetadata>("cmd_plugin_info", { id });
+      return rpc<PluginMetadata>("cmd_plugin_info", { id });
     },
   });
 }

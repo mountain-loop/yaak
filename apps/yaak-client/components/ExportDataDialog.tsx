@@ -1,4 +1,3 @@
-import { save } from "@tauri-apps/plugin-dialog";
 import type { Workspace } from "@yaakapp-internal/models";
 import { workspacesAtom } from "@yaakapp-internal/models";
 import { HStack, VStack } from "@yaakapp-internal/ui";
@@ -7,12 +6,13 @@ import { useCallback, useMemo, useState } from "react";
 import slugify from "slugify";
 import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { pluralizeCount } from "../lib/pluralize";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
 import { DetailsBanner } from "./core/DetailsBanner";
 import { Link } from "./core/Link";
+import { platform } from "@yaakapp-internal/platform";
 
 interface Props {
   onHide: () => void;
@@ -65,7 +65,7 @@ function ExportDataDialogContent({
     const ids = Object.keys(selectedWorkspaces).filter((k) => selectedWorkspaces[k]);
     const workspace = ids.length === 1 ? workspaces.find((w) => w.id === ids[0]) : undefined;
     const slug = workspace ? slugify(workspace.name, { lower: true }) : "workspaces";
-    const exportPath = await save({
+    const exportPath = await platform.dialog.save({
       title: "Export Data",
       defaultPath: `yaak.${slug}.json`,
     });
@@ -73,7 +73,7 @@ function ExportDataDialogContent({
       return;
     }
 
-    await invokeCmd("cmd_export_data", {
+    await rpc("cmd_export_data", {
       workspaceIds: ids,
       exportPath,
       includePrivateEnvironments: includePrivateEnvironments,

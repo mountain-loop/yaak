@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { emit } from "@tauri-apps/api/event";
+import { platform } from "@yaakapp-internal/platform";
 import type { GrpcConnection, GrpcRequest } from "@yaakapp-internal/models";
 import { flushAllModelWrites } from "@yaakapp-internal/models";
 import { jotaiStore } from "../lib/jotai";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { activeEnvironmentIdAtom, useActiveEnvironment } from "./useActiveEnvironment";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
 
@@ -25,7 +25,7 @@ export function useGrpc(
     mutationKey: ["grpc_go", conn?.id],
     mutationFn: async () => {
       await flushAllModelWrites(); // The backend reads the request from the DB
-      return invokeCmd<void>("cmd_grpc_go", {
+      return rpc<void>("cmd_grpc_go", {
         requestId,
         environmentId: environment?.id,
         protoFiles,
@@ -36,17 +36,17 @@ export function useGrpc(
   const send = useMutation({
     mutationKey: ["grpc_send", conn?.id],
     mutationFn: ({ message }: { message: string }) =>
-      emit(`grpc_client_msg_${conn?.id ?? "none"}`, { Message: message }),
+      platform.emit(`grpc_client_msg_${conn?.id ?? "none"}`, { Message: message }),
   });
 
   const cancel = useMutation({
     mutationKey: ["grpc_cancel", conn?.id ?? "n/a"],
-    mutationFn: () => emit(`grpc_client_msg_${conn?.id ?? "none"}`, "Cancel"),
+    mutationFn: () => platform.emit(`grpc_client_msg_${conn?.id ?? "none"}`, "Cancel"),
   });
 
   const commit = useMutation({
     mutationKey: ["grpc_commit", conn?.id ?? "n/a"],
-    mutationFn: () => emit(`grpc_client_msg_${conn?.id ?? "none"}`, "Commit"),
+    mutationFn: () => platform.emit(`grpc_client_msg_${conn?.id ?? "none"}`, "Commit"),
   });
 
   const debouncedUrl = useDebouncedValue<string>(req?.url ?? "", 1000);
@@ -61,7 +61,7 @@ export function useGrpc(
     queryFn: () => {
       const environmentId = jotaiStore.get(activeEnvironmentIdAtom);
       return minPromiseMillis<ReflectResponseService[]>(
-        invokeCmd("cmd_grpc_reflect", { requestId, protoFiles, environmentId }),
+        rpc("cmd_grpc_reflect", { requestId, protoFiles, environmentId }),
         300,
       );
     },

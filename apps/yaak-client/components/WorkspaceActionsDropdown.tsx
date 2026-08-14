@@ -1,5 +1,3 @@
-import { open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { getModel, settingsAtom, workspacesAtom } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
@@ -27,6 +25,7 @@ import { Icon } from "@yaakapp-internal/ui";
 import type { RadioDropdownItem } from "./core/RadioDropdown";
 import { RadioDropdown } from "./core/RadioDropdown";
 import { SwitchWorkspaceDialog } from "./SwitchWorkspaceDialog";
+import { platform } from "@yaakapp-internal/platform";
 
 type Props = Pick<ButtonProps, "className" | "justify" | "forDropdown" | "leftSlot">;
 
@@ -76,7 +75,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
             label: "Open Folder",
             leftSlot: <Icon icon="folder_open" />,
             onSelect: async () => {
-              const dir = await open({
+              const dir = await platform.dialog.open({
                 title: "Select Workspace Directory",
                 directory: true,
                 multiple: false,
@@ -120,7 +119,7 @@ export const WorkspaceActionsDropdown = memo(function WorkspaceActionsDropdown({
         leftSlot: <Icon icon="folder_symlink" />,
         onSelect: async () => {
           if (workspaceMeta?.settingSyncDir == null) return;
-          await revealItemInDir(workspaceMeta.settingSyncDir);
+          await platform.revealItemInDir(workspaceMeta.settingSyncDir);
         },
       },
       {

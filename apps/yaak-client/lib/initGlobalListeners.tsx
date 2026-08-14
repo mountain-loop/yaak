@@ -1,5 +1,3 @@
-import { emit } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { debounce } from "@yaakapp-internal/lib";
 import type {
   FormInput,
@@ -20,23 +18,23 @@ import { Button } from "../components/core/Button";
 import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading";
 
 // Listen for toasts
-import { listenToTauriEvent } from "../hooks/useListenToTauriEvent";
+import { platform } from "@yaakapp-internal/platform";
 import { updateAvailableAtom } from "./atoms";
 import { stringToColor } from "./color";
 import { generateId } from "./generateId";
 import { jotaiStore } from "./jotai";
 import { showPrompt } from "./prompt";
 import { showPromptForm } from "./prompt-form";
-import { invokeCmd } from "./tauri";
+import { rpc } from "./rpc";
 import { showToast } from "./toast";
 
 export function initGlobalListeners() {
-  listenToTauriEvent<ShowToastRequest>("show_toast", (event) => {
-    showToast({ ...event.payload });
+  platform.listen<ShowToastRequest>("show_toast", (payload) => {
+    showToast({ ...payload });
   });
 
   // Show errors for any plugins that failed to load during startup
-  void invokeCmd<[string, string][]>("cmd_plugin_init_errors").then((errors) => {
+  void rpc<[string, string][]>("cmd_plugin_init_errors").then((errors) => {
     for (const [dir, err] of errors) {
       const name = dir.split(/[/\\]/).pop() ?? dir;
       showToast({
@@ -61,13 +59,13 @@ export function initGlobalListeners() {
     }
   });
 
-  listenToTauriEvent("settings", () => openSettings.mutate(null));
+  platform.listen("settings", () => openSettings.mutate(null));
 
   // Track active dynamic form dialogs so follow-up input updates can reach them
   const activeForms = new Map<string, (inputs: FormInput[]) => void>();
 
   // Listen for plugin events
-  listenToTauriEvent<InternalEvent>("plugin_event", async ({ payload: event }) => {
+  platform.listen<InternalEvent>("plugin_event", async (event) => {
     if (event.payload.type === "prompt_text_request") {
       const value = await showPrompt(event.payload);
       const result: InternalEvent = {
@@ -81,7 +79,7 @@ export function initGlobalListeners() {
           value,
         },
       };
-      await emit(event.id, result);
+      await platform.emit(event.id, result);
     } else if (event.payload.type === "prompt_form_request") {
       if (event.replyId != null) {
         // Follow-up update from plugin runtime — update the active dialog's inputs
@@ -106,7 +104,7 @@ export function initGlobalListeners() {
             done,
           },
         };
-        void emit(event.id, result);
+        void platform.emit(event.id, result);
       };
 
       const values = await showPromptForm({
@@ -127,24 +125,24 @@ export function initGlobalListeners() {
     }
   });
 
-  listenToTauriEvent<string>("update_installed", async ({ payload: version }) => {
+  platform.listen<string>("update_installed", async (version) => {
     console.log("Got update installed event", version);
     showUpdateInstalledToast(version);
   });
 
   // Listen for update events
-  listenToTauriEvent<UpdateInfo>("update_available", async ({ payload }) => {
+  platform.listen<UpdateInfo>("update_available", async (payload) => {
     console.log("Got update available", payload);
     void showUpdateAvailableToast(payload);
   });
 
-  listenToTauriEvent<YaakNotification>("notification", ({ payload }) => {
+  platform.listen<YaakNotification>("notification", (payload) => {
     console.log("Got notification event", payload);
     showNotificationToast(payload);
   });
 
   // Listen for plugin update events
-  listenToTauriEvent<PluginUpdateNotification>("plugin_updates_available", ({ payload }) => {
+  platform.listen<PluginUpdateNotification>("plugin_updates_available", (payload) => {
     console.log("Got plugin updates event", payload);
     showPluginUpdatesToast(payload);
   });
@@ -171,7 +169,7 @@ function showUpdateInstalledToast(version: string) {
         loadingChildren="Restarting..."
         onClick={() => {
           hide();
-          setTimeout(() => invokeCmd("cmd_restart", {}), 200);
+          setTimeout(() => rpc("cmd_restart", {}), 200);
         }}
       >
         Relaunch Yaak
@@ -187,7 +185,7 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
   jotaiStore.set(updateAvailableAtom, { version, downloaded });
 
   // Acknowledge the event, so we don't time out and try the fallback update logic
-  await emit<UpdateResponse>(replyEventId, { type: "ack" });
+  await platform.emit(replyEventId, { type: "ack" } satisfies UpdateResponse);
 
   showToast({
     id: UPDATE_TOAST_ID,
@@ -209,10 +207,10 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
           className="min-w-40"
           loadingChildren={downloaded ? "Installing..." : "Downloading..."}
           onClick={async () => {
-            await emit<UpdateResponse>(replyEventId, {
+            await platform.emit(replyEventId, {
               type: "action",
               action: "install",
-            });
+            } satisfies UpdateResponse);
           }}
         >
           {downloaded ? "Install Now" : "Download and Install"}
@@ -223,7 +221,7 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
           variant="border"
           rightSlot={<Icon icon="external_link" />}
           onClick={async () => {
-            await openUrl(`https://yaak.app/changelog/${version}`);
+            await platform.openUrl(`https://yaak.app/changelog/${version}`);
           }}
         >
           What&apos;s New
@@ -304,7 +302,7 @@ function showNotificationToast(n: YaakNotification) {
       </VStack>
     ),
     onClose: () => {
-      invokeCmd("cmd_dismiss_notification", { notificationId: n.id }).catch(console.error);
+      rpc("cmd_dismiss_notification", { notificationId: n.id }).catch(console.error);
     },
     action: ({ hide }) => {
       return actionLabel && actionUrl ? (
@@ -315,7 +313,7 @@ function showNotificationToast(n: YaakNotification) {
           rightSlot={<Icon icon="external_link" />}
           onClick={() => {
             hide();
-            return openUrl(actionUrl);
+            return platform.openUrl(actionUrl);
           }}
         >
           {actionLabel}

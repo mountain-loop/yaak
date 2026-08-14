@@ -2,7 +2,7 @@ import { HStack, VStack } from "@yaakapp-internal/ui";
 import { useRef, useState } from "react";
 import type { FeedbackFeature } from "../lib/featureFeedbackConstants";
 import { FEEDBACK_FEATURES } from "../lib/featureFeedbackConstants";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { hideToastById, showToast } from "../lib/toast";
 import { Button } from "./core/Button";
 import { Input } from "./core/Input";
@@ -31,7 +31,7 @@ export function FeedbackToast({ feature, onDone }: Props) {
     onDone();
 
     // Fire-and-forget; failures are intentionally ignored
-    invokeCmd("cmd_send_feedback", { feature, text: trimmedText }).catch(() => {});
+    rpc("cmd_send_feedback", { feature, text: trimmedText }).catch(() => {});
     showToast({
       id: `feature-feedback-${feature}`,
       timeout: 3000,

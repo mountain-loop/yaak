@@ -12,7 +12,7 @@ import {
 import type { GetTemplateFunctionConfigResponse, JsonPrimitive } from "@yaakapp-internal/plugins";
 import { useAtomValue } from "jotai";
 import { md5 } from "js-md5";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { activeEnvironmentIdAtom } from "./useActiveEnvironment";
 import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
@@ -63,7 +63,7 @@ export async function getTemplateFunctionConfig(
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
   environmentId: string | undefined,
 ) {
-  const config = await invokeCmd<GetTemplateFunctionConfigResponse>(
+  const config = await rpc<GetTemplateFunctionConfigResponse>(
     "cmd_template_function_config",
     {
       functionName,

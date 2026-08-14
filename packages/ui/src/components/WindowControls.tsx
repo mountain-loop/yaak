@@ -1,4 +1,4 @@
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { useState } from "react";
 import { WINDOW_CONTROLS_WIDTH } from "../lib/constants";
@@ -40,7 +40,7 @@ export function WindowControls({
           <Button
             className="h-full! px-4 text-text-subtle hocus:text hocus:bg-surface-highlight rounded-none"
             color="custom"
-            onClick={() => getCurrentWebviewWindow().minimize()}
+            onClick={() => platform.window.minimize()}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
               <title>Minimize</title>
@@ -51,7 +51,7 @@ export function WindowControls({
             className="h-full! px-4 text-text-subtle hocus:text hocus:bg-surface-highlight rounded-none"
             color="custom"
             onClick={async () => {
-              const w = getCurrentWebviewWindow();
+              const w = platform.window;
               const isMaximized = await w.isMaximized();
               if (isMaximized) {
                 await w.unmaximize();
@@ -82,7 +82,7 @@ export function WindowControls({
       <Button
         color="custom"
         className="h-full! px-4 text-text-subtle rounded-none hocus:bg-danger hocus:text-text"
-        onClick={() => getCurrentWebviewWindow().close()}
+        onClick={() => platform.window.close()}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
           <title>Close</title>

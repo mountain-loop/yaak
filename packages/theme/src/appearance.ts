@@ -1,5 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { platform } from "@yaakapp-internal/platform";
 
 export type Appearance = "light" | "dark";
 
@@ -10,7 +9,7 @@ export function getCSSAppearance(): Appearance {
 }
 
 export async function getWindowAppearance(): Promise<Appearance> {
-  const appearance = await getCurrentWebviewWindow().theme();
+  const appearance = await platform.window.theme();
   return appearance ?? getCSSAppearance();
 }
 
@@ -24,35 +23,13 @@ export function subscribeToCSSAppearanceChange(cb: (appearance: Appearance) => v
 export function subscribeToWindowAppearanceChange(
   cb: (appearance: Appearance) => void,
 ): () => void {
-  const container = {
-    unsubscribe: () => {},
-  };
-
-  void getCurrentWebviewWindow()
-    .onThemeChanged((theme) => {
-      cb(theme.payload);
-    })
-    .then((listener) => {
-      container.unsubscribe = listener;
-    });
-
-  return () => container.unsubscribe();
+  return platform.window.onThemeChanged(cb);
 }
 
 export function subscribeToSystemAppearanceChange(
   cb: (appearance: Appearance) => void,
 ): () => void {
-  const container = {
-    unsubscribe: () => {},
-  };
-
-  void listen<Appearance>(SYSTEM_APPEARANCE_CHANGE_EVENT, (event) => {
-    cb(event.payload);
-  }).then((listener) => {
-    container.unsubscribe = listener;
-  });
-
-  return () => container.unsubscribe();
+  return platform.listen<Appearance>(SYSTEM_APPEARANCE_CHANGE_EVENT, cb);
 }
 
 export function resolveAppearance(

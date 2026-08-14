@@ -1,7 +1,15 @@
-import type { InvokeArgs } from "@tauri-apps/api/core";
-import { invoke } from "@tauri-apps/api/core";
+import type { RpcPayload } from "@yaakapp-internal/platform";
+import { platform } from "@yaakapp-internal/platform";
 
-type TauriCmd =
+/**
+ * Every backend command the client sends.
+ *
+ * Listing them keeps typos out and gives us the inventory to check the Rust
+ * side against. Once the app's commands move onto `RpcRouter`, this union is
+ * replaced by the generated `RpcSchema` and the payload and result types come
+ * with it, the way `apps/yaak-proxy/lib/rpc.ts` already works.
+ */
+type AppCmd =
   | "cmd_call_grpc_request_action"
   | "cmd_call_http_authentication_action"
   | "cmd_call_http_request_action"
@@ -53,14 +61,15 @@ type TauriCmd =
   | "cmd_send_http_request"
   | "cmd_template_function_summaries"
   | "cmd_template_function_config"
-  | "cmd_template_tokens_to_string";
+  | "cmd_template_tokens_to_string"
+  | "models_get_graphql_introspection"
+  | "models_get_settings"
+  | "models_grpc_events"
+  | "models_upsert_graphql_introspection"
+  | "models_websocket_events"
+  | "plugin:yaak-license|check";
 
-export async function invokeCmd<T>(cmd: TauriCmd, args?: InvokeArgs): Promise<T> {
-  // console.log('RUN COMMAND', cmd, args);
-  try {
-    return await invoke(cmd, args);
-  } catch (err) {
-    console.warn("Tauri command error", cmd, err);
-    throw err;
-  }
+/** Call a backend command. */
+export function rpc<T>(cmd: AppCmd, payload?: RpcPayload): Promise<T> {
+  return platform.rpc<T>(cmd, payload);
 }

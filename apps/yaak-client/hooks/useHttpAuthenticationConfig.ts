@@ -11,7 +11,7 @@ import type { GetHttpAuthenticationConfigResponse, JsonPrimitive } from "@yaakap
 import { useAtomValue } from "jotai";
 import { md5 } from "js-md5";
 import { useState } from "react";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { activeEnvironmentIdAtom } from "./useActiveEnvironment";
 import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 
@@ -48,7 +48,7 @@ export function useHttpAuthenticationConfig(
     placeholderData: (prev) => prev, // Keep previous data on refetch
     queryFn: async () => {
       if (authName == null || authName === "inherit") return null;
-      const config = await invokeCmd<GetHttpAuthenticationConfigResponse>(
+      const config = await rpc<GetHttpAuthenticationConfigResponse>(
         "cmd_get_http_authentication_config",
         {
           authName,
@@ -65,7 +65,7 @@ export function useHttpAuthenticationConfig(
           call: async (
             model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
           ) => {
-            await invokeCmd("cmd_call_http_authentication_action", {
+            await rpc("cmd_call_http_authentication_action", {
               pluginRefId: config.pluginRefId,
               actionIndex: i,
               authName,

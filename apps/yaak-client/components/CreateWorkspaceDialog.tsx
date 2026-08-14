@@ -5,7 +5,7 @@ import { VStack } from "@yaakapp-internal/ui";
 import { useState } from "react";
 import { router } from "../lib/router";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { showErrorToast } from "../lib/toast";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
@@ -39,7 +39,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
 
         // Do getWorkspaceMeta instead of naively creating one because it might have
         // been created already when the store refreshes the workspace meta after
-        const workspaceMeta = await invokeCmd<WorkspaceMeta>("cmd_get_workspace_meta", {
+        const workspaceMeta = await rpc<WorkspaceMeta>("cmd_get_workspace_meta", {
           workspaceId,
         });
         await updateModel({

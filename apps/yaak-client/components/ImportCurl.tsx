@@ -1,5 +1,4 @@
-import { isTauri } from "@tauri-apps/api/core";
-import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { platform, useCapability } from "@yaakapp-internal/platform";
 import { Icon } from "@yaakapp-internal/ui";
 import * as m from "motion/react-m";
 import { useEffect, useState } from "react";
@@ -9,12 +8,12 @@ import { showToast } from "../lib/toast";
 import { Button } from "./core/Button";
 
 /**
- * Offers to create a request from a Curl command on the clipboard. The desktop app can
- * read the clipboard whenever the window is focused, but a browser can't without
- * prompting for permission, so it waits for the user to paste instead.
+ * Offers to create a request from a Curl command on the clipboard. A host that can read
+ * the clipboard on its own offers it whenever the window is focused; one that would have
+ * to prompt for permission first waits for the user to paste instead.
  */
 export function ImportCurl() {
-  return isTauri() ? <ImportCurlButton /> : <ImportCurlOnPaste />;
+  return useCapability("clipboardRead") ? <ImportCurlButton /> : <ImportCurlOnPaste />;
 }
 
 function ImportCurlButton() {
@@ -24,7 +23,7 @@ function ImportCurlButton() {
 
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- none
   useEffect(() => {
-    void readText().then(setClipboardText);
+    void platform.clipboard.readText().then(setClipboardText);
   }, [focused]);
 
   if (!looksLikeCurl(clipboardText)) {

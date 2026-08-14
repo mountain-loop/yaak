@@ -3,7 +3,7 @@ import { changeModelStoreWorkspace, pluginsAtom } from "@yaakapp-internal/models
 import { useAtomValue } from "jotai";
 import { jotaiStore } from "../lib/jotai";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
-import { invokeCmd } from "../lib/tauri";
+import { rpc } from "../lib/rpc";
 import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
 import { invalidateAllPluginInfo } from "./usePluginInfo";
@@ -26,7 +26,7 @@ export function useRefreshPlugins() {
     mutationFn: async () => {
       await minPromiseMillis(
         (async () => {
-          await invokeCmd("cmd_reload_plugins");
+          await rpc("cmd_reload_plugins");
           const workspaceId = jotaiStore.get(activeWorkspaceIdAtom);
           await changeModelStoreWorkspace(workspaceId); // Force refresh models
           invalidateAllPluginInfo();

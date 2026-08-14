@@ -1,4 +1,3 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useLicense } from "@yaakapp-internal/license";
 import { useRef } from "react";
 import { openSettings } from "../commands/openSettings";
@@ -13,6 +12,7 @@ import { Dropdown } from "./core/Dropdown";
 import { Icon } from "@yaakapp-internal/ui";
 import { IconButton } from "./core/IconButton";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import { platform } from "@yaakapp-internal/platform";
 
 export function SettingsDropdown() {
   const exportData = useExportData();
@@ -62,7 +62,7 @@ export function SettingsDropdown() {
         {
           label: "Create Run Button",
           leftSlot: <Icon icon="rocket" />,
-          onSelect: () => openUrl("https://yaak.app/button/new"),
+          onSelect: () => platform.openUrl("https://yaak.app/button/new"),
         },
         { type: "separator", label: `Yaak v${appInfo.version}` },
         {
@@ -78,26 +78,26 @@ export function SettingsDropdown() {
           leftSlot: <Icon icon="circle_dollar_sign" />,
           rightSlot: <Icon icon="external_link" color="success" className="opacity-60" />,
           onSelect: () =>
-            openUrl(pricingUrl(`app.menu.purchase.${check.data?.status ?? "unknown"}`)),
+            platform.openUrl(pricingUrl(`app.menu.purchase.${check.data?.status ?? "unknown"}`)),
         },
         {
           label: "Install CLI",
           hidden: appInfo.cliVersion != null,
           leftSlot: <Icon icon="square_terminal" />,
           rightSlot: <Icon icon="external_link" color="secondary" />,
-          onSelect: () => openUrl("https://yaak.app/docs/cli"),
+          onSelect: () => platform.openUrl("https://yaak.app/docs/cli"),
         },
         {
           label: "Feedback",
           leftSlot: <Icon icon="chat" />,
           rightSlot: <Icon icon="external_link" color="secondary" />,
-          onSelect: () => openUrl("https://yaak.app/feedback"),
+          onSelect: () => platform.openUrl("https://yaak.app/feedback"),
         },
         {
           label: "Changelog",
           leftSlot: <Icon icon="cake" />,
           rightSlot: <Icon icon="external_link" color="secondary" />,
-          onSelect: () => openUrl(`https://yaak.app/changelog/${appInfo.version}`),
+          onSelect: () => platform.openUrl(`https://yaak.app/changelog/${appInfo.version}`),
         },
       ]}
     >

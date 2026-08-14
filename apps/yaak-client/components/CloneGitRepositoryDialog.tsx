@@ -1,4 +1,3 @@
-import { open } from "@tauri-apps/plugin-dialog";
 import { gitClone } from "@yaakapp-internal/git";
 import { Banner, VStack } from "@yaakapp-internal/ui";
 import { useState } from "react";
@@ -11,6 +10,7 @@ import { Checkbox } from "./core/Checkbox";
 import { IconButton } from "./core/IconButton";
 import { PlainInput } from "./core/PlainInput";
 import { promptCredentials } from "./git/credentials";
+import { platform } from "@yaakapp-internal/platform";
 
 interface Props {
   hide: () => void;
@@ -38,7 +38,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
     hasSubdirectory && subdirectory ? `${directory}${sep}${subdirectory}` : directory;
 
   const handleSelectDirectory = async () => {
-    const dir = await open({
+    const dir = await platform.dialog.open({
       title: "Select Directory",
       directory: true,
       multiple: false,
