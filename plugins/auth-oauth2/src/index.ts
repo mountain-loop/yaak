@@ -103,6 +103,7 @@ export const plugin: PluginDefinition = {
             authorizationUrl: stringArg(values, "authorizationUrl"),
             accessTokenUrl: stringArg(values, "accessTokenUrl"),
             clientId: stringArg(values, "clientId"),
+            username: usernameArg(values),
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
@@ -128,6 +129,7 @@ export const plugin: PluginDefinition = {
             authorizationUrl: stringArg(values, "authorizationUrl"),
             accessTokenUrl: stringArg(values, "accessTokenUrl"),
             clientId: stringArg(values, "clientId"),
+            username: usernameArg(values),
           };
           if (await deleteToken(ctx, tokenArgs)) {
             await ctx.toast.show({
@@ -478,6 +480,7 @@ export const plugin: PluginDefinition = {
             authorizationUrl: stringArg(values, "authorizationUrl"),
             accessTokenUrl: stringArg(values, "accessTokenUrl"),
             clientId: stringArg(values, "clientId"),
+            username: usernameArg(values),
           };
           const token = await getToken(ctx, tokenArgs);
           if (token == null) {
@@ -607,6 +610,12 @@ function stringArgOrNull(
   const arg = values[name];
   if (arg == null || arg === "") return null;
   return `${arg}`;
+}
+
+/** Only the password grant stores its token under a username, so the others must not key by one */
+function usernameArg(values: Record<string, JsonPrimitive | undefined>): string | null {
+  const grantType = String(values.grantType ?? defaultGrantType);
+  return grantType === "password" ? stringArgOrNull(values, "username") : null;
 }
 
 function stringArg(values: Record<string, JsonPrimitive | undefined>, name: string): string {
