@@ -60,29 +60,52 @@ impl<'a> ClientDb<'a> {
         // until every statement that could fail (and roll back the rows) is done.
         let responses = self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, wid, None)?;
 
-        self.delete_many_untracked::<HttpResponseEvent>(HttpResponseEventIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<HttpResponse>(HttpResponseIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<HttpRequest>(HttpRequestIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<GrpcEvent>(GrpcEventIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<GrpcConnection>(GrpcConnectionIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<GrpcRequest>(GrpcRequestIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<WebsocketEvent>(WebsocketEventIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<WebsocketConnection>(
-            WebsocketConnectionIden::WorkspaceId,
-            wid,
-        )?;
-        self.delete_many_untracked::<WebsocketRequest>(WebsocketRequestIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<GraphQlIntrospection>(
-            GraphQlIntrospectionIden::WorkspaceId,
-            wid,
-        )?;
-        self.delete_many_untracked::<Folder>(FolderIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<Environment>(EnvironmentIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<CookieJar>(CookieJarIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<SyncState>(SyncStateIden::WorkspaceId, wid)?;
-        self.delete_many_untracked::<WorkspaceMeta>(WorkspaceMetaIden::WorkspaceId, wid)?;
+        // Sync and the CLI call this on a plain connection where each statement
+        // would otherwise commit on its own, leaving a partially-deleted workspace
+        // if one fails. A savepoint makes the cascade atomic there, and nests
+        // harmlessly inside the interactive path's transaction.
+        let conn = self.conn().resolve();
+        conn.execute_batch("SAVEPOINT delete_workspace")?;
 
-        let deleted = self.delete(workspace, source)?;
+        let result: Result<Workspace> = (|| {
+            self.delete_many_untracked::<HttpResponseEvent>(
+                HttpResponseEventIden::WorkspaceId,
+                wid,
+            )?;
+            self.delete_many_untracked::<HttpResponse>(HttpResponseIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<HttpRequest>(HttpRequestIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<GrpcEvent>(GrpcEventIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<GrpcConnection>(GrpcConnectionIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<GrpcRequest>(GrpcRequestIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<WebsocketEvent>(WebsocketEventIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<WebsocketConnection>(
+                WebsocketConnectionIden::WorkspaceId,
+                wid,
+            )?;
+            self.delete_many_untracked::<WebsocketRequest>(WebsocketRequestIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<GraphQlIntrospection>(
+                GraphQlIntrospectionIden::WorkspaceId,
+                wid,
+            )?;
+            self.delete_many_untracked::<Folder>(FolderIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<Environment>(EnvironmentIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<CookieJar>(CookieJarIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<SyncState>(SyncStateIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<WorkspaceMeta>(WorkspaceMetaIden::WorkspaceId, wid)?;
+            self.delete(workspace, source)
+        })();
+
+        let deleted = match result {
+            Ok(deleted) => {
+                conn.execute_batch("RELEASE delete_workspace")?;
+                deleted
+            }
+            Err(e) => {
+                let _ = conn
+                    .execute_batch("ROLLBACK TO delete_workspace; RELEASE delete_workspace");
+                return Err(e);
+            }
+        };
 
         // Best-effort cleanup of response bodies (disk files and blob chunks).
         // Failures only orphan unreferenced data, and are logged.
