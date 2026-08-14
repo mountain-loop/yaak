@@ -1630,10 +1630,11 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
 ) -> YaakResult<()> {
-    Ok(app_handle.db().delete_all_http_responses_for_request(
+    app_handle.db().delete_all_http_responses_for_request(
         request_id,
         &UpdateSource::from_window_label(window.label()),
-    )?)
+    )?;
+    Ok(())
 }
 
 #[tauri::command]

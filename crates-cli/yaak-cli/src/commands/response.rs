@@ -117,13 +117,8 @@ fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
             println!("Aborted");
             return Ok(());
         }
-        // The delete helpers return no count, so take one first to report honestly.
         let count = ctx
             .db()
-            .list_http_responses_for_request(id, None)
-            .map_err(|e| format!("Failed to list responses: {e}"))?
-            .len();
-        ctx.db()
             .delete_all_http_responses_for_request(id, &UpdateSource::Sync)
             .map_err(|e| format!("Failed to delete responses: {e}"))?;
         println!("Deleted {count} responses for request {id}");
@@ -137,10 +132,6 @@ fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
     }
     let count = ctx
         .db()
-        .list_http_responses(&workspace_id, None)
-        .map_err(|e| format!("Failed to list responses: {e}"))?
-        .len();
-    ctx.db()
         .delete_all_http_responses_for_workspace(&workspace_id, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to delete responses: {e}"))?;
     println!("Deleted {count} responses for workspace {workspace_id}");
