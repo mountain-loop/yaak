@@ -34,6 +34,12 @@ export type PlatformAppearance = "light" | "dark";
 /** Command arguments. Serialized to JSON, so only JSON values belong here. */
 export type RpcPayload = Record<string, unknown>;
 
+/** A streaming command's result, plus the teardown for its subscription. */
+export interface RpcStreamHandle<T> {
+  result: T;
+  unlisten: Unsubscribe;
+}
+
 export interface DialogFilter {
   name: string;
   extensions: string[];
@@ -156,12 +162,18 @@ export interface Platform {
   rpc<T>(cmd: string, payload?: RpcPayload): Promise<T>;
 
   /**
-   * Call a command that streams messages back before it resolves.
+   * Call a command that streams messages back while it runs.
    *
-   * The host passes the stream to the backend under the payload's `channel` key,
-   * which is the shape the existing sync and git watchers already expect.
+   * Resolves once the command itself completes, with its result and an
+   * `unlisten` that tears down the local subscription. The host guarantees the
+   * subscription is live before the command is dispatched, so a stream that
+   * emits immediately cannot lose its first message.
    */
-  rpcStream<T, M>(cmd: string, payload: RpcPayload, onMessage: (message: M) => void): Promise<T>;
+  rpcStream<T, M>(
+    cmd: string,
+    payload: RpcPayload,
+    onMessage: (message: M) => void,
+  ): Promise<RpcStreamHandle<T>>;
 
   /** Subscribe to a backend event addressed to this window. */
   listen<T>(event: string, callback: (payload: T) => void): Unsubscribe;

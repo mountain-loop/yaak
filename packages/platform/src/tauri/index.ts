@@ -15,6 +15,7 @@ import type {
   PlatformCapabilities,
   PlatformWindow,
   RpcPayload,
+  RpcStreamHandle,
   Unsubscribe,
 } from "../types";
 
@@ -132,18 +133,25 @@ export function createTauriPlatform(): Platform {
 
     rpc,
 
-    rpcStream<T, M>(cmd: string, payload: RpcPayload, onMessage: (message: M) => void): Promise<T> {
-      // The caller mints the stream id and subscribes before dispatching, so no
-      // message can be emitted before anyone is listening. The subscription
-      // lives as long as the page, matching the lifetime the backend stream
-      // had when this rode a Tauri Channel.
+    async rpcStream<T, M>(
+      cmd: string,
+      payload: RpcPayload,
+      onMessage: (message: M) => void,
+    ): Promise<RpcStreamHandle<T>> {
+      // The caller mints the stream id, and the subscription is awaited before
+      // the command dispatches: registration is its own IPC round trip, and the
+      // command may emit its first message while it runs.
       const streamId = crypto.randomUUID();
-      toSyncUnsubscribe(
-        tauriListen<M>(`stream_${streamId}`, (e) => onMessage(e.payload), {
-          target: { kind: "Window", label: window.label },
-        }),
-      );
-      return rpc<T>(cmd, { ...payload, streamId });
+      const unlisten = await tauriListen<M>(`stream_${streamId}`, (e) => onMessage(e.payload), {
+        target: { kind: "Window", label: window.label },
+      });
+      try {
+        const result = await rpc<T>(cmd, { ...payload, streamId });
+        return { result, unlisten };
+      } catch (err) {
+        unlisten();
+        throw err;
+      }
     },
 
     listen<T>(event: string, callback: (payload: T) => void): Unsubscribe {
