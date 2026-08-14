@@ -87,31 +87,56 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
         // Delete only what we wrote and the user has not since changed. Anything they
         // edited or added is theirs, and uninstalling is not a reason to lose it.
         let manifest = read_manifest(&dir);
+        let mut retained =
+            SkillManifest { cli_version: manifest.cli_version.clone(), ..Default::default() };
         let mut kept = Vec::new();
+        let mut failed = Vec::new();
+
         for (relative, written) in &manifest.files {
             let path = dir.join(relative);
             match fs::read(&path) {
-                Ok(on_disk) if sha256(&on_disk) == *written => {
-                    if let Err(error) = fs::remove_file(&path) {
+                Ok(on_disk) if sha256(&on_disk) == *written => match fs::remove_file(&path) {
+                    Ok(()) => {}
+                    Err(error) => {
                         ui::warning_stderr(&format!(
                             "Failed to remove {}: {error}",
                             path.display()
                         ));
+                        retained.files.insert(relative.clone(), written.clone());
+                        failed.push(relative.clone());
                     }
+                },
+                Ok(_) => {
+                    kept.push(relative.clone());
+                    retained.files.insert(relative.clone(), written.clone());
                 }
-                Ok(_) => kept.push(relative.clone()),
-                Err(_) => {} // Already gone
+                Err(_) => {} // Already gone, so stop tracking it
             }
         }
 
-        let _ = fs::remove_file(dir.join(MANIFEST_NAME));
-        prune_empty_dirs(&dir);
+        // Any file still on disk keeps its ownership record, so a later install can
+        // still tell the user's edits from ours instead of overwriting them, and a
+        // later remove can retry whatever could not be deleted.
+        if retained.files.is_empty() {
+            let _ = fs::remove_file(dir.join(MANIFEST_NAME));
+            prune_empty_dirs(&dir);
+        } else {
+            // A failure here leaves the older manifest in place, which still lists
+            // every retained file, so keep going rather than aborting other targets.
+            if let Err(error) = write_manifest(&dir, &retained) {
+                ui::warning_stderr(&error);
+            }
+            prune_empty_dirs_below(&dir);
+        }
 
         removed += 1;
         if dir.exists() {
             ui::success(&format!("Removed the Yaak skill from {}", dir.display()));
             for path in kept {
                 ui::warning(&format!("  kept your edited {path}"));
+            }
+            for path in failed {
+                ui::warning(&format!("  could not delete {path}, so it is still tracked"));
             }
         } else {
             ui::success(&format!("Removed {}", dir.display()));
@@ -190,6 +215,7 @@ fn write_skill(dir: &Path, force: bool) -> CommandResult<WriteOutcome> {
     // Drop files an earlier version shipped that this one no longer does, so a stale
     // reference can't sit alongside the refreshed guidance. Files the user has since
     // edited are left behind and stop being tracked; they belong to them now.
+    let mut stale_to_retain = Vec::new();
     for (relative, written) in &previous.files {
         if manifest.files.contains_key(relative) {
             continue;
@@ -199,16 +225,26 @@ fn write_skill(dir: &Path, force: bool) -> CommandResult<WriteOutcome> {
             && let Err(error) = fs::remove_file(&path)
         {
             ui::warning_stderr(&format!("Failed to remove stale {}: {error}", path.display()));
+            // Keep tracking it so a later run can retry, rather than orphaning a file
+            // we know we wrote.
+            stale_to_retain.push((relative.clone(), written.clone()));
         }
+    }
+    for (relative, written) in stale_to_retain {
+        manifest.files.insert(relative, written);
     }
     prune_empty_dirs_below(dir);
 
-    let manifest_json = serde_json::to_string_pretty(&manifest)
-        .map_err(|e| format!("Failed to serialize skill manifest: {e}"))?;
-    fs::write(dir.join(MANIFEST_NAME), manifest_json)
-        .map_err(|e| format!("Failed to write skill manifest: {e}"))?;
+    write_manifest(dir, &manifest)?;
 
     Ok(WriteOutcome::Written { skipped })
+}
+
+fn write_manifest(dir: &Path, manifest: &SkillManifest) -> CommandResult {
+    let manifest_json = serde_json::to_string_pretty(manifest)
+        .map_err(|e| format!("Failed to serialize skill manifest: {e}"))?;
+    fs::write(dir.join(MANIFEST_NAME), manifest_json)
+        .map_err(|e| format!("Failed to write skill manifest: {e}"))
 }
 
 fn read_manifest(dir: &Path) -> SkillManifest {
