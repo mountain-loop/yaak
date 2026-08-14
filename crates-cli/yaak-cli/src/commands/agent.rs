@@ -1,5 +1,6 @@
 use crate::cli::{AgentArgs, AgentCommands};
 use crate::ui;
+use crate::version;
 use include_dir::{Dir, include_dir};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,6 +8,10 @@ use std::path::{Path, PathBuf};
 static SKILL_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills/use-yaak");
 
 const SKILL_NAME: &str = "use-yaak";
+
+/// Records which CLI version wrote the skill, so `--help` can tell the user when an
+/// upgrade has left their installed copy behind.
+const VERSION_FILE: &str = ".yaak-version";
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
 
@@ -102,7 +107,51 @@ fn write_skill(dir: &Path) -> CommandResult {
             .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
     }
 
+    fs::write(dir.join(VERSION_FILE), version::cli_version())
+        .map_err(|e| format!("Failed to write skill version: {e}"))?;
+
     Ok(())
+}
+
+/// Health summary appended to root `--help`, so an agent can notice in one command
+/// that an upgraded CLI has left the installed skill behind. Silent when nothing is
+/// installed anywhere, to avoid nagging users who do not use agent tooling.
+pub fn help_section() -> Option<String> {
+    let targets = resolve_targets(None).ok()?;
+    let current = version::cli_version();
+
+    let mut stale = Vec::new();
+    let mut installed = 0usize;
+    for target in &targets {
+        let dir = target.skills_dir.join(SKILL_NAME);
+        if !dir.join("SKILL.md").exists() {
+            continue;
+        }
+        installed += 1;
+
+        let found = fs::read_to_string(dir.join(VERSION_FILE))
+            .map(|v| v.trim().to_string())
+            .unwrap_or_default();
+        if found != current {
+            let found = if found.is_empty() { "unknown".to_string() } else { found };
+            stale.push(format!("{} ({found})", target.label));
+        }
+    }
+
+    if installed == 0 {
+        return None;
+    }
+
+    if stale.is_empty() {
+        return Some(format!(
+            "Agent tooling:\n  Yaak skill is installed and up to date ({current})"
+        ));
+    }
+
+    Some(format!(
+        "Agent tooling:\n  Yaak skill is out of date for {} — CLI is {current}\n  Run `yaak agent install`, then restart your coding tool",
+        stale.join(", ")
+    ))
 }
 
 /// Flatten the embedded skill directory into its files, recursing into subdirectories.

@@ -1,18 +1,17 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+pub const AGENT_HINTS: &str = r#"Agent Hints:
+  - Template variable syntax is ${[ my_var ]}, not {{ ... }}
+  - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
+  - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
+  - Deletion requires confirmation (--yes for non-interactive environments)"#;
+
 #[derive(Parser)]
 #[command(name = "yaak")]
 #[command(about = "Yaak CLI - API client from the command line")]
 #[command(version = crate::version::cli_version())]
 #[command(disable_help_subcommand = true)]
-#[command(after_help = r#"Agent Hints:
-  - Template variable syntax is ${[ my_var ]}, not {{ ... }}
-  - Template function syntax is ${[ namespace.my_func(a='aaa',b='bbb') ]}
-  - View JSONSchema for models before creating or updating (eg. `yaak request schema http`)
-  - Deletion requires confirmation (--yes for non-interactive environments)
-  - Run `yaak agent install` to install the Yaak skill for AI coding agents
-  "#)]
 pub struct Cli {
     /// Use a custom data directory
     #[arg(long, global = true)]

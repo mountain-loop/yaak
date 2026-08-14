@@ -83,9 +83,23 @@ yaak workspace list
 ```
 
 Pick the workspace matching the user's project before changing anything, and
-create one only when nothing fits. If a documented command is unrecognized, the
-CLI is older than this skill: update it with `npm install -g @yaakapp/cli@latest`
-and re-run `yaak agent install`, then tell the user to restart their coding tool.
+create one only when nothing fits.
+
+### Skill freshness
+
+The CLI writes this skill, so an upgraded CLI can leave it behind. That failure
+is silent: nothing errors, the skill just stops mentioning things the CLI can
+now do. Check once per session, alongside the commands above:
+
+```bash
+yaak --help 2>&1 | grep -A2 "Agent tooling:"
+```
+
+If it reports the skill is out of date, run `yaak agent install` and tell the
+user to restart their coding tool. This session keeps running on the old copy
+until they do, so finish the current request either way. Check once and do not
+re-run it after acting.
+
 **When the CLI and this skill disagree, the CLI is right.**
 
 ## Core workflows
@@ -127,9 +141,14 @@ yaak response body rq_abc123     # just the body
 ```
 
 `response show` gives status, reason, timing, headers, the final URL, and any
-transport error. Pass a response ID for a specific one. `-v` on a send prints
-the same information live, prefixed `*`, `>`, and `<`, but interleaves it with
-the body on stdout, so prefer `response show` when you need to act on the result.
+transport error. Pass a response ID for a specific one.
+
+`-v` on a send prints the same information live, prefixed `*`, `>`, and `<`, and
+is useful to watch. **Do not parse it.** The body and the event lines are written
+to stdout by separate tasks, so their order is not deterministic: the body can
+land in the middle of the headers and run onto the same line as the status, which
+makes even `grep '^< HTTP'` miss it on some runs. Use `response show` whenever
+you need to act on the result.
 
 Exit code 1 means the send did not complete: an unresolved template variable, an
 unreachable host, a TLS failure. **HTTP error statuses are not failures.** Like

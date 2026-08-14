@@ -7,15 +7,31 @@ mod utils;
 mod version;
 mod version_check;
 
-use clap::Parser;
-use cli::{Cli, Commands, PluginCommands, RequestCommands};
+use clap::{CommandFactory, FromArgMatches};
+use cli::{AGENT_HINTS, Cli, Commands, PluginCommands, RequestCommands};
 use context::{CliContext, CliExecutionContext};
 use std::path::PathBuf;
 use yaak_models::queries::any_request::AnyRequest;
 
+/// Built at runtime so root `--help` can report whether the installed agent skill is
+/// still in step with this CLI version.
+fn help_footer() -> String {
+    match commands::agent::help_section() {
+        Some(section) => format!("{AGENT_HINTS}\n\n{section}"),
+        None => format!(
+            "{AGENT_HINTS}\n  - Run `yaak agent install` to install the Yaak skill for AI coding agents"
+        ),
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    let Cli { data_dir, environment, cookie_jar, verbose, log, command } = Cli::parse();
+    let matches = Cli::command().after_help(help_footer()).get_matches();
+    let Cli { data_dir, environment, cookie_jar, verbose, log, command } =
+        match Cli::from_arg_matches(&matches) {
+            Ok(cli) => cli,
+            Err(error) => error.exit(),
+        };
 
     if let Some(log_level) = log {
         match log_level {
