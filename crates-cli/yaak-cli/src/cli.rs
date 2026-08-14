@@ -90,6 +90,50 @@ pub enum Commands {
     /// Template function commands
     #[command(alias = "func")]
     TemplateFunction(TemplateFunctionArgs),
+
+    /// Response commands
+    Response(ResponseArgs),
+}
+
+#[derive(Args)]
+pub struct ResponseArgs {
+    #[command(subcommand)]
+    pub command: ResponseCommands,
+}
+
+#[derive(Subcommand)]
+pub enum ResponseCommands {
+    /// List stored responses for a request or workspace
+    List {
+        /// Request or workspace ID (optional when exactly one workspace exists)
+        id: Option<String>,
+
+        /// Maximum number of responses to return, newest first
+        #[arg(long)]
+        limit: Option<u64>,
+    },
+
+    /// Show a response as JSON, including status, timing, and headers
+    Show {
+        /// Response ID, or a request ID to use its most recent response
+        id: String,
+    },
+
+    /// Write a stored response body to stdout
+    Body {
+        /// Response ID, or a request ID to use its most recent response
+        id: String,
+    },
+
+    /// Delete stored responses for a request or workspace
+    Delete {
+        /// Request or workspace ID
+        id: String,
+
+        /// Skip confirmation prompt
+        #[arg(short, long)]
+        yes: bool,
+    },
 }
 
 #[derive(Args)]

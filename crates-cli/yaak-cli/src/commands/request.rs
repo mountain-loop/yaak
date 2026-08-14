@@ -107,6 +107,47 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType, pretty: bool)
     Ok(())
 }
 
+/// `request create` only builds HTTP requests, but `request schema` will happily hand
+/// out gRPC and WebSocket schemas. Without this, a gRPC payload deserializes into an
+/// HttpRequest with its unknown fields dropped, quietly producing a broken request
+/// (the gRPC method name lands in `method`, and `service` disappears).
+fn reject_non_http_payload(payload: &Value, context: &str) -> CommandResult {
+    let Some(object) = payload.as_object() else {
+        return Ok(());
+    };
+
+    if let Some(model) = object.get("model").and_then(Value::as_str)
+        && !model.is_empty()
+        && model != "http_request"
+    {
+        return Err(format!(
+            "{context} only supports HTTP requests, but the payload has \"model\": \"{model}\". The CLI cannot work with {model} requests yet; use the Yaak app instead."
+        ));
+    }
+
+    let known: std::collections::BTreeSet<String> = serde_json::to_value(schema_for!(HttpRequest))
+        .ok()
+        .and_then(|schema| schema.get("properties").and_then(Value::as_object).cloned())
+        .map(|properties| properties.keys().cloned().collect())
+        .unwrap_or_default();
+
+    if known.is_empty() {
+        return Ok(());
+    }
+
+    let unknown: Vec<&str> =
+        object.keys().filter(|key| !known.contains(*key)).map(String::as_str).collect();
+
+    if !unknown.is_empty() {
+        return Err(format!(
+            "{context} got fields that are not part of an HTTP request: {}. If this is a gRPC or WebSocket request, the CLI cannot work with it yet. Run `yaak request schema http` for the valid fields.",
+            unknown.join(", ")
+        ));
+    }
+
+    Ok(())
+}
+
 fn enrich_schema_guidance(schema: &mut Value, request_type: RequestSchemaType) {
     if !matches!(request_type, RequestSchemaType::Http) {
         return;
@@ -367,6 +408,7 @@ fn create(
         }
 
         validate_create_id(&payload, "request")?;
+        reject_non_http_payload(&payload, "request create")?;
         let mut request: HttpRequest = serde_json::from_value(payload)
             .map_err(|e| format!("Failed to parse request create JSON: {e}"))?;
         let fallback_workspace_id = if workspace_id_arg.is_none() && request.workspace_id.is_empty()
@@ -415,6 +457,7 @@ fn create(
 fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) -> CommandResult {
     let patch = parse_required_json(json, json_input, "request update")?;
     let id = require_id(&patch, "request update")?;
+    reject_non_http_payload(&patch, "request update")?;
 
     let existing = ctx
         .db()

@@ -110,18 +110,26 @@ committed `yaak export` plus `--data-dir ./.yaak` gives a runnable suite in CI.
 
 ## Reading results
 
-A plain send writes only the response body to stdout. Add `-v` for the request
-and response metadata, where lines are prefixed `*`, `>`, and `<`:
+A plain send writes only the response body to stdout. Yaak also stores every
+response, so the reliable way to see what happened is to ask afterwards rather
+than to parse the send output:
 
 ```bash
-yaak -v request send rq_abc123 2>&1 | grep '^< HTTP'
+yaak response show rq_abc123     # latest response for a request, as JSON
+yaak response list rq_abc123     # its history, newest first
+yaak response body rq_abc123     # just the body
 ```
+
+`response show` gives status, reason, timing, headers, the final URL, and any
+transport error. Pass a response ID for a specific one. `-v` on a send prints
+the same information live, prefixed `*`, `>`, and `<`, but interleaves it with
+the body on stdout, so prefer `response show` when you need to act on the result.
 
 Exit code 1 means the send did not complete: an unresolved template variable, an
 unreachable host, a TLS failure. **HTTP error statuses are not failures.** Like
 `curl`, a 404 or 500 exits 0, and a folder of requests that all return 500
 reports success. Never tell the user an API is healthy based on a clean exit;
-check the status yourself with `-v`.
+check the status.
 
 ## Execution rules
 

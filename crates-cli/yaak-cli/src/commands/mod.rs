@@ -6,6 +6,7 @@ pub mod folder;
 pub mod import_export;
 pub mod plugin;
 pub mod request;
+pub mod response;
 pub mod send;
 pub mod template_function;
 pub mod workspace;
