@@ -550,14 +550,24 @@ async fn send_http_request_by_id(
             }
         }
     });
+    // Verbose mode has a second writer on stdout (the event task above), and the two
+    // race: the body could land in the middle of the headers, or run onto the same
+    // line as the status. So buffer the body while verbose and write it once the
+    // events are done. Without -v nothing else writes, so stream it straight through.
     let body_handle = tokio::task::spawn_blocking(move || {
+        let mut buffered = Vec::new();
         let mut stdout = std::io::stdout();
         while let Some(chunk) = body_chunk_rx.blocking_recv() {
+            if verbose {
+                buffered.extend_from_slice(&chunk);
+                continue;
+            }
             if stdout.write_all(&chunk).is_err() {
                 break;
             }
             let _ = stdout.flush();
         }
+        buffered
     });
     let response_dir = ctx.data_dir().join("responses");
 
@@ -579,8 +589,16 @@ async fn send_http_request_by_id(
     })
     .await;
 
+    // Await the events first so every `*`, `>`, and `<` line is out before the body.
     let _ = event_handle.await;
-    let _ = body_handle.await;
+    if let Ok(buffered) = body_handle.await
+        && !buffered.is_empty()
+    {
+        let mut stdout = std::io::stdout();
+        let _ = stdout.write_all(&buffered);
+        let _ = stdout.flush();
+    }
+
     result.map_err(|e| e.to_string())?;
     Ok(())
 }

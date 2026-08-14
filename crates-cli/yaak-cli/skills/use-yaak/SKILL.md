@@ -143,12 +143,15 @@ yaak response body rq_abc123     # just the body
 `response show` gives status, reason, timing, headers, the final URL, and any
 transport error. Pass a response ID for a specific one.
 
-`-v` on a send prints the same information live, prefixed `*`, `>`, and `<`, and
-is useful to watch. **Do not parse it.** The body and the event lines are written
-to stdout by separate tasks, so their order is not deterministic: the body can
-land in the middle of the headers and run onto the same line as the status, which
-makes even `grep '^< HTTP'` miss it on some runs. Use `response show` whenever
-you need to act on the result.
+`-v` on a send prints the same information prefixed `*`, `>`, and `<`, with the
+body after the last `<` header line:
+
+```bash
+yaak -v request send rq_abc123 2>&1 | grep '^< HTTP'
+```
+
+That works, but `response show` is still better when you need to act on the
+result, since it gives you fields rather than text to parse.
 
 Exit code 1 means the send did not complete: an unresolved template variable, an
 unreachable host, a TLS failure. **HTTP error statuses are not failures.** Like
