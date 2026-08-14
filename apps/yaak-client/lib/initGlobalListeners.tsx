@@ -15,11 +15,9 @@ import type {
   YaakNotification,
 } from "@yaakapp-internal/tauri-client";
 import { HStack, Icon, VStack } from "@yaakapp-internal/ui";
-import { importCurl, looksLikeCurl } from "../commands/importCurl";
 import { openSettings } from "../commands/openSettings";
 import { Button } from "../components/core/Button";
 import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading";
-import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 
 // Listen for toasts
 import { listenToTauriEvent } from "../hooks/useListenToTauriEvent";
@@ -150,52 +148,6 @@ export function initGlobalListeners() {
     console.log("Got plugin updates event", payload);
     showPluginUpdatesToast(payload);
   });
-
-  listenForCurlPaste();
-}
-
-// Offer to create a request when a Curl command is pasted somewhere it would otherwise
-// do nothing, like the sidebar or an empty pane. Pastes into editable targets are left
-// alone, since the text may well be wanted as text (the URL editor handles its own).
-function listenForCurlPaste() {
-  document.addEventListener("paste", (e) => {
-    const command = e.clipboardData?.getData("text/plain") ?? "";
-    if (!looksLikeCurl(command)) return;
-    if (isEditable(e.target)) return;
-    if (jotaiStore.get(activeWorkspaceIdAtom) == null) return;
-
-    showToast({
-      id: "curl-paste",
-      color: "success",
-      message: (
-        <VStack>
-          <h2 className="font-semibold">Curl command detected</h2>
-          <p className="text-text-subtle text-sm">Create a request from the pasted command?</p>
-        </VStack>
-      ),
-      action: ({ hide }) => (
-        <Button
-          size="xs"
-          color="success"
-          className="mr-auto min-w-20"
-          rightSlot={<Icon icon="import" size="sm" />}
-          onClick={() => {
-            hide();
-            importCurl.mutate({ command });
-          }}
-        >
-          Create Request
-        </Button>
-      ),
-    });
-  });
-}
-
-function isEditable(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  if (target.closest(".cm-editor") != null) return true;
-  return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
 function showUpdateInstalledToast(version: string) {

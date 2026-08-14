@@ -10,6 +10,7 @@ import { CookieDropdown } from "./CookieDropdown";
 import { IconButton } from "./core/IconButton";
 import { PillButton } from "./core/PillButton";
 import { EnvironmentActionsDropdown } from "./EnvironmentActionsDropdown";
+import { ImportCurl } from "./ImportCurl";
 import { LicenseBadge } from "./LicenseBadge";
 import { RecentRequestsDropdown } from "./RecentRequestsDropdown";
 import { SettingsDropdown } from "./SettingsDropdown";
@@ -55,6 +56,7 @@ export const WorkspaceHeader = memo(function WorkspaceHeader({
         <RecentRequestsDropdown />
       </div>
       <div className="flex-1 flex gap-1 items-center h-full justify-end pointer-events-none pr-1">
+        <ImportCurl />
         {showEncryptionSetup ? (
           <PillButton color="danger" onClick={setupOrConfigureEncryption}>
             Enter Encryption Key
