@@ -1,4 +1,5 @@
 use crate::error::Result;
+use yaak_models::blob_manager::BlobManager;
 use crate::models::SyncModel;
 use chrono::Utc;
 use log::{info, warn};
@@ -339,6 +340,7 @@ fn workspace_models(db: &ClientDb, version: &str, workspace_id: &str) -> Result<
 /// Returns a list of SyncStateOps that should be applied afterward.
 pub fn apply_sync_ops(
     db: &ClientDb,
+    blobs: &BlobManager,
     workspace_id: &str,
     sync_dir: &Path,
     sync_ops: Vec<SyncOp>,
@@ -435,7 +437,7 @@ pub fn apply_sync_ops(
                 }
             }
             SyncOp::DbDelete { model, state } => {
-                delete_model(db, &model)?;
+                delete_model(db, blobs, &model)?;
                 SyncStateOp::Delete { state: state.to_owned() }
             }
             SyncOp::IgnorePrivate { .. } => SyncStateOp::NoOp,
@@ -547,10 +549,10 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
     Path::new(&rel).to_path_buf()
 }
 
-fn delete_model(db: &ClientDb, model: &SyncModel) -> Result<()> {
+fn delete_model(db: &ClientDb, blobs: &BlobManager, model: &SyncModel) -> Result<()> {
     match model {
         SyncModel::Workspace(m) => {
-            db.delete_workspace(&m, &UpdateSource::Sync)?;
+            db.delete_workspace(&m, &UpdateSource::Sync, blobs)?;
         }
         SyncModel::Environment(m) => {
             db.delete_environment(&m, &UpdateSource::Sync)?;

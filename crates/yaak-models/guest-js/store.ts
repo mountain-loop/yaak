@@ -27,6 +27,7 @@ export function initModelStore(store: JotaiStore) {
 
         for (const payload of payloads) {
           if (shouldIgnoreModel(payload)) continue;
+          if (isUnsafeObjectKey(payload.model.id)) continue;
 
           if (payload.change.type === "upsert") {
             const modelType = payload.model.model;
@@ -47,13 +48,23 @@ export function initModelStore(store: JotaiStore) {
     .catch(console.error);
 }
 
+/**
+ * Model buckets are plain objects keyed by model id, so ids that collide with
+ * Object.prototype members ("__proto__" etc.) could pollute the prototype.
+ * Real model ids are backend-generated and never look like this.
+ */
+function isUnsafeObjectKey(key: string): boolean {
+  return key === "__proto__" || key === "constructor" || key === "prototype";
+}
+
 function deleteFromBucket(
   next: ModelStoreData,
   clonedBuckets: Set<AnyModel["model"]>,
   modelType: AnyModel["model"],
   id: string,
 ): boolean {
-  if ((next[modelType] as Record<string, AnyModel>)[id] == null) return false;
+  if (isUnsafeObjectKey(id)) return false;
+  if (!Object.prototype.hasOwnProperty.call(next[modelType], id)) return false;
   if (!clonedBuckets.has(modelType)) {
     next[modelType] = { ...next[modelType] } as never;
     clonedBuckets.add(modelType);

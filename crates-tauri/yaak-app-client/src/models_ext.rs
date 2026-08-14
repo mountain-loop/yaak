@@ -194,7 +194,7 @@ pub(crate) async fn models_delete<R: Runtime>(
                 AnyModel::Plugin(m) => tx.delete_plugin(&m, source)?.id,
                 AnyModel::WebsocketConnection(m) => tx.delete_websocket_connection(&m, source)?.id,
                 AnyModel::WebsocketRequest(m) => tx.delete_websocket_request(&m, source)?.id,
-                AnyModel::Workspace(m) => tx.delete_workspace(&m, source)?.id,
+                AnyModel::Workspace(m) => tx.delete_workspace(&m, source, &blobs)?.id,
                 a => return Err(GenericError(format!("Cannot delete AnyModel {a:?})"))),
             };
             Ok(id)

@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn records_model_changes_for_upsert_and_delete() {
-        let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
         let db = query_manager.connect();
 
         let workspace = db
@@ -128,7 +128,7 @@ mod tests {
         ));
         assert!(matches!(created_changes[0].payload.update_source, UpdateSource::Sync));
 
-        db.delete_workspace_by_id(&workspace.id, &UpdateSource::Sync)
+        db.delete_workspace_by_id(&workspace.id, &UpdateSource::Sync, &blob_manager)
             .expect("Failed to delete workspace");
 
         let all_changes = db.list_model_changes_after(0, 10).expect("Failed to list changes");
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn list_model_changes_since_uses_timestamp_with_id_tiebreaker() {
-        let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
         let db = query_manager.connect();
 
         let workspace = db
@@ -192,7 +192,7 @@ mod tests {
                 &UpdateSource::Sync,
             )
             .expect("Failed to upsert workspace");
-        db.delete_workspace_by_id(&workspace.id, &UpdateSource::Sync)
+        db.delete_workspace_by_id(&workspace.id, &UpdateSource::Sync, &blob_manager)
             .expect("Failed to delete workspace");
 
         let all = db.list_model_changes_after(0, 10).expect("Failed to list changes");

@@ -1,3 +1,4 @@
+use crate::blob_manager::BlobManager;
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
@@ -49,15 +50,21 @@ impl<'a> ClientDb<'a> {
         &self,
         workspace: &Workspace,
         source: &UpdateSource,
+        blobs: &BlobManager,
     ) -> Result<Workspace> {
         let wid = workspace.id.as_str();
 
-        // Response bodies can live on disk; remove them before dropping the rows
+        // Response bodies live on disk and in the blob DB; clean both up before
+        // dropping the rows
+        let blob_ctx = blobs.connect();
         for m in self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, wid, None)? {
             if let Some(p) = m.body_path {
                 if let Err(e) = std::fs::remove_file(&p) {
                     warn!("Failed to delete response body file {p:?}: {e}");
                 }
+            }
+            if let Err(e) = blob_ctx.delete_chunks_like(&format!("{}.%", m.id)) {
+                warn!("Failed to delete blobs for response {}: {e}", m.id);
             }
         }
 
@@ -86,9 +93,14 @@ impl<'a> ClientDb<'a> {
         self.delete(workspace, source)
     }
 
-    pub fn delete_workspace_by_id(&self, id: &str, source: &UpdateSource) -> Result<Workspace> {
+    pub fn delete_workspace_by_id(
+        &self,
+        id: &str,
+        source: &UpdateSource,
+        blobs: &BlobManager,
+    ) -> Result<Workspace> {
         let workspace = self.get_workspace(id)?;
-        self.delete_workspace(&workspace, source)
+        self.delete_workspace(&workspace, source, blobs)
     }
 
     pub fn upsert_workspace(&self, w: &Workspace, source: &UpdateSource) -> Result<Workspace> {
