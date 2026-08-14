@@ -54,19 +54,11 @@ impl<'a> ClientDb<'a> {
     ) -> Result<Workspace> {
         let wid = workspace.id.as_str();
 
-        // Response bodies live on disk and in the blob DB; clean both up before
-        // dropping the rows
-        let blob_ctx = blobs.connect();
-        for m in self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, wid, None)? {
-            if let Some(p) = m.body_path {
-                if let Err(e) = std::fs::remove_file(&p) {
-                    warn!("Failed to delete response body file {p:?}: {e}");
-                }
-            }
-            if let Err(e) = blob_ctx.delete_chunks_like(&format!("{}.%", m.id)) {
-                warn!("Failed to delete blobs for response {}: {e}", m.id);
-            }
-        }
+        // Collect response cleanup targets before their rows disappear. The actual
+        // cleanup runs at the end: response bodies live on disk and in the blob DB,
+        // which don't participate in this transaction, so removing them must wait
+        // until every statement that could fail (and roll back the rows) is done.
+        let responses = self.find_many::<HttpResponse>(HttpResponseIden::WorkspaceId, wid, None)?;
 
         self.delete_many_untracked::<HttpResponseEvent>(HttpResponseEventIden::WorkspaceId, wid)?;
         self.delete_many_untracked::<HttpResponse>(HttpResponseIden::WorkspaceId, wid)?;
@@ -90,7 +82,23 @@ impl<'a> ClientDb<'a> {
         self.delete_many_untracked::<SyncState>(SyncStateIden::WorkspaceId, wid)?;
         self.delete_many_untracked::<WorkspaceMeta>(WorkspaceMetaIden::WorkspaceId, wid)?;
 
-        self.delete(workspace, source)
+        let deleted = self.delete(workspace, source)?;
+
+        // Best-effort cleanup of response bodies (disk files and blob chunks).
+        // Failures only orphan unreferenced data, and are logged.
+        let blob_ctx = blobs.connect();
+        for m in responses {
+            if let Some(p) = m.body_path {
+                if let Err(e) = std::fs::remove_file(&p) {
+                    warn!("Failed to delete response body file {p:?}: {e}");
+                }
+            }
+            if let Err(e) = blob_ctx.delete_chunks_like(&format!("{}.%", m.id)) {
+                warn!("Failed to delete blobs for response {}: {e}", m.id);
+            }
+        }
+
+        Ok(deleted)
     }
 
     pub fn delete_workspace_by_id(
