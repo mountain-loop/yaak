@@ -585,7 +585,7 @@ async fn send_http_request_by_id(
         encryption_manager: ctx.encryption_manager.clone(),
         plugin_context: &plugin_context,
         cancelled_rx: None,
-        connection_manager: None,
+        connection_manager: ctx.connection_manager(),
     })
     .await;
 
