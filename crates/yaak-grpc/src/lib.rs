@@ -18,15 +18,17 @@ pub fn serialize_options() -> SerializeOptions {
     SerializeOptions::new().skip_default_fields(false)
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, ts_rs::TS)]
 #[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_grpc.ts")]
 pub struct ServiceDefinition {
     pub name: String,
     pub methods: Vec<MethodDefinition>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug, Default, ts_rs::TS)]
 #[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_grpc.ts")]
 pub struct MethodDefinition {
     pub name: String,
     pub schema: String,

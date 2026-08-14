@@ -1,10 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::mpsc;
 
+/// A boxed future, so handlers of different concrete types can share a map.
+pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
 /// Type-erased handler function: takes context + JSON payload, returns JSON or error.
+///
+/// Handlers are async and take the context by value: the future outlives the
+/// `dispatch` call frame, so it cannot borrow, and contexts are cheap clones
+/// (handles and `Arc`s). Synchronous handlers wrap into this via `rpc_handler!`
+/// with no visible change.
 type HandlerFn<Ctx> =
-    Box<dyn Fn(&Ctx, serde_json::Value) -> Result<serde_json::Value, RpcError> + Send + Sync>;
+    Box<dyn Fn(Ctx, serde_json::Value) -> BoxFuture<Result<serde_json::Value, RpcError>> + Send + Sync>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcError {
@@ -56,33 +66,33 @@ pub struct RpcRouter<Ctx> {
     handlers: HashMap<&'static str, HandlerFn<Ctx>>,
 }
 
-impl<Ctx> RpcRouter<Ctx> {
+impl<Ctx: Clone> RpcRouter<Ctx> {
     pub fn new() -> Self {
         Self { handlers: HashMap::new() }
     }
 
     /// Register a handler for a command name.
-    /// Use the `rpc_handler!` macro to wrap a typed function.
+    /// Use the `rpc_handler!` (sync) or `rpc_handler_async!` macro to wrap a typed function.
     pub fn register(&mut self, cmd: &'static str, handler: HandlerFn<Ctx>) {
         self.handlers.insert(cmd, handler);
     }
 
     /// Dispatch a command by name with a JSON payload.
-    pub fn dispatch(
+    pub async fn dispatch(
         &self,
         cmd: &str,
         payload: serde_json::Value,
         ctx: &Ctx,
     ) -> Result<serde_json::Value, RpcError> {
         match self.handlers.get(cmd) {
-            Some(handler) => handler(ctx, payload),
+            Some(handler) => handler(ctx.clone(), payload).await,
             None => Err(RpcError { message: format!("unknown command: {cmd}") }),
         }
     }
 
     /// Handle a full `RpcRequest`, returning an `RpcResponse`.
-    pub fn handle(&self, req: RpcRequest, ctx: &Ctx) -> RpcResponse {
-        match self.dispatch(&req.cmd, req.payload, ctx) {
+    pub async fn handle(&self, req: RpcRequest, ctx: &Ctx) -> RpcResponse {
+        match self.dispatch(&req.cmd, req.payload, ctx).await {
             Ok(payload) => RpcResponse::Success { id: req.id, payload },
             Err(e) => RpcResponse::Error { id: req.id, error: e.message },
         }
@@ -195,7 +205,7 @@ macro_rules! define_rpc {
     };
 }
 
-/// Wrap a typed handler function into a type-erased `HandlerFn`.
+/// Wrap a typed synchronous handler function into a type-erased `HandlerFn`.
 ///
 /// The function must have the signature:
 /// `fn(ctx: &Ctx, req: Req) -> Result<Res, RpcError>`
@@ -211,9 +221,39 @@ macro_rules! define_rpc {
 macro_rules! rpc_handler {
     ($f:expr) => {
         Box::new(|ctx, payload| {
-            let req = serde_json::from_value(payload).map_err($crate::RpcError::from)?;
-            let res = $f(ctx, req)?;
-            serde_json::to_value(res).map_err($crate::RpcError::from)
+            Box::pin(async move {
+                let req = serde_json::from_value(payload).map_err($crate::RpcError::from)?;
+                let res = $f(&ctx, req)?;
+                serde_json::to_value(res).map_err($crate::RpcError::from)
+            })
+        })
+    };
+}
+
+/// Wrap a typed async handler function into a type-erased `HandlerFn`.
+///
+/// The function must have the signature:
+/// `async fn(ctx: Ctx, req: Req) -> Result<Res, E>`
+/// where `Req: DeserializeOwned`, `Res: Serialize`, and `E: ToString`, so
+/// handlers can keep returning their own error types.
+///
+/// # Example
+/// ```ignore
+/// async fn cmd_metadata(ctx: ClientCtx, req: MetadataReq) -> Result<AppMetaData, Error> { ... }
+///
+/// router.register("cmd_metadata", rpc_handler_async!(cmd_metadata));
+/// ```
+#[macro_export]
+macro_rules! rpc_handler_async {
+    ($f:expr) => {
+        Box::new(|ctx, payload| {
+            Box::pin(async move {
+                let req = serde_json::from_value(payload).map_err($crate::RpcError::from)?;
+                let res = $f(ctx, req)
+                    .await
+                    .map_err(|e| $crate::RpcError { message: e.to_string() })?;
+                serde_json::to_value(res).map_err($crate::RpcError::from)
+            })
         })
     };
 }

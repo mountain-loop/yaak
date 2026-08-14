@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use tauri::path::BaseDirectory;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{
-    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent, command,
+    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent,
     is_dev,
 };
 use tokio::sync::Mutex;
@@ -132,7 +132,6 @@ impl PluginUpdater {
 // Tauri Commands
 // ============================================================================
 
-#[command]
 pub async fn cmd_plugins_search<R: Runtime>(
     app_handle: AppHandle<R>,
     query: &str,
@@ -142,7 +141,6 @@ pub async fn cmd_plugins_search<R: Runtime>(
     Ok(search_plugins(&http_client, query).await?)
 }
 
-#[command]
 pub async fn cmd_plugins_install<R: Runtime>(
     window: WebviewWindow<R>,
     name: &str,
@@ -165,7 +163,6 @@ pub async fn cmd_plugins_install<R: Runtime>(
     Ok(())
 }
 
-#[command]
 pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     window: WebviewWindow<R>,
     directory: &str,
@@ -187,7 +184,6 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     Ok(plugin)
 }
 
-#[command]
 pub async fn cmd_plugins_uninstall<R: Runtime>(
     plugin_id: &str,
     window: WebviewWindow<R>,
@@ -198,14 +194,12 @@ pub async fn cmd_plugins_uninstall<R: Runtime>(
     Ok(delete_and_uninstall(plugin_manager, &query_manager, &plugin_context, plugin_id).await?)
 }
 
-#[command]
 pub async fn cmd_plugin_init_errors(
     plugin_manager: State<'_, PluginManager>,
 ) -> Result<Vec<(String, String)>> {
     Ok(plugin_manager.take_init_errors().await)
 }
 
-#[command]
 pub async fn cmd_plugins_updates<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<PluginUpdatesResponse> {
@@ -215,7 +209,6 @@ pub async fn cmd_plugins_updates<R: Runtime>(
     Ok(check_plugin_updates(&http_client, plugins).await?)
 }
 
-#[command]
 pub async fn cmd_plugins_update_all<R: Runtime>(
     window: WebviewWindow<R>,
 ) -> Result<Vec<PluginNameVersion>> {

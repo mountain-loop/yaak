@@ -72,6 +72,7 @@ tokio-tungstenite = { version = "0.26.2", default-features = false }
 url = "2"
 tokio-util = { version = "0.7", features = ["codec"] }
 ts-rs = { workspace = true }
+yaak-rpc = { workspace = true }
 uuid = "1.12.1"
 yaak-api = { workspace = true }
 yaak-common = { workspace = true }

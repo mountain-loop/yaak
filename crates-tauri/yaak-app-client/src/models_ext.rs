@@ -140,7 +140,6 @@ impl<'a, R: Runtime, M: Manager<R>> BlobManagerExt<'a, R> for M {
 // Commands for yaak-models
 use tauri::WebviewWindow;
 
-#[tauri::command]
 pub(crate) fn models_upsert<R: Runtime>(
     window: WebviewWindow<R>,
     model: AnyModel,
@@ -171,7 +170,6 @@ pub(crate) fn models_upsert<R: Runtime>(
 
 // Async so cascading deletes (e.g. a workspace with thousands of requests) run on a
 // blocking thread instead of stalling the main thread and all other IPC.
-#[tauri::command]
 pub(crate) async fn models_delete<R: Runtime>(
     window: WebviewWindow<R>,
     model: AnyModel,
@@ -204,7 +202,6 @@ pub(crate) async fn models_delete<R: Runtime>(
     .map_err(|e| GenericError(format!("Delete task failed: {e}")))?
 }
 
-#[tauri::command]
 pub(crate) fn models_duplicate<R: Runtime>(
     window: WebviewWindow<R>,
     model_type: String,
@@ -238,7 +235,6 @@ pub(crate) fn models_duplicate<R: Runtime>(
     })
 }
 
-#[tauri::command]
 pub(crate) fn models_websocket_events<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     connection_id: &str,
@@ -246,7 +242,6 @@ pub(crate) fn models_websocket_events<R: Runtime>(
     Ok(app_handle.db().list_websocket_events(connection_id)?)
 }
 
-#[tauri::command]
 pub(crate) fn models_grpc_events<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     connection_id: &str,
@@ -254,12 +249,10 @@ pub(crate) fn models_grpc_events<R: Runtime>(
     Ok(app_handle.db().list_grpc_events(connection_id)?)
 }
 
-#[tauri::command]
 pub(crate) fn models_get_settings<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<Settings> {
     Ok(app_handle.db().get_settings())
 }
 
-#[tauri::command]
 pub(crate) fn models_get_graphql_introspection<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     request_id: &str,
@@ -267,7 +260,6 @@ pub(crate) fn models_get_graphql_introspection<R: Runtime>(
     Ok(app_handle.db().get_graphql_introspection(request_id))
 }
 
-#[tauri::command]
 pub(crate) fn models_upsert_graphql_introspection<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     request_id: &str,
@@ -279,7 +271,6 @@ pub(crate) fn models_upsert_graphql_introspection<R: Runtime>(
     Ok(app_handle.db().upsert_graphql_introspection(workspace_id, request_id, content, &source)?)
 }
 
-#[tauri::command]
 pub(crate) async fn models_workspace_models<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: Option<&str>,
