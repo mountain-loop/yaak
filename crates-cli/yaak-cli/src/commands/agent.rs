@@ -93,12 +93,50 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
 /// an edited file would be skipped by every future install and go stale forever,
 /// against a CLI that keeps changing.
 fn write_skill(dir: &Path) -> CommandResult {
-    if dir.exists() {
-        fs::remove_dir_all(dir).map_err(|e| format!("Failed to replace {}: {e}", dir.display()))?;
+    let parent =
+        dir.parent().ok_or_else(|| format!("Invalid skill path {}", dir.display()))?.to_path_buf();
+    fs::create_dir_all(&parent)
+        .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+
+    // Build the new copy alongside the old one and swap it in with a rename, so a
+    // failure part way through leaves the working skill untouched rather than
+    // deleting it. Staging lives in the same directory to keep the rename atomic.
+    let staging = parent.join(format!(".{SKILL_NAME}.tmp-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&staging);
+
+    if let Err(error) = stage_skill(&staging) {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error);
     }
 
+    let previous = parent.join(format!(".{SKILL_NAME}.old-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&previous);
+
+    let had_previous = dir.exists();
+    if had_previous && let Err(error) = fs::rename(dir, &previous) {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(format!("Failed to replace {}: {error}", dir.display()));
+    }
+
+    match fs::rename(&staging, dir) {
+        Ok(()) => {
+            let _ = fs::remove_dir_all(&previous);
+            Ok(())
+        }
+        Err(error) => {
+            // Put the working copy back rather than leaving nothing behind.
+            if had_previous {
+                let _ = fs::rename(&previous, dir);
+            }
+            let _ = fs::remove_dir_all(&staging);
+            Err(format!("Failed to install into {}: {error}", dir.display()))
+        }
+    }
+}
+
+fn stage_skill(staging: &Path) -> CommandResult {
     for file in walk(&SKILL_DIR) {
-        let destination = dir.join(file.path());
+        let destination = staging.join(file.path());
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
@@ -107,10 +145,8 @@ fn write_skill(dir: &Path) -> CommandResult {
             .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
     }
 
-    fs::write(dir.join(VERSION_FILE), version::cli_version())
-        .map_err(|e| format!("Failed to write skill version: {e}"))?;
-
-    Ok(())
+    fs::write(staging.join(VERSION_FILE), version::cli_version())
+        .map_err(|e| format!("Failed to write skill version: {e}"))
 }
 
 /// Health summary appended to root `--help`, so an agent can notice in one command
