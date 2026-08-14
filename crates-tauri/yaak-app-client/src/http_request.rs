@@ -160,7 +160,7 @@ async fn send_http_request_inner<R: Runtime>(
         encryption_manager,
         plugin_context,
         cancelled_rx: Some(cancelled_rx.clone()),
-        connection_manager: Some(connection_manager.inner()),
+        connection_manager: connection_manager.inner(),
     })
     .await
     .map_err(|e| GenericError(e.to_string()))?;

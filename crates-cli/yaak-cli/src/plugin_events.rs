@@ -15,6 +15,7 @@ use yaak::render::{render_grpc_request, render_http_request};
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
+use yaak_http::manager::HttpConnectionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::Environment;
 use yaak_models::queries::any_request::AnyRequest;
@@ -42,6 +43,7 @@ struct CliHostContext {
     blob_manager: BlobManager,
     plugin_manager: Arc<PluginManager>,
     encryption_manager: Arc<EncryptionManager>,
+    connection_manager: Arc<HttpConnectionManager>,
     response_dir: PathBuf,
     execution_context: CliExecutionContext,
 }
@@ -52,6 +54,7 @@ impl CliPluginEventBridge {
         query_manager: QueryManager,
         blob_manager: BlobManager,
         encryption_manager: Arc<EncryptionManager>,
+        connection_manager: Arc<HttpConnectionManager>,
         data_dir: PathBuf,
         execution_context: CliExecutionContext,
     ) -> Self {
@@ -63,6 +66,7 @@ impl CliPluginEventBridge {
             blob_manager,
             plugin_manager,
             encryption_manager,
+            connection_manager,
             response_dir: data_dir.join("responses"),
             execution_context,
         });
@@ -214,7 +218,7 @@ async fn build_plugin_reply(
                     encryption_manager: host_context.encryption_manager.clone(),
                     plugin_context: &plugin_context,
                     cancelled_rx: None,
-                    connection_manager: None,
+                    connection_manager: &host_context.connection_manager,
                 })
                 .await
                 {

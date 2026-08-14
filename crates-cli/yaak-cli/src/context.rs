@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use yaak_crypto::manager::EncryptionManager;
+use yaak_http::manager::HttpConnectionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
 use yaak_models::query_manager::QueryManager;
@@ -31,6 +32,7 @@ pub struct CliContext {
     query_manager: QueryManager,
     blob_manager: BlobManager,
     pub encryption_manager: Arc<EncryptionManager>,
+    connection_manager: Arc<HttpConnectionManager>,
     plugin_manager: Option<Arc<PluginManager>>,
     plugin_event_bridge: Mutex<Option<CliPluginEventBridge>>,
 }
@@ -54,6 +56,7 @@ impl CliContext {
             query_manager,
             blob_manager,
             encryption_manager,
+            connection_manager: Arc::new(HttpConnectionManager::new()),
             plugin_manager: None,
             plugin_event_bridge: Mutex::new(None),
         }
@@ -91,6 +94,7 @@ impl CliContext {
                     self.query_manager.clone(),
                     self.blob_manager.clone(),
                     self.encryption_manager.clone(),
+                    self.connection_manager.clone(),
                     self.data_dir.clone(),
                     execution_context,
                 )
@@ -118,6 +122,10 @@ impl CliContext {
 
     pub fn blob_manager(&self) -> &BlobManager {
         &self.blob_manager
+    }
+
+    pub fn connection_manager(&self) -> &HttpConnectionManager {
+        &self.connection_manager
     }
 
     pub fn plugin_manager(&self) -> Arc<PluginManager> {

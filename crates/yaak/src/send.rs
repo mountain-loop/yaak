@@ -127,31 +127,6 @@ pub struct CookieBehavior {
     pub store_cookies: bool,
 }
 
-struct DefaultSendRequestExecutor;
-
-#[async_trait]
-impl SendRequestExecutor for DefaultSendRequestExecutor {
-    async fn send(
-        &self,
-        sendable_request: SendableHttpRequest,
-        event_tx: mpsc::Sender<SenderHttpResponseEvent>,
-        cookie_behavior: CookieBehavior,
-    ) -> yaak_http::error::Result<yaak_http::sender::HttpResponse> {
-        let sender = ReqwestSender::new()?;
-        let transaction = match cookie_behavior.store {
-            Some(store) => HttpTransaction::with_cookie_behavior(
-                sender,
-                store,
-                cookie_behavior.send_cookies,
-                cookie_behavior.store_cookies,
-            ),
-            None => HttpTransaction::new(sender),
-        };
-        let (_cancel_tx, cancel_rx) = watch::channel(false);
-        transaction.execute_with_cancellation(sendable_request, cancel_rx, event_tx).await
-    }
-}
-
 struct PluginPrepareSendableRequest {
     plugin_manager: Arc<PluginManager>,
     plugin_context: PluginContext,
@@ -259,7 +234,7 @@ pub struct SendHttpRequestByIdParams<'a, T: TemplateCallback> {
     pub emit_response_body_chunks_to: Option<mpsc::UnboundedSender<Vec<u8>>>,
     pub cancelled_rx: Option<watch::Receiver<bool>>,
     pub prepare_sendable_request: Option<&'a dyn PrepareSendableRequest>,
-    pub executor: Option<&'a dyn SendRequestExecutor>,
+    pub executor: &'a dyn SendRequestExecutor,
 }
 
 pub struct SendHttpRequestParams<'a, T: TemplateCallback> {
@@ -278,7 +253,7 @@ pub struct SendHttpRequestParams<'a, T: TemplateCallback> {
     pub auth_context_id: Option<String>,
     pub existing_response: Option<HttpResponse>,
     pub prepare_sendable_request: Option<&'a dyn PrepareSendableRequest>,
-    pub executor: Option<&'a dyn SendRequestExecutor>,
+    pub executor: &'a dyn SendRequestExecutor,
 }
 
 pub struct SendHttpRequestWithPluginsParams<'a> {
@@ -296,7 +271,7 @@ pub struct SendHttpRequestWithPluginsParams<'a> {
     pub encryption_manager: Arc<EncryptionManager>,
     pub plugin_context: &'a PluginContext,
     pub cancelled_rx: Option<watch::Receiver<bool>>,
-    pub connection_manager: Option<&'a HttpConnectionManager>,
+    pub connection_manager: &'a HttpConnectionManager,
 }
 
 pub struct SendHttpRequestByIdWithPluginsParams<'a> {
@@ -313,7 +288,7 @@ pub struct SendHttpRequestByIdWithPluginsParams<'a> {
     pub encryption_manager: Arc<EncryptionManager>,
     pub plugin_context: &'a PluginContext,
     pub cancelled_rx: Option<watch::Receiver<bool>>,
-    pub connection_manager: Option<&'a HttpConnectionManager>,
+    pub connection_manager: &'a HttpConnectionManager,
 }
 
 pub struct SendHttpRequestResult {
@@ -403,14 +378,13 @@ pub async fn send_http_request_with_plugins(
         plugin_context: params.plugin_context.clone(),
         cancelled_rx: params.cancelled_rx.clone(),
     };
-    let executor =
-        params.connection_manager.map(|connection_manager| ConnectionManagerSendRequestExecutor {
-            connection_manager,
-            plugin_context_id: params.plugin_context.id.clone(),
-            query_manager: params.query_manager.clone(),
-            request: params.request.clone(),
-            cancelled_rx: params.cancelled_rx.clone(),
-        });
+    let executor = ConnectionManagerSendRequestExecutor {
+        connection_manager: params.connection_manager,
+        plugin_context_id: params.plugin_context.id.clone(),
+        query_manager: params.query_manager.clone(),
+        request: params.request.clone(),
+        cancelled_rx: params.cancelled_rx.clone(),
+    };
 
     send_http_request(SendHttpRequestParams {
         query_manager: params.query_manager,
@@ -428,7 +402,7 @@ pub async fn send_http_request_with_plugins(
         auth_context_id: None,
         existing_response: params.existing_response,
         prepare_sendable_request: Some(&auth_hook),
-        executor: executor.as_ref().map(|e| e as &dyn SendRequestExecutor),
+        executor: &executor,
     })
     .await
 }
@@ -613,8 +587,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         }
     });
 
-    let default_executor = DefaultSendRequestExecutor;
-    let executor = params.executor.unwrap_or(&default_executor);
+    let executor = params.executor;
     let started_at = Instant::now();
     let request_started_url = sendable_request.url.clone();
 
