@@ -41,6 +41,7 @@ use yaak_tls::find_client_certificate;
 const HTTP_EVENT_CHANNEL_CAPACITY: usize = 100;
 const REQUEST_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 const RESPONSE_PROGRESS_UPDATE_INTERVAL_MS: u128 = 100;
+const MAX_AUTH_BODY_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum SendHttpRequestError {
@@ -1087,7 +1088,12 @@ pub async fn apply_plugin_authentication(
                     })
                     .collect(),
                 body: match &sendable_request.body {
-                    Some(SendableBody::Bytes(bytes)) => {
+                    // Bodies above the cap are not passed to auth plugins. Copying
+                    // them across the plugin IPC is too expensive, and payloads that
+                    // large are usually uploads that signing schemes treat as
+                    // unsigned anyway. Streamed bodies (files, multipart) are never
+                    // passed for the same reason.
+                    Some(SendableBody::Bytes(bytes)) if bytes.len() <= MAX_AUTH_BODY_BYTES => {
                         String::from_utf8(bytes.to_vec()).ok()
                     }
                     _ => None,
