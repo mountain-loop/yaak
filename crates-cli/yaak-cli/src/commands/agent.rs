@@ -9,9 +9,10 @@ static SKILL_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills/use-yaak");
 
 const SKILL_NAME: &str = "use-yaak";
 
-/// Records which CLI version wrote the skill, so `--help` can tell the user when an
-/// upgrade has left their installed copy behind.
-const VERSION_FILE: &str = ".yaak-version";
+/// Substituted at install time so the installed skill records which CLI wrote it,
+/// letting `--help` tell the user when an upgrade has left their copy behind.
+const VERSION_PLACEHOLDER: &str = "__YAAK_CLI_VERSION__";
+const VERSION_MARKER: &str = "yaak-cli-version:";
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
 
@@ -93,51 +94,89 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
 /// an edited file would be skipped by every future install and go stale forever,
 /// against a CLI that keeps changing.
 fn write_skill(dir: &Path) -> CommandResult {
-    let parent =
-        dir.parent().ok_or_else(|| format!("Invalid skill path {}", dir.display()))?.to_path_buf();
-    fs::create_dir_all(&parent)
-        .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
+    fs::create_dir_all(dir).map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
 
-    // Move the working copy aside before writing, so a failure part way through can
-    // put it back instead of leaving nothing behind. The destination has to be vacated
-    // either way: `rename` cannot replace a non-empty directory.
-    let previous = parent.join(format!(".{SKILL_NAME}.old-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&previous);
-
-    let had_previous = dir.exists();
-    if had_previous {
-        fs::rename(dir, &previous)
-            .map_err(|e| format!("Failed to replace {}: {e}", dir.display()))?;
-    }
-
-    match write_files(dir) {
-        Ok(()) => {
-            let _ = fs::remove_dir_all(&previous);
-            Ok(())
-        }
-        Err(error) => {
-            let _ = fs::remove_dir_all(dir);
-            if had_previous {
-                let _ = fs::rename(&previous, dir);
-            }
-            Err(error)
-        }
-    }
-}
-
-fn write_files(dir: &Path) -> CommandResult {
+    let mut written = Vec::new();
     for file in walk(&SKILL_DIR) {
-        let destination = dir.join(file.path());
+        let relative = file.path().to_path_buf();
+        let destination = dir.join(&relative);
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
         }
-        fs::write(&destination, file.contents())
-            .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
+
+        let contents = stamp_version(file.contents());
+        write_atomic(&destination, &contents)?;
+        written.push(relative);
     }
 
-    fs::write(dir.join(VERSION_FILE), version::cli_version())
-        .map_err(|e| format!("Failed to write skill version: {e}"))
+    prune_unshipped(dir, &written);
+    Ok(())
+}
+
+/// Write via a sibling temp file and rename over the destination. `rename` replaces an
+/// existing file atomically, so a reader sees either the old copy or the new one, and a
+/// crash part way through cannot leave a half-written skill behind.
+fn write_atomic(destination: &Path, contents: &[u8]) -> CommandResult {
+    let parent = destination
+        .parent()
+        .ok_or_else(|| format!("Invalid skill path {}", destination.display()))?;
+    let name = destination
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| format!("Invalid skill path {}", destination.display()))?;
+    let temp = parent.join(format!(".{name}.tmp-{}", std::process::id()));
+
+    fs::write(&temp, contents)
+        .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
+
+    match fs::rename(&temp, destination) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = fs::remove_file(&temp);
+            Err(format!("Failed to write {}: {error}", destination.display()))
+        }
+    }
+}
+
+/// Stamp the running version into the skill so it carries its own provenance.
+fn stamp_version(contents: &[u8]) -> Vec<u8> {
+    match std::str::from_utf8(contents) {
+        Ok(text) => text.replace(VERSION_PLACEHOLDER, version::cli_version()).into_bytes(),
+        Err(_) => contents.to_vec(),
+    }
+}
+
+/// Drop anything this version does not ship, so files an older version wrote (or a
+/// leftover temp file) cannot linger beside the refreshed skill.
+fn prune_unshipped(dir: &Path, written: &[PathBuf]) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(relative) = path.strip_prefix(dir) else {
+            continue;
+        };
+        if written.iter().any(|w| w == relative || w.starts_with(relative)) {
+            continue;
+        }
+        if path.is_dir() {
+            let _ = fs::remove_dir_all(&path);
+        } else {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
+
+/// Read the version an installed skill was stamped with.
+fn installed_version(dir: &Path) -> Option<String> {
+    let text = fs::read_to_string(dir.join("SKILL.md")).ok()?;
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix(VERSION_MARKER))
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty() && v != VERSION_PLACEHOLDER)
 }
 
 /// Health summary appended to root `--help`, so an agent can notice in one command
@@ -156,9 +195,7 @@ pub fn help_section() -> Option<String> {
         }
         installed += 1;
 
-        let found = fs::read_to_string(dir.join(VERSION_FILE))
-            .map(|v| v.trim().to_string())
-            .unwrap_or_default();
+        let found = installed_version(&dir).unwrap_or_default();
         if found != current {
             let found = if found.is_empty() { "unknown".to_string() } else { found };
             stale.push(format!("{} ({found})", target.label));

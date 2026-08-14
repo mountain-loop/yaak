@@ -23,6 +23,7 @@ allowed-tools: Bash(yaak:*), Bash(which:*), Bash(command:*), Bash(npm:*), Bash(n
   Managed by the Yaak CLI. `yaak agent install` replaces this file wholesale on
   every run, so local edits are lost. To add your own guidance, write a separate
   skill or use your tool's project instructions instead.
+  yaak-cli-version: __YAAK_CLI_VERSION__
 -->
 
 Yaak is a desktop API client. The `yaak` CLI reads and writes the **same local
