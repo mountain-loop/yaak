@@ -9,7 +9,7 @@ use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource};
 use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
@@ -17,15 +17,17 @@ use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
 
 // -- Context --
 
+// Cloned once per dispatched command, so shared state lives behind an `Arc`.
+#[derive(Clone)]
 pub struct ProxyCtx {
-    handle: Mutex<Option<ProxyHandle>>,
+    handle: Arc<Mutex<Option<ProxyHandle>>>,
     pub db: ProxyQueryManager,
     pub events: RpcEventEmitter,
 }
 
 impl ProxyCtx {
     pub fn new(db_path: &Path, events: RpcEventEmitter) -> Self {
-        Self { handle: Mutex::new(None), db: ProxyQueryManager::new(db_path), events }
+        Self { handle: Arc::new(Mutex::new(None)), db: ProxyQueryManager::new(db_path), events }
     }
 }
 

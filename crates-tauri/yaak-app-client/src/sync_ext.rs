@@ -8,8 +8,7 @@ use chrono::Utc;
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tauri::ipc::Channel;
-use tauri::{AppHandle, Listener, Runtime, command};
+use tauri::{AppHandle, Listener, Runtime};
 use tokio::sync::watch;
 use ts_rs::TS;
 use yaak_sync::error::Error::InvalidSyncDirectory;
@@ -19,7 +18,6 @@ use yaak_sync::sync::{
 };
 use yaak_sync::watch::{WatchEvent, watch_directory};
 
-#[command]
 pub(crate) async fn cmd_sync_calculate<R: Runtime>(
     app_handle: AppHandle<R>,
     workspace_id: &str,
@@ -40,14 +38,12 @@ pub(crate) async fn cmd_sync_calculate<R: Runtime>(
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 
-#[command]
 pub(crate) async fn cmd_sync_calculate_fs(dir: &Path) -> Result<Vec<SyncOp>> {
     let db_candidates = Vec::new();
     let fs_candidates = get_fs_candidates(dir)?;
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 
-#[command]
 pub(crate) async fn cmd_sync_apply<R: Runtime>(
     app_handle: AppHandle<R>,
     sync_ops: Vec<SyncOp>,
@@ -68,23 +64,19 @@ pub(crate) struct WatchResult {
     unlisten_event: String,
 }
 
-#[command]
-pub(crate) async fn cmd_sync_watch<R: Runtime>(
+pub(crate) async fn sync_watch<R, F>(
     app_handle: AppHandle<R>,
     sync_dir: &Path,
     workspace_id: &str,
-    channel: Channel<WatchEvent>,
-) -> Result<WatchResult> {
+    on_event: F,
+) -> Result<WatchResult>
+where
+    R: Runtime,
+    F: Fn(WatchEvent) + Send + Sync + 'static,
+{
     let (cancel_tx, cancel_rx) = watch::channel(());
 
-    // Create a callback that forwards events to the Tauri channel
-    let callback = move |event: WatchEvent| {
-        if let Err(e) = channel.send(event) {
-            warn!("Failed to send watch event: {:?}", e);
-        }
-    };
-
-    watch_directory(&sync_dir, callback, cancel_rx).await?;
+    watch_directory(&sync_dir, on_event, cancel_rx).await?;
 
     let app_handle_inner = app_handle.clone();
     let unlisten_event =

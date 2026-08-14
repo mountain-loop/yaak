@@ -1,7 +1,7 @@
 use crate::PluginContextExt;
 use crate::error::Result;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow, command};
+use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::models::HttpRequestHeader;
 use yaak_models::queries::workspaces::default_headers;
@@ -22,7 +22,6 @@ impl<'a, R: Runtime, M: Manager<R>> EncryptionManagerExt<'a, R> for M {
     }
 }
 
-#[command]
 pub(crate) async fn cmd_decrypt_template<R: Runtime>(
     window: WebviewWindow<R>,
     template: &str,
@@ -32,7 +31,6 @@ pub(crate) async fn cmd_decrypt_template<R: Runtime>(
     Ok(decrypt_secure_template_function(&encryption_manager, &plugin_context, template)?)
 }
 
-#[command]
 pub(crate) async fn cmd_secure_template<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -49,7 +47,6 @@ pub(crate) async fn cmd_secure_template<R: Runtime>(
     )?)
 }
 
-#[command]
 pub(crate) async fn cmd_get_themes<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -57,7 +54,6 @@ pub(crate) async fn cmd_get_themes<R: Runtime>(
     Ok(plugin_manager.get_themes(&window.plugin_context()).await?)
 }
 
-#[command]
 pub(crate) async fn cmd_enable_encryption<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
@@ -67,7 +63,6 @@ pub(crate) async fn cmd_enable_encryption<R: Runtime>(
     Ok(())
 }
 
-#[command]
 pub(crate) async fn cmd_reveal_workspace_key<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
@@ -75,7 +70,6 @@ pub(crate) async fn cmd_reveal_workspace_key<R: Runtime>(
     Ok(window.crypto().reveal_workspace_key(workspace_id)?)
 }
 
-#[command]
 pub(crate) async fn cmd_set_workspace_key<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
@@ -85,7 +79,6 @@ pub(crate) async fn cmd_set_workspace_key<R: Runtime>(
     Ok(())
 }
 
-#[command]
 pub(crate) async fn cmd_disable_encryption<R: Runtime>(
     window: WebviewWindow<R>,
     workspace_id: &str,
@@ -94,7 +87,6 @@ pub(crate) async fn cmd_disable_encryption<R: Runtime>(
     Ok(())
 }
 
-#[command]
 pub(crate) fn cmd_default_headers() -> Vec<HttpRequestHeader> {
     default_headers()
 }

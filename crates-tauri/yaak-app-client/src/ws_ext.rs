@@ -9,7 +9,7 @@ use log::{debug, info, warn};
 use std::str::FromStr;
 use std::sync::Arc;
 use tauri::http::HeaderValue;
-use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow, command};
+use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
@@ -29,7 +29,6 @@ use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
-#[command]
 pub async fn cmd_ws_delete_connections<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
@@ -41,7 +40,6 @@ pub async fn cmd_ws_delete_connections<R: Runtime>(
     )?)
 }
 
-#[command]
 pub async fn cmd_ws_send<R: Runtime>(
     connection_id: &str,
     environment_id: Option<&str>,
@@ -125,7 +123,6 @@ async fn send_websocket_message<R: Runtime>(
     Ok(connection.clone())
 }
 
-#[command]
 pub async fn cmd_ws_close<R: Runtime>(
     connection_id: &str,
     app_handle: AppHandle<R>,
@@ -149,7 +146,6 @@ pub async fn cmd_ws_close<R: Runtime>(
     Ok(connection)
 }
 
-#[command]
 pub async fn cmd_ws_connect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,

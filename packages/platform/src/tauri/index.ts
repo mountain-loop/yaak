@@ -1,5 +1,5 @@
 import { getIdentifier } from "@tauri-apps/api/app";
-import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { emit as tauriEmit, listen as tauriListen } from "@tauri-apps/api/event";
 import { basename, resolveResource } from "@tauri-apps/api/path";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -15,17 +15,14 @@ import type {
   PlatformCapabilities,
   PlatformWindow,
   RpcPayload,
+  RpcStreamHandle,
   Unsubscribe,
 } from "../types";
 
 /**
  * The desktop host: the yaak-rpc envelope carried by Tauri's `invoke` and
- * window events.
- *
- * Commands still arrive as their own `invoke` names rather than one `rpc`
- * command, because the Rust side has not moved onto `RpcRouter` yet. When it
- * does, only `rpc` below changes — `invoke("rpc", { cmd, payload })`, the way
- * the proxy app already does it — and no call site notices.
+ * window events. Every command goes through the single `rpc` Tauri command
+ * into the `RpcRouter` on the Rust side.
  */
 
 /**
@@ -92,6 +89,21 @@ function createWindow(): PlatformWindow {
   };
 }
 
+async function rpc<T>(cmd: string, payload?: RpcPayload): Promise<T> {
+  try {
+    // Host plugin commands (`plugin:yaak-license|check`, ...) are registered by
+    // their Tauri plugins and ride outside the envelope. Everything else goes
+    // through the single `rpc` command and the RpcRouter behind it.
+    if (cmd.startsWith("plugin:")) {
+      return await invoke<T>(cmd, payload);
+    }
+    return await invoke<T>("rpc", { cmd, payload: payload ?? {} });
+  } catch (err) {
+    console.warn("Platform command error", cmd, err);
+    throw err;
+  }
+}
+
 export function createTauriPlatform(): Platform {
   const window = createWindow();
 
@@ -119,19 +131,27 @@ export function createTauriPlatform(): Platform {
       resolveResource: (path) => resolveResource(path),
     },
 
-    async rpc<T>(cmd: string, payload?: RpcPayload): Promise<T> {
+    rpc,
+
+    async rpcStream<T, M>(
+      cmd: string,
+      payload: RpcPayload,
+      onMessage: (message: M) => void,
+    ): Promise<RpcStreamHandle<T>> {
+      // The caller mints the stream id, and the subscription is awaited before
+      // the command dispatches: registration is its own IPC round trip, and the
+      // command may emit its first message while it runs.
+      const streamId = crypto.randomUUID();
+      const unlisten = await tauriListen<M>(`stream_${streamId}`, (e) => onMessage(e.payload), {
+        target: { kind: "Window", label: window.label },
+      });
       try {
-        return await invoke<T>(cmd, payload);
+        const result = await rpc<T>(cmd, { ...payload, streamId });
+        return { result, unlisten };
       } catch (err) {
-        console.warn("Platform command error", cmd, err);
+        unlisten();
         throw err;
       }
-    },
-
-    rpcStream<T, M>(cmd: string, payload: RpcPayload, onMessage: (message: M) => void): Promise<T> {
-      const channel = new Channel<M>();
-      channel.onmessage = onMessage;
-      return invoke<T>(cmd, { ...payload, channel });
     },
 
     listen<T>(event: string, callback: (payload: T) => void): Unsubscribe {

@@ -8,6 +8,10 @@ export * from "./bindings/license";
 
 const CHECK_QUERY_KEY = ["license.check"];
 
+export async function checkLicense(): Promise<LicenseCheckStatus> {
+  return platform.rpc<LicenseCheckStatus>("plugin:yaak-license|check");
+}
+
 export function useLicense() {
   const queryClient = useQueryClient();
   const activate = useMutation<void, string, { licenseKey: string }>({
@@ -37,7 +41,7 @@ export function useLicense() {
       if (!appInfo.featureLicense) {
         return null;
       }
-      return platform.rpc<LicenseCheckStatus>("plugin:yaak-license|check");
+      return checkLicense();
     },
   });
 

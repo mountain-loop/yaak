@@ -64,22 +64,23 @@ export function useGitWorktreeStatus(dir: string, refreshKey?: string) {
 }
 
 export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktreeStatus) => void) {
-  const unlistenPromise = platform.rpcStream<GitWatchResult, GitWorktreeStatus>(
+  const handle = platform.rpcStream<GitWatchResult, GitWorktreeStatus>(
     "cmd_git_watch_worktree_status",
     { dir },
     callback,
   );
 
-  void unlistenPromise
-    .then(({ unlistenEvent }) => {
-      addGitWatchKey(unlistenEvent);
+  void handle
+    .then(({ result }) => {
+      addGitWatchKey(result.unlistenEvent);
     })
     .catch(console.debug);
 
   return () =>
-    unlistenPromise
-      .then(async ({ unlistenEvent }) => {
-        unlistenGitWatcher(unlistenEvent);
+    handle
+      .then(async ({ result, unlisten }) => {
+        unlistenGitWatcher(result.unlistenEvent);
+        unlisten();
       })
       .catch(console.error);
 }

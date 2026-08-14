@@ -49,13 +49,13 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
 }
 
 #[tauri::command]
-fn rpc(
+async fn rpc(
     router: State<'_, RpcRouter<ProxyCtx>>,
     ctx: State<'_, ProxyCtx>,
     cmd: String,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    router.dispatch(&cmd, payload, &ctx).map_err(|e| e.message)
+    router.dispatch(&cmd, payload, &ctx).await.map_err(|e| e.message)
 }
 
 pub fn run() {

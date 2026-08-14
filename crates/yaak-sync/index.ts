@@ -30,21 +30,22 @@ export function watchWorkspaceFiles(
   callback: (e: WatchEvent) => void,
 ) {
   console.log("Watching workspace files", workspaceId, syncDir);
-  const unlistenPromise = platform.rpcStream<WatchResult, WatchEvent>(
+  const handle = platform.rpcStream<WatchResult, WatchEvent>(
     "cmd_sync_watch",
     { workspaceId, syncDir },
     callback,
   );
 
-  void unlistenPromise.then(({ unlistenEvent }) => {
-    addWatchKey(unlistenEvent);
+  void handle.then(({ result }) => {
+    addWatchKey(result.unlistenEvent);
   });
 
   return () =>
-    unlistenPromise
-      .then(async ({ unlistenEvent }) => {
+    handle
+      .then(async ({ result, unlisten }) => {
         console.log("Unwatching workspace files", workspaceId, syncDir);
-        unlistenToWatcher(unlistenEvent);
+        unlistenToWatcher(result.unlistenEvent);
+        unlisten();
       })
       .catch(console.error);
 }

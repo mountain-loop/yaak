@@ -77,6 +77,7 @@ mod notifications;
 mod plugin_events;
 mod plugins_ext;
 mod render;
+mod rpc_ext;
 mod sync_ext;
 mod updates;
 mod uri_scheme;
@@ -181,9 +182,10 @@ impl<R: Runtime> PluginContextExt<R> for WebviewWindow<R> {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ts_rs::TS)]
 #[serde(default, rename_all = "camelCase")]
-struct AppMetaData {
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct AppMetaData {
     is_dev: bool,
     version: String,
     cli_version: Option<String>,
@@ -196,7 +198,6 @@ struct AppMetaData {
     feature_license: bool,
 }
 
-#[tauri::command]
 async fn cmd_metadata<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<AppMetaData> {
     let app_data_dir = app_handle.path().app_data_dir()?;
     let app_log_dir = app_handle.path().app_log_dir()?;
@@ -236,7 +237,6 @@ async fn detect_cli_version_for_binary(program: &str) -> Option<String> {
     Some(parts.next().unwrap_or(line).to_string())
 }
 
-#[tauri::command]
 async fn cmd_template_tokens_to_string<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
@@ -254,7 +254,6 @@ async fn cmd_template_tokens_to_string<R: Runtime>(
     Ok(new_tokens.to_string())
 }
 
-#[tauri::command]
 async fn cmd_render_template<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
@@ -288,7 +287,6 @@ async fn cmd_render_template<R: Runtime>(
     Ok(result)
 }
 
-#[tauri::command]
 async fn cmd_send_feedback<R: Runtime>(
     app_handle: AppHandle<R>,
     feature: String,
@@ -298,7 +296,6 @@ async fn cmd_send_feedback<R: Runtime>(
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_dismiss_notification<R: Runtime>(
     window: WebviewWindow<R>,
     notification_id: &str,
@@ -307,7 +304,6 @@ async fn cmd_dismiss_notification<R: Runtime>(
     Ok(yaak_notifier.lock().await.seen(&window, notification_id).await?)
 }
 
-#[tauri::command]
 async fn cmd_grpc_reflect<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
@@ -368,7 +364,6 @@ async fn cmd_grpc_reflect<R: Runtime>(
         .map_err(|e| GenericError(e.to_string()))?)
 }
 
-#[tauri::command]
 async fn cmd_grpc_go<R: Runtime>(
     request_id: &str,
     environment_id: Option<&str>,
@@ -981,13 +976,11 @@ async fn cmd_grpc_go<R: Runtime>(
     Ok(conn.id)
 }
 
-#[tauri::command]
 async fn cmd_restart<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<()> {
     app_handle.request_restart();
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_send_ephemeral_request<R: Runtime>(
     mut request: HttpRequest,
     environment_id: Option<&str>,
@@ -1016,12 +1009,10 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     send_http_request(&window, &request, &response, environment, cookie_jar, &mut cancel_rx).await
 }
 
-#[tauri::command]
 async fn cmd_format_json(text: &str) -> YaakResult<String> {
     Ok(format_json(text, "  "))
 }
 
-#[tauri::command]
 async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
     match pretty_graphql::format_text(text, &Default::default()) {
         Ok(formatted) => Ok(formatted),
@@ -1029,7 +1020,6 @@ async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
     }
 }
 
-#[tauri::command]
 async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1063,7 +1053,6 @@ async fn cmd_http_response_body<R: Runtime>(
     }
 }
 
-#[tauri::command]
 async fn cmd_http_request_body<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
@@ -1080,7 +1069,6 @@ async fn cmd_http_request_body<R: Runtime>(
     Ok(Some(body))
 }
 
-#[tauri::command]
 async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>> {
     let body = fs::read(file_path)?;
     let mut event_parser = EventParser::new();
@@ -1101,7 +1089,6 @@ async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>>
     Ok(events)
 }
 
-#[tauri::command]
 async fn cmd_get_http_response_events<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
@@ -1110,7 +1097,6 @@ async fn cmd_get_http_response_events<R: Runtime>(
     Ok(events)
 }
 
-#[tauri::command]
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
     file_path: &str,
@@ -1118,7 +1104,6 @@ async fn cmd_import_data<R: Runtime>(
     import_data(&window, file_path).await
 }
 
-#[tauri::command]
 async fn cmd_http_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1126,7 +1111,6 @@ async fn cmd_http_request_actions<R: Runtime>(
     Ok(plugin_manager.get_http_request_actions(&window.plugin_context()).await?)
 }
 
-#[tauri::command]
 async fn cmd_websocket_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1134,7 +1118,6 @@ async fn cmd_websocket_request_actions<R: Runtime>(
     Ok(plugin_manager.get_websocket_request_actions(&window.plugin_context()).await?)
 }
 
-#[tauri::command]
 async fn cmd_call_websocket_request_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallWebsocketRequestActionRequest,
@@ -1152,7 +1135,6 @@ async fn cmd_call_websocket_request_action<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_workspace_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1160,7 +1142,6 @@ async fn cmd_workspace_actions<R: Runtime>(
     Ok(plugin_manager.get_workspace_actions(&window.plugin_context()).await?)
 }
 
-#[tauri::command]
 async fn cmd_call_workspace_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallWorkspaceActionRequest,
@@ -1175,7 +1156,6 @@ async fn cmd_call_workspace_action<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_folder_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1183,7 +1163,6 @@ async fn cmd_folder_actions<R: Runtime>(
     Ok(plugin_manager.get_folder_actions(&window.plugin_context()).await?)
 }
 
-#[tauri::command]
 async fn cmd_call_folder_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallFolderActionRequest,
@@ -1198,7 +1177,6 @@ async fn cmd_call_folder_action<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_grpc_request_actions<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1206,7 +1184,6 @@ async fn cmd_grpc_request_actions<R: Runtime>(
     Ok(plugin_manager.get_grpc_request_actions(&window.plugin_context()).await?)
 }
 
-#[tauri::command]
 async fn cmd_template_function_summaries<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1215,7 +1192,6 @@ async fn cmd_template_function_summaries<R: Runtime>(
     Ok(results)
 }
 
-#[tauri::command]
 async fn cmd_template_function_config<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1229,7 +1205,6 @@ async fn cmd_template_function_config<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_get_http_authentication_summaries<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
@@ -1239,7 +1214,6 @@ async fn cmd_get_http_authentication_summaries<R: Runtime>(
     Ok(results.into_iter().map(|(_, a)| a).collect())
 }
 
-#[tauri::command]
 async fn cmd_get_http_authentication_config<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
@@ -1294,7 +1268,6 @@ async fn cmd_get_http_authentication_config<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_call_http_request_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallHttpRequestActionRequest,
@@ -1314,7 +1287,6 @@ async fn cmd_call_http_request_action<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_call_grpc_request_action<R: Runtime>(
     window: WebviewWindow<R>,
     req: CallGrpcRequestActionRequest,
@@ -1334,7 +1306,6 @@ async fn cmd_call_grpc_request_action<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_call_http_authentication_action<R: Runtime>(
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
@@ -1390,7 +1361,6 @@ async fn cmd_call_http_authentication_action<R: Runtime>(
         .await?)
 }
 
-#[tauri::command]
 async fn cmd_curl_to_request<R: Runtime>(
     window: WebviewWindow<R>,
     command: &str,
@@ -1412,7 +1382,6 @@ async fn cmd_curl_to_request<R: Runtime>(
         })?)
 }
 
-#[tauri::command]
 async fn cmd_export_data<R: Runtime>(
     app_handle: AppHandle<R>,
     export_path: &str,
@@ -1439,7 +1408,6 @@ async fn cmd_export_data<R: Runtime>(
 /// array of numbers, several times the size of the thing being saved. And the callers that need
 /// this — values the editor collapsed — are holding base64 already, so passing it through
 /// untouched means the save never decodes megabytes on the main thread.
-#[tauri::command]
 async fn cmd_save_base64_to_binary<R: Runtime>(
     _app_handle: AppHandle<R>,
     filepath: &str,
@@ -1453,7 +1421,6 @@ async fn cmd_save_base64_to_binary<R: Runtime>(
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_save_response<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
@@ -1468,7 +1435,6 @@ async fn cmd_save_response<R: Runtime>(
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_send_http_request<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -1540,7 +1506,6 @@ async fn cmd_send_http_request<R: Runtime>(
     Ok(r)
 }
 
-#[tauri::command]
 async fn cmd_reload_plugins<R: Runtime>(
     app_handle: AppHandle<R>,
     window: WebviewWindow<R>,
@@ -1553,7 +1518,6 @@ async fn cmd_reload_plugins<R: Runtime>(
     Ok(errors)
 }
 
-#[tauri::command]
 async fn cmd_plugin_info<R: Runtime>(
     id: &str,
     app_handle: AppHandle<R>,
@@ -1592,7 +1556,6 @@ fn fallback_plugin_metadata(directory: &str) -> PluginMetadata {
     }
 }
 
-#[tauri::command]
 async fn cmd_delete_all_grpc_connections<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
@@ -1604,7 +1567,6 @@ async fn cmd_delete_all_grpc_connections<R: Runtime>(
     )?)
 }
 
-#[tauri::command]
 async fn cmd_delete_send_history<R: Runtime>(
     workspace_id: &str,
     app_handle: AppHandle<R>,
@@ -1619,7 +1581,6 @@ async fn cmd_delete_send_history<R: Runtime>(
     })?)
 }
 
-#[tauri::command]
 async fn cmd_delete_all_http_responses<R: Runtime>(
     request_id: &str,
     app_handle: AppHandle<R>,
@@ -1632,7 +1593,6 @@ async fn cmd_delete_all_http_responses<R: Runtime>(
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_get_workspace_meta<R: Runtime>(
     app_handle: AppHandle<R>,
     workspace_id: &str,
@@ -1642,7 +1602,6 @@ async fn cmd_get_workspace_meta<R: Runtime>(
     Ok(db.get_or_create_workspace_meta(&workspace.id)?)
 }
 
-#[tauri::command]
 async fn cmd_new_child_window<R: Runtime>(
     parent_window: WebviewWindow<R>,
     url: &str,
@@ -1665,7 +1624,6 @@ async fn cmd_new_child_window<R: Runtime>(
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_new_main_window<R: Runtime>(app_handle: AppHandle<R>, url: &str) -> YaakResult<()> {
     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
     let initialization_script = initial_appearance_script(&app_handle);
@@ -1679,7 +1637,6 @@ async fn cmd_new_main_window<R: Runtime>(app_handle: AppHandle<R>, url: &str) ->
     Ok(())
 }
 
-#[tauri::command]
 async fn cmd_check_for_updates<R: Runtime>(
     window: WebviewWindow<R>,
     yaak_updater: State<'_, Mutex<YaakUpdater>>,
@@ -1770,6 +1727,10 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // The RPC command registry — every frontend command dispatches
+            // through this via the single `rpc` Tauri command
+            app.manage(rpc_ext::build_rpc_router::<TauriRuntime>());
+
             // Initialize HTTP connection manager
             app.manage(yaak_http::manager::HttpConnectionManager::new());
 
@@ -1844,128 +1805,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            cmd_call_http_authentication_action,
-            cmd_call_http_request_action,
-            cmd_call_websocket_request_action,
-            cmd_call_workspace_action,
-            cmd_call_folder_action,
-            cmd_call_grpc_request_action,
-            cmd_check_for_updates,
-            cmd_curl_to_request,
-            cmd_delete_all_grpc_connections,
-            cmd_delete_all_http_responses,
-            cmd_delete_send_history,
-            cmd_dismiss_notification,
-            cmd_export_data,
-            cmd_send_feedback,
-            cmd_http_request_body,
-            cmd_http_response_body,
-            cmd_format_json,
-            cmd_format_graphql,
-            cmd_get_http_authentication_summaries,
-            cmd_get_http_authentication_config,
-            cmd_get_sse_events,
-            cmd_get_http_response_events,
-            cmd_get_workspace_meta,
-            cmd_grpc_go,
-            cmd_grpc_reflect,
-            cmd_grpc_request_actions,
-            cmd_http_request_actions,
-            cmd_websocket_request_actions,
-            cmd_workspace_actions,
-            cmd_folder_actions,
-            cmd_import_data,
-            cmd_metadata,
-            cmd_new_child_window,
-            cmd_new_main_window,
-            cmd_plugin_info,
-            cmd_reload_plugins,
-            cmd_render_template,
-            cmd_restart,
-            cmd_save_base64_to_binary,
-            cmd_save_response,
-            cmd_send_ephemeral_request,
-            cmd_send_http_request,
-            cmd_template_function_config,
-            cmd_template_function_summaries,
-            cmd_template_tokens_to_string,
-            //
-            //
-            // Migrated commands
-            crate::commands::cmd_decrypt_template,
-            crate::commands::cmd_default_headers,
-            crate::commands::cmd_disable_encryption,
-            crate::commands::cmd_enable_encryption,
-            crate::commands::cmd_get_themes,
-            crate::commands::cmd_reveal_workspace_key,
-            crate::commands::cmd_secure_template,
-            crate::commands::cmd_set_workspace_key,
-            //
-            // Models commands
-            models_ext::models_delete,
-            models_ext::models_duplicate,
-            models_ext::models_get_graphql_introspection,
-            models_ext::models_get_settings,
-            models_ext::models_grpc_events,
-            models_ext::models_upsert,
-            models_ext::models_upsert_graphql_introspection,
-            models_ext::models_websocket_events,
-            models_ext::models_workspace_models,
-            //
-            // Sync commands
-            sync_ext::cmd_sync_calculate,
-            sync_ext::cmd_sync_calculate_fs,
-            sync_ext::cmd_sync_apply,
-            sync_ext::cmd_sync_watch,
-            //
-            // Git commands
-            git_ext::cmd_git_checkout,
-            git_ext::cmd_git_branch,
-            git_ext::cmd_git_delete_branch,
-            git_ext::cmd_git_delete_remote_branch,
-            git_ext::cmd_git_merge_branch,
-            git_ext::cmd_git_rename_branch,
-            git_ext::cmd_git_branch_info,
-            git_ext::cmd_git_status,
-            git_ext::cmd_git_worktree_status,
-            git_ext::cmd_git_watch_worktree_status,
-            git_ext::cmd_git_log,
-            git_ext::cmd_git_log_for_file,
-            git_ext::cmd_git_file_diff_for_commit,
-            git_ext::cmd_git_initialize,
-            git_ext::cmd_git_clone,
-            git_ext::cmd_git_commit,
-            git_ext::cmd_git_fetch_all,
-            git_ext::cmd_git_push,
-            git_ext::cmd_git_pull,
-            git_ext::cmd_git_pull_force_reset,
-            git_ext::cmd_git_pull_merge,
-            git_ext::cmd_git_add,
-            git_ext::cmd_git_unstage,
-            git_ext::cmd_git_reset_changes,
-            git_ext::cmd_git_restore_files,
-            git_ext::cmd_git_restore_file_from_commit,
-            git_ext::cmd_git_add_credential,
-            git_ext::cmd_git_remotes,
-            git_ext::cmd_git_add_remote,
-            git_ext::cmd_git_rm_remote,
-            //
-            // Plugin commands
-            plugins_ext::cmd_plugin_init_errors,
-            plugins_ext::cmd_plugins_install_from_directory,
-            plugins_ext::cmd_plugins_search,
-            plugins_ext::cmd_plugins_install,
-            plugins_ext::cmd_plugins_uninstall,
-            plugins_ext::cmd_plugins_updates,
-            plugins_ext::cmd_plugins_update_all,
-            //
-            // WebSocket commands
-            ws_ext::cmd_ws_delete_connections,
-            ws_ext::cmd_ws_send,
-            ws_ext::cmd_ws_close,
-            ws_ext::cmd_ws_connect,
-        ])
+        .invoke_handler(tauri::generate_handler![rpc_ext::rpc])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app_handle, event| {
