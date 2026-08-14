@@ -19,6 +19,12 @@ allowed-tools: Bash(yaak:*), Bash(which:*), Bash(command:*), Bash(npm:*), Bash(n
 
 # Use Yaak
 
+<!--
+  Managed by the Yaak CLI. `yaak agent install` replaces this file wholesale on
+  every run, so local edits are lost. To add your own guidance, write a separate
+  skill or use your tool's project instructions instead.
+-->
+
 Yaak is a desktop API client. The `yaak` CLI reads and writes the **same local
 database as the desktop app**, so anything you create shows up in the app
 immediately, and vice versa. There is no server and no sign-in: `yaak auth` is

@@ -1,29 +1,14 @@
 use crate::cli::{AgentArgs, AgentCommands};
 use crate::ui;
-use crate::version;
 use include_dir::{Dir, include_dir};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 static SKILL_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/skills/use-yaak");
 
 const SKILL_NAME: &str = "use-yaak";
-const MANIFEST_NAME: &str = ".yaak-skill.json";
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
-
-/// Records what this CLI wrote, so a later install can tell its own output apart
-/// from edits the user made by hand.
-#[derive(Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-struct SkillManifest {
-    cli_version: String,
-    /// Relative file path -> SHA-256 of the contents this CLI wrote.
-    files: BTreeMap<String, String>,
-}
 
 /// A coding tool that reads skills from a directory in the user's home.
 struct Target {
@@ -35,7 +20,7 @@ struct Target {
 
 pub fn run(args: AgentArgs) -> i32 {
     let result = match args.command {
-        AgentCommands::Install { force, agent } => install(force, agent),
+        AgentCommands::Install { agent } => install(agent),
         AgentCommands::Remove { agent } => remove(agent),
     };
 
@@ -48,19 +33,16 @@ pub fn run(args: AgentArgs) -> i32 {
     }
 }
 
-fn install(force: bool, agent: Option<Vec<String>>) -> CommandResult {
+fn install(agent: Option<Vec<String>>) -> CommandResult {
     let targets = resolve_targets(agent)?;
 
     let mut installed = 0usize;
     for target in &targets {
         let dir = target.skills_dir.join(SKILL_NAME);
-        match write_skill(&dir, force) {
-            Ok(WriteOutcome::Written { skipped }) => {
+        match write_skill(&dir) {
+            Ok(()) => {
                 installed += 1;
                 ui::success(&format!("{} -> {}", target.label, dir.display()));
-                for path in skipped {
-                    ui::warning(&format!("  kept your edited {path} (use --force to overwrite)"));
-                }
             }
             Err(error) => ui::warning_stderr(&format!("{}: {}", target.label, error)),
         }
@@ -83,63 +65,14 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
         if !dir.exists() {
             continue;
         }
-
-        // Delete only what we wrote and the user has not since changed. Anything they
-        // edited or added is theirs, and uninstalling is not a reason to lose it.
-        let manifest = read_manifest(&dir);
-        let mut retained =
-            SkillManifest { cli_version: manifest.cli_version.clone(), ..Default::default() };
-        let mut kept = Vec::new();
-        let mut failed = Vec::new();
-
-        for (relative, written) in &manifest.files {
-            let path = dir.join(relative);
-            match fs::read(&path) {
-                Ok(on_disk) if sha256(&on_disk) == *written => match fs::remove_file(&path) {
-                    Ok(()) => {}
-                    Err(error) => {
-                        ui::warning_stderr(&format!(
-                            "Failed to remove {}: {error}",
-                            path.display()
-                        ));
-                        retained.files.insert(relative.clone(), written.clone());
-                        failed.push(relative.clone());
-                    }
-                },
-                Ok(_) => {
-                    kept.push(relative.clone());
-                    retained.files.insert(relative.clone(), written.clone());
-                }
-                Err(_) => {} // Already gone, so stop tracking it
+        match fs::remove_dir_all(&dir) {
+            Ok(()) => {
+                removed += 1;
+                ui::success(&format!("Removed {}", dir.display()));
             }
-        }
-
-        // Any file still on disk keeps its ownership record, so a later install can
-        // still tell the user's edits from ours instead of overwriting them, and a
-        // later remove can retry whatever could not be deleted.
-        if retained.files.is_empty() {
-            let _ = fs::remove_file(dir.join(MANIFEST_NAME));
-            prune_empty_dirs(&dir);
-        } else {
-            // A failure here leaves the older manifest in place, which still lists
-            // every retained file, so keep going rather than aborting other targets.
-            if let Err(error) = write_manifest(&dir, &retained) {
-                ui::warning_stderr(&error);
+            Err(error) => {
+                ui::warning_stderr(&format!("Failed to remove {}: {error}", dir.display()))
             }
-            prune_empty_dirs_below(&dir);
-        }
-
-        removed += 1;
-        if dir.exists() {
-            ui::success(&format!("Removed the Yaak skill from {}", dir.display()));
-            for path in kept {
-                ui::warning(&format!("  kept your edited {path}"));
-            }
-            for path in failed {
-                ui::warning(&format!("  could not delete {path}, so it is still tracked"));
-            }
-        } else {
-            ui::success(&format!("Removed {}", dir.display()));
         }
     }
 
@@ -149,115 +82,27 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
     Ok(())
 }
 
-/// Remove empty directories depth-first, including `dir` itself when nothing is left.
-fn prune_empty_dirs(dir: &Path) {
-    prune_empty_dirs_below(dir);
-    if is_empty_dir(dir) {
-        let _ = fs::remove_dir(dir);
+/// The skill directory belongs to the CLI, so every install replaces it wholesale.
+/// That keeps it exactly in step with the installed version, including dropping files
+/// an older version shipped. Preserving local edits would be worse than losing them:
+/// an edited file would be skipped by every future install and go stale forever,
+/// against a CLI that keeps changing.
+fn write_skill(dir: &Path) -> CommandResult {
+    if dir.exists() {
+        fs::remove_dir_all(dir).map_err(|e| format!("Failed to replace {}: {e}", dir.display()))?;
     }
-}
-
-/// Same, but always keeps `dir` itself.
-fn prune_empty_dirs_below(dir: &Path) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            prune_empty_dirs(&path);
-        }
-    }
-}
-
-fn is_empty_dir(dir: &Path) -> bool {
-    fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_none())
-}
-
-enum WriteOutcome {
-    Written { skipped: Vec<String> },
-}
-
-fn write_skill(dir: &Path, force: bool) -> CommandResult<WriteOutcome> {
-    let previous = read_manifest(dir);
-    let mut manifest =
-        SkillManifest { cli_version: version::cli_version().to_string(), ..Default::default() };
-    let mut skipped = Vec::new();
 
     for file in walk(&SKILL_DIR) {
-        let relative = file.path().to_string_lossy().to_string();
         let destination = dir.join(file.path());
-        let contents = file.contents();
-        let digest = sha256(contents);
-
-        // Leave a file alone when the user has changed it since we wrote it.
-        if !force
-            && destination.exists()
-            && let Ok(on_disk) = fs::read(&destination)
-            && let Some(written) = previous.files.get(&relative)
-            && sha256(&on_disk) != *written
-        {
-            skipped.push(relative.clone());
-            manifest.files.insert(relative, written.clone());
-            continue;
-        }
-
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create {}: {e}", parent.display()))?;
         }
-        fs::write(&destination, contents)
+        fs::write(&destination, file.contents())
             .map_err(|e| format!("Failed to write {}: {e}", destination.display()))?;
-        manifest.files.insert(relative, digest);
     }
 
-    // Drop files an earlier version shipped that this one no longer does, so a stale
-    // reference can't sit alongside the refreshed guidance. Files the user has since
-    // edited are left behind and stop being tracked; they belong to them now.
-    let mut stale_to_retain = Vec::new();
-    for (relative, written) in &previous.files {
-        if manifest.files.contains_key(relative) {
-            continue;
-        }
-        let path = dir.join(relative);
-        if fs::read(&path).is_ok_and(|on_disk| sha256(&on_disk) == *written)
-            && let Err(error) = fs::remove_file(&path)
-        {
-            ui::warning_stderr(&format!("Failed to remove stale {}: {error}", path.display()));
-            // Keep tracking it so a later run can retry, rather than orphaning a file
-            // we know we wrote.
-            stale_to_retain.push((relative.clone(), written.clone()));
-        }
-    }
-    for (relative, written) in stale_to_retain {
-        manifest.files.insert(relative, written);
-    }
-    prune_empty_dirs_below(dir);
-
-    write_manifest(dir, &manifest)?;
-
-    Ok(WriteOutcome::Written { skipped })
-}
-
-fn write_manifest(dir: &Path, manifest: &SkillManifest) -> CommandResult {
-    let manifest_json = serde_json::to_string_pretty(manifest)
-        .map_err(|e| format!("Failed to serialize skill manifest: {e}"))?;
-    fs::write(dir.join(MANIFEST_NAME), manifest_json)
-        .map_err(|e| format!("Failed to write skill manifest: {e}"))
-}
-
-fn read_manifest(dir: &Path) -> SkillManifest {
-    fs::read_to_string(dir.join(MANIFEST_NAME))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex::encode(hasher.finalize())
+    Ok(())
 }
 
 /// Flatten the embedded skill directory into its files, recursing into subdirectories.

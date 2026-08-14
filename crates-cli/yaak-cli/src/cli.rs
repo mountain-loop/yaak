@@ -173,10 +173,6 @@ pub enum AgentCommands {
     /// Install the Yaak skill so coding agents know how to drive the CLI
     #[command(alias = "update", alias = "add")]
     Install {
-        /// Overwrite skill files you have edited locally
-        #[arg(long)]
-        force: bool,
-
         /// Install for specific agents instead of all detected ones
         #[arg(long = "agent", value_name = "AGENT")]
         agent: Option<Vec<String>>,
