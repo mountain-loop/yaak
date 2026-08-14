@@ -86,6 +86,36 @@ pub enum Commands {
 
     /// Environment commands
     Environment(EnvironmentArgs),
+
+    /// Template function commands
+    #[command(alias = "func")]
+    TemplateFunction(TemplateFunctionArgs),
+}
+
+#[derive(Args)]
+pub struct TemplateFunctionArgs {
+    #[command(subcommand)]
+    pub command: TemplateFunctionCommands,
+}
+
+#[derive(Subcommand)]
+pub enum TemplateFunctionCommands {
+    /// List template functions provided by installed plugins
+    List {
+        /// Only show functions whose name contains this text
+        #[arg(value_name = "FILTER")]
+        filter: Option<String>,
+    },
+
+    /// Show a template function's arguments as JSON
+    Show {
+        /// Template function name (for example: response.body.path)
+        name: String,
+
+        /// Pretty-print JSON output
+        #[arg(long)]
+        pretty: bool,
+    },
 }
 
 #[derive(Args)]
@@ -359,6 +389,13 @@ pub enum FolderCommands {
     List {
         /// Workspace ID (optional when exactly one workspace exists)
         workspace_id: Option<String>,
+    },
+
+    /// Output JSON schema for folder create/update payloads
+    Schema {
+        /// Pretty-print schema JSON output
+        #[arg(long)]
+        pretty: bool,
     },
 
     /// Show a folder as JSON

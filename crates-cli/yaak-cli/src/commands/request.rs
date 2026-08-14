@@ -122,6 +122,20 @@ fn enrich_schema_guidance(schema: &mut Value, request_type: RequestSchemaType) {
             "For path segments like `/foo/:id/comments/:commentId`, put concrete values in `urlParameters` using names that keep the leading `:` (for example `:id`, `:commentId`). A name without the `:` is sent as a query string parameter instead, leaving the placeholder in the path.",
         );
     }
+
+    if let Some(body_type_schema) = properties.get_mut("bodyType").and_then(Value::as_object_mut) {
+        append_description(
+            body_type_schema,
+            "Known values: `application/json`, `text/xml`, `application/x-www-form-urlencoded`, `multipart/form-data`, `graphql`, `binary`, `other`, or null for no body. This selects how `body` is encoded; it does NOT add a `Content-Type` header. Add that header yourself, matching the body type (`other` pairs with `text/plain` and `graphql` with `application/json`). Multipart is the exception: its header is generated at send time to carry the boundary.",
+        );
+    }
+
+    if let Some(body_schema) = properties.get_mut("body").and_then(Value::as_object_mut) {
+        append_description(
+            body_schema,
+            "Shape depends on `bodyType`. Text-ish types (`application/json`, `text/xml`, `other`) use `{\"text\": \"...\"}` where the value is a string, so JSON bodies are a JSON string containing JSON. Form types use `{\"form\": [{\"name\": \"a\", \"value\": \"1\", \"enabled\": true}]}`, and a multipart entry may use `file` (an absolute path) and `contentType` instead of `value`. `binary` uses `{\"filePath\": \"/abs/path\"}`. `graphql` uses `{\"query\": \"...\", \"variables\": \"{}\", \"operationName\": \"\"}` where `variables` is a string of JSON.",
+        );
+    }
 }
 
 fn append_description(schema: &mut Map<String, Value>, extra: &str) {

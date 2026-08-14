@@ -37,6 +37,13 @@ async fn main() {
 
     let exit_code = match command {
         Commands::Agent(args) => commands::agent::run(args),
+        Commands::TemplateFunction(args) => {
+            let mut context = CliContext::new(data_dir.clone(), app_id);
+            context.init_plugins(CliExecutionContext::default()).await;
+            let exit_code = commands::template_function::run(&context, args).await;
+            context.shutdown().await;
+            exit_code
+        }
         Commands::Auth(args) => commands::auth::run(args).await,
         Commands::Import(args) => {
             let mut context = CliContext::new(data_dir.clone(), app_id);

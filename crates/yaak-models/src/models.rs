@@ -949,7 +949,7 @@ pub struct ParentHeaders {
     pub headers: Vec<HttpRequestHeader>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "folders")]
