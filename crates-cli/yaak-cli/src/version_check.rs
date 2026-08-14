@@ -47,6 +47,8 @@ struct VersionCheckRequest<'a> {
     install_source: String,
     platform: &'a str,
     arch: &'a str,
+    // False when stdout is piped, e.g. a coding agent driving the CLI
+    interactive: bool,
 }
 
 pub async fn maybe_check_for_updates() {
@@ -102,11 +104,7 @@ fn should_skip_check() -> bool {
         return true;
     }
 
-    if std::env::var("CI").is_ok() {
-        return true;
-    }
-
-    !std::io::stdout().is_terminal()
+    std::env::var("CI").is_ok()
 }
 
 async fn fetch_version_check() -> Option<VersionCheckResponse> {
@@ -118,6 +116,7 @@ async fn fetch_version_check() -> Option<VersionCheckResponse> {
         install_source: install_source(),
         platform: std::env::consts::OS,
         arch: std::env::consts::ARCH,
+        interactive: std::io::stdout().is_terminal(),
     };
 
     let client = yaak_api_client(ApiClientKind::Cli, current_version).ok()?;

@@ -170,3 +170,6 @@ check the status.
 5. Never write a real secret into an environment variable on the user's behalf.
    Reference one and let them fill in the value.
 6. Verify what you built by sending it, and report the real HTTP status.
+7. If the CLI warns on stderr that a newer version is available, offer to run
+   the upgrade command it prints, then re-run `yaak agent install` so this
+   skill updates too.
