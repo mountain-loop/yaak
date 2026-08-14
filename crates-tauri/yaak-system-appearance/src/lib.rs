@@ -1,18 +1,17 @@
 use std::sync::{Arc, Mutex};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::time::Duration;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use log::{debug, warn};
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use tauri::Emitter;
 use tauri::{AppHandle, Runtime};
 
 pub const INITIAL_APPEARANCE_GLOBAL: &str = "__YAAK_INITIAL_APPEARANCE__";
-pub const INITIAL_APPEARANCE_SOURCE_GLOBAL: &str = "__YAAK_INITIAL_APPEARANCE_SOURCE__";
 pub const SYSTEM_APPEARANCE_CHANGE_EVENT: &str = "system_appearance_change";
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 const SYSTEM_APPEARANCE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,64 +29,53 @@ impl Appearance {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InitialAppearanceSource {
-    Settings,
-    LinuxSystem,
-}
-
-impl InitialAppearanceSource {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Settings => "settings",
-            Self::LinuxSystem => "linux-system",
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct SystemAppearanceState {
-    // Only read by the Linux polling thread
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     last_appearance: Arc<Mutex<Option<Appearance>>>,
 }
 
-pub fn initialization_script(appearance: Appearance, source: InitialAppearanceSource) -> String {
-    let appearance = appearance.as_str();
-    let source = source.as_str();
-    format!(
-        "window.{INITIAL_APPEARANCE_GLOBAL} = {appearance:?};\
-        window.{INITIAL_APPEARANCE_SOURCE_GLOBAL} = {source:?};"
-    )
+impl SystemAppearanceState {
+    pub fn last_appearance(&self) -> Option<Appearance> {
+        *self.last_appearance.lock().expect("system appearance lock poisoned")
+    }
 }
 
-#[cfg(target_os = "linux")]
+pub fn initialization_script(appearance: Appearance) -> String {
+    let appearance = appearance.as_str();
+    format!("window.{INITIAL_APPEARANCE_GLOBAL} = {appearance:?};")
+}
+
+/// Detect the appearance the OS prefers, independent of any appearance that has
+/// been forced onto app windows (which is what the webview itself reports).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn system_appearance() -> Option<Appearance> {
+    #[cfg(target_os = "linux")]
     if let Some(appearance) = gsettings_system_appearance() {
         return Some(appearance);
     }
 
+    // On macOS this reads AppleInterfaceStyle from the global user defaults
     match dark_light::detect() {
         Ok(dark_light::Mode::Dark) => Some(Appearance::Dark),
         Ok(dark_light::Mode::Light) => Some(Appearance::Light),
         Ok(dark_light::Mode::Unspecified) => None,
         Err(err) => {
-            debug!("Failed to detect Linux system appearance: {err:?}");
+            debug!("Failed to detect system appearance: {err:?}");
             None
         }
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn system_appearance() -> Option<Appearance> {
     None
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn watch<R: Runtime>(app_handle: AppHandle<R>) -> Option<SystemAppearanceState> {
     let last_appearance = system_appearance();
     if last_appearance.is_none() {
-        debug!("Linux system appearance detection unavailable");
+        debug!("System appearance detection unavailable");
         return None;
     }
 
@@ -103,12 +91,12 @@ pub fn watch<R: Runtime>(app_handle: AppHandle<R>) -> Option<SystemAppearanceSta
     Some(state)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn watch<R: Runtime>(_app_handle: AppHandle<R>) -> Option<SystemAppearanceState> {
     None
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn emit_change<R: Runtime>(app_handle: &AppHandle<R>, state: &SystemAppearanceState) {
     let appearance = system_appearance();
     let mut last_appearance =

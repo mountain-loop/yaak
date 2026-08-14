@@ -5,30 +5,34 @@ import type { Appearance } from "@yaakapp-internal/theme";
 import {
   applyThemeToDocument,
   getCSSAppearance,
+  getSystemAppearance,
+  getWindowAppearance,
   subscribeToPreferredAppearanceChange,
-  subscribeToSystemAppearanceChange,
 } from "@yaakapp-internal/theme";
 import { getSettings } from "./lib/settings";
 import { getResolvedTheme } from "./lib/themes";
 
-// NOTE: CSS appearance isn't as accurate as getting it async from the window (next step), but we want
-//  a good appearance guess so we're not waiting too long
-let preferredAppearance: Appearance = getInitialAppearance();
-let linuxSystemAppearanceAvailable =
-  platform.osType() === "linux" && window.__YAAK_INITIAL_APPEARANCE_SOURCE__ === "linux-system";
+// NOTE: The appearance the OS prefers (never the one the settings force). The backend
+//  injects it on macOS and Linux; the CSS guess is only a fallback until the async
+//  window value arrives below.
+let preferredAppearance: Appearance = getSystemAppearance() ?? getCSSAppearance();
 let configureThemeGeneration = 0;
 let windowShown = false;
 
 configureThemeAndShow().catch((err) => console.log("Failed to configure theme", err));
 
-subscribeToPreferredAppearanceChange(async (a) => {
-  if (linuxSystemAppearanceAvailable) return;
-  preferredAppearance = a;
-  await configureThemeAndShow();
-});
+if (getSystemAppearance() == null) {
+  // The initial appearance is only a guess, so confirm it with the window once it's available
+  getWindowAppearance()
+    .then(async (a) => {
+      if (a === preferredAppearance) return;
+      preferredAppearance = a;
+      await configureThemeAndShow();
+    })
+    .catch((err) => console.log("Failed to get window appearance", err));
+}
 
-subscribeToSystemAppearanceChange(async (a) => {
-  linuxSystemAppearanceAvailable = true;
+subscribeToPreferredAppearanceChange(async (a) => {
   preferredAppearance = a;
   await configureThemeAndShow();
 });
@@ -74,19 +78,4 @@ async function configureTheme(): Promise<boolean> {
   }
 
   return true;
-}
-
-function getInitialAppearance(): Appearance {
-  const initialAppearance = window.__YAAK_INITIAL_APPEARANCE__;
-  if (initialAppearance === "dark" || initialAppearance === "light") {
-    return initialAppearance;
-  }
-  return getCSSAppearance();
-}
-
-declare global {
-  interface Window {
-    __YAAK_INITIAL_APPEARANCE__?: Appearance;
-    __YAAK_INITIAL_APPEARANCE_SOURCE__?: "settings" | "linux-system";
-  }
 }

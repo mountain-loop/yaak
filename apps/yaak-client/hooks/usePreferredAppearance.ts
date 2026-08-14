@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
 import type { Appearance } from "@yaakapp-internal/theme";
-import { getCSSAppearance, subscribeToPreferredAppearance } from "@yaakapp-internal/theme";
+import {
+  getCSSAppearance,
+  getSystemAppearance,
+  subscribeToPreferredAppearance,
+} from "@yaakapp-internal/theme";
 
 export function usePreferredAppearance() {
-  const [preferredAppearance, setPreferredAppearance] = useState<Appearance>(getCSSAppearance());
+  const [preferredAppearance, setPreferredAppearance] = useState<Appearance>(
+    getSystemAppearance() ?? getCSSAppearance(),
+  );
   useEffect(() => subscribeToPreferredAppearance(setPreferredAppearance), []);
   return preferredAppearance;
 }
