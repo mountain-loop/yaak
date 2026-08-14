@@ -18,11 +18,12 @@ zstd = "0.13"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
 mime_guess = "2.0.5"
-native-tls = "0.2"
+native-tls = { version = "0.2", features = ["alpn"] }
 regex = "1.11.1"
 reqwest = { workspace = true, features = [
   "rustls-tls-manual-roots-no-provider",
   "native-tls",
+  "native-tls-alpn",
   "socks",
   "http2",
   "stream",
@@ -38,3 +39,6 @@ yaak-common = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

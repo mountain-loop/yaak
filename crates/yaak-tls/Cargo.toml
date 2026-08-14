@@ -14,3 +14,4 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = "2.0.17"
 url = "2.5"
 yaak-models = { workspace = true }
+yasna = "0.5"
