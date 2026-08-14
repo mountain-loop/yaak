@@ -159,10 +159,14 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
     Ok(())
 }
 
-fn initial_appearance_script() -> Option<String> {
+fn initial_appearance_script<R: Runtime>(app_handle: &AppHandle<R>) -> Option<String> {
     // Only report the appearance the OS prefers. The frontend needs it to resolve the
     // "automatic" setting, so the configured appearance is never a substitute for it.
-    let appearance = yaak_system_appearance::system_appearance()?;
+    //
+    // NOTE: The value comes from the watcher state, not a fresh detection, so the frontend
+    //  only ever sees a snapshot when the change events that keep it fresh are also flowing.
+    let state = app_handle.try_state::<yaak_system_appearance::SystemAppearanceState>()?;
+    let appearance = state.last_appearance()?;
     Some(yaak_system_appearance::initialization_script(appearance))
 }
 
@@ -1647,7 +1651,7 @@ async fn cmd_new_child_window<R: Runtime>(
     inner_size: (f64, f64),
 ) -> YaakResult<()> {
     let use_native_titlebar = parent_window.app_handle().db().get_settings().use_native_titlebar;
-    let initialization_script = initial_appearance_script();
+    let initialization_script = initial_appearance_script(&parent_window.app_handle());
     let win = yaak_window::window::create_child_window(
         &parent_window,
         url,
@@ -1664,7 +1668,7 @@ async fn cmd_new_child_window<R: Runtime>(
 #[tauri::command]
 async fn cmd_new_main_window<R: Runtime>(app_handle: AppHandle<R>, url: &str) -> YaakResult<()> {
     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
-    let initialization_script = initial_appearance_script();
+    let initialization_script = initial_appearance_script(&app_handle);
     let win = yaak_window::window::create_main_window(
         &app_handle,
         url,
@@ -1968,7 +1972,7 @@ pub fn run() {
             match event {
                 RunEvent::Ready => {
                     let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
-                    let initialization_script = initial_appearance_script();
+                    let initialization_script = initial_appearance_script(app_handle);
                     if let Ok(win) = yaak_window::window::create_main_window(
                         app_handle,
                         "/",

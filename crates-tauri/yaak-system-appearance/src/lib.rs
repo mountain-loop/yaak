@@ -31,9 +31,13 @@ impl Appearance {
 
 #[derive(Clone)]
 pub struct SystemAppearanceState {
-    // Only read by the polling thread
-    #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
     last_appearance: Arc<Mutex<Option<Appearance>>>,
+}
+
+impl SystemAppearanceState {
+    pub fn last_appearance(&self) -> Option<Appearance> {
+        *self.last_appearance.lock().expect("system appearance lock poisoned")
+    }
 }
 
 pub fn initialization_script(appearance: Appearance) -> String {
