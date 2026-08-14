@@ -130,10 +130,46 @@ strategy names are not always what you would guess — the built-ins are `basic`
 "authentication": {"location": "header", "key": "X-Api-Key", "value": "${[ api_key ]}"}
 ```
 
-The exact fields for each strategy, and which are required, are in the
-`authentication` property of `yaak request schema http --pretty`, which
-enumerates every installed strategy as a named variant. Read it rather than
-guessing — `oauth2` has fifteen fields and `jwt` requires four.
+OAuth 2.0 is the one to look up rather than attempt from memory. It has fifteen
+fields, six of them required, and `grantType` is an enum:
+
+```json
+"authenticationType": "oauth2",
+"authentication": {
+  "grantType": "client_credentials",
+  "clientId": "${[ client_id ]}",
+  "clientSecret": "${[ client_secret ]}",
+  "accessTokenUrl": "https://auth.example.com/oauth/token",
+  "scope": "read:pets",
+  "credentials": "body",
+  "tokenName": "access_token",
+  "headerName": "Authorization",
+  "usePkce": false,
+  "useExternalBrowser": false
+}
+```
+
+`grantType` accepts `authorization_code`, `implicit`, `password`, or
+`client_credentials`, and which other fields matter depends on which you pick:
+`authorization_code` also wants `authorizationUrl` and `redirectUri`, while
+`client_credentials` does not.
+
+The exact fields for every strategy, and which are required, come from the
+schema, which enumerates each installed strategy as a named variant under
+`authentication`:
+
+```bash
+# display name plus the value to use for authenticationType
+yaak request schema http | jq -r '.properties.authentication.oneOf[]
+  | select(.title) | "\(.title): \(.description)"'
+
+# the full shape of one strategy
+yaak request schema http | jq '.properties.authentication.oneOf[]
+  | select(.title == "OAuth 2.0")'
+```
+
+Because the list is built by loading plugins, it covers plugin-contributed
+strategies too, not just the built-ins. Read it rather than guessing.
 
 Set `authenticationType` to `null` to send no auth and stop inheriting from the
 parent folder.

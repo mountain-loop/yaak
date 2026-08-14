@@ -2,15 +2,16 @@
 name: use-yaak
 description: >
   Build and run HTTP API requests with the Yaak CLI (`yaak`): create workspaces,
-  folders, environments and variables, author HTTP requests, send them
-  individually or a whole folder/workspace at once, chain one request's response
-  into the next, and import existing APIs from OpenAPI, Postman, Insomnia, or
-  cURL. Use this skill whenever the user mentions Yaak, a Yaak workspace, or the
-  `yaak` command, and also when they ask to try, hit, call, exercise, or smoke
-  test an HTTP or REST endpoint, to save or organize API requests for reuse, to
-  set up API requests for manual testing, to turn an OpenAPI or Postman
-  collection into runnable requests, or to run a saved request suite against
-  staging versus production. Prefer this over one-off `curl` commands whenever
+  folders, environments and variables, author HTTP requests, configure
+  authentication (OAuth 2.0, bearer tokens, API keys, basic, JWT, AWS SigV4),
+  send them individually or a whole folder/workspace at once, chain one
+  request's response into the next, and import existing APIs from OpenAPI,
+  Postman, Insomnia, or cURL. Use this skill whenever the user mentions Yaak, a
+  Yaak workspace, or the `yaak` command, and also when they ask to try, hit,
+  call, exercise, or smoke test an HTTP or REST endpoint, to save or organize
+  API requests for reuse, to set up API requests for manual testing, to add auth
+  to a saved request, to turn an OpenAPI or Postman collection into runnable
+  requests, or to run a saved request suite against staging versus production. Prefer this over one-off `curl` commands whenever
   the requests should be saved, reused, shared, or run as a set.
 allowed-tools: Bash(yaak:*), Bash(which:*), Bash(command:*), Bash(npm:*), Bash(npx:*)
 ---
@@ -94,6 +95,32 @@ authentication variants:
 ```bash
 yaak request schema http --pretty
 ```
+
+That schema is also the authoritative list of **authentication strategies**,
+including ones contributed by plugins. Each appears as a named variant under
+`authentication`, with its own fields, required list, and enums, so there is
+never a reason to guess auth config:
+
+```bash
+# every installed strategy, with the value to use for authenticationType
+yaak request schema http | jq -r '.properties.authentication.oneOf[]
+  | select(.title) | "\(.title): \(.description)"'
+
+# the full shape of one of them
+yaak request schema http | jq '.properties.authentication.oneOf[]
+  | select(.title == "OAuth 2.0")'
+```
+
+The first prints lines like `OAuth 2.0: Authentication values for strategy
+'oauth2'`. **The title is a display label, not the value** — `authenticationType`
+takes the quoted strategy name, so NTLM Auth is `windows` and AWS Signature is
+`awsv4`.
+
+The second prints the fields. OAuth 2.0 has fifteen of them plus an enum of valid
+`grantType` values (`authorization_code`, `implicit`, `password`,
+`client_credentials`), which is exactly the sort of thing that comes out wrong
+when guessed. The command loads plugins, so it reflects what is actually
+installed rather than a fixed list, and it returns in well under a second.
 
 Rules that are easy to get wrong:
 
