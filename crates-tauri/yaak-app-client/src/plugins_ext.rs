@@ -285,6 +285,19 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             #[cfg(not(target_os = "windows"))]
             let node_bin_name = "yaaknode";
 
+            // In dev, spawn yaaknode from the source vendored dir, not the copy under
+            // target/. tauri-build rewrites the target copy in place when the source
+            // changes (e.g. a Node version bump between branches), and on macOS an
+            // in-place write permanently taints the inode's cached code signature —
+            // every later spawn of it dies with SIGKILL (Code Signature Invalid).
+            // vendor-node.cjs always recreates the source file on a fresh inode.
+            #[cfg(debug_assertions)]
+            let node_bin_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("vendored")
+                .join("node")
+                .join(node_bin_name);
+
+            #[cfg(not(debug_assertions))]
             let node_bin_path = app_handle
                 .path()
                 .resolve(format!("vendored/node/{}", node_bin_name), BaseDirectory::Resource)
