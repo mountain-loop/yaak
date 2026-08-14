@@ -88,11 +88,16 @@ fn remove(agent: Option<Vec<String>>) -> CommandResult {
     Ok(())
 }
 
-/// The skill directory belongs to the CLI, so every install replaces it wholesale.
-/// That keeps it exactly in step with the installed version, including dropping files
-/// an older version shipped. Preserving local edits would be worse than losing them:
-/// an edited file would be skipped by every future install and go stale forever,
-/// against a CLI that keeps changing.
+/// The skill directory belongs to the CLI, so every install overwrites what is there
+/// and prunes what this version no longer ships. Preserving local edits would be worse
+/// than losing them: an edited file would be skipped by every future install and go
+/// stale forever, against a CLI that keeps changing.
+///
+/// NOTE: atomicity is per file, not for the install as a whole. That is total today
+/// because the skill is a single file, but adding a second one would mean a reader
+/// could catch a mix of old and new files. Replacing the directory as a unit is not an
+/// option (`rename` refuses a non-empty destination), so a multi-file skill would need
+/// the published path to become a symlink swapped between versioned directories.
 fn write_skill(dir: &Path) -> CommandResult {
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create {}: {e}", dir.display()))?;
 
