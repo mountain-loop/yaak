@@ -44,6 +44,56 @@ impl<'a> ClientDb<'a> {
         Ok(count)
     }
 
+    /// Delete response body data (blob chunks and body files) whose owning HTTP
+    /// response row no longer exists. Cascaded deletes (request, folder,
+    /// workspace) historically never cleaned the blob DB or the responses
+    /// directory, so orphans accumulate; this runs in the background at startup.
+    ///
+    /// Safe against in-flight sends: the response row is created before its
+    /// body file or chunks are written.
+    ///
+    /// Returns the number of orphaned bodies deleted.
+    pub fn delete_orphaned_response_bodies(
+        &self,
+        blobs: &BlobManager,
+        responses_dir: &std::path::Path,
+    ) -> Result<usize> {
+        let mut deleted = 0;
+
+        // Blob chunks are keyed "{response_id}.request"
+        let blob_ctx = blobs.connect();
+        for body_id in blob_ctx.list_body_ids()? {
+            let response_id = body_id.split('.').next().unwrap_or_default();
+            if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some() {
+                continue;
+            }
+            blob_ctx.delete_chunks(&body_id)?;
+            deleted += 1;
+        }
+
+        // Body files are stored as {responses_dir}/{response_id}
+        if let Ok(entries) = fs::read_dir(responses_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+                let Some(response_id) = path.file_name().and_then(|n| n.to_str()) else {
+                    continue;
+                };
+                if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some()
+                {
+                    continue;
+                }
+                if fs::remove_file(&path).is_ok() {
+                    deleted += 1;
+                }
+            }
+        }
+
+        Ok(deleted)
+    }
+
     /// Returns the number of responses deleted.
     pub fn delete_all_http_responses_for_workspace(
         &self,
@@ -116,5 +166,70 @@ impl<'a> ClientDb<'a> {
         source: &UpdateSource,
     ) -> Result<HttpResponse> {
         if response.id.is_empty() { Ok(response.clone()) } else { self.upsert(response, source) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::blob_manager::BodyChunk;
+    use crate::init_in_memory;
+    use crate::models::{HttpRequest, HttpResponse, Workspace};
+    use crate::util::UpdateSource;
+
+    #[test]
+    fn deletes_orphaned_response_bodies() {
+        let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+
+        let source = &UpdateSource::Background;
+        let workspace = db
+            .upsert_workspace(&Workspace { name: "GC Test".to_string(), ..Default::default() }, source)
+            .expect("Failed to upsert workspace");
+        let request = db
+            .upsert_http_request(
+                &HttpRequest { workspace_id: workspace.id.clone(), ..Default::default() },
+                source,
+            )
+            .expect("Failed to upsert request");
+
+        let live = db
+            .upsert_http_response(
+                &HttpResponse {
+                    request_id: request.id.clone(),
+                    workspace_id: workspace.id.clone(),
+                    ..Default::default()
+                },
+                source,
+                &blob_manager,
+            )
+            .expect("Failed to upsert response");
+
+        let live_body_id = format!("{}.request", live.id);
+        {
+            // Scope the connection: the in-memory pool only has one, and the GC
+            // needs to take it
+            let blob_ctx = blob_manager.connect();
+            blob_ctx.insert_chunk(&BodyChunk::new(&live_body_id, 0, b"live".to_vec())).unwrap();
+            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone.request", 0, b"dead".to_vec())).unwrap();
+        }
+
+        let dir = std::env::temp_dir().join(format!("yaak-blob-gc-test-{}", live.id));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(&live.id), b"live").unwrap();
+        std::fs::write(dir.join("rs_gone"), b"dead").unwrap();
+
+        let deleted = db
+            .delete_orphaned_response_bodies(&blob_manager, &dir)
+            .expect("Failed to GC response bodies");
+        assert_eq!(deleted, 2);
+
+        // Live data survives, orphans are gone
+        let blob_ctx = blob_manager.connect();
+        assert!(blob_ctx.body_exists(&live_body_id).unwrap());
+        assert!(!blob_ctx.body_exists("rs_gone.request").unwrap());
+        assert!(dir.join(&live.id).exists());
+        assert!(!dir.join("rs_gone").exists());
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

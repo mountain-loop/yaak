@@ -377,6 +377,20 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
             let poll_query_manager = query_manager.clone();
 
+            // GC response bodies orphaned by cascade deletes, which historically
+            // didn't clean the blob DB or responses directory
+            let gc_query_manager = query_manager.clone();
+            let gc_blob_manager = blob_manager.clone();
+            let gc_responses_dir = app_path.join("responses");
+            tauri::async_runtime::spawn_blocking(move || {
+                let db = gc_query_manager.connect();
+                match db.delete_orphaned_response_bodies(&gc_blob_manager, &gc_responses_dir) {
+                    Ok(0) => {}
+                    Ok(n) => log::info!("Deleted {n} orphaned response bodies"),
+                    Err(e) => error!("Failed to delete orphaned response bodies: {e:?}"),
+                }
+            });
+
             app_handle.manage(query_manager);
             app_handle.manage(blob_manager);
 
