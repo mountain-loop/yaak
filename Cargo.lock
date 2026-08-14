@@ -11226,6 +11226,7 @@ dependencies = [
  "reqwest 0.12.20",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
@@ -11441,6 +11442,7 @@ dependencies = [
  "thiserror 2.0.17",
  "url",
  "yaak-models",
+ "yasna",
 ]
 
 [[package]]

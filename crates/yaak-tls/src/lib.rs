@@ -11,8 +11,17 @@ use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use yasna::models::ObjectIdentifier;
 
 pub mod error;
+
+const OID_RSA_ENCRYPTION: &[u64] = &[1, 2, 840, 113549, 1, 1, 1];
+const OID_EC_PUBLIC_KEY: &[u64] = &[1, 2, 840, 10045, 2, 1];
+
+/// Password for the PKCS#12 blob [`load_client_identity_pkcs12`] builds from PEM
+/// files. The blob never leaves the process, so the value only has to agree with
+/// the caller that immediately re-parses it.
+const IN_MEMORY_PKCS12_PASSWORD: &str = "yaak";
 
 #[derive(Clone, Default)]
 pub struct ClientCertificateConfig {
@@ -96,6 +105,101 @@ fn load_client_cert(
     }
 
     Ok(None)
+}
+
+/// Load the configured client certificate as PKCS#12 DER, along with the
+/// password needed to open it.
+///
+/// Native TLS stacks accept a client identity as either PKCS#12 or a PKCS#8
+/// PEM, and the PKCS#8 route rejects EC keys on macOS outright. Going through
+/// PKCS#12 keeps the key formats we accept identical to the rustls path, which
+/// reads PKCS#1 and SEC1 keys directly.
+pub fn load_client_identity_pkcs12(
+    client_cert: Option<ClientCertificateConfig>,
+) -> Result<Option<(Vec<u8>, String)>> {
+    let config = match client_cert {
+        None => return Ok(None),
+        Some(c) => c,
+    };
+
+    // Pass a user-supplied PFX through untouched. The OS parser understands more
+    // encryption algorithms than re-encoding it here would preserve.
+    if let Some(pfx_path) = &config.pfx_file {
+        if !pfx_path.is_empty() {
+            let data = fs::read(Path::new(pfx_path))?;
+            return Ok(Some((data, config.passphrase.clone().unwrap_or_default())));
+        }
+    }
+
+    let Some((certs, key)) = load_client_cert(Some(config))? else {
+        return Ok(None);
+    };
+
+    let key_der = to_pkcs8_der(&key)?;
+    let (leaf, cas) = certs.split_first().ok_or(GenericError("No certificates found".into()))?;
+    let cas: Vec<&[u8]> = cas.iter().map(|c| c.as_ref()).collect();
+
+    let pfx = p12::PFX::new_with_cas(leaf, &key_der, &cas, IN_MEMORY_PKCS12_PASSWORD, "yaak")
+        .ok_or(GenericError("Failed to build PKCS#12 from client certificate".into()))?;
+
+    Ok(Some((pfx.to_der(), IN_MEMORY_PKCS12_PASSWORD.to_string())))
+}
+
+/// Re-encode a private key as PKCS#8 DER, wrapping PKCS#1 and SEC1 keys.
+fn to_pkcs8_der(key: &PrivateKeyDer<'_>) -> Result<Vec<u8>> {
+    match key {
+        PrivateKeyDer::Pkcs8(k) => Ok(k.secret_pkcs8_der().to_vec()),
+        PrivateKeyDer::Pkcs1(k) => Ok(wrap_pkcs8(OID_RSA_ENCRYPTION, None, k.secret_pkcs1_der())),
+        PrivateKeyDer::Sec1(k) => {
+            let (curve, inner) = split_sec1(k.secret_sec1_der())?;
+            Ok(wrap_pkcs8(OID_EC_PUBLIC_KEY, Some(curve), &inner))
+        }
+        _ => Err(GenericError("Unsupported private key format".into())),
+    }
+}
+
+/// Build a PKCS#8 `PrivateKeyInfo` (RFC 5208) around an already-encoded key.
+fn wrap_pkcs8(algorithm: &[u64], parameters: Option<ObjectIdentifier>, key_der: &[u8]) -> Vec<u8> {
+    yasna::construct_der(|w| {
+        w.write_sequence(|w| {
+            w.next().write_u8(0);
+            w.next().write_sequence(|w| {
+                w.next().write_oid(&ObjectIdentifier::from_slice(algorithm));
+                match &parameters {
+                    Some(oid) => w.next().write_oid(oid),
+                    None => w.next().write_null(),
+                }
+            });
+            w.next().write_bytes(key_der);
+        })
+    })
+}
+
+/// Split a SEC1 `ECPrivateKey` (RFC 5915) into its named curve and a copy of the
+/// key with that curve removed. PKCS#8 carries the curve in the algorithm
+/// identifier, and RFC 5915 says it should not also be repeated inside the key.
+fn split_sec1(der: &[u8]) -> Result<(ObjectIdentifier, Vec<u8>)> {
+    yasna::parse_der(der, |r| {
+        r.read_sequence(|r| {
+            let version = r.next().read_u8()?;
+            let private_key = r.next().read_bytes()?;
+            let curve = r.next().read_tagged(yasna::Tag::context(0), |r| r.read_oid())?;
+            let public_key = r.read_optional(|r| r.read_tagged_der())?;
+
+            let inner = yasna::construct_der(|w| {
+                w.write_sequence(|w| {
+                    w.next().write_u8(version);
+                    w.next().write_bytes(&private_key);
+                    if let Some(public_key) = &public_key {
+                        w.next().write_tagged_der(public_key);
+                    }
+                })
+            });
+
+            Ok((curve, inner))
+        })
+    })
+    .map_err(|e| GenericError(format!("EC private key is missing a named curve: {e}")))
 }
 
 fn load_pem_files(
