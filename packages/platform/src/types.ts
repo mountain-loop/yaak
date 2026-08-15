@@ -141,6 +141,15 @@ export interface PlatformDialog {
 export interface PlatformFiles {
   readDir(path: string): Promise<DirEntry[]>;
 
+  /**
+   * The text of a file the user picked, decoded as UTF-8.
+   *
+   * Only for paths the host itself handed us — a dialog result or a drag-drop
+   * payload — never one the page assembled. A host without a filesystem reads
+   * whatever its own handle points at.
+   */
+  readText(path: string): Promise<string>;
+
   /** A URL the page can load a file from, for `<img>`, `<video>`, and friends. */
   url(path: string): string;
 

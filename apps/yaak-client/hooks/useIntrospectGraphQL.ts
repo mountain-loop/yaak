@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-
 import type { GraphQlIntrospection, HttpRequest } from "@yaakapp-internal/models";
+import { platform } from "@yaakapp-internal/platform";
 import type { GraphQLSchema, IntrospectionQuery } from "graphql";
 import { buildClientSchema, getIntrospectionQuery } from "graphql";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { tryBuildIntrospectionFromFile } from "../lib/graphqlSchema";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
 import { sendEphemeralRequest } from "../lib/sendEphemeralRequest";
 import { useActiveEnvironment } from "./useActiveEnvironment";
+import { useGraphQLSchemaFile } from "./useGraphQLSchemaFile";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
 import { rpc } from "../lib/rpc";
 
@@ -29,6 +31,11 @@ export function useIntrospectGraphQL(
   const queryClient = useQueryClient();
 
   const introspection = useIntrospectionResult(baseRequest);
+
+  // The schema's source. Outlives the introspection row it produces, so a
+  // request configured with a file keeps working after the row is swept.
+  const schemaFile = useGraphQLSchemaFile(baseRequest.id);
+  const filePath = schemaFile.value ?? null;
 
   const upsertIntrospection = useCallback(
     async (content: string | null) => {
@@ -92,14 +99,108 @@ export function useIntrospectGraphQL(
       return;
     }
 
-    refetch().catch(console.error);
-  }, [baseRequest.id, debouncedRequest.url, debouncedRequest.method, activeEnvironment?.id]);
+    // A request pointed at a file gets its schema from that file. Introspecting
+    // here would overwrite it on the next URL edit.
+    if (filePath != null) {
+      return;
+    }
 
+    refetch().catch(console.error);
+  }, [
+    baseRequest.id,
+    debouncedRequest.url,
+    debouncedRequest.method,
+    activeEnvironment?.id,
+    filePath,
+  ]);
+
+  // Clears the schema, not the source. Removing a file source is a separate
+  // action, because the source is what would rebuild this a moment later.
   const clear = useCallback(async () => {
     setError("");
     setSchema(null);
     await upsertIntrospection(null);
   }, [upsertIntrospection]);
+
+  // Reads a schema file and produces an introspection row from it, the same way
+  // `refetch` produces one from a server. Does not touch the stored source.
+  const introspectFromFile = useCallback(
+    async (path: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      try {
+        setIsLoading(true);
+        setError(undefined);
+
+        const fileContent = await platform.files.readText(path);
+        const result = tryBuildIntrospectionFromFile(fileContent);
+
+        if ("error" in result) {
+          setError(result.error);
+          return { ok: false, error: result.error };
+        }
+
+        await upsertIntrospection(result.content);
+        return { ok: true };
+      } catch (err) {
+        // The host rejects with a bare string for a missing or unreadable path,
+        // so this can't assume an Error.
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        return { ok: false, error: message };
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [upsertIntrospection],
+  );
+
+  // Points the request at a file and immediately builds its schema from it.
+  const loadFromFile = useCallback(
+    async (path: string) => {
+      const result = await introspectFromFile(path);
+      if (result.ok) await schemaFile.set(path);
+      return result;
+    },
+    [introspectFromFile, schemaFile],
+  );
+
+  const reloadFromFile = useCallback(async () => {
+    if (filePath == null) return { ok: false as const, error: "No schema file to reload" };
+    return introspectFromFile(filePath);
+  }, [filePath, introspectFromFile]);
+
+  // The file-source counterpart of automatic introspection: re-read the file
+  // when the request is opened, so an edited schema is picked up without asking.
+  //
+  // A missing row is repaired even with the setting off — that is recovering
+  // from the 7-day sweep, not keeping the schema fresh, and skipping it would
+  // make the schema disappear with no visible cause.
+  const reloadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (filePath == null || introspection.isLoading) return;
+    // Only attempt once per path, so an unreadable file doesn't spin.
+    if (reloadedFor.current === filePath) return;
+
+    const hasContent = (introspection.data?.content ?? "") !== "";
+    if (hasContent && options.disabled) return;
+
+    reloadedFor.current = filePath;
+    introspectFromFile(filePath).catch(console.error);
+  }, [
+    filePath,
+    introspection.data?.content,
+    introspection.isLoading,
+    introspectFromFile,
+    options.disabled,
+  ]);
+
+  // Stops using the file. The schema goes with it, since the file is what
+  // produced it; introspection repopulates if it's set to run automatically.
+  const removeSchemaFile = useCallback(async () => {
+    setError("");
+    setSchema(null);
+    await schemaFile.set(null);
+    await upsertIntrospection(null);
+  }, [schemaFile, upsertIntrospection]);
 
   useEffect(() => {
     if (introspection.data?.content == null || introspection.data.content === "") {
@@ -114,7 +215,17 @@ export function useIntrospectGraphQL(
     }
   }, [introspection.data?.content]);
 
-  return { schema, isLoading, error, refetch, clear };
+  return {
+    schema,
+    isLoading,
+    error,
+    refetch,
+    clear,
+    loadFromFile,
+    reloadFromFile,
+    removeSchemaFile,
+    filePath,
+  };
 }
 
 function useIntrospectionResult(request: HttpRequest) {

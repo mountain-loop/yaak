@@ -5,7 +5,7 @@ import { basename, resolveResource } from "@tauri-apps/api/path";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { clear, readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readDir, readFile } from "@tauri-apps/plugin-fs";
+import { readDir, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { type as osType } from "@tauri-apps/plugin-os";
 import type {
@@ -137,6 +137,7 @@ export function createTauriPlatform(): Platform {
 
     files: {
       readDir: (path) => readDir(path),
+      readText: (path) => readTextFile(path),
       url: (path) => convertFileSrc(path),
       basename: (path) => basename(path),
       resolveResource: (path) => resolveResource(path),
