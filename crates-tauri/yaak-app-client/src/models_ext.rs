@@ -144,28 +144,10 @@ pub(crate) fn models_upsert<R: Runtime>(
     window: WebviewWindow<R>,
     model: AnyModel,
 ) -> Result<String> {
-    use yaak_models::error::Error::GenericError;
-
     let db = window.db();
     let blobs = window.blob_manager();
     let source = &UpdateSource::from_window_label(window.label());
-    let id = match model {
-        AnyModel::CookieJar(m) => db.upsert_cookie_jar(&m, source)?.id,
-        AnyModel::Environment(m) => db.upsert_environment(&m, source)?.id,
-        AnyModel::Folder(m) => db.upsert_folder(&m, source)?.id,
-        AnyModel::GrpcRequest(m) => db.upsert_grpc_request(&m, source)?.id,
-        AnyModel::HttpRequest(m) => db.upsert_http_request(&m, source)?.id,
-        AnyModel::HttpResponse(m) => db.upsert_http_response(&m, source, &blobs)?.id,
-        AnyModel::KeyValue(m) => db.upsert_key_value(&m, source)?.id,
-        AnyModel::Plugin(m) => db.upsert_plugin(&m, source)?.id,
-        AnyModel::Settings(m) => db.upsert_settings(&m, source)?.id,
-        AnyModel::WebsocketRequest(m) => db.upsert_websocket_request(&m, source)?.id,
-        AnyModel::Workspace(m) => db.upsert_workspace(&m, source)?.id,
-        AnyModel::WorkspaceMeta(m) => db.upsert_workspace_meta(&m, source)?.id,
-        a => return Err(GenericError(format!("Cannot upsert AnyModel {a:?})"))),
-    };
-
-    Ok(id)
+    yaak::models_ops::upsert_model(&db, &blobs, model, source)
 }
 
 // Async so cascading deletes (e.g. a workspace with thousands of requests) run on a
@@ -181,21 +163,7 @@ pub(crate) async fn models_delete<R: Runtime>(
         // Use transaction for deletions because it might recurse
         window.with_tx(|tx| {
             let source = &UpdateSource::from_window_label(window.label());
-            let id = match model {
-                AnyModel::CookieJar(m) => tx.delete_cookie_jar(&m, source)?.id,
-                AnyModel::Environment(m) => tx.delete_environment(&m, source)?.id,
-                AnyModel::Folder(m) => tx.delete_folder(&m, source)?.id,
-                AnyModel::GrpcConnection(m) => tx.delete_grpc_connection(&m, source)?.id,
-                AnyModel::GrpcRequest(m) => tx.delete_grpc_request(&m, source)?.id,
-                AnyModel::HttpRequest(m) => tx.delete_http_request(&m, source)?.id,
-                AnyModel::HttpResponse(m) => tx.delete_http_response(&m, source, &blobs)?.id,
-                AnyModel::Plugin(m) => tx.delete_plugin(&m, source)?.id,
-                AnyModel::WebsocketConnection(m) => tx.delete_websocket_connection(&m, source)?.id,
-                AnyModel::WebsocketRequest(m) => tx.delete_websocket_request(&m, source)?.id,
-                AnyModel::Workspace(m) => tx.delete_workspace(&m, source, &blobs)?.id,
-                a => return Err(GenericError(format!("Cannot delete AnyModel {a:?})"))),
-            };
-            Ok(id)
+            yaak::models_ops::delete_model(tx, &blobs, model, source)
         })
     })
     .await
@@ -207,31 +175,10 @@ pub(crate) fn models_duplicate<R: Runtime>(
     model_type: String,
     model_id: String,
 ) -> Result<String> {
-    use yaak_models::error::Error::GenericError;
-
     // Use transaction for duplications because it might recurse
     window.with_tx(|tx| {
         let source = &UpdateSource::from_window_label(window.label());
-        // Fetch the model fresh from the DB so the duplicate doesn't come from
-        // a stale frontend snapshot
-        let id = match model_type.as_str() {
-            "environment" => {
-                tx.duplicate_environment(&tx.get_environment(&model_id)?, source)?.id
-            }
-            "folder" => tx.duplicate_folder(&tx.get_folder(&model_id)?, source)?.id,
-            "grpc_request" => {
-                tx.duplicate_grpc_request(&tx.get_grpc_request(&model_id)?, source)?.id
-            }
-            "http_request" => {
-                tx.duplicate_http_request(&tx.get_http_request(&model_id)?, source)?.id
-            }
-            "websocket_request" => {
-                tx.duplicate_websocket_request(&tx.get_websocket_request(&model_id)?, source)?.id
-            }
-            t => return Err(GenericError(format!("Cannot duplicate model type {t}"))),
-        };
-
-        Ok(id)
+        yaak::models_ops::duplicate_model(tx, &model_type, &model_id, source)
     })
 }
 
