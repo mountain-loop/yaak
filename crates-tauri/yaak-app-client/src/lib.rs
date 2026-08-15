@@ -8,7 +8,6 @@ use crate::import::{import_data, import_url};
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_json_value, render_template};
-use crate::rpc_ext::EphemeralHttpResponse;
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use crate::uri_scheme::handle_deep_link;
 use error::Result as YaakResult;
@@ -57,6 +56,7 @@ use yaak_plugins::events::{
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_meta::{PluginMetadata, get_plugin_meta};
 use yaak_plugins::template_callback::PluginTemplateCallback;
+use yaak_rpc_schema::{AppMetaData, EphemeralHttpResponse};
 use yaak_sse::sse::ServerSentEvent;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_templates::format_json::format_json;
@@ -182,22 +182,6 @@ impl<R: Runtime> PluginContextExt<R> for WebviewWindow<R> {
     fn plugin_context(&self) -> PluginContext {
         PluginContext::new(Some(self.label().to_string()), self.workspace_id())
     }
-}
-
-#[derive(serde::Serialize, ts_rs::TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_rpc.ts")]
-pub struct AppMetaData {
-    is_dev: bool,
-    version: String,
-    cli_version: Option<String>,
-    name: String,
-    app_data_dir: String,
-    app_log_dir: String,
-    vendored_plugin_dir: String,
-    default_project_dir: String,
-    feature_updater: bool,
-    feature_license: bool,
 }
 
 async fn cmd_metadata<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<AppMetaData> {

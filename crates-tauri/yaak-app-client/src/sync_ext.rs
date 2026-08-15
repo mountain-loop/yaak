@@ -6,11 +6,10 @@ use crate::error::Result;
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use chrono::Utc;
 use log::warn;
-use serde::{Deserialize, Serialize};
 use std::path::Path;
 use tauri::{AppHandle, Listener, Runtime};
 use tokio::sync::watch;
-use ts_rs::TS;
+use yaak_rpc_schema::WatchResult;
 use yaak_sync::error::Error::InvalidSyncDirectory;
 use yaak_sync::sync::{
     FsCandidate, SyncOp, apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates,
@@ -55,13 +54,6 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
     let sync_state_ops = apply_sync_ops(&db, &blobs, workspace_id, sync_dir, sync_ops)?;
     apply_sync_state_ops(&db, workspace_id, sync_dir, sync_state_ops)?;
     Ok(())
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "index.ts")]
-pub(crate) struct WatchResult {
-    unlisten_event: String,
 }
 
 pub(crate) async fn sync_watch<R, F>(

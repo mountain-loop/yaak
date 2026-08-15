@@ -1,5 +1,5 @@
 import { platform } from "@yaakapp-internal/platform";
-import type { WatchResult } from "@yaakapp-internal/tauri-client";
+import type { WatchResult } from "@yaakapp-internal/rpc-schema";
 import { SyncOp } from "./bindings/gen_sync";
 import { WatchEvent } from "./bindings/gen_watch";
 

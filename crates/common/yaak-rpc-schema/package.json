@@ -1,0 +1,6 @@
+{
+  "name": "@yaakapp-internal/rpc-schema",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts"
+}

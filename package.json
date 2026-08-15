@@ -58,6 +58,7 @@
     "crates-tauri/yaak-fonts",
     "crates-tauri/yaak-license",
     "crates-tauri/yaak-mac-window",
+    "crates/common/yaak-rpc-schema",
     "crates/yaak-crypto",
     "crates/yaak-git",
     "crates/yaak-models",

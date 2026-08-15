@@ -11035,6 +11035,7 @@ dependencies = [
  "yaak-models",
  "yaak-plugins",
  "yaak-rpc",
+ "yaak-rpc-schema",
  "yaak-sse",
  "yaak-sync",
  "yaak-system-appearance",
@@ -11370,6 +11371,22 @@ dependencies = [
  "serde",
  "serde_json",
  "ts-rs",
+]
+
+[[package]]
+name = "yaak-rpc-schema"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "ts-rs",
+ "yaak-git",
+ "yaak-grpc",
+ "yaak-models",
+ "yaak-plugins",
+ "yaak-sse",
+ "yaak-sync",
+ "yaak-templates",
+ "yaak-ws",
 ]
 
 [[package]]
