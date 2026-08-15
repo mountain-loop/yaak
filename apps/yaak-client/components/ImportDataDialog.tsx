@@ -43,7 +43,7 @@ export function ImportDataDialog({ importFile, importUrl }: Props) {
 
   const selectSource = (value: string) => {
     setSource(value);
-    // Remount the URL input so it reflects the newly-picked file
+    // Remount the input so it shows the path of the newly-picked file
     setForceUpdateKey((k) => k + 1);
   };
 
@@ -98,15 +98,18 @@ export function ImportDataDialog({ importFile, importUrl }: Props) {
         )}
       >
         <Icon icon="folder_input" className="text-text-subtlest w-8! h-8! mb-2" />
-        {filePath == null ? (
-          <div className="text-text">
-            <strong className="font-semibold">Choose a file</strong> or drag it here
-          </div>
-        ) : (
-          <div className="text-text font-mono text-xs w-full truncate" title={filePath}>
-            {fileName(filePath)}
-          </div>
-        )}
+        {/* Fixed height so the region doesn't resize between the empty and selected states */}
+        <div className="h-6 w-full flex items-center justify-center">
+          {filePath == null ? (
+            <div className="text-text">
+              <strong className="font-semibold">Choose a file</strong> or drag it here
+            </div>
+          ) : (
+            <div className="text-text font-mono text-xs max-w-full truncate" title={filePath}>
+              {fileName(filePath)}
+            </div>
+          )}
+        </div>
         <div className="text-xs text-text-subtlest">
           Supports OpenAPI, Swagger, Postman, Insomnia, and curl
         </div>
@@ -114,10 +117,10 @@ export function ImportDataDialog({ importFile, importUrl }: Props) {
 
       <VStack space={2}>
         <PlainInput
-          label="Or enter a URL"
+          label="Or enter a file path or URL"
           size="sm"
           placeholder="https://example.com/openapi.json"
-          defaultValue={filePath == null ? (source ?? "") : ""}
+          defaultValue={source ?? ""}
           forceUpdateKey={String(forceUpdateKey)}
           onChange={setSource}
         />
