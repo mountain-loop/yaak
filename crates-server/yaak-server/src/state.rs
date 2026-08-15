@@ -84,6 +84,14 @@ impl BridgeCapabilities {
     }
 }
 
+/// Where a response's body is, and what it is meant to be read as.
+pub struct ResponseBodyLocation {
+    /// None when the response has no stored body.
+    pub path: Option<PathBuf>,
+    /// The response's declared `Content-Type`, empty when it has none.
+    pub content_type: String,
+}
+
 pub struct BridgeState {
     data_dir: PathBuf,
     query_manager: QueryManager,
@@ -197,6 +205,28 @@ impl BridgeState {
 
     pub fn response_dir(&self) -> PathBuf {
         self.data_dir.join("responses")
+    }
+
+    /// Find a response's body from its id alone.
+    ///
+    /// The tab hands back an id and never a path, so the only bodies reachable
+    /// through the bridge are ones the engine wrote and the database still
+    /// knows about. Every route and command that reads a body goes through
+    /// here for that reason.
+    pub fn locate_response_body(
+        &self,
+        response_id: &str,
+    ) -> yaak_models::error::Result<ResponseBodyLocation> {
+        let response = self.db().get_http_response(response_id)?;
+        Ok(ResponseBodyLocation {
+            path: response.body_path.map(PathBuf::from),
+            content_type: response
+                .headers
+                .iter()
+                .find(|h| h.name.eq_ignore_ascii_case("content-type"))
+                .map(|h| h.value.clone())
+                .unwrap_or_default(),
+        })
     }
 
     pub fn db(&self) -> ClientDb<'_> {

@@ -63,17 +63,6 @@ function detectOsType(): OsType {
 }
 
 /**
- * A response body path is an opaque handle the backend minted, and the bridge
- * writes them as `<data dir>/responses/<response id>`. Taking the last segment
- * turns it back into the id the `/responses/{id}/body` route wants, which keeps
- * the server from ever being asked for a path chosen by the page.
- */
-function responseIdFromBodyPath(path: string): string {
-  const segments = path.split(/[/\\]/);
-  return segments[segments.length - 1] ?? path;
-}
-
-/**
  * Answer the Tauri host-plugin commands, which ride outside the RPC envelope.
  *
  * `set_title` has a real browser equivalent. `set_theme` paints the native
@@ -221,25 +210,34 @@ export function createBridgePlatform(baseUrl: string, token: string | null): Pla
     },
 
     files: {
-      async readFile(path) {
-        const res = await connection.fetch(`/responses/${responseIdFromBodyPath(path)}/body`);
+      readDir: async () => {
+        throw unsupported("Browsing the filesystem");
+      },
+      // No filesystem here, so a path is just a string this host echoes back.
+      url: (path) => path,
+      basename: async (path) => path.split(/[/\\]/).pop() ?? path,
+      resolveResource: async (path) => path,
+    },
+
+    // Bodies live on the bridge's disk and are addressed by response id. The
+    // server resolves the id through its database, so a page can only ever
+    // reach a body the engine actually wrote.
+    blobs: {
+      async read(id) {
+        const res = await connection.fetch(`/responses/${encodeURIComponent(id)}/body`);
+        if (res.status === 404) return null;
         if (!res.ok) {
           throw new Error(`Failed to read response body (${res.status})`);
         }
         return new Uint8Array(await res.arrayBuffer());
       },
 
-      readDir: async () => {
-        throw unsupported("Browsing the filesystem");
-      },
-
       // The `<img src>`/`<video src>` equivalent of Tauri's `convertFileSrc`.
       // The token rides in the query because the browser makes these requests
       // itself and the page cannot add a header to them.
-      url: (path) => connection.url(`/responses/${responseIdFromBodyPath(path)}/body`),
-
-      basename: async (path) => path.split(/[/\\]/).pop() ?? path,
-      resolveResource: async (path) => path,
+      async url(id) {
+        return connection.url(`/responses/${encodeURIComponent(id)}/body`);
+      },
     },
 
     rpc: <T,>(cmd: string, payload?: RpcPayload): Promise<T> => {

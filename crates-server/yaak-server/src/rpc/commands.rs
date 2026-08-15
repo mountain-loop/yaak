@@ -490,27 +490,22 @@ async fn cmd_send_ephemeral_request(
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CmdHttpResponseBodyReq {
-    pub response: HttpResponse,
+    pub response_id: String,
     pub filter: Option<String>,
 }
 
+/// The frontend hands back an id and never a path, so the only bodies reachable
+/// here are ones the engine wrote and the database still knows about.
 async fn cmd_http_response_body(
     ctx: BridgeCtx,
     req: CmdHttpResponseBodyReq,
 ) -> Result<FilterResponse> {
-    let Some(body_path) = req.response.body_path else {
+    let location = ctx.state.locate_response_body(&req.response_id).map_err(err)?;
+    let Some(body_path) = location.path else {
         return Ok(FilterResponse { content: String::new(), error: None });
     };
 
-    let content_type = req
-        .response
-        .headers
-        .iter()
-        .find_map(|h| {
-            if h.name.eq_ignore_ascii_case("content-type") { Some(h.value.as_str()) } else { None }
-        })
-        .unwrap_or_default();
-
+    let content_type = location.content_type.as_str();
     let body = read_response_body(&body_path, content_type)
         .await
         .ok_or_else(|| RpcError { message: "Failed to find response body".to_string() })?;
@@ -523,6 +518,24 @@ async fn cmd_http_response_body(
             .map_err(err),
         _ => Ok(FilterResponse { content: body, error: None }),
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CmdHttpResponseBodyPathReq {
+    pub response_id: String,
+}
+
+/// The desktop host uses this to open the file itself. A tab cannot open a
+/// path, so the bridge's browser host never calls it — it fetches
+/// `/responses/:id/body` instead — but the command answers honestly for any
+/// client that does, with the path on the bridge's machine.
+async fn cmd_http_response_body_path(
+    ctx: BridgeCtx,
+    req: CmdHttpResponseBodyPathReq,
+) -> Result<Option<String>> {
+    let location = ctx.state.locate_response_body(&req.response_id).map_err(err)?;
+    Ok(location.path.map(|p| p.to_string_lossy().to_string()))
 }
 
 /// Decode a response body from disk using the charset its Content-Type
@@ -576,16 +589,21 @@ async fn cmd_get_http_response_events(
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CmdGetSseEventsReq {
-    pub file_path: String,
+    pub response_id: String,
 }
 
 async fn cmd_get_sse_events(
-    _ctx: BridgeCtx,
+    ctx: BridgeCtx,
     req: CmdGetSseEventsReq,
 ) -> Result<Vec<ServerSentEvent>> {
     use eventsource_client::{EventParser, SSE};
 
-    let body = std::fs::read(&req.file_path).map_err(err)?;
+    let Some(body_path) = ctx.state.locate_response_body(&req.response_id).map_err(err)?.path
+    else {
+        return Ok(Vec::new());
+    };
+
+    let body = std::fs::read(&body_path).map_err(err)?;
     let mut event_parser = EventParser::new();
     event_parser.process_bytes(body).map_err(err)?;
 
@@ -1107,6 +1125,7 @@ rpc_commands! {
     cmd_send_ephemeral_request,
 
     cmd_http_response_body,
+    cmd_http_response_body_path,
     cmd_http_request_body,
     cmd_get_http_response_events,
     cmd_get_sse_events,

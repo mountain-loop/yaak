@@ -247,12 +247,12 @@ async fn response_body(
     Query(_q): Query<BodyQuery>,
     headers: HeaderMap,
 ) -> Response {
-    let response = match app.state.db().get_http_response(&id) {
-        Ok(response) => response,
+    let location = match app.state.locate_response_body(&id) {
+        Ok(location) => location,
         Err(_) => return (StatusCode::NOT_FOUND, "No such response").into_response(),
     };
 
-    let Some(body_path) = response.body_path else {
+    let Some(body_path) = location.path else {
         return (StatusCode::NOT_FOUND, "Response has no body").into_response();
     };
 
@@ -269,12 +269,11 @@ async fn response_body(
         }
     };
 
-    let content_type = response
-        .headers
-        .iter()
-        .find(|h| h.name.eq_ignore_ascii_case("content-type"))
-        .map(|h| h.value.clone())
-        .unwrap_or_else(|| "application/octet-stream".to_string());
+    let content_type = if location.content_type.is_empty() {
+        "application/octet-stream".to_string()
+    } else {
+        location.content_type
+    };
 
     let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok()).and_then(parse_range);
 
