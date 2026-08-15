@@ -25,6 +25,10 @@ export function useSaveResponse(response: HttpResponse | null) {
         defaultPath: ext ? `${slug}.${ext}` : slug,
         title: "Save Response",
       });
+      if (filepath == null) {
+        return; // Cancelled
+      }
+
       await rpc("cmd_save_response", { responseId: response.id, filepath });
       showToast({
         message: (
