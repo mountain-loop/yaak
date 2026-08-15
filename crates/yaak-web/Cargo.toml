@@ -16,15 +16,22 @@ wasm-opt = false # Matches yaak-templates; wasm-opt has caused errors in CI
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# The whole crate is `#![cfg(target_arch = "wasm32")]`: on a native target it
+# is empty, so a workspace-wide `cargo test` neither builds SQLite's wasm shim
+# for the host (which fails) nor links a browser-only runtime. Everything that
+# only exists for wasm is a target-scoped dependency for the same reason.
+
 [dependencies]
-console_error_panic_hook = "0.1"
-js-sys = "0.3"
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde-wasm-bindgen = "0.6.5"
 serde_json = { workspace = true }
+yaak-models = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6.5"
 sqlite-wasm-rs = "0.5"
 sqlite-wasm-vfs = "0.2"
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4"
-yaak-models = { workspace = true }

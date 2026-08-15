@@ -15,6 +15,11 @@
 //! its model store coherent, and blob storage. Sending, plugins, git, sync and
 //! everything else with a socket or a filesystem behind it lives elsewhere.
 
+// Nothing in here means anything off wasm32, and building it there would drag
+// SQLite's wasm C shim into a native compile. So on any other target the crate
+// is empty — a workspace-wide `cargo test` passes through it.
+#![cfg(target_arch = "wasm32")]
+
 use std::cell::RefCell;
 use std::sync::mpsc;
 

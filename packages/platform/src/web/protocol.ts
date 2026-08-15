@@ -38,8 +38,13 @@ export type FromWorker =
 export const WORKER_NAME = "yaak-db";
 
 /**
- * The Web Lock a dedicated (non-shared) worker takes so a second tab cannot
- * open a second SQLite over the same pages. Shared workers don't need it: the
- * browser guarantees one of them.
+ * The Web Lock every worker takes before opening the database, shared or not.
+ *
+ * A SharedWorker is the *preferred* owner because the browser gives all tabs
+ * the same one — but it is not the *guarantee*. A tab that gave up waiting for
+ * a slow shared worker and fell back to a dedicated one must not find the
+ * shared worker starting up behind it and opening a second SQLite over the
+ * same pages. The lock is what makes "one database owner per origin" true no
+ * matter how the workers arrived.
  */
 export const DB_LOCK_NAME = "yaak-db";

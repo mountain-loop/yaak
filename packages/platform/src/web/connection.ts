@@ -137,6 +137,12 @@ export class WorkerConnection {
    * only then gives up on sharing and takes a dedicated worker.
    */
   private replaceWorker(why: string): void {
+    // Let go of the port that never answered. If a slow shared worker does
+    // come up later, it will find its port closed and — since it takes the
+    // same lock the replacement takes — cannot open the database beneath us.
+    if (this.port instanceof MessagePort) this.port.close();
+    else this.port.terminate();
+
     if (this.sharedAttempts < MAX_SHARED_ATTEMPTS) {
       console.warn(`Reconnecting to the database worker (${why})`);
       this.port = this.connectShared();
