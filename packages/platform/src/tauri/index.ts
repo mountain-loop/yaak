@@ -104,6 +104,17 @@ async function rpc<T>(cmd: string, payload?: RpcPayload): Promise<T> {
   }
 }
 
+/**
+ * Where the backend put a response's body, or null if it has none.
+ *
+ * The app holds response ids and nothing else; a path exists for exactly as
+ * long as it takes this host to open the file, which is the one thing a desktop
+ * host can do that a tab cannot.
+ */
+function responseBodyPath(responseId: string): Promise<string | null> {
+  return rpc<string | null>("cmd_http_response_body_path", { responseId });
+}
+
 export function createTauriPlatform(): Platform {
   const window = createWindow();
 
@@ -124,11 +135,20 @@ export function createTauriPlatform(): Platform {
     },
 
     files: {
-      readFile: (path) => readFile(path),
       readDir: (path) => readDir(path),
       url: (path) => convertFileSrc(path),
       basename: (path) => basename(path),
       resolveResource: (path) => resolveResource(path),
+
+      async readResponseBody(responseId) {
+        const path = await responseBodyPath(responseId);
+        return path == null ? null : readFile(path);
+      },
+
+      async responseBodyUrl(responseId) {
+        const path = await responseBodyPath(responseId);
+        return path == null ? null : convertFileSrc(path);
+      },
     },
 
     rpc,

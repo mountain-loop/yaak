@@ -63,14 +63,13 @@ function detectOsType(): OsType {
 }
 
 /**
- * A response body path is an opaque handle the backend minted, and the bridge
- * writes them as `<data dir>/responses/<response id>`. Taking the last segment
- * turns it back into the id the `/responses/{id}/body` route wants, which keeps
- * the server from ever being asked for a path chosen by the page.
+ * The route that serves a response body, keyed by the response id.
+ *
+ * The bridge resolves the id against its own database, so this is the only
+ * thing the page ever has to know about where a body lives.
  */
-function responseIdFromBodyPath(path: string): string {
-  const segments = path.split(/[/\\]/);
-  return segments[segments.length - 1] ?? path;
+function responseBodyRoute(responseId: string): string {
+  return `/responses/${encodeURIComponent(responseId)}/body`;
 }
 
 /**
@@ -221,25 +220,33 @@ export function createBridgePlatform(baseUrl: string, token: string | null): Pla
     },
 
     files: {
-      async readFile(path) {
-        const res = await connection.fetch(`/responses/${responseIdFromBodyPath(path)}/body`);
+      readDir: async () => {
+        throw unsupported("Browsing the filesystem");
+      },
+
+      // App resources are served by the page's own origin, so the path the
+      // caller resolved is already a URL a tab can load.
+      url: (path) => path,
+
+      basename: async (path) => path.split(/[/\\]/).pop() ?? path,
+      resolveResource: async (path) => path,
+
+      // The route takes the response id and looks the body up itself, so the
+      // page never names a file — the same reason the desktop asks the backend
+      // for the path instead of building one.
+      async readResponseBody(responseId) {
+        const res = await connection.fetch(responseBodyRoute(responseId));
+        if (res.status === 404) return null;
         if (!res.ok) {
           throw new Error(`Failed to read response body (${res.status})`);
         }
         return new Uint8Array(await res.arrayBuffer());
       },
 
-      readDir: async () => {
-        throw unsupported("Browsing the filesystem");
-      },
-
       // The `<img src>`/`<video src>` equivalent of Tauri's `convertFileSrc`.
       // The token rides in the query because the browser makes these requests
       // itself and the page cannot add a header to them.
-      url: (path) => connection.url(`/responses/${responseIdFromBodyPath(path)}/body`),
-
-      basename: async (path) => path.split(/[/\\]/).pop() ?? path,
-      resolveResource: async (path) => path,
+      responseBodyUrl: async (responseId) => connection.url(responseBodyRoute(responseId)),
     },
 
     rpc: <T,>(cmd: string, payload?: RpcPayload): Promise<T> => {

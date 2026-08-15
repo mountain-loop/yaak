@@ -1,4 +1,5 @@
 use crate::render::render_http_request;
+use crate::responses::response_body_path;
 use async_trait::async_trait;
 use log::warn;
 use std::path::{Path, PathBuf};
@@ -660,7 +661,7 @@ pub async fn send_http_request<T: TemplateCallback>(
             source,
         }
     })?;
-    let body_path = params.response_dir.join(&response.id);
+    let body_path = response_body_path(params.response_dir, &response.id);
     let response_body_path = body_path.to_string_lossy().to_string();
     let connected_response = HttpResponse {
         state: HttpResponseState::Connected,

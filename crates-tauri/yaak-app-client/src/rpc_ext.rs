@@ -268,8 +268,15 @@ pub(crate) struct CmdFormatGraphqlReq {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub(crate) struct CmdHttpResponseBodyReq {
-    pub response: HttpResponse,
+    pub response_id: String,
     pub filter: Option<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub(crate) struct CmdHttpResponseBodyPathReq {
+    pub response_id: String,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -283,7 +290,7 @@ pub(crate) struct CmdHttpRequestBodyReq {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub(crate) struct CmdGetSseEventsReq {
-    pub file_path: String,
+    pub response_id: String,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -983,15 +990,19 @@ async fn cmd_format_graphql<R: Runtime>(_ctx: ClientCtx<R>, req: CmdFormatGraphq
 }
 
 async fn cmd_http_response_body<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpResponseBodyReq) -> Result<FilterResponse> {
-    Ok(crate::cmd_http_response_body(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>(), req.response, req.filter.as_deref()).await?)
+    Ok(crate::cmd_http_response_body(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>(), &req.response_id, req.filter.as_deref()).await?)
+}
+
+async fn cmd_http_response_body_path<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpResponseBodyPathReq) -> Result<Option<String>> {
+    Ok(crate::cmd_http_response_body_path(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
 async fn cmd_http_request_body<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestBodyReq) -> Result<Option<Vec<u8>>> {
     Ok(crate::cmd_http_request_body(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
-async fn cmd_get_sse_events<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGetSseEventsReq) -> Result<Vec<ServerSentEvent>> {
-    Ok(crate::cmd_get_sse_events(&req.file_path).await?)
+async fn cmd_get_sse_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetSseEventsReq) -> Result<Vec<ServerSentEvent>> {
+    Ok(crate::cmd_get_sse_events(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
 async fn cmd_get_http_response_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpResponseEventsReq) -> Result<Vec<HttpResponseEvent>> {
@@ -1371,6 +1382,7 @@ rpc_commands! {
     cmd_format_json(CmdFormatJsonReq) -> String,
     cmd_format_graphql(CmdFormatGraphqlReq) -> String,
     cmd_http_response_body(CmdHttpResponseBodyReq) -> FilterResponse,
+    cmd_http_response_body_path(CmdHttpResponseBodyPathReq) -> Option<String>,
     cmd_http_request_body(CmdHttpRequestBodyReq) -> Option<Vec<u8>>,
     cmd_get_sse_events(CmdGetSseEventsReq) -> Vec<ServerSentEvent>,
     cmd_get_http_response_events(CmdGetHttpResponseEventsReq) -> Vec<HttpResponseEvent>,

@@ -1,10 +1,10 @@
 import classNames from "classnames";
 import { useEffect, useState } from "react";
-import { platform } from "@yaakapp-internal/platform";
 
 type Props = { className?: string; mimeType?: string } & (
   | {
-      bodyPath: string;
+      /** A URL the host resolved, for a body it already stored. */
+      url: string;
     }
   | {
       data: ArrayBuffer;
@@ -13,21 +13,21 @@ type Props = { className?: string; mimeType?: string } & (
 
 export function ImageViewer({ className, mimeType, ...props }: Props) {
   const [src, setSrc] = useState<string>();
-  const bodyPath = "bodyPath" in props ? props.bodyPath : null;
+  const url = "url" in props ? props.url : null;
   const data = "data" in props ? props.data : null;
 
   useEffect(() => {
-    if (bodyPath != null) {
-      setSrc(platform.files.url(bodyPath));
+    if (url != null) {
+      setSrc(url);
     } else if (data != null) {
       const blob = new Blob([data], { type: mimeType ?? "image/png" });
-      const url = URL.createObjectURL(blob);
-      setSrc(url);
-      return () => URL.revokeObjectURL(url);
+      const objectUrl = URL.createObjectURL(blob);
+      setSrc(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
     } else {
       setSrc(undefined);
     }
-  }, [bodyPath, data, mimeType]);
+  }, [url, data, mimeType]);
 
   return (
     <img

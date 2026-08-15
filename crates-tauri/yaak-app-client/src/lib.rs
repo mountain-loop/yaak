@@ -30,6 +30,7 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
 use yaak::export::{self, ExportDataParams};
+use yaak::responses::{is_response_id, response_body_path};
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
@@ -1020,27 +1021,64 @@ async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
     }
 }
 
+/// Where a response's body is, and what it is meant to be read as.
+struct ResponseBodyLocation {
+    /// None when the response has no stored body.
+    path: Option<PathBuf>,
+    /// The response's declared `Content-Type`, empty when it has none. An
+    /// ephemeral response has no headers to consult, so its body decodes as
+    /// UTF-8.
+    content_type: String,
+}
+
+/// Find a response's body from its id alone.
+///
+/// The frontend hands back an id and never a path, so nothing a caller says can
+/// point this at a file the engine didn't write. Persisted responses carry the
+/// path they were written to; ephemeral ones (GraphQL introspection) never
+/// reach the database, but their body still lands at `<response dir>/<id>`,
+/// which is how [`yaak::send`] builds the path in the first place.
+fn locate_response_body<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<ResponseBodyLocation> {
+    if !is_response_id(response_id) {
+        return Err(GenericError(format!("Invalid response ID {response_id}")));
+    }
+
+    match app_handle.db().get_http_response(response_id) {
+        Ok(response) => Ok(ResponseBodyLocation {
+            path: response.body_path.map(PathBuf::from),
+            content_type: response
+                .headers
+                .iter()
+                .find(|h| h.name.eq_ignore_ascii_case("content-type"))
+                .map(|h| h.value.clone())
+                .unwrap_or_default(),
+        }),
+        Err(yaak_models::error::Error::ModelNotFound(_)) => {
+            let response_dir = app_handle.path().app_data_dir()?.join("responses");
+            Ok(ResponseBodyLocation {
+                path: Some(response_body_path(&response_dir, response_id)),
+                content_type: String::new(),
+            })
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-    response: HttpResponse,
+    response_id: &str,
     filter: Option<&str>,
 ) -> YaakResult<FilterResponse> {
-    let body_path = match response.body_path {
-        None => {
-            return Ok(FilterResponse { content: String::new(), error: None });
-        }
-        Some(p) => p,
+    let location = locate_response_body(window.app_handle(), response_id)?;
+    let Some(body_path) = location.path else {
+        return Ok(FilterResponse { content: String::new(), error: None });
     };
 
-    let content_type = response
-        .headers
-        .iter()
-        .find_map(|h| {
-            if h.name.eq_ignore_ascii_case("content-type") { Some(h.value.as_str()) } else { None }
-        })
-        .unwrap_or_default();
-
+    let content_type = location.content_type.as_str();
     let body = read_response_body(&body_path, content_type)
         .await
         .ok_or(GenericError("Failed to find response body".to_string()))?;
@@ -1051,6 +1089,20 @@ async fn cmd_http_response_body<R: Runtime>(
             .await?),
         _ => Ok(FilterResponse { content: body, error: None }),
     }
+}
+
+/// The body's path on this machine, for the desktop host to read or hand to the
+/// webview's asset protocol.
+///
+/// The frontend holds response ids; only `packages/platform`'s Tauri host sees
+/// the path, and only because it is about to open the file itself. Hosts
+/// without a filesystem serve the same bytes over HTTP instead.
+async fn cmd_http_response_body_path<R: Runtime>(
+    app_handle: AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<Option<String>> {
+    let location = locate_response_body(&app_handle, response_id)?;
+    Ok(location.path.map(|p| p.to_string_lossy().to_string()))
 }
 
 async fn cmd_http_request_body<R: Runtime>(
@@ -1069,8 +1121,15 @@ async fn cmd_http_request_body<R: Runtime>(
     Ok(Some(body))
 }
 
-async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>> {
-    let body = fs::read(file_path)?;
+async fn cmd_get_sse_events<R: Runtime>(
+    app_handle: AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<Vec<ServerSentEvent>> {
+    let Some(body_path) = locate_response_body(&app_handle, response_id)?.path else {
+        return Ok(Vec::new());
+    };
+
+    let body = fs::read(body_path)?;
     let mut event_parser = EventParser::new();
     event_parser.process_bytes(body.into())?;
 

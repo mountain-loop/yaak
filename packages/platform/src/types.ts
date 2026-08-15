@@ -135,11 +135,15 @@ export interface PlatformDialog {
  * File-ish operations, keyed by paths the backend handed us.
  *
  * A path here is an opaque handle, not something to parse or construct: the UI
- * only ever passes one back to `readFile` or `url`. A host without a filesystem
+ * only ever passes one back to `url` or `readDir`. A host without a filesystem
  * can mint handles of its own (a blob id, a URL) and stay compatible.
+ *
+ * Response bodies are addressed by response id instead, because they are the
+ * one thing every host stores somewhere different. The desktop reads the file
+ * the engine wrote; the bridge fetches it over HTTP. Neither is ever handed a
+ * location the page chose.
  */
 export interface PlatformFiles {
-  readFile(path: string): Promise<Uint8Array<ArrayBuffer>>;
   readDir(path: string): Promise<DirEntry[]>;
 
   /** A URL the page can load a file from, for `<img>`, `<video>`, and friends. */
@@ -149,6 +153,19 @@ export interface PlatformFiles {
 
   /** Resolve a path bundled with the app itself, rather than one from the backend. */
   resolveResource(path: string): Promise<string>;
+
+  /** The bytes of a stored response body, or null if the response has none. */
+  readResponseBody(responseId: string): Promise<Uint8Array<ArrayBuffer> | null>;
+
+  /**
+   * A URL the media viewers can point an element at, or null if the response
+   * has no stored body.
+   *
+   * Asynchronous because the host may have to ask the backend where the body
+   * is: only the host is allowed to know that, and only the moment before it
+   * opens it.
+   */
+  responseBodyUrl(responseId: string): Promise<string | null>;
 }
 
 export interface Platform {

@@ -11,10 +11,11 @@ use super::{BridgeCtx, UNSUPPORTED_COMMANDS, unsupported_command};
 use mime_guess::{Mime, mime};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use yaak::import::{ImportDataParams, import_data as import_data_shared};
 use yaak::models_ops::{delete_model, duplicate_model, upsert_model};
+use yaak::responses::{is_response_id, response_body_path};
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_core::WorkspaceContext;
 use yaak_models::models::{
@@ -487,10 +488,51 @@ async fn cmd_send_ephemeral_request(
 
 // -- Reading responses --
 
+/// Where a response's body is, and what it is meant to be read as.
+struct ResponseBodyLocation {
+    /// None when the response has no stored body.
+    path: Option<PathBuf>,
+    /// The response's declared `Content-Type`, empty when it has none. An
+    /// ephemeral response has no headers to consult, so its body decodes as
+    /// UTF-8.
+    content_type: String,
+}
+
+/// Find a response's body from its id alone.
+///
+/// The tab hands back an id and never a path, so nothing a page says can point
+/// this at a file the engine didn't write — the same rule `GET
+/// /responses/:id/body` follows. Persisted responses carry the path they were
+/// written to; ephemeral ones (GraphQL introspection) never reach the database,
+/// but their body still lands at `<response dir>/<id>`, which is how
+/// [`yaak::send`] builds the path in the first place.
+fn locate_response_body(ctx: &BridgeCtx, response_id: &str) -> Result<ResponseBodyLocation> {
+    if !is_response_id(response_id) {
+        return Err(RpcError { message: format!("Invalid response ID {response_id}") });
+    }
+
+    match ctx.state.db().get_http_response(response_id) {
+        Ok(response) => Ok(ResponseBodyLocation {
+            path: response.body_path.map(PathBuf::from),
+            content_type: response
+                .headers
+                .iter()
+                .find(|h| h.name.eq_ignore_ascii_case("content-type"))
+                .map(|h| h.value.clone())
+                .unwrap_or_default(),
+        }),
+        Err(yaak_models::error::Error::ModelNotFound(_)) => Ok(ResponseBodyLocation {
+            path: Some(response_body_path(&ctx.state.response_dir(), response_id)),
+            content_type: String::new(),
+        }),
+        Err(e) => Err(err(e)),
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CmdHttpResponseBodyReq {
-    pub response: HttpResponse,
+    pub response_id: String,
     pub filter: Option<String>,
 }
 
@@ -498,19 +540,12 @@ async fn cmd_http_response_body(
     ctx: BridgeCtx,
     req: CmdHttpResponseBodyReq,
 ) -> Result<FilterResponse> {
-    let Some(body_path) = req.response.body_path else {
+    let location = locate_response_body(&ctx, &req.response_id)?;
+    let Some(body_path) = location.path else {
         return Ok(FilterResponse { content: String::new(), error: None });
     };
 
-    let content_type = req
-        .response
-        .headers
-        .iter()
-        .find_map(|h| {
-            if h.name.eq_ignore_ascii_case("content-type") { Some(h.value.as_str()) } else { None }
-        })
-        .unwrap_or_default();
-
+    let content_type = location.content_type.as_str();
     let body = read_response_body(&body_path, content_type)
         .await
         .ok_or_else(|| RpcError { message: "Failed to find response body".to_string() })?;
@@ -576,16 +611,20 @@ async fn cmd_get_http_response_events(
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CmdGetSseEventsReq {
-    pub file_path: String,
+    pub response_id: String,
 }
 
 async fn cmd_get_sse_events(
-    _ctx: BridgeCtx,
+    ctx: BridgeCtx,
     req: CmdGetSseEventsReq,
 ) -> Result<Vec<ServerSentEvent>> {
     use eventsource_client::{EventParser, SSE};
 
-    let body = std::fs::read(&req.file_path).map_err(err)?;
+    let Some(body_path) = locate_response_body(&ctx, &req.response_id)?.path else {
+        return Ok(Vec::new());
+    };
+
+    let body = std::fs::read(&body_path).map_err(err)?;
     let mut event_parser = EventParser::new();
     event_parser.process_bytes(body).map_err(err)?;
 

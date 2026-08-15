@@ -118,6 +118,11 @@ pub const UNSUPPORTED_COMMANDS: &[&str] = &[
     "cmd_reveal_workspace_key",
     "cmd_set_workspace_key",
     // Things that need a local filesystem the tab can point at.
+    //
+    // `cmd_http_response_body_path` is how the desktop host turns a response id
+    // into a file it can open; a tab has nothing to do with the answer and
+    // fetches `/responses/:id/body` instead.
+    "cmd_http_response_body_path",
     "cmd_export_data",
     "cmd_save_response",
     "cmd_save_base64_to_binary",
