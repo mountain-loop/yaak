@@ -236,14 +236,46 @@ pub struct SendHttpRequestByIdParams<'a, T: TemplateCallback> {
     pub executor: &'a dyn SendRequestExecutor,
 }
 
+/// An [`HttpRequest`] carrying the authentication and headers it inherits from its folder or
+/// workspace, alongside the id of the model that authentication came from.
+///
+/// Sending requires inheritance to be applied first, and this type is the only way to say it has
+/// been. There is no public constructor beyond [`resolve_inherited_request`], which resolves it
+/// against a database, and [`ResolvedHttpRequest::assume_resolved`], which a caller without a
+/// database must name explicitly — so skipping inheritance is a deliberate, greppable act rather
+/// than something a new call site forgets.
+#[derive(Clone)]
+pub struct ResolvedHttpRequest {
+    request: HttpRequest,
+    auth_context_id: String,
+}
+
+impl ResolvedHttpRequest {
+    /// Declare a request already resolved, for callers with no database to resolve against. The
+    /// caller owns the promise that inherited authentication and headers are applied.
+    pub fn assume_resolved(request: HttpRequest, auth_context_id: String) -> Self {
+        Self { request, auth_context_id }
+    }
+
+    pub fn request(&self) -> &HttpRequest {
+        &self.request
+    }
+
+    pub fn auth_context_id(&self) -> &str {
+        &self.auth_context_id
+    }
+
+    fn into_parts(self) -> (HttpRequest, String) {
+        (self.request, self.auth_context_id)
+    }
+}
+
 /// Everything a send needs that would otherwise be read from the database.
 ///
 /// Callers backed by a database build this with [`resolve_send_inputs`]. A stateless caller
 /// constructs it directly, which is what lets [`send_http_request`] run with no database at all.
 pub struct HttpSendInputs {
-    /// The request with inherited authentication and headers already applied.
-    pub request: HttpRequest,
-    pub auth_context_id: String,
+    pub request: ResolvedHttpRequest,
     pub environment_chain: Vec<Environment>,
     pub runtime_config: HttpSendRuntimeConfig,
     /// Cookies the send starts with. The store is shared, so reading it back after the send
@@ -351,12 +383,7 @@ pub fn resolve_send_inputs(
         .resolve_environments(&request.workspace_id, request.folder_id.as_deref(), environment_id)
         .map_err(SendHttpRequestError::ResolveEnvironments)?;
 
-    let (authentication_type, authentication, auth_context_id) = db
-        .resolve_auth_for_http_request(request)
-        .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
-    let headers = db
-        .resolve_headers_for_http_request(request)
-        .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
+    let resolved_request = resolve_inherited_request(query_manager, request)?;
 
     let workspace =
         db.get_workspace(&request.workspace_id).map_err(SendHttpRequestError::LoadWorkspace)?;
@@ -366,8 +393,7 @@ pub fn resolve_send_inputs(
         .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
 
     Ok(HttpSendInputs {
-        request: HttpRequest { authentication_type, authentication, headers, ..request.clone() },
-        auth_context_id,
+        request: resolved_request,
         environment_chain,
         runtime_config: HttpSendRuntimeConfig {
             settings: resolved_settings,
@@ -376,6 +402,25 @@ pub fn resolve_send_inputs(
             client_certificates: settings.client_certificates,
         },
         cookie_store: cookies.map(CookieStore::from_cookies),
+    })
+}
+
+/// Apply the authentication and headers a request inherits from its folder or workspace.
+pub fn resolve_inherited_request(
+    query_manager: &QueryManager,
+    request: &HttpRequest,
+) -> Result<ResolvedHttpRequest> {
+    let db = query_manager.connect();
+    let (authentication_type, authentication, auth_context_id) = db
+        .resolve_auth_for_http_request(request)
+        .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
+    let headers = db
+        .resolve_headers_for_http_request(request)
+        .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
+
+    Ok(ResolvedHttpRequest {
+        request: HttpRequest { authentication_type, authentication, headers, ..request.clone() },
+        auth_context_id,
     })
 }
 
@@ -504,13 +549,8 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
 pub async fn send_http_request<T: TemplateCallback>(
     params: SendHttpRequestParams<'_, T>,
 ) -> Result<SendHttpRequestResult> {
-    let HttpSendInputs {
-        request,
-        auth_context_id,
-        environment_chain,
-        runtime_config,
-        cookie_store,
-    } = params.inputs;
+    let HttpSendInputs { request, environment_chain, runtime_config, cookie_store } = params.inputs;
+    let (request, auth_context_id) = request.into_parts();
     let storage = params.storage;
     let send_options = runtime_config.send_options();
     let resolved_settings = &runtime_config.settings;
@@ -1284,12 +1324,14 @@ mod tests {
 
         let result = send_http_request(SendHttpRequestParams {
             inputs: HttpSendInputs {
-                request: HttpRequest {
-                    workspace_id: "wk_test".to_string(),
-                    url: "http://localhost/test".to_string(),
-                    ..Default::default()
-                },
-                auth_context_id: String::new(),
+                request: ResolvedHttpRequest::assume_resolved(
+                    HttpRequest {
+                        workspace_id: "wk_test".to_string(),
+                        url: "http://localhost/test".to_string(),
+                        ..Default::default()
+                    },
+                    String::new(),
+                ),
                 environment_chain: Vec::new(),
                 runtime_config: HttpSendRuntimeConfig {
                     settings: ResolvedHttpRequestSettings::default(),
