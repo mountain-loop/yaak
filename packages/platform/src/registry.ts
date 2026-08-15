@@ -49,6 +49,9 @@ export const platform: Platform = {
   get files() {
     return host().files;
   },
+  get blobs() {
+    return host().blobs;
+  },
   rpc: (cmd, payload) => host().rpc(cmd, payload),
   rpcStream: (cmd, payload, onMessage) => host().rpcStream(cmd, payload, onMessage),
   listen: (event, callback) => host().listen(event, callback),

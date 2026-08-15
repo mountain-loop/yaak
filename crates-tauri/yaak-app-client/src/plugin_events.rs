@@ -314,7 +314,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             .await?;
 
             Ok(Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
-                http_response,
+                http_response: http_response.response,
             })))
         }
         HostRequest::OpenWindow(req) => {

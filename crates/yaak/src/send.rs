@@ -339,11 +339,28 @@ pub struct SendHttpRequestByIdWithPluginsParams<'a> {
     pub connection_manager: &'a HttpConnectionManager,
 }
 
+/// Where a send left the response body, so the caller knows where to get it.
+///
+/// The body goes to exactly one place, and which one depends on what the caller
+/// asked for. Saying so outright beats handing back a `Vec` that is empty for
+/// two entirely different reasons.
+pub enum ResponseBody {
+    /// Written to the response's own file. Read it back by response id.
+    Stored,
+    /// Sent to the chunk sender the caller supplied, as it arrived.
+    Streamed,
+    /// Here it is, because nothing else kept it. Empty means the response
+    /// really had no body.
+    Returned(Vec<u8>),
+}
+
 pub struct SendHttpRequestResult {
     pub rendered_request: HttpRequest,
     pub response: HttpResponse,
-    pub response_body: Vec<u8>,
-    /// The cookies held by the jar after the send, for callers that persist one.
+    pub response_body: ResponseBody,
+    /// The cookies held by the jar after the send, for callers that persist
+    /// one. `None` when the caller supplied no jar, which is independent of
+    /// where the body went.
     pub cookies: Option<Vec<Cookie>>,
 }
 
@@ -798,9 +815,16 @@ pub async fn send_http_request<T: TemplateCallback>(
     };
     let mut body_stream =
         http_response.into_body_stream().map_err(SendHttpRequestError::ReadResponseBody)?;
-    let mut response_body = Vec::new();
     let mut read_buf = vec![0; 64 * 1024];
-    let collect_response_body = !persist_response && params.emit_response_body_chunks_to.is_none();
+    // Decided once, before the first chunk: the accumulator only exists in the
+    // one arm that returns it, so nothing can hand back bytes it never received.
+    let mut response_body = if params.emit_response_body_chunks_to.is_some() {
+        ResponseBody::Streamed
+    } else if persist_response {
+        ResponseBody::Stored
+    } else {
+        ResponseBody::Returned(Vec::new())
+    };
     let mut body_read_error = None;
     let mut written_bytes: usize = 0;
     let mut last_progress_update = started_at;
@@ -841,8 +865,8 @@ pub async fn send_http_request<T: TemplateCallback>(
                 }
                 if let Some(tx) = params.emit_response_body_chunks_to.as_ref() {
                     let _ = tx.send(chunk.to_vec());
-                } else if collect_response_body {
-                    response_body.extend_from_slice(chunk);
+                } else if let ResponseBody::Returned(body) = &mut response_body {
+                    body.extend_from_slice(chunk);
                 }
 
                 let now = Instant::now();
@@ -1382,6 +1406,52 @@ mod tests {
             events.iter().any(|e| matches!(e, SenderHttpResponseEvent::HeaderDown(..))),
             "expected timeline events from the executor, got {events:?}"
         );
+    }
+
+    /// A response nothing stores has to hand its body back, because no later
+    /// read can find it: there is no row to look up and no id to read it by.
+    /// GraphQL introspection is the caller that depends on this.
+    #[tokio::test]
+    async fn returns_the_body_when_nothing_stores_it() {
+        let executor = StubExecutor { body: b"hello world" };
+
+        let result = send_http_request(SendHttpRequestParams {
+            inputs: HttpSendInputs {
+                request: ResolvedHttpRequest::assume_resolved(
+                    HttpRequest {
+                        workspace_id: "wk_test".to_string(),
+                        url: "http://localhost/test".to_string(),
+                        ..Default::default()
+                    },
+                    String::new(),
+                ),
+                environment_chain: Vec::new(),
+                runtime_config: HttpSendRuntimeConfig {
+                    settings: ResolvedHttpRequestSettings::default(),
+                    proxy: HttpConnectionProxySetting::System,
+                    dns_overrides: Vec::new(),
+                    client_certificates: Vec::new(),
+                },
+                cookie_store: Some(CookieStore::new()),
+            },
+            template_callback: &NoopTemplateCallback,
+            storage: None,
+            emit_events_to: None,
+            // No chunk sender: the body is collected for the caller instead.
+            emit_response_body_chunks_to: None,
+            cancelled_rx: None,
+            existing_response: None,
+            prepare_sendable_request: None,
+            executor: &executor,
+        })
+        .await
+        .expect("send should succeed without a database");
+
+        let ResponseBody::Returned(body) = result.response_body else {
+            panic!("a response nothing stores has to hand its body back");
+        };
+        assert_eq!(body, b"hello world");
+        assert!(result.response.request_id.is_empty(), "an unsaved response has no request");
     }
 
     fn seed_cookie_jar() -> (QueryManager, CookieJar, TempDir) {

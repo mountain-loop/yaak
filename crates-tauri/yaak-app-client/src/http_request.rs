@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tokio::sync::watch::Receiver;
-use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
+use yaak::send::{ResponseBody, SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::manager::HttpConnectionManager;
 use yaak_models::models::{CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseState};
@@ -62,6 +62,12 @@ impl<R: Runtime> ResponseContext<R> {
     }
 }
 
+/// What a send produced: the response, and where its body went.
+pub struct SentHttpRequest {
+    pub response: HttpResponse,
+    pub body: ResponseBody,
+}
+
 pub async fn send_http_request<R: Runtime>(
     window: &WebviewWindow<R>,
     unrendered_request: &HttpRequest,
@@ -69,7 +75,7 @@ pub async fn send_http_request<R: Runtime>(
     environment: Option<Environment>,
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &mut Receiver<bool>,
-) -> Result<HttpResponse> {
+) -> Result<SentHttpRequest> {
     send_http_request_with_context(
         window,
         unrendered_request,
@@ -90,7 +96,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     cookie_jar: Option<CookieJar>,
     cancelled_rx: &Receiver<bool>,
     plugin_context: &PluginContext,
-) -> Result<HttpResponse> {
+) -> Result<SentHttpRequest> {
     let app_handle = window.app_handle().clone();
     let update_source = UpdateSource::from_window_label(window.label());
     let mut response_ctx =
@@ -110,7 +116,7 @@ pub async fn send_http_request_with_context<R: Runtime>(
     .await;
 
     match result {
-        Ok(response) => Ok(response),
+        Ok(sent) => Ok(sent),
         Err(e) => {
             let error = e.to_string();
             let elapsed = start.elapsed().as_millis() as i32;
@@ -123,7 +129,12 @@ pub async fn send_http_request_with_context<R: Runtime>(
                 }
                 r.error = Some(error);
             });
-            Ok(response_ctx.response().clone())
+            // The send failed, so whatever body exists is the partial one
+            // already on disk under the response's id.
+            Ok(SentHttpRequest {
+                response: response_ctx.response().clone(),
+                body: ResponseBody::Stored,
+            })
         }
     }
 }
@@ -136,7 +147,7 @@ async fn send_http_request_inner<R: Runtime>(
     cancelled_rx: &Receiver<bool>,
     plugin_context: &PluginContext,
     response_ctx: &mut ResponseContext<R>,
-) -> Result<HttpResponse> {
+) -> Result<SentHttpRequest> {
     let app_handle = window.app_handle().clone();
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
@@ -165,7 +176,7 @@ async fn send_http_request_inner<R: Runtime>(
     .await
     .map_err(|e| GenericError(e.to_string()))?;
 
-    Ok(result.response)
+    Ok(SentHttpRequest { response: result.response, body: result.response_body })
 }
 
 pub fn resolve_http_request<R: Runtime>(

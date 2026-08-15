@@ -8,6 +8,7 @@ import { useCopyHttpResponse } from "../hooks/useCopyHttpResponse";
 import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
 import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
 import { useResponseBodyBytes, useResponseBodyText } from "../hooks/useResponseBodyText";
+import { useResponseBodyUrl } from "../hooks/useResponseBodyUrl";
 import { useResponseViewMode } from "../hooks/useResponseViewMode";
 import { useSaveResponse } from "../hooks/useSaveResponse";
 import { useTimelineViewMode } from "../hooks/useTimelineViewMode";
@@ -409,14 +410,13 @@ function EnsureCompleteResponse({
   Component,
 }: {
   response: HttpResponse;
-  Component: ComponentType<{ bodyPath: string }>;
+  Component: ComponentType<{ bodyUrl: string }>;
 }) {
-  if (response.bodyPath === null) {
-    return <div>Empty response body</div>;
-  }
+  // Wait until the response has been fully-downloaded before asking for it
+  const complete = response.state === "closed";
+  const bodyUrl = useResponseBodyUrl(complete ? response : null);
 
-  // Wait until the response has been fully-downloaded
-  if (response.state !== "closed") {
+  if (!complete || bodyUrl.isPending) {
     return (
       <EmptyStateText>
         <LoadingIcon />
@@ -424,7 +424,15 @@ function EnsureCompleteResponse({
     );
   }
 
-  return <Component bodyPath={response.bodyPath} />;
+  if (bodyUrl.error) {
+    return <Banner color="danger">{String(bodyUrl.error)}</Banner>;
+  }
+
+  if (bodyUrl.data == null) {
+    return <div>Empty response body</div>;
+  }
+
+  return <Component bodyUrl={bodyUrl.data} />;
 }
 
 function HttpSvgViewer({ response }: { response: HttpResponse }) {
