@@ -3,7 +3,6 @@ pub mod db_context;
 pub mod error;
 pub mod migrate;
 pub mod pool;
-pub mod sea_query_rusqlite;
 pub mod traits;
 pub mod update_source;
 pub mod util;

@@ -10,7 +10,8 @@ include_dir = "0.7"
 log = { workspace = true }
 nanoid = "0.4.0"
 rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
-sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
+sea-query-rusqlite = { version = "0.8.0", features = ["with-chrono"] }
+sea-query = { version = "1.0", features = ["with-chrono", "attr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

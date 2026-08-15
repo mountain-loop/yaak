@@ -3,8 +3,9 @@ use crate::error::Result;
 use crate::models::{GraphQlIntrospection, GraphQlIntrospectionIden};
 use crate::util::UpdateSource;
 use chrono::{Duration, Utc};
+use sea_query::ExprTrait;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
-use yaak_database::sea_query_rusqlite::RusqliteBinder;
+use sea_query_rusqlite::RusqliteBinder;
 
 impl<'a> ClientDb<'a> {
     pub fn get_graphql_introspection(&self, request_id: &str) -> Option<GraphQlIntrospection> {

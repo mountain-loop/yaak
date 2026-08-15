@@ -4,8 +4,9 @@ use crate::models::{KeyValue, KeyValueIden, UpsertModelInfo};
 use crate::util::UpdateSource;
 use chrono::NaiveDateTime;
 use log::error;
+use sea_query::ExprTrait;
 use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
-use yaak_database::sea_query_rusqlite::RusqliteBinder;
+use sea_query_rusqlite::RusqliteBinder;
 
 impl<'a> ClientDb<'a> {
     pub fn list_key_values(&self) -> Result<Vec<KeyValue>> {
