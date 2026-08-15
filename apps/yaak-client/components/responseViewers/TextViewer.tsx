@@ -1,9 +1,8 @@
 import classNames from "classnames";
 import type { ReactNode } from "react";
-import { Children, useCallback, useMemo } from "react";
-import { createGlobalState } from "react-use";
-import { useDebouncedValue } from "@yaakapp-internal/ui";
+import { Children, useMemo } from "react";
 import { useFormatText } from "../../hooks/useFormatText";
+import type { ResponseFilterApi } from "../../hooks/useResponseFilter";
 import type { EditorProps } from "../core/Editor/Editor";
 import { hyperlink } from "../core/Editor/hyperlink/extension";
 import { Editor } from "../core/Editor/LazyEditor";
@@ -16,56 +15,34 @@ interface Props {
   text: string;
   language: EditorProps["language"];
   stateKey: string | null;
-  filterStateKey?: string | null;
   pretty?: boolean;
   className?: string;
   footerActions?: ReactNode;
-  onFilter?: (filter: string) => {
+  /** Filter state, from useResponseFilter in whichever component runs the filter */
+  filter?: ResponseFilterApi;
+  /** Result of applying `filter.debouncedFilterText` to the body */
+  filterResult?: {
     data: string | null | undefined;
     isPending: boolean;
     error: boolean;
   };
 }
 
-const useFilterText = createGlobalState<Record<string, string | null>>({});
-
 export function TextViewer({
   language,
   text,
   stateKey,
-  filterStateKey,
   pretty,
   className,
   footerActions,
-  onFilter,
+  filter,
+  filterResult,
 }: Props) {
-  const filterKey = filterStateKey ?? stateKey;
-  const [filterTextMap, setFilterTextMap] = useFilterText();
-  const filterText = filterKey ? (filterTextMap[filterKey] ?? null) : null;
-  const debouncedFilterText = useDebouncedValue(filterText);
-  const setFilterText = useCallback(
-    (v: string | null) => {
-      if (!filterKey) return;
-      setFilterTextMap((m) => ({ ...m, [filterKey]: v }));
-    },
-    [filterKey, setFilterTextMap],
-  );
-
-  const isSearching = filterText != null;
-  const filteredResponse =
-    onFilter && debouncedFilterText
-      ? onFilter(debouncedFilterText)
-      : { data: null, isPending: false, error: false };
-
-  const toggleSearch = useCallback(() => {
-    if (isSearching) {
-      setFilterText(null);
-    } else {
-      setFilterText("");
-    }
-  }, [isSearching, setFilterText]);
-
-  const canFilter = onFilter && (language === "json" || language === "xml" || language === "html");
+  const canFilter =
+    filter != null && (language === "json" || language === "xml" || language === "html");
+  const isSearching = filter?.isSearching ?? false;
+  const filterText = filter?.filterText ?? null;
+  const resultError = filterResult?.error ?? false;
 
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = isSearching ? [] : Children.toArray(footerActions);
@@ -76,8 +53,8 @@ export function TextViewer({
       nodes.push(
         <div key="input" className="w-full opacity-100!">
           <Input
-            key={filterKey ?? "filter"}
-            validate={!filteredResponse.error}
+            key={filter.stateKey ?? "filter"}
+            validate={!resultError}
             hideLabel
             autoFocus
             containerClassName="bg-surface"
@@ -86,9 +63,9 @@ export function TextViewer({
             label="Filter expression"
             name="filter"
             defaultValue={filterText}
-            onKeyDown={(e) => e.key === "Escape" && toggleSearch()}
-            onChange={setFilterText}
-            stateKey={filterKey ? `filter.${filterKey}` : null}
+            onKeyDown={(e) => e.key === "Escape" && filter.toggleSearch()}
+            onChange={filter.setFilterText}
+            stateKey={filter.stateKey ? `filter.${filter.stateKey}` : null}
           />
         </div>,
       );
@@ -98,10 +75,10 @@ export function TextViewer({
       <IconButton
         key="icon"
         size="sm"
-        isLoading={filteredResponse.isPending}
+        isLoading={filterResult?.isPending ?? false}
         icon={isSearching ? "x" : "filter"}
         title={isSearching ? "Close filter" : "Filter response"}
-        onClick={toggleSearch}
+        onClick={filter.toggleSearch}
         className={classNames("border border-border-subtle!", isSearching && "opacity-100!")}
       />,
     );
@@ -110,14 +87,12 @@ export function TextViewer({
   }, [
     canFilter,
     footerActions,
-    filterKey,
+    filter,
     filterText,
-    filteredResponse.error,
-    filteredResponse.isPending,
+    filterResult?.isPending,
+    resultError,
     isSearching,
     language,
-    setFilterText,
-    toggleSearch,
   ]);
 
   const formattedBody = useFormatText({ text, language, pretty: pretty ?? false });
@@ -126,11 +101,11 @@ export function TextViewer({
   }
 
   let body: string;
-  if (isSearching && filterText?.length > 0) {
-    if (filteredResponse.error) {
+  if (isSearching && filterText != null && filterText.length > 0) {
+    if (resultError) {
       body = "";
     } else {
-      body = filteredResponse.data != null ? filteredResponse.data : "";
+      body = filterResult?.data != null ? filterResult.data : "";
     }
   } else {
     body = formattedBody;
