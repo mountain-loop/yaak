@@ -456,12 +456,7 @@ pub async fn send_http_request_with_plugins(
     })
     .await;
 
-    persist_cookies_after_send(
-        params.query_manager,
-        cookie_jar.as_mut(),
-        cookie_store.as_ref(),
-        &result,
-    )?;
+    persist_cookies_after_send(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
 
     result
 }
@@ -501,12 +496,7 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
     })
     .await;
 
-    persist_cookies_after_send(
-        params.query_manager,
-        cookie_jar.as_mut(),
-        cookie_store.as_ref(),
-        &result,
-    )?;
+    persist_cookies_after_send(params.query_manager, cookie_jar.as_mut(), cookie_store.as_ref())?;
 
     result
 }
@@ -1037,44 +1027,30 @@ pub fn load_cookie_jar(
 
 /// Write the cookies a send collected back to its jar.
 ///
-/// The store is shared with the HTTP transaction, so it holds cookies picked up along the way —
-/// worth keeping even when the send later failed partway through a redirect chain. A failure
-/// before the transaction started leaves the jar alone.
+/// The store is shared with the HTTP transaction, so it holds every cookie picked up along the
+/// way no matter how the send ended — including when the response arrived but the storage work
+/// after it failed. Call this whatever the send returned; a send that failed before the
+/// transaction started leaves the store untouched, which compares equal and writes nothing.
 pub fn persist_cookies_after_send(
     query_manager: &QueryManager,
     cookie_jar: Option<&mut CookieJar>,
     cookie_store: Option<&CookieStore>,
-    result: &Result<SendHttpRequestResult>,
 ) -> Result<()> {
-    let transaction_ran = result.as_ref().err().is_none_or(|err| {
-        matches!(
-            err,
-            SendHttpRequestError::SendRequest(_) | SendHttpRequestError::ReadResponseBody(_)
-        )
-    });
-    if !transaction_ran {
+    let (Some(cookie_jar), Some(cookie_store)) = (cookie_jar, cookie_store) else {
+        return Ok(());
+    };
+
+    let cookies = cookie_store.get_all_cookies();
+    if cookies == cookie_jar.cookies {
         return Ok(());
     }
 
-    persist_cookie_jar(query_manager, cookie_jar, cookie_store)
-}
-
-fn persist_cookie_jar(
-    query_manager: &QueryManager,
-    cookie_jar: Option<&mut CookieJar>,
-    cookie_store: Option<&CookieStore>,
-) -> Result<()> {
-    match (cookie_jar, cookie_store) {
-        (Some(cookie_jar), Some(cookie_store)) => {
-            cookie_jar.cookies = cookie_store.get_all_cookies();
-            query_manager
-                .connect()
-                .upsert_cookie_jar(cookie_jar, &UpdateSource::Background)
-                .map_err(SendHttpRequestError::PersistCookieJar)?;
-            Ok(())
-        }
-        _ => Ok(()),
-    }
+    cookie_jar.cookies = cookies;
+    query_manager
+        .connect()
+        .upsert_cookie_jar(cookie_jar, &UpdateSource::Background)
+        .map_err(SendHttpRequestError::PersistCookieJar)?;
+    Ok(())
 }
 
 fn send_setting_event<T>(
@@ -1239,8 +1215,10 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::pin::Pin;
+    use tempfile::TempDir;
     use tokio::io::AsyncRead;
     use yaak_http::decompress::ContentEncoding;
+    use yaak_models::models::{CookieDomain, CookieExpires, Workspace};
 
     struct NoopTemplateCallback;
 
@@ -1362,5 +1340,99 @@ mod tests {
             events.iter().any(|e| matches!(e, SenderHttpResponseEvent::HeaderDown(..))),
             "expected timeline events from the executor, got {events:?}"
         );
+    }
+
+    fn seed_cookie_jar() -> (QueryManager, CookieJar, TempDir) {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let (query_manager, _blob_manager, _rx) = yaak_models::init_standalone(
+            &temp_dir.path().join("db.sqlite"),
+            &temp_dir.path().join("blobs.sqlite"),
+        )
+        .expect("Failed to initialize DB");
+
+        query_manager
+            .connect()
+            .upsert_workspace(
+                &Workspace { id: "wk_test".to_string(), ..Default::default() },
+                &UpdateSource::Sync,
+            )
+            .expect("Failed to seed workspace");
+        let cookie_jar = query_manager
+            .connect()
+            .upsert_cookie_jar(
+                &CookieJar {
+                    id: "cj_test".to_string(),
+                    workspace_id: "wk_test".to_string(),
+                    name: "Default".to_string(),
+                    ..Default::default()
+                },
+                &UpdateSource::Sync,
+            )
+            .expect("Failed to seed cookie jar");
+
+        (query_manager, cookie_jar, temp_dir)
+    }
+
+    fn cookie(name: &str) -> Cookie {
+        Cookie {
+            name: name.to_string(),
+            value: "value".to_string(),
+            domain: CookieDomain::HostOnly("localhost".to_string()),
+            expires: CookieExpires::SessionEnd,
+            path: "/".to_string(),
+            secure: false,
+            http_only: false,
+            same_site: None,
+        }
+    }
+
+    /// Cookies the transaction collected must survive no matter how the send ended, including the
+    /// storage work that runs after a response has already arrived.
+    #[test]
+    fn persists_cookies_collected_before_a_failure() {
+        let (query_manager, mut cookie_jar, _temp_dir) = seed_cookie_jar();
+        let store = CookieStore::from_cookies(cookie_jar.cookies.clone());
+        store.store_cookies_from_response(
+            &"http://localhost/test".parse().expect("valid url"),
+            &["session=abc123; Path=/".to_string()],
+        );
+
+        persist_cookies_after_send(&query_manager, Some(&mut cookie_jar), Some(&store))
+            .expect("Failed to persist cookies");
+
+        let stored =
+            query_manager.connect().get_cookie_jar("cj_test").expect("Failed to load cookie jar");
+        assert_eq!(stored.cookies.len(), 1);
+        assert_eq!(stored.cookies[0].name, "session");
+        assert_eq!(stored.cookies[0].value, "abc123");
+    }
+
+    /// A send that failed before the transaction started leaves the store untouched, so there is
+    /// nothing to write and a concurrent update to the jar must not be clobbered.
+    #[test]
+    fn leaves_the_jar_alone_when_no_cookies_changed() {
+        let (query_manager, mut cookie_jar, _temp_dir) = seed_cookie_jar();
+        cookie_jar.cookies = vec![cookie("original")];
+        cookie_jar = query_manager
+            .connect()
+            .upsert_cookie_jar(&cookie_jar, &UpdateSource::Sync)
+            .expect("Failed to seed cookies");
+        let store = CookieStore::from_cookies(cookie_jar.cookies.clone());
+
+        // Someone else updates the jar while the send is in flight.
+        query_manager
+            .connect()
+            .upsert_cookie_jar(
+                &CookieJar { cookies: vec![cookie("newer")], ..cookie_jar.clone() },
+                &UpdateSource::Sync,
+            )
+            .expect("Failed to update cookie jar");
+
+        persist_cookies_after_send(&query_manager, Some(&mut cookie_jar), Some(&store))
+            .expect("Failed to persist cookies");
+
+        let stored =
+            query_manager.connect().get_cookie_jar("cj_test").expect("Failed to load cookie jar");
+        assert_eq!(stored.cookies, vec![cookie("newer")]);
     }
 }

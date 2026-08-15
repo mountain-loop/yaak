@@ -593,7 +593,7 @@ impl UpsertModelInfo for WorkspaceMeta {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum CookieDomain {
     HostOnly(String),
@@ -602,14 +602,14 @@ pub enum CookieDomain {
     Empty,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum CookieExpires {
     AtUtc(String),
     SessionEnd,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[ts(export, export_to = "gen_models.ts")]
 pub enum CookieSameSite {
     Strict,
@@ -617,7 +617,7 @@ pub enum CookieSameSite {
     None,
 }
 
-#[derive(Debug, Clone, Serialize, TS)]
+#[derive(Debug, Clone, Serialize, TS, PartialEq)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct Cookie {
