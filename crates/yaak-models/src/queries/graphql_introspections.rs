@@ -3,6 +3,7 @@ use crate::error::Result;
 use crate::models::{GraphQlIntrospection, GraphQlIntrospectionIden};
 use crate::util::UpdateSource;
 use chrono::{Duration, Utc};
+use sea_query::ExprTrait;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 

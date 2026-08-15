@@ -3,6 +3,7 @@ use crate::error::Error::ModelNotFound;
 use crate::error::Result;
 use crate::traits::UpsertModelInfo;
 use crate::update_source::UpdateSource;
+use sea_query::ExprTrait;
 use sea_query::{
     Asterisk, Expr, Func, IntoColumnRef, IntoIden, OnConflict, Query, SimpleExpr,
     SqliteQueryBuilder,

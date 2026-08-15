@@ -4,6 +4,7 @@ use crate::models::{KeyValue, KeyValueIden, UpsertModelInfo};
 use crate::util::UpdateSource;
 use chrono::NaiveDateTime;
 use log::error;
+use sea_query::ExprTrait;
 use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 

@@ -7,7 +7,7 @@ pub enum Error {
     SqlError(#[from] rusqlite::Error),
 
     #[error("SQL Pool error: {0}")]
-    SqlPoolError(#[from] r2d2::Error),
+    SqlPoolError(#[from] crate::pool::PoolError),
 
     #[error("Database error: {0}")]
     Database(String),

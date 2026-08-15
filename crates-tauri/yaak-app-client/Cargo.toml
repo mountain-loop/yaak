@@ -39,7 +39,7 @@ md5 = "0.8.0"
 notify = "8.0.0"
 pretty_graphql = "0.2"
 r2d2 = "0.8.10"
-r2d2_sqlite = "0.25.0"
+r2d2_sqlite = "0.32"
 mime_guess = "2.0.5"
 rand = "0.9.0"
 reqwest = { workspace = true, features = [

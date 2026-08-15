@@ -1,9 +1,8 @@
-use r2d2::PooledConnection;
-use r2d2_sqlite::SqliteConnectionManager;
+use crate::pool::SqliteConn;
 use rusqlite::{Connection, Statement, ToSql, Transaction};
 
 pub enum ConnectionOrTx<'a> {
-    Connection(PooledConnection<SqliteConnectionManager>),
+    Connection(SqliteConn),
     Transaction(&'a Transaction<'a>),
 }
 

@@ -1,6 +1,7 @@
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{PluginKeyValue, PluginKeyValueIden};
+use sea_query::ExprTrait;
 use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Asterisk, Cond, Expr, OnConflict, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;

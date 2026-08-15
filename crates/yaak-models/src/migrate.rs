@@ -2,14 +2,13 @@ use crate::error::Error::MigrationError;
 use crate::error::Result;
 use include_dir::{Dir, DirEntry, include_dir};
 use log::{debug, info};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{OptionalExtension, TransactionBehavior, params};
+use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 use sha2::{Digest, Sha384};
+use yaak_database::SqlitePool;
 
 static MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
-pub fn migrate_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
+pub fn migrate_db(pool: &SqlitePool) -> Result<()> {
     info!("Running database migrations");
 
     // Ensure the table exists
@@ -43,8 +42,10 @@ pub fn migrate_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
     let mut ran_migrations = 0;
     for entry in entries {
         num_migrations += 1;
-        let mut conn = pool.get()?;
-        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let conn = pool.get()?;
+        // `new_unchecked` takes `&Connection`; see yaak_database::pool for why
+        // the pool never hands out `&mut`.
+        let mut tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
         match run_migration(entry, &mut tx) {
             Ok(ran) => {
                 if ran {
@@ -74,7 +75,7 @@ pub fn migrate_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
 }
 
 fn run_migration(migration_path: &DirEntry, tx: &mut rusqlite::Transaction) -> Result<bool> {
-    let start = std::time::Instant::now();
+    let start = elapsed_timer();
     let (version, description) = split_migration_filename(migration_path.path().to_str().unwrap())
         .expect("Failed to parse migration filename");
 
@@ -97,7 +98,7 @@ fn run_migration(migration_path: &DirEntry, tx: &mut rusqlite::Transaction) -> R
     // Split on `;`? → optional depending on how your SQL is structured
     tx.execute_batch(&sql)?;
 
-    let execution_time = start.elapsed().as_nanos() as i64;
+    let execution_time = start();
     let checksum = sha384_hex_prefixed(sql.as_bytes());
 
     // NOTE: The success column is never used. It's just there for sqlx compatibility.
@@ -107,6 +108,21 @@ fn run_migration(migration_path: &DirEntry, tx: &mut rusqlite::Transaction) -> R
     )?;
 
     Ok(true)
+}
+
+/// Nanoseconds since the timer was started, for the sqlx-compatible
+/// `execution_time` column. `Instant` does not exist on `wasm32-unknown-unknown`
+/// (there is no monotonic clock to ask), and the column is bookkeeping, so
+/// there it reads as zero rather than taking the migrator down with it.
+#[cfg(not(target_arch = "wasm32"))]
+fn elapsed_timer() -> impl Fn() -> i64 {
+    let start = std::time::Instant::now();
+    move || start.elapsed().as_nanos() as i64
+}
+
+#[cfg(target_arch = "wasm32")]
+fn elapsed_timer() -> impl Fn() -> i64 {
+    || 0
 }
 
 fn split_migration_filename(filename: &str) -> Option<(String, String)> {

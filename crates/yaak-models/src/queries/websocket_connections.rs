@@ -4,6 +4,7 @@ use crate::models::{WebsocketConnection, WebsocketConnectionIden, WebsocketConne
 use crate::queries::MAX_HISTORY_ITEMS;
 use crate::util::UpdateSource;
 use log::debug;
+use sea_query::ExprTrait;
 use sea_query::{Expr, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 

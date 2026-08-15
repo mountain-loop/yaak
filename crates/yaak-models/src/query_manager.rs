@@ -1,23 +1,21 @@
 use crate::client_db::ClientDb;
 use crate::error::Error::GenericError;
 use crate::util::ModelPayload;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::TransactionBehavior;
+use rusqlite::{Transaction, TransactionBehavior};
 use std::sync::mpsc;
-use yaak_database::{ConnectionOrTx, DbContext};
+use yaak_database::{ConnectionOrTx, DbContext, SqlitePool};
 
 // Pool is internally synchronized — don't wrap it in a Mutex. A Mutex held across the
 // blocking `get()` serializes every DB access behind the slowest waiter, freezing the
 // whole app whenever the pool is exhausted.
 #[derive(Debug, Clone)]
 pub struct QueryManager {
-    pool: Pool<SqliteConnectionManager>,
+    pool: SqlitePool,
     events_tx: mpsc::Sender<ModelPayload>,
 }
 
 impl QueryManager {
-    pub fn new(pool: Pool<SqliteConnectionManager>, events_tx: mpsc::Sender<ModelPayload>) -> Self {
+    pub fn new(pool: SqlitePool, events_tx: mpsc::Sender<ModelPayload>) -> Self {
         QueryManager { pool, events_tx }
     }
 
@@ -46,9 +44,10 @@ impl QueryManager {
     where
         E: From<crate::error::Error>,
     {
-        let mut conn = self.pool.get().expect("Failed to get new DB connection from the pool");
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
+        let conn = self.pool.get().expect("Failed to get new DB connection from the pool");
+        // `new_unchecked` takes `&Connection`; see yaak_database::pool for why
+        // the pool never hands out `&mut`.
+        let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)
             .expect("Failed to start DB transaction");
 
         let ctx = DbContext::new(ConnectionOrTx::Transaction(&tx));
