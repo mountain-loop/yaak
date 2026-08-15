@@ -135,11 +135,10 @@ export interface PlatformDialog {
  * File-ish operations, keyed by paths the backend handed us.
  *
  * A path here is an opaque handle, not something to parse or construct: the UI
- * only ever passes one back to `readFile` or `url`. A host without a filesystem
+ * only ever passes one back to `url` or `readDir`. A host without a filesystem
  * can mint handles of its own (a blob id, a URL) and stay compatible.
  */
 export interface PlatformFiles {
-  readFile(path: string): Promise<Uint8Array<ArrayBuffer>>;
   readDir(path: string): Promise<DirEntry[]>;
 
   /** A URL the page can load a file from, for `<img>`, `<video>`, and friends. */
@@ -151,12 +150,38 @@ export interface PlatformFiles {
   resolveResource(path: string): Promise<string>;
 }
 
+/**
+ * Content the backend stored, addressed by the id it stored it under.
+ *
+ * Where those bytes actually live is the one thing every host answers
+ * differently — a file the engine wrote, a row in a database, a URL on the
+ * other end of a socket — so finding them is the host's job and nobody else's.
+ * The caller passes an id and never a location, which is also what keeps a page
+ * from naming something the backend never wrote.
+ *
+ * What the content *means* is the app's business, not this package's.
+ */
+export interface PlatformBlobs {
+  /** The bytes, or null if the host has nothing stored under that id. */
+  read(id: string): Promise<Uint8Array<ArrayBuffer> | null>;
+
+  /**
+   * A URL an element can load the content from, for `<img>`, `<video>` and
+   * friends, or null if the host has nothing stored under that id.
+   *
+   * Asynchronous because the host may have to ask its backend where the bytes
+   * are, and it only does that the moment before it reads them.
+   */
+  url(id: string): Promise<string | null>;
+}
+
 export interface Platform {
   readonly capabilities: PlatformCapabilities;
   readonly window: PlatformWindow;
   readonly clipboard: PlatformClipboard;
   readonly dialog: PlatformDialog;
   readonly files: PlatformFiles;
+  readonly blobs: PlatformBlobs;
 
   /** Call a backend command and await its result. */
   rpc<T>(cmd: string, payload?: RpcPayload): Promise<T>;

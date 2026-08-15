@@ -1,11 +1,12 @@
-import type { HttpRequest, HttpResponse } from "@yaakapp-internal/models";
+import type { HttpRequest } from "@yaakapp-internal/models";
+import type { EphemeralHttpResponse } from "@yaakapp-internal/tauri-client";
 import { getActiveCookieJar } from "../hooks/useActiveCookieJar";
 import { rpc } from "./rpc";
 
 export async function sendEphemeralRequest(
   request: HttpRequest,
   environmentId: string | null,
-): Promise<HttpResponse> {
+): Promise<EphemeralHttpResponse> {
   // Remove some things that we don't want to associate
   const newRequest = { ...request };
   return rpc("cmd_send_ephemeral_request", {

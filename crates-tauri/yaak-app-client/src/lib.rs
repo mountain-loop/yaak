@@ -8,6 +8,7 @@ use crate::import::import_data;
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_json_value, render_template};
+use crate::rpc_ext::EphemeralHttpResponse;
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use crate::uri_scheme::handle_deep_link;
 use error::Result as YaakResult;
@@ -30,6 +31,7 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
 use yaak::export::{self, ExportDataParams};
+use yaak::send::ResponseBody;
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
@@ -981,13 +983,18 @@ async fn cmd_restart<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<()> {
     Ok(())
 }
 
+/// Send without saving anything.
+///
+/// The response never reaches the database, so its body cannot be read back by
+/// id later the way a saved response's can. It comes back here instead, which
+/// is the only copy the caller gets.
 async fn cmd_send_ephemeral_request<R: Runtime>(
     mut request: HttpRequest,
     environment_id: Option<&str>,
     cookie_jar_id: Option<&str>,
     window: WebviewWindow<R>,
     app_handle: AppHandle<R>,
-) -> YaakResult<HttpResponse> {
+) -> YaakResult<EphemeralHttpResponse> {
     let response = HttpResponse::default();
     request.id = "".to_string();
     let environment = match environment_id {
@@ -1006,7 +1013,18 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
         }
     });
 
-    send_http_request(&window, &request, &response, environment, cookie_jar, &mut cancel_rx).await
+    let sent =
+        send_http_request(&window, &request, &response, environment, cookie_jar, &mut cancel_rx)
+            .await?;
+
+    // Blanking the request id above is what makes this send unsaved, so the
+    // engine always hands the body back. Failing loudly beats returning an
+    // empty body that reads as "the server sent nothing".
+    let ResponseBody::Returned(body) = sent.body else {
+        return Err(GenericError("Unsaved response did not return a body".to_string()));
+    };
+
+    Ok(EphemeralHttpResponse { response: sent.response, body })
 }
 
 async fn cmd_format_json(text: &str) -> YaakResult<String> {
@@ -1020,27 +1038,49 @@ async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
     }
 }
 
+/// Where a response's body is, and what it is meant to be read as.
+struct ResponseBodyLocation {
+    /// None when the response has no stored body.
+    path: Option<PathBuf>,
+    /// The response's declared `Content-Type`, empty when it has none.
+    content_type: String,
+}
+
+/// Find a response's body from its id alone.
+///
+/// The frontend hands back an id and never a path, so the only bodies reachable
+/// here are ones the engine wrote and the database still knows about. A
+/// response that was never saved has no entry, and its body came back from the
+/// send that made it.
+fn locate_response_body<R: Runtime>(
+    app_handle: &AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<ResponseBodyLocation> {
+    let response = app_handle.db().get_http_response(response_id)?;
+
+    Ok(ResponseBodyLocation {
+        path: response.body_path.map(PathBuf::from),
+        content_type: response
+            .headers
+            .iter()
+            .find(|h| h.name.eq_ignore_ascii_case("content-type"))
+            .map(|h| h.value.clone())
+            .unwrap_or_default(),
+    })
+}
+
 async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
     plugin_manager: State<'_, PluginManager>,
-    response: HttpResponse,
+    response_id: &str,
     filter: Option<&str>,
 ) -> YaakResult<FilterResponse> {
-    let body_path = match response.body_path {
-        None => {
-            return Ok(FilterResponse { content: String::new(), error: None });
-        }
-        Some(p) => p,
+    let location = locate_response_body(window.app_handle(), response_id)?;
+    let Some(body_path) = location.path else {
+        return Ok(FilterResponse { content: String::new(), error: None });
     };
 
-    let content_type = response
-        .headers
-        .iter()
-        .find_map(|h| {
-            if h.name.eq_ignore_ascii_case("content-type") { Some(h.value.as_str()) } else { None }
-        })
-        .unwrap_or_default();
-
+    let content_type = location.content_type.as_str();
     let body = read_response_body(&body_path, content_type)
         .await
         .ok_or(GenericError("Failed to find response body".to_string()))?;
@@ -1051,6 +1091,20 @@ async fn cmd_http_response_body<R: Runtime>(
             .await?),
         _ => Ok(FilterResponse { content: body, error: None }),
     }
+}
+
+/// The body's path on this machine, for the desktop host to read or hand to the
+/// webview's asset protocol.
+///
+/// The frontend holds response ids; only `packages/platform`'s Tauri host sees
+/// the path, and only because it is about to open the file itself. Hosts
+/// without a filesystem serve the same bytes over HTTP instead.
+async fn cmd_http_response_body_path<R: Runtime>(
+    app_handle: AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<Option<String>> {
+    let location = locate_response_body(&app_handle, response_id)?;
+    Ok(location.path.map(|p| p.to_string_lossy().to_string()))
 }
 
 async fn cmd_http_request_body<R: Runtime>(
@@ -1069,8 +1123,15 @@ async fn cmd_http_request_body<R: Runtime>(
     Ok(Some(body))
 }
 
-async fn cmd_get_sse_events(file_path: &str) -> YaakResult<Vec<ServerSentEvent>> {
-    let body = fs::read(file_path)?;
+async fn cmd_get_sse_events<R: Runtime>(
+    app_handle: AppHandle<R>,
+    response_id: &str,
+) -> YaakResult<Vec<ServerSentEvent>> {
+    let Some(body_path) = locate_response_body(&app_handle, response_id)?.path else {
+        return Ok(Vec::new());
+    };
+
+    let body = fs::read(body_path)?;
     let mut event_parser = EventParser::new();
     event_parser.process_bytes(body.into())?;
 
@@ -1488,7 +1549,7 @@ async fn cmd_send_http_request<R: Runtime>(
     )
     .await
     {
-        Ok(r) => r,
+        Ok(sent) => sent.response,
         Err(e) => {
             let resp = app_handle.db().get_http_response(&response.id)?;
             app_handle.db().upsert_http_response(

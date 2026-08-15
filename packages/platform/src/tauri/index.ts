@@ -104,6 +104,18 @@ async function rpc<T>(cmd: string, payload?: RpcPayload): Promise<T> {
   }
 }
 
+/**
+ * Where this host keeps the bytes stored under an id, or null if it has none.
+ *
+ * The desktop stores them as files the engine wrote, so answering means asking
+ * the backend. Callers hold ids and nothing else; the path exists for exactly
+ * as long as it takes to open the file, which is the one thing a desktop host
+ * can do that a tab cannot.
+ */
+function storedBodyPath(id: string): Promise<string | null> {
+  return rpc<string | null>("cmd_http_response_body_path", { responseId: id });
+}
+
 export function createTauriPlatform(): Platform {
   const window = createWindow();
 
@@ -124,11 +136,22 @@ export function createTauriPlatform(): Platform {
     },
 
     files: {
-      readFile: (path) => readFile(path),
       readDir: (path) => readDir(path),
       url: (path) => convertFileSrc(path),
       basename: (path) => basename(path),
       resolveResource: (path) => resolveResource(path),
+    },
+
+    blobs: {
+      async read(id) {
+        const path = await storedBodyPath(id);
+        return path == null ? null : readFile(path);
+      },
+
+      async url(id) {
+        const path = await storedBodyPath(id);
+        return path == null ? null : convertFileSrc(path);
+      },
     },
 
     rpc,

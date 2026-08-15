@@ -6,7 +6,6 @@ import { useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import { useContainerSize } from "@yaakapp-internal/ui";
 import { fireAndForget } from "../../lib/fireAndForget";
-import { platform } from "@yaakapp-internal/platform";
 
 fireAndForget(
   import("react-pdf").then(({ pdfjs }) => {
@@ -18,7 +17,8 @@ fireAndForget(
 );
 
 interface Props {
-  bodyPath?: string;
+  /** A URL for the body the host already stored. */
+  bodyUrl?: string;
   data?: Uint8Array;
 }
 
@@ -27,7 +27,7 @@ const options = {
   standardFontDataUrl: "/standard_fonts/",
 };
 
-export function PdfViewer({ bodyPath, data }: Props) {
+export function PdfViewer({ bodyUrl, data }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>();
 
@@ -36,8 +36,8 @@ export function PdfViewer({ bodyPath, data }: Props) {
   // During render, not in an effect: an effect leaves the first paint with no file, and
   // `Document` renders its "Failed to load PDF file" state for that frame before recovering
   const src = useMemo(() => {
-    if (bodyPath) {
-      return platform.files.url(bodyPath);
+    if (bodyUrl) {
+      return bodyUrl;
     }
     if (data) {
       // Create a copy to avoid "Buffer is already detached" errors
@@ -45,7 +45,7 @@ export function PdfViewer({ bodyPath, data }: Props) {
       return { data: new Uint8Array(data) };
     }
     return undefined;
-  }, [bodyPath, data]);
+  }, [bodyUrl, data]);
 
   const onDocumentLoadSuccess = ({ numPages: nextNumPages }: PDFDocumentProxy): void => {
     setNumPages(nextNumPages);

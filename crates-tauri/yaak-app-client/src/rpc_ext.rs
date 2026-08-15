@@ -250,6 +250,19 @@ pub(crate) struct CmdSendEphemeralRequestReq {
     pub cookie_jar_id: Option<String>,
 }
 
+/// An unsaved response and its body.
+///
+/// The body rides along because nothing stored it: there is no database row to
+/// look up later and no file for a host to read, so this is the caller's only
+/// copy.
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct EphemeralHttpResponse {
+    pub response: HttpResponse,
+    pub body: Vec<u8>,
+}
+
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
@@ -268,8 +281,15 @@ pub(crate) struct CmdFormatGraphqlReq {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub(crate) struct CmdHttpResponseBodyReq {
-    pub response: HttpResponse,
+    pub response_id: String,
     pub filter: Option<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub(crate) struct CmdHttpResponseBodyPathReq {
+    pub response_id: String,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -283,7 +303,7 @@ pub(crate) struct CmdHttpRequestBodyReq {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub(crate) struct CmdGetSseEventsReq {
-    pub file_path: String,
+    pub response_id: String,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -970,7 +990,7 @@ async fn cmd_restart<R: Runtime>(ctx: ClientCtx<R>, _req: CmdRestartReq) -> Resu
     Ok(crate::cmd_restart(ctx.window.app_handle().clone()).await?)
 }
 
-async fn cmd_send_ephemeral_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendEphemeralRequestReq) -> Result<HttpResponse> {
+async fn cmd_send_ephemeral_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendEphemeralRequestReq) -> Result<EphemeralHttpResponse> {
     Ok(crate::cmd_send_ephemeral_request(req.request, req.environment_id.as_deref(), req.cookie_jar_id.as_deref(), ctx.window.clone(), ctx.window.app_handle().clone()).await?)
 }
 
@@ -983,15 +1003,19 @@ async fn cmd_format_graphql<R: Runtime>(_ctx: ClientCtx<R>, req: CmdFormatGraphq
 }
 
 async fn cmd_http_response_body<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpResponseBodyReq) -> Result<FilterResponse> {
-    Ok(crate::cmd_http_response_body(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>(), req.response, req.filter.as_deref()).await?)
+    Ok(crate::cmd_http_response_body(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>(), &req.response_id, req.filter.as_deref()).await?)
+}
+
+async fn cmd_http_response_body_path<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpResponseBodyPathReq) -> Result<Option<String>> {
+    Ok(crate::cmd_http_response_body_path(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
 async fn cmd_http_request_body<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestBodyReq) -> Result<Option<Vec<u8>>> {
     Ok(crate::cmd_http_request_body(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
-async fn cmd_get_sse_events<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGetSseEventsReq) -> Result<Vec<ServerSentEvent>> {
-    Ok(crate::cmd_get_sse_events(&req.file_path).await?)
+async fn cmd_get_sse_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetSseEventsReq) -> Result<Vec<ServerSentEvent>> {
+    Ok(crate::cmd_get_sse_events(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
 async fn cmd_get_http_response_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpResponseEventsReq) -> Result<Vec<HttpResponseEvent>> {
@@ -1367,10 +1391,11 @@ rpc_commands! {
     cmd_grpc_reflect(CmdGrpcReflectReq) -> Vec<ServiceDefinition>,
     cmd_grpc_go(CmdGrpcGoReq) -> String,
     cmd_restart(CmdRestartReq) -> (),
-    cmd_send_ephemeral_request(CmdSendEphemeralRequestReq) -> HttpResponse,
+    cmd_send_ephemeral_request(CmdSendEphemeralRequestReq) -> EphemeralHttpResponse,
     cmd_format_json(CmdFormatJsonReq) -> String,
     cmd_format_graphql(CmdFormatGraphqlReq) -> String,
     cmd_http_response_body(CmdHttpResponseBodyReq) -> FilterResponse,
+    cmd_http_response_body_path(CmdHttpResponseBodyPathReq) -> Option<String>,
     cmd_http_request_body(CmdHttpRequestBodyReq) -> Option<Vec<u8>>,
     cmd_get_sse_events(CmdGetSseEventsReq) -> Vec<ServerSentEvent>,
     cmd_get_http_response_events(CmdGetHttpResponseEventsReq) -> Vec<HttpResponseEvent>,

@@ -5,7 +5,6 @@ import type { GraphQLSchema, IntrospectionQuery } from "graphql";
 import { buildClientSchema, getIntrospectionQuery } from "graphql";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { minPromiseMillis } from "../lib/minPromiseMillis";
-import { getResponseBodyText } from "../lib/responseBody";
 import { sendEphemeralRequest } from "../lib/sendEphemeralRequest";
 import { useActiveEnvironment } from "./useActiveEnvironment";
 import { useDebouncedValue } from "@yaakapp-internal/ui";
@@ -55,7 +54,7 @@ export function useIntrospectGraphQL(
         bodyType: "application/json",
         body: { text: introspectionRequestBody },
       };
-      const response = await minPromiseMillis(
+      const { response, body } = await minPromiseMillis(
         sendEphemeralRequest(args, activeEnvironment?.id ?? null),
         700,
       );
@@ -64,14 +63,16 @@ export function useIntrospectGraphQL(
         return setError(response.error);
       }
 
-      const bodyText = await getResponseBodyText({ response, filter: null });
+      // The send hands back the only copy of the body — an unsaved response has
+      // nothing on disk and no row to read it back from
+      const bodyText = new TextDecoder("utf-8").decode(new Uint8Array(body));
       if (response.status < 200 || response.status >= 300) {
         return setError(
           `Request failed with status ${response.status}.\nThe response text is:\n\n${bodyText}`,
         );
       }
 
-      if (bodyText === null) {
+      if (bodyText === "") {
         return setError("Empty body returned in response");
       }
 
