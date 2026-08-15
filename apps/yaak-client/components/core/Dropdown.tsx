@@ -663,7 +663,9 @@ const Menu = forwardRef<Omit<DropdownRef, "open" | "isOpen" | "toggle" | "items"
 
         if (item.submenu && !item.submenuOpenOnClick && item.submenuTrigger !== "button") {
           setActiveSubmenu({ item, parent });
-        } else if (activeSubmenu) {
+        } else if (activeSubmenu && activeSubmenu.item !== item) {
+          // Hovering the row that owns the open submenu must not dismiss it — the
+          // pointer travels across the row on its way to a button-triggered submenu
           submenuTimeoutRef.current = window.setTimeout(() => {
             const submenuEl = submenuRef.current;
             if (!submenuEl || !activeSubmenu) {
