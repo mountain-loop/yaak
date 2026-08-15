@@ -18,7 +18,7 @@ pub mod error;
 const OID_RSA_ENCRYPTION: &[u64] = &[1, 2, 840, 113549, 1, 1, 1];
 const OID_EC_PUBLIC_KEY: &[u64] = &[1, 2, 840, 10045, 2, 1];
 
-/// Password for the PKCS#12 blob [`load_client_identity_pkcs12`] builds from PEM
+/// Password for the PKCS#12 blob [`load_native_client_identity`] builds from PEM
 /// files. The blob never leaves the process, so the value only has to agree with
 /// the caller that immediately re-parses it.
 const IN_MEMORY_PKCS12_PASSWORD: &str = "yaak";
@@ -107,16 +107,33 @@ fn load_client_cert(
     Ok(None)
 }
 
-/// Load the configured client certificate as PKCS#12 DER, along with the
-/// password needed to open it.
+/// A client identity in one of the encodings a native TLS stack accepts.
+pub enum NativeClientIdentity {
+    /// A PKCS#12 archive, with the password needed to open it.
+    Pkcs12 { data: Vec<u8>, password: String },
+    /// A PEM certificate chain, leaf first, with a PKCS#8 PEM private key.
+    Pkcs8 {
+        chain_pem: Vec<u8>,
+        key_pem: Vec<u8>,
+    },
+}
+
+/// Whether the platform's native TLS stack should be handed PEM material as
+/// PKCS#12 rather than PKCS#8.
 ///
-/// Native TLS stacks accept a client identity as either PKCS#12 or a PKCS#8
-/// PEM, and the PKCS#8 route rejects EC keys on macOS outright. Going through
-/// PKCS#12 keeps the key formats we accept identical to the rustls path, which
-/// reads PKCS#1 and SEC1 keys directly.
-pub fn load_client_identity_pkcs12(
+/// Both encodings lose something. PKCS#8 is rejected for EC keys by Security
+/// Framework on macOS and by SChannel on Windows, which imports keys through an
+/// RSA-only provider. PKCS#12 as the `p12` crate emits it is encrypted with
+/// SHA1/40-bit-RC2 (certificates) and SHA1/3DES (key), and OpenSSL 3 moved RC2
+/// into the legacy provider, so on Linux it fails to decrypt what we just
+/// wrote. Each platform therefore gets the encoding its own stack can read.
+const NATIVE_TLS_WANTS_PKCS12: bool = cfg!(any(target_vendor = "apple", target_os = "windows"));
+
+/// Load the configured client certificate in whichever encoding this platform's
+/// native TLS stack accepts.
+pub fn load_native_client_identity(
     client_cert: Option<ClientCertificateConfig>,
-) -> Result<Option<(Vec<u8>, String)>> {
+) -> Result<Option<NativeClientIdentity>> {
     let config = match client_cert {
         None => return Ok(None),
         Some(c) => c,
@@ -127,7 +144,10 @@ pub fn load_client_identity_pkcs12(
     if let Some(pfx_path) = &config.pfx_file {
         if !pfx_path.is_empty() {
             let data = fs::read(Path::new(pfx_path))?;
-            return Ok(Some((data, config.passphrase.clone().unwrap_or_default())));
+            return Ok(Some(NativeClientIdentity::Pkcs12 {
+                data,
+                password: config.passphrase.clone().unwrap_or_default(),
+            }));
         }
     }
 
@@ -136,13 +156,35 @@ pub fn load_client_identity_pkcs12(
     };
 
     let key_der = to_pkcs8_der(&key)?;
+
+    if !NATIVE_TLS_WANTS_PKCS12 {
+        return Ok(Some(to_pkcs8_identity(&certs, &key_der)));
+    }
+
     let (leaf, cas) = certs.split_first().ok_or(GenericError("No certificates found".into()))?;
     let cas: Vec<&[u8]> = cas.iter().map(|c| c.as_ref()).collect();
 
     let pfx = p12::PFX::new_with_cas(leaf, &key_der, &cas, IN_MEMORY_PKCS12_PASSWORD, "yaak")
         .ok_or(GenericError("Failed to build PKCS#12 from client certificate".into()))?;
 
-    Ok(Some((pfx.to_der(), IN_MEMORY_PKCS12_PASSWORD.to_string())))
+    Ok(Some(NativeClientIdentity::Pkcs12 {
+        data: pfx.to_der(),
+        password: IN_MEMORY_PKCS12_PASSWORD.to_string(),
+    }))
+}
+
+/// Re-encode a certificate chain and PKCS#8 key as the PEM pair native-tls
+/// expects. It only recognises a key whose first line is the PKCS#8 header, so
+/// the key has to arrive already converted by [`to_pkcs8_der`].
+fn to_pkcs8_identity(certs: &[CertificateDer<'static>], key_der: &[u8]) -> NativeClientIdentity {
+    let config = pem::EncodeConfig::new().set_line_ending(pem::LineEnding::LF);
+    let chain: Vec<pem::Pem> =
+        certs.iter().map(|c| pem::Pem::new("CERTIFICATE", c.as_ref())).collect();
+
+    NativeClientIdentity::Pkcs8 {
+        chain_pem: pem::encode_many_config(&chain, config).into_bytes(),
+        key_pem: pem::encode_config(&pem::Pem::new("PRIVATE KEY", key_der), config).into_bytes(),
+    }
 }
 
 /// Re-encode a private key as PKCS#8 DER, wrapping PKCS#1 and SEC1 keys.
@@ -378,4 +420,80 @@ pub fn find_client_certificate(
     }
 
     None
+}
+
+#[cfg(test)]
+mod pkcs8_identity_tests {
+    use super::*;
+
+    const EC_CRT: &str = r#"-----BEGIN CERTIFICATE-----
+MIIBhTCCASugAwIBAgIUB8703dqXCUOJQbhbyaMUMbVFOjwwCgYIKoZIzj0EAwIw
+FzEVMBMGA1UEAwwMeWFhay10ZXN0LWVjMCAXDTI2MDgxNDIwNDYyNFoYDzIxMjYw
+NzIxMjA0NjI0WjAXMRUwEwYDVQQDDAx5YWFrLXRlc3QtZWMwWTATBgcqhkjOPQIB
+BggqhkjOPQMBBwNCAATCYYKhzgHEaRaGsYVjJSoXvoroL8qe1yeEA0VtfxFzMBg+
++bkPQ0nCtMyFfvQQtXWYIakxzsWJyhI8wPjUj6QSo1MwUTAdBgNVHQ4EFgQUKq40
+Hl+2DziVkBVR/tGsPj9FRo0wHwYDVR0jBBgwFoAUKq40Hl+2DziVkBVR/tGsPj9F
+Ro0wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiEAj1dx5XLl9iCZ
+rD0CW+a3RTluxQ5icXno9WJ9qaS6L08CIFx2t0y9znQr7n5x+SmfXbfZtkDola8e
+8nEZga/HXSeu
+-----END CERTIFICATE-----"#;
+
+    const EC_SEC1_KEY: &str = r#"-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIIoiiZ/hb4h6eHkZUVBTQFz7KLrVKJqQtWee2ygOjijNoAoGCCqGSM49
+AwEHoUQDQgAEwmGCoc4BxGkWhrGFYyUqF76K6C/KntcnhANFbX8RczAYPvm5D0NJ
+wrTMhX70ELV1mCGpMc7FicoSPMD41I+kEg==
+-----END EC PRIVATE KEY-----"#;
+
+    const EC_PKCS8_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgiiKJn+FviHp4eRlR
+UFNAXPsoutUompC1Z57bKA6OKM2hRANCAATCYYKhzgHEaRaGsYVjJSoXvoroL8qe
+1yeEA0VtfxFzMBg++bkPQ0nCtMyFfvQQtXWYIakxzsWJyhI8wPjUj6QS
+-----END PRIVATE KEY-----"#;
+
+    fn pkcs8_identity(crt: &str, key: &str) -> (Vec<u8>, Vec<u8>) {
+        let certs: Vec<CertificateDer<'static>> =
+            rustls_pemfile::certs(&mut BufReader::new(crt.as_bytes()))
+                .map(|c| c.unwrap())
+                .collect();
+        let key_der = to_pkcs8_der(&load_private_key(key.as_bytes()).unwrap()).unwrap();
+
+        match to_pkcs8_identity(&certs, &key_der) {
+            NativeClientIdentity::Pkcs8 { chain_pem, key_pem } => (chain_pem, key_pem),
+            NativeClientIdentity::Pkcs12 { .. } => unreachable!("asked for PKCS#8"),
+        }
+    }
+
+    /// native-tls matches the PKCS#8 header as a literal prefix and rejects the
+    /// key outright when it does not line up, so pin it on every platform even
+    /// though only the OpenSSL backend is handed this encoding.
+    #[test]
+    fn every_key_format_re_encodes_to_a_pkcs8_pem() {
+        for (name, key) in [("SEC1", EC_SEC1_KEY), ("PKCS#8", EC_PKCS8_KEY)] {
+            let (chain_pem, key_pem) = pkcs8_identity(EC_CRT, key);
+
+            assert!(
+                key_pem.starts_with(b"-----BEGIN PRIVATE KEY-----\n"),
+                "{name} key did not re-encode to a PKCS#8 PEM"
+            );
+
+            let round_tripped: Vec<CertificateDer<'static>> =
+                rustls_pemfile::certs(&mut BufReader::new(chain_pem.as_slice()))
+                    .map(|c| c.unwrap())
+                    .collect();
+            let original: Vec<CertificateDer<'static>> =
+                rustls_pemfile::certs(&mut BufReader::new(EC_CRT.as_bytes()))
+                    .map(|c| c.unwrap())
+                    .collect();
+            assert_eq!(round_tripped, original, "{name} chain did not round-trip");
+        }
+    }
+
+    /// The two on-disk spellings of one EC key have to converge, because only
+    /// the PKCS#8 one survives the re-encode.
+    #[test]
+    fn sec1_and_pkcs8_spellings_of_one_key_agree() {
+        let (_, from_sec1) = pkcs8_identity(EC_CRT, EC_SEC1_KEY);
+        let (_, from_pkcs8) = pkcs8_identity(EC_CRT, EC_PKCS8_KEY);
+        assert_eq!(from_sec1, from_pkcs8);
+    }
 }
