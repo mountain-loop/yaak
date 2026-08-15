@@ -1,6 +1,8 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { useCopyHttpResponse } from "../../hooks/useCopyHttpResponse";
-import { useResponseBodyText } from "../../hooks/useResponseBodyText";
+import { responseBodyTextQuery, useResponseBodyText } from "../../hooks/useResponseBodyText";
 import { useResponseFilter } from "../../hooks/useResponseFilter";
 import { useSaveResponse } from "../../hooks/useSaveResponse";
 import { languageFromContentType } from "../../lib/contentType";
@@ -52,8 +54,16 @@ interface HttpTextViewerProps {
 }
 
 function HttpTextViewer({ response, text, language, pretty, className }: HttpTextViewerProps) {
-  const filter = useResponseFilter({ stateKey: `response.body.${response.requestId}` });
-  const filteredBody = useResponseBodyText({ response, filter: filter.debouncedFilterText });
+  const queryClient = useQueryClient();
+  const filter = useResponseFilter({
+    stateKey: `response.body.${response.requestId}`,
+    // Shares the display query's cache entry, so the verdict costs no extra RPC
+    runFilter: useCallback(
+      (f: string) => queryClient.fetchQuery(responseBodyTextQuery({ response, filter: f })),
+      [queryClient, response],
+    ),
+  });
+  const filteredBody = useResponseBodyText({ response, filter: filter.appliedFilter });
   const saveResponse = useSaveResponse(response);
   const copyResponse = useCopyHttpResponse(response);
   const actionsDisabled = response.state !== "closed" && response.status >= 100;

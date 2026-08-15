@@ -1,13 +1,15 @@
-import classNames from "classnames";
 import type { ReactNode } from "react";
-import { Children, useMemo } from "react";
+import { Children, useCallback, useMemo } from "react";
+import { Banner, HStack, Icon, InlineCode } from "@yaakapp-internal/ui";
 import { useFormatText } from "../../hooks/useFormatText";
 import type { ResponseFilterApi } from "../../hooks/useResponseFilter";
+import { Button } from "../core/Button";
 import type { EditorProps } from "../core/Editor/Editor";
 import { hyperlink } from "../core/Editor/hyperlink/extension";
 import { Editor } from "../core/Editor/LazyEditor";
 import { IconButton } from "../core/IconButton";
 import { Input } from "../core/Input";
+import { RecentFiltersDropdown } from "./RecentFiltersDropdown";
 
 const extraExtensions = [hyperlink];
 
@@ -18,9 +20,7 @@ interface Props {
   pretty?: boolean;
   className?: string;
   footerActions?: ReactNode;
-  /** Filter state, from useResponseFilter in whichever component runs the filter */
   filter?: ResponseFilterApi;
-  /** Result of applying `filter.debouncedFilterText` to the body */
   filterResult?: {
     data: string | null | undefined;
     isPending: boolean;
@@ -41,8 +41,20 @@ export function TextViewer({
   const canFilter =
     filter != null && (language === "json" || language === "xml" || language === "html");
   const isSearching = filter?.isSearching ?? false;
-  const filterText = filter?.filterText ?? null;
+  const appliedFilter = filter?.appliedFilter ?? null;
   const resultError = filterResult?.error ?? false;
+
+  const handleFilterKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (filter == null) return;
+      if (e.key === "Escape") {
+        filter.toggleSearch();
+      } else if (e.key === "Enter" && filter.filterText != null) {
+        filter.applyFilter(filter.filterText);
+      }
+    },
+    [filter],
+  );
 
   const actions = useMemo<ReactNode[]>(() => {
     const nodes: ReactNode[] = isSearching ? [] : Children.toArray(footerActions);
@@ -62,37 +74,62 @@ export function TextViewer({
             placeholder={language === "json" ? "JSONPath expression" : "XPath expression"}
             label="Filter expression"
             name="filter"
-            defaultValue={filterText}
-            onKeyDown={(e) => e.key === "Escape" && filter.toggleSearch()}
+            defaultValue={filter.filterText}
+            forceUpdateKey={filter.filterUpdateKey}
+            onKeyDown={handleFilterKeyDown}
             onChange={filter.setFilterText}
             stateKey={filter.stateKey ? `filter.${filter.stateKey}` : null}
+            leftSlot={
+              <div className="py-0.5 flex">
+                <RecentFiltersDropdown
+                  recentFilters={filter.recentFilters}
+                  activeFilter={filter.appliedFilter}
+                  onSelect={filter.replaceFilter}
+                  onRemove={filter.removeRecentFilter}
+                  onTogglePin={filter.togglePinRecentFilter}
+                  onClear={filter.clearRecentFilters}
+                />
+              </div>
+            }
+            rightSlot={
+              <div className="py-0.5 flex">
+                <IconButton
+                  size="xs"
+                  icon="x"
+                  title="Close filter"
+                  iconColor="secondary"
+                  onClick={filter.toggleSearch}
+                  className="w-8 mr-0.5 h-auto!"
+                />
+              </div>
+            }
           />
         </div>,
       );
+    } else {
+      nodes.push(
+        <IconButton
+          key="icon"
+          size="sm"
+          isLoading={filterResult?.isPending ?? false}
+          icon="filter"
+          title="Filter response"
+          onClick={filter.toggleSearch}
+          className="border border-border-subtle!"
+        />,
+      );
     }
-
-    nodes.push(
-      <IconButton
-        key="icon"
-        size="sm"
-        isLoading={filterResult?.isPending ?? false}
-        icon={isSearching ? "x" : "filter"}
-        title={isSearching ? "Close filter" : "Filter response"}
-        onClick={filter.toggleSearch}
-        className={classNames("border border-border-subtle!", isSearching && "opacity-100!")}
-      />,
-    );
 
     return nodes;
   }, [
     canFilter,
     footerActions,
     filter,
-    filterText,
     filterResult?.isPending,
     resultError,
     isSearching,
     language,
+    handleFilterKeyDown,
   ]);
 
   const formattedBody = useFormatText({ text, language, pretty: pretty ?? false });
@@ -101,7 +138,7 @@ export function TextViewer({
   }
 
   let body: string;
-  if (isSearching && filterText != null && filterText.length > 0) {
+  if (appliedFilter) {
     if (resultError) {
       body = "";
     } else {
@@ -118,15 +155,61 @@ export function TextViewer({
   }
 
   return (
-    <Editor
-      readOnly
-      className={className}
-      defaultValue={body}
-      language={language}
-      actions={actions}
-      extraExtensions={extraExtensions}
-      stateKey={stateKey}
-    />
+    <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full w-full">
+      {appliedFilter && filter != null ? (
+        <AppliedFilterBar
+          filter={appliedFilter}
+          error={resultError}
+          onClear={() => filter.replaceFilter("")}
+        />
+      ) : (
+        <span />
+      )}
+      <Editor
+        readOnly
+        className={className}
+        defaultValue={body}
+        language={language}
+        actions={actions}
+        extraExtensions={extraExtensions}
+        stateKey={stateKey}
+      />
+    </div>
+  );
+}
+
+/**
+ * Shows what's actually filtering the body, which the filter box below can't convey
+ * once it holds an edited expression that hasn't been applied yet.
+ */
+function AppliedFilterBar({
+  filter,
+  error,
+  onClear,
+}: {
+  filter: string;
+  error: boolean;
+  onClear: () => void;
+}) {
+  return (
+    <Banner color={error ? "danger" : "info"} className="py-1! mb-2! text-sm">
+      <HStack space={2} className="min-w-0">
+        <Icon icon="filter" size="xs" className="shrink-0 opacity-70" />
+        <span className="truncate min-w-0" title={filter}>
+          Response filtered by <InlineCode>{filter}</InlineCode>
+          {error && " (invalid expression)"}
+        </span>
+        <Button
+          size="2xs"
+          variant="border"
+          color={error ? "danger" : "info"}
+          className="ml-auto shrink-0"
+          onClick={onClear}
+        >
+          Clear
+        </Button>
+      </HStack>
+    </Banner>
   );
 }
 

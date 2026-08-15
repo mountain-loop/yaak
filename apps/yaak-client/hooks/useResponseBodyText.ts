@@ -2,6 +2,25 @@ import { useQuery } from "@tanstack/react-query";
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { getResponseBodyBytes, getResponseBodyText } from "../lib/responseBody";
 
+export function responseBodyTextQuery({
+  response,
+  filter,
+}: {
+  response: HttpResponse;
+  filter: string | null;
+}) {
+  return {
+    queryKey: [
+      "response_body_text",
+      response.id,
+      response.updatedAt,
+      response.contentLength,
+      filter ?? "",
+    ],
+    queryFn: () => getResponseBodyText({ response, filter }),
+  };
+}
+
 export function useResponseBodyText({
   response,
   filter,
@@ -11,14 +30,7 @@ export function useResponseBodyText({
 }) {
   return useQuery({
     placeholderData: (prev) => prev, // Keep previous data on refetch
-    queryKey: [
-      "response_body_text",
-      response.id,
-      response.updatedAt,
-      response.contentLength,
-      filter ?? "",
-    ],
-    queryFn: () => getResponseBodyText({ response, filter }),
+    ...responseBodyTextQuery({ response, filter }),
   });
 }
 
