@@ -71,9 +71,16 @@ const ALREADY_OPEN =
  */
 function acquireDatabaseLock(): Promise<void> {
   if (typeof navigator.locks === "undefined") {
-    // No way to guarantee exclusivity; proceed and hope. This is old browsers
-    // only, and they will get one tab working.
-    return Promise.resolve();
+    // Without Web Locks there is no way to promise a second tab won't open a
+    // second SQLite over the same pages, and a hopeful open is a corrupted
+    // workspace waiting to happen. Refuse. This is iOS Safari before 15.4 and
+    // Android Chrome before 69 — browsers the rest of the app has already
+    // left behind.
+    return Promise.reject(
+      new Error(
+        "This browser can't keep Yaak's data safe when more than one tab is open (it has no Web Locks). Please use a newer browser.",
+      ),
+    );
   }
   return new Promise<void>((resolve, reject) => {
     navigator.locks
