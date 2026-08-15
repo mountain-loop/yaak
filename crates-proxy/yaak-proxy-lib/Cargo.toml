@@ -10,8 +10,8 @@ chrono = { workspace = true, features = ["serde"] }
 log = { workspace = true }
 include_dir = "0.7"
 r2d2 = "0.8.10"
-r2d2_sqlite = "0.25.0"
-rusqlite = { version = "0.32.1", features = ["bundled", "chrono"] }
+r2d2_sqlite = "0.32"
+rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
 sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

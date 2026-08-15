@@ -1,13 +1,13 @@
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Error::ModelNotFound;
 use crate::error::Result;
+use crate::sea_query_rusqlite::RusqliteBinder;
 use crate::traits::UpsertModelInfo;
 use crate::update_source::UpdateSource;
 use sea_query::{
     Asterisk, Expr, Func, IntoColumnRef, IntoIden, OnConflict, Query, SimpleExpr,
     SqliteQueryBuilder,
 };
-use sea_query_rusqlite::RusqliteBinder;
 use std::fmt::Debug;
 
 pub struct DbContext<'a> {

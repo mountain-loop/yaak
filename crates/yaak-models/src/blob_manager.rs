@@ -2,9 +2,8 @@ use crate::error::Result;
 use crate::util::generate_prefixed_id;
 use include_dir::{Dir, include_dir};
 use log::{debug, info};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, params};
+use yaak_database::{SqliteConn, SqlitePool};
 
 static BLOB_MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/blob_migrations");
 
@@ -29,11 +28,11 @@ impl BodyChunk {
 // whole app whenever the pool is exhausted.
 #[derive(Debug, Clone)]
 pub struct BlobManager {
-    pool: Pool<SqliteConnectionManager>,
+    pool: SqlitePool,
 }
 
 impl BlobManager {
-    pub fn new(pool: Pool<SqliteConnectionManager>) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
@@ -45,7 +44,7 @@ impl BlobManager {
 
 /// Context for blob database operations.
 pub struct BlobContext {
-    conn: r2d2::PooledConnection<SqliteConnectionManager>,
+    conn: SqliteConn,
 }
 
 impl BlobContext {
@@ -131,7 +130,7 @@ impl BlobContext {
 }
 
 /// Run migrations for the blob database.
-pub fn migrate_blob_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
+pub fn migrate_blob_db(pool: &SqlitePool) -> Result<()> {
     info!("Running blob database migrations");
 
     // Create migrations tracking table
@@ -198,9 +197,9 @@ pub fn migrate_blob_db(pool: &Pool<SqliteConnectionManager>) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn create_test_pool() -> Pool<SqliteConnectionManager> {
-        let manager = SqliteConnectionManager::memory();
-        let pool = Pool::builder().max_size(1).build(manager).unwrap();
+    fn create_test_pool() -> SqlitePool {
+        let manager = r2d2_sqlite::SqliteConnectionManager::memory();
+        let pool = r2d2::Pool::builder().max_size(1).build(manager).unwrap();
         migrate_blob_db(&pool).unwrap();
         pool
     }

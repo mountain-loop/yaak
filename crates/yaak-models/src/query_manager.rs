@@ -1,23 +1,21 @@
 use crate::client_db::ClientDb;
 use crate::error::Error::GenericError;
 use crate::util::ModelPayload;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::TransactionBehavior;
 use std::sync::mpsc;
-use yaak_database::{ConnectionOrTx, DbContext};
+use yaak_database::{ConnectionOrTx, DbContext, SqlitePool};
 
 // Pool is internally synchronized — don't wrap it in a Mutex. A Mutex held across the
 // blocking `get()` serializes every DB access behind the slowest waiter, freezing the
 // whole app whenever the pool is exhausted.
 #[derive(Debug, Clone)]
 pub struct QueryManager {
-    pool: Pool<SqliteConnectionManager>,
+    pool: SqlitePool,
     events_tx: mpsc::Sender<ModelPayload>,
 }
 
 impl QueryManager {
-    pub fn new(pool: Pool<SqliteConnectionManager>, events_tx: mpsc::Sender<ModelPayload>) -> Self {
+    pub fn new(pool: SqlitePool, events_tx: mpsc::Sender<ModelPayload>) -> Self {
         QueryManager { pool, events_tx }
     }
 

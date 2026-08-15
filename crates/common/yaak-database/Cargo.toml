@@ -9,12 +9,19 @@ chrono = { version = "0.4.38", features = ["serde"] }
 include_dir = "0.7"
 log = { workspace = true }
 nanoid = "0.4.0"
-r2d2 = "0.8.10"
-r2d2_sqlite = { version = "0.25.0" }
-rusqlite = { version = "0.32.1", features = ["bundled", "chrono"] }
+rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
 sea-query = { version = "0.32.1", features = ["with-chrono", "attr"] }
-sea-query-rusqlite = { version = "0.7.0", features = ["with-chrono"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 ts-rs = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+r2d2 = "0.8.10"
+r2d2_sqlite = { version = "0.32" }
+
+# nanoid pulls getrandom, which needs to be told how to reach the browser's
+# CSPRNG on wasm32-unknown-unknown. Native targets are unaffected.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+uuid = { version = "1", features = ["js"] }

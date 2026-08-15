@@ -1,8 +1,7 @@
 use crate::error::Result;
+use crate::pool::SqlitePool;
 use include_dir::Dir;
 use log::{debug, info};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{OptionalExtension, params};
 
 const TRACKING_TABLE: &str = "_sqlx_migrations";
@@ -11,7 +10,7 @@ const TRACKING_TABLE: &str = "_sqlx_migrations";
 ///
 /// Migrations are sorted by filename (use timestamp prefixes like `00000001_init.sql`).
 /// Applied migrations are tracked in `_sqlx_migrations`.
-pub fn run_migrations(pool: &Pool<SqliteConnectionManager>, dir: &Dir<'_>) -> Result<()> {
+pub fn run_migrations(pool: &SqlitePool, dir: &Dir<'_>) -> Result<()> {
     info!("Running migrations");
 
     // Create tracking table

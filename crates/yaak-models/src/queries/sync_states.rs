@@ -3,8 +3,8 @@ use crate::error::Result;
 use crate::models::{SyncState, SyncStateIden, UpsertModelInfo};
 use crate::util::UpdateSource;
 use sea_query::{Asterisk, Cond, Expr, Query, SqliteQueryBuilder};
-use sea_query_rusqlite::RusqliteBinder;
 use std::path::Path;
+use yaak_database::sea_query_rusqlite::RusqliteBinder;
 
 impl<'a> ClientDb<'a> {
     pub fn get_sync_state(&self, id: &str) -> Result<SyncState> {

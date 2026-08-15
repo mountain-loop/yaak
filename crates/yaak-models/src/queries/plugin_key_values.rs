@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::models::{PluginKeyValue, PluginKeyValueIden};
 use sea_query::Keyword::CurrentTimestamp;
 use sea_query::{Asterisk, Cond, Expr, OnConflict, Query, SqliteQueryBuilder};
-use sea_query_rusqlite::RusqliteBinder;
+use yaak_database::sea_query_rusqlite::RusqliteBinder;
 
 impl<'a> ClientDb<'a> {
     pub fn get_plugin_key_value(&self, plugin_name: &str, key: &str) -> Option<PluginKeyValue> {

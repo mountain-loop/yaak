@@ -6,7 +6,7 @@ use crate::queries::MAX_HISTORY_ITEMS;
 use crate::util::UpdateSource;
 use log::{debug, error};
 use sea_query::{Expr, Query, SqliteQueryBuilder};
-use sea_query_rusqlite::RusqliteBinder;
+use yaak_database::sea_query_rusqlite::RusqliteBinder;
 use std::fs;
 
 impl<'a> ClientDb<'a> {
