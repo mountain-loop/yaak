@@ -2,11 +2,9 @@ import type { BatchUpsertResult } from "@yaakapp-internal/models";
 import { FormattedError, VStack } from "@yaakapp-internal/ui";
 import { Button } from "../components/core/Button";
 import { ImportDataDialog } from "../components/ImportDataDialog";
-import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
 import { showAlert } from "./alert";
 import { showDialog } from "./dialog";
-import { jotaiStore } from "./jotai";
 import { pluralizeCount } from "./pluralize";
 import { router } from "./router";
 import { rpc } from "./rpc";
@@ -28,12 +26,9 @@ export const importData = createFastMutation({
         title: "Import Data",
         size: "sm",
         render: ({ hide }) => {
-          const importAndHide = async (filePath: string) => {
+          const importAndHide = async (runImport: () => Promise<BatchUpsertResult>) => {
             try {
-              const didImport = await performImport(filePath);
-              if (!didImport) {
-                return;
-              }
+              await finishImport(await runImport());
               resolve();
             } catch (err) {
               reject(err);
@@ -41,20 +36,23 @@ export const importData = createFastMutation({
               hide();
             }
           };
-          return <ImportDataDialog importData={importAndHide} />;
+          return (
+            <ImportDataDialog
+              importFile={(filePath) =>
+                importAndHide(() => rpc<BatchUpsertResult>("cmd_import_data", { filePath }))
+              }
+              importUrl={(url) =>
+                importAndHide(() => rpc<BatchUpsertResult>("cmd_import_url", { url }))
+              }
+            />
+          );
         },
       });
     });
   },
 });
 
-async function performImport(filePath: string): Promise<boolean> {
-  const activeWorkspace = jotaiStore.get(activeWorkspaceAtom);
-  const imported = await rpc<BatchUpsertResult>("cmd_import_data", {
-    filePath,
-    workspaceId: activeWorkspace?.id,
-  });
-
+async function finishImport(imported: BatchUpsertResult): Promise<void> {
   const importedWorkspace = imported.workspaces[0];
 
   showDialog({
@@ -103,6 +101,4 @@ async function performImport(filePath: string): Promise<boolean> {
       search: { environment_id: environmentId },
     });
   }
-
-  return true;
 }

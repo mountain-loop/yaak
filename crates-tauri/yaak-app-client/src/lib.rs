@@ -4,7 +4,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::grpc::{build_metadata, metadata_to_map, resolve_grpc_request};
 use crate::http_request::{resolve_http_request, send_http_request};
-use crate::import::import_data;
+use crate::import::{import_data, import_url};
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_json_value, render_template};
@@ -1163,6 +1163,13 @@ async fn cmd_import_data<R: Runtime>(
     file_path: &str,
 ) -> YaakResult<BatchUpsertResult> {
     import_data(&window, file_path).await
+}
+
+async fn cmd_import_url<R: Runtime>(
+    window: WebviewWindow<R>,
+    url: &str,
+) -> YaakResult<BatchUpsertResult> {
+    import_url(&window, url).await
 }
 
 async fn cmd_http_request_actions<R: Runtime>(

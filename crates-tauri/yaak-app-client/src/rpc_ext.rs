@@ -321,6 +321,13 @@ pub(crate) struct CmdImportDataReq {
 }
 
 #[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub(crate) struct CmdImportUrlReq {
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub(crate) struct CmdHttpRequestActionsReq {}
 
@@ -1026,6 +1033,10 @@ async fn cmd_import_data<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportDataReq) -
     Ok(crate::cmd_import_data(ctx.window.clone(), &req.file_path).await?)
 }
 
+async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> Result<BatchUpsertResult> {
+    Ok(crate::cmd_import_url(ctx.window.clone(), &req.url).await?)
+}
+
 async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {
     Ok(crate::cmd_http_request_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
 }
@@ -1400,6 +1411,7 @@ rpc_commands! {
     cmd_get_sse_events(CmdGetSseEventsReq) -> Vec<ServerSentEvent>,
     cmd_get_http_response_events(CmdGetHttpResponseEventsReq) -> Vec<HttpResponseEvent>,
     cmd_import_data(CmdImportDataReq) -> BatchUpsertResult,
+    cmd_import_url(CmdImportUrlReq) -> BatchUpsertResult,
     cmd_http_request_actions(CmdHttpRequestActionsReq) -> Vec<GetHttpRequestActionsResponse>,
     cmd_websocket_request_actions(CmdWebsocketRequestActionsReq) -> Vec<GetWebsocketRequestActionsResponse>,
     cmd_call_websocket_request_action(CmdCallWebsocketRequestActionReq) -> (),
