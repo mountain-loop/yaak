@@ -1,6 +1,6 @@
 import type { RpcPayload } from "@yaakapp-internal/platform";
 import { platform } from "@yaakapp-internal/platform";
-import type { RpcSchema } from "@yaakapp-internal/tauri-client";
+import type { RpcSchema } from "@yaakapp-internal/rpc-schema";
 
 /**
  * Every backend command the app can call: the generated wire schema, one field

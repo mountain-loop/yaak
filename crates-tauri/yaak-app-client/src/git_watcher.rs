@@ -2,7 +2,6 @@ use crate::error::{Error, Result};
 use chrono::Utc;
 use log::{debug, error, warn};
 use notify::Watcher;
-use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -10,17 +9,10 @@ use tauri::{AppHandle, Listener, Runtime};
 use tokio::select;
 use tokio::sync::watch;
 use tokio::time::sleep;
-use ts_rs::TS;
 use yaak_git::{GitWorktreeStatus, git_path_is_ignored, git_repository_paths, git_worktree_status};
+use yaak_rpc_schema::GitWatchResult;
 
 const GIT_STATUS_COALESCE_WINDOW: Duration = Duration::from_millis(250);
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "index.ts")]
-pub(crate) struct GitWatchResult {
-    unlisten_event: String,
-}
 
 pub(crate) async fn watch_git_worktree_status<R, F>(
     app_handle: AppHandle<R>,

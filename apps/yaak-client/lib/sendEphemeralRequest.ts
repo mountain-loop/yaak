@@ -1,5 +1,5 @@
 import type { HttpRequest } from "@yaakapp-internal/models";
-import type { EphemeralHttpResponse } from "@yaakapp-internal/tauri-client";
+import type { EphemeralHttpResponse } from "@yaakapp-internal/rpc-schema";
 import { getActiveCookieJar } from "../hooks/useActiveCookieJar";
 import { rpc } from "./rpc";
 

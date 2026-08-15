@@ -1,0 +1,18 @@
+[package]
+name = "yaak-rpc-schema"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+ts-rs = { workspace = true }
+yaak-git = { workspace = true }
+yaak-grpc = { workspace = true }
+yaak-models = { workspace = true }
+yaak-plugins = { workspace = true }
+yaak-sse = { workspace = true }
+yaak-sync = { workspace = true }
+yaak-templates = { workspace = true }
+yaak-ws = { workspace = true }

@@ -5,6 +5,7 @@ members = [
   # Common/foundation crates
   "crates/common/yaak-database",
   "crates/common/yaak-rpc",
+  "crates/common/yaak-rpc-schema",
   # Shared crates (no Tauri dependency)
   "crates/yaak-core",
   "crates/yaak-common",
@@ -63,6 +64,7 @@ ts-rs = "11.1.0"
 # Internal crates - common/foundation
 yaak-database = { path = "crates/common/yaak-database" }
 yaak-rpc = { path = "crates/common/yaak-rpc" }
+yaak-rpc-schema = { path = "crates/common/yaak-rpc-schema" }
 
 # Internal crates - shared
 yaak-core = { path = "crates/yaak-core" }
