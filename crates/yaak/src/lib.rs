@@ -1,7 +1,6 @@
 pub mod error;
 pub mod export;
 pub mod import;
-pub mod models_ops;
 pub mod plugin_events;
 pub mod render;
 pub mod send;

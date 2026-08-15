@@ -14,6 +14,7 @@ mod connection_or_tx;
 pub mod error;
 pub mod migrate;
 pub mod models;
+pub mod models_ops;
 pub mod queries;
 pub mod query_manager;
 pub mod render;
@@ -24,6 +25,7 @@ fn init_connection(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     conn.busy_timeout(std::time::Duration::from_millis(5000))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn init_file_connection(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;

@@ -1,0 +1,30 @@
+[package]
+name = "yaak-web"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The desktop's model layer, compiled for a browser tab. See src/lib.rs.
+#
+# Building needs a clang with a WebAssembly backend: sqlite-wasm-rs compiles
+# sqlite3.c to wasm at build time, and Apple's clang cannot target it. See
+# build-wasm.cjs, which points cc at Homebrew LLVM when it is present.
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false # Matches yaak-templates; wasm-opt has caused errors in CI
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+console_error_panic_hook = "0.1"
+js-sys = "0.3"
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde-wasm-bindgen = "0.6.5"
+serde_json = { workspace = true }
+sqlite-wasm-rs = "0.5"
+sqlite-wasm-vfs = "0.2"
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4"
+yaak-models = { workspace = true }

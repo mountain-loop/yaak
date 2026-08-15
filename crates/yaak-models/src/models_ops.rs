@@ -7,12 +7,12 @@
 //! `UpdateSource` identifying who is writing; nothing here knows whether the
 //! caller is a desktop window or an HTTP request.
 
-use yaak_models::blob_manager::BlobManager;
-use yaak_models::client_db::ClientDb;
-use yaak_models::error::Error::GenericError;
-use yaak_models::error::Result;
-use yaak_models::models::AnyModel;
-use yaak_models::util::UpdateSource;
+use crate::blob_manager::BlobManager;
+use crate::client_db::ClientDb;
+use crate::error::Error::GenericError;
+use crate::error::Result;
+use crate::models::AnyModel;
+use crate::util::UpdateSource;
 
 pub fn upsert_model(
     db: &ClientDb,

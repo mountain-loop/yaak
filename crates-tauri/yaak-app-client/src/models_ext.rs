@@ -147,7 +147,7 @@ pub(crate) fn models_upsert<R: Runtime>(
     let db = window.db();
     let blobs = window.blob_manager();
     let source = &UpdateSource::from_window_label(window.label());
-    yaak::models_ops::upsert_model(&db, &blobs, model, source)
+    yaak_models::models_ops::upsert_model(&db, &blobs, model, source)
 }
 
 // Async so cascading deletes (e.g. a workspace with thousands of requests) run on a
@@ -163,7 +163,7 @@ pub(crate) async fn models_delete<R: Runtime>(
         // Use transaction for deletions because it might recurse
         window.with_tx(|tx| {
             let source = &UpdateSource::from_window_label(window.label());
-            yaak::models_ops::delete_model(tx, &blobs, model, source)
+            yaak_models::models_ops::delete_model(tx, &blobs, model, source)
         })
     })
     .await
@@ -178,7 +178,7 @@ pub(crate) fn models_duplicate<R: Runtime>(
     // Use transaction for duplications because it might recurse
     window.with_tx(|tx| {
         let source = &UpdateSource::from_window_label(window.label());
-        yaak::models_ops::duplicate_model(tx, &model_type, &model_id, source)
+        yaak_models::models_ops::duplicate_model(tx, &model_type, &model_id, source)
     })
 }
 

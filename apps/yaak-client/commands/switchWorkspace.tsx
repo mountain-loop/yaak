@@ -1,3 +1,4 @@
+import { platform } from "@yaakapp-internal/platform";
 import { createFastMutation } from "../hooks/useFastMutation";
 import { getRecentCookieJars } from "../hooks/useRecentCookieJars";
 import { getRecentEnvironments } from "../hooks/useRecentEnvironments";
@@ -24,7 +25,9 @@ export const switchWorkspace = createFastMutation<
       request_id: requestId,
     };
 
-    if (inNewWindow) {
+    // A host without windows opens the workspace here instead. Refusing would
+    // strand the user on the workspace they were trying to leave.
+    if (inNewWindow && platform.capabilities.multiWindow) {
       const location = router.buildLocation({
         to: "/workspaces/$workspaceId",
         params: { workspaceId },

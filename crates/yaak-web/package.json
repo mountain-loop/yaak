@@ -1,0 +1,15 @@
+{
+  "name": "@yaakapp-internal/web",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "bootstrap": "npm run build",
+    "build": "run-s build:*",
+    "build:pack": "node build-wasm.cjs",
+    "build:clean": "rimraf ./pkg/.gitignore"
+  },
+  "devDependencies": {
+    "rimraf": "^6.1.2"
+  }
+}
