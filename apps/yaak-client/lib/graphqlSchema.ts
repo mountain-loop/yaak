@@ -26,12 +26,9 @@ export function tryBuildIntrospectionFromFile(
         try {
           const schema = buildClientSchema(candidate as IntrospectionQuery, {});
           return { schema, content: JSON.stringify({ data: candidate }) };
-          // oxlint-disable-next-line no-explicit-any
-        } catch (e: any) {
+        } catch (e) {
           return {
-            error: `Failed to build schema from introspection JSON: ${String(
-              "message" in e ? e.message : e,
-            )}`,
+            error: `Failed to build schema from introspection JSON: ${errorMessage(e)}`,
           };
         }
       }
@@ -42,12 +39,13 @@ export function tryBuildIntrospectionFromFile(
     const schema = buildSchema(fileContent);
     const introspection = introspectionFromSchema(schema);
     return { schema, content: JSON.stringify({ data: introspection }) };
-    // oxlint-disable-next-line no-explicit-any
-  } catch (e: any) {
+  } catch (e) {
     return {
-      error: `Could not parse file as introspection JSON or GraphQL SDL: ${String(
-        "message" in e ? e.message : e,
-      )}`,
+      error: `Could not parse file as introspection JSON or GraphQL SDL: ${errorMessage(e)}`,
     };
   }
+}
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }

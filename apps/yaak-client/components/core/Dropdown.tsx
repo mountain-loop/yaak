@@ -37,12 +37,15 @@ import { ErrorBoundary } from "../ErrorBoundary";
 import { Button } from "./Button";
 import { Hotkey } from "./Hotkey";
 import { IconButton } from "./IconButton";
+import type { SeparatorAction } from "./Separator";
 import { Separator } from "./Separator";
 
 export type DropdownItemSeparator = {
   type: "separator";
   label?: ReactNode;
   hidden?: boolean;
+  /** A control shown beside the label, eg. revealing the labelled file on disk. */
+  action?: SeparatorAction;
 };
 
 export type DropdownItemContent = {
@@ -791,6 +794,7 @@ const Menu = forwardRef<Omit<DropdownRef, "open" | "isOpen" | "toggle" | "items"
                   // oxlint-disable-next-line no-array-index-key -- Nothing else available
                   key={i}
                   className={classNames("my-1.5", item.label ? "ml-2" : null)}
+                  action={item.action}
                 >
                   {item.label}
                 </Separator>
