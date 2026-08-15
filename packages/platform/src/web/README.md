@@ -46,13 +46,16 @@ isn't one, so a desktop `npm run bootstrap` never depends on it.
 
 Behaviours worth knowing before changing anything:
 
-- **The worker is a `SharedWorker`**, which is what makes "one database, many
-  tabs" true by construction — and makes the browser look like the desktop:
-  one process holds the data, every window talks to it, it pushes writes to
-  all of them. Where `SharedWorker` is missing (Android Chrome) or its script
-  can't be fetched (some embedded browsers), the connection falls back to a
-  dedicated worker that takes a Web Lock; a second tab then gets a clear
-  "already open in another tab" instead of a second SQLite over the same pages.
+- **The worker is a `SharedWorker`, and only that.** The browser hands every
+  tab on the origin the same one, which is what makes "one database owner"
+  true without anyone coordinating — and makes the browser look like the
+  desktop: one process holds the data, every window talks to it, it pushes
+  writes to all of them. It still takes a Web Lock before opening, for the one
+  overlap the browser doesn't rule out (a reloading tab's dying predecessor).
+  There is deliberately no fallback to a per-tab worker: two kinds of worker
+  that can both come up is a race, and the browsers without `SharedWorker`
+  (Android Chrome) aren't a target for an API client. Those, and any without
+  Web Locks, get a clear "unsupported browser" message.
 - **Every write is stamped with the calling tab's `label`** as
   `UpdateSource::Window`, exactly like a desktop window label, so the frontend
   store's echo handling is unchanged.

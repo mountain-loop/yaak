@@ -10,12 +10,11 @@
  * `model_writes` out to every port — so two tabs are coherent for the same
  * reason two desktop windows are, not because of a side channel.
  *
- * It runs as a SharedWorker where the browser has one, which is what gives
- * every tab the same worker. Where it doesn't (Android Chrome), it runs as a
- * dedicated worker instead. Either way it takes a Web Lock before opening the
- * database, and that lock — not the worker kind — is what guarantees there is
- * exactly one SQLite over these pages: a second worker, however it came to
- * exist, fails loudly rather than opening another.
+ * It is a SharedWorker, and only that: the browser hands every tab on the
+ * origin the same one, which is what makes "one database owner" true without
+ * anyone coordinating. It still takes a Web Lock before opening the database,
+ * for the one overlap the browser doesn't rule out — a tab reloading itself,
+ * whose old worker may still be letting go while the new one comes up.
  */
 
 import { DB_LOCK_NAME, type FromWorker, type ToWorker } from "./protocol";
@@ -59,7 +58,7 @@ function errorMessage(err: unknown): string {
 const LOCK_TIMEOUT_MS = 3000;
 
 const ALREADY_OPEN =
-  "Yaak is already open in another tab, and this browser can't share a database between tabs. Close the other tab, or use it instead.";
+  "Yaak's database is held by another worker that isn't letting go. Close Yaak's other tabs and reload.";
 
 /**
  * Take the lock, or explain why not.
@@ -70,18 +69,8 @@ const ALREADY_OPEN =
  * waited out but a live one is reported.
  */
 function acquireDatabaseLock(): Promise<void> {
-  if (typeof navigator.locks === "undefined") {
-    // Without Web Locks there is no way to promise a second tab won't open a
-    // second SQLite over the same pages, and a hopeful open is a corrupted
-    // workspace waiting to happen. Refuse. This is iOS Safari before 15.4 and
-    // Android Chrome before 69 — browsers the rest of the app has already
-    // left behind.
-    return Promise.reject(
-      new Error(
-        "This browser can't keep Yaak's data safe when more than one tab is open (it has no Web Locks). Please use a newer browser.",
-      ),
-    );
-  }
+  // The tab checked for Web Locks before it ever connected; a worker without
+  // them would be a browser lying about its own features.
   return new Promise<void>((resolve, reject) => {
     navigator.locks
       .request(DB_LOCK_NAME, { signal: AbortSignal.timeout(LOCK_TIMEOUT_MS) }, () => {
@@ -196,13 +185,7 @@ function attach(port: MessagePort): void {
   );
 }
 
-// A SharedWorker sees each tab arrive as a connect event; a dedicated worker
-// *is* its one tab's port.
-const scope = self as unknown as { onconnect?: unknown };
-if ("onconnect" in scope) {
-  (self as unknown as SharedWorkerGlobalScope).onconnect = (e: MessageEvent) => {
-    attach(e.ports[0]!);
-  };
-} else {
-  attach(self as unknown as MessagePort);
-}
+// Each tab arrives as a connect event with its own port.
+(self as unknown as SharedWorkerGlobalScope).onconnect = (e: MessageEvent) => {
+  attach(e.ports[0]!);
+};

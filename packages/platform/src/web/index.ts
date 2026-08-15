@@ -160,11 +160,6 @@ export function createWebPlatform(): Platform {
   // without reading the source.
   (window as unknown as Record<string, unknown>).__YAAK_WEB__ = {
     label: db.label,
-    // A getter: the connection may fall back from shared to dedicated after
-    // this object is built.
-    get sharedWorker() {
-      return db.shared;
-    },
     capabilities,
     commands: commandSupport,
   };

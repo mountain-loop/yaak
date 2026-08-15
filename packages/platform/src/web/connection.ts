@@ -24,8 +24,11 @@ import { type FromWorker, type ToWorker, WORKER_NAME } from "./protocol";
  * high is a user staring at a blank page, so err low.
  */
 const HELLO_TIMEOUT_MS = 400;
-/** Shared-worker connects to try before settling for a dedicated worker. */
-const MAX_SHARED_ATTEMPTS = 3;
+/** Connects to try before concluding the worker can't be started here. */
+const MAX_ATTEMPTS = 3;
+
+const UNSUPPORTED =
+  "This browser can't run Yaak: it needs shared workers and Web Locks to keep your data safe across tabs. Every current desktop browser has both.";
 
 type Pending = {
   resolve: (value: unknown) => void;
@@ -36,7 +39,7 @@ type Pending = {
 };
 
 export class WorkerConnection {
-  private port: MessagePort | Worker;
+  private port: MessagePort | null;
   private readonly pending = new Map<number, Pending>();
   private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
   private nextId = 1;
@@ -52,106 +55,84 @@ export class WorkerConnection {
    */
   readonly label = `tab_${crypto.randomUUID().slice(0, 8)}`;
 
-  /** Whether the database is shared with other tabs, or this tab holds it alone. */
-  shared: boolean;
-
-  /** True once the worker has said anything at all; after that, no fallback. */
+  /** True once the worker has said anything at all; after that, no reconnects. */
   private heard = false;
 
-  /** How many times a shared worker was tried before giving up on sharing. */
-  private sharedAttempts = 0;
+  private attempts = 0;
 
   constructor() {
-    if (typeof SharedWorker !== "undefined") {
-      this.port = this.connectShared();
-      this.shared = true;
-    } else {
-      // No SharedWorker (Android Chrome). One tab owns the database; the
-      // worker takes a lock and a second tab is told so.
-      this.port = this.connectDedicated();
-      this.shared = false;
+    // Both are required and neither is faked. Without a shared worker every
+    // tab would need its own SQLite over the same pages; without Web Locks
+    // nothing can promise there is only one even so. Every current desktop
+    // browser has both; the ones that don't get told, not corrupted.
+    if (typeof SharedWorker === "undefined" || typeof navigator.locks === "undefined") {
+      this.port = null;
+      this.bootError = UNSUPPORTED;
+      showBootError(UNSUPPORTED);
+      return;
     }
 
-    // Let the worker forget this port. Not load-bearing — a SharedWorker port
-    // that never says goodbye is a leaked entry in a Set — but tidy.
+    this.port = this.connect();
+
+    // Let the worker forget this port. Not load-bearing — a port that never
+    // says goodbye is a leaked entry in a Set — but tidy.
     window.addEventListener("pagehide", () => this.post({ type: "goodbye" }));
   }
 
-  /*
-   * `new URL("./worker.ts", import.meta.url)` is written out inline at each
-   * constructor on purpose: that exact syntax is what the bundler pattern-
-   * matches to know it must bundle a worker entry. Hoisted into a variable it
-   * becomes an asset URL and ships as raw TypeScript.
+  /**
+   * Connect to the origin's one database worker.
+   *
+   * The browser hands every tab the same SharedWorker for this name and URL,
+   * which is what makes "one database owner" true without anyone coordinating.
+   *
+   * `new URL("./worker.ts", import.meta.url)` is written out inline on purpose:
+   * that exact syntax is what the bundler pattern-matches to know it must
+   * bundle a worker entry. Hoisted into a variable it becomes an asset URL and
+   * ships as raw TypeScript.
    */
-
-  private connectShared(): MessagePort {
-    this.sharedAttempts += 1;
+  private connect(): MessagePort {
+    this.attempts += 1;
+    this.heard = false;
     const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), {
       type: "module",
       name: WORKER_NAME,
     });
-    // A SharedWorker whose script fails to load fires `error` on the
-    // SharedWorker object and nothing else — the port just goes quiet. Some
-    // embedded browsers can't fetch shared-worker scripts at all.
+    // A worker whose script fails to load fires `error` on the SharedWorker
+    // object and nothing else — the port just goes quiet.
     worker.onerror = () => {
-      if (!this.heard) this.replaceWorker("script failed to load");
+      if (!this.heard) this.reconnect("script failed to load");
     };
-    this.attach(worker.port);
+    worker.port.onmessage = (e: MessageEvent<FromWorker>) => this.receive(e.data);
+    worker.port.start();
     this.expectHello(worker.port);
     return worker.port;
   }
 
-  private connectDedicated(): Worker {
-    const worker = new Worker(new URL("./worker.ts", import.meta.url), {
-      type: "module",
-      name: WORKER_NAME,
-    });
-    this.attach(worker);
-    this.expectHello(worker);
-    return worker;
-  }
-
-  private attach(port: MessagePort | Worker): void {
-    this.heard = false;
-    port.onmessage = (e: MessageEvent<FromWorker>) => this.receive(e.data);
-    if (port instanceof MessagePort) port.start();
-  }
-
   /**
-   * The worker says hello synchronously on connect. If it doesn't, the port is
-   * attached to nothing that will ever answer — most often a shared worker
-   * caught mid-teardown, which is what a tab reloading itself hands to the
-   * next document — and the only move is to connect again.
+   * The worker says hello synchronously on connect. If it doesn't, this port
+   * is attached to nothing that will ever answer — a worker caught
+   * mid-teardown, which is what a tab reloading itself can hand to the next
+   * document — and the only move is to connect again. The browser resolves
+   * that to the same worker if it is alive, or a fresh one if it is gone;
+   * either way there is only ever one.
    */
-  private expectHello(port: MessagePort | Worker): void {
+  private expectHello(port: MessagePort): void {
     // Passed in rather than read from `this.port`, which the constructor has
     // not assigned yet the first time this runs.
     setTimeout(() => {
-      if (!this.heard && this.port === port) this.replaceWorker("no reply from worker");
+      if (!this.heard && this.port === port) this.reconnect("no reply from worker");
     }, HELLO_TIMEOUT_MS);
   }
 
-  /**
-   * Replace a worker that never answered. Tries sharing again a few times —
-   * a torn-down shared worker is gone by then and a fresh one comes up — and
-   * only then gives up on sharing and takes a dedicated worker.
-   */
-  private replaceWorker(why: string): void {
-    // Let go of the port that never answered. If a slow shared worker does
-    // come up later, it will find its port closed and — since it takes the
-    // same lock the replacement takes — cannot open the database beneath us.
-    if (this.port instanceof MessagePort) this.port.close();
-    else this.port.terminate();
-
-    if (this.sharedAttempts < MAX_SHARED_ATTEMPTS) {
-      console.warn(`Reconnecting to the database worker (${why})`);
-      this.port = this.connectShared();
-      this.shared = true;
-    } else {
-      console.warn(`Falling back to a dedicated database worker (${why})`);
-      this.port = this.connectDedicated();
-      this.shared = false;
+  private reconnect(why: string): void {
+    this.port?.close();
+    if (this.attempts >= MAX_ATTEMPTS) {
+      const message = `The database worker could not be started (${why}). ${UNSUPPORTED}`;
+      this.failEverything(message);
+      return;
     }
+    console.warn(`Reconnecting to the database worker (${why})`);
+    this.port = this.connect();
     // Whatever was posted to the dead port never arrived. Bodies were copied,
     // not transferred, precisely so they can be re-sent from here.
     for (const p of this.pending.values()) {
@@ -159,8 +140,17 @@ export class WorkerConnection {
     }
   }
 
+  private failEverything(message: string): void {
+    this.bootError = message;
+    showBootError(message);
+    for (const [id, p] of this.pending) {
+      this.pending.delete(id);
+      p.reject(new Error(message));
+    }
+  }
+
   private post(message: ToWorker, transfer: Transferable[] = []): void {
-    this.port.postMessage(message, transfer);
+    this.port?.postMessage(message, transfer);
   }
 
   private receive(message: FromWorker): void {
@@ -170,15 +160,10 @@ export class WorkerConnection {
       case "ready":
         return;
       case "boot_error":
-        this.bootError = message.message;
         // Nothing will ever answer, and the app cannot render without an
         // answer, so say what happened where the user can see it. This is the
         // page's whole content at this point.
-        showBootError(message.message);
-        for (const [id, p] of this.pending) {
-          this.pending.delete(id);
-          p.reject(new Error(message.message));
-        }
+        this.failEverything(message.message);
         return;
       case "result": {
         const p = this.pending.get(message.id);
