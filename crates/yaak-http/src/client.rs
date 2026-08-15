@@ -4,7 +4,9 @@ use log::{debug, info, warn};
 use reqwest::{Client, ClientBuilder, Proxy, redirect};
 use std::sync::{Arc, Mutex};
 use yaak_models::models::DnsOverride;
-use yaak_tls::{ClientCertificateConfig, get_tls_config, load_client_identity_pkcs12};
+use yaak_tls::{
+    ClientCertificateConfig, NativeClientIdentity, get_tls_config, load_native_client_identity,
+};
 
 pub const HTTP2_MAX_RESPONSE_HEADER_LIST_SIZE: u32 = 1024 * 1024;
 
@@ -61,12 +63,19 @@ static IDENTITY_IMPORT: Mutex<()> = Mutex::new(());
 fn build_native_tls_identity(
     client_cert: Option<ClientCertificateConfig>,
 ) -> Result<Option<native_tls::Identity>> {
-    let Some((pkcs12, password)) = load_client_identity_pkcs12(client_cert)? else {
+    let Some(material) = load_native_client_identity(client_cert)? else {
         return Ok(None);
     };
 
     let _guard = IDENTITY_IMPORT.lock().unwrap_or_else(|e| e.into_inner());
-    Ok(Some(native_tls::Identity::from_pkcs12(&pkcs12, &password)?))
+    Ok(Some(match material {
+        NativeClientIdentity::Pkcs12 { data, password } => {
+            native_tls::Identity::from_pkcs12(&data, &password)?
+        }
+        NativeClientIdentity::Pkcs8 { chain_pem, key_pem } => {
+            native_tls::Identity::from_pkcs8(&chain_pem, &key_pem)?
+        }
+    }))
 }
 
 #[derive(Clone)]
