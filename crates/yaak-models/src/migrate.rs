@@ -2,7 +2,7 @@ use crate::error::Error::MigrationError;
 use crate::error::Result;
 use include_dir::{Dir, DirEntry, include_dir};
 use log::{debug, info};
-use rusqlite::{OptionalExtension, TransactionBehavior, params};
+use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
 use sha2::{Digest, Sha384};
 use yaak_database::SqlitePool;
 
@@ -42,8 +42,10 @@ pub fn migrate_db(pool: &SqlitePool) -> Result<()> {
     let mut ran_migrations = 0;
     for entry in entries {
         num_migrations += 1;
-        let mut conn = pool.get()?;
-        let mut tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let conn = pool.get()?;
+        // `new_unchecked` takes `&Connection`; see yaak_database::pool for why
+        // the pool never hands out `&mut`.
+        let mut tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)?;
         match run_migration(entry, &mut tx) {
             Ok(ran) => {
                 if ran {

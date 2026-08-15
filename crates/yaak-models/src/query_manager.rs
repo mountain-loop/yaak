@@ -1,7 +1,7 @@
 use crate::client_db::ClientDb;
 use crate::error::Error::GenericError;
 use crate::util::ModelPayload;
-use rusqlite::TransactionBehavior;
+use rusqlite::{Transaction, TransactionBehavior};
 use std::sync::mpsc;
 use yaak_database::{ConnectionOrTx, DbContext, SqlitePool};
 
@@ -44,9 +44,10 @@ impl QueryManager {
     where
         E: From<crate::error::Error>,
     {
-        let mut conn = self.pool.get().expect("Failed to get new DB connection from the pool");
-        let tx = conn
-            .transaction_with_behavior(TransactionBehavior::Immediate)
+        let conn = self.pool.get().expect("Failed to get new DB connection from the pool");
+        // `new_unchecked` takes `&Connection`; see yaak_database::pool for why
+        // the pool never hands out `&mut`.
+        let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)
             .expect("Failed to start DB transaction");
 
         let ctx = DbContext::new(ConnectionOrTx::Transaction(&tx));
