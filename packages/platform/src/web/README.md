@@ -53,9 +53,10 @@ Behaviours worth knowing before changing anything:
   writes to all of them. It still takes a Web Lock before opening, for the one
   overlap the browser doesn't rule out (a reloading tab's dying predecessor).
   There is deliberately no fallback to a per-tab worker: two kinds of worker
-  that can both come up is a race, and the browsers without `SharedWorker`
-  (Android Chrome) aren't a target for an API client. Those, and any without
-  Web Locks, get a clear "unsupported browser" message.
+  that can both come up is a race. Every current browser, desktop and mobile,
+  has `SharedWorker` and Web Locks (Chrome for Android since 148, April 2026);
+  older ones get a clear "unsupported browser" message rather than a second
+  SQLite over the same pages.
 - **Every write is stamped with the calling tab's `label`** as
   `UpdateSource::Window`, exactly like a desktop window label, so the frontend
   store's echo handling is unchanged.

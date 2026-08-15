@@ -18,25 +18,17 @@ import { type FromWorker, type ToWorker, WORKER_NAME } from "./protocol";
  *
  * A live worker answers in the same turn it is connected — the worker script
  * is tiny and imports the model layer lazily, so this measures liveness, not
- * load time. The one thing that can push it past this is a slow first fetch of
- * the script itself, and the cost of a false alarm there is a second connect
- * that the browser resolves to the same, now-live worker. The cost of guessing
- * high is a user staring at a blank page, so err low.
+ * load time. It only has to be longer than a cold fetch of that small script;
+ * a worker silent past this is not coming, and a message beats a blank page.
  */
-const HELLO_TIMEOUT_MS = 400;
-/** Connects to try before concluding the worker can't be started here. */
-const MAX_ATTEMPTS = 3;
+const HELLO_TIMEOUT_MS = 3000;
+
+const WORKER_FAILED = "Yaak's database worker could not be started. Reload the page to try again";
 
 const UNSUPPORTED =
-  "This browser can't run Yaak: it needs shared workers and Web Locks to keep your data safe across tabs. Every current desktop browser has both.";
+  "This browser can't run Yaak: it needs shared workers and Web Locks to keep your data safe across tabs. Every current browser has both.";
 
-type Pending = {
-  resolve: (value: unknown) => void;
-  reject: (reason: Error) => void;
-  /** Kept so the request can be re-sent if the worker has to be replaced. */
-  message: ToWorker;
-  transfer: Transferable[];
-};
+type Pending = { resolve: (value: unknown) => void; reject: (reason: Error) => void };
 
 export class WorkerConnection {
   private port: MessagePort | null;
@@ -55,16 +47,15 @@ export class WorkerConnection {
    */
   readonly label = `tab_${crypto.randomUUID().slice(0, 8)}`;
 
-  /** True once the worker has said anything at all; after that, no reconnects. */
+  /** True once the worker has said anything at all. */
   private heard = false;
-
-  private attempts = 0;
 
   constructor() {
     // Both are required and neither is faked. Without a shared worker every
     // tab would need its own SQLite over the same pages; without Web Locks
-    // nothing can promise there is only one even so. Every current desktop
-    // browser has both; the ones that don't get told, not corrupted.
+    // nothing can promise there is only one even so. Every current browser,
+    // desktop and mobile, has both (Chrome for Android since 148); the ones
+    // that don't get told, not corrupted.
     if (typeof SharedWorker === "undefined" || typeof navigator.locks === "undefined") {
       this.port = null;
       this.bootError = UNSUPPORTED;
@@ -91,8 +82,6 @@ export class WorkerConnection {
    * ships as raw TypeScript.
    */
   private connect(): MessagePort {
-    this.attempts += 1;
-    this.heard = false;
     const worker = new SharedWorker(new URL("./worker.ts", import.meta.url), {
       type: "module",
       name: WORKER_NAME,
@@ -100,44 +89,22 @@ export class WorkerConnection {
     // A worker whose script fails to load fires `error` on the SharedWorker
     // object and nothing else — the port just goes quiet.
     worker.onerror = () => {
-      if (!this.heard) this.reconnect("script failed to load");
+      if (!this.heard) this.failEverything(`${WORKER_FAILED} (its script failed to load).`);
     };
     worker.port.onmessage = (e: MessageEvent<FromWorker>) => this.receive(e.data);
     worker.port.start();
-    this.expectHello(worker.port);
-    return worker.port;
-  }
 
-  /**
-   * The worker says hello synchronously on connect. If it doesn't, this port
-   * is attached to nothing that will ever answer — a worker caught
-   * mid-teardown, which is what a tab reloading itself can hand to the next
-   * document — and the only move is to connect again. The browser resolves
-   * that to the same worker if it is alive, or a fresh one if it is gone;
-   * either way there is only ever one.
-   */
-  private expectHello(port: MessagePort): void {
-    // Passed in rather than read from `this.port`, which the constructor has
-    // not assigned yet the first time this runs.
+    // The worker says hello synchronously on connect. Silence past the timeout
+    // means this port is attached to nothing that will ever answer, and the
+    // user should see that rather than a blank page. It is not retried: the
+    // one way this used to happen (a module worker missing connects during a
+    // top-level-await import) is fixed at the source by importing the wasm
+    // lazily, and a reload is the right remedy for anything else.
     setTimeout(() => {
-      if (!this.heard && this.port === port) this.reconnect("no reply from worker");
+      if (!this.heard) this.failEverything(`${WORKER_FAILED} (it never answered).`);
     }, HELLO_TIMEOUT_MS);
-  }
 
-  private reconnect(why: string): void {
-    this.port?.close();
-    if (this.attempts >= MAX_ATTEMPTS) {
-      const message = `The database worker could not be started (${why}). ${UNSUPPORTED}`;
-      this.failEverything(message);
-      return;
-    }
-    console.warn(`Reconnecting to the database worker (${why})`);
-    this.port = this.connect();
-    // Whatever was posted to the dead port never arrived. Bodies were copied,
-    // not transferred, precisely so they can be re-sent from here.
-    for (const p of this.pending.values()) {
-      this.post(p.message, p.transfer);
-    }
+    return worker.port;
   }
 
   private failEverything(message: string): void {
@@ -186,10 +153,9 @@ export class WorkerConnection {
   private request<T>(build: (id: number) => ToWorker, transfer: Transferable[] = []): Promise<T> {
     if (this.bootError != null) return Promise.reject(new Error(this.bootError));
     const id = this.nextId++;
-    const message = build(id);
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, message, transfer });
-      this.post(message, transfer);
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      this.post(build(id), transfer);
     });
   }
 
@@ -203,12 +169,14 @@ export class WorkerConnection {
   }
 
   blobPut(blobId: string, bytes: Uint8Array): Promise<void> {
-    // Copied rather than transferred: transferring would detach the caller's
-    // buffer, and would leave nothing to re-send if the worker is replaced.
-    // Bodies are small enough that the copy is cheaper than the bookkeeping.
+    // Copied so the caller's buffer isn't detached out from under it, then
+    // transferred so the copy isn't copied again crossing to the worker.
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
-    return this.request<void>((id) => ({ type: "blob_put", id, blobId, bytes: copy.buffer }));
+    return this.request<void>(
+      (id) => ({ type: "blob_put", id, blobId, bytes: copy.buffer }),
+      [copy.buffer],
+    );
   }
 
   blobDelete(blobId: string): Promise<void> {
