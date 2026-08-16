@@ -21,6 +21,7 @@ import type {
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
+  GetHttpResponseBodyInfoResponse,
   GetKeyValueResponse,
   GrpcRequestAction,
   HttpAuthenticationAction,
@@ -37,6 +38,7 @@ import type {
   PluginContext,
   PromptFormResponse,
   PromptTextResponse,
+  ReadHttpResponseBodyChunkResponse,
   RenderGrpcRequestResponse,
   RenderHttpRequestResponse,
   SendHttpRequestResponse,
@@ -49,6 +51,7 @@ import type {
 import { applyDynamicFormInput } from "./common";
 import { EventChannel } from "./EventChannel";
 import { migrateTemplateFunctionSelectOptions } from "./migrations";
+import { createResponseBody, decodeBase64Chunk } from "./responseBody";
 
 export interface PluginWorkerData {
   bootRequest: BootRequest;
@@ -555,16 +558,24 @@ export class PluginInstance {
   #sendForReply<T extends Omit<InternalEventPayload, "type">>(
     context: PluginContext,
     payload: InternalEventPayload,
+    // Off by default because a reply-shaped object with none of the expected
+    // fields is what every existing caller already copes with; turning it on
+    // for a new call is how that stops spreading.
+    { throwOnError = false }: { throwOnError?: boolean } = {},
   ): Promise<T> {
     // 1. Build event to send
     const eventToSend = this.#buildEventToSend(context, payload, null);
 
     // 2. Spawn listener in background
-    const promise = new Promise<T>((resolve) => {
+    const promise = new Promise<T>((resolve, reject) => {
       const cb = (event: InternalEvent) => {
         if (event.replyId === eventToSend.id) {
           this.#appToPluginEvents.unlisten(cb); // Unlisten, now that we're done
           const { type: _, ...payload } = event.payload;
+          if (throwOnError && event.payload.type === "error_response") {
+            reject(new Error(String((payload as { error?: string }).error ?? "Unknown error")));
+            return;
+          }
           resolve(payload as T);
         }
       };
@@ -750,6 +761,29 @@ export class PluginInstance {
             payload,
           );
           return httpResponses;
+        },
+        body: async ({ responseId }) => {
+          const info = await this.#sendForReply<GetHttpResponseBodyInfoResponse>(
+            context,
+            { type: "get_http_response_body_info_request", responseId },
+            { throwOnError: true },
+          );
+
+          return createResponseBody(
+            {
+              responseId,
+              contentLength: info.contentLength,
+              contentType: info.contentType ?? null,
+            },
+            async (offset, length) => {
+              const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
+                context,
+                { type: "read_http_response_body_chunk_request", responseId, offset, length },
+                { throwOnError: true },
+              );
+              return decodeBase64Chunk(chunk.data);
+            },
+          );
         },
       },
       grpcRequest: {

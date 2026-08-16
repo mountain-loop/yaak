@@ -171,6 +171,12 @@ pub enum InternalEventPayload {
 
     FindHttpResponsesRequest(FindHttpResponsesRequest),
     FindHttpResponsesResponse(FindHttpResponsesResponse),
+
+    GetHttpResponseBodyInfoRequest(GetHttpResponseBodyInfoRequest),
+    GetHttpResponseBodyInfoResponse(GetHttpResponseBodyInfoResponse),
+    ReadHttpResponseBodyChunkRequest(ReadHttpResponseBodyChunkRequest),
+    ReadHttpResponseBodyChunkResponse(ReadHttpResponseBodyChunkResponse),
+
     ListHttpRequestsRequest(ListHttpRequestsRequest),
     ListHttpRequestsResponse(ListHttpRequestsResponse),
     ListFoldersRequest(ListFoldersRequest),
@@ -1411,6 +1417,62 @@ pub struct FindHttpResponsesRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct FindHttpResponsesResponse {
     pub http_responses: Vec<HttpResponse>,
+}
+
+/// Ask what a response's body is, before deciding whether to pull it.
+///
+/// Bodies are addressed by response id and never by path, so where the host
+/// keeps the bytes is its own business.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetHttpResponseBodyInfoRequest {
+    pub response_id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct GetHttpResponseBodyInfoResponse {
+    /// How many bytes are actually stored, which is not necessarily what the
+    /// `Content-Length` header claimed. Zero when the response has no body.
+    #[ts(type = "number")]
+    pub content_length: u64,
+
+    /// The response's `Content-Type` header, verbatim, so the reader can pick a
+    /// charset.
+    #[ts(optional = nullable)]
+    pub content_type: Option<String>,
+}
+
+/// Pull one window of a response body.
+///
+/// Reads are idempotent: the bytes live in durable storage, so the same window
+/// can be asked for as many times as the plugin likes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct ReadHttpResponseBodyChunkRequest {
+    pub response_id: String,
+    #[ts(type = "number")]
+    pub offset: u64,
+    #[ts(type = "number")]
+    pub length: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct ReadHttpResponseBodyChunkResponse {
+    /// Base64, because the desktop transport is a WebSocket that only sends
+    /// text frames today. A host that can carry binary sends the bytes as they
+    /// are and fills this in from them.
+    pub data: String,
+
+    /// Bytes decoded from `data`. Short of the requested length means the body
+    /// ended here.
+    #[ts(type = "number")]
+    pub length: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

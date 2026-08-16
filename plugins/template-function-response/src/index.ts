@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type {
   CallTemplateFunctionArgs,
   Context,
@@ -196,17 +195,8 @@ export const plugin: PluginDefinition = {
         });
         if (response == null) return null;
 
-        if (response.bodyPath == null) {
-          return null;
-        }
-
-        const BOM = "\ufeff";
-        let body: string;
-        try {
-          body = readFileSync(response.bodyPath, "utf-8").replace(BOM, "");
-        } catch {
-          return null;
-        }
+        const body = await readResponseBody(ctx, response);
+        if (body == null) return null;
 
         try {
           const result: JSONPathResult =
@@ -261,22 +251,28 @@ export const plugin: PluginDefinition = {
         });
         if (response == null) return null;
 
-        if (response.bodyPath == null) {
-          return null;
-        }
-
-        let body: string;
-        try {
-          body = readFileSync(response.bodyPath, "utf-8");
-        } catch {
-          return null;
-        }
-
-        return body;
+        return await readResponseBody(ctx, response);
       },
     },
   ],
 };
+
+/**
+ * The response's body as text, or null when there is nothing to read.
+ *
+ * The host is asked for it by response id, so this works wherever the bytes
+ * happen to live. A body over the runtime's size limit throws rather than
+ * coming back empty, since a template silently rendering to nothing is worse
+ * than one that says why.
+ */
+async function readResponseBody(ctx: Context, response: HttpResponse): Promise<string | null> {
+  if (!response.id) return null;
+
+  const body = await ctx.httpResponse.body({ responseId: response.id });
+  if (body.contentLength === 0) return null;
+
+  return await body.text();
+}
 
 async function getResponse(
   ctx: Context,

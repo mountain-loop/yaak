@@ -12,6 +12,7 @@ use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak::render::{render_grpc_request, render_http_request};
+use yaak::response_body::FileResponseBodyStore;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
@@ -131,6 +132,7 @@ async fn build_plugin_reply(
 
     match handle_shared_plugin_event(
         &host_context.query_manager,
+        &FileResponseBodyStore::new(&host_context.query_manager),
         &event.payload,
         SharedPluginEventContext { plugin_name, workspace_id: shared_workspace_id },
     ) {

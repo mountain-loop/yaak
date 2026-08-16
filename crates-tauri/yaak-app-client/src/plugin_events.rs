@@ -16,6 +16,7 @@ use tauri_plugin_opener::OpenerExt;
 use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
+use yaak::response_body::FileResponseBodyStore;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
 use yaak_models::models::{HttpResponse, Plugin};
@@ -54,6 +55,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
     match handle_shared_plugin_event(
         app_handle.db_manager().inner(),
+        &FileResponseBodyStore::new(app_handle.db_manager().inner()),
         &event.payload,
         SharedPluginEventContext {
             plugin_name: &plugin_name,
