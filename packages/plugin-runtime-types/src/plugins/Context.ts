@@ -152,6 +152,15 @@ export interface Context {
     render(args: RenderGrpcRequestRequest): Promise<RenderGrpcRequestResponse["grpcRequest"]>;
   };
   httpRequest: {
+    /**
+     * Send a request and wait for the response.
+     *
+     * A request with an id is saved, and its body can be read back by response
+     * id whenever you like. A request without one is not: it is sent, the
+     * response comes back, and nothing keeps it. Read that body with
+     * `ctx.httpResponse.body()` before returning — it is only there for the
+     * rest of this call.
+     */
     send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse["httpResponse"]>;
     getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse["httpRequest"]>;
     render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse["httpRequest"]>;
