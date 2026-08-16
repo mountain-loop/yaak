@@ -14,7 +14,7 @@ use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -29,8 +29,8 @@ use tauri_plugin_log::{Builder, Target, TargetKind, log};
 use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
-use yaak::export::{self, ExportDataParams};
 use yaak::send::ResponseBody;
+use yaak_commands::responses::locate_response_body;
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
@@ -38,8 +38,7 @@ use yaak_grpc::{Code, ServiceDefinition};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
     AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, HttpRequest, HttpResponse, HttpResponseEvent, HttpResponseState, Workspace,
-    WorkspaceMeta,
+    GrpcEventType, HttpRequest, HttpResponse, HttpResponseState, Workspace,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource};
 use yaak_plugins::events::{
@@ -54,12 +53,10 @@ use yaak_plugins::events::{
     InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::plugin_meta::{PluginMetadata, get_plugin_meta};
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_rpc_schema::{AppMetaData, EphemeralHttpResponse};
 use yaak_sse::sse::ServerSentEvent;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
-use yaak_templates::format_json::format_json;
 use yaak_templates::strip_json_comments::strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions, Tokens, transform_args};
 use yaak_tls::find_client_certificate;
@@ -1011,46 +1008,11 @@ async fn cmd_send_ephemeral_request<R: Runtime>(
     Ok(EphemeralHttpResponse { response: sent.response, body })
 }
 
-async fn cmd_format_json(text: &str) -> YaakResult<String> {
-    Ok(format_json(text, "  "))
-}
-
 async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
     match pretty_graphql::format_text(text, &Default::default()) {
         Ok(formatted) => Ok(formatted),
         Err(_) => Ok(text.to_string()),
     }
-}
-
-/// Where a response's body is, and what it is meant to be read as.
-struct ResponseBodyLocation {
-    /// None when the response has no stored body.
-    path: Option<PathBuf>,
-    /// The response's declared `Content-Type`, empty when it has none.
-    content_type: String,
-}
-
-/// Find a response's body from its id alone.
-///
-/// The frontend hands back an id and never a path, so the only bodies reachable
-/// here are ones the engine wrote and the database still knows about. A
-/// response that was never saved has no entry, and its body came back from the
-/// send that made it.
-fn locate_response_body<R: Runtime>(
-    app_handle: &AppHandle<R>,
-    response_id: &str,
-) -> YaakResult<ResponseBodyLocation> {
-    let response = app_handle.db().get_http_response(response_id)?;
-
-    Ok(ResponseBodyLocation {
-        path: response.body_path.map(PathBuf::from),
-        content_type: response
-            .headers
-            .iter()
-            .find(|h| h.name.eq_ignore_ascii_case("content-type"))
-            .map(|h| h.value.clone())
-            .unwrap_or_default(),
-    })
 }
 
 async fn cmd_http_response_body<R: Runtime>(
@@ -1059,7 +1021,7 @@ async fn cmd_http_response_body<R: Runtime>(
     response_id: &str,
     filter: Option<&str>,
 ) -> YaakResult<FilterResponse> {
-    let location = locate_response_body(window.app_handle(), response_id)?;
+    let location = locate_response_body(&window.db(), response_id)?;
     let Some(body_path) = location.path else {
         return Ok(FilterResponse { content: String::new(), error: None });
     };
@@ -1077,41 +1039,11 @@ async fn cmd_http_response_body<R: Runtime>(
     }
 }
 
-/// The body's path on this machine, for the desktop host to read or hand to the
-/// webview's asset protocol.
-///
-/// The frontend holds response ids; only `packages/platform`'s Tauri host sees
-/// the path, and only because it is about to open the file itself. Hosts
-/// without a filesystem serve the same bytes over HTTP instead.
-async fn cmd_http_response_body_path<R: Runtime>(
-    app_handle: AppHandle<R>,
-    response_id: &str,
-) -> YaakResult<Option<String>> {
-    let location = locate_response_body(&app_handle, response_id)?;
-    Ok(location.path.map(|p| p.to_string_lossy().to_string()))
-}
-
-async fn cmd_http_request_body<R: Runtime>(
-    app_handle: AppHandle<R>,
-    response_id: &str,
-) -> YaakResult<Option<Vec<u8>>> {
-    let body_id = format!("{}.request", response_id);
-    let chunks = app_handle.blobs().get_chunks(&body_id)?;
-
-    if chunks.is_empty() {
-        return Ok(None);
-    }
-
-    // Concatenate all chunks
-    let body: Vec<u8> = chunks.into_iter().flat_map(|c| c.data).collect();
-    Ok(Some(body))
-}
-
 async fn cmd_get_sse_events<R: Runtime>(
     app_handle: AppHandle<R>,
     response_id: &str,
 ) -> YaakResult<Vec<ServerSentEvent>> {
-    let Some(body_path) = locate_response_body(&app_handle, response_id)?.path else {
+    let Some(body_path) = locate_response_body(&app_handle.db(), response_id)?.path else {
         return Ok(Vec::new());
     };
 
@@ -1131,14 +1063,6 @@ async fn cmd_get_sse_events<R: Runtime>(
         }
     }
 
-    Ok(events)
-}
-
-async fn cmd_get_http_response_events<R: Runtime>(
-    app_handle: AppHandle<R>,
-    response_id: &str,
-) -> YaakResult<Vec<HttpResponseEvent>> {
-    let events: Vec<HttpResponseEvent> = app_handle.db().list_http_response_events(response_id)?;
     Ok(events)
 }
 
@@ -1434,22 +1358,6 @@ async fn cmd_curl_to_request<R: Runtime>(
         })?)
 }
 
-async fn cmd_export_data<R: Runtime>(
-    app_handle: AppHandle<R>,
-    export_path: &str,
-    workspace_ids: Vec<&str>,
-    include_private_environments: bool,
-) -> YaakResult<()> {
-    let version = app_handle.package_info().version.to_string();
-    Ok(export::export_data(ExportDataParams {
-        query_manager: &app_handle.db_manager(),
-        yaak_version: &version,
-        export_path: Path::new(export_path),
-        workspace_ids,
-        include_private_environments,
-    })?)
-}
-
 /// Decodes base64 and writes the bytes to a file the user picked.
 ///
 /// The webview can't do this itself: its `fs` permissions are read-only and scoped to the app
@@ -1470,20 +1378,6 @@ async fn cmd_save_base64_to_binary<R: Runtime>(
         .decode(data)
         .map_err(|e| GenericError(format!("Data is not valid base64: {e}")))?;
     fs::write(filepath, bytes).map_err(|e| GenericError(e.to_string()))?;
-    Ok(())
-}
-
-async fn cmd_save_response<R: Runtime>(
-    app_handle: AppHandle<R>,
-    response_id: &str,
-    filepath: &str,
-) -> YaakResult<()> {
-    let response = app_handle.db().get_http_response(response_id)?;
-
-    let body_path =
-        response.body_path.ok_or(GenericError("Response does not have a body".to_string()))?;
-    fs::copy(body_path, filepath).map_err(|e| GenericError(e.to_string()))?;
-
     Ok(())
 }
 
@@ -1568,90 +1462,6 @@ async fn cmd_reload_plugins<R: Runtime>(
         PluginContext::new(Some(window.label().to_string()), window.workspace_id());
     let errors = plugin_manager.initialize_all_plugins(plugins, &plugin_context).await;
     Ok(errors)
-}
-
-async fn cmd_plugin_info<R: Runtime>(
-    id: &str,
-    app_handle: AppHandle<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<PluginMetadata> {
-    let plugin = app_handle.db().get_plugin(id)?;
-    if let Some(plugin_handle) = plugin_manager
-        .get_plugin_by_dir(plugin.directory.as_str())
-        .await
-    {
-        return Ok(plugin_handle.info());
-    }
-
-    if let Ok(metadata) = get_plugin_meta(&PathBuf::from(&plugin.directory)) {
-        return Ok(metadata);
-    }
-
-    Ok(fallback_plugin_metadata(&plugin.directory))
-}
-
-fn fallback_plugin_metadata(directory: &str) -> PluginMetadata {
-    let display_name = PathBuf::from(directory)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .unwrap_or(directory)
-        .to_string();
-
-    PluginMetadata {
-        version: "Unavailable".to_string(),
-        name: directory.to_string(),
-        display_name,
-        description: Some(format!("Plugin metadata could not be loaded from {directory}")),
-        homepage_url: None,
-        repository_url: None,
-    }
-}
-
-async fn cmd_delete_all_grpc_connections<R: Runtime>(
-    request_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> YaakResult<()> {
-    Ok(app_handle.db().delete_all_grpc_connections_for_request(
-        request_id,
-        &UpdateSource::from_window_label(window.label()),
-    )?)
-}
-
-async fn cmd_delete_send_history<R: Runtime>(
-    workspace_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> YaakResult<()> {
-    Ok(app_handle.with_tx(|tx| {
-        let source = &UpdateSource::from_window_label(window.label());
-        tx.delete_all_http_responses_for_workspace(workspace_id, source)?;
-        tx.delete_all_grpc_connections_for_workspace(workspace_id, source)?;
-        tx.delete_all_websocket_connections_for_workspace(workspace_id, source)?;
-        Ok(())
-    })?)
-}
-
-async fn cmd_delete_all_http_responses<R: Runtime>(
-    request_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> YaakResult<()> {
-    app_handle.db().delete_all_http_responses_for_request(
-        request_id,
-        &UpdateSource::from_window_label(window.label()),
-    )?;
-    Ok(())
-}
-
-async fn cmd_get_workspace_meta<R: Runtime>(
-    app_handle: AppHandle<R>,
-    workspace_id: &str,
-) -> YaakResult<WorkspaceMeta> {
-    let db = app_handle.db();
-    let workspace = db.get_workspace(workspace_id)?;
-    Ok(db.get_or_create_workspace_meta(&workspace.id)?)
 }
 
 async fn cmd_new_child_window<R: Runtime>(

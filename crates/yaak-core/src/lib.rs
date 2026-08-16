@@ -6,5 +6,5 @@
 mod context;
 mod error;
 
-pub use context::{AppContext, WorkspaceContext};
+pub use context::WorkspaceContext;
 pub use error::{Error, Result};

@@ -80,6 +80,7 @@ yaak-common = { workspace = true }
 yaak-tauri-utils = { workspace = true }
 yaak-core = { workspace = true }
 yaak = { workspace = true }
+yaak-commands = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-fonts = { workspace = true }
 yaak-git = { workspace = true }

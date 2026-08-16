@@ -12,10 +12,8 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
 use yaak_models::error::Result;
-use yaak_models::models::{AnyModel, GraphQlIntrospection, GrpcEvent, Settings, WebsocketEvent};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
-use yaak_plugins::manager::PluginManager;
 
 const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
 const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 1000;
@@ -123,163 +121,12 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
 /// Extension trait for accessing the BlobManager from Tauri Manager types.
 pub trait BlobManagerExt<'a, R> {
     fn blob_manager(&'a self) -> State<'a, BlobManager>;
-    fn blobs(&'a self) -> yaak_models::blob_manager::BlobContext;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> BlobManagerExt<'a, R> for M {
     fn blob_manager(&'a self) -> State<'a, BlobManager> {
         self.state::<BlobManager>()
     }
-
-    fn blobs(&'a self) -> yaak_models::blob_manager::BlobContext {
-        let manager = self.state::<BlobManager>();
-        manager.inner().connect()
-    }
-}
-
-// Commands for yaak-models
-use tauri::WebviewWindow;
-
-pub(crate) fn models_upsert<R: Runtime>(
-    window: WebviewWindow<R>,
-    model: AnyModel,
-) -> Result<String> {
-    let db = window.db();
-    let blobs = window.blob_manager();
-    let source = &UpdateSource::from_window_label(window.label());
-    yaak_models::models_ops::upsert_model(&db, &blobs, model, source)
-}
-
-// Async so cascading deletes (e.g. a workspace with thousands of requests) run on a
-// blocking thread instead of stalling the main thread and all other IPC.
-pub(crate) async fn models_delete<R: Runtime>(
-    window: WebviewWindow<R>,
-    model: AnyModel,
-) -> Result<String> {
-    use yaak_models::error::Error::GenericError;
-
-    tauri::async_runtime::spawn_blocking(move || {
-        let blobs = window.blob_manager();
-        // Use transaction for deletions because it might recurse
-        window.with_tx(|tx| {
-            let source = &UpdateSource::from_window_label(window.label());
-            yaak_models::models_ops::delete_model(tx, &blobs, model, source)
-        })
-    })
-    .await
-    .map_err(|e| GenericError(format!("Delete task failed: {e}")))?
-}
-
-pub(crate) fn models_duplicate<R: Runtime>(
-    window: WebviewWindow<R>,
-    model_type: String,
-    model_id: String,
-) -> Result<String> {
-    // Use transaction for duplications because it might recurse
-    window.with_tx(|tx| {
-        let source = &UpdateSource::from_window_label(window.label());
-        yaak_models::models_ops::duplicate_model(tx, &model_type, &model_id, source)
-    })
-}
-
-pub(crate) fn models_websocket_events<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    connection_id: &str,
-) -> Result<Vec<WebsocketEvent>> {
-    Ok(app_handle.db().list_websocket_events(connection_id)?)
-}
-
-pub(crate) fn models_grpc_events<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    connection_id: &str,
-) -> Result<Vec<GrpcEvent>> {
-    Ok(app_handle.db().list_grpc_events(connection_id)?)
-}
-
-pub(crate) fn models_get_settings<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Result<Settings> {
-    Ok(app_handle.db().get_settings())
-}
-
-pub(crate) fn models_get_graphql_introspection<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    request_id: &str,
-) -> Result<Option<GraphQlIntrospection>> {
-    Ok(app_handle.db().get_graphql_introspection(request_id))
-}
-
-pub(crate) fn models_upsert_graphql_introspection<R: Runtime>(
-    app_handle: tauri::AppHandle<R>,
-    request_id: &str,
-    workspace_id: &str,
-    content: Option<String>,
-    window: WebviewWindow<R>,
-) -> Result<GraphQlIntrospection> {
-    let source = UpdateSource::from_window_label(window.label());
-    Ok(app_handle.db().upsert_graphql_introspection(workspace_id, request_id, content, &source)?)
-}
-
-pub(crate) async fn models_workspace_models<R: Runtime>(
-    window: WebviewWindow<R>,
-    workspace_id: Option<&str>,
-    plugin_manager: State<'_, PluginManager>,
-) -> Result<String> {
-    let mut l: Vec<AnyModel> = Vec::new();
-
-    // Add the global models
-    {
-        let db = window.db();
-        l.push(db.get_settings().into());
-        l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
-    }
-
-    let plugins = {
-        let db = window.db();
-        db.list_plugins()?
-    };
-
-    let plugins = plugin_manager.resolve_plugins_for_runtime_from_db(plugins).await;
-    l.append(&mut plugins.into_iter().map(Into::into).collect());
-
-    // Add the workspace children
-    if let Some(wid) = workspace_id {
-        let db = window.db();
-        l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_environments_ensure_base(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_grpc_connections(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_grpc_requests(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_http_requests(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_http_responses(wid, None)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_websocket_connections(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_websocket_requests(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_workspace_metas(wid)?.into_iter().map(Into::into).collect());
-    }
-
-    let j = serde_json::to_string(&l)?;
-
-    Ok(escape_str_for_webview(&j))
-}
-
-fn escape_str_for_webview(input: &str) -> String {
-    input
-        .chars()
-        .map(|c| {
-            let code = c as u32;
-            // ASCII
-            if code <= 0x7F {
-                c.to_string()
-                // BMP characters encoded normally
-            } else if code < 0xFFFF {
-                format!("\\u{:04X}", code)
-                // Beyond BMP encoded a surrogate pairs
-            } else {
-                let high = ((code - 0x10000) >> 10) + 0xD800;
-                let low = ((code - 0x10000) & 0x3FF) + 0xDC00;
-                format!("\\u{:04X}\\u{:04X}", high, low)
-            }
-        })
-        .collect()
 }
 
 /// Initialize database managers as a plugin (for initialization order).
