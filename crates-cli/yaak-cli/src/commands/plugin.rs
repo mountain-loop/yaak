@@ -149,9 +149,6 @@ async fn dev(args: PluginPathArg) -> CommandResult {
 
     ui::info(&format!("Watching plugin {}...", plugin_dir.display()));
 
-    prepare_build_output_dir(&plugin_dir)?;
-    copy_build_assets(&plugin_dir)?;
-
     let bundler = Bundler::new(bundler_options(&plugin_dir, true))
         .map_err(|err| format!("Failed to initialize Rolldown watcher: {err}"))?;
     let watcher = Watcher::new(vec![Arc::new(Mutex::new(bundler))], None)
@@ -184,7 +181,11 @@ async fn dev(args: PluginPathArg) -> CommandResult {
                     ui::info(&format!("Rebuilding plugin {display_path}"));
                 }
                 WatcherEvent::Event(BundleEvent::BundleEnd(_)) => {
-                    match generate_plugin_metadata(&watch_root) {
+                    // Assets are staged on every rebuild, so a changed asset or
+                    // declaration is picked up without restarting.
+                    let result = copy_build_assets(&watch_root)
+                        .and_then(|()| generate_plugin_metadata(&watch_root));
+                    match result {
                         Ok(()) => ui::success(&format!(
                             "Generated plugin metadata at {}",
                             watch_root.join("build/metadata.json").display()
@@ -531,11 +532,21 @@ fn copy_build_assets(plugin_dir: &Path) -> CommandResult {
     .map_err(|e| format!("Failed to parse {}: {e}", manifest_path.display()))?;
 
     let build_dir = plugin_dir.join("build");
+    let mut names = HashSet::new();
     for asset in manifest.yaak.build_assets {
         let src = plugin_dir.join(&asset);
         let name = src
             .file_name()
             .ok_or_else(|| format!("yaak.buildAssets entry is not a file path: {asset}"))?;
+        // A copy that later gets overwritten would pass the build and fail on
+        // load, so anything the build itself writes, or a second asset with
+        // the same name, is rejected up front.
+        if name == "index.js" || name == "metadata.json" {
+            return Err(format!("Build asset {asset} would be overwritten by the build output"));
+        }
+        if !names.insert(name.to_owned()) {
+            return Err(format!("Two build assets share the name {}", name.display()));
+        }
         if !src.is_file() {
             return Err(format!("Build asset does not exist: {}", src.display()));
         }
@@ -893,6 +904,38 @@ mod tests {
         copy_build_assets(root).expect("copy assets");
 
         assert_eq!(fs::read_dir(root.join("build")).expect("read build").count(), 0);
+    }
+
+    #[test]
+    fn copy_build_assets_rejects_names_the_build_writes() {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path();
+        fs::create_dir_all(root.join("build")).expect("create build");
+        fs::write(root.join("index.js"), "asset").expect("write asset");
+        fs::write(root.join("package.json"), r#"{"yaak":{"buildAssets":["index.js"]}}"#)
+            .expect("write package.json");
+
+        let err = copy_build_assets(root).expect_err("reserved name should fail");
+        assert!(err.contains("overwritten by the build output"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn copy_build_assets_rejects_duplicate_names() {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path();
+        fs::create_dir_all(root.join("build")).expect("create build");
+        fs::create_dir_all(root.join("a")).expect("create a");
+        fs::create_dir_all(root.join("b")).expect("create b");
+        fs::write(root.join("a/core.wasm"), "one").expect("write a");
+        fs::write(root.join("b/core.wasm"), "two").expect("write b");
+        fs::write(
+            root.join("package.json"),
+            r#"{"yaak":{"buildAssets":["a/core.wasm","b/core.wasm"]}}"#,
+        )
+        .expect("write package.json");
+
+        let err = copy_build_assets(root).expect_err("duplicate name should fail");
+        assert!(err.contains("share the name"), "unexpected error: {err}");
     }
 
     #[test]
