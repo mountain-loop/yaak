@@ -571,13 +571,17 @@ export class PluginInstance {
     return this.#sendPayload(context, { type: "empty_response" }, replyId);
   }
 
+  /**
+   * Send a request to the host and wait for its reply.
+   *
+   * A host that cannot answer replies with an error, which becomes a thrown
+   * error here. The alternative is handing back a reply-shaped object with
+   * none of the fields the caller destructures, and letting it fail somewhere
+   * further along with no idea why.
+   */
   #sendForReply<T extends Omit<InternalEventPayload, "type">>(
     context: PluginContext,
     payload: InternalEventPayload,
-    // Off by default because a reply-shaped object with none of the expected
-    // fields is what every existing caller already copes with; turning it on
-    // for a new call is how that stops spreading.
-    { throwOnError = false }: { throwOnError?: boolean } = {},
   ): Promise<T> {
     // 1. Build event to send
     const eventToSend = this.#buildEventToSend(context, payload, null);
@@ -588,8 +592,9 @@ export class PluginInstance {
         if (event.replyId === eventToSend.id) {
           this.#appToPluginEvents.unlisten(cb); // Unlisten, now that we're done
           const { type: _, ...payload } = event.payload;
-          if (throwOnError && event.payload.type === "error_response") {
-            reject(new Error(String((payload as { error?: string }).error ?? "Unknown error")));
+          if (event.payload.type === "error_response") {
+            const { error } = payload as { error?: string };
+            reject(new Error(error || `Host failed to handle ${eventToSend.payload.type}`));
             return;
           }
           resolve(payload as T);
@@ -630,7 +635,6 @@ export class PluginInstance {
       const info = await this.#sendForReply<GetHttpResponseBodyInfoResponse>(
         context,
         { type: "get_http_response_body_info_request", responseId },
-        { throwOnError: true },
       );
 
       return createResponseBody(
@@ -639,7 +643,6 @@ export class PluginInstance {
           const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
             context,
             { type: "read_http_response_body_chunk_request", responseId, offset, length },
-            { throwOnError: true },
           );
           return decodeBase64Chunk(chunk.data);
         },
@@ -834,9 +837,6 @@ export class PluginInstance {
           const { httpResponse, body } = await this.#sendForReply<SendHttpRequestResponse>(
             context,
             payload,
-            // A failed send has no response to hand back, and reading `.body`
-            // off nothing would bury the host's reason for failing.
-            { throwOnError: true },
           );
 
           // A send with no request behind it saves nothing, so the reply

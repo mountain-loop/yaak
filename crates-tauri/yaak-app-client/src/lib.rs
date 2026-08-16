@@ -45,7 +45,7 @@ use yaak_plugins::events::{
     CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
     CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest,
     CallWebsocketRequestActionArgs, CallWebsocketRequestActionRequest, CallWorkspaceActionArgs,
-    CallWorkspaceActionRequest, Color, FilterResponse, GetFolderActionsResponse,
+    CallWorkspaceActionRequest, Color, ErrorResponse, FilterResponse, GetFolderActionsResponse,
     GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
     GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse,
@@ -1782,6 +1782,7 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
 
                 let ev = match ev {
                     Ok(Some(ev)) => ev,
+                    // Nothing to say, or the reply comes later from somewhere else.
                     Ok(None) => return,
                     Err(e) => {
                         warn!("Failed to handle plugin event: {e:?}");
@@ -1794,7 +1795,10 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
                                 timeout: Some(30000),
                             }),
                         );
-                        return;
+                        // Tell the plugin as well as the user. It is awaiting a
+                        // reply, and a toast it cannot see would leave it
+                        // waiting for one that never comes.
+                        InternalEventPayload::ErrorResponse(ErrorResponse { error: e.to_string() })
                     }
                 };
 
