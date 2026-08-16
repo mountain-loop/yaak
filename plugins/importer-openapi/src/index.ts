@@ -198,9 +198,11 @@ function importOperation({
   folderId: string | null;
 }): ImportResources["httpRequests"][0] {
   importState.beginOperation();
-  const parameters = [...pathParameters, ...toArray(operation.parameters)].map((p) =>
-    importState.resolve(p),
-  );
+  const parameters = mergeParameters({
+    importState,
+    pathParameters,
+    operationParameters: toArray(operation.parameters),
+  });
   const body = importBody({ importState, operation, parameters, spec });
   const urlParameters = importUrlParameters({ importState, parameters });
   const headers = mergeHeaders(
@@ -234,6 +236,46 @@ function importOperation({
     sortPriority: importState.nextSortPriority(),
     ...authentication,
   };
+}
+
+/**
+ * A parameter is identified by its name and location, and an operation may
+ * redeclare one from its path item to change it. Keeping both copies would
+ * import the stale one alongside the override, so the operation's wins.
+ */
+function mergeParameters({
+  importState,
+  pathParameters,
+  operationParameters,
+}: {
+  importState: ImportState;
+  pathParameters: unknown[];
+  operationParameters: unknown[];
+}): unknown[] {
+  const merged: unknown[] = [];
+  const indexByKey = new Map<string, number>();
+
+  for (const parameter of [...pathParameters, ...operationParameters]) {
+    const resolved = importState.resolve(parameter);
+    const name = stringAt(resolved, "name");
+    const location = stringAt(resolved, "in");
+    // Anything missing an identity can't be matched up, so it is kept as-is
+    if (name == null || location == null) {
+      merged.push(resolved);
+      continue;
+    }
+
+    const key = `${location} ${name}`;
+    const existing = indexByKey.get(key);
+    if (existing == null) {
+      indexByKey.set(key, merged.length);
+      merged.push(resolved);
+    } else {
+      merged[existing] = resolved;
+    }
+  }
+
+  return merged;
 }
 
 /** Operation-level `servers` beat path-level, which beat the spec-level base URL */
@@ -601,7 +643,9 @@ function importBody({
     .map((p) => importState.resolve(p))
     .find((p) => isRecord(p) && stringAt(p, "in") === "body");
   if (isRecord(bodyParameter)) {
-    const contentType = toArray(spec.consumes).find((c): c is string => typeof c === "string");
+    const contentType = toArray(operation.consumes ?? spec.consumes).find(
+      (c): c is string => typeof c === "string",
+    );
     const bodyType = contentType ?? "application/json";
     return {
       headers: [{ enabled: true, name: "Content-Type", value: bodyType }],
@@ -620,7 +664,7 @@ function importBody({
     .filter((p) => stringAt(p, "in") === "formData");
   if (formParameters.length > 0) {
     const contentType =
-      toArray(spec.consumes).find((c): c is string => typeof c === "string") ??
+      toArray(operation.consumes ?? spec.consumes).find((c): c is string => typeof c === "string") ??
       (formParameters.some((p) => stringAt(p, "type") === "file")
         ? "multipart/form-data"
         : "application/x-www-form-urlencoded");
@@ -810,22 +854,16 @@ function importAuthentication({
         continue;
       }
       if (type === "apiKey") {
-        return {
-          authenticationType: "apikey",
-          authentication: {
-            location: stringAt(scheme, "in") === "query" ? "query" : "header",
-            key: stringAt(scheme, "name") ?? schemeName,
-            value: "",
-          },
-        };
+        return { authenticationType: "apikey", authentication: importApiKey(scheme, schemeName) };
       }
-      if (type === "http" && stringAt(scheme, "scheme")?.toLowerCase() === "basic") {
+      // Swagger 2.0 spells basic auth as its own type rather than an HTTP scheme
+      if (type === "basic" || (type === "http" && schemeIs(scheme, "basic"))) {
         return {
           authenticationType: "basic",
           authentication: { username: "", password: "" },
         };
       }
-      if (type === "http" && stringAt(scheme, "scheme")?.toLowerCase() === "bearer") {
+      if (type === "http" && schemeIs(scheme, "bearer")) {
         return {
           authenticationType: "bearer",
           authentication: { token: "", prefix: "Bearer" },
@@ -835,6 +873,25 @@ function importAuthentication({
   }
 
   return { authenticationType: null, authentication: {} };
+}
+
+function schemeIs(scheme: UnknownRecord, name: string): boolean {
+  return stringAt(scheme, "scheme")?.toLowerCase() === name;
+}
+
+/**
+ * The API key auth plugin can only write a header or a query parameter, so a
+ * cookie key becomes the Cookie header it would have ended up in, pre-filled
+ * with its name. Sending it as a header named after the cookie would just fail.
+ */
+function importApiKey(scheme: UnknownRecord, schemeName: string): Record<string, string> {
+  const key = stringAt(scheme, "name") ?? schemeName;
+  const location = stringAt(scheme, "in");
+
+  if (location === "cookie") {
+    return { location: "header", key: "Cookie", value: `${key}=` };
+  }
+  return { location: location === "query" ? "query" : "header", key, value: "" };
 }
 
 /**

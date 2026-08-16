@@ -440,6 +440,101 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[1]?.headers).toEqual([]);
   });
 
+  test("Lets an operation override a path-level parameter", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Override Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            parameters: [
+              { name: "page", in: "query", required: false, schema: { example: "path-level" } },
+              { name: "keep", in: "query", required: true, schema: { example: "untouched" } },
+            ],
+            get: {
+              parameters: [
+                // Same name and location as above, so it replaces rather than adds
+                { name: "page", in: "query", required: true, schema: { example: "operation" } },
+                // Same name but a different location, so it is its own parameter
+                { name: "page", in: "header", schema: { example: "header-level" } },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: true, name: "page", value: "operation" },
+      { enabled: true, name: "keep", value: "untouched" },
+    ]);
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: false, name: "page", value: "header-level" },
+    ]);
+  });
+
+  test("Prefers operation-level consumes for Swagger bodies", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "Consumes Test", version: "1.0.0" },
+        host: "example.com",
+        consumes: ["application/json"],
+        paths: {
+          "/a": {
+            post: {
+              consumes: ["application/xml"],
+              parameters: [{ name: "body", in: "body", schema: { type: "object" } }],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        bodyType: "application/xml",
+        headers: expect.arrayContaining([
+          { enabled: true, name: "Content-Type", value: "application/xml" },
+        ]),
+      }),
+    );
+  });
+
+  test("Imports Swagger 2 basic auth and cookie API keys", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "Auth Test", version: "1.0.0" },
+        host: "example.com",
+        paths: {
+          "/a": { get: { security: [{ basicAuth: [] }], responses: {} } },
+          "/b": { get: { security: [{ cookieKey: [] }], responses: {} } },
+        },
+        securityDefinitions: {
+          basicAuth: { type: "basic" },
+          cookieKey: { type: "apiKey", in: "cookie", name: "session" },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "basic",
+        authentication: { username: "", password: "" },
+      }),
+    );
+    // The auth plugin has no cookie location, so it becomes the Cookie header
+    expect(imported?.resources.httpRequests[1]).toEqual(
+      expect.objectContaining({
+        authenticationType: "apikey",
+        authentication: { location: "header", key: "Cookie", value: "session=" },
+      }),
+    );
+  });
+
   test("Reports references that point outside the document", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
