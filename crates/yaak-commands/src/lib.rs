@@ -17,7 +17,9 @@ pub mod error;
 pub mod host;
 pub mod models;
 pub mod plugins;
+pub mod render;
 pub mod responses;
+pub mod templates;
 
 pub use error::{Error, Result};
 pub use host::{Host, PluginHost};
