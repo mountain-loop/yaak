@@ -65,7 +65,7 @@ pub async fn cmd_call_http_request_action<H: PluginHost>(
     let inner = req.req;
     let http_request = resolve_http_request(&host.db(), &inner.args.http_request)?.0;
     host.call_http_request_action(CallHttpRequestActionRequest {
-        args: CallHttpRequestActionArgs { http_request, ..inner.args },
+        args: CallHttpRequestActionArgs { http_request },
         ..inner
     })
     .await

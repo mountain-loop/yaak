@@ -41,7 +41,7 @@ pub async fn cmd_get_http_authentication_config<H: PluginHost>(
     )
     .await?;
 
-    host.http_authentication_config(&req.auth_name, values, &req.model.id()).await
+    host.http_authentication_config(&req.auth_name, values, req.model.id()).await
 }
 
 pub async fn cmd_call_http_authentication_action<H: PluginHost>(
@@ -60,7 +60,7 @@ pub async fn cmd_call_http_authentication_action<H: PluginHost>(
     )
     .await?;
 
-    host.call_http_authentication_action(&req.auth_name, req.action_index, values, &req.model.id())
+    host.call_http_authentication_action(&req.auth_name, req.action_index, values, req.model.id())
         .await
 }
 
