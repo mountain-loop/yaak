@@ -11,9 +11,5 @@
   },
   "dependencies": {
     "yaml": "^2.8.3"
-  },
-  "devDependencies": {
-    "@types/openapi-to-postmanv2": "^5.0.0",
-    "openapi-to-postmanv2": "^6.3.3"
   }
 }
