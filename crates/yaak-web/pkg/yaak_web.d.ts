@@ -29,8 +29,23 @@ export function boot(): Promise<void>;
  * Run one command as `label` (the calling tab's identity, which stands in for
  * the desktop's window label on every write it makes).
  *
- * The payload shapes match the `Cmd*Req` types in `yaak-rpc-schema` — that
- * crate itself pulls the git, gRPC and plugin crates for their response types
- * and cannot come to wasm, so the handful needed here are declared locally.
+ * The payload shapes match the `Cmd*Req` types in `yaak-rpc-schema`, but are
+ * declared locally and dispatched by name, which is the one place this host
+ * does not share the desktop's guarantees: the desktop builds its router from
+ * the schema, so every command has a handler by construction. Here a renamed
+ * command would surface as a runtime "not a command this host answers".
+ *
+ * The fix is `yaak-commands` (the `Host` trait), not more machinery here —
+ * its `models::*` handlers are already this file, typed. Three things have to
+ * give before a wasm host can register them:
+ *
+ * 1. `Host: Send + Sync`, which a browser cannot satisfy: there is one thread
+ *    and the connection pool is an `Rc`.
+ * 2. `models_delete` reaches for `spawn_blocking`; there is nothing to spawn
+ *    onto here.
+ * 3. `yaak-commands` depends on `yaak` and `yaak-plugins`, which pull the HTTP
+ *    stack and the Node sidecar and do not build for wasm32.
+ *
+ * None of those are hard; they are just not this PR.
  */
 export function rpc(cmd: string, payload: any, label: string): any;

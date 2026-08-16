@@ -149,6 +149,9 @@ async fn dev(args: PluginPathArg) -> CommandResult {
 
     ui::info(&format!("Watching plugin {}...", plugin_dir.display()));
 
+    prepare_build_output_dir(&plugin_dir)?;
+    copy_build_assets(&plugin_dir)?;
+
     let bundler = Bundler::new(bundler_options(&plugin_dir, true))
         .map_err(|err| format!("Failed to initialize Rolldown watcher: {err}"))?;
     let watcher = Watcher::new(vec![Arc::new(Mutex::new(bundler))], None)
@@ -408,6 +411,7 @@ struct PublishResponse {
 
 async fn build_plugin_bundle(plugin_dir: &Path) -> CommandResult<Vec<String>> {
     prepare_build_output_dir(plugin_dir)?;
+    copy_build_assets(plugin_dir)?;
     let mut bundler = Bundler::new(bundler_options(plugin_dir, false))
         .map_err(|err| format!("Failed to initialize Rolldown: {err}"))?;
     let output = bundler.write().await.map_err(|err| format!("Plugin build failed:\n{err}"))?;
@@ -496,6 +500,50 @@ fn prepare_build_output_dir(plugin_dir: &Path) -> CommandResult {
     }
     fs::create_dir_all(&build_dir)
         .map_err(|e| format!("Failed to create build directory {}: {e}", build_dir.display()))
+}
+
+#[derive(Deserialize, Default)]
+struct PluginManifest {
+    #[serde(default)]
+    yaak: PluginManifestConfig,
+}
+
+#[derive(Deserialize, Default)]
+struct PluginManifestConfig {
+    /// Files to place beside the bundle, as paths relative to the plugin
+    /// directory. Publishing ships everything in `build/`, so these travel with
+    /// the plugin.
+    #[serde(default, rename = "buildAssets")]
+    build_assets: Vec<String>,
+}
+
+/// Copy the plugin's declared assets into `build/`.
+///
+/// This runs after the directory is cleared and before the bundle is written,
+/// because a bundle may read an asset from its own directory at import time and
+/// metadata generation imports the bundle.
+fn copy_build_assets(plugin_dir: &Path) -> CommandResult {
+    let manifest_path = plugin_dir.join("package.json");
+    let manifest: PluginManifest = serde_json::from_str(
+        &fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("Failed to read {}: {e}", manifest_path.display()))?,
+    )
+    .map_err(|e| format!("Failed to parse {}: {e}", manifest_path.display()))?;
+
+    let build_dir = plugin_dir.join("build");
+    for asset in manifest.yaak.build_assets {
+        let src = plugin_dir.join(&asset);
+        let name = src
+            .file_name()
+            .ok_or_else(|| format!("yaak.buildAssets entry is not a file path: {asset}"))?;
+        if !src.is_file() {
+            return Err(format!("Build asset does not exist: {}", src.display()));
+        }
+        fs::copy(&src, build_dir.join(name))
+            .map_err(|e| format!("Failed to copy build asset {}: {e}", src.display()))?;
+    }
+
+    Ok(())
 }
 
 fn bundler_options(plugin_dir: &Path, watch: bool) -> BundlerOptions {
@@ -750,7 +798,10 @@ describe("Example Plugin", () => {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_publish_archive, generate_plugin_metadata};
+    use super::{
+        copy_build_assets, create_publish_archive, generate_plugin_metadata,
+        prepare_build_output_dir,
+    };
     use serde_json::Value;
     use std::collections::HashSet;
     use std::fs;
@@ -793,6 +844,67 @@ mod tests {
         assert!(names.contains("src/index.ts"));
         assert!(names.contains("build/index.js"));
         assert!(!names.contains("ignored/secret.txt"));
+    }
+
+    #[test]
+    fn prepare_build_output_dir_clears_stale_output() {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path();
+        let build = root.join("build");
+        fs::create_dir_all(&build).expect("create build");
+        fs::write(build.join("index.js"), "stale").expect("write index.js");
+        fs::write(build.join("left-behind.js"), "stale").expect("write extra");
+
+        prepare_build_output_dir(root).expect("prepare build dir");
+
+        // Publishing ships everything under build/, so nothing may survive.
+        assert!(build.is_dir());
+        assert_eq!(fs::read_dir(&build).expect("read build").count(), 0);
+    }
+
+    #[test]
+    fn copy_build_assets_places_declared_files_beside_the_bundle() {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path();
+        fs::create_dir_all(root.join("build")).expect("create build");
+        fs::create_dir_all(root.join("vendor")).expect("create vendor");
+        fs::write(root.join("vendor/core_bg.wasm"), "asset").expect("write asset");
+        fs::write(
+            root.join("package.json"),
+            r#"{"yaak":{"buildAssets":["vendor/core_bg.wasm"]}}"#,
+        )
+        .expect("write package.json");
+
+        copy_build_assets(root).expect("copy assets");
+
+        assert_eq!(
+            fs::read_to_string(root.join("build/core_bg.wasm")).expect("read copied asset"),
+            "asset"
+        );
+    }
+
+    #[test]
+    fn copy_build_assets_is_a_noop_without_declarations() {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path();
+        fs::create_dir_all(root.join("build")).expect("create build");
+        fs::write(root.join("package.json"), r#"{"name":"demo"}"#).expect("write package.json");
+
+        copy_build_assets(root).expect("copy assets");
+
+        assert_eq!(fs::read_dir(root.join("build")).expect("read build").count(), 0);
+    }
+
+    #[test]
+    fn copy_build_assets_fails_on_a_missing_asset() {
+        let dir = TempDir::new().expect("temp dir");
+        let root = dir.path();
+        fs::create_dir_all(root.join("build")).expect("create build");
+        fs::write(root.join("package.json"), r#"{"yaak":{"buildAssets":["nope.wasm"]}}"#)
+            .expect("write package.json");
+
+        let err = copy_build_assets(root).expect_err("missing asset should fail");
+        assert!(err.contains("Build asset does not exist"), "unexpected error: {err}");
     }
 
     #[test]
