@@ -1,7 +1,7 @@
 //! Reads and writes of models, keyed by the client's identity so the frontend
 //! can suppress its own echoes.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::host::{Host, PluginHost};
 use yaak_models::models::{
     AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequestHeader, Settings, WebsocketEvent,
@@ -14,29 +14,34 @@ pub async fn models_upsert<H: Host>(host: H, req: ModelsUpsertReq) -> Result<Str
     let db = host.db();
     let blobs = host.blob_manager();
     let source = host.update_source();
-    Ok(yaak::models_ops::upsert_model(&db, blobs, req.model, &source)?)
+    Ok(yaak_models::models_ops::upsert_model(&db, blobs, req.model, &source)?)
 }
 
-/// Deletes run on a blocking thread: they cascade (a workspace can hold
-/// thousands of requests), and a transaction holds a raw connection that
-/// would otherwise stall the runtime and every other call with it.
+/// Deletes cascade — a workspace can hold thousands of requests — and run in a
+/// transaction, which holds a raw connection for the duration.
+///
+/// Whether that wants a blocking thread is the *host's* question, not the
+/// delete's: a desktop with a multi-threaded runtime should keep this off the
+/// runtime (see its adapter), while a single-threaded host has nothing to move
+/// it to and runs it here. So this is the plain version, and a host that wants
+/// to relocate it calls [`models_delete_blocking`] itself.
 pub async fn models_delete<H: Host>(host: H, req: ModelsDeleteReq) -> Result<String> {
-    let result = tokio::task::spawn_blocking(move || {
-        let source = host.update_source();
-        host.query_manager().with_tx(|tx| {
-            yaak::models_ops::delete_model(tx, host.blob_manager(), req.model, &source)
-        })
-    })
-    .await
-    .map_err(|e| Error::Generic(format!("Delete task failed: {e}")))?;
-    Ok(result?)
+    models_delete_blocking(&host, req)
+}
+
+/// The body of [`models_delete`], callable from a blocking context.
+pub fn models_delete_blocking<H: Host>(host: &H, req: ModelsDeleteReq) -> Result<String> {
+    let source = host.update_source();
+    Ok(host.query_manager().with_tx(|tx| {
+        yaak_models::models_ops::delete_model(tx, host.blob_manager(), req.model, &source)
+    })?)
 }
 
 /// Duplicates recurse, so this runs in a transaction too.
 pub async fn models_duplicate<H: Host>(host: H, req: ModelsDuplicateReq) -> Result<String> {
     let source = host.update_source();
     Ok(host.query_manager().with_tx(|tx| {
-        yaak::models_ops::duplicate_model(tx, &req.model_type, &req.model_id, &source)
+        yaak_models::models_ops::duplicate_model(tx, &req.model_type, &req.model_id, &source)
     })?)
 }
 

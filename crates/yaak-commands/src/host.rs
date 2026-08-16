@@ -22,7 +22,13 @@ use yaak_models::util::UpdateSource;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
 
-pub trait Host: Clone + Send + Sync + 'static {
+/// Only `Clone` is required here. `Send`/`Sync`/`'static` are deliberately
+/// *not*: a browser host is single-threaded and its connection pool is an
+/// `Rc<Connection>` — `rusqlite::Connection` is not `Sync` to begin with — so a
+/// thread-safety bound on the trait would lock that host out of implementing it
+/// at all. The router needs those bounds and states them itself, which is where
+/// they belong: they are a property of a particular transport, not of a command.
+pub trait Host: Clone {
     /// Stable identity of the client this call is for. On the desktop this is
     /// the window label. It rides on every model write so the client that made
     /// a change can tell its own echo from everyone else's.

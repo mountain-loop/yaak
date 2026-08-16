@@ -421,8 +421,18 @@ async fn models_upsert<R: Runtime>(ctx: ClientCtx<R>, req: ModelsUpsertReq) -> R
     Ok(yaak_commands::models::models_upsert(ctx, req).await?)
 }
 
+/// Runs on a blocking thread rather than the async runtime: a cascading delete
+/// (a workspace with thousands of requests) holds a transaction for its whole
+/// duration, and stalling the runtime stalls every other IPC call behind it.
+/// That is this host's concern, so the shared handler stays plain and the
+/// relocation happens here.
 async fn models_delete<R: Runtime>(ctx: ClientCtx<R>, req: ModelsDeleteReq) -> Result<String> {
-    Ok(yaak_commands::models::models_delete(ctx, req).await?)
+    let deleted = tauri::async_runtime::spawn_blocking(move || {
+        yaak_commands::models::models_delete_blocking(&ctx, req)
+    })
+    .await
+    .map_err(|e| crate::error::Error::GenericError(format!("Delete task failed: {e}")))?;
+    Ok(deleted?)
 }
 
 async fn models_duplicate<R: Runtime>(ctx: ClientCtx<R>, req: ModelsDuplicateReq) -> Result<String> {

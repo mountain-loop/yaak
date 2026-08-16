@@ -6,6 +6,7 @@
 //! Node runtime here, and the commands exercised below never needed one. A
 //! handler that reaches for plugins would not compile against this host.
 
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 use yaak_commands::Host;
@@ -119,8 +120,8 @@ async fn writes_carry_the_client_id() {
             .expect("workspace meta");
     assert_eq!(meta.workspace_id, id);
 
-    // Deletes run through spawn_blocking and a transaction; make sure that
-    // path also works off a plain tokio runtime.
+    // Deletes cascade inside a transaction; make sure that path works with no
+    // host doing anything special around it.
     let workspace = host.db().get_workspace(&id).expect("get workspace");
     let deleted =
         models_delete(host.clone(), ModelsDeleteReq { model: AnyModel::Workspace(workspace) })
@@ -135,4 +136,61 @@ async fn host_free_handlers_need_no_state() {
     let host = TestHost::new();
     let headers = cmd_default_headers(host, CmdDefaultHeadersReq {}).await.expect("headers");
     assert!(!headers.is_empty());
+}
+
+/// A host that is deliberately **not** `Send` or `Sync`: it keeps its state in
+/// an `Rc`, the way a single-threaded browser host has to, since
+/// `rusqlite::Connection` is not `Sync` to begin with.
+///
+/// Nothing here asserts anything at runtime — the test is that it compiles. A
+/// `Host` that demanded thread-safety would shut such a host out of the trait
+/// entirely, and this file would stop building.
+#[derive(Clone)]
+struct SingleThreadedHost {
+    inner: Rc<Inner>,
+}
+
+impl Host for SingleThreadedHost {
+    fn client_id(&self) -> &str {
+        "tab-1"
+    }
+
+    fn session(&self) -> WorkspaceContext {
+        WorkspaceContext::new()
+    }
+
+    fn app_version(&self) -> String {
+        "0.0.0-web".to_string()
+    }
+
+    fn query_manager(&self) -> &QueryManager {
+        &self.inner.query_manager
+    }
+
+    fn blob_manager(&self) -> &BlobManager {
+        &self.inner.blob_manager
+    }
+
+    fn encryption_manager(&self) -> &EncryptionManager {
+        &self.inner.encryption_manager
+    }
+}
+
+#[tokio::test]
+async fn a_single_threaded_host_can_implement_the_trait() {
+    let TestHost { inner } = TestHost::new();
+    let host = SingleThreadedHost { inner: Rc::new(Arc::into_inner(inner).expect("sole owner")) };
+
+    let workspace = Workspace { name: "From one thread".to_string(), ..Default::default() };
+    let id = models_upsert(host.clone(), ModelsUpsertReq { model: AnyModel::Workspace(workspace) })
+        .await
+        .expect("upsert");
+
+    // The delete path too, since it is the one that used to reach for a
+    // blocking thread this host does not have.
+    let workspace = host.db().get_workspace(&id).expect("get workspace");
+    let deleted = models_delete(host, ModelsDeleteReq { model: AnyModel::Workspace(workspace) })
+        .await
+        .expect("delete");
+    assert_eq!(deleted, id);
 }
