@@ -1,0 +1,78 @@
+openapi: 3.0.0
+servers:
+  - url: http://xkcd.com/
+info:
+  description: Webcomic of romance, sarcasm, math, and language.
+  title: XKCD
+  version: 1.0.0
+  x-apisguru-categories:
+    - media
+  x-logo:
+    url: https://api.apis.guru/v2/cache/logo/http_imgs.xkcd.com_static_terrible_small_logo.png
+  x-origin:
+    - format: openapi
+      url: https://raw.githubusercontent.com/APIs-guru/unofficial_openapi_specs/master/xkcd.com/1.0.0/openapi.yaml
+      version: "3.0"
+  x-providerName: xkcd.com
+  x-tags:
+    - humor
+    - comics
+  x-unofficialSpec: true
+externalDocs:
+  url: https://xkcd.com/json.html
+paths:
+  /info.0.json:
+    get:
+      description: |
+        Fetch current comic and metadata.
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/comic"
+          description: OK
+  "/{comicId}/info.0.json":
+    get:
+      description: |
+        Fetch comics and metadata  by comic id.
+      parameters:
+        - in: path
+          name: comicId
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          content:
+            "*/*":
+              schema:
+                $ref: "#/components/schemas/comic"
+          description: OK
+components:
+  schemas:
+    comic:
+      properties:
+        alt:
+          type: string
+        day:
+          type: string
+        img:
+          type: string
+        link:
+          type: string
+        month:
+          type: string
+        news:
+          type: string
+        num:
+          type: number
+        safe_title:
+          type: string
+        title:
+          type: string
+        transcript:
+          type: string
+        year:
+          type: string
+      type: object

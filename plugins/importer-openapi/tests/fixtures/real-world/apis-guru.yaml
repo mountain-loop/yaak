@@ -1,0 +1,399 @@
+openapi: 3.0.0
+servers:
+  - url: https://api.apis.guru/v2
+info:
+  contact:
+    email: mike.ralphson@gmail.com
+    name: APIs.guru
+    url: https://APIs.guru
+  description: |
+    Wikipedia for Web APIs. Repository of API definitions in OpenAPI format.
+    **Warning**: If you want to be notified about changes in advance please join our [Slack channel](https://join.slack.com/t/mermade/shared_invite/zt-g78g7xir-MLE_CTCcXCdfJfG3CJe9qA).
+    Client sample: [[Demo]](https://apis.guru/simple-ui) [[Repo]](https://github.com/APIs-guru/simple-ui)
+  license:
+    name: CC0 1.0
+    url: https://github.com/APIs-guru/openapi-directory#licenses
+  title: APIs.guru
+  version: 2.2.0
+  x-apisguru-categories:
+    - open_data
+    - developer_tools
+  x-logo:
+    url: https://api.apis.guru/v2/cache/logo/https_apis.guru_branding_logo_vertical.svg
+  x-origin:
+    - format: openapi
+      url: https://api.apis.guru/v2/openapi.yaml
+      version: "3.0"
+  x-providerName: apis.guru
+  x-tags:
+    - API
+    - Catalog
+    - Directory
+    - REST
+    - Swagger
+    - OpenAPI
+externalDocs:
+  url: https://github.com/APIs-guru/openapi-directory/blob/master/API.md
+security: []
+tags:
+  - description: Actions relating to APIs in the collection
+    name: APIs
+paths:
+  /list.json:
+    get:
+      description: |
+        List all APIs in the directory.
+        Returns links to the OpenAPI definitions for each API in the directory.
+        If API exist in multiple versions `preferred` one is explicitly marked.
+        Some basic info from the OpenAPI definition is cached inside each object.
+        This allows you to generate some simple views without needing to fetch the OpenAPI definition for each API.
+      operationId: listAPIs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIs"
+          description: OK
+      summary: List all APIs
+      tags:
+        - APIs
+  /metrics.json:
+    get:
+      description: |
+        Some basic metrics for the entire directory.
+        Just stunning numbers to put on a front page and are intended purely for WoW effect :)
+      operationId: getMetrics
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Metrics"
+          description: OK
+      summary: Get basic metrics
+      tags:
+        - APIs
+  /providers.json:
+    get:
+      description: |
+        List all the providers in the directory
+      operationId: getProviders
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    items:
+                      minLength: 1
+                      type: string
+                    minItems: 1
+                    type: array
+                type: object
+          description: OK
+      summary: List all providers
+      tags:
+        - APIs
+  "/specs/{provider}/{api}.json":
+    get:
+      description: Returns the API entry for one specific version of an API where there is no serviceName.
+      operationId: getAPI
+      parameters:
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/api"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API"
+          description: OK
+      summary: Retrieve one version of a particular API
+      tags:
+        - APIs
+  "/specs/{provider}/{service}/{api}.json":
+    get:
+      description: Returns the API entry for one specific version of an API where there is a serviceName.
+      operationId: getServiceAPI
+      parameters:
+        - $ref: "#/components/parameters/provider"
+        - in: path
+          name: service
+          required: true
+          schema:
+            example: graph
+            maxLength: 255
+            minLength: 1
+            type: string
+        - $ref: "#/components/parameters/api"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/API"
+          description: OK
+      summary: Retrieve one version of a particular API with a serviceName.
+      tags:
+        - APIs
+  "/{provider}.json":
+    get:
+      description: |
+        List all APIs in the directory for a particular providerName
+        Returns links to the individual API entry for each API.
+      operationId: getProvider
+      parameters:
+        - $ref: "#/components/parameters/provider"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIs"
+          description: OK
+      summary: List all APIs for a particular provider
+      tags:
+        - APIs
+  "/{provider}/services.json":
+    get:
+      description: |
+        List all serviceNames in the directory for a particular providerName
+      operationId: getServices
+      parameters:
+        - $ref: "#/components/parameters/provider"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    items:
+                      minLength: 0
+                      type: string
+                    minItems: 1
+                    type: array
+                type: object
+          description: OK
+      summary: List all serviceNames for a particular provider
+      tags:
+        - APIs
+components:
+  parameters:
+    api:
+      in: path
+      name: api
+      required: true
+      schema:
+        example: 2.1.0
+        maxLength: 255
+        minLength: 1
+        type: string
+    provider:
+      in: path
+      name: provider
+      required: true
+      schema:
+        example: apis.guru
+        maxLength: 255
+        minLength: 1
+        type: string
+  schemas:
+    API:
+      additionalProperties: false
+      description: Meta information about API
+      properties:
+        added:
+          description: Timestamp when the API was first added to the directory
+          format: date-time
+          type: string
+        preferred:
+          description: Recommended version
+          type: string
+        versions:
+          additionalProperties:
+            $ref: "#/components/schemas/ApiVersion"
+          description: List of supported versions of the API
+          minProperties: 1
+          type: object
+      required:
+        - added
+        - preferred
+        - versions
+      type: object
+    APIs:
+      additionalProperties:
+        $ref: "#/components/schemas/API"
+      description: |
+        List of API details.
+        It is a JSON object with API IDs(`<provider>[:<service>]`) as keys.
+      example:
+        googleapis.com:drive:
+          added: 2015-02-22T20:00:45.000Z
+          preferred: v3
+          versions:
+            v2:
+              added: 2015-02-22T20:00:45.000Z
+              info:
+                title: Drive
+                version: v2
+                x-apiClientRegistration:
+                  url: https://console.developers.google.com
+                x-logo:
+                  url: https://api.apis.guru/v2/cache/logo/https_www.gstatic.com_images_icons_material_product_2x_drive_32dp.png
+                x-origin:
+                  format: google
+                  url: https://www.googleapis.com/discovery/v1/apis/drive/v2/rest
+                  version: v1
+                x-preferred: false
+                x-providerName: googleapis.com
+                x-serviceName: drive
+              swaggerUrl: https://api.apis.guru/v2/specs/googleapis.com/drive/v2/swagger.json
+              swaggerYamlUrl: https://api.apis.guru/v2/specs/googleapis.com/drive/v2/swagger.yaml
+              updated: 2016-06-17T00:21:44.000Z
+            v3:
+              added: 2015-12-12T00:25:13.000Z
+              info:
+                title: Drive
+                version: v3
+                x-apiClientRegistration:
+                  url: https://console.developers.google.com
+                x-logo:
+                  url: https://api.apis.guru/v2/cache/logo/https_www.gstatic.com_images_icons_material_product_2x_drive_32dp.png
+                x-origin:
+                  format: google
+                  url: https://www.googleapis.com/discovery/v1/apis/drive/v3/rest
+                  version: v1
+                x-preferred: true
+                x-providerName: googleapis.com
+                x-serviceName: drive
+              swaggerUrl: https://api.apis.guru/v2/specs/googleapis.com/drive/v3/swagger.json
+              swaggerYamlUrl: https://api.apis.guru/v2/specs/googleapis.com/drive/v3/swagger.yaml
+              updated: 2016-06-17T00:21:44.000Z
+      minProperties: 1
+      type: object
+    ApiVersion:
+      additionalProperties: false
+      properties:
+        added:
+          description: Timestamp when the version was added
+          format: date-time
+          type: string
+        externalDocs:
+          description: Copy of `externalDocs` section from OpenAPI definition
+          minProperties: 1
+          type: object
+        info:
+          description: Copy of `info` section from OpenAPI definition
+          minProperties: 1
+          type: object
+        link:
+          description: Link to the individual API entry for this API
+          format: url
+          type: string
+        openapiVer:
+          description: The value of the `openapi` or `swagger` property of the source definition
+          type: string
+        swaggerUrl:
+          description: URL to OpenAPI definition in JSON format
+          format: url
+          type: string
+        swaggerYamlUrl:
+          description: URL to OpenAPI definition in YAML format
+          format: url
+          type: string
+        updated:
+          description: Timestamp when the version was updated
+          format: date-time
+          type: string
+      required:
+        - added
+        - updated
+        - swaggerUrl
+        - swaggerYamlUrl
+        - info
+        - openapiVer
+      type: object
+    Metrics:
+      additionalProperties: false
+      description: List of basic metrics
+      example:
+        datasets: []
+        fixedPct: 22
+        fixes: 81119
+        invalid: 598
+        issues: 28
+        numAPIs: 2501
+        numDrivers: 10
+        numEndpoints: 106448
+        numProviders: 659
+        numSpecs: 3329
+        stars: 2429
+        thisWeek:
+          added: 45
+          updated: 171
+        unofficial: 25
+        unreachable: 123
+      properties:
+        datasets:
+          description: Data used for charting etc
+          items: {}
+          type: array
+        fixedPct:
+          description: Percentage of all APIs where auto fixes have been applied
+          type: integer
+        fixes:
+          description: Total number of fixes applied across all APIs
+          type: integer
+        invalid:
+          description: Number of newly invalid APIs
+          type: integer
+        issues:
+          description: Open GitHub issues on our main repo
+          type: integer
+        numAPIs:
+          description: Number of unique APIs
+          minimum: 1
+          type: integer
+        numDrivers:
+          description: Number of methods of API retrieval
+          type: integer
+        numEndpoints:
+          description: Total number of endpoints inside all definitions
+          minimum: 1
+          type: integer
+        numProviders:
+          description: Number of API providers in directory
+          type: integer
+        numSpecs:
+          description: Number of API definitions including different versions of the same API
+          minimum: 1
+          type: integer
+        stars:
+          description: GitHub stars for our main repo
+          type: integer
+        thisWeek:
+          description: Summary totals for the last 7 days
+          properties:
+            added:
+              description: APIs added in the last week
+              type: integer
+            updated:
+              description: APIs updated in the last week
+              type: integer
+          type: object
+        unofficial:
+          description: Number of unofficial APIs
+          type: integer
+        unreachable:
+          description: Number of unreachable (4XX,5XX status) APIs
+          type: integer
+      required:
+        - numSpecs
+        - numAPIs
+        - numEndpoints
+      type: object
+x-optic-standard: "@febf8ac6-ee67-4565-b45a-5c85a469dca7/Fz6KU3_wMIO5iJ6_VUZ30"
+x-optic-url: https://app.useoptic.com/organizations/febf8ac6-ee67-4565-b45a-5c85a469dca7/apis/_0fKWqUvhs9ssYNkq1k-c
