@@ -18,7 +18,7 @@ use yaak_http::cookies::CookieStore;
 use yaak_http::path_placeholders::apply_path_placeholders;
 use yaak_models::models::{
     HttpResponseHeader, WebsocketConnection, WebsocketConnectionState, WebsocketEvent,
-    WebsocketEventType, WebsocketRequest,
+    WebsocketEventType,
 };
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader, RenderPurpose};
@@ -27,6 +27,7 @@ use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::strip_json_comments::maybe_strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
+use yaak_commands::resolve::resolve_websocket_request;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
 pub async fn cmd_ws_send<R: Runtime>(
@@ -75,7 +76,7 @@ async fn send_websocket_message<R: Runtime>(
         environment_id,
     )?;
     let (resolved_request, _auth_context_id) =
-        resolve_websocket_request(&window, &unrendered_request)?;
+        resolve_websocket_request(&window.db(), &unrendered_request)?;
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_websocket_request(
@@ -154,7 +155,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
         app_handle.db().resolve_settings_for_websocket_request(&unrendered_request)?;
     let settings = app_handle.db().get_settings();
     let (resolved_request, auth_context_id) =
-        resolve_websocket_request(&window, &unrendered_request)?;
+        resolve_websocket_request(&window.db(), &unrendered_request)?;
     let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_websocket_request(
@@ -454,23 +455,6 @@ pub async fn cmd_ws_connect<R: Runtime>(
     Ok(connection)
 }
 
-/// Resolve inherited authentication and headers for a websocket request
-fn resolve_websocket_request<R: Runtime>(
-    window: &WebviewWindow<R>,
-    request: &WebsocketRequest,
-) -> Result<(WebsocketRequest, String)> {
-    let mut new_request = request.clone();
-
-    let (authentication_type, authentication, authentication_context_id) =
-        window.db().resolve_auth_for_websocket_request(request)?;
-    new_request.authentication_type = authentication_type;
-    new_request.authentication = authentication;
-
-    let headers = window.db().resolve_headers_for_websocket_request(request)?;
-    new_request.headers = headers;
-
-    Ok((new_request, authentication_context_id))
-}
 
 /// Convert WS URL to HTTP URL for cookie filtering
 /// WebSocket upgrade requests are HTTP requests initially, so HttpOnly cookies should apply

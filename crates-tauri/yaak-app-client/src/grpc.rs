@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use crate::PluginContextExt;
 use crate::error::Result;
-use crate::models_ext::QueryManagerExt;
 use KeyAndValueRef::{Ascii, Binary};
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak_grpc::{KeyAndValueRef, MetadataMap};
@@ -21,22 +20,6 @@ pub(crate) fn metadata_to_map(metadata: MetadataMap) -> BTreeMap<String, String>
     entries
 }
 
-pub(crate) fn resolve_grpc_request<R: Runtime>(
-    window: &WebviewWindow<R>,
-    request: &GrpcRequest,
-) -> Result<(GrpcRequest, String)> {
-    let mut new_request = request.clone();
-
-    let (authentication_type, authentication, authentication_context_id) =
-        window.db().resolve_auth_for_grpc_request(request)?;
-    new_request.authentication_type = authentication_type;
-    new_request.authentication = authentication;
-
-    let metadata = window.db().resolve_metadata_for_grpc_request(request)?;
-    new_request.metadata = metadata;
-
-    Ok((new_request, authentication_context_id))
-}
 
 pub(crate) async fn build_metadata<R: Runtime>(
     window: &WebviewWindow<R>,

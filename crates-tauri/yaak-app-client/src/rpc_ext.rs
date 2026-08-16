@@ -42,7 +42,9 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::BatchUpsertResult;
 use yaak_plugins::events::{
-    FilterResponse, JsonPrimitive, RenderPurpose, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
+    CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse, ImportResponse,
+    JsonPrimitive, RenderPurpose, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
     GetTemplateFunctionSummaryResponse, GetThemesResponse, GetWebsocketRequestActionsResponse,
@@ -106,28 +108,35 @@ impl<R: Runtime> Host for ClientCtx<R> {
     }
 }
 
+impl<R: Runtime> ClientCtx<R> {
+    /// The plugin runtime this window talks to. Only the `PluginHost` impl
+    /// below uses it; everything else goes through the trait.
+    fn pm(&self) -> State<'_, PluginManager> {
+        self.window.state::<PluginManager>()
+    }
+}
+
 /// The desktop answers all of these out of the `PluginManager` it already
 /// runs — the Node sidecar. Each is a delegation, which is the point: the
 /// operations are what the handlers need, and this is one host's way of
 /// providing them.
 impl<R: Runtime> PluginHost for ClientCtx<R> {
     async fn loaded_plugin_metadata(&self, directory: &str) -> Option<PluginMetadata> {
-        let manager = self.window.state::<PluginManager>();
-        let handle = manager.get_plugin_by_dir(directory).await?;
+        let handle = self.pm().get_plugin_by_dir(directory).await?;
         Some(handle.info())
     }
 
     async fn take_plugin_init_errors(&self) -> Vec<(String, String)> {
-        self.window.state::<PluginManager>().take_init_errors().await
+        self.pm().take_init_errors().await
     }
 
     async fn resolve_plugins(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
-        self.window.state::<PluginManager>().resolve_plugins_for_runtime_from_db(plugins).await
+        self.pm().resolve_plugins_for_runtime_from_db(plugins).await
     }
 
     fn template_callback(&self, purpose: RenderPurpose) -> impl TemplateCallback {
         PluginTemplateCallback::new(
-            Arc::new((*self.window.state::<PluginManager>()).clone()),
+            Arc::new((*self.pm()).clone()),
             Arc::new(self.encryption_manager().clone()),
             &self.plugin_context(),
             purpose,
@@ -158,11 +167,118 @@ impl<R: Runtime> PluginHost for ClientCtx<R> {
     }
 
     async fn themes(&self) -> yaak_commands::Result<Vec<GetThemesResponse>> {
-        Ok(self.window.state::<PluginManager>().get_themes(&self.plugin_context()).await?)
+        Ok(self.pm().get_themes(&self.plugin_context()).await?)
+    }
+
+    async fn http_request_actions(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetHttpRequestActionsResponse>> {
+        Ok(self.pm().get_http_request_actions(&self.plugin_context()).await?)
+    }
+
+    async fn websocket_request_actions(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetWebsocketRequestActionsResponse>> {
+        Ok(self.pm().get_websocket_request_actions(&self.plugin_context()).await?)
+    }
+
+    async fn grpc_request_actions(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetGrpcRequestActionsResponse>> {
+        Ok(self.pm().get_grpc_request_actions(&self.plugin_context()).await?)
+    }
+
+    async fn workspace_actions(&self) -> yaak_commands::Result<Vec<GetWorkspaceActionsResponse>> {
+        Ok(self.pm().get_workspace_actions(&self.plugin_context()).await?)
+    }
+
+    async fn folder_actions(&self) -> yaak_commands::Result<Vec<GetFolderActionsResponse>> {
+        Ok(self.pm().get_folder_actions(&self.plugin_context()).await?)
+    }
+
+    async fn call_http_request_action(
+        &self,
+        req: CallHttpRequestActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Ok(self.pm().call_http_request_action(&self.plugin_context(), req).await?)
+    }
+
+    async fn call_grpc_request_action(
+        &self,
+        req: CallGrpcRequestActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Ok(self.pm().call_grpc_request_action(&self.plugin_context(), req).await?)
+    }
+
+    async fn call_websocket_request_action(
+        &self,
+        req: CallWebsocketRequestActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Ok(self.pm().call_websocket_request_action(&self.plugin_context(), req).await?)
+    }
+
+    async fn call_workspace_action(
+        &self,
+        req: CallWorkspaceActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Ok(self.pm().call_workspace_action(&self.plugin_context(), req).await?)
+    }
+
+    async fn call_folder_action(
+        &self,
+        req: CallFolderActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Ok(self.pm().call_folder_action(&self.plugin_context(), req).await?)
+    }
+
+    async fn http_authentication_summaries(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetHttpAuthenticationSummaryResponse>> {
+        let results = self.pm().get_http_authentication_summaries(&self.plugin_context()).await?;
+        Ok(results.into_iter().map(|(_, a)| a).collect())
+    }
+
+    async fn http_authentication_config(
+        &self,
+        auth_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> yaak_commands::Result<GetHttpAuthenticationConfigResponse> {
+        Ok(self
+            .pm()
+            .get_http_authentication_config(&self.plugin_context(), auth_name, values, model_id)
+            .await?)
+    }
+
+    async fn call_http_authentication_action(
+        &self,
+        auth_name: &str,
+        action_index: i32,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> yaak_commands::Result<()> {
+        Ok(self
+            .pm()
+            .call_http_authentication_action(
+                &self.plugin_context(),
+                auth_name,
+                action_index,
+                values,
+                model_id,
+            )
+            .await?)
+    }
+
+    async fn import_data(&self, content: &str) -> yaak_commands::Result<ImportResponse> {
+        Ok(self.pm().import_data(&self.plugin_context(), content).await?)
+    }
+
+    async fn reload_plugins(&self, plugins: Vec<Plugin>) -> Vec<(String, String)> {
+        self.pm().initialize_all_plugins(plugins, &self.plugin_context()).await
     }
 
     async fn encrypt_secure_template(&self, template: &str) -> yaak_commands::Result<String> {
-        let plugin_manager = Arc::new((*self.window.state::<PluginManager>()).clone());
+        let plugin_manager = Arc::new((*self.pm()).clone());
         let encryption_manager = Arc::new(self.encryption_manager().clone());
         Ok(encrypt_secure_template_function(
             plugin_manager,
@@ -333,36 +449,36 @@ async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> 
     Ok(crate::cmd_import_url(ctx.window.clone(), &req.url).await?)
 }
 
-async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {
-    Ok(crate::cmd_http_request_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {
+    Ok(yaak_commands::actions::cmd_http_request_actions(ctx, req).await?)
 }
 
-async fn cmd_websocket_request_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdWebsocketRequestActionsReq) -> Result<Vec<GetWebsocketRequestActionsResponse>> {
-    Ok(crate::cmd_websocket_request_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_websocket_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdWebsocketRequestActionsReq) -> Result<Vec<GetWebsocketRequestActionsResponse>> {
+    Ok(yaak_commands::actions::cmd_websocket_request_actions(ctx, req).await?)
 }
 
 async fn cmd_call_websocket_request_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallWebsocketRequestActionReq) -> Result<()> {
-    Ok(crate::cmd_call_websocket_request_action(ctx.window.clone(), req.req, ctx.window.app_handle().state::<PluginManager>()).await?)
+    Ok(yaak_commands::actions::cmd_call_websocket_request_action(ctx, req).await?)
 }
 
-async fn cmd_workspace_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdWorkspaceActionsReq) -> Result<Vec<GetWorkspaceActionsResponse>> {
-    Ok(crate::cmd_workspace_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_workspace_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdWorkspaceActionsReq) -> Result<Vec<GetWorkspaceActionsResponse>> {
+    Ok(yaak_commands::actions::cmd_workspace_actions(ctx, req).await?)
 }
 
 async fn cmd_call_workspace_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallWorkspaceActionReq) -> Result<()> {
-    Ok(crate::cmd_call_workspace_action(ctx.window.clone(), req.req, ctx.window.app_handle().state::<PluginManager>()).await?)
+    Ok(yaak_commands::actions::cmd_call_workspace_action(ctx, req).await?)
 }
 
-async fn cmd_folder_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdFolderActionsReq) -> Result<Vec<GetFolderActionsResponse>> {
-    Ok(crate::cmd_folder_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_folder_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdFolderActionsReq) -> Result<Vec<GetFolderActionsResponse>> {
+    Ok(yaak_commands::actions::cmd_folder_actions(ctx, req).await?)
 }
 
 async fn cmd_call_folder_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallFolderActionReq) -> Result<()> {
-    Ok(crate::cmd_call_folder_action(ctx.window.clone(), req.req, ctx.window.app_handle().state::<PluginManager>()).await?)
+    Ok(yaak_commands::actions::cmd_call_folder_action(ctx, req).await?)
 }
 
-async fn cmd_grpc_request_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdGrpcRequestActionsReq) -> Result<Vec<GetGrpcRequestActionsResponse>> {
-    Ok(crate::cmd_grpc_request_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_grpc_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdGrpcRequestActionsReq) -> Result<Vec<GetGrpcRequestActionsResponse>> {
+    Ok(yaak_commands::actions::cmd_grpc_request_actions(ctx, req).await?)
 }
 
 async fn cmd_template_function_summaries<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateFunctionSummariesReq) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
@@ -373,28 +489,28 @@ async fn cmd_template_function_config<R: Runtime>(ctx: ClientCtx<R>, req: CmdTem
     Ok(yaak_commands::templates::cmd_template_function_config(ctx, req).await?)
 }
 
-async fn cmd_get_http_authentication_summaries<R: Runtime>(ctx: ClientCtx<R>, _req: CmdGetHttpAuthenticationSummariesReq) -> Result<Vec<GetHttpAuthenticationSummaryResponse>> {
-    Ok(crate::cmd_get_http_authentication_summaries(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_get_http_authentication_summaries<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpAuthenticationSummariesReq) -> Result<Vec<GetHttpAuthenticationSummaryResponse>> {
+    Ok(yaak_commands::auth::cmd_get_http_authentication_summaries(ctx, req).await?)
 }
 
 async fn cmd_get_http_authentication_config<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpAuthenticationConfigReq) -> Result<GetHttpAuthenticationConfigResponse> {
-    Ok(crate::cmd_get_http_authentication_config(ctx.window.clone(), ctx.window.app_handle().clone(), ctx.window.app_handle().state::<PluginManager>(), ctx.window.app_handle().state::<EncryptionManager>(), &req.auth_name, req.values, req.model, req.environment_id.as_deref()).await?)
+    Ok(yaak_commands::auth::cmd_get_http_authentication_config(ctx, req).await?)
 }
 
 async fn cmd_call_http_request_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallHttpRequestActionReq) -> Result<()> {
-    Ok(crate::cmd_call_http_request_action(ctx.window.clone(), req.req, ctx.window.app_handle().state::<PluginManager>()).await?)
+    Ok(yaak_commands::actions::cmd_call_http_request_action(ctx, req).await?)
 }
 
 async fn cmd_call_grpc_request_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallGrpcRequestActionReq) -> Result<()> {
-    Ok(crate::cmd_call_grpc_request_action(ctx.window.clone(), req.req, ctx.window.app_handle().state::<PluginManager>()).await?)
+    Ok(yaak_commands::actions::cmd_call_grpc_request_action(ctx, req).await?)
 }
 
 async fn cmd_call_http_authentication_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallHttpAuthenticationActionReq) -> Result<()> {
-    Ok(crate::cmd_call_http_authentication_action(ctx.window.clone(), ctx.window.app_handle().clone(), ctx.window.app_handle().state::<PluginManager>(), ctx.window.app_handle().state::<EncryptionManager>(), &req.auth_name, req.action_index, req.values, req.model, req.environment_id.as_deref()).await?)
+    Ok(yaak_commands::auth::cmd_call_http_authentication_action(ctx, req).await?)
 }
 
 async fn cmd_curl_to_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdCurlToRequestReq) -> Result<HttpRequest> {
-    Ok(crate::cmd_curl_to_request(ctx.window.clone(), &req.command, ctx.window.app_handle().state::<PluginManager>(), &req.workspace_id).await?)
+    Ok(yaak_commands::actions::cmd_curl_to_request(ctx, req).await?)
 }
 
 async fn cmd_export_data<R: Runtime>(ctx: ClientCtx<R>, req: CmdExportDataReq) -> Result<()> {
@@ -413,8 +529,8 @@ async fn cmd_send_http_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendHttpRe
     Ok(crate::cmd_send_http_request(ctx.window.app_handle().clone(), ctx.window.clone(), req.environment_id.as_deref(), req.cookie_jar_id.as_deref(), req.request_id).await?)
 }
 
-async fn cmd_reload_plugins<R: Runtime>(ctx: ClientCtx<R>, _req: CmdReloadPluginsReq) -> Result<Vec<(String, String)>> {
-    Ok(crate::cmd_reload_plugins(ctx.window.app_handle().clone(), ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_reload_plugins<R: Runtime>(ctx: ClientCtx<R>, req: CmdReloadPluginsReq) -> Result<Vec<(String, String)>> {
+    Ok(yaak_commands::actions::cmd_reload_plugins(ctx, req).await?)
 }
 
 async fn cmd_plugin_info<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginInfoReq) -> Result<PluginMetadata> {

@@ -8,10 +8,12 @@
 //! `PluginHost` too, without one, which is only possible because that trait
 //! names operations rather than handing back a manager.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
+use yaak_commands::auth::cmd_get_http_authentication_config;
 use yaak_commands::models::{
     cmd_default_headers, cmd_get_workspace_meta, models_delete, models_upsert,
     models_workspace_models,
@@ -25,8 +27,13 @@ use yaak_models::models::{AnyModel, Environment, EnvironmentVariable, Plugin, Wo
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
 use yaak_plugins::events::{
+    CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, GetFolderActionsResponse,
+    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
     GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
-    JsonPrimitive, RenderPurpose,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportResponse, JsonPrimitive,
+    RenderPurpose,
 };
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_rpc_schema::{
@@ -162,6 +169,9 @@ async fn host_free_handlers_need_no_state() {
 #[derive(Clone)]
 struct SingleThreadedHost {
     inner: Rc<Inner>,
+    /// The values the last auth-config call arrived with, so a test can check
+    /// they were rendered before the host ever saw them.
+    auth_values: Rc<RefCell<Option<HashMap<String, JsonPrimitive>>>>,
 }
 
 impl Host for SingleThreadedHost {
@@ -260,12 +270,113 @@ impl PluginHost for SingleThreadedHost {
     async fn themes(&self) -> yaak_commands::Result<Vec<GetThemesResponse>> {
         Ok(Vec::new())
     }
+
+    // No plugins, so nothing contributes actions and nothing can run one.
+
+    async fn http_request_actions(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetHttpRequestActionsResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn websocket_request_actions(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetWebsocketRequestActionsResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn grpc_request_actions(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetGrpcRequestActionsResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn workspace_actions(&self) -> yaak_commands::Result<Vec<GetWorkspaceActionsResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn folder_actions(&self) -> yaak_commands::Result<Vec<GetFolderActionsResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn call_http_request_action(
+        &self,
+        _req: CallHttpRequestActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Err(no_plugins())
+    }
+
+    async fn call_grpc_request_action(
+        &self,
+        _req: CallGrpcRequestActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Err(no_plugins())
+    }
+
+    async fn call_websocket_request_action(
+        &self,
+        _req: CallWebsocketRequestActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Err(no_plugins())
+    }
+
+    async fn call_workspace_action(
+        &self,
+        _req: CallWorkspaceActionRequest,
+    ) -> yaak_commands::Result<()> {
+        Err(no_plugins())
+    }
+
+    async fn call_folder_action(&self, _req: CallFolderActionRequest) -> yaak_commands::Result<()> {
+        Err(no_plugins())
+    }
+
+    async fn http_authentication_summaries(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetHttpAuthenticationSummaryResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn http_authentication_config(
+        &self,
+        _auth_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        _model_id: &str,
+    ) -> yaak_commands::Result<GetHttpAuthenticationConfigResponse> {
+        *self.auth_values.borrow_mut() = Some(values);
+        Err(no_plugins())
+    }
+
+    async fn call_http_authentication_action(
+        &self,
+        _auth_name: &str,
+        _action_index: i32,
+        _values: HashMap<String, JsonPrimitive>,
+        _model_id: &str,
+    ) -> yaak_commands::Result<()> {
+        Err(no_plugins())
+    }
+
+    async fn import_data(&self, _content: &str) -> yaak_commands::Result<ImportResponse> {
+        Err(no_plugins())
+    }
+
+    async fn reload_plugins(&self, _plugins: Vec<Plugin>) -> Vec<(String, String)> {
+        Vec::new()
+    }
+}
+
+fn no_plugins() -> yaak_commands::Error {
+    yaak_commands::Error::Generic("no plugin runtime on this host".into())
 }
 
 #[tokio::test]
 async fn a_single_threaded_host_can_implement_the_trait() {
     let TestHost { inner } = TestHost::new();
-    let host = SingleThreadedHost { inner: Rc::new(Arc::into_inner(inner).expect("sole owner")) };
+    let host = SingleThreadedHost {
+        inner: Rc::new(Arc::into_inner(inner).expect("sole owner")),
+        auth_values: Rc::new(RefCell::new(None)),
+    };
 
     let workspace = Workspace { name: "From one thread".to_string(), ..Default::default() };
     let id = models_upsert(host.clone(), ModelsUpsertReq { model: AnyModel::Workspace(workspace) })
@@ -293,7 +404,6 @@ async fn a_single_threaded_host_can_implement_the_trait() {
             &Environment {
                 workspace_id: id.clone(),
                 name: "Test env".to_string(),
-                base: true,
                 variables: vec![EnvironmentVariable {
                     enabled: true,
                     name: "greeting".to_string(),
@@ -327,4 +437,65 @@ async fn a_single_threaded_host_can_implement_the_trait() {
         .await
         .expect("delete");
     assert_eq!(deleted, id);
+}
+
+/// Auth form values may contain templates, and a plugin must never see one
+/// unrendered. The rendering happens in the shared handler, so this checks the
+/// host received a resolved value rather than `${[ ... ]}`.
+#[tokio::test]
+async fn auth_values_are_rendered_before_the_host_sees_them() {
+    let TestHost { inner } = TestHost::new();
+    let host = SingleThreadedHost {
+        inner: Rc::new(Arc::into_inner(inner).expect("sole owner")),
+        auth_values: Rc::new(RefCell::new(None)),
+    };
+
+    let workspace = host
+        .db()
+        .upsert_workspace(
+            &Workspace { name: "Auth".to_string(), ..Default::default() },
+            &host.update_source(),
+        )
+        .expect("workspace");
+    host.db()
+        .upsert_environment(
+            &Environment {
+                workspace_id: workspace.id.clone(),
+                name: "Env".to_string(),
+                variables: vec![EnvironmentVariable {
+                    enabled: true,
+                    name: "token".to_string(),
+                    value: "s3cret".to_string(),
+                    id: None,
+                }],
+                ..Default::default()
+            },
+            &host.update_source(),
+        )
+        .expect("environment");
+    let environment =
+        host.db().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
+
+    let mut values = HashMap::new();
+    values.insert("password".to_string(), JsonPrimitive::String("${[ token ]}".to_string()));
+
+    // The host refuses the call itself — it has no plugins — but only after the
+    // handler has rendered and handed over the values, which is what matters.
+    let _ = cmd_get_http_authentication_config(
+        host.clone(),
+        yaak_rpc_schema::CmdGetHttpAuthenticationConfigReq {
+            auth_name: "basic".to_string(),
+            values,
+            model: AnyModel::Workspace(workspace),
+            environment_id: Some(environment.id),
+        },
+    )
+    .await;
+
+    let seen = host.auth_values.borrow().clone().expect("the host should have been called");
+    assert!(
+        matches!(seen.get("password"), Some(JsonPrimitive::String(v)) if v == "s3cret"),
+        "the template should have been rendered before reaching the host, got {:?}",
+        seen.get("password"),
+    );
 }
