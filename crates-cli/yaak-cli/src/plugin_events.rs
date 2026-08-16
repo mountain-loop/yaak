@@ -1,5 +1,7 @@
 use crate::context::CliExecutionContext;
 use arboard::Clipboard;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use console::Term;
 use inquire::{Confirm, Editor, Password, PasswordDisplayMode, Select, Text};
 use serde_json::Value;
@@ -132,7 +134,7 @@ async fn build_plugin_reply(
 
     match handle_shared_plugin_event(
         &host_context.query_manager,
-        &FileResponseBodyStore::new(&host_context.query_manager, &host_context.response_dir),
+        &FileResponseBodyStore::new(&host_context.query_manager),
         &event.payload,
         SharedPluginEventContext { plugin_name, workspace_id: shared_workspace_id },
     ) {
@@ -225,7 +227,15 @@ async fn build_plugin_reply(
                 .await
                 {
                     Ok(result) => Some(InternalEventPayload::SendHttpRequestResponse(
-                        SendHttpRequestResponse { http_response: result.response },
+                        SendHttpRequestResponse {
+                            http_response: result.response,
+                            // Nothing saved this body, so the reply is the only
+                            // place the plugin can get it.
+                            body: result
+                                .response_body
+                                .returned_bytes()
+                                .map(|b| BASE64_STANDARD.encode(b)),
+                        },
                     )),
                     Err(err) => Some(InternalEventPayload::ErrorResponse(ErrorResponse {
                         error: format!("Failed to send HTTP request in CLI: {err}"),

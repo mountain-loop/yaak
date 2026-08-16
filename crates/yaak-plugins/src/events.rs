@@ -294,6 +294,15 @@ pub struct SendHttpRequestRequest {
 #[ts(export, export_to = "gen_events.ts")]
 pub struct SendHttpRequestResponse {
     pub http_response: HttpResponse,
+
+    /// The body, base64, when the send saved nothing.
+    ///
+    /// A request with no id behind it produces a response the model store never
+    /// sees, so it cannot be read back by id later the way a saved one can.
+    /// This is the only copy of it. `None` means the body was stored and should
+    /// be read with `read_http_response_body_chunk_request`.
+    #[ts(optional = nullable)]
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

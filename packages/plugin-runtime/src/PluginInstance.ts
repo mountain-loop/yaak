@@ -609,6 +609,14 @@ export class PluginInstance {
   }
 
   #newCtx(context: PluginContext): Context {
+    // Bodies of sends that saved nothing, keyed by the response id they were
+    // handed back with.
+    //
+    // A ctx is built per incoming call, so these last exactly as long as the
+    // plugin invocation that produced them — which is the whole life of an
+    // unsaved response. Nothing else can reach one: the host has no row for it.
+    const unsavedBodies = new Map<string, { bytes: Uint8Array; contentType: string | null }>();
+
     const _windowInfo = async () => {
       if (context.label == null) {
         throw new Error("Can't get window context without an active window");
@@ -763,6 +771,18 @@ export class PluginInstance {
           return httpResponses;
         },
         body: async ({ responseId }) => {
+          const unsaved = unsavedBodies.get(responseId);
+          if (unsaved != null) {
+            return createResponseBody(
+              {
+                responseId,
+                contentLength: unsaved.bytes.byteLength,
+                contentType: unsaved.contentType,
+              },
+              async (offset, length) => unsaved.bytes.slice(offset, offset + length),
+            );
+          }
+
           const info = await this.#sendForReply<GetHttpResponseBodyInfoResponse>(
             context,
             { type: "get_http_response_body_info_request", responseId },
@@ -816,10 +836,23 @@ export class PluginInstance {
             type: "send_http_request_request",
             ...args,
           } as const;
-          const { httpResponse } = await this.#sendForReply<SendHttpRequestResponse>(
+          const { httpResponse, body } = await this.#sendForReply<SendHttpRequestResponse>(
             context,
             payload,
           );
+
+          // A send with no request behind it saves nothing, so this reply is
+          // the only copy of its body. Hold it so ctx.httpResponse.body() can
+          // answer for it the same way it answers for a saved response.
+          if (body != null) {
+            unsavedBodies.set(httpResponse.id, {
+              bytes: decodeBase64Chunk(body),
+              contentType:
+                httpResponse.headers.find((h) => h.name.toLowerCase() === "content-type")?.value ??
+                null,
+            });
+          }
+
           return httpResponse;
         },
         render: async (args) => {

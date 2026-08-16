@@ -184,6 +184,11 @@ export interface Context {
      * Read a response's body by id. Where the host keeps the bytes — files on
      * a desktop, rows in a database, somewhere else later — is not something a
      * plugin sees or should depend on.
+     *
+     * Works for any response the host saved, and for one that `send` returned
+     * without saving — those are held for the rest of the call that sent them,
+     * since nothing else has a copy. Reaching for an unsaved response's id in a
+     * later call throws, because by then its bytes are gone.
      */
     body(args: GetHttpResponseBodyInfoRequest): Promise<HttpResponseBody>;
   };

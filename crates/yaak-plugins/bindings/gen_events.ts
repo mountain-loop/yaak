@@ -557,7 +557,16 @@ export type RenderPurpose = "send" | "preview";
 
 export type SendHttpRequestRequest = { httpRequest: Partial<HttpRequest>, };
 
-export type SendHttpRequestResponse = { httpResponse: HttpResponse, };
+export type SendHttpRequestResponse = { httpResponse: HttpResponse, 
+/**
+ * The body, base64, when the send saved nothing.
+ *
+ * A request with no id behind it produces a response the model store never
+ * sees, so it cannot be read back by id later the way a saved one can.
+ * This is the only copy of it. `None` means the body was stored and should
+ * be read with `read_http_response_body_chunk_request`.
+ */
+body?: string | null, };
 
 export type SetKeyValueRequest = { key: string, value: string, };
 
