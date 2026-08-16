@@ -23,12 +23,11 @@ import type {
   RenderHttpRequestRequest,
   RenderHttpRequestResponse,
   SendHttpRequestRequest,
-  SendHttpRequestResponse,
   ShowToastRequest,
   TemplateRenderRequest,
   WorkspaceInfo,
 } from "../bindings/gen_events.ts";
-import type { Folder, HttpRequest } from "../bindings/gen_models.ts";
+import type { Folder, HttpRequest, HttpResponse } from "../bindings/gen_models.ts";
 import type { JsonValue } from "../bindings/serde_json/JsonValue";
 import type { MaybePromise } from "../helpers";
 
@@ -116,6 +115,20 @@ export interface HttpResponseBody {
   chunks(options?: Pick<ReadHttpResponseBodyOptions, "chunkSize">): AsyncIterable<Uint8Array>;
 }
 
+/** What a send came back with. */
+export interface SentHttpRequest {
+  httpResponse: HttpResponse;
+
+  /**
+   * The response's body.
+   *
+   * Handed over here rather than looked up later, because a request with no id
+   * is not saved and this is the only copy of its body. Reading it is the same
+   * either way, so nothing has to know which kind of send it made.
+   */
+  body: HttpResponseBody;
+}
+
 export interface Context {
   clipboard: {
     copyText(text: string): Promise<void>;
@@ -153,15 +166,12 @@ export interface Context {
   };
   httpRequest: {
     /**
-     * Send a request and wait for the response.
+     * Send a request and wait for the response and its body.
      *
-     * A request with an id is saved, and its body can be read back by response
-     * id whenever you like. A request without one is not: it is sent, the
-     * response comes back, and nothing keeps it. Read that body with
-     * `ctx.httpResponse.body()` before returning — it is only there for the
-     * rest of this call.
+     * The body comes back with the response because a request with no id is
+     * never saved, and there would be nothing to look up afterwards.
      */
-    send(args: SendHttpRequestRequest): Promise<SendHttpRequestResponse["httpResponse"]>;
+    send(args: SendHttpRequestRequest): Promise<SentHttpRequest>;
     getById(args: GetHttpRequestByIdRequest): Promise<GetHttpRequestByIdResponse["httpRequest"]>;
     render(args: RenderHttpRequestRequest): Promise<RenderHttpRequestResponse["httpRequest"]>;
     list(args?: ListHttpRequestsRequest): Promise<ListHttpRequestsResponse["httpRequests"]>;
@@ -190,14 +200,12 @@ export interface Context {
   httpResponse: {
     find(args: FindHttpResponsesRequest): Promise<FindHttpResponsesResponse["httpResponses"]>;
     /**
-     * Read a response's body by id. Where the host keeps the bytes — files on
-     * a desktop, rows in a database, somewhere else later — is not something a
-     * plugin sees or should depend on.
+     * Read a saved response's body by id. Where the host keeps the bytes —
+     * files on a desktop, rows in a database, somewhere else later — is not
+     * something a plugin sees or should depend on.
      *
-     * Works for any response the host saved, and for one that `send` returned
-     * without saving — those are held for the rest of the call that sent them,
-     * since nothing else has a copy. Reaching for an unsaved response's id in a
-     * later call throws, because by then its bytes are gone.
+     * Ids come from `find`. A response that was never saved has none to look
+     * up, so its body arrives with the send that made it instead.
      */
     body(args: GetHttpResponseBodyInfoRequest): Promise<HttpResponseBody>;
   };

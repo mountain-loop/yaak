@@ -319,7 +319,7 @@ async function getResponse(
     // Explicitly render the request before send (instead of relying on send() to render) so that we can
     // preserve the render purpose.
     const renderedHttpRequest = await ctx.httpRequest.render({ httpRequest, purpose });
-    response = await ctx.httpRequest.send({ httpRequest: renderedHttpRequest });
+    response = (await ctx.httpRequest.send({ httpRequest: renderedHttpRequest })).httpResponse;
   }
 
   return response;

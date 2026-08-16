@@ -57,7 +57,7 @@ export async function fetchAccessToken(
   }
 
   httpRequest.authenticationType = "none"; // Don't inherit workspace auth
-  const resp = await ctx.httpRequest.send({ httpRequest });
+  const { httpResponse: resp } = await ctx.httpRequest.send({ httpRequest });
 
   console.log("[oauth2] Got access token response", resp.status);
 

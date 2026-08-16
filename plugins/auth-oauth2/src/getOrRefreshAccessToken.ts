@@ -71,7 +71,7 @@ export async function getOrRefreshAccessToken(
   }
 
   httpRequest.authenticationType = "none"; // Don't inherit workspace auth
-  const resp = await ctx.httpRequest.send({ httpRequest });
+  const { httpResponse: resp } = await ctx.httpRequest.send({ httpRequest });
 
   if (resp.error) {
     throw new Error(`Failed to refresh access token: ${resp.error}`);

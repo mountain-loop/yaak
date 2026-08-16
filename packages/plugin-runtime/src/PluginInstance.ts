@@ -609,13 +609,26 @@ export class PluginInstance {
   }
 
   #newCtx(context: PluginContext): Context {
-    // Bodies of sends that saved nothing, keyed by the response id they were
-    // handed back with.
-    //
-    // A ctx is built per incoming call, so these last exactly as long as the
-    // plugin invocation that produced them — which is the whole life of an
-    // unsaved response. Nothing else can reach one: the host has no row for it.
-    const unsavedBodies = new Map<string, { bytes: Uint8Array; contentType: string | null }>();
+    /** Read a body the host has stored, a chunk at a time. */
+    const storedBody = async (responseId: string) => {
+      const info = await this.#sendForReply<GetHttpResponseBodyInfoResponse>(
+        context,
+        { type: "get_http_response_body_info_request", responseId },
+        { throwOnError: true },
+      );
+
+      return createResponseBody(
+        { responseId, contentLength: info.contentLength, contentType: info.contentType ?? null },
+        async (offset, length) => {
+          const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
+            context,
+            { type: "read_http_response_body_chunk_request", responseId, offset, length },
+            { throwOnError: true },
+          );
+          return decodeBase64Chunk(chunk.data);
+        },
+      );
+    };
 
     const _windowInfo = async () => {
       if (context.label == null) {
@@ -770,41 +783,7 @@ export class PluginInstance {
           );
           return httpResponses;
         },
-        body: async ({ responseId }) => {
-          const unsaved = unsavedBodies.get(responseId);
-          if (unsaved != null) {
-            return createResponseBody(
-              {
-                responseId,
-                contentLength: unsaved.bytes.byteLength,
-                contentType: unsaved.contentType,
-              },
-              async (offset, length) => unsaved.bytes.slice(offset, offset + length),
-            );
-          }
-
-          const info = await this.#sendForReply<GetHttpResponseBodyInfoResponse>(
-            context,
-            { type: "get_http_response_body_info_request", responseId },
-            { throwOnError: true },
-          );
-
-          return createResponseBody(
-            {
-              responseId,
-              contentLength: info.contentLength,
-              contentType: info.contentType ?? null,
-            },
-            async (offset, length) => {
-              const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
-                context,
-                { type: "read_http_response_body_chunk_request", responseId, offset, length },
-                { throwOnError: true },
-              );
-              return decodeBase64Chunk(chunk.data);
-            },
-          );
-        },
+        body: ({ responseId }) => storedBody(responseId),
       },
       grpcRequest: {
         render: async (args) => {
@@ -839,21 +818,32 @@ export class PluginInstance {
           const { httpResponse, body } = await this.#sendForReply<SendHttpRequestResponse>(
             context,
             payload,
+            // A failed send has no response to hand back, and reading `.body`
+            // off nothing would bury the host's reason for failing.
+            { throwOnError: true },
           );
 
-          // A send with no request behind it saves nothing, so this reply is
-          // the only copy of its body. Hold it so ctx.httpResponse.body() can
-          // answer for it the same way it answers for a saved response.
-          if (body != null) {
-            unsavedBodies.set(httpResponse.id, {
-              bytes: decodeBase64Chunk(body),
-              contentType:
-                httpResponse.headers.find((h) => h.name.toLowerCase() === "content-type")?.value ??
-                null,
-            });
+          // A send with no request behind it saves nothing, so the reply
+          // carries the only copy of its body. A saved one is read back from
+          // the host like any other. Callers get the same thing either way.
+          if (body == null) {
+            return { httpResponse, body: await storedBody(httpResponse.id) };
           }
 
-          return httpResponse;
+          const bytes = decodeBase64Chunk(body);
+          return {
+            httpResponse,
+            body: createResponseBody(
+              {
+                responseId: httpResponse.id,
+                contentLength: bytes.byteLength,
+                contentType:
+                  httpResponse.headers.find((h) => h.name.toLowerCase() === "content-type")
+                    ?.value ?? null,
+              },
+              async (offset, length) => bytes.slice(offset, offset + length),
+            ),
+          };
         },
         render: async (args) => {
           const payload = {

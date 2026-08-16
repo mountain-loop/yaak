@@ -18,6 +18,7 @@ export type {
   DynamicPromptFormArg,
   HttpResponseBody,
   ReadHttpResponseBodyOptions,
+  SentHttpRequest,
 } from "./Context";
 export type { DynamicTemplateFunctionArg } from "./TemplateFunctionPlugin";
 export type { TemplateFunctionPlugin };
