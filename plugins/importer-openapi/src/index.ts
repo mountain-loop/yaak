@@ -32,6 +32,7 @@ const BODY_CONTENT_TYPE_PREFERENCE = [
 const MAX_EXAMPLE_DEPTH = 8;
 const MAX_EXAMPLE_PROPERTIES = 25;
 const MAX_DESCRIPTION_ITEMS = 40;
+const MAX_NAME_LENGTH = 100;
 
 export const plugin: PluginDefinition = {
   importer: {
@@ -78,6 +79,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   }
 
   const folderIdsByTag = new Map<string, string>();
+  const routeLabels = new Map<string, string>();
   for (const tag of toArray(spec.tags)) {
     const tagRecord = toRecord(tag);
     const name = stringAt(tagRecord, "name");
@@ -113,24 +115,26 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
         workspaceId: workspace.id,
       });
 
-      resources.httpRequests.push(
-        importOperation({
-          importState,
-          method,
-          operation,
-          path: rawPath,
-          pathItem,
-          pathParameters,
-          requestBaseUrl,
-          spec,
-          workspaceId: workspace.id,
-          folderId,
-        }),
-      );
+      const request = importOperation({
+        importState,
+        method,
+        operation,
+        path: rawPath,
+        pathItem,
+        pathParameters,
+        requestBaseUrl,
+        spec,
+        workspaceId: workspace.id,
+        folderId,
+      });
+      routeLabels.set(request.id, `${method.toUpperCase()} ${rawPath}`);
+      resources.httpRequests.push(request);
     }
   }
 
   if (resources.httpRequests.length === 0) return undefined;
+
+  disambiguateNames(resources.httpRequests, routeLabels);
 
   return {
     resources: deleteUndefinedAttrs(
@@ -144,6 +148,30 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
       }),
     ) as PartialImportResources,
   };
+}
+
+/**
+ * Two operations sharing a summary are indistinguishable once imported, so the
+ * colliding ones get their route appended. Names that are already unique within
+ * their folder are left alone.
+ */
+function disambiguateNames(
+  requests: ImportResources["httpRequests"],
+  routeLabels: Map<string, string>,
+): void {
+  const counts = new Map<string, number>();
+  for (const request of requests) {
+    const key = `${request.folderId ?? ""} ${request.name}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  for (const request of requests) {
+    const key = `${request.folderId ?? ""} ${request.name}`;
+    const routeLabel = routeLabels.get(request.id);
+    if ((counts.get(key) ?? 0) < 2 || routeLabel == null) continue;
+    if (request.name === routeLabel) continue;
+    request.name = `${request.name} (${routeLabel})`;
+  }
 }
 
 function importOperation({
@@ -298,8 +326,20 @@ function importOperationName(operation: UnknownRecord, method: string, path: str
   return (
     stringAt(operation, "summary") ??
     stringAt(operation, "operationId") ??
+    firstLine(stringAt(operation, "description")) ??
     `${method.toUpperCase()} ${path}`
   );
+}
+
+/**
+ * Some specs describe an operation without ever summarizing it, and the opening
+ * line is a far better name than the method and path. Paragraphs are left to the
+ * description, since a name that long is no easier to scan than the path.
+ */
+function firstLine(value: string | undefined): string | undefined {
+  const line = value?.split("\n").find((l) => l.trim().length > 0)?.trim();
+  if (line == null || line.length > MAX_NAME_LENGTH) return undefined;
+  return line;
 }
 
 function importOperationDescription({
@@ -317,6 +357,11 @@ function importOperationDescription({
   const summary = stringAt(operation, "summary");
   const description = stringAt(operation, "description");
   const operationId = stringAt(operation, "operationId");
+
+  // Leads the description, since it changes whether the request should be used at all
+  if (operation.deprecated === true) {
+    parts.push("Deprecated.");
+  }
 
   if (description != null) {
     parts.push(description);

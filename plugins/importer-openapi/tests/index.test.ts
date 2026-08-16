@@ -347,6 +347,67 @@ describe("importer-openapi", () => {
     );
   });
 
+  test("Names operations that only carry a description", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Naming Test", version: "1.0.0" },
+        paths: {
+          "/a": { get: { description: "Fetch the current comic.\nMore detail here.\n" } },
+          "/b": { get: { description: `${"x".repeat(101)}` } },
+          "/c": { get: { summary: "Explicit summary", description: "Ignored" } },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((r) => r.name)).toEqual([
+      "Fetch the current comic.",
+      // Too long to read as a name, so the route is clearer
+      "GET /b",
+      "Explicit summary",
+    ]);
+  });
+
+  test("Disambiguates requests that would share a name", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Duplicate Test", version: "1.0.0" },
+        paths: {
+          "/anything": {
+            get: { summary: "Returns anything" },
+            post: { summary: "Returns anything" },
+          },
+          "/unique": { get: { summary: "Stands alone" } },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((r) => r.name)).toEqual([
+      "Returns anything (GET /anything)",
+      "Returns anything (POST /anything)",
+      "Stands alone",
+    ]);
+  });
+
+  test("Flags deprecated operations", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Deprecated Test", version: "1.0.0" },
+        paths: {
+          "/old": { get: { summary: "Old", deprecated: true, description: "Use /new instead." } },
+          "/new": { get: { summary: "New" } },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.description).toBe(
+      "Deprecated.\n\nUse /new instead.",
+    );
+    expect(imported?.resources.httpRequests[1]?.description).toBe("New");
+  });
+
   test("Reports references that point outside the document", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
