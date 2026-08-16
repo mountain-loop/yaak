@@ -46,9 +46,9 @@ const WorkspacesWorkspaceIdRequestsRequestIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/workspaces': typeof WorkspacesIndexRoute
+  '/workspaces/': typeof WorkspacesIndexRoute
   '/workspaces/$workspaceId/settings': typeof WorkspacesWorkspaceIdSettingsRoute
-  '/workspaces/$workspaceId': typeof WorkspacesWorkspaceIdIndexRoute
+  '/workspaces/$workspaceId/': typeof WorkspacesWorkspaceIdIndexRoute
   '/workspaces/$workspaceId/requests/$requestId': typeof WorkspacesWorkspaceIdRequestsRequestIdRoute
 }
 export interface FileRoutesByTo {
@@ -70,9 +70,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/workspaces'
+    | '/workspaces/'
     | '/workspaces/$workspaceId/settings'
-    | '/workspaces/$workspaceId'
+    | '/workspaces/$workspaceId/'
     | '/workspaces/$workspaceId/requests/$requestId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,14 +110,14 @@ declare module '@tanstack/react-router' {
     '/workspaces/': {
       id: '/workspaces/'
       path: '/workspaces'
-      fullPath: '/workspaces'
+      fullPath: '/workspaces/'
       preLoaderRoute: typeof WorkspacesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workspaces/$workspaceId/': {
       id: '/workspaces/$workspaceId/'
       path: '/workspaces/$workspaceId'
-      fullPath: '/workspaces/$workspaceId'
+      fullPath: '/workspaces/$workspaceId/'
       preLoaderRoute: typeof WorkspacesWorkspaceIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
