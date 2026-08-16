@@ -8,6 +8,7 @@
 use crate::error::Result;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
 use yaak_models::query_manager::QueryManager;
 
 /// The most bytes one read will hand back, however much was asked for.
@@ -43,34 +44,60 @@ pub trait ResponseBodyStore {
 /// filesystem holds it.
 pub struct FileResponseBodyStore<'a> {
     query_manager: &'a QueryManager,
+    response_dir: &'a Path,
 }
 
 impl<'a> FileResponseBodyStore<'a> {
-    pub fn new(query_manager: &'a QueryManager) -> Self {
-        Self { query_manager }
+    pub fn new(query_manager: &'a QueryManager, response_dir: &'a Path) -> Self {
+        Self { query_manager, response_dir }
     }
 
-    /// The file backing a response, or `None` when the response stored no body.
+    /// The file backing a response, or `None` when it stored no body.
     ///
-    /// A response that was never persisted (GraphQL introspection and other
-    /// ephemeral sends) has no row here at all, so it fails as "not found"
-    /// rather than reading as an empty body.
-    fn body_path(&self, response_id: &str) -> Result<Option<String>> {
-        Ok(self.query_manager.connect().get_http_response(response_id)?.body_path)
+    /// Most responses have a row that names their file. A response sent with no
+    /// request behind it — the plugin `ctx.httpRequest.send` of an ad-hoc
+    /// request, GraphQL introspection — is ephemeral: the engine gives it an id
+    /// and writes its body under that id, but never records it. Those bodies are
+    /// still the caller's to read, so fall back to where the engine puts them.
+    fn body_path(&self, response_id: &str) -> Result<Option<PathBuf>> {
+        match self.query_manager.connect().get_http_response(response_id) {
+            Ok(response) => Ok(response.body_path.map(PathBuf::from)),
+            Err(err) => match self.ephemeral_path(response_id) {
+                Some(path) if path.is_file() => Ok(Some(path)),
+                _ => Err(err.into()),
+            },
+        }
+    }
+
+    /// Where an unrecorded response's body would be, if the id can name one.
+    ///
+    /// Ids arrive from a plugin, so only the shape the engine actually generates
+    /// is accepted; that leaves nothing that could climb out of the response
+    /// directory.
+    fn ephemeral_path(&self, response_id: &str) -> Option<PathBuf> {
+        let looks_generated = response_id.starts_with("rs_")
+            && response_id.len() > 3
+            && response_id[3..].chars().all(|c| c.is_ascii_alphanumeric());
+
+        looks_generated.then(|| self.response_dir.join(response_id))
     }
 }
 
 impl ResponseBodyStore for FileResponseBodyStore<'_> {
     fn info(&self, response_id: &str) -> Result<ResponseBodyInfo> {
-        let response = self.query_manager.connect().get_http_response(response_id)?;
+        // The headers live on the row, so an ephemeral response has none to
+        // give. Readers that need its charset have the response object the send
+        // handed back.
+        let content_type = match self.query_manager.connect().get_http_response(response_id) {
+            Ok(response) => response
+                .headers
+                .iter()
+                .find(|h| h.name.eq_ignore_ascii_case("content-type"))
+                .map(|h| h.value.clone()),
+            Err(_) => None,
+        };
 
-        let content_type = response
-            .headers
-            .iter()
-            .find(|h| h.name.eq_ignore_ascii_case("content-type"))
-            .map(|h| h.value.clone());
-
-        let content_length = match response.body_path {
+        let content_length = match self.body_path(response_id)? {
             Some(path) => std::fs::metadata(path)?.len(),
             None => 0,
         };
@@ -104,6 +131,10 @@ mod tests {
     use tempfile::TempDir;
     use yaak_models::models::{HttpRequest, HttpResponse, HttpResponseHeader, Workspace};
     use yaak_models::util::UpdateSource;
+
+    fn store<'a>(qm: &'a QueryManager, dir: &'a TempDir) -> FileResponseBodyStore<'a> {
+        FileResponseBodyStore::new(qm, dir.path())
+    }
 
     fn seed(body: Option<&[u8]>) -> (QueryManager, TempDir, String) {
         let temp_dir = TempDir::new().unwrap();
@@ -165,7 +196,7 @@ mod tests {
     #[test]
     fn info_reports_stored_size_and_content_type() {
         let (qm, _tmp, id) = seed(Some(b"hello world"));
-        let info = FileResponseBodyStore::new(&qm).info(&id).unwrap();
+        let info = store(&qm, &_tmp).info(&id).unwrap();
         assert_eq!(info.content_length, 11);
         assert_eq!(info.content_type.as_deref(), Some("application/json; charset=utf-8"));
     }
@@ -173,7 +204,7 @@ mod tests {
     #[test]
     fn chunks_cover_the_body_and_stop_short_at_the_end() {
         let (qm, _tmp, id) = seed(Some(b"hello world"));
-        let store = FileResponseBodyStore::new(&qm);
+        let store = store(&qm, &_tmp);
         assert_eq!(store.read_chunk(&id, 0, 5).unwrap(), b"hello");
         assert_eq!(store.read_chunk(&id, 6, 100).unwrap(), b"world");
         assert!(store.read_chunk(&id, 11, 100).unwrap().is_empty());
@@ -184,7 +215,7 @@ mod tests {
     #[test]
     fn a_response_with_no_body_is_empty_not_an_error() {
         let (qm, _tmp, id) = seed(None);
-        let store = FileResponseBodyStore::new(&qm);
+        let store = store(&qm, &_tmp);
         assert_eq!(store.info(&id).unwrap().content_length, 0);
         assert!(store.read_chunk(&id, 0, 100).unwrap().is_empty());
     }
@@ -192,6 +223,30 @@ mod tests {
     #[test]
     fn an_unknown_response_fails() {
         let (qm, _tmp, _id) = seed(Some(b"hi"));
-        assert!(FileResponseBodyStore::new(&qm).info("rs_nope").is_err());
+        assert!(store(&qm, &_tmp).info("rs_nope").is_err());
+    }
+
+    #[test]
+    fn an_ephemeral_body_is_readable_by_id_without_a_row() {
+        // What a plugin's ad-hoc `ctx.httpRequest.send` leaves behind: a file
+        // named for a response the engine never recorded.
+        let (qm, tmp, _id) = seed(Some(b"hi"));
+        std::fs::write(tmp.path().join("rs_ephemeral1"), b"access_token=abc").unwrap();
+
+        let info = store(&qm, &tmp).info("rs_ephemeral1").unwrap();
+        assert_eq!(info.content_length, 16);
+        // No row means no headers to report a charset from.
+        assert_eq!(info.content_type, None);
+        assert_eq!(store(&qm, &tmp).read_chunk("rs_ephemeral1", 0, 6).unwrap(), b"access");
+    }
+
+    #[test]
+    fn an_id_that_is_not_a_generated_one_cannot_name_a_file() {
+        let (qm, tmp, _id) = seed(Some(b"hi"));
+        std::fs::write(tmp.path().join("secrets"), b"nope").unwrap();
+
+        for id in ["secrets", "../secrets", "rs_../secrets", "rs_", "/etc/hosts"] {
+            assert!(store(&qm, &tmp).info(id).is_err(), "{id} should not resolve");
+        }
     }
 }

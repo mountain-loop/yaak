@@ -53,9 +53,13 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
             .and_then(|window| workspace_from_window(&window).map(|workspace| workspace.id))
     });
 
+    // Same directory the engine writes bodies into, so responses it never
+    // recorded are still readable by id.
+    let response_dir = app_handle.path().app_data_dir()?.join("responses");
+
     match handle_shared_plugin_event(
         app_handle.db_manager().inner(),
-        &FileResponseBodyStore::new(app_handle.db_manager().inner()),
+        &FileResponseBodyStore::new(app_handle.db_manager().inner(), &response_dir),
         &event.payload,
         SharedPluginEventContext {
             plugin_name: &plugin_name,

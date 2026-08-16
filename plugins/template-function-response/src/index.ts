@@ -261,11 +261,14 @@ export const plugin: PluginDefinition = {
  * The response's body as text, or null when there is nothing to read.
  *
  * The host is asked for it by response id, so this works wherever the bytes
- * happen to live. A body over the runtime's size limit throws rather than
- * coming back empty, since a template silently rendering to nothing is worse
- * than one that says why.
+ * happen to live — including responses it never recorded, which still get an
+ * id. A body over the runtime's size limit throws rather than coming back
+ * empty, since a template silently rendering to nothing is worse than one that
+ * says why.
  */
 async function readResponseBody(ctx: Context, response: HttpResponse): Promise<string | null> {
+  // Belt and braces: everything reaching here came from find() or send() and so
+  // has an id. An empty one would just be an unreadable id.
   if (!response.id) return null;
 
   const body = await ctx.httpResponse.body({ responseId: response.id });

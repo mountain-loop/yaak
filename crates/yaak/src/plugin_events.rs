@@ -481,6 +481,7 @@ mod tests {
     use super::*;
     use crate::response_body::{FileResponseBodyStore, ResponseBodyInfo};
     use std::cell::RefCell;
+    use std::path::Path;
     use tempfile::TempDir;
     use yaak_models::models::{AnyModel, Folder, HttpRequest, Workspace};
     use yaak_models::util::UpdateSource;
@@ -493,7 +494,7 @@ mod tests {
     ) -> GroupedPluginEvent<'a> {
         handle_shared_plugin_event(
             query_manager,
-            &FileResponseBodyStore::new(query_manager),
+            &FileResponseBodyStore::new(query_manager, Path::new("/nonexistent-response-dir")),
             payload,
             context,
         )

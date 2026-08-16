@@ -132,7 +132,7 @@ async fn build_plugin_reply(
 
     match handle_shared_plugin_event(
         &host_context.query_manager,
-        &FileResponseBodyStore::new(&host_context.query_manager),
+        &FileResponseBodyStore::new(&host_context.query_manager, &host_context.response_dir),
         &event.payload,
         SharedPluginEventContext { plugin_name, workspace_id: shared_workspace_id },
     ) {
