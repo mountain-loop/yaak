@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
-const decompress = require("decompress");
 const Downloader = require("nodejs-file-downloader");
+const { extractArchive } = require("./extract-archive.cjs");
 const path = require("node:path");
 const { rmSync, mkdirSync, cpSync, existsSync, statSync, chmodSync } = require("node:fs");
 const { execSync } = require("node:child_process");
@@ -86,7 +86,7 @@ mkdirSync(dstDir, { recursive: true });
   console.log("SHA256 verified:", actualHash);
 
   // Decompress to the same directory
-  await decompress(filePath, tmpDir, {});
+  await extractArchive(filePath, tmpDir);
 
   // Copy binary
   cpSync(binSrc, binDst);

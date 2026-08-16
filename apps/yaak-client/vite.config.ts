@@ -6,7 +6,6 @@ import path from "node:path";
 import { defineConfig, normalizePath } from "vite-plus";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 import svgr from "vite-plugin-svgr";
-import topLevelAwait from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
 
 const require = createRequire(import.meta.url);
@@ -43,10 +42,11 @@ export default defineConfig(async () => {
           : {},
     },
     // The browser host runs the model layer in a worker; that bundle needs the
-    // same wasm and top-level-await handling as the main one.
+    // same wasm handling as the main one. Top-level await needs no transform
+    // because the build targets esnext.
     worker: {
       format: "es" as const,
-      plugins: () => [wasm(), topLevelAwait()],
+      plugins: () => [wasm()],
     },
     plugins: [
       wasm(),
@@ -58,7 +58,6 @@ export default defineConfig(async () => {
       }),
       svgr(),
       react(),
-      topLevelAwait(),
       viteStaticCopy({
         targets: [
           { src: cMapsDir, dest: "" },
