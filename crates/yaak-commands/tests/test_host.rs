@@ -8,6 +8,7 @@
 //! `PluginHost` too, without one, which is only possible because that trait
 //! names operations rather than handing back a manager.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
@@ -15,18 +16,24 @@ use yaak_commands::models::{
     cmd_default_headers, cmd_get_workspace_meta, models_delete, models_upsert,
     models_workspace_models,
 };
+use yaak_commands::templates::cmd_render_template;
 use yaak_commands::{Host, PluginHost};
 use yaak_core::WorkspaceContext;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::models::{AnyModel, Plugin, Workspace};
+use yaak_models::models::{AnyModel, Environment, EnvironmentVariable, Plugin, Workspace};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
+use yaak_plugins::events::{
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
+    JsonPrimitive, RenderPurpose,
+};
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_rpc_schema::{
-    CmdDefaultHeadersReq, CmdGetWorkspaceMetaReq, ModelsDeleteReq, ModelsUpsertReq,
-    ModelsWorkspaceModelsReq,
+    CmdDefaultHeadersReq, CmdGetWorkspaceMetaReq, CmdRenderTemplateReq, ModelsDeleteReq,
+    ModelsUpsertReq, ModelsWorkspaceModelsReq,
 };
+use yaak_templates::TemplateCallback;
 
 #[derive(Clone)]
 struct TestHost {
@@ -183,6 +190,32 @@ impl Host for SingleThreadedHost {
     }
 }
 
+/// A template callback with no plugins behind it: variables still resolve,
+/// function calls have nothing to run them. A browser host would put a Worker
+/// round-trip where this returns an error.
+struct NoTemplateFunctions;
+
+impl TemplateCallback for NoTemplateFunctions {
+    async fn run(
+        &self,
+        fn_name: &str,
+        _args: HashMap<String, serde_json::Value>,
+    ) -> yaak_templates::error::Result<String> {
+        Err(yaak_templates::error::Error::RenderError(format!(
+            "no plugin runtime to run {fn_name}()"
+        )))
+    }
+
+    fn transform_arg(
+        &self,
+        _fn_name: &str,
+        _arg_name: &str,
+        arg_value: &str,
+    ) -> yaak_templates::error::Result<String> {
+        Ok(arg_value.to_string())
+    }
+}
+
 /// Answering plugin questions with no plugin runtime behind them. A browser
 /// host would put a `postMessage` round-trip to its Worker where these return
 /// constants; the shape of the trait is what makes either possible.
@@ -203,6 +236,29 @@ impl PluginHost for SingleThreadedHost {
 
     async fn encrypt_secure_template(&self, _template: &str) -> yaak_commands::Result<String> {
         Err(yaak_commands::Error::Generic("no plugin runtime on this host".into()))
+    }
+
+    fn template_callback(&self, _purpose: RenderPurpose) -> impl TemplateCallback {
+        NoTemplateFunctions
+    }
+
+    async fn template_function_summaries(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetTemplateFunctionSummaryResponse>> {
+        Ok(Vec::new())
+    }
+
+    async fn template_function_config(
+        &self,
+        function_name: &str,
+        _values: HashMap<String, JsonPrimitive>,
+        _model_id: &str,
+    ) -> yaak_commands::Result<GetTemplateFunctionConfigResponse> {
+        Err(yaak_commands::Error::Generic(format!("no plugin provides {function_name}()")))
+    }
+
+    async fn themes(&self) -> yaak_commands::Result<Vec<GetThemesResponse>> {
+        Ok(Vec::new())
     }
 }
 
@@ -226,6 +282,43 @@ async fn a_single_threaded_host_can_implement_the_trait() {
     .await
     .expect("workspace models");
     assert!(json.contains(&id), "the workspace should be in its own bootstrap payload");
+
+    // Rendering, on a host whose template callback has no plugins behind it.
+    // Resolving the environment chain is a database read and the render is
+    // shared code; only the callback came from the host. Rendering a real
+    // variable is what proves the chain was resolved rather than skipped.
+    let environment = host
+        .db()
+        .upsert_environment(
+            &Environment {
+                workspace_id: id.clone(),
+                name: "Test env".to_string(),
+                base: true,
+                variables: vec![EnvironmentVariable {
+                    enabled: true,
+                    name: "greeting".to_string(),
+                    value: "hello".to_string(),
+                    id: None,
+                }],
+                ..Default::default()
+            },
+            &host.update_source(),
+        )
+        .expect("seed environment");
+
+    let rendered = cmd_render_template(
+        host.clone(),
+        CmdRenderTemplateReq {
+            template: "${[ greeting ]} world".to_string(),
+            workspace_id: id.clone(),
+            environment_id: Some(environment.id.clone()),
+            purpose: None,
+            ignore_error: None,
+        },
+    )
+    .await
+    .expect("render");
+    assert_eq!(rendered, "hello world", "the environment chain should have been resolved");
 
     // The delete path too, since it is the one that used to reach for a
     // blocking thread this host does not have.

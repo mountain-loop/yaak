@@ -13,6 +13,7 @@
 //! is anything only a desktop can do — open a native window, run the updater,
 //! show a native dialog — those handlers stay with the desktop.
 
+use std::collections::HashMap;
 use std::future::Future;
 use yaak_core::WorkspaceContext;
 use yaak_crypto::manager::EncryptionManager;
@@ -21,8 +22,12 @@ use yaak_models::client_db::ClientDb;
 use yaak_models::models::Plugin;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
-use yaak_plugins::events::PluginContext;
+use yaak_plugins::events::{
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
+    JsonPrimitive, PluginContext, RenderPurpose,
+};
 use yaak_plugins::plugin_meta::PluginMetadata;
+use yaak_templates::TemplateCallback;
 
 /// Only `Clone` is required here. `Send`/`Sync`/`'static` are deliberately
 /// *not*: a browser host is single-threaded and its connection pool is an
@@ -105,6 +110,30 @@ pub trait PluginHost: Host {
     /// installed, the runtime knows which are bundled and what version actually
     /// loaded. A host without a runtime can return them untouched.
     fn resolve_plugins(&self, plugins: Vec<Plugin>) -> impl Future<Output = Vec<Plugin>>;
+
+    /// The template functions this host can run, as a callback the renderer
+    /// drives. This is the *only* thing the plugin runtime uniquely provides to
+    /// a render — the variables come from the environment chain, which is an
+    /// ordinary database read — so handing back the callback keeps the rest of
+    /// rendering shared instead of pushing whole commands behind this trait.
+    fn template_callback(&self, purpose: RenderPurpose) -> impl TemplateCallback;
+
+    /// Every template function the installed plugins expose, for the
+    /// autocomplete menu.
+    fn template_function_summaries(
+        &self,
+    ) -> impl Future<Output = crate::Result<Vec<GetTemplateFunctionSummaryResponse>>>;
+
+    /// The form a template function wants to show for the given values.
+    fn template_function_config(
+        &self,
+        function_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> impl Future<Output = crate::Result<GetTemplateFunctionConfigResponse>>;
+
+    /// Themes contributed by plugins.
+    fn themes(&self) -> impl Future<Output = crate::Result<Vec<GetThemesResponse>>>;
 
     /// Re-encrypt the `secure(...)` values in a template.
     ///

@@ -48,7 +48,6 @@ use yaak_plugins::events::{
     CallWorkspaceActionRequest, Color, FilterResponse, GetFolderActionsResponse,
     GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
     GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse,
     GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, InternalEvent,
     InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
 };
@@ -58,10 +57,9 @@ use yaak_rpc_schema::{AppMetaData, EphemeralHttpResponse};
 use yaak_sse::sse::ServerSentEvent;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_templates::strip_json_comments::strip_json_comments;
-use yaak_templates::{RenderErrorBehavior, RenderOptions, Tokens, transform_args};
+use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
 
-mod commands;
 mod encoding;
 mod error;
 mod feedback;
@@ -218,56 +216,6 @@ async fn detect_cli_version_for_binary(program: &str) -> Option<String> {
     let mut parts = line.split_whitespace();
     let _name = parts.next();
     Some(parts.next().unwrap_or(line).to_string())
-}
-
-async fn cmd_template_tokens_to_string<R: Runtime>(
-    window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-    tokens: Tokens,
-) -> YaakResult<String> {
-    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
-    let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
-    let cb = PluginTemplateCallback::new(
-        plugin_manager,
-        encryption_manager,
-        &PluginContext::new(Some(window.label().to_string()), window.workspace_id()),
-        RenderPurpose::Preview,
-    );
-    let new_tokens = transform_args(tokens, &cb)?;
-    Ok(new_tokens.to_string())
-}
-
-async fn cmd_render_template<R: Runtime>(
-    window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-    template: &str,
-    workspace_id: &str,
-    environment_id: Option<&str>,
-    purpose: Option<RenderPurpose>,
-    ignore_error: Option<bool>,
-) -> YaakResult<String> {
-    let environment_chain =
-        app_handle.db().resolve_environments(workspace_id, None, environment_id)?;
-    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
-    let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
-    let result = render_template(
-        template,
-        environment_chain,
-        &PluginTemplateCallback::new(
-            plugin_manager,
-            encryption_manager,
-            &PluginContext::new(Some(window.label().to_string()), window.workspace_id()),
-            purpose.unwrap_or(RenderPurpose::Preview),
-        ),
-        &RenderOptions {
-            error_behavior: match ignore_error {
-                Some(true) => RenderErrorBehavior::ReturnEmpty,
-                _ => RenderErrorBehavior::Throw,
-            },
-        },
-    )
-    .await?;
-    Ok(result)
 }
 
 async fn cmd_send_feedback<R: Runtime>(
@@ -1158,27 +1106,6 @@ async fn cmd_grpc_request_actions<R: Runtime>(
     plugin_manager: State<'_, PluginManager>,
 ) -> YaakResult<Vec<GetGrpcRequestActionsResponse>> {
     Ok(plugin_manager.get_grpc_request_actions(&window.plugin_context()).await?)
-}
-
-async fn cmd_template_function_summaries<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetTemplateFunctionSummaryResponse>> {
-    let results = plugin_manager.get_template_function_summaries(&window.plugin_context()).await?;
-    Ok(results)
-}
-
-async fn cmd_template_function_config<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-    function_name: &str,
-    values: HashMap<String, JsonPrimitive>,
-    model: AnyModel,
-    _environment_id: Option<&str>,
-) -> YaakResult<GetTemplateFunctionConfigResponse> {
-    Ok(plugin_manager
-        .get_template_function_config(&window.plugin_context(), function_name, values, model.id())
-        .await?)
 }
 
 async fn cmd_get_http_authentication_summaries<R: Runtime>(

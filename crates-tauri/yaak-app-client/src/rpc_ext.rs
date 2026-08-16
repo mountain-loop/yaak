@@ -22,6 +22,7 @@ use crate::updates::YaakUpdater;
 use log::warn;
 use serde::Serialize;
 use tauri::{Manager, Runtime, State, WebviewWindow};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use yaak_commands::{Host, PluginHost};
@@ -41,7 +42,7 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::BatchUpsertResult;
 use yaak_plugins::events::{
-    FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
+    FilterResponse, JsonPrimitive, RenderPurpose, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
     GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
     GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
     GetTemplateFunctionSummaryResponse, GetThemesResponse, GetWebsocketRequestActionsResponse,
@@ -50,11 +51,13 @@ use yaak_plugins::events::{
 use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::native_template_functions::encrypt_secure_template_function;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_rpc::RpcRouter;
 use yaak_rpc_schema::*;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_sync::sync::SyncOp;
+use yaak_templates::TemplateCallback;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
 use yaak_ws::WebsocketManager;
 
@@ -120,6 +123,42 @@ impl<R: Runtime> PluginHost for ClientCtx<R> {
 
     async fn resolve_plugins(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
         self.window.state::<PluginManager>().resolve_plugins_for_runtime_from_db(plugins).await
+    }
+
+    fn template_callback(&self, purpose: RenderPurpose) -> impl TemplateCallback {
+        PluginTemplateCallback::new(
+            Arc::new((*self.window.state::<PluginManager>()).clone()),
+            Arc::new(self.encryption_manager().clone()),
+            &self.plugin_context(),
+            purpose,
+        )
+    }
+
+    async fn template_function_summaries(
+        &self,
+    ) -> yaak_commands::Result<Vec<GetTemplateFunctionSummaryResponse>> {
+        Ok(self
+            .window
+            .state::<PluginManager>()
+            .get_template_function_summaries(&self.plugin_context())
+            .await?)
+    }
+
+    async fn template_function_config(
+        &self,
+        function_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> yaak_commands::Result<GetTemplateFunctionConfigResponse> {
+        Ok(self
+            .window
+            .state::<PluginManager>()
+            .get_template_function_config(&self.plugin_context(), function_name, values, model_id)
+            .await?)
+    }
+
+    async fn themes(&self) -> yaak_commands::Result<Vec<GetThemesResponse>> {
+        Ok(self.window.state::<PluginManager>().get_themes(&self.plugin_context()).await?)
     }
 
     async fn encrypt_secure_template(&self, template: &str) -> yaak_commands::Result<String> {
@@ -227,11 +266,11 @@ async fn cmd_metadata<R: Runtime>(ctx: ClientCtx<R>, _req: CmdMetadataReq) -> Re
 }
 
 async fn cmd_template_tokens_to_string<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateTokensToStringReq) -> Result<String> {
-    Ok(crate::cmd_template_tokens_to_string(ctx.window.clone(), ctx.window.app_handle().clone(), req.tokens).await?)
+    Ok(yaak_commands::templates::cmd_template_tokens_to_string(ctx, req).await?)
 }
 
 async fn cmd_render_template<R: Runtime>(ctx: ClientCtx<R>, req: CmdRenderTemplateReq) -> Result<String> {
-    Ok(crate::cmd_render_template(ctx.window.clone(), ctx.window.app_handle().clone(), &req.template, &req.workspace_id, req.environment_id.as_deref(), req.purpose, req.ignore_error).await?)
+    Ok(yaak_commands::templates::cmd_render_template(ctx, req).await?)
 }
 
 async fn cmd_send_feedback<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendFeedbackReq) -> Result<()> {
@@ -326,12 +365,12 @@ async fn cmd_grpc_request_actions<R: Runtime>(ctx: ClientCtx<R>, _req: CmdGrpcRe
     Ok(crate::cmd_grpc_request_actions(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
 }
 
-async fn cmd_template_function_summaries<R: Runtime>(ctx: ClientCtx<R>, _req: CmdTemplateFunctionSummariesReq) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
-    Ok(crate::cmd_template_function_summaries(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_template_function_summaries<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateFunctionSummariesReq) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
+    Ok(yaak_commands::templates::cmd_template_function_summaries(ctx, req).await?)
 }
 
 async fn cmd_template_function_config<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateFunctionConfigReq) -> Result<GetTemplateFunctionConfigResponse> {
-    Ok(crate::cmd_template_function_config(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>(), &req.function_name, req.values, req.model, req.environment_id.as_deref()).await?)
+    Ok(yaak_commands::templates::cmd_template_function_config(ctx, req).await?)
 }
 
 async fn cmd_get_http_authentication_summaries<R: Runtime>(ctx: ClientCtx<R>, _req: CmdGetHttpAuthenticationSummariesReq) -> Result<Vec<GetHttpAuthenticationSummaryResponse>> {
@@ -418,8 +457,8 @@ async fn cmd_secure_template<R: Runtime>(ctx: ClientCtx<R>, req: CmdSecureTempla
     Ok(yaak_commands::encryption::cmd_secure_template(ctx, req).await?)
 }
 
-async fn cmd_get_themes<R: Runtime>(ctx: ClientCtx<R>, _req: CmdGetThemesReq) -> Result<Vec<GetThemesResponse>> {
-    Ok(crate::commands::cmd_get_themes(ctx.window.clone(), ctx.window.app_handle().state::<PluginManager>()).await?)
+async fn cmd_get_themes<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetThemesReq) -> Result<Vec<GetThemesResponse>> {
+    Ok(yaak_commands::templates::cmd_get_themes(ctx, req).await?)
 }
 
 async fn cmd_enable_encryption<R: Runtime>(ctx: ClientCtx<R>, req: CmdEnableEncryptionReq) -> Result<()> {
