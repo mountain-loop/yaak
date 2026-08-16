@@ -229,6 +229,152 @@ describe("importer-openapi", () => {
     expect(imported).toBeUndefined();
   });
 
+  test("Prefers operation and path servers over the spec base URL", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Servers Test", version: "1.0.0" },
+        servers: [{ url: "https://root.example.com" }],
+        paths: {
+          "/root": { get: { responses: {} } },
+          "/path-level": {
+            servers: [{ url: "https://path.example.com" }],
+            get: { responses: {} },
+          },
+          "/operation-level": {
+            servers: [{ url: "https://path.example.com" }],
+            get: { servers: [{ url: "https://operation.example.com" }], responses: {} },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((r) => r.url)).toEqual([
+      "${[baseUrl]}/root",
+      "https://path.example.com/path-level",
+      "https://operation.example.com/operation-level",
+    ]);
+  });
+
+  test("Imports OpenAPI 3 OAuth2 flows", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "OAuth Test", version: "1.0.0" },
+        paths: {
+          "/a": { get: { security: [{ oauth: ["read", "write"] }], responses: {} } },
+          "/b": { get: { security: [{ implicitOauth: [] }], responses: {} } },
+        },
+        components: {
+          securitySchemes: {
+            oauth: {
+              type: "oauth2",
+              flows: {
+                clientCredentials: { tokenUrl: "https://example.com/token", scopes: {} },
+              },
+            },
+            implicitOauth: {
+              type: "oauth2",
+              flows: {
+                implicit: { authorizationUrl: "https://example.com/authorize", scopes: {} },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "oauth2",
+        authentication: {
+          grantType: "client_credentials",
+          clientId: "",
+          clientSecret: "",
+          headerPrefix: "Bearer",
+          scope: "read write",
+          accessTokenUrl: "https://example.com/token",
+        },
+      }),
+    );
+    expect(imported?.resources.httpRequests[1]).toEqual(
+      expect.objectContaining({
+        authenticationType: "oauth2",
+        authentication: {
+          grantType: "implicit",
+          clientId: "",
+          headerPrefix: "Bearer",
+          authorizationUrl: "https://example.com/authorize",
+        },
+      }),
+    );
+  });
+
+  test("Imports Swagger 2 OAuth2 flows and produces", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "Swagger OAuth Test", version: "1.0.0" },
+        host: "example.com",
+        produces: ["application/json"],
+        paths: { "/a": { get: { security: [{ oauth: ["admin"] }], responses: {} } } },
+        securityDefinitions: {
+          oauth: {
+            type: "oauth2",
+            flow: "accessCode",
+            authorizationUrl: "https://example.com/authorize",
+            tokenUrl: "https://example.com/token",
+            scopes: { admin: "Admin access" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "oauth2",
+        authentication: {
+          grantType: "authorization_code",
+          clientId: "",
+          clientSecret: "",
+          headerPrefix: "Bearer",
+          scope: "admin",
+          authorizationUrl: "https://example.com/authorize",
+          accessTokenUrl: "https://example.com/token",
+        },
+        headers: [{ enabled: true, name: "Accept", value: "application/json" }],
+      }),
+    );
+  });
+
+  test("Reports references that point outside the document", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "External Ref Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": { schema: { $ref: "./shared.yaml#/components/schemas/Foo" } },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/b": { get: { responses: {} } },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.description).toContain(
+      "./shared.yaml#/components/schemas/Foo",
+    );
+    // The report is per-operation, so an unrelated request stays clean
+    expect(imported?.resources.httpRequests[1]?.description).toBeUndefined();
+  });
+
   for (const fixture of fixtures) {
     test(`Imports ${fixture}`, async () => {
       const contents = fs.readFileSync(path.join(p, fixture), "utf-8");

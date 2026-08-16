@@ -119,6 +119,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
           method,
           operation,
           path: rawPath,
+          pathItem,
           pathParameters,
           requestBaseUrl,
           spec,
@@ -150,6 +151,7 @@ function importOperation({
   method,
   operation,
   path,
+  pathItem,
   pathParameters,
   requestBaseUrl,
   spec,
@@ -160,18 +162,33 @@ function importOperation({
   method: string;
   operation: UnknownRecord;
   path: string;
+  pathItem: UnknownRecord;
   pathParameters: unknown[];
   requestBaseUrl: string;
   spec: UnknownRecord;
   workspaceId: string;
   folderId: string | null;
 }): ImportResources["httpRequests"][0] {
+  importState.beginOperation();
   const parameters = [...pathParameters, ...toArray(operation.parameters)].map((p) =>
     importState.resolve(p),
   );
   const body = importBody({ importState, operation, parameters, spec });
   const urlParameters = importUrlParameters({ importState, parameters });
-  const headers = mergeHeaders(importHeaderParameters({ importState, parameters }), body.headers);
+  const headers = mergeHeaders(
+    importHeaderParameters({ importState, parameters }),
+    body.headers,
+    importAcceptHeader({ operation, spec }),
+  );
+  const authentication = importAuthentication({ importState, operation, spec });
+
+  // Built after everything else, so it can report the refs they left unresolved
+  const description = importOperationDescription({
+    importState,
+    operation,
+    parameters,
+    bodyContentType: body.bodyType,
+  });
 
   return {
     model: "http_request",
@@ -179,21 +196,52 @@ function importOperation({
     workspaceId,
     folderId,
     name: importOperationName(operation, method, path),
-    description: importOperationDescription({
-      importState,
-      operation,
-      parameters,
-      bodyContentType: body.bodyType,
-    }),
+    description,
     method: method.toUpperCase(),
-    url: buildOperationUrl(requestBaseUrl, path),
+    url: buildOperationUrl(operationBaseUrl({ operation, pathItem, requestBaseUrl }), path),
     urlParameters,
     headers,
     body: body.body,
     bodyType: body.bodyType,
     sortPriority: importState.nextSortPriority(),
-    ...importAuthentication({ importState, operation, spec }),
+    ...authentication,
   };
+}
+
+/** Operation-level `servers` beat path-level, which beat the spec-level base URL */
+function operationBaseUrl({
+  operation,
+  pathItem,
+  requestBaseUrl,
+}: {
+  operation: UnknownRecord;
+  pathItem: UnknownRecord;
+  requestBaseUrl: string;
+}): string {
+  for (const servers of [operation.servers, pathItem.servers]) {
+    const override = toArray(servers)
+      .map((s) => interpolateServerUrl(toRecord(s)))
+      .find((url) => url.length > 0);
+    // Overrides are inlined rather than shared, since only the spec-level base
+    // URL becomes the baseUrl variable
+    if (override != null) return override;
+  }
+  return requestBaseUrl;
+}
+
+/** Swagger 2.0 declares response types up front, so they can become an Accept header */
+function importAcceptHeader({
+  operation,
+  spec,
+}: {
+  operation: UnknownRecord;
+  spec: UnknownRecord;
+}): HttpRequestHeader[] {
+  const produces = toArray(operation.produces ?? spec.produces).find(
+    (c): c is string => typeof c === "string",
+  );
+  if (produces == null) return [];
+  return [{ enabled: true, name: "Accept", value: produces }];
 }
 
 function parseSpec(contents: string): unknown {
@@ -323,6 +371,17 @@ function importOperationDescription({
   if (stringAt(externalDocs, "url")) {
     parts.push(
       `${stringAt(externalDocs, "description") ?? "External docs"}: ${stringAt(externalDocs, "url")}`,
+    );
+  }
+
+  // Without this the parts these refs describe just come out blank
+  const unresolvedRefs = importState.unresolvedRefs().slice(0, MAX_DESCRIPTION_ITEMS);
+  if (unresolvedRefs.length > 0) {
+    parts.push(
+      [
+        "Unresolved references (point outside this document, so the parts they describe were left empty):",
+        ...unresolvedRefs.map((ref) => `- ${ref}`),
+      ].join("\n"),
     );
   }
 
@@ -675,9 +734,14 @@ function importAuthentication({
     ...toRecord(spec.securityDefinitions),
   };
   for (const requirement of security) {
-    for (const schemeName of Object.keys(toRecord(requirement))) {
+    for (const [schemeName, rawScopes] of Object.entries(toRecord(requirement))) {
       const scheme = toRecord(importState.resolve(schemes[schemeName]));
       const type = stringAt(scheme, "type");
+      if (type === "oauth2") {
+        const oauth2 = importOAuth2(scheme, rawScopes);
+        if (oauth2 != null) return oauth2;
+        continue;
+      }
       if (type === "apiKey") {
         return {
           authenticationType: "apikey",
@@ -704,6 +768,69 @@ function importAuthentication({
   }
 
   return { authenticationType: null, authentication: {} };
+}
+
+/**
+ * Maps an OpenAPI 3.x `flows` object or a Swagger 2.0 `flow` string onto the
+ * grant types the OAuth 2.0 auth plugin understands. Returns null when the
+ * scheme declares no flow this importer can map, so the caller keeps looking.
+ */
+function importOAuth2(
+  scheme: UnknownRecord,
+  rawScopes: unknown,
+): Pick<HttpRequest, "authentication" | "authenticationType"> | null {
+  const scope = toArray(rawScopes)
+    .filter((s): s is string => typeof s === "string")
+    .join(" ");
+
+  const flows = toRecord(scheme.flows);
+  const swagger2Flow = stringAt(scheme, "flow");
+  const candidates: { grantType: string; flow: UnknownRecord }[] = [
+    { grantType: "authorization_code", flow: toRecord(flows.authorizationCode) },
+    { grantType: "client_credentials", flow: toRecord(flows.clientCredentials) },
+    { grantType: "password", flow: toRecord(flows.password) },
+    { grantType: "implicit", flow: toRecord(flows.implicit) },
+  ];
+
+  // Swagger 2.0 puts the URLs on the scheme itself and names the flow differently
+  if (swagger2Flow != null) {
+    const grantType = {
+      accessCode: "authorization_code",
+      application: "client_credentials",
+      implicit: "implicit",
+      password: "password",
+    }[swagger2Flow];
+    if (grantType == null) return null;
+    candidates.unshift({ grantType, flow: scheme });
+  }
+
+  for (const { grantType, flow } of candidates) {
+    const authorizationUrl = stringAt(flow, "authorizationUrl");
+    const accessTokenUrl = stringAt(flow, "tokenUrl");
+    if (authorizationUrl == null && accessTokenUrl == null) continue;
+
+    const grantPatch =
+      grantType === "authorization_code"
+        ? { authorizationUrl, accessTokenUrl, clientSecret: "" }
+        : grantType === "implicit"
+          ? { authorizationUrl }
+          : grantType === "password"
+            ? { accessTokenUrl, clientSecret: "", username: "", password: "" }
+            : { accessTokenUrl, clientSecret: "" };
+
+    return {
+      authenticationType: "oauth2",
+      authentication: {
+        grantType,
+        clientId: "",
+        headerPrefix: "Bearer",
+        ...(scope.length > 0 ? { scope } : {}),
+        ...grantPatch,
+      },
+    };
+  }
+
+  return null;
 }
 
 function mergeHeaders(...headerGroups: HttpRequestHeader[][]): HttpRequestHeader[] {
@@ -794,6 +921,7 @@ class ImportState {
   readonly #spec: UnknownRecord;
   readonly #idCount: Partial<Record<string, number>> = {};
   #sortPriority = 0;
+  #unresolvedRefs = new Set<string>();
 
   constructor(spec: UnknownRecord) {
     this.#spec = spec;
@@ -808,6 +936,16 @@ class ImportState {
     return this.#sortPriority++;
   }
 
+  /** Starts collecting unresolved refs for a single operation */
+  beginOperation(): void {
+    this.#unresolvedRefs = new Set();
+  }
+
+  /** Refs seen since `beginOperation` that point outside this document */
+  unresolvedRefs(): string[] {
+    return [...this.#unresolvedRefs];
+  }
+
   resolve(value: unknown, visitedRefs = new Set<string>()): unknown {
     if (!isRecord(value) || typeof value.$ref !== "string") return value;
     if (visitedRefs.has(value.$ref)) return {};
@@ -815,7 +953,12 @@ class ImportState {
     const nextVisitedRefs = new Set(visitedRefs);
     nextVisitedRefs.add(value.$ref);
 
-    if (!value.$ref.startsWith("#/")) return value;
+    // Refs into other documents can't be followed without fetching them, so
+    // record them and let the operation description report what went missing
+    if (!value.$ref.startsWith("#/")) {
+      this.#unresolvedRefs.add(value.$ref);
+      return value;
+    }
 
     const resolved = value.$ref
       .slice(2)
