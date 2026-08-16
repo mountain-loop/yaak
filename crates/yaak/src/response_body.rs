@@ -11,6 +11,7 @@
 use crate::error::Result;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use yaak_models::models::HttpResponseState;
 use yaak_models::query_manager::QueryManager;
 
 /// The most bytes one read will hand back, however much was asked for.
@@ -28,6 +29,9 @@ pub struct ResponseBodyInfo {
     pub content_length: u64,
     /// The response's `Content-Type` header, verbatim.
     pub content_type: Option<String>,
+    /// Whether the response has finished arriving, so `content_length` is
+    /// final. A body still being written grows past it.
+    pub complete: bool,
 }
 
 /// Somewhere response bodies can be read from, a window at a time.
@@ -78,7 +82,12 @@ impl ResponseBodyStore for FileResponseBodyStore<'_> {
             None => 0,
         };
 
-        Ok(ResponseBodyInfo { content_length, content_type })
+        Ok(ResponseBodyInfo {
+            content_length,
+            content_type,
+            // Closed is the one terminal state: success, error, and cancel all end there.
+            complete: matches!(response.state, HttpResponseState::Closed),
+        })
     }
 
     fn read_chunk(&self, response_id: &str, offset: u64, length: u64) -> Result<Vec<u8>> {
@@ -190,6 +199,19 @@ mod tests {
         let store = FileResponseBodyStore::new(&qm);
         assert_eq!(store.info(&id).unwrap().content_length, 0);
         assert!(store.read_chunk(&id, 0, 100).unwrap().is_empty());
+    }
+
+    #[test]
+    fn complete_tracks_whether_the_response_has_closed() {
+        let (qm, _tmp, id) = seed(Some(b"partial"));
+        // Seeded responses default to Initialized: still arriving.
+        assert!(!FileResponseBodyStore::new(&qm).info(&id).unwrap().complete);
+
+        let mut response = qm.connect().get_http_response(&id).unwrap();
+        response.state = HttpResponseState::Closed;
+        qm.connect().update_http_response_if_id(&response, &UpdateSource::Sync).unwrap();
+
+        assert!(FileResponseBodyStore::new(&qm).info(&id).unwrap().complete);
     }
 
     #[test]

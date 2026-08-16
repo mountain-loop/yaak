@@ -13,6 +13,9 @@ const DEFAULT_CHUNK_SIZE = 1024 * 1024;
  */
 const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
 
+/** How long to wait, having caught up with a body still arriving, before looking again. */
+const DEFAULT_POLL_INTERVAL_MS = 100;
+
 /** Fetch one window of body bytes from the host. */
 export type ReadResponseBodyChunk = (offset: number, length: number) => Promise<Uint8Array>;
 
@@ -20,26 +23,65 @@ export interface ResponseBodyInfo {
   responseId: string;
   contentLength: number;
   contentType: string | null;
+  /** Whether the response has finished arriving, so `contentLength` is final. */
+  complete: boolean;
+}
+
+/** What can change while a body is still arriving. */
+export type ResponseBodyProgress = Pick<ResponseBodyInfo, "contentLength" | "complete">;
+
+export interface CreateResponseBodyOptions {
+  /**
+   * Ask the host where the body has got to. Needed only for a body that was
+   * not complete when opened; a reader that has caught up calls this to learn
+   * whether to wait for more or stop.
+   */
+  refresh?: () => Promise<ResponseBodyProgress>;
+  pollIntervalMs?: number;
 }
 
 export function createResponseBody(
   info: ResponseBodyInfo,
   readChunk: ReadResponseBodyChunk,
+  { refresh, pollIntervalMs = DEFAULT_POLL_INTERVAL_MS }: CreateResponseBodyOptions = {},
 ): HttpResponseBody {
-  const { responseId, contentLength, contentType } = info;
+  const { responseId, contentLength, contentType, complete } = info;
 
+  /**
+   * Yield the body from the start until it has all arrived.
+   *
+   * A complete body is read up to its known length and no further. One still
+   * arriving is followed: on catching up, ask the host whether it has finished,
+   * and if not, wait and look again. So this ends when the response does —
+   * which for a stream that never closes means it doesn't, exactly as
+   * iterating `fetch`'s body would not.
+   */
   async function* chunks(
     options?: Pick<ReadHttpResponseBodyOptions, "chunkSize">,
   ): AsyncIterable<Uint8Array> {
     const chunkSize = Math.max(1, Math.floor(options?.chunkSize ?? DEFAULT_CHUNK_SIZE));
+    let known = contentLength;
+    let done = complete;
     let offset = 0;
-    // Bounded by the length the host reported, but a short read still ends it:
-    // the body may have been rewritten between the two calls.
-    while (offset < contentLength) {
-      const chunk = await readChunk(offset, Math.min(chunkSize, contentLength - offset));
-      if (chunk.byteLength === 0) return;
-      yield chunk;
-      offset += chunk.byteLength;
+
+    while (true) {
+      if (done && offset >= known) return;
+
+      const want = done ? Math.min(chunkSize, known - offset) : chunkSize;
+      const chunk = await readChunk(offset, want);
+      if (chunk.byteLength > 0) {
+        yield chunk;
+        offset += chunk.byteLength;
+        continue;
+      }
+
+      // Caught up. A complete body that came up short simply ended sooner than
+      // the host said; one still arriving needs asking about.
+      if (done || refresh == null) return;
+      ({ contentLength: known, complete: done } = await refresh());
+      if (offset < known) continue;
+      if (done) return;
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
   }
 
@@ -70,6 +112,7 @@ export function createResponseBody(
     responseId,
     contentLength,
     contentType,
+    complete,
     chunks,
     async arrayBuffer(options) {
       const bytes = await readAll("arrayBuffer", options);

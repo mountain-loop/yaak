@@ -630,15 +630,22 @@ export class PluginInstance {
   }
 
   #newCtx(context: PluginContext): Context {
-    /** Read a body the host has stored, a chunk at a time. */
+    /** Read a body the host has stored, a chunk at a time, following it if it is still arriving. */
     const storedBody = async (responseId: string) => {
-      const info = await this.#sendForReply<GetHttpResponseBodyInfoResponse>(
-        context,
-        { type: "get_http_response_body_info_request", responseId },
-      );
+      const bodyInfo = () =>
+        this.#sendForReply<GetHttpResponseBodyInfoResponse>(context, {
+          type: "get_http_response_body_info_request",
+          responseId,
+        });
+      const info = await bodyInfo();
 
       return createResponseBody(
-        { responseId, contentLength: info.contentLength, contentType: info.contentType ?? null },
+        {
+          responseId,
+          contentLength: info.contentLength,
+          contentType: info.contentType ?? null,
+          complete: info.complete,
+        },
         async (offset, length) => {
           const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
             context,
@@ -646,6 +653,7 @@ export class PluginInstance {
           );
           return decodeBase64Chunk(chunk.data);
         },
+        { refresh: bodyInfo },
       );
     };
 
@@ -856,6 +864,8 @@ export class PluginInstance {
                 contentType:
                   httpResponse.headers.find((h) => h.name.toLowerCase() === "content-type")
                     ?.value ?? null,
+                // The host waited for the whole send before replying.
+                complete: true,
               },
               async (offset, length) => bytes.slice(offset, offset + length),
             ),

@@ -1445,12 +1445,13 @@ pub struct GetHttpResponseBodyInfoRequest {
 pub struct GetHttpResponseBodyInfoResponse {
     /// How many bytes are stored right now, which is not necessarily what the
     /// `Content-Length` header claimed. Zero when the response has no body.
-    ///
-    /// A response still being received keeps growing past this. Readers use it
-    /// as their upper bound, which is what lets them finish against a body
-    /// that has no end.
     #[ts(type = "number")]
     pub content_length: u64,
+
+    /// Whether the response has finished arriving. While it has not, the body
+    /// keeps growing past `content_length`, and a reader that wants all of it
+    /// asks again.
+    pub complete: bool,
 
     /// The response's `Content-Type` header, verbatim, so the reader can pick a
     /// charset.

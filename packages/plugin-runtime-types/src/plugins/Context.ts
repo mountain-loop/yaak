@@ -79,9 +79,12 @@ export interface ReadHttpResponseBodyOptions {
 /**
  * A response body, read back from wherever the host stored it.
  *
- * The accessors are named after `fetch`'s, but unlike `fetch` the body is not
- * used up by reading it: these bytes are in durable storage, so every accessor
- * can be called as many times as you like, in any order.
+ * The accessors are named after `fetch`'s and behave the same way against a
+ * response that is still arriving: they wait for the rest, and one that never
+ * finishes is never finished reading — `chunks()` is the way to consume that.
+ * Unlike `fetch`, the body is not used up by reading it: the bytes are in
+ * durable storage, so every accessor can be called as many times as you like,
+ * in any order.
  */
 export interface HttpResponseBody {
   /** The response these bytes belong to. */
@@ -90,12 +93,7 @@ export interface HttpResponseBody {
   /**
    * How many bytes were stored when this body was opened, which is not
    * necessarily what the `Content-Length` header claimed. Zero when the
-   * response has no body.
-   *
-   * A response still being received keeps growing after that: every accessor
-   * reads up to this length, so it gives you the body as of when you asked
-   * for it, not whatever it finishes as. Check `state` on the response if you
-   * need one that has finished arriving.
+   * response has no body. Final only if `complete`.
    */
   readonly contentLength: number;
 
@@ -103,23 +101,30 @@ export interface HttpResponseBody {
   readonly contentType: string | null;
 
   /**
-   * The body decoded to a string, using the charset from `contentType` and
-   * falling back to UTF-8. Throws if the body is over `maxBytes`.
+   * Whether the response had finished arriving when this body was opened.
+   * When false, the accessors below will wait for the rest of it.
+   */
+  readonly complete: boolean;
+
+  /**
+   * The whole body decoded to a string, using the charset from `contentType`
+   * and falling back to UTF-8. Waits for a response still arriving. Throws
+   * once more than `maxBytes` has been read.
    */
   text(options?: ReadHttpResponseBodyOptions): Promise<string>;
 
   /** `text()`, parsed as JSON. */
   json<T = unknown>(options?: ReadHttpResponseBodyOptions): Promise<T>;
 
-  /** The raw bytes. Throws if the body is over `maxBytes`. */
+  /** The whole body as raw bytes. Waits and throws as `text()` does. */
   arrayBuffer(options?: ReadHttpResponseBodyOptions): Promise<ArrayBuffer>;
 
   /**
    * The raw bytes, a chunk at a time, so a body of any size can be read
    * without holding all of it at once. Not subject to `maxBytes`.
    *
-   * Ends at `contentLength`, so this terminates even against a response that
-   * is still arriving — including one that never stops.
+   * Follows a response that is still arriving, yielding as it comes, and ends
+   * when the response does. Break out of the loop to stop early.
    */
   chunks(options?: Pick<ReadHttpResponseBodyOptions, "chunkSize">): AsyncIterable<Uint8Array>;
 }

@@ -306,6 +306,7 @@ fn build_shared_reply(
                 GetHttpResponseBodyInfoResponse {
                     content_length: info.content_length,
                     content_type: info.content_type,
+                    complete: info.complete,
                 },
             ),
             Err(err) => InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -645,6 +646,7 @@ mod tests {
             Ok(ResponseBodyInfo {
                 content_length: self.body.len() as u64,
                 content_type: Some("text/plain; charset=utf-8".to_string()),
+                complete: true,
             })
         }
 
