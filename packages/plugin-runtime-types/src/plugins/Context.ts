@@ -88,8 +88,14 @@ export interface HttpResponseBody {
   readonly responseId: string;
 
   /**
-   * How many bytes are stored, which is not necessarily what the
-   * `Content-Length` header claimed. Zero when the response has no body.
+   * How many bytes were stored when this body was opened, which is not
+   * necessarily what the `Content-Length` header claimed. Zero when the
+   * response has no body.
+   *
+   * A response still being received keeps growing after that: every accessor
+   * reads up to this length, so it gives you the body as of when you asked
+   * for it, not whatever it finishes as. Check `state` on the response if you
+   * need one that has finished arriving.
    */
   readonly contentLength: number;
 
@@ -111,6 +117,9 @@ export interface HttpResponseBody {
   /**
    * The raw bytes, a chunk at a time, so a body of any size can be read
    * without holding all of it at once. Not subject to `maxBytes`.
+   *
+   * Ends at `contentLength`, so this terminates even against a response that
+   * is still arriving — including one that never stops.
    */
   chunks(options?: Pick<ReadHttpResponseBodyOptions, "chunkSize">): AsyncIterable<Uint8Array>;
 }

@@ -426,8 +426,12 @@ export type GetHttpResponseBodyInfoRequest = { responseId: string, };
 
 export type GetHttpResponseBodyInfoResponse = { 
 /**
- * How many bytes are actually stored, which is not necessarily what the
+ * How many bytes are stored right now, which is not necessarily what the
  * `Content-Length` header claimed. Zero when the response has no body.
+ *
+ * A response still being received keeps growing past this. Readers use it
+ * as their upper bound, which is what lets them finish against a body
+ * that has no end.
  */
 contentLength: number, 
 /**
