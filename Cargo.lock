@@ -11352,7 +11352,6 @@ dependencies = [
 name = "yaak-commands"
 version = "0.0.0"
 dependencies = [
- "log 0.4.29",
  "serde_json",
  "tempfile",
  "thiserror 2.0.17",

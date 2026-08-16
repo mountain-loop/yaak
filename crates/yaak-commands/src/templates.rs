@@ -56,7 +56,7 @@ pub async fn cmd_template_function_config<H: PluginHost>(
     host: H,
     req: CmdTemplateFunctionConfigReq,
 ) -> Result<GetTemplateFunctionConfigResponse> {
-    host.template_function_config(&req.function_name, req.values, &req.model.id()).await
+    host.template_function_config(&req.function_name, req.values, req.model.id()).await
 }
 
 pub async fn cmd_get_themes<H: PluginHost>(

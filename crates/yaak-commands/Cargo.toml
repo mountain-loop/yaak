@@ -6,10 +6,8 @@ authors = ["Gregory Schier"]
 publish = false
 
 [dependencies]
-log = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
 yaak = { workspace = true }
 yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }

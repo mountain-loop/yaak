@@ -11,6 +11,8 @@
 //! host-specific types; the ones that stay behind are the ones only a desktop
 //! can serve (native windows, the updater, dialogs) or that still lean on it.
 
+pub mod actions;
+pub mod auth;
 pub mod data;
 pub mod encryption;
 pub mod error;
@@ -18,6 +20,7 @@ pub mod host;
 pub mod models;
 pub mod plugins;
 pub mod render;
+pub mod resolve;
 pub mod responses;
 pub mod templates;
 

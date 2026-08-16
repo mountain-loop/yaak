@@ -2,18 +2,17 @@ extern crate core;
 use crate::encoding::read_response_body;
 use crate::error::Error::GenericError;
 use crate::error::Result;
-use crate::grpc::{build_metadata, metadata_to_map, resolve_grpc_request};
-use crate::http_request::{resolve_http_request, send_http_request};
+use crate::grpc::{build_metadata, metadata_to_map};
+use crate::http_request::send_http_request;
 use crate::import::{import_data, import_url};
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
-use crate::render::{render_grpc_request, render_json_value, render_template};
+use crate::render::{render_grpc_request, render_template};
 use crate::updates::{UpdateMode, UpdateTrigger, YaakUpdater};
 use crate::uri_scheme::handle_deep_link;
 use error::Result as YaakResult;
 use eventsource_client::{EventParser, SSE};
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -31,25 +30,20 @@ use tokio::task::block_in_place;
 use tokio::time;
 use yaak::send::ResponseBody;
 use yaak_commands::responses::locate_response_body;
+use yaak_commands::resolve::resolve_grpc_request;
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
 use yaak_grpc::{Code, ServiceDefinition};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
-    AnyModel, CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
+    CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
     GrpcEventType, HttpRequest, HttpResponse, HttpResponseState, Workspace,
 };
 use yaak_models::util::{BatchUpsertResult, UpdateSource};
 use yaak_plugins::events::{
-    CallFolderActionArgs, CallFolderActionRequest, CallGrpcRequestActionArgs,
-    CallGrpcRequestActionRequest, CallHttpRequestActionArgs, CallHttpRequestActionRequest,
-    CallWebsocketRequestActionArgs, CallWebsocketRequestActionRequest, CallWorkspaceActionArgs,
-    CallWorkspaceActionRequest, Color, ErrorResponse, FilterResponse, GetFolderActionsResponse,
-    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
-    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, InternalEvent,
-    InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose, ShowToastRequest,
+    Color, ErrorResponse, FilterResponse, InternalEvent, InternalEventPayload, PluginContext,
+    RenderPurpose, ShowToastRequest,
 };
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
@@ -244,7 +238,8 @@ async fn cmd_grpc_reflect<R: Runtime>(
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<Vec<ServiceDefinition>> {
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
-    let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
+    let (resolved_request, auth_context_id) =
+        resolve_grpc_request(&window.db(), &unrendered_request)?;
 
     let environment_chain = app_handle.db().resolve_environments(
         &unrendered_request.workspace_id,
@@ -304,7 +299,8 @@ async fn cmd_grpc_go<R: Runtime>(
     grpc_handle: State<'_, Mutex<GrpcHandle>>,
 ) -> YaakResult<String> {
     let unrendered_request = app_handle.db().get_grpc_request(request_id)?;
-    let (resolved_request, auth_context_id) = resolve_grpc_request(&window, &unrendered_request)?;
+    let (resolved_request, auth_context_id) =
+        resolve_grpc_request(&window.db(), &unrendered_request)?;
     let environment_chain = app_handle.db().resolve_environments(
         &unrendered_request.workspace_id,
         unrendered_request.folder_id.as_deref(),
@@ -1028,262 +1024,19 @@ async fn cmd_import_url<R: Runtime>(
     import_url(&window, url).await
 }
 
-async fn cmd_http_request_actions<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetHttpRequestActionsResponse>> {
-    Ok(plugin_manager.get_http_request_actions(&window.plugin_context()).await?)
-}
 
-async fn cmd_websocket_request_actions<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetWebsocketRequestActionsResponse>> {
-    Ok(plugin_manager.get_websocket_request_actions(&window.plugin_context()).await?)
-}
 
-async fn cmd_call_websocket_request_action<R: Runtime>(
-    window: WebviewWindow<R>,
-    req: CallWebsocketRequestActionRequest,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<()> {
-    let websocket_request = window.db().get_websocket_request(&req.args.websocket_request.id)?;
-    Ok(plugin_manager
-        .call_websocket_request_action(
-            &window.plugin_context(),
-            CallWebsocketRequestActionRequest {
-                args: CallWebsocketRequestActionArgs { websocket_request },
-                ..req
-            },
-        )
-        .await?)
-}
 
-async fn cmd_workspace_actions<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetWorkspaceActionsResponse>> {
-    Ok(plugin_manager.get_workspace_actions(&window.plugin_context()).await?)
-}
 
-async fn cmd_call_workspace_action<R: Runtime>(
-    window: WebviewWindow<R>,
-    req: CallWorkspaceActionRequest,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<()> {
-    let workspace = window.db().get_workspace(&req.args.workspace.id)?;
-    Ok(plugin_manager
-        .call_workspace_action(
-            &window.plugin_context(),
-            CallWorkspaceActionRequest { args: CallWorkspaceActionArgs { workspace }, ..req },
-        )
-        .await?)
-}
 
-async fn cmd_folder_actions<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetFolderActionsResponse>> {
-    Ok(plugin_manager.get_folder_actions(&window.plugin_context()).await?)
-}
 
-async fn cmd_call_folder_action<R: Runtime>(
-    window: WebviewWindow<R>,
-    req: CallFolderActionRequest,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<()> {
-    let folder = window.db().get_folder(&req.args.folder.id)?;
-    Ok(plugin_manager
-        .call_folder_action(
-            &window.plugin_context(),
-            CallFolderActionRequest { args: CallFolderActionArgs { folder }, ..req },
-        )
-        .await?)
-}
 
-async fn cmd_grpc_request_actions<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetGrpcRequestActionsResponse>> {
-    Ok(plugin_manager.get_grpc_request_actions(&window.plugin_context()).await?)
-}
 
-async fn cmd_get_http_authentication_summaries<R: Runtime>(
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<GetHttpAuthenticationSummaryResponse>> {
-    let results =
-        plugin_manager.get_http_authentication_summaries(&window.plugin_context()).await?;
-    Ok(results.into_iter().map(|(_, a)| a).collect())
-}
 
-async fn cmd_get_http_authentication_config<R: Runtime>(
-    window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-    plugin_manager: State<'_, PluginManager>,
-    encryption_manager: State<'_, EncryptionManager>,
-    auth_name: &str,
-    values: HashMap<String, JsonPrimitive>,
-    model: AnyModel,
-    environment_id: Option<&str>,
-) -> YaakResult<GetHttpAuthenticationConfigResponse> {
-    // Extract workspace_id and folder_id from the model to resolve the environment chain
-    let (workspace_id, folder_id) = match &model {
-        AnyModel::HttpRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
-        AnyModel::GrpcRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
-        AnyModel::WebsocketRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
-        AnyModel::Folder(f) => (f.workspace_id.clone(), f.folder_id.clone()),
-        AnyModel::Workspace(w) => (w.id.clone(), None),
-        _ => return Err(GenericError("Unsupported model type for authentication config".into())),
-    };
 
-    // Resolve environment chain and render the values for token lookup
-    let environment_chain = app_handle.db().resolve_environments(
-        &workspace_id,
-        folder_id.as_deref(),
-        environment_id,
-    )?;
-    let plugin_manager_arc = Arc::new((*plugin_manager).clone());
-    let encryption_manager_arc = Arc::new((*encryption_manager).clone());
-    let cb = PluginTemplateCallback::new(
-        plugin_manager_arc,
-        encryption_manager_arc,
-        &window.plugin_context(),
-        RenderPurpose::Preview,
-    );
 
-    // Convert HashMap<String, JsonPrimitive> to serde_json::Value for rendering
-    let values_json: serde_json::Value = serde_json::to_value(&values)?;
-    let rendered_json =
-        render_json_value(values_json, environment_chain, &cb, &RenderOptions::return_empty())
-            .await?;
 
-    // Convert back to HashMap<String, JsonPrimitive>
-    let rendered_values: HashMap<String, JsonPrimitive> = serde_json::from_value(rendered_json)?;
 
-    Ok(plugin_manager
-        .get_http_authentication_config(
-            &window.plugin_context(),
-            auth_name,
-            rendered_values,
-            model.id(),
-        )
-        .await?)
-}
-
-async fn cmd_call_http_request_action<R: Runtime>(
-    window: WebviewWindow<R>,
-    req: CallHttpRequestActionRequest,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<()> {
-    Ok(plugin_manager
-        .call_http_request_action(
-            &window.plugin_context(),
-            CallHttpRequestActionRequest {
-                args: CallHttpRequestActionArgs {
-                    http_request: resolve_http_request(&window, &req.args.http_request)?.0,
-                    ..req.args
-                },
-                ..req
-            },
-        )
-        .await?)
-}
-
-async fn cmd_call_grpc_request_action<R: Runtime>(
-    window: WebviewWindow<R>,
-    req: CallGrpcRequestActionRequest,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<()> {
-    Ok(plugin_manager
-        .call_grpc_request_action(
-            &window.plugin_context(),
-            CallGrpcRequestActionRequest {
-                args: CallGrpcRequestActionArgs {
-                    grpc_request: resolve_grpc_request(&window, &req.args.grpc_request)?.0,
-                    ..req.args
-                },
-                ..req
-            },
-        )
-        .await?)
-}
-
-async fn cmd_call_http_authentication_action<R: Runtime>(
-    window: WebviewWindow<R>,
-    app_handle: AppHandle<R>,
-    plugin_manager: State<'_, PluginManager>,
-    encryption_manager: State<'_, EncryptionManager>,
-    auth_name: &str,
-    action_index: i32,
-    values: HashMap<String, JsonPrimitive>,
-    model: AnyModel,
-    environment_id: Option<&str>,
-) -> YaakResult<()> {
-    // Extract workspace_id and folder_id from the model to resolve the environment chain
-    let (workspace_id, folder_id) = match &model {
-        AnyModel::HttpRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
-        AnyModel::GrpcRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
-        AnyModel::WebsocketRequest(r) => (r.workspace_id.clone(), r.folder_id.clone()),
-        AnyModel::Folder(f) => (f.workspace_id.clone(), f.folder_id.clone()),
-        AnyModel::Workspace(w) => (w.id.clone(), None),
-        _ => return Err(GenericError("Unsupported model type for authentication action".into())),
-    };
-
-    // Resolve environment chain and render the values
-    let environment_chain = app_handle.db().resolve_environments(
-        &workspace_id,
-        folder_id.as_deref(),
-        environment_id,
-    )?;
-    let plugin_manager_arc = Arc::new((*plugin_manager).clone());
-    let encryption_manager_arc = Arc::new((*encryption_manager).clone());
-    let cb = PluginTemplateCallback::new(
-        plugin_manager_arc,
-        encryption_manager_arc,
-        &window.plugin_context(),
-        RenderPurpose::Send,
-    );
-
-    // Convert HashMap<String, JsonPrimitive> to serde_json::Value for rendering
-    let values_json: serde_json::Value = serde_json::to_value(&values)?;
-    let rendered_json =
-        render_json_value(values_json, environment_chain, &cb, &RenderOptions::throw()).await?;
-
-    // Convert back to HashMap<String, JsonPrimitive>
-    let rendered_values: HashMap<String, JsonPrimitive> = serde_json::from_value(rendered_json)?;
-
-    Ok(plugin_manager
-        .call_http_authentication_action(
-            &window.plugin_context(),
-            auth_name,
-            action_index,
-            rendered_values,
-            &model.id(),
-        )
-        .await?)
-}
-
-async fn cmd_curl_to_request<R: Runtime>(
-    window: WebviewWindow<R>,
-    command: &str,
-    plugin_manager: State<'_, PluginManager>,
-    workspace_id: &str,
-) -> YaakResult<HttpRequest> {
-    let import_result = plugin_manager.import_data(&window.plugin_context(), command).await?;
-
-    Ok(import_result
-        .resources
-        .http_requests
-        .get(0)
-        .ok_or(GenericError("No curl command found".to_string()))
-        .map(|r| {
-            let mut request = r.clone();
-            request.workspace_id = workspace_id.into();
-            request.id = "".to_string();
-            request
-        })?)
-}
 
 /// Decodes base64 and writes the bytes to a file the user picked.
 ///
@@ -1379,17 +1132,6 @@ async fn cmd_send_http_request<R: Runtime>(
     Ok(r)
 }
 
-async fn cmd_reload_plugins<R: Runtime>(
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
-) -> YaakResult<Vec<(String, String)>> {
-    let plugins = app_handle.db().list_plugins()?;
-    let plugin_context =
-        PluginContext::new(Some(window.label().to_string()), window.workspace_id());
-    let errors = plugin_manager.initialize_all_plugins(plugins, &plugin_context).await;
-    Ok(errors)
-}
 
 async fn cmd_new_child_window<R: Runtime>(
     parent_window: WebviewWindow<R>,

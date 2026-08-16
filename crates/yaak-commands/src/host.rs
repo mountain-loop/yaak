@@ -23,8 +23,13 @@ use yaak_models::models::Plugin;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
+    CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, GetFolderActionsResponse,
+    GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
     GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
-    JsonPrimitive, PluginContext, RenderPurpose,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportResponse, JsonPrimitive,
+    PluginContext, RenderPurpose,
 };
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_templates::TemplateCallback;
@@ -134,6 +139,77 @@ pub trait PluginHost: Host {
 
     /// Themes contributed by plugins.
     fn themes(&self) -> impl Future<Output = crate::Result<Vec<GetThemesResponse>>>;
+
+    // -- Actions plugins contribute to the UI --
+
+    fn http_request_actions(
+        &self,
+    ) -> impl Future<Output = crate::Result<Vec<GetHttpRequestActionsResponse>>>;
+    fn websocket_request_actions(
+        &self,
+    ) -> impl Future<Output = crate::Result<Vec<GetWebsocketRequestActionsResponse>>>;
+    fn grpc_request_actions(
+        &self,
+    ) -> impl Future<Output = crate::Result<Vec<GetGrpcRequestActionsResponse>>>;
+    fn workspace_actions(
+        &self,
+    ) -> impl Future<Output = crate::Result<Vec<GetWorkspaceActionsResponse>>>;
+    fn folder_actions(&self) -> impl Future<Output = crate::Result<Vec<GetFolderActionsResponse>>>;
+
+    /// Running an action. The request in each of these has already been
+    /// re-read and had its inheritance resolved by the handler; a host must
+    /// pass it through untouched.
+    fn call_http_request_action(
+        &self,
+        req: CallHttpRequestActionRequest,
+    ) -> impl Future<Output = crate::Result<()>>;
+    fn call_grpc_request_action(
+        &self,
+        req: CallGrpcRequestActionRequest,
+    ) -> impl Future<Output = crate::Result<()>>;
+    fn call_websocket_request_action(
+        &self,
+        req: CallWebsocketRequestActionRequest,
+    ) -> impl Future<Output = crate::Result<()>>;
+    fn call_workspace_action(
+        &self,
+        req: CallWorkspaceActionRequest,
+    ) -> impl Future<Output = crate::Result<()>>;
+    fn call_folder_action(
+        &self,
+        req: CallFolderActionRequest,
+    ) -> impl Future<Output = crate::Result<()>>;
+
+    // -- Authentication --
+
+    fn http_authentication_summaries(
+        &self,
+    ) -> impl Future<Output = crate::Result<Vec<GetHttpAuthenticationSummaryResponse>>>;
+
+    /// The form an auth plugin wants to show. `values` arrive already rendered.
+    fn http_authentication_config(
+        &self,
+        auth_name: &str,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> impl Future<Output = crate::Result<GetHttpAuthenticationConfigResponse>>;
+
+    fn call_http_authentication_action(
+        &self,
+        auth_name: &str,
+        action_index: i32,
+        values: HashMap<String, JsonPrimitive>,
+        model_id: &str,
+    ) -> impl Future<Output = crate::Result<()>>;
+
+    // -- The importers, and the runtime itself --
+
+    /// Hand arbitrary text to the importer plugins and take what they make of
+    /// it. Used for files, URLs and pasted `curl` commands alike.
+    fn import_data(&self, content: &str) -> impl Future<Output = crate::Result<ImportResponse>>;
+
+    /// Restart every plugin, returning `(plugin, error)` for those that failed.
+    fn reload_plugins(&self, plugins: Vec<Plugin>) -> impl Future<Output = Vec<(String, String)>>;
 
     /// Re-encrypt the `secure(...)` values in a template.
     ///

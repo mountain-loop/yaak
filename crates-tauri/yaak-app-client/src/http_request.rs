@@ -179,19 +179,3 @@ async fn send_http_request_inner<R: Runtime>(
     Ok(SentHttpRequest { response: result.response, body: result.response_body })
 }
 
-pub fn resolve_http_request<R: Runtime>(
-    window: &WebviewWindow<R>,
-    request: &HttpRequest,
-) -> Result<(HttpRequest, String)> {
-    let mut new_request = request.clone();
-
-    let (authentication_type, authentication, authentication_context_id) =
-        window.db().resolve_auth_for_http_request(request)?;
-    new_request.authentication_type = authentication_type;
-    new_request.authentication = authentication;
-
-    let headers = window.db().resolve_headers_for_http_request(request)?;
-    new_request.headers = headers;
-
-    Ok((new_request, authentication_context_id))
-}
