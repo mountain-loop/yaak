@@ -13,14 +13,16 @@
 //! is anything only a desktop can do — open a native window, run the updater,
 //! show a native dialog — those handlers stay with the desktop.
 
+use std::future::Future;
 use yaak_core::WorkspaceContext;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_models::blob_manager::{BlobContext, BlobManager};
 use yaak_models::client_db::ClientDb;
+use yaak_models::models::Plugin;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::PluginContext;
-use yaak_plugins::manager::PluginManager;
+use yaak_plugins::plugin_meta::PluginMetadata;
 
 /// Only `Clone` is required here. `Send`/`Sync`/`'static` are deliberately
 /// *not*: a browser host is single-threaded and its connection pool is an
@@ -67,15 +69,50 @@ pub trait Host: Clone {
 
 /// A host that can also reach plugins.
 ///
-/// Separate from [`Host`] because the plugin runtime is the one piece that is
-/// not the same shape everywhere. `PluginManager` *is* "spawn a Node sidecar
-/// and talk to it"; a browser host runs plugins in a Worker it reaches by
-/// message instead, and cannot hand back a `&PluginManager` at all.
+/// Separate from [`Host`] so that a command which only touches the database
+/// never demands a plugin runtime it does not call: a host with no plugins
+/// still serves those, and only handlers bounded on `PluginHost` are closed to
+/// it.
 ///
-/// Keeping it out of `Host` also stops a command that only touches the
-/// database from demanding a plugin runtime it never calls: a host with no
-/// plugins can still serve those, and only handlers bounded on `PluginHost`
-/// are closed to it.
+/// These are *operations*, not a handle. Handing back a `&PluginManager` would
+/// have been shorter, but that type is specifically "spawn a Node sidecar and
+/// talk to it over a socket", and a browser host runs plugins in a Worker it
+/// reaches by message — it can answer any of the questions below and can never
+/// produce that type. Naming the questions instead of the answerer is what lets
+/// both hosts exist.
+///
+/// Same rule as [`Host`]: this grows only when a migrated handler needs
+/// something new, and stays as narrow as those handlers allow. Today it is the
+/// four things batch 1 asks for.
+///
+/// The types crossing this boundary still come from `yaak-plugins` — fine on
+/// the desktop, and once its plain data types are split out from its runtime
+/// that becomes an import-path change here rather than an interface one.
 pub trait PluginHost: Host {
-    fn plugin_manager(&self) -> &PluginManager;
+    /// What the running plugin runtime knows about the plugin installed in
+    /// `directory`, or `None` if it has not loaded one from there. Callers fall
+    /// back to reading the plugin's manifest off disk.
+    fn loaded_plugin_metadata(
+        &self,
+        directory: &str,
+    ) -> impl Future<Output = Option<PluginMetadata>>;
+
+    /// Failures from plugin initialization, drained — reporting them clears
+    /// them, so a caller that drops these has lost them.
+    fn take_plugin_init_errors(&self) -> impl Future<Output = Vec<(String, String)>>;
+
+    /// The plugin rows as the runtime sees them: the database says what is
+    /// installed, the runtime knows which are bundled and what version actually
+    /// loaded. A host without a runtime can return them untouched.
+    fn resolve_plugins(&self, plugins: Vec<Plugin>) -> impl Future<Output = Vec<Plugin>>;
+
+    /// Re-encrypt the `secure(...)` values in a template.
+    ///
+    /// Whole operation rather than its pieces because the encryption is only
+    /// half of it: the value is also run through the plugin template functions,
+    /// so this needs the plugin runtime and not just a key.
+    fn encrypt_secure_template(
+        &self,
+        template: &str,
+    ) -> impl Future<Output = crate::Result<String>>;
 }

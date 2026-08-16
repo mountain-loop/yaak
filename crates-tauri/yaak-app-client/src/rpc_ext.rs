@@ -22,6 +22,7 @@ use crate::updates::YaakUpdater;
 use log::warn;
 use serde::Serialize;
 use tauri::{Manager, Runtime, State, WebviewWindow};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use yaak_commands::{Host, PluginHost};
 use yaak_core::WorkspaceContext;
@@ -48,6 +49,7 @@ use yaak_plugins::events::{
 };
 use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::manager::PluginManager;
+use yaak_plugins::native_template_functions::encrypt_secure_template_function;
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_rpc::RpcRouter;
 use yaak_rpc_schema::*;
@@ -101,11 +103,34 @@ impl<R: Runtime> Host for ClientCtx<R> {
     }
 }
 
-/// The desktop runs plugins the usual way, so it serves the plugin-backed
-/// commands too.
+/// The desktop answers all of these out of the `PluginManager` it already
+/// runs — the Node sidecar. Each is a delegation, which is the point: the
+/// operations are what the handlers need, and this is one host's way of
+/// providing them.
 impl<R: Runtime> PluginHost for ClientCtx<R> {
-    fn plugin_manager(&self) -> &PluginManager {
-        self.window.state::<PluginManager>().inner()
+    async fn loaded_plugin_metadata(&self, directory: &str) -> Option<PluginMetadata> {
+        let manager = self.window.state::<PluginManager>();
+        let handle = manager.get_plugin_by_dir(directory).await?;
+        Some(handle.info())
+    }
+
+    async fn take_plugin_init_errors(&self) -> Vec<(String, String)> {
+        self.window.state::<PluginManager>().take_init_errors().await
+    }
+
+    async fn resolve_plugins(&self, plugins: Vec<Plugin>) -> Vec<Plugin> {
+        self.window.state::<PluginManager>().resolve_plugins_for_runtime_from_db(plugins).await
+    }
+
+    async fn encrypt_secure_template(&self, template: &str) -> yaak_commands::Result<String> {
+        let plugin_manager = Arc::new((*self.window.state::<PluginManager>()).clone());
+        let encryption_manager = Arc::new(self.encryption_manager().clone());
+        Ok(encrypt_secure_template_function(
+            plugin_manager,
+            encryption_manager,
+            &self.plugin_context(),
+            template,
+        )?)
     }
 }
 

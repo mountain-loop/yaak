@@ -1,4 +1,4 @@
-//! Plugin queries that only need the plugin manager and the database.
+//! Plugin queries: what the runtime has loaded, and what failed to load.
 
 use crate::error::Result;
 use crate::host::PluginHost;
@@ -11,10 +11,8 @@ pub async fn cmd_plugin_info<H: PluginHost>(
     req: CmdPluginInfoReq,
 ) -> Result<PluginMetadata> {
     let plugin = host.db().get_plugin(&req.id)?;
-    if let Some(plugin_handle) =
-        host.plugin_manager().get_plugin_by_dir(plugin.directory.as_str()).await
-    {
-        return Ok(plugin_handle.info());
+    if let Some(metadata) = host.loaded_plugin_metadata(&plugin.directory).await {
+        return Ok(metadata);
     }
 
     if let Ok(metadata) = get_plugin_meta(&PathBuf::from(&plugin.directory)) {
@@ -46,5 +44,5 @@ pub async fn cmd_plugin_init_errors<H: PluginHost>(
     host: H,
     _req: CmdPluginInitErrorsReq,
 ) -> Result<Vec<(String, String)>> {
-    Ok(host.plugin_manager().take_init_errors().await)
+    Ok(host.take_plugin_init_errors().await)
 }

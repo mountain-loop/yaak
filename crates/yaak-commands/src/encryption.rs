@@ -2,10 +2,7 @@
 
 use crate::error::Result;
 use crate::host::{Host, PluginHost};
-use std::sync::Arc;
-use yaak_plugins::native_template_functions::{
-    decrypt_secure_template_function, encrypt_secure_template_function,
-};
+use yaak_plugins::native_template_functions::decrypt_secure_template_function;
 use yaak_rpc_schema::*;
 
 pub async fn cmd_enable_encryption<H: Host>(host: H, req: CmdEnableEncryptionReq) -> Result<()> {
@@ -40,13 +37,5 @@ pub async fn cmd_secure_template<H: PluginHost>(
     host: H,
     req: CmdSecureTemplateReq,
 ) -> Result<String> {
-    let plugin_manager = Arc::new(host.plugin_manager().clone());
-    let encryption_manager = Arc::new(host.encryption_manager().clone());
-    let plugin_context = host.plugin_context();
-    Ok(encrypt_secure_template_function(
-        plugin_manager,
-        encryption_manager,
-        &plugin_context,
-        &req.template,
-    )?)
+    host.encrypt_secure_template(&req.template).await
 }

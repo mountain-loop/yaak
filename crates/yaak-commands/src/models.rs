@@ -107,7 +107,7 @@ pub async fn models_workspace_models<H: PluginHost>(
         db.list_plugins()?
     };
 
-    let plugins = host.plugin_manager().resolve_plugins_for_runtime_from_db(plugins).await;
+    let plugins = host.resolve_plugins(plugins).await;
     l.append(&mut plugins.into_iter().map(Into::into).collect());
 
     // Add the workspace children
