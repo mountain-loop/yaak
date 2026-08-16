@@ -540,11 +540,14 @@ fn copy_build_assets(plugin_dir: &Path) -> CommandResult {
             .ok_or_else(|| format!("yaak.buildAssets entry is not a file path: {asset}"))?;
         // A copy that later gets overwritten would pass the build and fail on
         // load, so anything the build itself writes, or a second asset with
-        // the same name, is rejected up front.
-        if name == "index.js" || name == "metadata.json" {
+        // the same name, is rejected up front. Names are compared without
+        // case, because a plugin is installed on case-insensitive filesystems
+        // wherever it was built.
+        let key = name.to_string_lossy().to_lowercase();
+        if key == "index.js" || key == "metadata.json" {
             return Err(format!("Build asset {asset} would be overwritten by the build output"));
         }
-        if !names.insert(name.to_owned()) {
+        if !names.insert(key) {
             return Err(format!("Two build assets share the name {}", name.display()));
         }
         if !src.is_file() {
@@ -926,11 +929,12 @@ mod tests {
         fs::create_dir_all(root.join("build")).expect("create build");
         fs::create_dir_all(root.join("a")).expect("create a");
         fs::create_dir_all(root.join("b")).expect("create b");
+        // Differ only by case: one file on macOS and Windows.
         fs::write(root.join("a/core.wasm"), "one").expect("write a");
-        fs::write(root.join("b/core.wasm"), "two").expect("write b");
+        fs::write(root.join("b/Core.wasm"), "two").expect("write b");
         fs::write(
             root.join("package.json"),
-            r#"{"yaak":{"buildAssets":["a/core.wasm","b/core.wasm"]}}"#,
+            r#"{"yaak":{"buildAssets":["a/core.wasm","b/Core.wasm"]}}"#,
         )
         .expect("write package.json");
 
