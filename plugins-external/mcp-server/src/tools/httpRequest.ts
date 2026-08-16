@@ -80,7 +80,7 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
         throw new Error(`HTTP request with ID ${id} not found`);
       }
 
-      const response = await workspaceCtx.yaak.httpRequest.send({ httpRequest });
+      const { httpResponse: response } = await workspaceCtx.yaak.httpRequest.send({ httpRequest });
 
       return {
         content: [

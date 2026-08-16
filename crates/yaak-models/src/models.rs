@@ -1677,6 +1677,13 @@ pub struct HttpResponse {
     pub workspace_id: String,
     pub request_id: String,
 
+    /// Where the engine put the body, when it puts it in a file.
+    ///
+    /// Not exported to TypeScript: a path is only meaningful to a host that
+    /// has the filesystem it names, and bodies are moving off it. Read a body
+    /// by response id instead — the frontend through
+    /// `cmd_http_response_body_path`, plugins through `ctx.httpResponse.body`.
+    #[ts(skip)]
     pub body_path: Option<String>,
     pub content_length: Option<i32>,
     pub content_length_compressed: Option<i32>,

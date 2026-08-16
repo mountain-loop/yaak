@@ -1,5 +1,7 @@
 use crate::context::CliExecutionContext;
 use arboard::Clipboard;
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use console::Term;
 use inquire::{Confirm, Editor, Password, PasswordDisplayMode, Select, Text};
 use serde_json::Value;
@@ -12,6 +14,7 @@ use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
 use yaak::render::{render_grpc_request, render_http_request};
+use yaak::response_body::FileResponseBodyStore;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
@@ -131,6 +134,7 @@ async fn build_plugin_reply(
 
     match handle_shared_plugin_event(
         &host_context.query_manager,
+        &FileResponseBodyStore::new(&host_context.query_manager),
         &event.payload,
         SharedPluginEventContext { plugin_name, workspace_id: shared_workspace_id },
     ) {
@@ -223,7 +227,15 @@ async fn build_plugin_reply(
                 .await
                 {
                     Ok(result) => Some(InternalEventPayload::SendHttpRequestResponse(
-                        SendHttpRequestResponse { http_response: result.response },
+                        SendHttpRequestResponse {
+                            http_response: result.response,
+                            // Nothing saved this body, so the reply is the only
+                            // place the plugin can get it.
+                            body: result
+                                .response_body
+                                .returned_bytes()
+                                .map(|b| BASE64_STANDARD.encode(b)),
+                        },
                     )),
                     Err(err) => Some(InternalEventPayload::ErrorResponse(ErrorResponse {
                         error: format!("Failed to send HTTP request in CLI: {err}"),

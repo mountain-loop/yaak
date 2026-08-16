@@ -7,6 +7,8 @@ use crate::{
     call_frontend, cookie_jar_from_window, environment_from_window, get_window_from_plugin_context,
     workspace_from_window,
 };
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use chrono::Utc;
 use log::error;
 use std::sync::Arc;
@@ -16,6 +18,7 @@ use tauri_plugin_opener::OpenerExt;
 use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
+use yaak::response_body::FileResponseBodyStore;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
 use yaak_models::models::{HttpResponse, Plugin};
@@ -54,6 +57,7 @@ pub(crate) async fn handle_plugin_event<R: Runtime>(
 
     match handle_shared_plugin_event(
         app_handle.db_manager().inner(),
+        &FileResponseBodyStore::new(app_handle.db_manager().inner()),
         &event.payload,
         SharedPluginEventContext {
             plugin_name: &plugin_name,
@@ -313,8 +317,13 @@ async fn handle_host_plugin_request<R: Runtime>(
             )
             .await?;
 
+            // An ad-hoc request saves nothing, so the engine hands the body
+            // back and this reply is the only place the plugin can get it.
+            let body = http_response.body.returned_bytes().map(|b| BASE64_STANDARD.encode(b));
+
             Ok(Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
                 http_response: http_response.response,
+                body,
             })))
         }
         HostRequest::OpenWindow(req) => {

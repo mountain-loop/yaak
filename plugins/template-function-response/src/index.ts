@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type {
   CallTemplateFunctionArgs,
   Context,
@@ -196,17 +195,8 @@ export const plugin: PluginDefinition = {
         });
         if (response == null) return null;
 
-        if (response.bodyPath == null) {
-          return null;
-        }
-
-        const BOM = "\ufeff";
-        let body: string;
-        try {
-          body = readFileSync(response.bodyPath, "utf-8").replace(BOM, "");
-        } catch {
-          return null;
-        }
+        const body = await readResponseBody(ctx, response);
+        if (body == null) return null;
 
         try {
           const result: JSONPathResult =
@@ -261,22 +251,31 @@ export const plugin: PluginDefinition = {
         });
         if (response == null) return null;
 
-        if (response.bodyPath == null) {
-          return null;
-        }
-
-        let body: string;
-        try {
-          body = readFileSync(response.bodyPath, "utf-8");
-        } catch {
-          return null;
-        }
-
-        return body;
+        return await readResponseBody(ctx, response);
       },
     },
   ],
 };
+
+/**
+ * The response's body as text, or null when there is nothing to read.
+ *
+ * The host is asked for it by response id, so this works wherever the bytes
+ * happen to live — including responses it never recorded, which still get an
+ * id. A body over the runtime's size limit throws rather than coming back
+ * empty, since a template silently rendering to nothing is worse than one that
+ * says why.
+ */
+async function readResponseBody(ctx: Context, response: HttpResponse): Promise<string | null> {
+  // Belt and braces: everything reaching here came from find() or send() and so
+  // has an id. An empty one would just be an unreadable id.
+  if (!response.id) return null;
+
+  const body = await ctx.httpResponse.body({ responseId: response.id });
+  if (body.contentLength === 0) return null;
+
+  return await body.text();
+}
 
 async function getResponse(
   ctx: Context,
@@ -320,7 +319,7 @@ async function getResponse(
     // Explicitly render the request before send (instead of relying on send() to render) so that we can
     // preserve the render purpose.
     const renderedHttpRequest = await ctx.httpRequest.render({ httpRequest, purpose });
-    response = await ctx.httpRequest.send({ httpRequest: renderedHttpRequest });
+    response = (await ctx.httpRequest.send({ httpRequest: renderedHttpRequest })).httpResponse;
   }
 
   return response;

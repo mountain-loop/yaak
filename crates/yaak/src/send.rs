@@ -354,6 +354,19 @@ pub enum ResponseBody {
     Returned(Vec<u8>),
 }
 
+impl ResponseBody {
+    /// The bytes, when this is the only copy of them.
+    ///
+    /// Stored and streamed bodies belong to whoever holds them; only `Returned`
+    /// has to travel back to the caller.
+    pub fn returned_bytes(&self) -> Option<&[u8]> {
+        match self {
+            ResponseBody::Returned(bytes) => Some(bytes),
+            ResponseBody::Stored | ResponseBody::Streamed => None,
+        }
+    }
+}
+
 pub struct SendHttpRequestResult {
     pub rendered_request: HttpRequest,
     pub response: HttpResponse,

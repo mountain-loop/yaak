@@ -67,7 +67,7 @@ export const plugin: PluginDefinition = {
 
       const type1 = ntlm.createType1Message(options);
 
-      const negotiateResponse = await ctx.httpRequest.send({
+      const { httpResponse: negotiateResponse } = await ctx.httpRequest.send({
         httpRequest: {
           method,
           url,

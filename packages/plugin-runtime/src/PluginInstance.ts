@@ -21,11 +21,13 @@ import type {
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
+  GetHttpResponseBodyInfoResponse,
   GetKeyValueResponse,
   GrpcRequestAction,
   HttpAuthenticationAction,
   HttpRequest,
   HttpRequestAction,
+  HttpResponse,
   ImportResources,
   InternalEvent,
   InternalEventPayload,
@@ -37,6 +39,7 @@ import type {
   PluginContext,
   PromptFormResponse,
   PromptTextResponse,
+  ReadHttpResponseBodyChunkResponse,
   RenderGrpcRequestResponse,
   RenderHttpRequestResponse,
   SendHttpRequestResponse,
@@ -49,6 +52,22 @@ import type {
 import { applyDynamicFormInput } from "./common";
 import { EventChannel } from "./EventChannel";
 import { migrateTemplateFunctionSelectOptions } from "./migrations";
+import { createResponseBody, decodeBase64Chunk } from "./responseBody";
+
+/**
+ * A response as a plugin should see it.
+ *
+ * The host still puts `bodyPath` on the wire for its own callers, but it names
+ * a file on the host's disk — meaningless to a plugin, absent once bodies move
+ * off the filesystem, and impossible in a browser. Plugins address bodies by
+ * response id, so drop it here rather than let one grow a dependency on it.
+ */
+function forPlugin(httpResponse: HttpResponse): HttpResponse {
+  const { bodyPath: _bodyPath, ...rest } = httpResponse as HttpResponse & {
+    bodyPath?: string | null;
+  };
+  return rest;
+}
 
 export interface PluginWorkerData {
   bootRequest: BootRequest;
@@ -552,6 +571,14 @@ export class PluginInstance {
     return this.#sendPayload(context, { type: "empty_response" }, replyId);
   }
 
+  /**
+   * Send a request to the host and wait for its reply.
+   *
+   * A host that cannot answer replies with an error, which becomes a thrown
+   * error here. The alternative is handing back a reply-shaped object with
+   * none of the fields the caller destructures, and letting it fail somewhere
+   * further along with no idea why.
+   */
   #sendForReply<T extends Omit<InternalEventPayload, "type">>(
     context: PluginContext,
     payload: InternalEventPayload,
@@ -560,11 +587,16 @@ export class PluginInstance {
     const eventToSend = this.#buildEventToSend(context, payload, null);
 
     // 2. Spawn listener in background
-    const promise = new Promise<T>((resolve) => {
+    const promise = new Promise<T>((resolve, reject) => {
       const cb = (event: InternalEvent) => {
         if (event.replyId === eventToSend.id) {
           this.#appToPluginEvents.unlisten(cb); // Unlisten, now that we're done
           const { type: _, ...payload } = event.payload;
+          if (event.payload.type === "error_response") {
+            const { error } = payload as { error?: string };
+            reject(new Error(error || `Host failed to handle ${eventToSend.payload.type}`));
+            return;
+          }
           resolve(payload as T);
         }
       };
@@ -598,6 +630,33 @@ export class PluginInstance {
   }
 
   #newCtx(context: PluginContext): Context {
+    /** Read a body the host has stored, a chunk at a time, following it if it is still arriving. */
+    const storedBody = async (responseId: string) => {
+      const bodyInfo = () =>
+        this.#sendForReply<GetHttpResponseBodyInfoResponse>(context, {
+          type: "get_http_response_body_info_request",
+          responseId,
+        });
+      const info = await bodyInfo();
+
+      return createResponseBody(
+        {
+          responseId,
+          contentLength: info.contentLength,
+          contentType: info.contentType ?? null,
+          complete: info.complete,
+        },
+        async (offset, length) => {
+          const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
+            context,
+            { type: "read_http_response_body_chunk_request", responseId, offset, length },
+          );
+          return decodeBase64Chunk(chunk.data);
+        },
+        { refresh: bodyInfo },
+      );
+    };
+
     const _windowInfo = async () => {
       if (context.label == null) {
         throw new Error("Can't get window context without an active window");
@@ -749,8 +808,9 @@ export class PluginInstance {
             context,
             payload,
           );
-          return httpResponses;
+          return httpResponses.map(forPlugin);
         },
+        body: ({ responseId }) => storedBody(responseId),
       },
       grpcRequest: {
         render: async (args) => {
@@ -782,11 +842,34 @@ export class PluginInstance {
             type: "send_http_request_request",
             ...args,
           } as const;
-          const { httpResponse } = await this.#sendForReply<SendHttpRequestResponse>(
+          const { httpResponse, body } = await this.#sendForReply<SendHttpRequestResponse>(
             context,
             payload,
           );
-          return httpResponse;
+
+          // A send with no request behind it saves nothing, so the reply
+          // carries the only copy of its body. A saved one is read back from
+          // the host like any other. Callers get the same thing either way.
+          if (body == null) {
+            return { httpResponse: forPlugin(httpResponse), body: await storedBody(httpResponse.id) };
+          }
+
+          const bytes = decodeBase64Chunk(body);
+          return {
+            httpResponse: forPlugin(httpResponse),
+            body: createResponseBody(
+              {
+                responseId: httpResponse.id,
+                contentLength: bytes.byteLength,
+                contentType:
+                  httpResponse.headers.find((h) => h.name.toLowerCase() === "content-type")
+                    ?.value ?? null,
+                // The host waited for the whole send before replying.
+                complete: true,
+              },
+              async (offset, length) => bytes.slice(offset, offset + length),
+            ),
+          };
         },
         render: async (args) => {
           const payload = {

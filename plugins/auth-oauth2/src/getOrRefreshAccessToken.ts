@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type { Context, HttpRequest } from "@yaakapp/api";
 import type { AccessToken, AccessTokenRawResponse, TokenStoreArgs } from "./store";
 import { deleteToken, getToken, storeToken } from "./store";
@@ -71,7 +70,7 @@ export async function getOrRefreshAccessToken(
   }
 
   httpRequest.authenticationType = "none"; // Don't inherit workspace auth
-  const resp = await ctx.httpRequest.send({ httpRequest });
+  const { httpResponse: resp, body: responseBody } = await ctx.httpRequest.send({ httpRequest });
 
   if (resp.error) {
     throw new Error(`Failed to refresh access token: ${resp.error}`);
@@ -85,7 +84,9 @@ export async function getOrRefreshAccessToken(
     return null;
   }
 
-  const body = resp.bodyPath ? readFileSync(resp.bodyPath, "utf8") : "";
+  // Sent ad-hoc, so this body came back with the response rather than being
+  // saved anywhere to read later.
+  const body = await responseBody.text();
 
   console.log("[oauth2] Got refresh token response", resp.status);
 

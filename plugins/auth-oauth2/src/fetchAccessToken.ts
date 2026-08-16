@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type { Context, HttpRequest, HttpUrlParameter } from "@yaakapp/api";
 import type { AccessTokenRawResponse } from "./store";
 
@@ -57,7 +56,7 @@ export async function fetchAccessToken(
   }
 
   httpRequest.authenticationType = "none"; // Don't inherit workspace auth
-  const resp = await ctx.httpRequest.send({ httpRequest });
+  const { httpResponse: resp, body: responseBody } = await ctx.httpRequest.send({ httpRequest });
 
   console.log("[oauth2] Got access token response", resp.status);
 
@@ -65,7 +64,10 @@ export async function fetchAccessToken(
     throw new Error(`Failed to fetch access token: ${resp.error}`);
   }
 
-  const body = resp.bodyPath ? readFileSync(resp.bodyPath, "utf8") : "";
+  // A token request is sent ad-hoc, with no id, so nothing saves the response
+  // and this body is the only copy of it. An empty one parses to {} below,
+  // which is what reading a missing file used to give.
+  const body = await responseBody.text();
 
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`Failed to fetch access token with status=${resp.status} and body=${body}`);
