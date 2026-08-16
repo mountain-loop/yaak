@@ -3,6 +3,18 @@
 version = 4
 
 [[package]]
+name = "accessory"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc86a613208ca7d144ca24f6ec49c5cdfa5c05a46f2f7ab5880ff99371f165de"
+dependencies = [
+ "macroific 3.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1376,6 +1388,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "const-random"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1858,6 +1880,20 @@ name = "deflate64"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da692b8d1080ea3045efaab14434d40468c3d8657e42abddfffca87b428f4c1b"
+
+[[package]]
+name = "delegate-display"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54e3a499943fd5180aeffcb708164ffb22125ceeccb05491b5297981d37d6249"
+dependencies = [
+ "impartial-ord",
+ "itoa",
+ "macroific 3.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
 
 [[package]]
 name = "deranged"
@@ -2348,6 +2384,18 @@ dependencies = [
  "bit-set",
  "regex-automata",
  "regex-syntax 0.8.5",
+]
+
+[[package]]
+name = "fancy_constructor"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a8211ab12c36b63c269e17873331dc1da196a3edb7a5c79015677ef972da34a"
+dependencies = [
+ "macroific 3.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -3492,6 +3540,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "impartial-ord"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc680e03d1a08bdc1c01b60e0c39723430ced63d8cabd93cee0449b6ba916a25"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "include_dir"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3508,6 +3567,40 @@ checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
 dependencies = [
  "proc-macro2",
  "quote",
+]
+
+[[package]]
+name = "indexed_db_futures"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ff41758cbd104e91033bb53bc449bec7eea65652960c81eddf3fc146ecea19"
+dependencies = [
+ "accessory",
+ "cfg-if",
+ "delegate-display",
+ "derive_more 2.1.1",
+ "fancy_constructor",
+ "indexed_db_futures_macros_internal",
+ "js-sys",
+ "sealed 0.6.0",
+ "smallvec",
+ "thiserror 2.0.17",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "indexed_db_futures_macros_internal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caeba94923b68f254abef921cea7e7698bf4675fdd89d7c58bf1ed885b49a27d"
+dependencies = [
+ "macroific 2.0.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -4091,6 +4184,102 @@ name = "mac"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
+
+[[package]]
+name = "macroific"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89f276537b4b8f981bf1c13d79470980f71134b7bdcc5e6e911e910e556b0285"
+dependencies = [
+ "macroific_attr_parse 2.0.0",
+ "macroific_core 2.0.0",
+ "macroific_macro 2.0.0",
+]
+
+[[package]]
+name = "macroific"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c437abb3bf40939b00d1dff858ed2050d948bc230dee39546ed16795fcf10ec2"
+dependencies = [
+ "macroific_attr_parse 3.0.1",
+ "macroific_core 3.0.1",
+ "macroific_macro 3.0.1",
+]
+
+[[package]]
+name = "macroific_attr_parse"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad4023761b45fcd36abed8fb7ae6a80456b0a38102d55e89a57d9a594a236be9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sealed 0.6.0",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "macroific_attr_parse"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeb7a82ec1aa16094da719be18615d79cb2574b037358e4e6c6d96eedcff3a93"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sealed 0.7.0",
+ "syn 3.0.3",
+]
+
+[[package]]
+name = "macroific_core"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0a7594d3c14916fa55bef7e9d18c5daa9ed410dd37504251e4b75bbdeec33e3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sealed 0.6.0",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "macroific_core"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26c8e789484d2fa216eee9d5e0565ba80ccda389bcf0e111143a7b8f4792336e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sealed 0.7.0",
+ "syn 3.0.3",
+]
+
+[[package]]
+name = "macroific_macro"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4da6f2ed796261b0a74e2b52b42c693bb6dee1effba3a482c49592659f824b3b"
+dependencies = [
+ "macroific_attr_parse 2.0.0",
+ "macroific_core 2.0.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "macroific_macro"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e30d63cb102648965753f0d47a6ab171b1cbb1fb5c363f4784ea986782fc7b77"
+dependencies = [
+ "macroific_attr_parse 3.0.1",
+ "macroific_core 3.0.1",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
 
 [[package]]
 name = "malloc_buf"
@@ -7457,6 +7646,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
 
 [[package]]
+name = "sealed"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22f968c5ea23d555e670b449c1c5e7b2fc399fdaec1d304a17cd48e288abc107"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
+]
+
+[[package]]
+name = "sealed"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b68e2ea526d9fb32f23ca8894fb5da9e743f34c2f41701f0501dc8a25c4b343"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8038,6 +8249,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-wasm-vfs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7a5c9ac229421d577bb5a9bb59048838509958b218dd4e0b3c1214a87c361e"
+dependencies = [
+ "indexed_db_futures",
+ "js-sys",
+ "rsqlite-vfs",
+ "thiserror 2.0.17",
+ "tokio",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8165,6 +8392,17 @@ name = "syn"
 version = "2.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ce2b7fc941b3a24138a0a7cf8e858bfc6a992e7978a068a5c760deb0ed43caf"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
+version = "3.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11471,6 +11709,23 @@ dependencies = [
  "url",
  "yaak-models",
  "yasna",
+]
+
+[[package]]
+name = "yaak-web"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "log 0.4.29",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "sqlite-wasm-rs",
+ "sqlite-wasm-vfs",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "yaak-models",
 ]
 
 [[package]]

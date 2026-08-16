@@ -1,0 +1,32 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const blob_delete: (a: number, b: number) => [number, number];
+export const blob_get: (a: number, b: number) => [number, number, number, number];
+export const blob_put: (a: number, b: number, c: number, d: number) => [number, number];
+export const boot: () => any;
+export const rpc: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
+export const rust_sqlite_wasm_abort: () => void;
+export const rust_sqlite_wasm_assert_fail: (a: number, b: number, c: number, d: number) => void;
+export const rust_sqlite_wasm_calloc: (a: number, b: number) => number;
+export const rust_sqlite_wasm_free: (a: number) => void;
+export const rust_sqlite_wasm_getentropy: (a: number, b: number) => number;
+export const rust_sqlite_wasm_localtime: (a: number) => number;
+export const rust_sqlite_wasm_malloc: (a: number) => number;
+export const rust_sqlite_wasm_realloc: (a: number, b: number) => number;
+export const sqlite3_os_end: () => number;
+export const sqlite3_os_init: () => number;
+export const wasm_bindgen__convert__closures_____invoke__hf84d53817e0238b4: (a: number, b: number, c: any) => [number, number];
+export const wasm_bindgen__convert__closures_____invoke__ha579407f9663b071: (a: number, b: number, c: any) => [number, number];
+export const wasm_bindgen__convert__closures_____invoke__h2c72ca09e851b7f3: (a: number, b: number, c: any, d: any) => void;
+export const wasm_bindgen__convert__closures_____invoke__h7e06bb925b918fbb: (a: number, b: number, c: any) => void;
+export const wasm_bindgen__convert__closures_____invoke__h87640adb2bbfa2fc: (a: number, b: number) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_destroy_closure: (a: number, b: number) => void;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_start: () => void;

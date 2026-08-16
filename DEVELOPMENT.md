@@ -44,6 +44,25 @@ After bootstrapping, start the app in development mode:
 npm start
 ```
 
+## Run the App in a Browser
+
+The client can also run as a plain web page, with no Tauri and no local process
+behind it. Set `YAAK_TARGET=web` and start the frontend on its own:
+
+```shell
+YAAK_TARGET=web npm run dev --workspace @yaakapp/yaak-client
+```
+
+That flag picks the browser host in `packages/platform/src/web/`, which answers
+commands from an IndexedDB database the page owns instead of from the Rust
+engine. Data persists across reloads and is shared between tabs on the same
+origin. Sending HTTP is not available yet — the Send button reports that and
+everything else about the request is still saved. `packages/platform/src/web/README.md`
+lists which commands the browser host implements and which it declines.
+
+Desktop builds are unaffected: without the flag the platform package installs
+the Tauri host exactly as before.
+
 ## SQLite Migrations
 
 New migrations can be created from the `src-tauri/` directory:
