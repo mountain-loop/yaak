@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type { Context, HttpRequest, HttpUrlParameter } from "@yaakapp/api";
 import type { AccessTokenRawResponse } from "./store";
 
@@ -57,7 +56,7 @@ export async function fetchAccessToken(
   }
 
   httpRequest.authenticationType = "none"; // Don't inherit workspace auth
-  const { httpResponse: resp } = await ctx.httpRequest.send({ httpRequest });
+  const { httpResponse: resp, body: responseBody } = await ctx.httpRequest.send({ httpRequest });
 
   console.log("[oauth2] Got access token response", resp.status);
 
@@ -65,7 +64,8 @@ export async function fetchAccessToken(
     throw new Error(`Failed to fetch access token: ${resp.error}`);
   }
 
-  const body = resp.bodyPath ? readFileSync(resp.bodyPath, "utf8") : "";
+  // Empty when the response had no body, which parses to {} below.
+  const body = await responseBody.text();
 
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`Failed to fetch access token with status=${resp.status} and body=${body}`);
