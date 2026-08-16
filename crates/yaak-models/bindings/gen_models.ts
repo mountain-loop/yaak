@@ -225,7 +225,6 @@ export type HttpResponse = {
   updatedAt: string;
   workspaceId: string;
   requestId: string;
-  bodyPath: string | null;
   contentLength: number | null;
   contentLengthCompressed: number | null;
   elapsed: number;

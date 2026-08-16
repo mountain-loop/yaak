@@ -27,6 +27,7 @@ import type {
   HttpAuthenticationAction,
   HttpRequest,
   HttpRequestAction,
+  HttpResponse,
   ImportResources,
   InternalEvent,
   InternalEventPayload,
@@ -52,6 +53,21 @@ import { applyDynamicFormInput } from "./common";
 import { EventChannel } from "./EventChannel";
 import { migrateTemplateFunctionSelectOptions } from "./migrations";
 import { createResponseBody, decodeBase64Chunk } from "./responseBody";
+
+/**
+ * A response as a plugin should see it.
+ *
+ * The host still puts `bodyPath` on the wire for its own callers, but it names
+ * a file on the host's disk — meaningless to a plugin, absent once bodies move
+ * off the filesystem, and impossible in a browser. Plugins address bodies by
+ * response id, so drop it here rather than let one grow a dependency on it.
+ */
+function forPlugin(httpResponse: HttpResponse): HttpResponse {
+  const { bodyPath: _bodyPath, ...rest } = httpResponse as HttpResponse & {
+    bodyPath?: string | null;
+  };
+  return rest;
+}
 
 export interface PluginWorkerData {
   bootRequest: BootRequest;
@@ -781,7 +797,7 @@ export class PluginInstance {
             context,
             payload,
           );
-          return httpResponses;
+          return httpResponses.map(forPlugin);
         },
         body: ({ responseId }) => storedBody(responseId),
       },
@@ -827,12 +843,12 @@ export class PluginInstance {
           // carries the only copy of its body. A saved one is read back from
           // the host like any other. Callers get the same thing either way.
           if (body == null) {
-            return { httpResponse, body: await storedBody(httpResponse.id) };
+            return { httpResponse: forPlugin(httpResponse), body: await storedBody(httpResponse.id) };
           }
 
           const bytes = decodeBase64Chunk(body);
           return {
-            httpResponse,
+            httpResponse: forPlugin(httpResponse),
             body: createResponseBody(
               {
                 responseId: httpResponse.id,
