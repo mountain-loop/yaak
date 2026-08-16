@@ -11267,6 +11267,7 @@ dependencies = [
  "uuid",
  "yaak",
  "yaak-api",
+ "yaak-commands",
  "yaak-common",
  "yaak-core",
  "yaak-crypto",
@@ -11344,6 +11345,24 @@ dependencies = [
  "yaak-plugins",
  "yaak-templates",
  "zip",
+]
+
+[[package]]
+name = "yaak-commands"
+version = "0.0.0"
+dependencies = [
+ "log 0.4.29",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "yaak",
+ "yaak-core",
+ "yaak-crypto",
+ "yaak-models",
+ "yaak-plugins",
+ "yaak-rpc-schema",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -11677,6 +11696,7 @@ version = "0.1.0"
 dependencies = [
  "regex 1.11.1",
  "tauri",
+ "yaak-core",
 ]
 
 [[package]]

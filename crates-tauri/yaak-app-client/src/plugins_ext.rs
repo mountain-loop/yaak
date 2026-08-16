@@ -194,12 +194,6 @@ pub async fn cmd_plugins_uninstall<R: Runtime>(
     Ok(delete_and_uninstall(plugin_manager, &query_manager, &plugin_context, plugin_id).await?)
 }
 
-pub async fn cmd_plugin_init_errors(
-    plugin_manager: State<'_, PluginManager>,
-) -> Result<Vec<(String, String)>> {
-    Ok(plugin_manager.take_init_errors().await)
-}
-
 pub async fn cmd_plugins_updates<R: Runtime>(
     app_handle: AppHandle<R>,
 ) -> Result<PluginUpdatesResponse> {

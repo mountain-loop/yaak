@@ -29,17 +29,6 @@ use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
-pub async fn cmd_ws_delete_connections<R: Runtime>(
-    request_id: &str,
-    app_handle: AppHandle<R>,
-    window: WebviewWindow<R>,
-) -> Result<()> {
-    Ok(app_handle.db().delete_all_websocket_connections_for_request(
-        request_id,
-        &UpdateSource::from_window_label(window.label()),
-    )?)
-}
-
 pub async fn cmd_ws_send<R: Runtime>(
     connection_id: &str,
     environment_id: Option<&str>,

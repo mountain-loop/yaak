@@ -42,6 +42,9 @@ pub enum Error {
     YaakError(#[from] yaak::Error),
 
     #[error(transparent)]
+    CommandError(#[from] yaak_commands::Error),
+
+    #[error(transparent)]
     ClipboardError(#[from] tauri_plugin_clipboard_manager::Error),
 
     #[error(transparent)]

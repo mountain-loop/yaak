@@ -7,3 +7,4 @@ publish = false
 [dependencies]
 tauri = { workspace = true }
 regex = "1.11.0"
+yaak-core = { workspace = true }
