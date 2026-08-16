@@ -24,10 +24,12 @@ describe("auth-ntlm", () => {
 
   test("uses NTLM challenge when Negotiate and NTLM headers are separate", async () => {
     const send = vi.fn().mockResolvedValue({
-      headers: [
-        { name: "WWW-Authenticate", value: "Negotiate" },
-        { name: "WWW-Authenticate", value: "NTLM TlRMTVNTUAACAAAAAA==" },
-      ],
+      httpResponse: {
+        headers: [
+          { name: "WWW-Authenticate", value: "Negotiate" },
+          { name: "WWW-Authenticate", value: "NTLM TlRMTVNTUAACAAAAAA==" },
+        ],
+      },
     });
     const ctx = { httpRequest: { send } } as unknown as Context;
 
@@ -48,7 +50,9 @@ describe("auth-ntlm", () => {
 
   test("uses NTLM challenge when auth schemes are comma-separated in one header", async () => {
     const send = vi.fn().mockResolvedValue({
-      headers: [{ name: "www-authenticate", value: "Negotiate, NTLM TlRMTVNTUAACAAAAAA==" }],
+      httpResponse: {
+        headers: [{ name: "www-authenticate", value: "Negotiate, NTLM TlRMTVNTUAACAAAAAA==" }],
+      },
     });
     const ctx = { httpRequest: { send } } as unknown as Context;
 
@@ -68,7 +72,7 @@ describe("auth-ntlm", () => {
 
   test("throws a clear error when NTLM challenge is missing", async () => {
     const send = vi.fn().mockResolvedValue({
-      headers: [{ name: "WWW-Authenticate", value: "Negotiate" }],
+      httpResponse: { headers: [{ name: "WWW-Authenticate", value: "Negotiate" }] },
     });
     const ctx = { httpRequest: { send } } as unknown as Context;
 
