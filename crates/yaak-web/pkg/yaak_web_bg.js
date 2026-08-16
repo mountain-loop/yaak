@@ -66,24 +66,9 @@ export function boot() {
  * Run one command as `label` (the calling tab's identity, which stands in for
  * the desktop's window label on every write it makes).
  *
- * The payload shapes match the `Cmd*Req` types in `yaak-rpc-schema`, but are
- * declared locally and dispatched by name, which is the one place this host
- * does not share the desktop's guarantees: the desktop builds its router from
- * the schema, so every command has a handler by construction. Here a renamed
- * command would surface as a runtime "not a command this host answers".
- *
- * The fix is `yaak-commands` (the `Host` trait), not more machinery here —
- * its `models::*` handlers are already this file, typed. Three things have to
- * give before a wasm host can register them:
- *
- * 1. `Host: Send + Sync`, which a browser cannot satisfy: there is one thread
- *    and the connection pool is an `Rc`.
- * 2. `models_delete` reaches for `spawn_blocking`; there is nothing to spawn
- *    onto here.
- * 3. `yaak-commands` depends on `yaak` and `yaak-plugins`, which pull the HTTP
- *    stack and the Node sidecar and do not build for wasm32.
- *
- * None of those are hard; they are just not this PR.
+ * The payload shapes match the `Cmd*Req` types in `yaak-rpc-schema` — that
+ * crate itself pulls the git, gRPC and plugin crates for their response types
+ * and cannot come to wasm, so the handful needed here are declared locally.
  * @param {string} cmd
  * @param {any} payload
  * @param {string} label
@@ -689,7 +674,7 @@ export function __wbindgen_cast_0000000000000002(arg0, arg1) {
 }
 export function __wbindgen_cast_0000000000000003(arg0, arg1) {
     // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("IDBVersionChangeEvent")], shim_idx: 180, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h7e53e249a4dc4aa9);
+    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__ha579407f9663b071);
     return ret;
 }
 export function __wbindgen_cast_0000000000000004(arg0, arg1) {
@@ -746,8 +731,8 @@ function wasm_bindgen__convert__closures_____invoke__hf84d53817e0238b4(arg0, arg
     }
 }
 
-function wasm_bindgen__convert__closures_____invoke__h7e53e249a4dc4aa9(arg0, arg1, arg2) {
-    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h7e53e249a4dc4aa9(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__ha579407f9663b071(arg0, arg1, arg2) {
+    const ret = wasm.wasm_bindgen__convert__closures_____invoke__ha579407f9663b071(arg0, arg1, arg2);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }
