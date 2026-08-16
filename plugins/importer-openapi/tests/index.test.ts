@@ -408,6 +408,38 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[1]?.description).toBe("New");
   });
 
+  test("Derives an Accept header from OpenAPI 3 responses", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Accept Test", version: "1.0.0" },
+        paths: {
+          "/prefers-json": {
+            get: {
+              responses: {
+                "200": {
+                  description: "ok",
+                  content: { "application/xml": {}, "application/json": {} },
+                },
+              },
+            },
+          },
+          // Only failures describe content, so there is nothing to accept
+          "/errors-only": {
+            get: {
+              responses: { "500": { description: "nope", content: { "application/json": {} } } },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: true, name: "Accept", value: "application/json" },
+    ]);
+    expect(imported?.resources.httpRequests[1]?.headers).toEqual([]);
+  });
+
   test("Reports references that point outside the document", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({

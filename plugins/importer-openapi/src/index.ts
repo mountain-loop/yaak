@@ -206,7 +206,7 @@ function importOperation({
   const headers = mergeHeaders(
     importHeaderParameters({ importState, parameters }),
     body.headers,
-    importAcceptHeader({ operation, spec }),
+    importAcceptHeader({ importState, operation, spec }),
   );
   const authentication = importAuthentication({ importState, operation, spec });
 
@@ -257,19 +257,41 @@ function operationBaseUrl({
   return requestBaseUrl;
 }
 
-/** Swagger 2.0 declares response types up front, so they can become an Accept header */
+/**
+ * Swagger 2.0 declares response types up front in `produces`; OpenAPI 3 only
+ * lists them per response, so successful responses stand in. Both become an
+ * Accept header, which is what the Postman-based importer used to produce.
+ */
 function importAcceptHeader({
+  importState,
   operation,
   spec,
 }: {
+  importState: ImportState;
   operation: UnknownRecord;
   spec: UnknownRecord;
 }): HttpRequestHeader[] {
-  const produces = toArray(operation.produces ?? spec.produces).find(
-    (c): c is string => typeof c === "string",
-  );
-  if (produces == null) return [];
+  const produces =
+    toArray(operation.produces ?? spec.produces).find((c): c is string => typeof c === "string") ??
+    successResponseContentType(importState, operation);
+  // `*/*` is what a request accepts by default, so stating it just adds noise
+  if (produces == null || produces === "*/*") return [];
   return [{ enabled: true, name: "Accept", value: produces }];
+}
+
+/** The content type of the first successful response, by the usual preference */
+function successResponseContentType(
+  importState: ImportState,
+  operation: UnknownRecord,
+): string | null {
+  for (const [status, response] of Object.entries(toRecord(operation.responses))) {
+    if (!status.startsWith("2") && status !== "default") continue;
+
+    const content = toRecord(toRecord(importState.resolve(response)).content);
+    const contentType = chooseContentType(Object.keys(content));
+    if (contentType != null) return contentType;
+  }
+  return null;
 }
 
 function parseSpec(contents: string): unknown {

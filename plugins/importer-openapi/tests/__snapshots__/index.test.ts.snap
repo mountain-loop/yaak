@@ -50,7 +50,13 @@ Operation ID: listAPIs
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_0",
         "method": "GET",
         "model": "http_request",
@@ -74,7 +80,13 @@ Operation ID: getMetrics
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_1",
         "method": "GET",
         "model": "http_request",
@@ -97,7 +109,13 @@ Operation ID: getProviders
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_2",
         "method": "GET",
         "model": "http_request",
@@ -123,7 +141,13 @@ Parameters:
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_3",
         "method": "GET",
         "model": "http_request",
@@ -161,7 +185,13 @@ Parameters:
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_4",
         "method": "GET",
         "model": "http_request",
@@ -204,7 +234,13 @@ Parameters:
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_5",
         "method": "GET",
         "model": "http_request",
@@ -236,7 +272,13 @@ Parameters:
 Responses:
 - 200: OK",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_6",
         "method": "GET",
         "model": "http_request",
@@ -2613,7 +2655,13 @@ Responses:
 - 200: successful operation
 - 400: Date must be between Jun 16, 1995 and Mar 28, 2019.",
         "folderId": "GENERATE_ID::FOLDER_0",
-        "headers": [],
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Accept",
+            "value": "application/json",
+          },
+        ],
         "id": "GENERATE_ID::HTTP_REQUEST_0",
         "method": "GET",
         "model": "http_request",
