@@ -25,6 +25,24 @@ export function proxySendUrl(): string {
   return `${proxyBaseUrl()}/v1/http/send`;
 }
 
+let identity: Promise<string> | null = null;
+
+/**
+ * Who does the sending, for the timeline: `yaak-send-proxy 0.1.0 at http://…`.
+ * Asked of `/v1/health` once per page load; if the proxy can't be reached the
+ * URL alone is the answer, and the send itself will say why shortly after.
+ */
+export function proxyIdentity(): Promise<string> {
+  identity ??= fetch(`${proxyBaseUrl()}/v1/health`)
+    .then((res) => res.json() as Promise<{ version?: string }>)
+    .then((health) => `yaak-send-proxy ${health.version ?? ""} at ${proxyBaseUrl()}`.replace("  ", " "))
+    .catch(() => {
+      identity = null; // try again next send
+      return `send proxy at ${proxyBaseUrl()}`;
+    });
+  return identity;
+}
+
 /**
  * Yield frames from an NDJSON stream as they arrive. A partial trailing line is
  * held until its newline comes; anything left when the stream ends is dropped,

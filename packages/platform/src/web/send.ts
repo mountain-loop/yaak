@@ -33,7 +33,7 @@ import type {
 } from "@yaakapp-internal/models";
 import type { Frame, SendRequest } from "@yaakapp-internal/send-proxy";
 import type { WorkerConnection } from "./connection";
-import { proxyBaseUrl, proxySendUrl, readFrames } from "./proxy";
+import { proxyIdentity, proxySendUrl, readFrames } from "./proxy";
 
 /* -------------------------------- shapes --------------------------------- */
 
@@ -103,12 +103,12 @@ async function runSend(
   });
   await response.patch({ url: prepared.request.url });
 
+  // The first line of the timeline says what did the sending and where. A
+  // request through a proxy shows a different origin to the server than the
+  // user's machine, and this is where that should be visible.
   const timeline = new TimelineWriter(db, response.id, response.workspaceId);
+  timeline.push([{ type: "info", message: `Executed by ${await proxyIdentity()}` }]);
   timeline.push(prepared.settingEvents);
-  // Where the bytes actually left from. A request through a proxy shows a
-  // different origin to the server than the user's machine, and the timeline
-  // is where that should be visible.
-  timeline.push([{ type: "setting", name: "proxy", value: proxyBaseUrl() }]);
 
   const body: SendRequest = {
     request: prepared.request,
