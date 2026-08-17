@@ -1,4 +1,10 @@
-import type { Folder, ImportDestination, ImportPlan, Workspace } from "@yaakapp-internal/models";
+import {
+  type Folder,
+  type ImportDestination,
+  type ImportPlan,
+  modelTypeLabel,
+  type Workspace,
+} from "@yaakapp-internal/models";
 import { HStack, Icon, VStack } from "@yaakapp-internal/ui";
 import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
@@ -135,12 +141,12 @@ export function ImportDataDialog({
 
   if (plan != null) {
     const counts = [
-      ["Workspace", plan.resources.workspaces.length],
-      ["Environment", plan.resources.environments.length],
-      ["Folder", plan.resources.folders.length],
-      ["HTTP Request", plan.resources.httpRequests.length],
-      ["gRPC Request", plan.resources.grpcRequests.length],
-      ["WebSocket Request", plan.resources.websocketRequests.length],
+      [plan.resources.workspaces[0]?.resource, plan.resources.workspaces.length],
+      [plan.resources.environments[0]?.resource, plan.resources.environments.length],
+      [plan.resources.folders[0]?.resource, plan.resources.folders.length],
+      [plan.resources.httpRequests[0]?.resource, plan.resources.httpRequests.length],
+      [plan.resources.grpcRequests[0]?.resource, plan.resources.grpcRequests.length],
+      [plan.resources.websocketRequests[0]?.resource, plan.resources.websocketRequests.length],
     ] as const;
     const destinationLabel =
       plan.destination.type === "new_workspace"
@@ -159,11 +165,11 @@ export function ImportDataDialog({
         <div>
           <div className="text-sm font-semibold mb-1">Resources</div>
           <ul className="list-disc pl-6 text-sm text-text-subtle">
-            {counts
-              .filter(([, count]) => count > 0)
-              .map(([label, count]) => (
-                <li key={label}>{pluralizeCount(label, count)}</li>
-              ))}
+            {counts.map(([model, count]) =>
+              model == null ? null : (
+                <li key={model.model}>{pluralizeCount(modelTypeLabel(model), count)}</li>
+              ),
+            )}
           </ul>
         </div>
 
