@@ -22,11 +22,6 @@ pub struct Config {
     )]
     pub allowed_origins: Vec<String>,
 
-    /// Require `Authorization: Bearer <token>` on every send. Unset means anonymous access,
-    /// which is what the hosted funnel wants alongside the rate limit.
-    #[arg(long, env = "YAAK_PROXY_TOKEN")]
-    pub token: Option<String>,
-
     /// Allow sends to private, loopback, link-local and other non-public addresses.
     ///
     /// Off by default: a hosted instance must not become a relay into its own network. A
@@ -38,23 +33,6 @@ pub struct Config {
         default_value_t = false
     )]
     pub allow_private_networks: bool,
-
-    /// Only allow sends to these hosts (exact host, or `*.suffix`), comma-separated. Empty means
-    /// every host not on the deny list.
-    #[arg(long, env = "YAAK_PROXY_ALLOW_HOSTS", value_delimiter = ',')]
-    pub allow_hosts: Vec<String>,
-
-    /// Never send to these hosts (exact host, or `*.suffix`), comma-separated. Checked before the
-    /// allow list.
-    #[arg(long, env = "YAAK_PROXY_DENY_HOSTS", value_delimiter = ',')]
-    pub deny_hosts: Vec<String>,
-
-    /// NAT64 prefixes (/96) in use on this network, comma-separated, e.g. `2001:db8:64::`. The
-    /// well-known (64:ff9b::/96) and local-use (64:ff9b:1::/48) prefixes are always recognised;
-    /// a network-specific prefix has to be named here or an IPv6 address under it could reach
-    /// an internal IPv4 host through the translator.
-    #[arg(long, env = "YAAK_PROXY_NAT64_PREFIXES", value_delimiter = ',')]
-    pub nat64_prefixes: Vec<std::net::Ipv6Addr>,
 
     /// Largest request the proxy accepts from the tab (the rendered request JSON, body included).
     #[arg(long, env = "YAAK_PROXY_MAX_REQUEST_BYTES", default_value_t = 16 * 1024 * 1024)]
@@ -69,7 +47,8 @@ pub struct Config {
     #[arg(long, env = "YAAK_PROXY_MAX_TIMEOUT_SECS", default_value_t = 60)]
     pub max_timeout_secs: u64,
 
-    /// Sends allowed per client IP per minute. 0 disables the limit.
+    /// Sends allowed per client IP per minute. 0 disables the limit. This and the concurrency
+    /// cap are the whole of what protects an instance: there is no authentication.
     #[arg(long, env = "YAAK_PROXY_RATE_LIMIT_PER_MINUTE", default_value_t = 120)]
     pub rate_limit_per_minute: u32,
 

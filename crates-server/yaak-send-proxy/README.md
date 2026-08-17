@@ -35,11 +35,7 @@ arguments; `--help` lists them all.
 | --- | --- | --- |
 | `--bind` | `127.0.0.1:9227` | Listen address. `0.0.0.0:9227` inside a container. |
 | `--allowed-origins` | `*` | CORS origins, comma-separated. A hosted instance should name its web origin. |
-| `--token` | unset | Require `Authorization: Bearer <token>`. Unset means anonymous, which is what the hosted funnel wants alongside the rate limit. |
 | `--allow-private-networks` | off | Let sends reach private, loopback and link-local addresses. **Off by default; see below.** |
-| `--allow-hosts` | empty | Only these hosts (`api.example.com`, `*.example.com`). Empty means any host not denied. |
-| `--deny-hosts` | empty | Never these hosts. Checked before the allow list. |
-| `--nat64-prefixes` | empty | Network-specific NAT64 prefixes (`/96`) whose embedded IPv4 should be judged; the well-known and local-use prefixes always are. |
 | `--max-request-bytes` | 16 MiB | Largest rendered request accepted from the tab. |
 | `--max-response-bytes` | 64 MiB | Largest upstream body relayed before the send is cut off. |
 | `--max-timeout-secs` | 60 | Ceiling on a send's timeout; a request asking for more (or none) gets this. |
@@ -57,8 +53,7 @@ sits on. So by default it refuses to connect to:
   `fc00::/7`), link-local (`169.254/16` — where cloud metadata lives — and
   `fe80::/10`), carrier-grade NAT, multicast, reserved and unspecified ranges,
   and IPv4 addresses carried inside IPv6 forms (`::ffff:a.b.c.d`, the
-  well-known and local-use NAT64 prefixes, 6to4 — plus any NAT64 prefix you
-  name with `--nat64-prefixes`);
+  well-known and local-use NAT64 prefixes, 6to4);
 - anything not `http://` or `https://`.
 
 The check runs **on the resolved addresses, after DNS**, for every hop of a
@@ -69,7 +64,7 @@ fields), since no browser tab could legitimately mean those.
 
 Refusals are logged with the reason. A self-hosted instance on a private network
 that legitimately needs to reach the services next to it turns the range check
-off with `--allow-private-networks`, and can narrow that with `--allow-hosts`.
+off with `--allow-private-networks`.
 
 ## Self-hosting
 
@@ -79,13 +74,16 @@ One binary, no dependencies. Build it and run it wherever you like:
 cargo build --release -p yaak-send-proxy
 YAAK_PROXY_BIND=0.0.0.0:9227 \
 YAAK_PROXY_ALLOWED_ORIGINS=https://yaak.example.com \
-YAAK_PROXY_TOKEN=change-me \
 ./target/release/yaak-send-proxy
 ```
 
-Put TLS in front of it (a reverse proxy) — the token travels as a header. If the
-reverse proxy buffers responses, tell it not to: the reply is a stream and the
-`X-Accel-Buffering: no` header it sets is honoured by nginx-shaped ones.
+There is no authentication: an instance is anonymous and protected by the
+per-client rate limit and the destination policy, which is what the hosted
+funnel wants. Anything more (a shared token, per-user quotas) is a later slice
+and would sit in front of `send_http` in `main.rs`. Put TLS in front of it (a
+reverse proxy). If the reverse proxy buffers responses, tell it not to: the reply
+is a stream and the `X-Accel-Buffering: no` header it sets is honoured by
+nginx-shaped ones.
 
 ## The wire
 
@@ -116,8 +114,8 @@ happened:
 | `error` | last, on failure | the reason, and any cookies collected before the failure |
 
 Refusals that happen before anything is sent (a blocked destination, a bad body,
-rate limit, missing token) are plain HTTP errors (`403`, `400`, `429`, `401`)
-with `{"error": "…"}`, not streams.
+rate limit, capacity) are plain HTTP errors (`403`, `400`, `429`, `503`) with
+`{"error": "…"}`, not streams.
 
 Why a streamed HTTP response and not a WebSocket: one `POST` is stateless by
 construction, cancellable by closing the connection, readable with `curl`, and
@@ -135,8 +133,8 @@ wire on one side is a type error on the other.
 
 Not built, by design, but the router is shaped for it: a WebSocket relay
 (`/v1/ws/relay`) and a gRPC relay (`/v1/grpc/relay`) would be long-lived,
-bidirectional endpoints on the same binary, behind the same destination policy,
-limits and token. They differ from this endpoint in holding per-connection
+bidirectional endpoints on the same binary, behind the same destination policy
+and limits. They differ from this endpoint in holding per-connection
 in-memory state while a connection is open (never persisted), which brings
 connection limits and a larger abuse surface — the reason they are separate
 work.

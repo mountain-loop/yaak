@@ -24,57 +24,15 @@ use yaak_http::types::SendableHttpRequest;
 #[derive(Clone)]
 pub struct DestinationPolicy {
     allow_private_networks: bool,
-    allow_hosts: Vec<HostPattern>,
-    deny_hosts: Vec<HostPattern>,
-    /// NAT64 prefixes (/96) in use on this network beyond the well-known ones. An IPv6
-    /// address under one of these is really an IPv4 destination, and is judged as that.
-    nat64_prefixes: Vec<Ipv6Addr>,
-}
-
-#[derive(Clone, Debug)]
-enum HostPattern {
-    Exact(String),
-    /// `*.example.com`: any subdomain, and the bare domain too.
-    Suffix(String),
-}
-
-impl HostPattern {
-    fn parse(raw: &str) -> Option<Self> {
-        let raw = raw.trim().trim_end_matches('.').to_ascii_lowercase();
-        if raw.is_empty() {
-            return None;
-        }
-        Some(match raw.strip_prefix("*.") {
-            Some(suffix) => Self::Suffix(suffix.to_string()),
-            None => Self::Exact(raw),
-        })
-    }
-
-    fn matches(&self, host: &str) -> bool {
-        match self {
-            Self::Exact(h) => host == h,
-            Self::Suffix(s) => host == s || host.strip_suffix(s).is_some_and(|p| p.ends_with('.')),
-        }
-    }
 }
 
 impl DestinationPolicy {
-    pub fn new(
-        allow_private_networks: bool,
-        allow_hosts: &[String],
-        deny_hosts: &[String],
-        nat64_prefixes: &[Ipv6Addr],
-    ) -> Self {
-        Self {
-            allow_private_networks,
-            allow_hosts: allow_hosts.iter().filter_map(|h| HostPattern::parse(h)).collect(),
-            deny_hosts: deny_hosts.iter().filter_map(|h| HostPattern::parse(h)).collect(),
-            nat64_prefixes: nat64_prefixes.to_vec(),
-        }
+    pub fn new(allow_private_networks: bool) -> Self {
+        Self { allow_private_networks }
     }
 
-    /// Check a URL before a hop is attempted: scheme, host lists, and literal IPs. A hostname
-    /// that passes here still has its resolved addresses checked by [`Self::address_filter`].
+    /// Check a URL before a hop is attempted: scheme and literal IPs. A hostname that passes
+    /// here still has its resolved addresses checked by [`Self::address_filter`].
     pub fn check_url(&self, raw: &str) -> Result<(), String> {
         let url = Url::parse(raw).map_err(|e| format!("Invalid URL {raw:?}: {e}"))?;
         match url.scheme() {
@@ -82,15 +40,7 @@ impl DestinationPolicy {
             other => return Err(format!("Refusing to send over {other:?}; only http and https")),
         }
         let host = url.host_str().ok_or_else(|| format!("URL {raw:?} has no host"))?;
-        let host =
-            host.trim_matches(|c| c == '[' || c == ']').trim_end_matches('.').to_ascii_lowercase();
-
-        if self.deny_hosts.iter().any(|p| p.matches(&host)) {
-            return Err(format!("Host {host:?} is on this proxy's deny list"));
-        }
-        if !self.allow_hosts.is_empty() && !self.allow_hosts.iter().any(|p| p.matches(&host)) {
-            return Err(format!("Host {host:?} is not on this proxy's allow list"));
-        }
+        let host = host.trim_matches(|c| c == '[' || c == ']');
 
         // A literal IP never reaches the resolver, so it is checked here. Hostnames are checked
         // where their addresses become known.
@@ -110,17 +60,6 @@ impl DestinationPolicy {
         if self.allow_private_networks {
             return Ok(());
         }
-        // An address under a configured NAT64 prefix reaches an IPv4 host; judge that host.
-        if let IpAddr::V6(v6) = ip
-            && self.nat64_prefixes.iter().any(|p| p.segments()[..6] == v6.segments()[..6])
-        {
-            let v4 = trailing_v4(&v6);
-            if let Some(reason) = non_public_v4(v4) {
-                return Err(format!(
-                    "Refusing to connect to {ip} (NAT64 for {v4}): {reason}. This proxy only sends to public addresses"
-                ));
-            }
-        }
         match non_public_reason(ip) {
             Some(reason) => Err(format!(
                 "Refusing to connect to {ip}: {reason}. This proxy only sends to public addresses"
@@ -136,8 +75,7 @@ impl DestinationPolicy {
 /// itself, the network it sits on, and the link-local range where cloud metadata services
 /// (169.254.169.254) live. IPv4 addresses carried inside IPv6 forms — IPv4-mapped, the
 /// well-known and local-use NAT64 prefixes, 6to4 — are unwrapped and judged as IPv4, since
-/// that is where the packets end up. A network-specific NAT64 prefix is not knowable here;
-/// see `--nat64-prefix`.
+/// that is where the packets end up. (A network-specific NAT64 prefix is not knowable here.)
 pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
     match ip {
         IpAddr::V4(v4) => non_public_v4(v4),
@@ -310,50 +248,19 @@ mod tests {
     }
 
     #[test]
-    fn a_configured_nat64_prefix_is_judged_by_the_address_it_carries() {
-        // A made-up global prefix, standing in for whatever the network's translator uses
-        let prefix: Ipv6Addr = "2a02:1234:64::".parse().unwrap();
-        let policy = DestinationPolicy::new(false, &[], &[], &[prefix]);
-        assert!(policy.check_ip(ip("2a02:1234:64::a9fe:a9fe")).is_err(), "metadata behind NAT64");
-        assert!(policy.check_ip(ip("2a02:1234:64::0a00:1")).is_err(), "10.0.0.1 behind NAT64");
-        assert!(policy.check_ip(ip("2a02:1234:64::0101:0101")).is_ok(), "1.1.1.1 behind NAT64");
-        // Without the prefix configured the same address is an ordinary global v6, and passes:
-        // that is exactly the gap the option exists to close.
-        let policy = DestinationPolicy::new(false, &[], &[], &[]);
-        assert!(policy.check_ip(ip("2a02:1234:64::a9fe:a9fe")).is_ok());
-    }
-
-    #[test]
     fn private_networks_can_be_opted_in() {
-        let policy = DestinationPolicy::new(true, &[], &[], &[]);
+        let policy = DestinationPolicy::new(true);
         assert!(policy.check_url("http://127.0.0.1/").is_ok());
         assert!(policy.check_url("http://169.254.169.254/").is_ok());
-        let policy = DestinationPolicy::new(false, &[], &[], &[]);
+        let policy = DestinationPolicy::new(false);
         assert!(policy.check_url("http://127.0.0.1/").is_err());
         assert!(policy.check_url("http://[::1]/").is_err());
         assert!(policy.check_url("http://169.254.169.254/latest/meta-data").is_err());
     }
 
     #[test]
-    fn host_lists() {
-        let policy = DestinationPolicy::new(
-            false,
-            &["*.example.com".into(), "api.test".into()],
-            &["bad.example.com".into()],
-            &[],
-        );
-        assert!(policy.check_url("https://example.com/").is_ok());
-        assert!(policy.check_url("https://a.b.example.com/").is_ok());
-        assert!(policy.check_url("https://api.test/").is_ok());
-        assert!(policy.check_url("https://API.TEST./").is_ok());
-        assert!(policy.check_url("https://bad.example.com/").is_err(), "deny wins over allow");
-        assert!(policy.check_url("https://notexample.com/").is_err());
-        assert!(policy.check_url("https://httpbin.org/").is_err(), "not on the allow list");
-    }
-
-    #[test]
     fn only_http_schemes() {
-        let policy = DestinationPolicy::new(true, &[], &[], &[]);
+        let policy = DestinationPolicy::new(true);
         assert!(policy.check_url("ftp://example.com/").is_err());
         assert!(policy.check_url("file:///etc/passwd").is_err());
         assert!(policy.check_url("https://example.com/").is_ok());

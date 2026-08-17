@@ -49,12 +49,7 @@ async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let config = Config::parse();
 
-    let policy = DestinationPolicy::new(
-        config.allow_private_networks,
-        &config.allow_hosts,
-        &config.deny_hosts,
-        &config.nat64_prefixes,
-    );
+    let policy = DestinationPolicy::new(config.allow_private_networks);
     let state = AppState {
         limits: Arc::new(SendLimits {
             policy,
@@ -68,11 +63,10 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+        .allow_headers([header::CONTENT_TYPE])
         .allow_origin(allowed_origins(&state.config.allowed_origins));
 
     let app = Router::new()
-        .route("/", get(root))
         .route("/v1/health", get(health))
         // A WebSocket or gRPC relay would sit beside this as `/v1/ws/relay` and `/v1/grpc/relay`
         // on the same router, behind the same policy, limits and auth. Not built; see README.
@@ -87,9 +81,8 @@ async fn main() {
         std::process::exit(1);
     });
     info!(
-        "yaak-send-proxy listening on http://{bind} (private networks: {}, token: {}, rate limit: {}/min)",
+        "yaak-send-proxy listening on http://{bind} (private networks: {}, rate limit: {}/min)",
         if state.config.allow_private_networks { "allowed" } else { "refused" },
-        if state.config.token.is_some() { "required" } else { "none" },
         state.config.rate_limit_per_minute,
     );
 
@@ -111,16 +104,11 @@ fn allowed_origins(origins: &[String]) -> AllowOrigin {
     AllowOrigin::list(parsed)
 }
 
-async fn root() -> impl IntoResponse {
-    "yaak-send-proxy: POST /v1/http/send (see https://github.com/mountain-loop/yaak)\n"
-}
-
 async fn health(State(state): State<AppState>) -> impl IntoResponse {
     Json(json!({
         "ok": true,
         "version": env!("CARGO_PKG_VERSION"),
         "privateNetworks": state.config.allow_private_networks,
-        "tokenRequired": state.config.token.is_some(),
         "maxResponseBytes": state.config.max_response_bytes,
         "maxTimeoutSecs": state.config.max_timeout_secs,
     }))
@@ -144,34 +132,12 @@ fn client_ip(config: &Config, headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
     peer.ip()
 }
 
-fn authorized(config: &Config, headers: &HeaderMap) -> bool {
-    let Some(expected) = config.token.as_deref() else {
-        return true;
-    };
-    headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|got| constant_time_eq(got.as_bytes(), expected.as_bytes()))
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
-}
-
 async fn send_http(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     Json(body): Json<SendRequest>,
 ) -> Response {
-    if !authorized(&state.config, &headers) {
-        return error_response(StatusCode::UNAUTHORIZED, "This proxy requires a token");
-    }
-
     let ip = client_ip(&state.config, &headers, peer);
     if let Err(wait) = state.rate_limiter.check(ip) {
         warn!("Rate limited {ip}");
