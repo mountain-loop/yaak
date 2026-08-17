@@ -11745,6 +11745,7 @@ dependencies = [
  "sqlite-wasm-vfs",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
  "yaak-models",
 ]
 

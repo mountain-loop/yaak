@@ -92,7 +92,53 @@ pub async fn boot() -> Result<()> {
         yaak_models::init_standalone(DB_NAME, BLOB_DB_NAME).map_err(js_error)?;
 
     HOST.with(|h| *h.borrow_mut() = Some(Host { queries, blobs, events }));
+
+    spawn_orphaned_body_sweep();
+
     Ok(())
+}
+
+/// Delete blob-stored response bodies whose owning row is gone, once, in the
+/// background.
+///
+/// The desktop does the same thing at startup (`delete_orphaned_response_bodies`
+/// on a blocking thread) because deleting a request, folder or workspace
+/// cascades to its responses through the generic row delete, which never
+/// touched the bodies. A browser tab inherits that exactly — minus the
+/// filesystem half, since bodies here are only ever blob chunks.
+///
+/// Deferred to a macrotask rather than awaited: every command in the worker
+/// waits on `boot()`, so doing this inline would put a full scan of the blob
+/// database in front of the app's first paint. A `spawn_local` alone would not
+/// be enough — its task is queued as a microtask, ahead of the `message`
+/// events the tab has already posted. Yielding through `setTimeout` puts the
+/// sweep behind them.
+///
+/// Safe against a send that is already running: the response row is written
+/// before its body chunks are.
+fn spawn_orphaned_body_sweep() {
+    wasm_bindgen_futures::spawn_local(async {
+        let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+            let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
+            let _ = global.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 0);
+        });
+        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+
+        let swept = with_host(|host| {
+            let db = host.queries.connect();
+            db.delete_orphaned_response_body_blobs(&host.blobs).map_err(js_error)
+        });
+
+        match swept {
+            Ok(0) => {}
+            Ok(n) => {
+                web_sys::console::info_1(&format!("Deleted {n} orphaned response bodies").into())
+            }
+            Err(e) => {
+                web_sys::console::warn_2(&"Failed to delete orphaned response bodies".into(), &e)
+            }
+        }
+    });
 }
 
 fn with_host<T>(f: impl FnOnce(&Host) -> Result<T>) -> Result<T> {
