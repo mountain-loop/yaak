@@ -6,7 +6,7 @@
 //! would write to its database is written to the reply stream instead, and the tab stores it.
 
 use crate::guard::{DestinationPolicy, GuardedSender};
-use crate::wire::{Frame, SendRequest, WireHeader};
+use crate::wire::{Frame, SendRequest};
 use base64::Engine;
 use bytes::Bytes;
 use log::{info, warn};
@@ -21,6 +21,7 @@ use yaak_http::cookies::CookieStore;
 use yaak_http::sender::{HttpResponseEvent, ReqwestSender};
 use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{SendableHttpRequest, SendableHttpRequestOptions};
+use yaak_models::models::HttpResponseHeader;
 
 /// How many frames may sit unread by the client before body reading pauses. Backpressure, so a
 /// slow tab slows the upstream read rather than filling memory.
@@ -115,7 +116,7 @@ pub async fn prepare(limits: Arc<SendLimits>, send: SendRequest) -> Result<Prepa
 pub struct PreparedSend {
     limits: Arc<SendLimits>,
     sendable: SendableHttpRequest,
-    settings: crate::wire::SendSettings,
+    settings: yaak_models::models::HttpSendSettings,
     cookies: Option<Vec<yaak_models::models::Cookie>>,
     timeout: Duration,
     timeout_capped: bool,
@@ -331,10 +332,10 @@ struct DoneStats {
     content_length_compressed: u64,
 }
 
-fn to_wire_headers(headers: &[(String, String)]) -> Vec<WireHeader> {
+fn to_wire_headers(headers: &[(String, String)]) -> Vec<HttpResponseHeader> {
     headers
         .iter()
-        .map(|(name, value)| WireHeader { name: name.clone(), value: value.clone() })
+        .map(|(name, value)| HttpResponseHeader { name: name.clone(), value: value.clone() })
         .collect()
 }
 

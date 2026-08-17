@@ -29,6 +29,7 @@ import type {
   HttpRequest,
   HttpResponse,
   HttpResponseEventData,
+  HttpSendSettings,
 } from "@yaakapp-internal/models";
 import type { WorkerConnection } from "./connection";
 import type { ProxyFrame, ProxyRequestBody, ProxySendResponse } from "./proxy";
@@ -50,7 +51,7 @@ type ResponsePatch = Partial<HttpResponse>;
 /** What `prepare_http_send` (crates/yaak-web) hands back. */
 interface PreparedHttpSend {
   request: HttpRequest;
-  settings: ProxyRequestBody["settings"];
+  settings: HttpSendSettings;
   settingEvents: HttpResponseEventData[];
   cookieJar: CookieJar | null;
 }

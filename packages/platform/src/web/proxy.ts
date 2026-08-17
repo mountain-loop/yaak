@@ -12,6 +12,7 @@ import type {
   HttpRequest,
   HttpResponseEventData,
   HttpResponseHeader,
+  HttpSendSettings,
 } from "@yaakapp-internal/models";
 
 /* ------------------------------- location -------------------------------- */
@@ -38,13 +39,7 @@ export function proxySendUrl(): string {
 export interface ProxyRequestBody {
   /** The rendered request, in the model shape (see `wire.rs` `SendRequest.request`). */
   request: HttpRequest;
-  settings: {
-    validateCertificates: boolean;
-    followRedirects: boolean;
-    timeoutMs: number;
-    sendCookies: boolean;
-    storeCookies: boolean;
-  };
+  settings: HttpSendSettings;
   /** The jar's cookies to start from, or `null` for no jar at all. */
   cookies: Cookie[] | null;
 }

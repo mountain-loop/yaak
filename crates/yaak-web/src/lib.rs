@@ -30,8 +30,7 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::models::{
-    AnyModel, CookieJar, HttpRequest, HttpResponseEvent, HttpResponseEventData,
-    ResolvedHttpRequestSettings, ResolvedSetting,
+    AnyModel, CookieJar, HttpRequest, HttpResponseEvent, HttpResponseEventData, HttpSendSettings,
 };
 use yaak_models::models_ops;
 use yaak_models::query_manager::QueryManager;
@@ -378,17 +377,6 @@ struct PrepareHttpSendReq {
     cookie_jar_id: Option<String>,
 }
 
-/// The values the proxy needs to obey. Where each came from is in `setting_events`.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PreparedSendSettings {
-    validate_certificates: bool,
-    follow_redirects: bool,
-    timeout_ms: i64,
-    send_cookies: bool,
-    store_cookies: bool,
-}
-
 /// Everything a send needs that lives in the database, resolved and rendered: the desktop's
 /// `HttpSendInputs`, in the shape a tab hands to the proxy and keeps for itself.
 #[derive(Serialize)]
@@ -397,7 +385,7 @@ struct PreparedHttpSend {
     /// The request with inherited headers and authentication applied and every template
     /// rendered. What the proxy sends, and what the response records as its request.
     request: HttpRequest,
-    settings: PreparedSendSettings,
+    settings: HttpSendSettings,
     /// The `* Setting name=value` timeline lines the desktop writes at the top of a send,
     /// sources and all. The tab records them before the proxy's own events.
     setting_events: Vec<HttpResponseEventData>,
@@ -490,56 +478,16 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
         )));
     }
 
-    let setting_events = setting_events(&settings);
     let prepared = PreparedHttpSend {
         request: rendered,
-        settings: PreparedSendSettings {
-            validate_certificates: settings.validate_certificates.value,
-            follow_redirects: settings.follow_redirects.value,
-            timeout_ms: settings.request_timeout.value as i64,
-            send_cookies: settings.send_cookies.value,
-            store_cookies: settings.store_cookies.value,
-        },
-        setting_events,
+        settings: HttpSendSettings::from(&settings),
+        setting_events: settings.timeline_events(),
         cookie_jar,
     };
     // JSON-compatible, as `rpc` does: the tab posts this to the proxy with `JSON.stringify`,
     // and the default serializer's `Map` for the request body would stringify to `{}`.
     use serde::Serialize as _;
     prepared.serialize(&serde_wasm_bindgen::Serializer::json_compatible()).map_err(js_error)
-}
-
-/// The same five `Setting` lines `crates/yaak/src/send.rs` writes at the top of every send.
-fn setting_events(settings: &ResolvedHttpRequestSettings) -> Vec<HttpResponseEventData> {
-    fn event<T: ToString>(
-        name: &str,
-        value: String,
-        setting: &ResolvedSetting<T>,
-    ) -> HttpResponseEventData {
-        HttpResponseEventData::Setting {
-            name: name.to_string(),
-            value,
-            source_model: Some(setting.source_model.clone()),
-            source_id: setting.source_id.clone(),
-            source_name: setting.source_name.clone(),
-        }
-    }
-    let timeout = if settings.request_timeout.value > 0 {
-        format!("{}ms", settings.request_timeout.value)
-    } else {
-        "Infinity".to_string()
-    };
-    vec![
-        event(
-            "validate_certificates",
-            settings.validate_certificates.value.to_string(),
-            &settings.validate_certificates,
-        ),
-        event("redirects", settings.follow_redirects.value.to_string(), &settings.follow_redirects),
-        event("timeout", timeout, &settings.request_timeout),
-        event("send_cookies", settings.send_cookies.value.to_string(), &settings.send_cookies),
-        event("store_cookies", settings.store_cookies.value.to_string(), &settings.store_cookies),
-    ]
 }
 
 /* -------------------------------------------------------------------------- */

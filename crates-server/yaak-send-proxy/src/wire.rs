@@ -11,7 +11,9 @@
 //! back.
 
 use serde::{Deserialize, Serialize};
-use yaak_models::models::{Cookie, HttpRequest, HttpResponseEventData};
+use yaak_models::models::{
+    Cookie, HttpRequest, HttpResponseEventData, HttpResponseHeader, HttpSendSettings,
+};
 
 /// The body of `POST /v1/http/send`.
 #[derive(Deserialize, Debug)]
@@ -21,30 +23,12 @@ pub struct SendRequest {
     /// rendered by the tab. The proxy builds the URL, headers and body from it exactly the way
     /// the desktop does after rendering.
     pub request: HttpRequest,
-    pub settings: SendSettings,
+    /// The resolved settings, values only. Where they came from is the tab's to record in
+    /// its timeline; the proxy only needs to obey them.
+    pub settings: HttpSendSettings,
     /// The cookies to start with. `None` means no jar at all: nothing sent, nothing kept.
     #[serde(default)]
     pub cookies: Option<Vec<Cookie>>,
-}
-
-/// The resolved send settings, values only. Where they came from (request, folder, workspace)
-/// is the tab's to record in its timeline; the proxy only needs to obey them.
-#[derive(Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SendSettings {
-    pub validate_certificates: bool,
-    pub follow_redirects: bool,
-    /// Milliseconds. Zero or negative means "no timeout", which the proxy caps regardless.
-    pub timeout_ms: i64,
-    pub send_cookies: bool,
-    pub store_cookies: bool,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct WireHeader {
-    pub name: String,
-    pub value: String,
 }
 
 /// One line of the reply stream. Tags are snake_case like the timeline event tags; fields are
@@ -68,9 +52,9 @@ pub enum Frame {
         url: String,
         remote_addr: Option<String>,
         version: Option<String>,
-        headers: Vec<WireHeader>,
+        headers: Vec<HttpResponseHeader>,
         /// The headers that were actually sent on the final hop, cookies and all.
-        request_headers: Vec<WireHeader>,
+        request_headers: Vec<HttpResponseHeader>,
         /// `Content-Length` as declared by the server, if it declared one.
         content_length: Option<u64>,
         /// Milliseconds from the start of the send to the response head.
