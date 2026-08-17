@@ -25,10 +25,14 @@ impl<'a> ClientDb<'a> {
 
         if workspaces.is_empty() {
             workspaces.push(self.upsert_workspace(
+                // NOTE: `Workspace::default()` is derived, so every `default_true` setting has
+                //  to be set explicitly here or the first workspace gets `false`.
                 &Workspace {
                     name: "Yaak".to_string(),
                     setting_follow_redirects: true,
                     setting_request_message_size: crate::models::DEFAULT_REQUEST_MESSAGE_SIZE,
+                    setting_send_cookies: true,
+                    setting_store_cookies: true,
                     setting_validate_certificates: true,
                     ..Default::default()
                 },
@@ -206,4 +210,29 @@ pub fn default_headers() -> Vec<HttpRequestHeader> {
             id: None,
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::init_in_memory;
+
+    #[test]
+    fn bootstraps_first_workspace_with_default_true_settings() {
+        let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+
+        let workspaces = db.list_workspaces().expect("Failed to list workspaces");
+        let workspace = workspaces.first().expect("No workspace was bootstrapped");
+
+        // Every setting with a `default_true` serde default must be true, since
+        // this workspace is built in Rust and never goes through deserialization
+        assert!(workspace.setting_send_cookies, "setting_send_cookies");
+        assert!(workspace.setting_store_cookies, "setting_store_cookies");
+        assert!(workspace.setting_follow_redirects, "setting_follow_redirects");
+        assert!(workspace.setting_validate_certificates, "setting_validate_certificates");
+        assert_eq!(
+            workspace.setting_request_message_size,
+            crate::models::DEFAULT_REQUEST_MESSAGE_SIZE
+        );
+    }
 }
