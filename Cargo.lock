@@ -11689,6 +11689,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower-http",
+ "ts-rs",
  "url",
  "uuid",
  "yaak-http",

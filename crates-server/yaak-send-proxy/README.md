@@ -121,6 +121,11 @@ construction, cancellable by closing the connection, readable with `curl`, and
 needs no upgrade handling on either side. A WebSocket only earns its keep when
 traffic is bidirectional, which a single send is not.
 
+The TypeScript side of this contract is generated from `src/wire.rs` by ts-rs
+into `bindings/` (run `cargo test -p yaak-send-proxy` after changing a frame)
+and published to the tab as `@yaakapp-internal/send-proxy`, so a change to the
+wire on one side is a type error on the other.
+
 `GET /v1/health` reports the version and the effective limits.
 
 ## What comes later

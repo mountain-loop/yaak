@@ -69,6 +69,7 @@
     "crates/yaak-web",
     "crates/yaak-ws",
     "crates-proxy/yaak-proxy-lib",
+    "crates-server/yaak-send-proxy",
     "apps/yaak-client",
     "apps/yaak-proxy"
   ],

@@ -31,8 +31,8 @@ import type {
   HttpResponseEventData,
   HttpSendSettings,
 } from "@yaakapp-internal/models";
+import type { Frame, SendRequest } from "@yaakapp-internal/send-proxy";
 import type { WorkerConnection } from "./connection";
-import type { ProxyFrame, ProxyRequestBody, ProxySendResponse } from "./proxy";
 import { proxySendUrl, readFrames } from "./proxy";
 
 /* -------------------------------- shapes --------------------------------- */
@@ -106,7 +106,7 @@ async function runSend(
   const timeline = new TimelineWriter(db, response.id, response.workspaceId);
   timeline.push(prepared.settingEvents);
 
-  const body: ProxyRequestBody = {
+  const body: SendRequest = {
     request: prepared.request,
     settings: prepared.settings,
     cookies: prepared.cookieJar?.cookies ?? null,
@@ -139,7 +139,7 @@ async function runSend(
   const chunks: Uint8Array[] = [];
   let received = 0;
   let lastProgress = startedAt;
-  let terminal: ProxyFrame | null = null;
+  let terminal: Frame | null = null;
 
   for await (const frame of readFrames(res.body)) {
     switch (frame.type) {
@@ -201,7 +201,7 @@ async function runSend(
   });
 }
 
-function headOf(frame: ProxySendResponse): ResponsePatch {
+function headOf(frame: Extract<Frame, { type: "response" }>): ResponsePatch {
   return {
     state: "connected",
     status: frame.status,

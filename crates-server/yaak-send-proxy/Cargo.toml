@@ -29,6 +29,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "io-util", "time", "net"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
+ts-rs = { workspace = true }
 url = "2"
 uuid = { version = "1", features = ["v4"] }
 yaak-http = { workspace = true }
