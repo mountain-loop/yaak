@@ -66,6 +66,8 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
   models_grpc_events: (payload, db) => db.rpc("models_grpc_events", payload),
   models_websocket_events: (payload, db) => db.rpc("models_websocket_events", payload),
   cmd_get_workspace_meta: (payload, db) => db.rpc("cmd_get_workspace_meta", payload),
+  cmd_delete_all_http_responses: (payload, db) => db.rpc("cmd_delete_all_http_responses", payload),
+  cmd_delete_send_history: (payload, db) => db.rpc("cmd_delete_send_history", payload),
 
   /* ------------------------------- sending ------------------------------- */
 
@@ -301,10 +303,6 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
   cmd_call_workspace_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_folder_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_http_authentication_action: ["Plugins aren't available in the browser yet", "plugins"],
-
-  // Sending history and its bookkeeping belong to the send slice.
-  cmd_delete_send_history: ["Sending isn't available in the browser yet", null],
-  cmd_delete_all_http_responses: ["Sending isn't available in the browser yet", null],
 
   cmd_send_feedback: ["Feedback goes through the desktop app for now", null],
 };

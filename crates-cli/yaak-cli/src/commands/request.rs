@@ -435,15 +435,12 @@ fn create(
     let workspace_id = resolve_workspace_id(ctx, workspace_id_arg.as_deref(), "request create")?;
     let name = name.unwrap_or_default();
     let url = url.unwrap_or_default();
-    let method = method.unwrap_or_else(|| "GET".to_string());
-
-    let request = HttpRequest {
-        workspace_id,
-        name,
-        method: method.to_uppercase(),
-        url,
-        ..Default::default()
-    };
+    let mut request = HttpRequest { workspace_id, name, url, ..Default::default() };
+    // Only override the method when one was given; `HttpRequest::default()` is the
+    // single place the fallback ("GET") is defined.
+    if let Some(method) = method {
+        request.method = method.to_uppercase();
+    }
 
     let created = ctx
         .db()

@@ -60,8 +60,22 @@ pub struct ProxySettingAuth {
     pub password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
+impl Default for ClientCertificate {
+    fn default() -> Self {
+        Self {
+            host: String::new(),
+            port: None,
+            crt_file: None,
+            key_file: None,
+            pfx_file: None,
+            passphrase: None,
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct ClientCertificate {
     pub host: String,
@@ -75,13 +89,18 @@ pub struct ClientCertificate {
     pub pfx_file: Option<String>,
     #[serde(default)]
     pub passphrase: Option<String>,
-    #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
+impl Default for DnsOverride {
+    fn default() -> Self {
+        Self { hostname: String::new(), ipv4: Vec::new(), ipv6: Vec::new(), enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct DnsOverride {
     pub hostname: String,
@@ -89,7 +108,6 @@ pub struct DnsOverride {
     pub ipv4: Vec<String>,
     #[serde(default)]
     pub ipv6: Vec<String>,
-    #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
 }
@@ -211,7 +229,6 @@ pub struct InheritedBoolSetting {
     #[serde(default)]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
-    #[serde(default = "default_true")]
     pub value: bool,
 }
 
@@ -447,7 +464,31 @@ impl UpsertModelInfo for Settings {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for Workspace {
+    fn default() -> Self {
+        Self {
+            model: "workspace".to_string(),
+            id: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            authentication: BTreeMap::new(),
+            authentication_type: None,
+            description: String::new(),
+            headers: Vec::new(),
+            name: String::new(),
+            encryption_key_challenge: None,
+            setting_validate_certificates: true,
+            setting_follow_redirects: true,
+            setting_request_timeout: 0,
+            setting_request_message_size: DEFAULT_REQUEST_MESSAGE_SIZE,
+            setting_dns_overrides: Vec::new(),
+            setting_send_cookies: true,
+            setting_store_cookies: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "workspaces")]
@@ -467,18 +508,13 @@ pub struct Workspace {
     pub encryption_key_challenge: Option<String>,
 
     // Settings
-    #[serde(default = "default_true")]
     pub setting_validate_certificates: bool,
-    #[serde(default = "default_true")]
     pub setting_follow_redirects: bool,
     pub setting_request_timeout: i32,
-    #[serde(default = "default_request_message_size")]
     pub setting_request_message_size: i32,
     #[serde(default)]
     pub setting_dns_overrides: Vec<DnsOverride>,
-    #[serde(default = "default_true")]
     pub setting_send_cookies: bool,
-    #[serde(default = "default_true")]
     pub setting_store_cookies: bool,
 }
 
@@ -984,11 +1020,16 @@ impl UpsertModelInfo for Environment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for EnvironmentVariable {
+    fn default() -> Self {
+        Self { enabled: true, name: String::new(), value: String::new(), id: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct EnvironmentVariable {
-    #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     pub name: String,
@@ -1013,7 +1054,35 @@ pub struct ParentHeaders {
     pub headers: Vec<HttpRequestHeader>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for Folder {
+    fn default() -> Self {
+        Self {
+            model: "folder".to_string(),
+            id: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            workspace_id: String::new(),
+            folder_id: None,
+            authentication: BTreeMap::new(),
+            authentication_type: None,
+            description: String::new(),
+            headers: Vec::new(),
+            name: String::new(),
+            sort_priority: 0.0,
+            setting_send_cookies: InheritedBoolSetting::default(),
+            setting_store_cookies: InheritedBoolSetting::default(),
+            setting_validate_certificates: InheritedBoolSetting::default(),
+            setting_follow_redirects: InheritedBoolSetting::default(),
+            setting_request_timeout: InheritedIntSetting::default(),
+            setting_request_message_size: InheritedIntSetting {
+                enabled: false,
+                value: DEFAULT_REQUEST_MESSAGE_SIZE,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "folders")]
@@ -1038,7 +1107,6 @@ pub struct Folder {
     pub setting_validate_certificates: InheritedBoolSetting,
     pub setting_follow_redirects: InheritedBoolSetting,
     pub setting_request_timeout: InheritedIntSetting,
-    #[serde(default = "default_request_message_size_setting")]
     pub setting_request_message_size: InheritedIntSetting,
 }
 
@@ -1152,11 +1220,16 @@ impl UpsertModelInfo for Folder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for HttpRequestHeader {
+    fn default() -> Self {
+        Self { enabled: true, name: String::new(), value: String::new(), id: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpRequestHeader {
-    #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     pub name: String,
@@ -1165,11 +1238,16 @@ pub struct HttpRequestHeader {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for HttpUrlParameter {
+    fn default() -> Self {
+        Self { enabled: true, name: String::new(), value: String::new(), id: None }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 pub struct HttpUrlParameter {
-    #[serde(default = "default_true")]
     #[ts(optional, as = "Option<bool>")]
     pub enabled: bool,
     /// Colon-prefixed parameters are treated as path parameters if they match, like `/users/:id`
@@ -1180,7 +1258,36 @@ pub struct HttpUrlParameter {
     pub id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for HttpRequest {
+    fn default() -> Self {
+        Self {
+            model: "http_request".to_string(),
+            id: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            workspace_id: String::new(),
+            folder_id: None,
+            authentication: BTreeMap::new(),
+            authentication_type: None,
+            body: BTreeMap::new(),
+            body_type: None,
+            description: String::new(),
+            headers: Vec::new(),
+            method: "GET".to_string(),
+            name: String::new(),
+            sort_priority: 0.0,
+            url: String::new(),
+            url_parameters: Vec::new(),
+            setting_send_cookies: InheritedBoolSetting::default(),
+            setting_store_cookies: InheritedBoolSetting::default(),
+            setting_validate_certificates: InheritedBoolSetting::default(),
+            setting_follow_redirects: InheritedBoolSetting::default(),
+            setting_request_timeout: InheritedIntSetting::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "http_requests")]
@@ -1201,7 +1308,6 @@ pub struct HttpRequest {
     pub body_type: Option<String>,
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
-    #[serde(default = "default_http_method")]
     pub method: String,
     pub name: String,
     pub sort_priority: f64,
@@ -1457,7 +1563,36 @@ impl Default for WebsocketMessageType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for WebsocketRequest {
+    fn default() -> Self {
+        Self {
+            model: "websocket_request".to_string(),
+            id: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            workspace_id: String::new(),
+            folder_id: None,
+            authentication: BTreeMap::new(),
+            authentication_type: None,
+            description: String::new(),
+            headers: Vec::new(),
+            message: String::new(),
+            name: String::new(),
+            sort_priority: 0.0,
+            url: String::new(),
+            url_parameters: Vec::new(),
+            setting_send_cookies: InheritedBoolSetting::default(),
+            setting_store_cookies: InheritedBoolSetting::default(),
+            setting_validate_certificates: InheritedBoolSetting::default(),
+            setting_request_message_size: InheritedIntSetting {
+                enabled: false,
+                value: DEFAULT_REQUEST_MESSAGE_SIZE,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "websocket_requests")]
@@ -1484,7 +1619,6 @@ pub struct WebsocketRequest {
     pub setting_send_cookies: InheritedBoolSetting,
     pub setting_store_cookies: InheritedBoolSetting,
     pub setting_validate_certificates: InheritedBoolSetting,
-    #[serde(default = "default_request_message_size_setting")]
     pub setting_request_message_size: InheritedIntSetting,
 }
 
@@ -2117,7 +2251,35 @@ impl UpsertModelInfo for GraphQlIntrospection {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, TS)]
+impl Default for GrpcRequest {
+    fn default() -> Self {
+        Self {
+            model: "grpc_request".to_string(),
+            id: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            workspace_id: String::new(),
+            folder_id: None,
+            authentication_type: None,
+            authentication: BTreeMap::new(),
+            description: String::new(),
+            message: String::new(),
+            metadata: Vec::new(),
+            method: None,
+            name: String::new(),
+            service: None,
+            sort_priority: 0.0,
+            url: String::new(),
+            setting_validate_certificates: InheritedBoolSetting::default(),
+            setting_request_message_size: InheritedIntSetting {
+                enabled: false,
+                value: DEFAULT_REQUEST_MESSAGE_SIZE,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "grpc_requests")]
@@ -2143,7 +2305,6 @@ pub struct GrpcRequest {
     /// Server URL (http for plaintext or https for secure)
     pub url: String,
     pub setting_validate_certificates: InheritedBoolSetting,
-    #[serde(default = "default_request_message_size_setting")]
     pub setting_request_message_size: InheritedIntSetting,
 }
 
@@ -2794,20 +2955,10 @@ impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
     }
 }
 
-fn default_true() -> bool {
-    true
-}
-
-fn default_request_message_size() -> i32 {
-    DEFAULT_REQUEST_MESSAGE_SIZE
-}
-
+/// Only used as a `from_row` fallback for an unparseable settings column. The
+/// value a *new* model gets comes from that model's `Default` impl.
 fn default_request_message_size_setting() -> InheritedIntSetting {
     InheritedIntSetting { enabled: false, value: DEFAULT_REQUEST_MESSAGE_SIZE }
-}
-
-fn default_http_method() -> String {
-    "GET".to_string()
 }
 
 #[macro_export]
@@ -2951,5 +3102,67 @@ impl AnyModel {
             AnyModel::Workspace(v) => v.name,
             _ => "No Name".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every model below carries `#[serde(default)]` at the container level, so a
+    /// missing key is filled from `Default::default()`, which makes each `Default`
+    /// impl the single definition of that model's defaults.
+    ///
+    /// Deserializing `{}` therefore equals `Default::default()` by construction
+    /// today. What this catches is the two ways that can come apart again, both of
+    /// which have already bitten us:
+    ///
+    /// 1. A field-level `#[serde(default = "...")]` (or bare `#[serde(default)]`)
+    ///    added back on a field whose `Default` says something else. That is exactly
+    ///    the shape of the bug this replaced: `setting_send_cookies` deserialized as
+    ///    true but a derived `Default` produced false, so the bootstrapped workspace
+    ///    silently sent no cookies.
+    /// 2. The container-level `#[serde(default)]` being dropped, which turns every
+    ///    missing key into a deserialization error instead.
+    macro_rules! assert_default_matches_serde {
+        ($($t:ty),+ $(,)?) => {
+            $(
+                assert_eq!(
+                    serde_json::from_str::<$t>("{}").expect(concat!(
+                        stringify!($t),
+                        " must deserialize from an empty object"
+                    )),
+                    <$t>::default(),
+                    concat!(stringify!($t), ": Default::default() disagrees with its serde defaults"),
+                );
+            )+
+        };
+    }
+
+    #[test]
+    fn defaults_match_serde_defaults() {
+        assert_default_matches_serde!(
+            Workspace,
+            HttpRequest,
+            Folder,
+            GrpcRequest,
+            WebsocketRequest,
+            HttpRequestHeader,
+            HttpUrlParameter,
+            EnvironmentVariable,
+            DnsOverride,
+            ClientCertificate,
+            InheritedBoolSetting,
+            InheritedIntSetting,
+        );
+    }
+
+    #[test]
+    fn defaults_carry_their_model_name() {
+        assert_eq!(Workspace::default().model, "workspace");
+        assert_eq!(HttpRequest::default().model, "http_request");
+        assert_eq!(Folder::default().model, "folder");
+        assert_eq!(GrpcRequest::default().model, "grpc_request");
+        assert_eq!(WebsocketRequest::default().model, "websocket_request");
     }
 }
