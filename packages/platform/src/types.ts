@@ -262,6 +262,11 @@ export interface PlatformCapabilities {
    * chrome should be reserved or drawn.
    */
   windowChrome: boolean;
+  /**
+   * The app zooms its own interface, and so owns Cmd/Ctrl `+`, `-` and `0`.
+   * False in a browser, where those keys are already the browser's.
+   */
+  interfaceZoom: boolean;
   /** The plugin runtime. */
   plugins: boolean;
   /** Workspace encryption backed by a key the host keeps. */

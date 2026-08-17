@@ -124,7 +124,7 @@ export function SettingsHotkeys() {
             <HotkeyRow
               key={action}
               action={action}
-              currentKeys={hotkeys[action]}
+              currentKeys={hotkeys[action] ?? []}
               defaultKeys={defaultHotkeys[action]}
               onSave={async (keys) => {
                 const newHotkeys = { ...settings.hotkeys };
