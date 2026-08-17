@@ -4,7 +4,48 @@ on:
     tags: [v*]
 
 jobs:
+  prepare-release:
+    if: github.repository == 'mountain-loop/yaak'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Ensure exactly one draft release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          releases=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
+          matches=$(jq -c --arg tag "$GITHUB_REF_NAME" '[.[] | select(.tag_name == $tag)]' <<<"$releases")
+          count=$(jq 'length' <<<"$matches")
+
+          if [[ "$count" -gt 1 ]]; then
+            echo "Found $count releases for $GITHUB_REF_NAME; refusing to split artifacts"
+            jq -r '.[] | "- id=\(.id) draft=\(.draft) url=\(.html_url)"' <<<"$matches"
+            exit 1
+          fi
+
+          if [[ "$count" -eq 0 ]]; then
+            gh release create "$GITHUB_REF_NAME" \
+              --draft \
+              --prerelease \
+              --title "Release ${GITHUB_REF_NAME#v}" \
+              --notes '<!-- generated-by-yaak-releases -->'
+            exit 0
+          fi
+
+          if [[ "$(jq -r '.[0].draft' <<<"$matches")" != "true" ]]; then
+            echo "Release $GITHUB_REF_NAME is already published; refusing to modify it"
+            exit 1
+          fi
+
+          if [[ "$(jq -r '.[0].prerelease' <<<"$matches")" != "true" ]]; then
+            echo "Release $GITHUB_REF_NAME is not marked as a prerelease"
+            exit 1
+          fi
+
   build-artifacts:
+    needs: prepare-release
     if: github.repository == 'mountain-loop/yaak'
     permissions:
       contents: write
@@ -232,3 +273,18 @@ jobs:
           Copy-Item $setupSig $destSig
           gh release upload "${{ github.ref_name }}" "$dest" --clobber
           gh release upload "${{ github.ref_name }}" "$destSig" --clobber
+
+  verify-artifacts:
+    name: Verify release artifacts
+    needs: build-artifacts
+    if: github.repository == 'mountain-loop/yaak'
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify complete release asset set
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/verify-release-assets.sh "$GITHUB_REF_NAME"
