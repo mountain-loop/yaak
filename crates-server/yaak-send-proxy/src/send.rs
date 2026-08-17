@@ -202,6 +202,12 @@ impl PreparedSend {
             let _ = cancel_tx.send(true);
         });
 
+        // The first line of what the proxy adds to the timeline says what did the sending,
+        // so a response's timeline is honest about the hop between the tab and the server.
+        let _ = event_tx.try_send(HttpResponseEvent::Info(format!(
+            "Executed by yaak-send-proxy {}",
+            env!("CARGO_PKG_VERSION")
+        )));
         if self.timeout_capped {
             let _ = event_tx.try_send(HttpResponseEvent::Info(format!(
                 "Timeout set to {:?} (this proxy's ceiling)",
