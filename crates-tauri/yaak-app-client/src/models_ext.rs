@@ -12,10 +12,10 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
 use yaak_models::error::Result;
+use yaak_models::hooks::Role;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
 
-const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
 const MODEL_CHANGES_POLL_INTERVAL_MS: u64 = 1000;
 const MODEL_CHANGES_POLL_BATCH_SIZE: usize = 200;
 
@@ -152,27 +152,30 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 };
 
-            let db = query_manager.connect();
-            if let Err(err) = db.prune_model_changes_older_than_hours(MODEL_CHANGES_RETENTION_HOURS)
+            if let Err(err) =
+                yaak_models::hooks::before_serving(&query_manager.connect(), Role::Owner)
             {
-                error!("Failed to prune model_changes rows on startup: {err:?}");
+                error!("Startup hook failed: {err:?}");
             }
             // Only stream writes that happen after this app launch.
             let cursor = ModelChangeCursor::from_launch_time();
 
             let poll_query_manager = query_manager.clone();
 
-            // GC response bodies orphaned by cascade deletes, which historically
-            // didn't clean the blob DB or responses directory
+            // Off the startup path: this scans the whole blob database
             let gc_query_manager = query_manager.clone();
             let gc_blob_manager = blob_manager.clone();
             let gc_responses_dir = app_path.join("responses");
             tauri::async_runtime::spawn_blocking(move || {
                 let db = gc_query_manager.connect();
-                match db.delete_orphaned_response_bodies(&gc_blob_manager, &gc_responses_dir) {
+                match yaak_models::hooks::housekeeping(
+                    &db,
+                    &gc_blob_manager,
+                    Some(&gc_responses_dir),
+                ) {
                     Ok(0) => {}
                     Ok(n) => log::info!("Deleted {n} orphaned response bodies"),
-                    Err(e) => error!("Failed to delete orphaned response bodies: {e:?}"),
+                    Err(e) => error!("Housekeeping hook failed: {e:?}"),
                 }
             });
 

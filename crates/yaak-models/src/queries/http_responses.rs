@@ -50,10 +50,8 @@ impl<'a> ClientDb<'a> {
     /// "{response_id}" for a response body, "{response_id}.request" for the
     /// request that produced it — so ownership is the id's first segment.
     ///
-    /// Split out from [`Self::delete_orphaned_response_bodies`] because a
-    /// browser has no filesystem: it stores bodies only as blob chunks, and
-    /// runs this half alone. Both hosts therefore answer "which bodies have no
-    /// owning row" the same way.
+    /// The blob half of [`Self::delete_orphaned_response_bodies`], on its own
+    /// for hosts with no filesystem to hold body files. See `crate::hooks`.
     ///
     /// Returns the number of orphaned bodies deleted.
     pub fn delete_orphaned_response_body_blobs(&self, blobs: &BlobManager) -> Result<usize> {

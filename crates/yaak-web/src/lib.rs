@@ -26,6 +26,7 @@ use std::sync::mpsc;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
+use yaak_models::hooks::Role;
 use yaak_models::models::AnyModel;
 use yaak_models::models_ops;
 use yaak_models::query_manager::QueryManager;
@@ -91,21 +92,20 @@ pub async fn boot() -> Result<()> {
     let (queries, blobs, events) =
         yaak_models::init_standalone(DB_NAME, BLOB_DB_NAME).map_err(js_error)?;
 
+    // The same startup upkeep the desktop does, from the same module; only the
+    // scheduling is this host's.
+    if let Err(e) = yaak_models::hooks::before_serving(&queries.connect(), Role::Owner) {
+        web_sys::console::warn_2(&"Startup hook failed".into(), &js_error(e));
+    }
+
     HOST.with(|h| *h.borrow_mut() = Some(Host { queries, blobs, events }));
 
-    spawn_orphaned_body_sweep();
+    spawn_housekeeping();
 
     Ok(())
 }
 
-/// Delete blob-stored response bodies whose owning row is gone, once, in the
-/// background.
-///
-/// The desktop does the same thing at startup (`delete_orphaned_response_bodies`
-/// on a blocking thread) because deleting a request, folder or workspace
-/// cascades to its responses through the generic row delete, which never
-/// touched the bodies. A browser tab inherits that exactly — minus the
-/// filesystem half, since bodies here are only ever blob chunks.
+/// Run the housekeeping hook once, in the background.
 ///
 /// Deferred to a macrotask rather than awaited: every command in the worker
 /// waits on `boot()`, so doing this inline would put a full scan of the blob
@@ -113,10 +113,7 @@ pub async fn boot() -> Result<()> {
 /// be enough — its task is queued as a microtask, ahead of the `message`
 /// events the tab has already posted. Yielding through `setTimeout` puts the
 /// sweep behind them.
-///
-/// Safe against a send that is already running: the response row is written
-/// before its body chunks are.
-fn spawn_orphaned_body_sweep() {
+fn spawn_housekeeping() {
     wasm_bindgen_futures::spawn_local(async {
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
@@ -124,9 +121,11 @@ fn spawn_orphaned_body_sweep() {
         });
         let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
 
+        // No filesystem here, so no responses directory: bodies are only ever
+        // blob chunks.
         let swept = with_host(|host| {
             let db = host.queries.connect();
-            db.delete_orphaned_response_body_blobs(&host.blobs).map_err(js_error)
+            yaak_models::hooks::housekeeping(&db, &host.blobs, None).map_err(js_error)
         });
 
         match swept {
@@ -134,9 +133,7 @@ fn spawn_orphaned_body_sweep() {
             Ok(n) => {
                 web_sys::console::info_1(&format!("Deleted {n} orphaned response bodies").into())
             }
-            Err(e) => {
-                web_sys::console::warn_2(&"Failed to delete orphaned response bodies".into(), &e)
-            }
+            Err(e) => web_sys::console::warn_2(&"Housekeeping hook failed".into(), &e),
         }
     });
 }

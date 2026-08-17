@@ -1357,15 +1357,6 @@ pub fn run() {
                         let info = history::get_or_upsert_launch_info(&h);
                         debug!("Launched Yaak {:?}", info);
                     });
-
-                    // Cancel pending requests
-                    let h = app_handle.clone();
-                    tauri::async_runtime::block_on(async move {
-                        let db = h.db();
-                        let _ = db.cancel_pending_http_responses();
-                        let _ = db.cancel_pending_grpc_connections();
-                        let _ = db.cancel_pending_websocket_connections();
-                    });
                 }
                 RunEvent::WindowEvent { event: WindowEvent::Focused(true), label, .. } => {
                     #[cfg(any(target_os = "linux", target_os = "macos"))]
