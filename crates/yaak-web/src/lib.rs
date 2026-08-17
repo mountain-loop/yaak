@@ -312,6 +312,28 @@ fn dispatch(
             to_json(db.get_or_create_workspace_meta(&workspace.id).map_err(js_error)?)
         }
 
+        "cmd_delete_all_http_responses" => {
+            let req: RequestIdReq = from_js(payload)?;
+            host.queries
+                .connect()
+                .delete_all_http_responses_for_request(&req.request_id, source)
+                .map_err(js_error)?;
+            to_json(())
+        }
+
+        "cmd_delete_send_history" => {
+            let req: WorkspaceIdReq = from_js(payload)?;
+            host.queries
+                .with_tx(|tx| {
+                    tx.delete_all_http_responses_for_workspace(&req.workspace_id, source)?;
+                    tx.delete_all_grpc_connections_for_workspace(&req.workspace_id, source)?;
+                    tx.delete_all_websocket_connections_for_workspace(&req.workspace_id, source)?;
+                    Ok::<(), yaak_models::error::Error>(())
+                })
+                .map_err(js_error)?;
+            to_json(())
+        }
+
         other => Err(js_error(format!("yaak-web: `{other}` is not a command this host answers"))),
     }
 }
