@@ -6682,12 +6682,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "regex-lite"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
-
-[[package]]
 name = "regex-syntax"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11566,7 +11560,6 @@ dependencies = [
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
- "regex-lite",
  "rusqlite",
  "schemars 0.8.22",
  "sea-query",
