@@ -1,4 +1,4 @@
-use yaak_models::models::HttpUrlParameter;
+use crate::models::HttpUrlParameter;
 
 pub fn apply_path_placeholders(
     url: &str,
@@ -37,9 +37,9 @@ fn replace_path_placeholder(p: &HttpUrlParameter, url: &str) -> String {
     // A path placeholder is terminated by `/`, `?`, `#`, end-of-string, or a literal `:`.
     // The `:` boundary is what lets `/:id:increment-importance` substitute the `:id`
     // placeholder while leaving `:increment-importance` as literal text.
-    let re = regex::Regex::new(format!("(/){}([/?#:]|$)", p.name).as_str()).unwrap();
+    let re = regex_lite::Regex::new(format!("(/){}([/?#:]|$)", p.name).as_str()).unwrap();
     let result = re
-        .replace_all(url, |cap: &regex::Captures| {
+        .replace_all(url, |cap: &regex_lite::Captures| {
             format!(
                 "{}{}{}",
                 cap[1].to_string(),
@@ -54,7 +54,7 @@ fn replace_path_placeholder(p: &HttpUrlParameter, url: &str) -> String {
 #[cfg(test)]
 mod placeholder_tests {
     use crate::path_placeholders::{apply_path_placeholders, replace_path_placeholder};
-    use yaak_models::models::{HttpRequest, HttpUrlParameter};
+    use crate::models::{HttpRequest, HttpUrlParameter};
 
     #[test]
     fn placeholder_middle() {

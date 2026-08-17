@@ -1,0 +1,100 @@
+//! What crosses the wire between a tab and this proxy.
+//!
+//! One `POST /v1/http/send` carries a request the tab has already rendered —
+//! templates resolved, inheritance applied — plus the send settings and the
+//! cookies the send starts with. The reply is a stream of newline-delimited
+//! JSON frames: timeline events as they happen, the response head as soon as
+//! headers arrive, body chunks as they are read, and one terminal frame.
+//!
+//! Nothing here names a workspace, a request id, or a response id. The proxy
+//! does not know what the tab will call this response; it only knows what came
+//! back.
+
+use serde::{Deserialize, Serialize};
+use yaak_models::models::{Cookie, HttpRequest, HttpResponseEventData};
+
+/// The body of `POST /v1/http/send`.
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SendRequest {
+    /// The request to send, in the desktop's own model shape but with every template already
+    /// rendered by the tab. The proxy builds the URL, headers and body from it exactly the way
+    /// the desktop does after rendering.
+    pub request: HttpRequest,
+    pub settings: SendSettings,
+    /// The cookies to start with. `None` means no jar at all: nothing sent, nothing kept.
+    #[serde(default)]
+    pub cookies: Option<Vec<Cookie>>,
+}
+
+/// The resolved send settings, values only. Where they came from (request, folder, workspace)
+/// is the tab's to record in its timeline; the proxy only needs to obey them.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SendSettings {
+    pub validate_certificates: bool,
+    pub follow_redirects: bool,
+    /// Milliseconds. Zero or negative means "no timeout", which the proxy caps regardless.
+    pub timeout_ms: i64,
+    pub send_cookies: bool,
+    pub store_cookies: bool,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WireHeader {
+    pub name: String,
+    pub value: String,
+}
+
+/// One line of the reply stream. Tags are snake_case like the timeline event tags; fields are
+/// camelCase like every model the tab stores.
+#[derive(Serialize, Debug)]
+#[serde(
+    tag = "type",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum Frame {
+    /// A timeline event, in the same shape the desktop stores. Interleaved with everything
+    /// else in the order the engine produced it.
+    Event { event: HttpResponseEventData },
+    /// The response head. Sent once, as soon as the final hop's headers are in — before any of
+    /// the body — so the tab can show status and headers while the body streams.
+    Response {
+        status: u16,
+        status_reason: Option<String>,
+        /// The URL that answered, after redirects.
+        url: String,
+        remote_addr: Option<String>,
+        version: Option<String>,
+        headers: Vec<WireHeader>,
+        /// The headers that were actually sent on the final hop, cookies and all.
+        request_headers: Vec<WireHeader>,
+        /// `Content-Length` as declared by the server, if it declared one.
+        content_length: Option<u64>,
+        /// Milliseconds from the start of the send to the response head.
+        elapsed_headers: u64,
+        /// Milliseconds spent in DNS on the last lookup, or zero.
+        elapsed_dns: u64,
+    },
+    /// A piece of the response body, decompressed, base64-encoded.
+    Body { data: String },
+    /// The send finished. The last frame on a successful stream.
+    Done {
+        /// Milliseconds from the start of the send to the end of the body.
+        elapsed: u64,
+        /// Bytes of body relayed, after decompression.
+        content_length: u64,
+        /// Bytes on the wire as declared by the server, or the relayed size when unknown.
+        content_length_compressed: u64,
+        /// The jar as the send left it, for the tab to persist. `None` when the tab sent none.
+        cookies: Option<Vec<Cookie>>,
+    },
+    /// The send failed. The last frame on a failed stream. Cookies collected before the failure
+    /// still come back — the transaction may have set some before the hop that failed.
+    Error {
+        message: String,
+        cookies: Option<Vec<Cookie>>,
+    },
+}

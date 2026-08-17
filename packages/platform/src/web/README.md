@@ -24,8 +24,10 @@ installs the Tauri host exactly as before.
 
 ```
 tab (index.ts, commands.ts) ──MessagePort──▶ worker.ts ──▶ @yaakapp-internal/web (wasm)
-                            ◀── model_writes ──          crates/yaak-web → yaak-models → SQLite
-                                                                        └─ pages in IndexedDB
+        │                   ◀── model_writes ──          crates/yaak-web → yaak-models → SQLite
+        │                                                               └─ pages in IndexedDB
+        └── send.ts ──POST rendered request──▶ yaak-send-proxy (crates-server) ──▶ the internet
+                     ◀── NDJSON: events, response, body, cookies ──
 ```
 
 | File | What it is |
@@ -33,13 +35,19 @@ tab (index.ts, commands.ts) ──MessagePort──▶ worker.ts ──▶ @yaak
 | `index.ts` | The `Platform` implementation. |
 | `commands.ts` | The command table: model commands forward to the worker; the rest is fixed answers and refusals-with-a-reason. |
 | `connection.ts` | A tab's end of the wire: request/response over a `MessagePort`, event delivery, and the tab's identity (`label`). |
+| `send.ts` | Sending: the worker renders (`prepare_http_send`), the proxy executes, this file stores what comes back where the desktop stores it. |
+| `proxy.ts` | The proxy's location and wire shapes, mirrored by hand from `crates-server/yaak-send-proxy/src/wire.rs`. |
 | `worker.ts` | The process that owns the database. Loads the wasm, opens the DB once, answers each port, fans `model_writes` out to every port. |
 | `protocol.ts` | The message shapes both sides import. |
 | `errors.ts` | `UnsupportedCommandError`, the structured refusal. |
 | `storage.ts` | `navigator.storage.persist()`. |
 
 The Rust side is `crates/yaak-web` (`@yaakapp-internal/web`): `boot()`,
-`rpc(cmd, payload, label)` returning `{ result, events }`, and blob get/put.
+`rpc(cmd, payload, label)` returning `{ result, events }`, blob get/put, and
+`prepare_http_send(payload)` — the database half of a send (environment chain,
+inherited headers and auth, request settings, cookie jar, rendering), which is
+`yaak_models::render::render_http_request`, the same function the desktop
+renders with.
 Its `pkg/` is committed; rebuilding needs a clang with a WebAssembly backend
 (`brew install llvm`), and `build-wasm.cjs` skips with a notice when there
 isn't one, so a desktop `npm run bootstrap` never depends on it.
@@ -70,13 +78,14 @@ Behaviours worth knowing before changing anything:
 ## Commands
 
 109 commands are declared in `@yaakapp-internal/rpc-schema`. This host answers
-31, declines 44 by name with a reason, and refuses the remaining 34 generically.
+32, declines 43 by name with a reason, and refuses the remaining 34 generically.
 
-### Implemented (31)
+### Implemented (32)
 
 | Group | Commands |
 | --- | --- |
 | Models | `models_workspace_models`, `models_upsert`, `models_delete`, `models_duplicate`, `models_get_settings`, `models_get_graphql_introspection`, `models_upsert_graphql_introspection`, `models_grpc_events`, `models_websocket_events` |
+| Sending | `cmd_send_http_request` (through the send proxy; see below) |
 | App | `cmd_metadata`, `cmd_get_workspace_meta`, `cmd_default_headers`, `cmd_get_themes`, `cmd_check_for_updates`, `cmd_dismiss_notification`, `cmd_plugin_init_errors` |
 | Bodies | `cmd_http_response_body`, `cmd_http_response_body_path`, `cmd_http_request_body`, `cmd_get_http_response_events`, `cmd_get_sse_events` |
 | Plugin surfaces (empty results) | `cmd_http_request_actions`, `cmd_websocket_request_actions`, `cmd_grpc_request_actions`, `cmd_workspace_actions`, `cmd_folder_actions`, `cmd_template_function_summaries`, `cmd_get_http_authentication_summaries`, `cmd_get_http_authentication_config` |
@@ -97,7 +106,7 @@ Some of these answer honestly rather than fully, and the difference matters:
 - `cmd_metadata` reports empty strings for the data, log, plugin and project
   directories. There is no filesystem behind this host.
 
-### Declined by name (44)
+### Declined by name (43)
 
 Each returns an `UnsupportedCommandError` carrying `cmd`, a user-facing
 `message`, and the `capability` a caller should have checked. The UI turns it
@@ -105,7 +114,7 @@ into a toast.
 
 | Reason | Commands |
 | --- | --- |
-| Sending isn't available yet (slice 2) | `cmd_send_http_request`, `cmd_send_ephemeral_request`, `cmd_delete_send_history`, `cmd_delete_all_http_responses`, `cmd_import_url` |
+| Sending, the parts not wired yet | `cmd_send_ephemeral_request`, `cmd_delete_send_history`, `cmd_delete_all_http_responses`, `cmd_import_url` |
 | No plugin runtime | `cmd_reload_plugins`, `cmd_plugin_info`, `cmd_plugins_search`, `cmd_plugins_install`, `cmd_plugins_install_from_directory`, `cmd_plugins_uninstall`, `cmd_plugins_updates`, `cmd_plugins_update_all`, `cmd_template_function_config`, `cmd_template_tokens_to_string`, `cmd_call_http_request_action`, `cmd_call_websocket_request_action`, `cmd_call_grpc_request_action`, `cmd_call_workspace_action`, `cmd_call_folder_action`, `cmd_call_http_authentication_action`, `cmd_curl_to_request`, `cmd_format_graphql` |
 | No filesystem | `cmd_import_data`, `cmd_export_data`, `cmd_save_response`, `cmd_save_base64_to_binary` |
 | Needs a real socket | `cmd_grpc_reflect`, `cmd_grpc_go`, `cmd_delete_all_grpc_connections`, `cmd_ws_connect`, `cmd_ws_send`, `cmd_ws_close`, `cmd_ws_delete_connections` |
@@ -129,7 +138,7 @@ Reported honestly, so callers gate on the question rather than on the host:
 
 | True | False |
 | --- | --- |
-| `cookieJar` (the jar stores and edits here; only filling it needs the sender) | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `timeline`, `multiWindow`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
+| `httpSending`, `timeline`, `cookieJar` | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `multiWindow`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
 
 `multiWindow: false` means the host cannot open a *second window* on demand —
 what `cmd_new_child_window` does for Settings and workspace switching. It is not
@@ -168,26 +177,35 @@ other's writes for an echo of their own and drop them.
   crates for their types), so the crate declares the handful of request shapes
   it needs locally, and `commands.ts` stays typed against `RpcSchema`.
 
-## What slice 2 (the send proxy) will need from this layer
+## Sending
 
-Sending becomes a stateless hosted service; this layer stays the only place data
-lives. Concretely:
+A page cannot see a response the way a desktop app can — CORS exposes a handful
+of headers, redirects are followed silently, there is no timeline — so the
+network half of a send runs on a small stateless proxy,
+`crates-server/yaak-send-proxy`. This layer stays the only place data lives:
 
-1. **A rendered request to send.** The client assembles `HttpSendInputs` and
-   posts it. Nothing about the workspace is uploaded except what this request
-   needs.
-2. **Cookies out, cookies in.** The active `cookie_jar` model's `cookies` array
-   goes up with the request; the proxy returns the jar as the exchange left it,
-   and the client upserts it back through `models_upsert` like any other write.
-   The proxy keeps nothing.
-3. **A response body sink.** `blob_put(responseId, bytes)` in the worker
-   writes through the desktop's `blob_manager`, chunked the way it chunks.
-   Streaming will want an append path rather than one whole-body write.
-4. **A request body sink** under `${responseId}.request`, which
-   `cmd_http_request_body` already reads.
-5. **Response and timeline models.** `cmd_send_http_request` currently declines;
-   it will instead upsert an `http_response` as the exchange progresses, plus
-   `http_response_event` rows once `timeline` becomes true. Both flow through
-   the same `write()` helper, so other tabs see a send land live.
-6. **Blob cleanup is the desktop's.** `delete_http_response` and
-   `delete_workspace` in `yaak-models` already remove blob chunks.
+1. `send.ts` creates the `http_response` row (state `initialized`), as the
+   desktop does, so anything that goes wrong lands in the response pane.
+2. The worker resolves and renders the request (`prepare_http_send`): the
+   environment chain, inherited headers and auth, request settings, the cookie
+   jar. This is the desktop's `HttpSendInputs`, in Rust, on the same model layer,
+   with `yaak_models::render::render_http_request`. Variables (`${[ name ]}`)
+   render here with no plugins involved.
+3. The rendered request, the settings and the jar's cookies are POSTed to the
+   proxy. It streams back timeline events, the response head, body chunks and a
+   terminal frame carrying the jar as the send left it.
+4. Each frame is written where the desktop writes it: the response row as it
+   progresses, `http_response_event` rows for the timeline (which is why
+   `timeline` is true), the body under the response id via `blob_put`, and the
+   cookie jar through `models_upsert`. Every write fans out to every tab.
+
+**What sends today:** any saved request whose templates are variables and whose
+authentication is none, or an inline header. Sending a request that needs a
+template *function* (`${[ timestamp() ]}`) or an authentication plugin (bearer,
+basic, OAuth, …) is refused before anything leaves the tab, with a message naming
+what it needs; those light up when plugins run in the browser. Requests with a
+file body or multipart file fields are refused by the proxy (it has no access to
+your files, and must not read its own).
+
+The proxy URL is `VITE_YAAK_SEND_PROXY_URL` at build time, defaulting to
+`http://127.0.0.1:9227` (see `proxy.ts`). Run one with `cargo run -p yaak-send-proxy`.

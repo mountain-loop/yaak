@@ -1,4 +1,4 @@
-use crate::dns::LocalhostResolver;
+use crate::dns::{AddressFilter, LocalhostResolver};
 use crate::error::Result;
 use log::{debug, info, warn};
 use reqwest::{Client, ClientBuilder, Proxy, redirect};
@@ -103,13 +103,18 @@ pub struct HttpConnectionOptions {
     pub proxy: HttpConnectionProxySetting,
     pub client_certificate: Option<ClientCertificateConfig>,
     pub dns_overrides: Vec<DnsOverride>,
+    /// Refuse connections to addresses a hostname resolves to. `None` means
+    /// every resolved address is connectable, which is what the desktop wants:
+    /// a user sending to their own machine or their own network is the point.
+    /// A hosted sender is the caller that supplies one.
+    pub address_filter: Option<AddressFilter>,
 }
 
 impl HttpConnectionOptions {
     /// Build a reqwest Client and return it along with the DNS resolver.
     /// The resolver is returned separately so it can be configured per-request
     /// to emit DNS timing events to the appropriate channel.
-    pub(crate) fn build_client(&self) -> Result<(ConfiguredClient, Arc<LocalhostResolver>)> {
+    pub fn build_client(&self) -> Result<(ConfiguredClient, Arc<LocalhostResolver>)> {
         let mut client = client_builder()
             .connection_verbose(true)
             .redirect(redirect::Policy::none())
@@ -135,7 +140,10 @@ impl HttpConnectionOptions {
         }
 
         // Configure DNS resolver - keep a reference to configure per-request
-        let resolver = LocalhostResolver::new(self.dns_overrides.clone());
+        let resolver = LocalhostResolver::with_address_filter(
+            self.dns_overrides.clone(),
+            self.address_filter.clone(),
+        );
         client = client.dns_resolver(resolver.clone());
 
         // Configure proxy

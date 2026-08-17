@@ -10,6 +10,12 @@
 /** Tab → worker */
 export type ToWorker =
   | { type: "rpc"; id: number; cmd: string; payload: unknown; label: string }
+  /**
+   * The prepare half of a send: resolve, inherit and render a request against
+   * the database. Its own message rather than an `rpc` command because it is
+   * async in the engine (rendering is), where every `rpc` command is not.
+   */
+  | { type: "prepare_http_send"; id: number; payload: unknown }
   | { type: "blob_get"; id: number; blobId: string }
   | { type: "blob_put"; id: number; blobId: string; bytes: ArrayBuffer }
   | { type: "blob_delete"; id: number; blobId: string }

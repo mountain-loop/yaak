@@ -21,6 +21,7 @@ import type { RpcSchema } from "@yaakapp-internal/rpc-schema";
 import type { CapabilityName, RpcPayload } from "../types";
 import type { WorkerConnection } from "./connection";
 import { unsupported } from "./errors";
+import { sendHttpRequest } from "./send";
 
 export type AppCmd = keyof RpcSchema;
 
@@ -65,6 +66,18 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
   models_grpc_events: (payload, db) => db.rpc("models_grpc_events", payload),
   models_websocket_events: (payload, db) => db.rpc("models_websocket_events", payload),
   cmd_get_workspace_meta: (payload, db) => db.rpc("cmd_get_workspace_meta", payload),
+
+  /* ------------------------------- sending ------------------------------- */
+
+  // The tab renders and stores; a stateless proxy puts the bytes on the wire.
+  // See send.ts for the whole shape of it.
+  cmd_send_http_request: (payload, db) =>
+    sendHttpRequest(
+      db,
+      text(payload, "requestId"),
+      str(payload, "environmentId"),
+      str(payload, "cookieJarId"),
+    ),
 
   /* -------------------------------- app ---------------------------------- */
 
@@ -203,9 +216,8 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
     return bytes == null ? null : Array.from(bytes);
   },
 
-  async cmd_get_http_response_events() {
-    return [];
-  },
+  // The rows the sender wrote for that response, same table as the desktop.
+  cmd_get_http_response_events: (payload, db) => db.rpc("cmd_get_http_response_events", payload),
 
   async cmd_get_sse_events() {
     return [];
@@ -237,16 +249,10 @@ const HTTP_AUTHENTICATION_SUMMARIES = [
  * while the first is a slice away.
  */
 const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityName | null]>> = {
-  // Sending — the next slice. Everything else about a request works today;
-  // only the part that puts bytes on the network is missing.
-  cmd_send_http_request: [
-    "Sending isn't available in the browser yet — everything else about this request is saved",
-    null,
-  ],
-  cmd_send_ephemeral_request: [
-    "Sending isn't available in the browser yet — everything else about this request is saved",
-    null,
-  ],
+  // Saved requests send through the proxy (see send.ts). Ephemeral sends — the
+  // ones nothing stores, used for GraphQL introspection — take the same road but
+  // return the body inline; not wired yet.
+  cmd_send_ephemeral_request: ["Sending unsaved requests isn't available in the browser yet", null],
   cmd_curl_to_request: ["Importing from cURL needs a plugin, which this host doesn't run", null],
 
   // Protocols that need a real socket.

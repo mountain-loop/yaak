@@ -7,11 +7,12 @@
  * the origin, so two tabs stay coherent for the same reason two desktop windows
  * do: one process holds the data and pushes every write to all of them.
  *
- * What a page genuinely cannot do is not faked. There is no file dialog, no
- * second window, no clipboard read without a prompt, and — in this slice — no
- * sending. Those report false through `capabilities` and refuse with a reason
- * if called anyway, so a missing feature shows up as a disabled control or a
- * toast that explains itself, never as a silent no-op.
+ * Sending goes through a small stateless proxy, because a page cannot see a
+ * response the way a desktop app can (see send.ts). What a page genuinely
+ * cannot do is not faked: there is no file dialog, no second window, no
+ * clipboard read without a prompt. Those report false through `capabilities`
+ * and refuse with a reason if called anyway, so a missing feature shows up as a
+ * disabled control or a toast that explains itself, never as a silent no-op.
  */
 
 import type {
@@ -32,17 +33,21 @@ import { requestPersistence } from "./storage";
 /** What this host can do, reported honestly. */
 function capabilitiesFor(): PlatformCapabilities {
   return {
+    // Through the send proxy: the tab renders, the proxy executes, the tab
+    // stores. Requests needing plugin auth or template functions are refused
+    // with the reason until plugins run here.
+    httpSending: true,
     grpc: false,
     websocket: false,
     git: false,
     sync: false,
     // Certificates and proxies are decided by whoever puts the bytes on the
-    // wire. Nothing in the browser does yet.
+    // wire, and the send proxy uses its own.
     tlsOptions: false,
-    // The jar can be edited and stored here; only filling it needs the sender.
     cookieJar: true,
     localFiles: false,
-    timeline: false,
+    // The proxy streams the engine's events back and the sender stores them.
+    timeline: true,
     // Whether the host can put a *second window* on this data on demand — what
     // `cmd_new_child_window` does for Settings and workspace switching. A tab
     // can't, so those open in place instead. This is not a claim that nothing

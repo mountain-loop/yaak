@@ -193,6 +193,7 @@ impl SendRequestExecutor for ConnectionManagerSendRequestExecutor<'_> {
                 proxy: runtime_config.proxy.clone(),
                 client_certificate,
                 dns_overrides: runtime_config.dns_overrides.clone(),
+                address_filter: None,
             })
             .await?;
 

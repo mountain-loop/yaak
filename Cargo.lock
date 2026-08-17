@@ -619,6 +619,8 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -627,10 +629,15 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -651,6 +658,7 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -6674,6 +6682,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-lite"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
+
+[[package]]
 name = "regex-syntax"
 version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9531,6 +9545,7 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -9548,6 +9563,7 @@ dependencies = [
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+ "tracing",
  "url",
 ]
 
@@ -9569,6 +9585,7 @@ version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
+ "log 0.4.29",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -11490,7 +11507,6 @@ dependencies = [
  "log 0.4.29",
  "mime_guess",
  "native-tls",
- "regex 1.11.1",
  "reqwest 0.12.20",
  "serde",
  "serde_json",
@@ -11550,6 +11566,7 @@ dependencies = [
  "nanoid",
  "r2d2",
  "r2d2_sqlite",
+ "regex-lite",
  "rusqlite",
  "schemars 0.8.22",
  "sea-query",
@@ -11559,8 +11576,10 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "ts-rs",
+ "urlencoding",
  "yaak-core",
  "yaak-database",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -11655,6 +11674,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-send-proxy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "clap",
+ "env_logger",
+ "futures-util",
+ "log 0.4.29",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "url",
+ "uuid",
+ "yaak-http",
+ "yaak-models",
+]
+
+[[package]]
 name = "yaak-sse"
 version = "0.1.0"
 dependencies = [
@@ -11746,6 +11787,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "yaak-models",
+ "yaak-templates",
 ]
 
 [[package]]

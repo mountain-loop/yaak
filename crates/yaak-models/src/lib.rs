@@ -15,6 +15,7 @@ pub mod error;
 pub mod migrate;
 pub mod models;
 pub mod models_ops;
+pub mod path_placeholders;
 pub mod queries;
 pub mod query_manager;
 pub mod render;
