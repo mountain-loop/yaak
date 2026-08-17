@@ -9557,7 +9557,6 @@ dependencies = [
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
- "tracing",
  "url",
 ]
 

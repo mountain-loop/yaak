@@ -65,9 +65,9 @@ Refusals are logged with the reason. There is no switch to turn this off: the
 proxy's private network is the cloud's, not the user's, so a `localhost` or LAN
 API can never be reached through it — that is what the desktop app is for.
 
-## Self-hosting
+## Deploying
 
-One binary, no dependencies. Build it and run it wherever you like:
+One binary, no dependencies:
 
 ```shell
 cargo build --release -p yaak-send-proxy

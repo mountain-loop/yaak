@@ -7,7 +7,7 @@
 //! for the tab to store. It keeps nothing: no database, no files, no session.
 //!
 //! One binary, configured by flags or `YAAK_PROXY_*` environment variables.
-//! See README.md for running and self-hosting it, and `guard.rs` for what it
+//! See README.md for running and deploying it, and `guard.rs` for what it
 //! refuses to talk to.
 
 mod config;
