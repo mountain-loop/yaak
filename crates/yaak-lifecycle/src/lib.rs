@@ -1,64 +1,37 @@
-//! What a Yaak host does at fixed points in its life, in one place.
+//! Lifecycle hooks shared by every host (desktop, browser, CLI). The hooks say
+//! what happens at each moment; the host decides when and on which thread.
 //!
-//! The desktop, the browser and the CLI each open the same database and each
-//! owe the installation the same upkeep at the same moments — prune the change
-//! log, close what the last session left in flight, sweep bodies a cascaded
-//! delete orphaned. They run that upkeep on different machinery (a blocking
-//! thread here, a deferred macrotask there), so the *what* lives in this crate
-//! and only the *when* stays with the host. A new startup task is added here,
-//! once, and every host has it.
-//!
-//! A host describes itself once as a [`Host`]: what it is to the database it
-//! opened, and where its things are. Hooks read what they need from that, so
-//! upkeep that only makes sense with a filesystem (a responses directory, an
-//! installation folder) is a field the browser leaves `None`, not a separate
-//! code path per host.
-//!
-//! This crate builds for wasm32, which is the whole reason it exists apart
-//! from `yaak-commands`: it can reach the model layer but not the send engine
-//! or the plugin runtime.
+//! Builds for wasm32, so it can depend on `yaak-models` but not on the send
+//! engine or plugin runtime.
 
 use std::path::PathBuf;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
 use yaak_models::error::Result;
 
-/// How long a `model_changes` row lives. The rows exist so a second process
-/// (the CLI, another window) can catch up on writes it did not make; an hour
-/// is far longer than any poller falls behind.
 const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
 
-/// What this process is to the database it just opened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
-    /// The one process that has the database for the life of the app: the
-    /// desktop, or the browser's SharedWorker. Whatever it finds mid-flight
-    /// was left by a session that is over.
+    /// Has the database for the life of the app (desktop, browser worker)
     Owner,
-    /// A short-lived process on a database an owner may be using at the same
-    /// moment: the CLI. A `connected` row it sees may be the desktop's send,
-    /// still running, so it must not touch anything in flight.
+    /// Short-lived, and an owner may be using the database right now (CLI).
+    /// Must not touch anything in flight.
     Guest,
 }
 
-/// The running host, as the hooks need to know it.
-///
-/// Paths are optional because a browser has none of them; a hook that needs
-/// one does nothing when it is absent.
+/// Paths are `None` on hosts without a filesystem (the browser).
 #[derive(Debug, Clone)]
 pub struct Host {
     pub role: Role,
-    /// Where response body files live, on hosts that keep them on disk.
     pub responses_dir: Option<PathBuf>,
 }
 
 impl Host {
-    /// A host with the database to itself and nothing on disk.
     pub fn owner() -> Self {
         Self { role: Role::Owner, responses_dir: None }
     }
 
-    /// A short-lived process sharing the database with a possible owner.
     pub fn guest() -> Self {
         Self { role: Role::Guest, responses_dir: None }
     }
@@ -69,20 +42,13 @@ impl Host {
     }
 }
 
-/// The host has opened the database and is about to start answering. Run once,
-/// after migrations and before the first command or the first change poll.
-///
-/// Cheap and synchronous on purpose: everything here is a handful of UPDATEs
-/// and one DELETE, and it has to land before the frontend can read a
-/// "pending" row that nothing will ever finish.
+/// Run once after the database is open, before the host answers anything.
+/// Cheap; must finish before the frontend can read a stale in-flight row.
 pub fn on_launch(host: &Host, db: &ClientDb) -> Result<()> {
-    // Safe for anyone: a row older than an hour is behind every poller that
-    // could still want it.
     db.prune_model_changes_older_than_hours(MODEL_CHANGES_RETENTION_HOURS)?;
 
     if host.role == Role::Owner {
-        // Anything still marked in-flight was orphaned by the last session; no
-        // sender survives a restart.
+        // Anything still in flight was left by the last session
         db.cancel_pending_http_responses()?;
         db.cancel_pending_grpc_connections()?;
         db.cancel_pending_websocket_connections()?;
@@ -91,18 +57,9 @@ pub fn on_launch(host: &Host, db: &ClientDb) -> Result<()> {
     Ok(())
 }
 
-/// The host is up. Run once, whenever an owner has a spare moment — never on
-/// the path to first paint, because it scans the whole blob database. Safe
-/// next to a running send (the row is written before its body), so a guest
-/// *could* run it; a short-lived one just shouldn't pay for the scan on every
-/// invocation.
-///
-/// Sweeps response bodies whose owning row is gone. Cascaded deletes (request,
-/// folder, workspace) historically removed the rows through the generic row
-/// delete, which never touched the bodies. Blob chunks are swept everywhere;
-/// body *files* only where the host has a directory for them.
-///
-/// Returns how many orphaned bodies were deleted.
+/// Run once in the background after launch: sweeps response bodies whose row
+/// is gone (cascaded deletes never cleaned them up). Scans the whole blob
+/// database, so keep it off the startup path. Returns how many were deleted.
 pub fn after_launch(host: &Host, db: &ClientDb, blobs: &BlobManager) -> Result<usize> {
     match host.responses_dir.as_deref() {
         Some(dir) => db.delete_orphaned_response_bodies(blobs, dir),
@@ -149,12 +106,10 @@ mod tests {
             )
             .unwrap();
 
-        // A guest leaves it alone: it may be another process's live send.
         on_launch(&Host::guest(), &db).unwrap();
         let response = db.get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Connected));
 
-        // The owner knows nothing survived the restart.
         on_launch(&Host::owner(), &db).unwrap();
         let response = db.get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Closed));

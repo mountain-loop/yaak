@@ -50,9 +50,6 @@ impl CliContext {
                 }
             };
 
-        // A guest: the desktop may have this database open right now, so this
-        // is only the upkeep that is safe beside a live session. Best-effort;
-        // a failure here is not a reason to refuse the user's command.
         let _ = yaak_lifecycle::on_launch(&yaak_lifecycle::Host::guest(), &query_manager.connect());
 
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));

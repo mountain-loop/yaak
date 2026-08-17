@@ -5,9 +5,5 @@ edition = "2024"
 authors = ["Gregory Schier"]
 publish = false
 
-# What every host does at fixed points in its life. Builds for wasm32 too, so
-# it can only reach for crates that do; the model layer is one, the send engine
-# and plugin runtime are not.
-
 [dependencies]
 yaak-models = { workspace = true }

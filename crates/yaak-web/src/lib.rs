@@ -43,8 +43,6 @@ struct Host {
     events: mpsc::Receiver<ModelPayload>,
 }
 
-/// What this host is to the lifecycle hooks: the SharedWorker owns the
-/// database, and there is no disk for anything to live on.
 fn lifecycle_host() -> yaak_lifecycle::Host {
     yaak_lifecycle::Host::owner()
 }
@@ -97,8 +95,6 @@ pub async fn boot() -> Result<()> {
     let (queries, blobs, events) =
         yaak_models::init_standalone(DB_NAME, BLOB_DB_NAME).map_err(js_error)?;
 
-    // The same startup upkeep the desktop does, from the same module; only the
-    // scheduling is this host's.
     if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host(), &queries.connect()) {
         web_sys::console::warn_2(&"on_launch hook failed".into(), &js_error(e));
     }
@@ -110,14 +106,8 @@ pub async fn boot() -> Result<()> {
     Ok(())
 }
 
-/// Run the `after_launch` hook once, in the background.
-///
-/// Deferred to a macrotask rather than awaited: every command in the worker
-/// waits on `boot()`, so doing this inline would put a full scan of the blob
-/// database in front of the app's first paint. A `spawn_local` alone would not
-/// be enough — its task is queued as a microtask, ahead of the `message`
-/// events the tab has already posted. Yielding through `setTimeout` puts the
-/// sweep behind them.
+/// Yields through `setTimeout` first: a bare `spawn_local` is a microtask and
+/// would run ahead of the `message` events the tab has already posted.
 fn spawn_after_launch() {
     wasm_bindgen_futures::spawn_local(async {
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
