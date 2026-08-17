@@ -25,6 +25,7 @@ crate-type = ["cdylib", "rlib"]
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+yaak-lifecycle = { workspace = true }
 yaak-models = { workspace = true }
 # No default features: the template exports belong to @yaakapp-internal/templates, not this module
 yaak-templates = { path = "../yaak-templates", default-features = false }
@@ -37,3 +38,4 @@ sqlite-wasm-rs = "0.5"
 sqlite-wasm-vfs = "0.2"
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["console"] }

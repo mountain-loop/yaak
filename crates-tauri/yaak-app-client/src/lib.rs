@@ -1258,6 +1258,14 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            let lifecycle_host = yaak_lifecycle::Host::owner()
+                .with_responses_dir(app.path().app_data_dir()?.join("responses"));
+            if let Err(e) =
+                yaak_lifecycle::on_launch(&lifecycle_host, &app.db(), &app.blob_manager())
+            {
+                error!("on_launch hook failed: {e:?}");
+            }
+
             // The RPC command registry — every frontend command dispatches
             // through this via the single `rpc` Tauri command
             app.manage(rpc_ext::build_rpc_router::<TauriRuntime>());
@@ -1356,15 +1364,6 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move {
                         let info = history::get_or_upsert_launch_info(&h);
                         debug!("Launched Yaak {:?}", info);
-                    });
-
-                    // Cancel pending requests
-                    let h = app_handle.clone();
-                    tauri::async_runtime::block_on(async move {
-                        let db = h.db();
-                        let _ = db.cancel_pending_http_responses();
-                        let _ = db.cancel_pending_grpc_connections();
-                        let _ = db.cancel_pending_websocket_connections();
                     });
                 }
                 RunEvent::WindowEvent { event: WindowEvent::Focused(true), label, .. } => {
