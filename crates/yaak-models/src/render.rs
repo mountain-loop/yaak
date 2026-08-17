@@ -1,5 +1,11 @@
+//! Rendering requests against an environment chain.
+//!
+//! Lives here rather than beside the send engine so that the browser's wasm
+//! host, which has the model layer but no sockets, renders exactly what the
+//! desktop renders.
+
 use crate::models::{
-    Environment, EnvironmentVariable, HttpRequest, HttpRequestHeader, HttpUrlParameter,
+    Environment, EnvironmentVariable, GrpcRequest, HttpRequest, HttpRequestHeader, HttpUrlParameter,
 };
 use crate::path_placeholders::apply_path_placeholders;
 use log::info;
@@ -7,11 +13,7 @@ use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use yaak_templates::{RenderOptions, TemplateCallback, parse_and_render, render_json_value_raw};
 
-/// Render every template in a request against an environment chain.
-///
-/// Lives here rather than beside the send engine so that the browser's wasm
-/// host, which has the model layer but no sockets, renders exactly what the
-/// desktop renders.
+/// Render every template in an HTTP request against an environment chain.
 pub async fn render_http_request<T: TemplateCallback>(
     request: &HttpRequest,
     environment_chain: Vec<Environment>,
@@ -93,6 +95,64 @@ pub async fn render_http_request<T: TemplateCallback>(
     let (url, url_parameters) = apply_path_placeholders(&url, &url_parameters);
 
     Ok(HttpRequest { url, url_parameters, headers, body, authentication, ..request.to_owned() })
+}
+
+pub async fn render_grpc_request<T: TemplateCallback>(
+    r: &GrpcRequest,
+    environment_chain: Vec<Environment>,
+    cb: &T,
+    opt: &RenderOptions,
+) -> yaak_templates::error::Result<GrpcRequest> {
+    let vars = &make_vars_hashmap(environment_chain);
+
+    let mut metadata = Vec::new();
+    for p in r.metadata.clone() {
+        if !p.enabled {
+            continue;
+        }
+        metadata.push(HttpRequestHeader {
+            enabled: p.enabled,
+            name: parse_and_render(p.name.as_str(), vars, cb, opt).await?,
+            value: parse_and_render(p.value.as_str(), vars, cb, opt).await?,
+            id: p.id,
+        })
+    }
+
+    let authentication = {
+        let mut disabled = false;
+        let mut auth = BTreeMap::new();
+        match r.authentication.get("disabled") {
+            Some(Value::Bool(true)) => {
+                disabled = true;
+            }
+            Some(Value::String(tmpl)) => {
+                disabled = parse_and_render(tmpl.as_str(), vars, cb, opt)
+                    .await
+                    .unwrap_or_default()
+                    .is_empty();
+                info!(
+                    "Rendering authentication.disabled as a template: {disabled} from \"{tmpl}\""
+                );
+            }
+            _ => {}
+        }
+        if disabled {
+            auth.insert("disabled".to_string(), Value::Bool(true));
+        } else {
+            for (k, v) in r.authentication.clone() {
+                if k == "disabled" {
+                    auth.insert(k, Value::Bool(false));
+                } else {
+                    auth.insert(k, render_json_value_raw(v, vars, cb, opt).await?);
+                }
+            }
+        }
+        auth
+    };
+
+    let url = parse_and_render(r.url.as_str(), vars, cb, opt).await?;
+
+    Ok(GrpcRequest { url, metadata, authentication, ..r.to_owned() })
 }
 
 pub fn make_vars_hashmap(environment_chain: Vec<Environment>) -> HashMap<String, String> {

@@ -1,4 +1,3 @@
-use crate::render::render_http_request;
 use async_trait::async_trait;
 use log::warn;
 use std::path::{Path, PathBuf};
@@ -29,6 +28,7 @@ use yaak_models::models::{
     ResolvedHttpRequestSettings, ResolvedSetting,
 };
 use yaak_models::query_manager::QueryManager;
+use yaak_models::render::render_http_request;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
