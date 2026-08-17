@@ -86,10 +86,8 @@ export async function promptDivergedStrategy({
     showDialog({
       id: "git-diverged",
       title: "Branches Diverged",
-      hideX: true,
       size: "sm",
-      disableBackdropClose: true,
-      onClose: () => resolve("cancel"),
+      disableClose: true,
       render: ({ hide }) =>
         DivergedDialog({
           remote,

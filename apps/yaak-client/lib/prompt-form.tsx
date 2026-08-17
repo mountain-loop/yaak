@@ -25,13 +25,8 @@ export async function showPromptForm({
       id,
       title,
       description,
-      hideX: true,
       size: size ?? "sm",
-      disableBackdropClose: true, // Prevent accidental dismisses
-      onClose: () => {
-        // Click backdrop, close, or escape
-        resolve(null);
-      },
+      disableClose: true,
       render: ({ hide }) =>
         Prompt({
           onCancel: () => {
