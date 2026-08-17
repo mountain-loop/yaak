@@ -30,7 +30,7 @@ export const importData = createFastMutation({
         id: "import",
         title: "Import Data",
         size: "sm",
-        onClose: resolve,
+        disableClose: true,
         render: ({ hide }) => {
           const cancel = () => {
             hide();

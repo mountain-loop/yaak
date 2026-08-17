@@ -10,6 +10,7 @@ export interface DialogProps {
   children: ReactNode;
   open: boolean;
   onClose?: () => void;
+  disableClose?: boolean;
   disableBackdropClose?: boolean;
   title?: ReactNode;
   description?: ReactNode;
@@ -27,6 +28,7 @@ export function Dialog({
   size = "full",
   open,
   onClose,
+  disableClose,
   disableBackdropClose,
   title,
   description,
@@ -42,7 +44,11 @@ export function Dialog({
   );
 
   return (
-    <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
+    <Overlay
+      open={open}
+      onClose={disableClose || disableBackdropClose ? undefined : onClose}
+      portalName="dialog"
+    >
       <div
         role="dialog"
         className={classNames(
@@ -58,7 +64,7 @@ export function Dialog({
           // NOTE: We handle Escape on the element itself so that it doesn't close multiple
           //   dialogs and can be intercepted by children if needed.
           if (e.key === "Escape") {
-            onClose?.();
+            if (!disableClose) onClose?.();
             e.stopPropagation();
             e.preventDefault();
           }
@@ -110,7 +116,7 @@ export function Dialog({
           </div>
 
           {/*Put close at the end so that it's the last thing to be tabbed to*/}
-          {!hideX && (
+          {!hideX && !disableClose && (
             <div className="ml-auto absolute right-1 top-1">
               <IconButton
                 className="opacity-70 hover:opacity-100"
