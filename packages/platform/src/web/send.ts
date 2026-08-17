@@ -36,27 +36,36 @@ interface HttpResponseHeader {
   value: string;
 }
 
-/** The subset of the `http_response` model this sender writes. */
+/**
+ * The fields of the `http_response` model this sender writes as a send
+ * progresses. Every one is optional: a field this file never sets takes the
+ * model layer's default, the same way the desktop's row does. Defaults live in
+ * Rust, once.
+ */
 interface ResponsePatch {
+  state?: "initialized" | "connected" | "closed";
+  url?: string;
+  status?: number;
+  statusReason?: string | null;
+  version?: string | null;
+  remoteAddr?: string | null;
+  headers?: HttpResponseHeader[];
+  requestHeaders?: HttpResponseHeader[];
+  contentLength?: number | null;
+  contentLengthCompressed?: number | null;
+  elapsed?: number;
+  elapsedHeaders?: number;
+  elapsedDns?: number;
+  error?: string | null;
+}
+
+/** The row itself: what identifies it, plus whatever has been written so far. */
+type ResponseRow = {
   model: "http_response";
-  id: string;
+  id?: string;
   requestId: string;
   workspaceId: string;
-  state: "initialized" | "connected" | "closed";
-  url: string;
-  status: number;
-  statusReason: string | null;
-  version: string | null;
-  remoteAddr: string | null;
-  headers: HttpResponseHeader[];
-  requestHeaders: HttpResponseHeader[];
-  contentLength: number | null;
-  contentLengthCompressed: number | null;
-  elapsed: number;
-  elapsedHeaders: number;
-  elapsedDns: number;
-  error: string | null;
-}
+} & ResponsePatch;
 
 interface CookieJarModel {
   model: "cookie_jar";
@@ -88,26 +97,7 @@ export async function sendHttpRequest(
   // a failure to render or to reach the proxy lands in the response pane as
   // that response's error rather than as a toast that names no request.
   const workspaceId = await workspaceIdOfRequest(db, requestId);
-  const response = new ResponseWriter(db, {
-    model: "http_response",
-    id: "",
-    requestId,
-    workspaceId,
-    state: "initialized",
-    url: "",
-    status: 0,
-    statusReason: null,
-    version: null,
-    remoteAddr: null,
-    headers: [],
-    requestHeaders: [],
-    contentLength: null,
-    contentLengthCompressed: null,
-    elapsed: 0,
-    elapsedHeaders: 0,
-    elapsedDns: 0,
-    error: null,
-  });
+  const response = new ResponseWriter(db, { model: "http_response", requestId, workspaceId });
   await response.create();
 
   const cancel = new AbortController();
@@ -237,7 +227,7 @@ async function runSend(
   });
 }
 
-function headOf(frame: ProxySendResponse): Partial<ResponsePatch> {
+function headOf(frame: ProxySendResponse): ResponsePatch {
   return {
     state: "connected",
     status: frame.status,
@@ -261,34 +251,34 @@ function headOf(frame: ProxySendResponse): Partial<ResponsePatch> {
  * `models_upsert`, so every tab on this database sees the response land.
  */
 class ResponseWriter {
-  private state: ResponsePatch;
+  private state: ResponseRow;
 
   constructor(
     private readonly db: WorkerConnection,
-    initial: ResponsePatch,
+    initial: ResponseRow,
   ) {
     this.state = initial;
   }
 
   get id(): string {
-    return this.state.id;
+    return this.state.id ?? "";
   }
 
   get workspaceId(): string {
     return this.state.workspaceId;
   }
 
-  current(): ResponsePatch {
+  current(): ResponseRow {
     return this.state;
   }
 
+  /** Create the row. Everything but its identity is the model layer's default. */
   async create(): Promise<void> {
-    const { id: _, ...withoutId } = this.state;
-    const id = await this.db.rpc<string>("models_upsert", { model: withoutId });
+    const id = await this.db.rpc<string>("models_upsert", { model: this.state });
     this.state = { ...this.state, id };
   }
 
-  async patch(patch: Partial<ResponsePatch>): Promise<void> {
+  async patch(patch: ResponsePatch): Promise<void> {
     // Structured clone carries `undefined` across to the worker as a present
     // key, and the model layer reads that as "wrong type" and refuses the whole
     // model. Nothing here should produce one, but a missing wire field must
@@ -298,7 +288,7 @@ class ResponseWriter {
     await this.db.rpc("models_upsert", { model: this.state });
   }
 
-  async finish(patch: Partial<ResponsePatch>): Promise<void> {
+  async finish(patch: ResponsePatch): Promise<void> {
     await this.patch({ ...patch, state: "closed" });
   }
 }

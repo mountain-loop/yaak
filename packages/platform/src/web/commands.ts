@@ -71,13 +71,11 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
 
   // The tab renders and stores; a stateless proxy puts the bytes on the wire.
   // See send.ts for the whole shape of it.
-  cmd_send_http_request: (payload, db) =>
-    sendHttpRequest(
-      db,
-      text(payload, "requestId"),
-      str(payload, "environmentId"),
-      str(payload, "cookieJarId"),
-    ),
+  cmd_send_http_request: (payload, db) => {
+    const requestId = str(payload, "requestId");
+    if (requestId == null) throw new Error("cmd_send_http_request needs a requestId");
+    return sendHttpRequest(db, requestId, str(payload, "environmentId"), str(payload, "cookieJarId"));
+  },
 
   /* -------------------------------- app ---------------------------------- */
 
