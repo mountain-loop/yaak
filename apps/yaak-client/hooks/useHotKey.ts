@@ -333,7 +333,9 @@ export function formatHotkeyString(trigger: string): string[] {
       } else if (p === "Alt") {
         labelParts.push("⌥");
       } else if (p === "Enter") {
-        labelParts.push("↩");
+        // U+21A9 has an emoji presentation, which Chromium's font fallback picks
+        // (a blue glyph among monochrome ones). U+FE0E forces the text form.
+        labelParts.push("↩︎");
       } else if (p === "Tab") {
         labelParts.push("⇥");
       } else if (p === "Backspace") {

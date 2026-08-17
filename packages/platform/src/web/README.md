@@ -129,12 +129,15 @@ Reported honestly, so callers gate on the question rather than on the host:
 
 | True | False |
 | --- | --- |
-| `cookieJar` (the jar stores and edits here; only filling it needs the sender) | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `timeline`, `multiWindow`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
+| `cookieJar` (the jar stores and edits here; only filling it needs the sender) | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `timeline`, `multiWindow`, `windowChrome`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
 
 `multiWindow: false` means the host cannot open a *second window* on demand —
 what `cmd_new_child_window` does for Settings and workspace switching. It is not
 a claim that nothing else is looking: other tabs may well be open on the same
 worker, and it pushes every write to all of them regardless.
+
+`windowChrome: false` means the browser owns the frame around the page, so the
+header draws no window controls and reserves no room for macOS traffic lights.
 
 ## Multiple tabs
 

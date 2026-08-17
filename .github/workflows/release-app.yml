@@ -26,19 +26,19 @@ jobs:
             os: "macos"
             runtime: "wry"
             targets: "x86_64-apple-darwin"
-          - platform: "ubuntu-24.04"
+          - platform: "ubuntu-22.04"
             args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "x64"
             os: "ubuntu"
             runtime: "wry"
             targets: ""
-          - platform: "ubuntu-24.04-arm"
+          - platform: "ubuntu-22.04-arm"
             args: '--config ./tauri.release.conf.json --config ''{"build":{"features":["updater","license","wry"]}}'''
             yaak_arch: "arm64"
             os: "ubuntu"
             runtime: "wry"
             targets: ""
-          - platform: "ubuntu-24.04"
+          - platform: "ubuntu-22.04"
             args: >-
               --bundles deb
               --config ./tauri.release.conf.json
@@ -47,7 +47,7 @@ jobs:
             os: "ubuntu"
             runtime: "cef"
             targets: ""
-          - platform: "ubuntu-24.04-arm"
+          - platform: "ubuntu-22.04-arm"
             args: >-
               --bundles deb
               --config ./tauri.release.conf.json
@@ -102,7 +102,13 @@ jobs:
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils
+          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils clang-15 llvm-15
+          # crates/yaak-web compiles SQLite to wasm via sqlite-wasm-rs, whose C shim
+          # uses C23 [[noreturn]]. Ubuntu 22.04's default clang-14 rejects it; clang-15
+          # from the same repos accepts it. Only the wasm build uses this compiler, so
+          # the shipped binary keeps 22.04's glibc floor.
+          echo "CC_wasm32_unknown_unknown=/usr/bin/clang-15" >> "$GITHUB_ENV"
+          echo "AR_wasm32_unknown_unknown=/usr/bin/llvm-ar-15" >> "$GITHUB_ENV"
 
       - name: Install Protoc for plugin-runtime
         uses: arduino/setup-protoc@v3
