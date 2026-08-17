@@ -167,6 +167,7 @@ export class PluginInstance {
         if (reply != null) {
           const replyPayload: InternalEventPayload = {
             type: "import_response",
+            importer: this.#mod.importer.name,
             resources: reply.resources as ImportResources,
           };
           this.#sendPayload(context, replyPayload, replyId);

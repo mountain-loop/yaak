@@ -474,7 +474,7 @@ export type ImportRequest = { content: string, };
 
 export type ImportResources = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
 
-export type ImportResponse = { resources: ImportResources, };
+export type ImportResponse = { importer: string, resources: ImportResources, };
 
 export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, context: PluginContext, payload: InternalEventPayload, };
 

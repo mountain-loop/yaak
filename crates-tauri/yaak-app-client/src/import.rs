@@ -4,51 +4,61 @@ use crate::models_ext::QueryManagerExt;
 use std::fs::read_to_string;
 use std::io::ErrorKind;
 use tauri::{Manager, Runtime, WebviewWindow};
-use yaak::import::{self, ImportDataParams};
+use yaak::import::{self, PlanImportDataParams};
 use yaak_api::{ApiClientKind, yaak_api_client};
-use yaak_core::WorkspaceContext;
-use yaak_models::util::BatchUpsertResult;
+use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan};
 use yaak_plugins::manager::PluginManager;
-use yaak_tauri_utils::window::WorkspaceWindowTrait;
 
 pub(crate) async fn import_data<R: Runtime>(
     window: &WebviewWindow<R>,
     file_path: &str,
 ) -> Result<BatchUpsertResult> {
-    let contents = read_import_file(file_path)?;
-    import_contents(window, &contents).await
+    let plan = plan_import_data(window, file_path, ImportDestination::NewWorkspace).await?;
+    commit_import(window, plan)
 }
 
-pub(crate) async fn import_url<R: Runtime>(
+pub(crate) async fn plan_import_data<R: Runtime>(
+    window: &WebviewWindow<R>,
+    file_path: &str,
+    destination: ImportDestination,
+) -> Result<ImportPlan> {
+    let contents = read_import_file(file_path)?;
+    plan_import_contents(window, &contents, destination).await
+}
+
+pub(crate) async fn plan_import_url<R: Runtime>(
     window: &WebviewWindow<R>,
     url: &str,
-) -> Result<BatchUpsertResult> {
+    destination: ImportDestination,
+) -> Result<ImportPlan> {
     let contents = fetch_import_url(window, url).await?;
-    import_contents(window, &contents).await
+    plan_import_contents(window, &contents, destination).await
 }
 
-async fn import_contents<R: Runtime>(
+async fn plan_import_contents<R: Runtime>(
     window: &WebviewWindow<R>,
     contents: &str,
-) -> Result<BatchUpsertResult> {
+    destination: ImportDestination,
+) -> Result<ImportPlan> {
     let plugin_manager = window.state::<PluginManager>();
     let query_manager = window.db_manager();
     let plugin_context = window.plugin_context();
-    let workspace_context = WorkspaceContext {
-        workspace_id: window.workspace_id(),
-        environment_id: window.environment_id(),
-        cookie_jar_id: window.cookie_jar_id(),
-        request_id: None,
-    };
 
-    Ok(import::import_data(ImportDataParams {
+    Ok(import::plan_import_data(PlanImportDataParams {
         query_manager: &query_manager,
         plugin_manager: &plugin_manager,
         plugin_context: &plugin_context,
-        workspace_context,
+        destination,
         contents,
     })
     .await?)
+}
+
+pub(crate) fn commit_import<R: Runtime>(
+    window: &WebviewWindow<R>,
+    plan: ImportPlan,
+) -> Result<BatchUpsertResult> {
+    Ok(import::commit_import_plan(&window.db_manager(), plan)?)
 }
 
 /// Download an importable document (OpenAPI, Postman, Insomnia, …) so it can be fed to the same

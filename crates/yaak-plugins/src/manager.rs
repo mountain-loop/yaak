@@ -1104,8 +1104,19 @@ impl PluginManager {
             .await?;
 
         // TODO: Don't just return the first valid response
-        let result = reply_events.into_iter().find_map(|e| match e.payload {
-            InternalEventPayload::ImportResponse(resp) => Some(resp),
+        let result = reply_events.into_iter().find_map(|e| match e {
+            InternalEvent {
+                plugin_name,
+                payload: InternalEventPayload::ImportResponse(mut resp),
+                ..
+            } => {
+                // Older plugin runtimes do not include the importer's display name. The plugin
+                // package name is still enough to identify the detected format in that case.
+                if resp.importer.is_empty() {
+                    resp.importer = plugin_name;
+                }
+                Some(resp)
+            }
             _ => None,
         });
 

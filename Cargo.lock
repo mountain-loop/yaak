@@ -11199,6 +11199,7 @@ dependencies = [
  "base64 0.22.1",
  "log 0.4.29",
  "md5 0.8.0",
+ "rusqlite",
  "serde_json",
  "tempfile",
  "thiserror 2.0.17",

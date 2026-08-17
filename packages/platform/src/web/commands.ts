@@ -261,6 +261,7 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
   // Anything that needs files the page can't reach.
   cmd_import_data: ["Importing from a file needs a filesystem, which a browser tab has no", "localFiles"],
   cmd_import_url: ["Importing from a URL needs the send proxy, which isn't available yet", null],
+  cmd_commit_import: ["Importing needs a plugin, which this host doesn't run", null],
   cmd_export_data: ["Exporting to a file isn't available in the browser yet", "localFiles"],
   cmd_save_response: ["Saving a response to disk isn't available in the browser", "localFiles"],
   cmd_save_base64_to_binary: ["Saving to disk isn't available in the browser", "localFiles"],

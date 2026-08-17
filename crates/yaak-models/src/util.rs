@@ -85,6 +85,86 @@ pub struct BatchUpsertResult {
     pub websocket_requests: Vec<WebsocketRequest>,
 }
 
+/// Where a staged import will be committed.
+///
+/// The current workspace and optional folder IDs are captured in the plan so the preview describes
+/// the exact destination that confirmation will use.
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportDestination {
+    NewWorkspace,
+    CurrentWorkspace {
+        #[serde(rename = "workspaceId")]
+        workspace_id: String,
+        #[serde(rename = "folderId")]
+        #[ts(optional)]
+        folder_id: Option<String>,
+    },
+}
+
+/// A model staged for import.
+///
+/// `source_key` is intentionally part of the plan boundary even though the first import slice does
+/// not persist it. Future linked imports can populate it without changing how plans contain models.
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct PlannedImportResource<T> {
+    #[ts(optional)]
+    pub source_key: Option<String>,
+    pub resource: T,
+}
+
+impl<T> PlannedImportResource<T> {
+    pub fn new(resource: T) -> Self {
+        Self { source_key: None, resource }
+    }
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlanResources {
+    pub workspaces: Vec<PlannedImportResource<Workspace>>,
+    pub environments: Vec<PlannedImportResource<Environment>>,
+    pub folders: Vec<PlannedImportResource<Folder>>,
+    pub http_requests: Vec<PlannedImportResource<HttpRequest>>,
+    pub grpc_requests: Vec<PlannedImportResource<GrpcRequest>>,
+    pub websocket_requests: Vec<PlannedImportResource<WebsocketRequest>>,
+}
+
+impl ImportPlanResources {
+    pub fn into_batch(self) -> BatchUpsertResult {
+        BatchUpsertResult {
+            workspaces: self.workspaces.into_iter().map(|v| v.resource).collect(),
+            environments: self.environments.into_iter().map(|v| v.resource).collect(),
+            folders: self.folders.into_iter().map(|v| v.resource).collect(),
+            http_requests: self.http_requests.into_iter().map(|v| v.resource).collect(),
+            grpc_requests: self.grpc_requests.into_iter().map(|v| v.resource).collect(),
+            websocket_requests: self.websocket_requests.into_iter().map(|v| v.resource).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlanWarning {
+    pub title: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlan {
+    pub importer: String,
+    pub destination: ImportDestination,
+    pub resources: ImportPlanResources,
+    pub warnings: Vec<ImportPlanWarning>,
+}
+
 pub fn get_workspace_export_resources(
     db: &ClientDb,
     yaak_version: &str,

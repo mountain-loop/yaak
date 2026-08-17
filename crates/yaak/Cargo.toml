@@ -21,5 +21,6 @@ yaak-templates = { workspace = true }
 yaak-tls = { workspace = true }
 
 [dev-dependencies]
+rusqlite = { version = "0.38", features = ["bundled"] }
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

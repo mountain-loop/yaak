@@ -40,7 +40,7 @@ use yaak_models::models::{
     HttpResponseEvent, Plugin, Settings, WebsocketConnection, WebsocketEvent, WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManager;
-use yaak_models::util::BatchUpsertResult;
+use yaak_models::util::{BatchUpsertResult, ImportPlan};
 use yaak_plugins::events::{
     CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
     CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse, ImportResponse,
@@ -441,12 +441,16 @@ async fn cmd_get_http_response_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGet
     Ok(yaak_commands::responses::cmd_get_http_response_events(ctx, req).await?)
 }
 
-async fn cmd_import_data<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportDataReq) -> Result<BatchUpsertResult> {
-    Ok(crate::cmd_import_data(ctx.window.clone(), &req.file_path).await?)
+async fn cmd_import_data<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportDataReq) -> Result<ImportPlan> {
+    Ok(crate::cmd_import_data(ctx.window.clone(), &req.file_path, req.destination).await?)
 }
 
-async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> Result<BatchUpsertResult> {
-    Ok(crate::cmd_import_url(ctx.window.clone(), &req.url).await?)
+async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> Result<ImportPlan> {
+    Ok(crate::cmd_import_url(ctx.window.clone(), &req.url, req.destination).await?)
+}
+
+async fn cmd_commit_import<R: Runtime>(ctx: ClientCtx<R>, req: CmdCommitImportReq) -> Result<BatchUpsertResult> {
+    Ok(crate::cmd_commit_import(ctx.window.clone(), req.plan).await?)
 }
 
 async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {
@@ -843,4 +847,3 @@ async fn cmd_plugins_updates<R: Runtime>(ctx: ClientCtx<R>, _req: CmdPluginsUpda
 async fn cmd_plugins_update_all<R: Runtime>(ctx: ClientCtx<R>, _req: CmdPluginsUpdateAllReq) -> Result<Vec<PluginNameVersion>> {
     Ok(crate::plugins_ext::cmd_plugins_update_all(ctx.window.clone()).await?)
 }
-
