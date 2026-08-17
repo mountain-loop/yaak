@@ -76,8 +76,8 @@ pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
             if let Some(v4) = v6.to_ipv4_mapped() {
                 return non_public_v4(v4);
             }
-            if let Some(v4) = embedded_v4(&v6) {
-                return non_public_v4(v4);
+            if let Some(reason) = embedded_v4(&v6).into_iter().find_map(non_public_v4) {
+                return Some(reason);
             }
             if v6.is_loopback() {
                 Some("loopback")
@@ -129,33 +129,35 @@ fn non_public_v4(v4: Ipv4Addr) -> Option<&'static str> {
     }
 }
 
-/// The IPv4 address an IPv6 address stands for, when it is one of the standard translation
-/// forms: NAT64 well-known prefix (64:ff9b::/96), NAT64 local-use prefix (64:ff9b:1::/48,
-/// RFC 8215), or 6to4 (2002::/16, where the IPv4 sits in the next 32 bits).
-fn embedded_v4(v6: &Ipv6Addr) -> Option<Ipv4Addr> {
+/// The IPv4 addresses an IPv6 address may stand for, when it is one of the standard
+/// translation forms: the NAT64 well-known prefix (64:ff9b::/96), the NAT64 local-use range
+/// (64:ff9b:1::/48, RFC 8215), or 6to4 (2002::/16, IPv4 in the next 32 bits).
+///
+/// The local-use range is a pool an operator carves their own prefix from, at any of the
+/// lengths RFC 6052 allows, so where the IPv4 sits inside it is not knowable here. Every
+/// position it could occupy is returned, and the caller refuses if any of them is
+/// non-public — a hosted relay would rather turn away an odd address than reach the wrong one.
+fn embedded_v4(v6: &Ipv6Addr) -> Vec<Ipv4Addr> {
     let s = v6.segments();
+    let o = v6.octets();
+    let v4 = |a: usize, b: usize, c: usize, d: usize| Ipv4Addr::new(o[a], o[b], o[c], o[d]);
     if s[0] == 0x64 && s[1] == 0xff9b && s[2..6].iter().all(|x| *x == 0) {
-        return Some(trailing_v4(v6));
+        return vec![v4(12, 13, 14, 15)];
     }
     if s[0] == 0x64 && s[1] == 0xff9b && s[2] == 1 {
-        return Some(trailing_v4(v6));
+        // RFC 6052 layouts for a /48, /56, /64 and /96 prefix; octet 8 is the reserved `u`
+        // byte, skipped by the layouts that straddle it.
+        return vec![
+            v4(6, 7, 9, 10),
+            v4(7, 9, 10, 11),
+            v4(9, 10, 11, 12),
+            v4(12, 13, 14, 15),
+        ];
     }
     if s[0] == 0x2002 {
-        return Some(Ipv4Addr::new(
-            (s[1] >> 8) as u8,
-            (s[1] & 0xff) as u8,
-            (s[2] >> 8) as u8,
-            (s[2] & 0xff) as u8,
-        ));
+        return vec![v4(2, 3, 4, 5)];
     }
-    None
-}
-
-/// The last 32 bits of an IPv6 address as an IPv4 address (where every /96 NAT64 prefix
-/// keeps it).
-fn trailing_v4(v6: &Ipv6Addr) -> Ipv4Addr {
-    let o = v6.octets();
-    Ipv4Addr::new(o[12], o[13], o[14], o[15])
+    Vec::new()
 }
 
 /// An [`HttpSender`] that checks each hop's URL against the policy before delegating.
