@@ -16,6 +16,36 @@ describe("importer-curl", () => {
     });
   });
 
+  // A short cluster is one option per character until one that takes a value.
+  // `-fsSL` is four boolean flags, so nothing in it is a positional argument --
+  // the URL used to come out as "sSL".
+  test("Imports combined short flags", () => {
+    expect(convertCurl("curl -fsSL https://yaak.app")).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Imports a combined short cluster ending in a value flag", () => {
+    expect(convertCurl("curl -sSXPOST https://yaak.app")).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            method: "POST",
+          }),
+        ],
+      },
+    });
+  });
+
   test("Explicit URL", () => {
     expect(convertCurl("curl --url https://yaak.app")).toEqual({
       resources: {
