@@ -7,6 +7,13 @@
  * is a change to the other, and the frame `type` tags are the versioning.
  */
 
+import type {
+  Cookie,
+  HttpRequest,
+  HttpResponseEventData,
+  HttpResponseHeader,
+} from "@yaakapp-internal/models";
+
 /* ------------------------------- location -------------------------------- */
 
 /**
@@ -30,7 +37,7 @@ export function proxySendUrl(): string {
 /** The body of `POST /v1/http/send`. */
 export interface ProxyRequestBody {
   /** The rendered request, in the model shape (see `wire.rs` `SendRequest.request`). */
-  request: Record<string, unknown>;
+  request: HttpRequest;
   settings: {
     validateCertificates: boolean;
     followRedirects: boolean;
@@ -39,15 +46,10 @@ export interface ProxyRequestBody {
     storeCookies: boolean;
   };
   /** The jar's cookies to start from, or `null` for no jar at all. */
-  cookies: unknown[] | null;
+  cookies: Cookie[] | null;
 }
 
 /* -------------------------------- down ----------------------------------- */
-
-interface WireHeader {
-  name: string;
-  value: string;
-}
 
 export interface ProxySendResponse {
   type: "response";
@@ -56,8 +58,8 @@ export interface ProxySendResponse {
   url: string;
   remoteAddr: string | null;
   version: string | null;
-  headers: WireHeader[];
-  requestHeaders: WireHeader[];
+  headers: HttpResponseHeader[];
+  requestHeaders: HttpResponseHeader[];
   contentLength: number | null;
   elapsedHeaders: number;
   elapsedDns: number;
@@ -65,7 +67,7 @@ export interface ProxySendResponse {
 
 export type ProxyFrame =
   /** A timeline event in the `http_response_event.event` shape. */
-  | { type: "event"; event: unknown }
+  | { type: "event"; event: HttpResponseEventData }
   | ProxySendResponse
   /** A body chunk, decompressed, base64. */
   | { type: "body"; data: string }
@@ -74,9 +76,9 @@ export type ProxyFrame =
       elapsed: number;
       contentLength: number;
       contentLengthCompressed: number;
-      cookies: unknown[] | null;
+      cookies: Cookie[] | null;
     }
-  | { type: "error"; message: string; cookies: unknown[] | null };
+  | { type: "error"; message: string; cookies: Cookie[] | null };
 
 /**
  * Yield frames from an NDJSON stream as they arrive. A partial trailing line is

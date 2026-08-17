@@ -21,65 +21,38 @@
  * byte it returns is stored by this tab.
  */
 
+// Types only: the models package imports this one at runtime, and a type import
+// is erased, so there is no cycle.
+import type {
+  Cookie,
+  CookieJar,
+  HttpRequest,
+  HttpResponse,
+  HttpResponseEventData,
+} from "@yaakapp-internal/models";
 import type { WorkerConnection } from "./connection";
 import type { ProxyFrame, ProxyRequestBody, ProxySendResponse } from "./proxy";
 import { proxySendUrl, readFrames } from "./proxy";
 
 /* -------------------------------- shapes --------------------------------- */
 
-// The model types this file writes, spelled out rather than imported from
-// `@yaakapp-internal/models`: the platform package sits underneath the model
-// package in the dependency graph and must not import it.
-
-interface HttpResponseHeader {
-  name: string;
-  value: string;
-}
-
 /**
- * The fields of the `http_response` model this sender writes as a send
- * progresses. Every one is optional: a field this file never sets takes the
- * model layer's default, the same way the desktop's row does. Defaults live in
- * Rust, once.
+ * The response row as this file knows it: what identifies it, plus whatever
+ * has been written so far. Every other field is optional and takes the model
+ * layer's default when absent, the same way the desktop's row does — defaults
+ * live in Rust, once.
  */
-interface ResponsePatch {
-  state?: "initialized" | "connected" | "closed";
-  url?: string;
-  status?: number;
-  statusReason?: string | null;
-  version?: string | null;
-  remoteAddr?: string | null;
-  headers?: HttpResponseHeader[];
-  requestHeaders?: HttpResponseHeader[];
-  contentLength?: number | null;
-  contentLengthCompressed?: number | null;
-  elapsed?: number;
-  elapsedHeaders?: number;
-  elapsedDns?: number;
-  error?: string | null;
-}
+type ResponseRow = Pick<HttpResponse, "model" | "requestId" | "workspaceId"> &
+  Partial<Omit<HttpResponse, "model" | "requestId" | "workspaceId">>;
 
-/** The row itself: what identifies it, plus whatever has been written so far. */
-type ResponseRow = {
-  model: "http_response";
-  id?: string;
-  requestId: string;
-  workspaceId: string;
-} & ResponsePatch;
-
-interface CookieJarModel {
-  model: "cookie_jar";
-  id: string;
-  cookies: unknown[];
-  [key: string]: unknown;
-}
+type ResponsePatch = Partial<HttpResponse>;
 
 /** What `prepare_http_send` (crates/yaak-web) hands back. */
 interface PreparedHttpSend {
-  request: { url: string; [key: string]: unknown };
+  request: HttpRequest;
   settings: ProxyRequestBody["settings"];
-  settingEvents: unknown[];
-  cookieJar: CookieJarModel | null;
+  settingEvents: HttpResponseEventData[];
+  cookieJar: CookieJar | null;
 }
 
 /** The desktop writes progress at most this often while a body streams in. */
@@ -92,7 +65,7 @@ export async function sendHttpRequest(
   requestId: string,
   environmentId: string | null,
   cookieJarId: string | null,
-): Promise<unknown> {
+): Promise<ResponseRow> {
   // The response row exists before anything can go wrong, as on the desktop, so
   // a failure to render or to reach the proxy lands in the response pane as
   // that response's error rather than as a toast that names no request.
@@ -300,7 +273,7 @@ class ResponseWriter {
  * which the whole timeline is known to be in the database.
  */
 class TimelineWriter {
-  private queue: unknown[] = [];
+  private queue: HttpResponseEventData[] = [];
   private inFlight: Promise<void> = Promise.resolve();
 
   constructor(
@@ -309,7 +282,7 @@ class TimelineWriter {
     private readonly workspaceId: string,
   ) {}
 
-  push(events: unknown[]): void {
+  push(events: HttpResponseEventData[]): void {
     if (events.length === 0) return;
     this.queue.push(...events);
     this.inFlight = this.inFlight.then(() => this.drain());
@@ -331,11 +304,7 @@ class TimelineWriter {
   }
 }
 
-async function persistCookies(
-  db: WorkerConnection,
-  jar: CookieJarModel,
-  cookies: unknown[],
-): Promise<void> {
+async function persistCookies(db: WorkerConnection, jar: CookieJar, cookies: Cookie[]): Promise<void> {
   // The desktop compares before writing so a jar edited mid-send isn't clobbered
   // by an unchanged copy. Structural equality is enough here: cookies are plain
   // data and the proxy hands back the whole jar.
