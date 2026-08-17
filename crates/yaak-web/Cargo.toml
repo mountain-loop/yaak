@@ -25,6 +25,7 @@ crate-type = ["cdylib", "rlib"]
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+yaak-lifecycle = { workspace = true }
 yaak-models = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

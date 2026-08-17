@@ -8,7 +8,6 @@ use yaak_crypto::manager::EncryptionManager;
 use yaak_http::manager::HttpConnectionManager;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
-use yaak_models::hooks::Role;
 use yaak_models::query_manager::QueryManager;
 use yaak_plugins::events::PluginContext;
 use yaak_plugins::manager::PluginManager;
@@ -54,7 +53,10 @@ impl CliContext {
         // A guest: the desktop may have this database open right now, so this
         // is only the upkeep that is safe beside a live session. Best-effort;
         // a failure here is not a reason to refuse the user's command.
-        let _ = yaak_models::hooks::before_serving(&query_manager.connect(), Role::Guest);
+        let _ = yaak_lifecycle::before_serving(
+            &yaak_lifecycle::Host::guest(),
+            &query_manager.connect(),
+        );
 
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 

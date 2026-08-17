@@ -26,7 +26,6 @@ use std::sync::mpsc;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
-use yaak_models::hooks::Role;
 use yaak_models::models::AnyModel;
 use yaak_models::models_ops;
 use yaak_models::query_manager::QueryManager;
@@ -42,6 +41,12 @@ struct Host {
     queries: QueryManager,
     blobs: BlobManager,
     events: mpsc::Receiver<ModelPayload>,
+}
+
+/// What this host is to the lifecycle hooks: the SharedWorker owns the
+/// database, and there is no disk for anything to live on.
+fn lifecycle_host() -> yaak_lifecycle::Host {
+    yaak_lifecycle::Host::owner()
 }
 
 thread_local! {
@@ -94,7 +99,7 @@ pub async fn boot() -> Result<()> {
 
     // The same startup upkeep the desktop does, from the same module; only the
     // scheduling is this host's.
-    if let Err(e) = yaak_models::hooks::before_serving(&queries.connect(), Role::Owner) {
+    if let Err(e) = yaak_lifecycle::before_serving(&lifecycle_host(), &queries.connect()) {
         web_sys::console::warn_2(&"Startup hook failed".into(), &js_error(e));
     }
 
@@ -121,11 +126,9 @@ fn spawn_housekeeping() {
         });
         let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
 
-        // No filesystem here, so no responses directory: bodies are only ever
-        // blob chunks.
         let swept = with_host(|host| {
             let db = host.queries.connect();
-            yaak_models::hooks::housekeeping(&db, &host.blobs, None).map_err(js_error)
+            yaak_lifecycle::housekeeping(&lifecycle_host(), &db, &host.blobs).map_err(js_error)
         });
 
         match swept {

@@ -12,7 +12,6 @@ pub mod blob_manager;
 pub mod client_db;
 mod connection_or_tx;
 pub mod error;
-pub mod hooks;
 pub mod migrate;
 pub mod models;
 pub mod models_ops;

@@ -12,7 +12,6 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
 use yaak_models::error::Result;
-use yaak_models::hooks::Role;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
 
@@ -152,9 +151,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 };
 
-            if let Err(err) =
-                yaak_models::hooks::before_serving(&query_manager.connect(), Role::Owner)
-            {
+            let host = yaak_lifecycle::Host::owner().with_responses_dir(app_path.join("responses"));
+            if let Err(err) = yaak_lifecycle::before_serving(&host, &query_manager.connect()) {
                 error!("Startup hook failed: {err:?}");
             }
             // Only stream writes that happen after this app launch.
@@ -165,14 +163,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             // Off the startup path: this scans the whole blob database
             let gc_query_manager = query_manager.clone();
             let gc_blob_manager = blob_manager.clone();
-            let gc_responses_dir = app_path.join("responses");
             tauri::async_runtime::spawn_blocking(move || {
                 let db = gc_query_manager.connect();
-                match yaak_models::hooks::housekeeping(
-                    &db,
-                    &gc_blob_manager,
-                    Some(&gc_responses_dir),
-                ) {
+                match yaak_lifecycle::housekeeping(&host, &db, &gc_blob_manager) {
                     Ok(0) => {}
                     Ok(n) => log::info!("Deleted {n} orphaned response bodies"),
                     Err(e) => error!("Housekeeping hook failed: {e:?}"),

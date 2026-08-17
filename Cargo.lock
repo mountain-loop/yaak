@@ -11277,6 +11277,7 @@ dependencies = [
  "yaak-grpc",
  "yaak-http",
  "yaak-license",
+ "yaak-lifecycle",
  "yaak-mac-window",
  "yaak-models",
  "yaak-plugins",
@@ -11342,6 +11343,7 @@ dependencies = [
  "yaak-core",
  "yaak-crypto",
  "yaak-http",
+ "yaak-lifecycle",
  "yaak-models",
  "yaak-plugins",
  "yaak-templates",
@@ -11523,6 +11525,13 @@ dependencies = [
  "ts-rs",
  "yaak-api",
  "yaak-common",
+ "yaak-models",
+]
+
+[[package]]
+name = "yaak-lifecycle"
+version = "0.0.0"
+dependencies = [
  "yaak-models",
 ]
 
@@ -11746,6 +11755,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "yaak-lifecycle",
  "yaak-models",
 ]
 
