@@ -11532,6 +11532,7 @@ dependencies = [
 name = "yaak-lifecycle"
 version = "0.0.0"
 dependencies = [
+ "log 0.4.29",
  "yaak-models",
 ]
 

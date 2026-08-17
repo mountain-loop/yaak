@@ -1260,20 +1260,10 @@ pub fn run() {
         .setup(|app| {
             let lifecycle_host = yaak_lifecycle::Host::owner()
                 .with_responses_dir(app.path().app_data_dir()?.join("responses"));
-            if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host, &app.db()) {
-                error!("on_launch hook failed: {e:?}");
-            }
+            if let Err(e) =
+                yaak_lifecycle::on_launch(&lifecycle_host, &app.db(), &app.blob_manager())
             {
-                let query_manager = app.db_manager().inner().clone();
-                let blob_manager = app.blob_manager().inner().clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    let db = query_manager.connect();
-                    match yaak_lifecycle::after_launch(&lifecycle_host, &db, &blob_manager) {
-                        Ok(0) => {}
-                        Ok(n) => info!("Deleted {n} orphaned response bodies"),
-                        Err(e) => error!("after_launch hook failed: {e:?}"),
-                    }
-                });
+                error!("on_launch hook failed: {e:?}");
             }
 
             // The RPC command registry — every frontend command dispatches

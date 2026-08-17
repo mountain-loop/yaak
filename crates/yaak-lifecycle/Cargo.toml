@@ -6,4 +6,5 @@ authors = ["Gregory Schier"]
 publish = false
 
 [dependencies]
+log = { workspace = true }
 yaak-models = { workspace = true }

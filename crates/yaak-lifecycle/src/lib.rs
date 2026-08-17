@@ -4,6 +4,7 @@
 //! Builds for wasm32, so it can depend on `yaak-models` but not on the send
 //! engine or plugin runtime.
 
+use log::info;
 use std::path::PathBuf;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
@@ -43,8 +44,7 @@ impl Host {
 }
 
 /// Run once after the database is open, before the host answers anything.
-/// Cheap; must finish before the frontend can read a stale in-flight row.
-pub fn on_launch(host: &Host, db: &ClientDb) -> Result<()> {
+pub fn on_launch(host: &Host, db: &ClientDb, blobs: &BlobManager) -> Result<()> {
     db.prune_model_changes_older_than_hours(MODEL_CHANGES_RETENTION_HOURS)?;
 
     if host.role == Role::Owner {
@@ -52,19 +52,18 @@ pub fn on_launch(host: &Host, db: &ClientDb) -> Result<()> {
         db.cancel_pending_http_responses()?;
         db.cancel_pending_grpc_connections()?;
         db.cancel_pending_websocket_connections()?;
+
+        // Cascaded deletes never cleaned up response bodies
+        let deleted = match host.responses_dir.as_deref() {
+            Some(dir) => db.delete_orphaned_response_bodies(blobs, dir)?,
+            None => db.delete_orphaned_response_body_blobs(blobs)?,
+        };
+        if deleted > 0 {
+            info!("Deleted {deleted} orphaned response bodies");
+        }
     }
 
     Ok(())
-}
-
-/// Run once in the background after launch: sweeps response bodies whose row
-/// is gone (cascaded deletes never cleaned them up). Scans the whole blob
-/// database, so keep it off the startup path. Returns how many were deleted.
-pub fn after_launch(host: &Host, db: &ClientDb, blobs: &BlobManager) -> Result<usize> {
-    match host.responses_dir.as_deref() {
-        Some(dir) => db.delete_orphaned_response_bodies(blobs, dir),
-        None => db.delete_orphaned_response_body_blobs(blobs),
-    }
 }
 
 #[cfg(test)]
@@ -106,17 +105,17 @@ mod tests {
             )
             .unwrap();
 
-        on_launch(&Host::guest(), &db).unwrap();
+        on_launch(&Host::guest(), &db, &blob_manager).unwrap();
         let response = db.get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Connected));
 
-        on_launch(&Host::owner(), &db).unwrap();
+        on_launch(&Host::owner(), &db, &blob_manager).unwrap();
         let response = db.get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Closed));
     }
 
     #[test]
-    fn after_launch_without_a_filesystem_still_sweeps_blobs() {
+    fn owner_without_a_filesystem_still_sweeps_blobs() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
         let db = query_manager.connect();
         {
@@ -124,9 +123,8 @@ mod tests {
             blob_ctx.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())).unwrap();
         }
 
-        let deleted = after_launch(&Host::owner(), &db, &blob_manager).unwrap();
+        on_launch(&Host::owner(), &db, &blob_manager).unwrap();
 
-        assert_eq!(deleted, 1);
         assert!(!blob_manager.connect().body_exists("rs_gone").unwrap());
     }
 }
