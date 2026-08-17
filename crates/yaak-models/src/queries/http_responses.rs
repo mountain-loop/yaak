@@ -45,6 +45,31 @@ impl<'a> ClientDb<'a> {
         Ok(count)
     }
 
+    /// Delete blob-stored response bodies whose owning HTTP response row no
+    /// longer exists. Blob ids are keyed by the response that owns them —
+    /// "{response_id}" for a response body, "{response_id}.request" for the
+    /// request that produced it — so ownership is the id's first segment.
+    ///
+    /// The blob half of [`Self::delete_orphaned_response_bodies`], on its own
+    /// for hosts with no filesystem to hold body files. See `crate::hooks`.
+    ///
+    /// Returns the number of orphaned bodies deleted.
+    pub fn delete_orphaned_response_body_blobs(&self, blobs: &BlobManager) -> Result<usize> {
+        let mut deleted = 0;
+
+        let blob_ctx = blobs.connect();
+        for body_id in blob_ctx.list_body_ids()? {
+            let response_id = body_id.split('.').next().unwrap_or_default();
+            if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some() {
+                continue;
+            }
+            blob_ctx.delete_chunks(&body_id)?;
+            deleted += 1;
+        }
+
+        Ok(deleted)
+    }
+
     /// Delete response body data (blob chunks and body files) whose owning HTTP
     /// response row no longer exists. Cascaded deletes (request, folder,
     /// workspace) historically never cleaned the blob DB or the responses
@@ -59,18 +84,7 @@ impl<'a> ClientDb<'a> {
         blobs: &BlobManager,
         responses_dir: &std::path::Path,
     ) -> Result<usize> {
-        let mut deleted = 0;
-
-        // Blob chunks are keyed "{response_id}.request"
-        let blob_ctx = blobs.connect();
-        for body_id in blob_ctx.list_body_ids()? {
-            let response_id = body_id.split('.').next().unwrap_or_default();
-            if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some() {
-                continue;
-            }
-            blob_ctx.delete_chunks(&body_id)?;
-            deleted += 1;
-        }
+        let mut deleted = self.delete_orphaned_response_body_blobs(blobs)?;
 
         // Body files are stored as {responses_dir}/{response_id}
         if let Ok(entries) = fs::read_dir(responses_dir) {
@@ -172,19 +186,20 @@ impl<'a> ClientDb<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::blob_manager::BodyChunk;
+    use crate::blob_manager::{BlobManager, BodyChunk};
+    use crate::client_db::ClientDb;
     use crate::init_in_memory;
     use crate::models::{HttpRequest, HttpResponse, Workspace};
     use crate::util::UpdateSource;
 
-    #[test]
-    fn deletes_orphaned_response_bodies() {
-        let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
-
+    /// A workspace, a request, and one response that still exists.
+    fn seed_live_response(db: &ClientDb, blob_manager: &BlobManager) -> HttpResponse {
         let source = &UpdateSource::Background;
         let workspace = db
-            .upsert_workspace(&Workspace { name: "GC Test".to_string(), ..Default::default() }, source)
+            .upsert_workspace(
+                &Workspace { name: "GC Test".to_string(), ..Default::default() },
+                source,
+            )
             .expect("Failed to upsert workspace");
         let request = db
             .upsert_http_request(
@@ -192,19 +207,57 @@ mod tests {
                 source,
             )
             .expect("Failed to upsert request");
+        db.upsert_http_response(
+            &HttpResponse {
+                request_id: request.id.clone(),
+                workspace_id: workspace.id.clone(),
+                ..Default::default()
+            },
+            source,
+            blob_manager,
+        )
+        .expect("Failed to upsert response")
+    }
 
-        let live = db
-            .upsert_http_response(
-                &HttpResponse {
-                    request_id: request.id.clone(),
-                    workspace_id: workspace.id.clone(),
-                    ..Default::default()
-                },
-                source,
-                &blob_manager,
-            )
-            .expect("Failed to upsert response");
+    /// What a browser host runs: no filesystem, so bodies exist only as blob
+    /// chunks, under both id shapes the blob DB uses.
+    #[test]
+    fn deletes_orphaned_response_body_blobs() {
+        let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
 
+        let live = seed_live_response(&db, &blob_manager);
+        let live_request_body_id = format!("{}.request", live.id);
+        {
+            // Scope the connection: the in-memory pool only has one, and the GC
+            // needs to take it
+            let blob_ctx = blob_manager.connect();
+            blob_ctx.insert_chunk(&BodyChunk::new(&live.id, 0, b"live".to_vec())).unwrap();
+            blob_ctx
+                .insert_chunk(&BodyChunk::new(&live_request_body_id, 0, b"live".to_vec()))
+                .unwrap();
+            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())).unwrap();
+            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone.request", 0, b"dead".to_vec())).unwrap();
+        }
+
+        let deleted = db
+            .delete_orphaned_response_body_blobs(&blob_manager)
+            .expect("Failed to GC response body blobs");
+        assert_eq!(deleted, 2);
+
+        let blob_ctx = blob_manager.connect();
+        assert!(blob_ctx.body_exists(&live.id).unwrap());
+        assert!(blob_ctx.body_exists(&live_request_body_id).unwrap());
+        assert!(!blob_ctx.body_exists("rs_gone").unwrap());
+        assert!(!blob_ctx.body_exists("rs_gone.request").unwrap());
+    }
+
+    #[test]
+    fn deletes_orphaned_response_bodies() {
+        let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+
+        let live = seed_live_response(&db, &blob_manager);
         let live_body_id = format!("{}.request", live.id);
         {
             // Scope the connection: the in-memory pool only has one, and the GC

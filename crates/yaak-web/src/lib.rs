@@ -43,6 +43,10 @@ struct Host {
     events: mpsc::Receiver<ModelPayload>,
 }
 
+fn lifecycle_host() -> yaak_lifecycle::Host {
+    yaak_lifecycle::Host::owner()
+}
+
 thread_local! {
     static HOST: RefCell<Option<Host>> = const { RefCell::new(None) };
 }
@@ -90,6 +94,10 @@ pub async fn boot() -> Result<()> {
 
     let (queries, blobs, events) =
         yaak_models::init_standalone(DB_NAME, BLOB_DB_NAME).map_err(js_error)?;
+
+    if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host(), &queries.connect(), &blobs) {
+        web_sys::console::warn_2(&"on_launch hook failed".into(), &js_error(e));
+    }
 
     HOST.with(|h| *h.borrow_mut() = Some(Host { queries, blobs, events }));
     Ok(())

@@ -45,6 +45,7 @@ yaak-api = { workspace = true }
 yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }
+yaak-lifecycle = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }

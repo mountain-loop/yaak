@@ -49,6 +49,14 @@ impl CliContext {
                     std::process::exit(1);
                 }
             };
+
+        // Guest: the desktop may have this DB open, so only what's safe beside a live session
+        let _ = yaak_lifecycle::on_launch(
+            &yaak_lifecycle::Host::guest(),
+            &query_manager.connect(),
+            &blob_manager,
+        );
+
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
         Self {
