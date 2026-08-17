@@ -69,13 +69,13 @@ impl Host {
     }
 }
 
-/// Run once, after migrations and before the host answers its first command
-/// or starts polling for changes.
+/// The host has opened the database and is about to start answering. Run once,
+/// after migrations and before the first command or the first change poll.
 ///
 /// Cheap and synchronous on purpose: everything here is a handful of UPDATEs
 /// and one DELETE, and it has to land before the frontend can read a
 /// "pending" row that nothing will ever finish.
-pub fn before_serving(host: &Host, db: &ClientDb) -> Result<()> {
+pub fn on_launch(host: &Host, db: &ClientDb) -> Result<()> {
     // Safe for anyone: a row older than an hour is behind every poller that
     // could still want it.
     db.prune_model_changes_older_than_hours(MODEL_CHANGES_RETENTION_HOURS)?;
@@ -91,10 +91,10 @@ pub fn before_serving(host: &Host, db: &ClientDb) -> Result<()> {
     Ok(())
 }
 
-/// Run once, whenever an owner has a spare moment after boot — never on the
-/// path to first paint, because it scans the whole blob database. Safe next to
-/// a running send (the row is written before its body), so a guest *could*
-/// run it; a short-lived one just shouldn't pay for the scan on every
+/// The host is up. Run once, whenever an owner has a spare moment — never on
+/// the path to first paint, because it scans the whole blob database. Safe
+/// next to a running send (the row is written before its body), so a guest
+/// *could* run it; a short-lived one just shouldn't pay for the scan on every
 /// invocation.
 ///
 /// Sweeps response bodies whose owning row is gone. Cascaded deletes (request,
@@ -103,7 +103,7 @@ pub fn before_serving(host: &Host, db: &ClientDb) -> Result<()> {
 /// body *files* only where the host has a directory for them.
 ///
 /// Returns how many orphaned bodies were deleted.
-pub fn housekeeping(host: &Host, db: &ClientDb, blobs: &BlobManager) -> Result<usize> {
+pub fn after_launch(host: &Host, db: &ClientDb, blobs: &BlobManager) -> Result<usize> {
     match host.responses_dir.as_deref() {
         Some(dir) => db.delete_orphaned_response_bodies(blobs, dir),
         None => db.delete_orphaned_response_body_blobs(blobs),
@@ -150,18 +150,18 @@ mod tests {
             .unwrap();
 
         // A guest leaves it alone: it may be another process's live send.
-        before_serving(&Host::guest(), &db).unwrap();
+        on_launch(&Host::guest(), &db).unwrap();
         let response = db.get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Connected));
 
         // The owner knows nothing survived the restart.
-        before_serving(&Host::owner(), &db).unwrap();
+        on_launch(&Host::owner(), &db).unwrap();
         let response = db.get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Closed));
     }
 
     #[test]
-    fn housekeeping_without_a_filesystem_still_sweeps_blobs() {
+    fn after_launch_without_a_filesystem_still_sweeps_blobs() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
         let db = query_manager.connect();
         {
@@ -169,7 +169,7 @@ mod tests {
             blob_ctx.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())).unwrap();
         }
 
-        let deleted = housekeeping(&Host::owner(), &db, &blob_manager).unwrap();
+        let deleted = after_launch(&Host::owner(), &db, &blob_manager).unwrap();
 
         assert_eq!(deleted, 1);
         assert!(!blob_manager.connect().body_exists("rs_gone").unwrap());

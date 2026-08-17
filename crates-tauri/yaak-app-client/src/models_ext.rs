@@ -151,26 +151,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 };
 
-            let host = yaak_lifecycle::Host::owner().with_responses_dir(app_path.join("responses"));
-            if let Err(err) = yaak_lifecycle::before_serving(&host, &query_manager.connect()) {
-                error!("Startup hook failed: {err:?}");
-            }
             // Only stream writes that happen after this app launch.
             let cursor = ModelChangeCursor::from_launch_time();
 
             let poll_query_manager = query_manager.clone();
-
-            // Off the startup path: this scans the whole blob database
-            let gc_query_manager = query_manager.clone();
-            let gc_blob_manager = blob_manager.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                let db = gc_query_manager.connect();
-                match yaak_lifecycle::housekeeping(&host, &db, &gc_blob_manager) {
-                    Ok(0) => {}
-                    Ok(n) => log::info!("Deleted {n} orphaned response bodies"),
-                    Err(e) => error!("Housekeeping hook failed: {e:?}"),
-                }
-            });
 
             app_handle.manage(query_manager);
             app_handle.manage(blob_manager);

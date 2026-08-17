@@ -1258,6 +1258,29 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            // The database is open (models_ext ran first); this is the app
+            // starting. Lifecycle hooks are shared with the browser and CLI
+            // hosts, so only the scheduling is decided here: the cheap part
+            // now, before any window can read a stale row, and the blob scan
+            // off the startup path.
+            let lifecycle_host = yaak_lifecycle::Host::owner()
+                .with_responses_dir(app.path().app_data_dir()?.join("responses"));
+            if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host, &app.db()) {
+                error!("on_launch hook failed: {e:?}");
+            }
+            {
+                let query_manager = app.db_manager().inner().clone();
+                let blob_manager = app.blob_manager().inner().clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let db = query_manager.connect();
+                    match yaak_lifecycle::after_launch(&lifecycle_host, &db, &blob_manager) {
+                        Ok(0) => {}
+                        Ok(n) => info!("Deleted {n} orphaned response bodies"),
+                        Err(e) => error!("after_launch hook failed: {e:?}"),
+                    }
+                });
+            }
+
             // The RPC command registry — every frontend command dispatches
             // through this via the single `rpc` Tauri command
             app.manage(rpc_ext::build_rpc_router::<TauriRuntime>());

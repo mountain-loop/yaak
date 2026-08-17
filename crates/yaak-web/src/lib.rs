@@ -99,18 +99,18 @@ pub async fn boot() -> Result<()> {
 
     // The same startup upkeep the desktop does, from the same module; only the
     // scheduling is this host's.
-    if let Err(e) = yaak_lifecycle::before_serving(&lifecycle_host(), &queries.connect()) {
-        web_sys::console::warn_2(&"Startup hook failed".into(), &js_error(e));
+    if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host(), &queries.connect()) {
+        web_sys::console::warn_2(&"on_launch hook failed".into(), &js_error(e));
     }
 
     HOST.with(|h| *h.borrow_mut() = Some(Host { queries, blobs, events }));
 
-    spawn_housekeeping();
+    spawn_after_launch();
 
     Ok(())
 }
 
-/// Run the housekeeping hook once, in the background.
+/// Run the `after_launch` hook once, in the background.
 ///
 /// Deferred to a macrotask rather than awaited: every command in the worker
 /// waits on `boot()`, so doing this inline would put a full scan of the blob
@@ -118,7 +118,7 @@ pub async fn boot() -> Result<()> {
 /// be enough — its task is queued as a microtask, ahead of the `message`
 /// events the tab has already posted. Yielding through `setTimeout` puts the
 /// sweep behind them.
-fn spawn_housekeeping() {
+fn spawn_after_launch() {
     wasm_bindgen_futures::spawn_local(async {
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             let global: web_sys::WorkerGlobalScope = js_sys::global().unchecked_into();
@@ -128,7 +128,7 @@ fn spawn_housekeeping() {
 
         let swept = with_host(|host| {
             let db = host.queries.connect();
-            yaak_lifecycle::housekeeping(&lifecycle_host(), &db, &host.blobs).map_err(js_error)
+            yaak_lifecycle::after_launch(&lifecycle_host(), &db, &host.blobs).map_err(js_error)
         });
 
         match swept {
@@ -136,7 +136,7 @@ fn spawn_housekeeping() {
             Ok(n) => {
                 web_sys::console::info_1(&format!("Deleted {n} orphaned response bodies").into())
             }
-            Err(e) => web_sys::console::warn_2(&"Housekeeping hook failed".into(), &e),
+            Err(e) => web_sys::console::warn_2(&"after_launch hook failed".into(), &e),
         }
     });
 }
