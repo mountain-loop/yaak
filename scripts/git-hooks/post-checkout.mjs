@@ -17,7 +17,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const isBranchCheckout = process.argv[4] === "1";
+// Git supplies three arguments when invoking this as a post-checkout hook. When run directly,
+// assume the caller wants to configure the current worktree instead of requiring placeholder refs.
+const isManualRun = process.argv.length === 2;
+const isBranchCheckout = isManualRun || process.argv[4] === "1";
 
 if (!isBranchCheckout) {
   process.exit(0);
