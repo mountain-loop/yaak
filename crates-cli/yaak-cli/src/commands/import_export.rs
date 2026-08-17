@@ -5,8 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use yaak::export::{self, ExportDataParams};
 use yaak::import;
-use yaak_core::WorkspaceContext;
-use yaak_models::util::BatchUpsertResult;
+use yaak_models::util::{BatchUpsertResult, ImportDestination};
 use yaak_plugins::events::{ImportResources, PluginContext};
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
@@ -51,6 +50,7 @@ async fn import(ctx: &CliContext, args: ImportArgs) -> CommandResult<BatchUpsert
         .import_data(&plugin_context, &file_contents)
         .await
         .map_err(|e| format!("Failed to import data: {e}"))?;
+    let importer = import_result.importer;
     let resources = import_result.resources;
     let workspace_id = args.workspace_id;
     if workspace_id.is_none() && resources_need_current_workspace(&resources) {
@@ -59,13 +59,13 @@ async fn import(ctx: &CliContext, args: ImportArgs) -> CommandResult<BatchUpsert
                 .to_string(),
         );
     }
-    let workspace_context = WorkspaceContext {
-        workspace_id,
-        environment_id: None,
-        cookie_jar_id: None,
-        request_id: None,
+    let destination = match workspace_id {
+        Some(workspace_id) => ImportDestination::CurrentWorkspace { workspace_id, folder_id: None },
+        None => ImportDestination::NewWorkspace,
     };
-    let imported = import::import_resources(ctx.query_manager(), workspace_context, resources)
+    let plan = import::plan_import_resources(ctx.query_manager(), importer, destination, resources)
+        .map_err(|e| format!("Failed to plan import: {e}"))?;
+    let imported = import::commit_import_plan(ctx.query_manager(), plan)
         .map_err(|e| format!("Failed to import data: {e}"))?;
     Ok(imported)
 }
