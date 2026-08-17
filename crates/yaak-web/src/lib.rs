@@ -29,8 +29,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
+use yaak_models::cookies::apply_cookie_changes;
 use yaak_models::models::{
-    AnyModel, CookieJar, HttpRequest, HttpResponseEvent, HttpResponseEventData, HttpSendSettings,
+    AnyModel, Cookie, CookieJar, HttpRequest, HttpResponseEvent, HttpResponseEventData,
+    HttpSendSettings,
 };
 use yaak_models::models_ops;
 use yaak_models::query_manager::QueryManager;
@@ -216,6 +218,14 @@ struct ResponseIdReq {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct PersistSendCookiesReq {
+    cookie_jar_id: String,
+    before: Vec<Cookie>,
+    after: Vec<Cookie>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct InsertResponseEventsReq {
     response_id: String,
     workspace_id: String,
@@ -339,6 +349,20 @@ fn dispatch(
                     .list_http_response_events(&req.response_id)
                     .map_err(js_error)?,
             )
+        }
+
+        // The cookies a send set or cleared, applied to the jar as it is *now* rather than
+        // written over it, so an edit made while the send was in flight survives.
+        "web_persist_send_cookies" => {
+            let req: PersistSendCookiesReq = from_js(payload)?;
+            if req.before == req.after {
+                return to_json(());
+            }
+            let db = host.queries.connect();
+            let jar = db.get_cookie_jar(&req.cookie_jar_id).map_err(js_error)?;
+            let cookies = apply_cookie_changes(jar.cookies.clone(), &req.before, &req.after);
+            db.upsert_cookie_jar(&CookieJar { cookies, ..jar }, source).map_err(js_error)?;
+            to_json(())
         }
 
         // The tab's half of the send timeline: the events the proxy streamed back, recorded

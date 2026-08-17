@@ -53,6 +53,7 @@ async fn main() {
         config.allow_private_networks,
         &config.allow_hosts,
         &config.deny_hosts,
+        &config.nat64_prefixes,
     );
     let state = AppState {
         limits: Arc::new(SendLimits {

@@ -305,12 +305,14 @@ class TimelineWriter {
   }
 }
 
+/**
+ * Carry the send's cookie changes into the jar. The worker applies them as a
+ * difference against the jar as it is now (see `apply_cookie_changes` in
+ * yaak-models), so an edit made while the send was in flight survives rather
+ * than being written over by the send's stale snapshot.
+ */
 async function persistCookies(db: WorkerConnection, jar: CookieJar, cookies: Cookie[]): Promise<void> {
-  // The desktop compares before writing so a jar edited mid-send isn't clobbered
-  // by an unchanged copy. Structural equality is enough here: cookies are plain
-  // data and the proxy hands back the whole jar.
-  if (JSON.stringify(cookies) === JSON.stringify(jar.cookies)) return;
-  await db.rpc("models_upsert", { model: { ...jar, cookies } });
+  await db.rpc("web_persist_send_cookies", { cookieJarId: jar.id, before: jar.cookies, after: cookies });
 }
 
 /**

@@ -39,6 +39,7 @@ arguments; `--help` lists them all.
 | `--allow-private-networks` | off | Let sends reach private, loopback and link-local addresses. **Off by default; see below.** |
 | `--allow-hosts` | empty | Only these hosts (`api.example.com`, `*.example.com`). Empty means any host not denied. |
 | `--deny-hosts` | empty | Never these hosts. Checked before the allow list. |
+| `--nat64-prefixes` | empty | Network-specific NAT64 prefixes (`/96`) whose embedded IPv4 should be judged; the well-known and local-use prefixes always are. |
 | `--max-request-bytes` | 16 MiB | Largest rendered request accepted from the tab. |
 | `--max-response-bytes` | 64 MiB | Largest upstream body relayed before the send is cut off. |
 | `--max-timeout-secs` | 60 | Ceiling on a send's timeout; a request asking for more (or none) gets this. |
@@ -55,7 +56,9 @@ sits on. So by default it refuses to connect to:
 - loopback (`127/8`, `::1`), private (`10/8`, `172.16/12`, `192.168/16`,
   `fc00::/7`), link-local (`169.254/16` — where cloud metadata lives — and
   `fe80::/10`), carrier-grade NAT, multicast, reserved and unspecified ranges,
-  and IPv4 addresses tunnelled inside IPv6 forms (`::ffff:a.b.c.d`, NAT64);
+  and IPv4 addresses carried inside IPv6 forms (`::ffff:a.b.c.d`, the
+  well-known and local-use NAT64 prefixes, 6to4 — plus any NAT64 prefix you
+  name with `--nat64-prefixes`);
 - anything not `http://` or `https://`.
 
 The check runs **on the resolved addresses, after DNS**, for every hop of a

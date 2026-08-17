@@ -26,6 +26,9 @@ pub struct DestinationPolicy {
     allow_private_networks: bool,
     allow_hosts: Vec<HostPattern>,
     deny_hosts: Vec<HostPattern>,
+    /// NAT64 prefixes (/96) in use on this network beyond the well-known ones. An IPv6
+    /// address under one of these is really an IPv4 destination, and is judged as that.
+    nat64_prefixes: Vec<Ipv6Addr>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,11 +63,13 @@ impl DestinationPolicy {
         allow_private_networks: bool,
         allow_hosts: &[String],
         deny_hosts: &[String],
+        nat64_prefixes: &[Ipv6Addr],
     ) -> Self {
         Self {
             allow_private_networks,
             allow_hosts: allow_hosts.iter().filter_map(|h| HostPattern::parse(h)).collect(),
             deny_hosts: deny_hosts.iter().filter_map(|h| HostPattern::parse(h)).collect(),
+            nat64_prefixes: nat64_prefixes.to_vec(),
         }
     }
 
@@ -105,6 +110,17 @@ impl DestinationPolicy {
         if self.allow_private_networks {
             return Ok(());
         }
+        // An address under a configured NAT64 prefix reaches an IPv4 host; judge that host.
+        if let IpAddr::V6(v6) = ip
+            && self.nat64_prefixes.iter().any(|p| p.segments()[..6] == v6.segments()[..6])
+        {
+            let v4 = trailing_v4(&v6);
+            if let Some(reason) = non_public_v4(v4) {
+                return Err(format!(
+                    "Refusing to connect to {ip} (NAT64 for {v4}): {reason}. This proxy only sends to public addresses"
+                ));
+            }
+        }
         match non_public_reason(ip) {
             Some(reason) => Err(format!(
                 "Refusing to connect to {ip}: {reason}. This proxy only sends to public addresses"
@@ -118,8 +134,10 @@ impl DestinationPolicy {
 ///
 /// Every range here is one a hosted relay must never be talked into reaching: the machine
 /// itself, the network it sits on, and the link-local range where cloud metadata services
-/// (169.254.169.254) live. IPv4 addresses tunnelled inside IPv6 forms are unwrapped and judged
-/// as IPv4, since that is what the socket would connect to.
+/// (169.254.169.254) live. IPv4 addresses carried inside IPv6 forms — IPv4-mapped, the
+/// well-known and local-use NAT64 prefixes, 6to4 — are unwrapped and judged as IPv4, since
+/// that is where the packets end up. A network-specific NAT64 prefix is not knowable here;
+/// see `--nat64-prefix`.
 pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
     match ip {
         IpAddr::V4(v4) => non_public_v4(v4),
@@ -127,7 +145,7 @@ pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
             if let Some(v4) = v6.to_ipv4_mapped() {
                 return non_public_v4(v4);
             }
-            if let Some(v4) = nat64_embedded_v4(&v6) {
+            if let Some(v4) = embedded_v4(&v6) {
                 return non_public_v4(v4);
             }
             if v6.is_loopback() {
@@ -180,15 +198,33 @@ fn non_public_v4(v4: Ipv4Addr) -> Option<&'static str> {
     }
 }
 
-/// The IPv4 address inside a NAT64 (64:ff9b::/96) address, if this is one.
-fn nat64_embedded_v4(v6: &Ipv6Addr) -> Option<Ipv4Addr> {
+/// The IPv4 address an IPv6 address stands for, when it is one of the standard translation
+/// forms: NAT64 well-known prefix (64:ff9b::/96), NAT64 local-use prefix (64:ff9b:1::/48,
+/// RFC 8215), or 6to4 (2002::/16, where the IPv4 sits in the next 32 bits).
+fn embedded_v4(v6: &Ipv6Addr) -> Option<Ipv4Addr> {
     let s = v6.segments();
     if s[0] == 0x64 && s[1] == 0xff9b && s[2..6].iter().all(|x| *x == 0) {
-        let o = v6.octets();
-        Some(Ipv4Addr::new(o[12], o[13], o[14], o[15]))
-    } else {
-        None
+        return Some(trailing_v4(v6));
     }
+    if s[0] == 0x64 && s[1] == 0xff9b && s[2] == 1 {
+        return Some(trailing_v4(v6));
+    }
+    if s[0] == 0x2002 {
+        return Some(Ipv4Addr::new(
+            (s[1] >> 8) as u8,
+            (s[1] & 0xff) as u8,
+            (s[2] >> 8) as u8,
+            (s[2] & 0xff) as u8,
+        ));
+    }
+    None
+}
+
+/// The last 32 bits of an IPv6 address as an IPv4 address (where every /96 NAT64 prefix
+/// keeps it).
+fn trailing_v4(v6: &Ipv6Addr) -> Ipv4Addr {
+    let o = v6.octets();
+    Ipv4Addr::new(o[12], o[13], o[14], o[15])
 }
 
 /// An [`HttpSender`] that checks each hop's URL against the policy before delegating.
@@ -274,11 +310,25 @@ mod tests {
     }
 
     #[test]
+    fn a_configured_nat64_prefix_is_judged_by_the_address_it_carries() {
+        // A made-up global prefix, standing in for whatever the network's translator uses
+        let prefix: Ipv6Addr = "2a02:1234:64::".parse().unwrap();
+        let policy = DestinationPolicy::new(false, &[], &[], &[prefix]);
+        assert!(policy.check_ip(ip("2a02:1234:64::a9fe:a9fe")).is_err(), "metadata behind NAT64");
+        assert!(policy.check_ip(ip("2a02:1234:64::0a00:1")).is_err(), "10.0.0.1 behind NAT64");
+        assert!(policy.check_ip(ip("2a02:1234:64::0101:0101")).is_ok(), "1.1.1.1 behind NAT64");
+        // Without the prefix configured the same address is an ordinary global v6, and passes:
+        // that is exactly the gap the option exists to close.
+        let policy = DestinationPolicy::new(false, &[], &[], &[]);
+        assert!(policy.check_ip(ip("2a02:1234:64::a9fe:a9fe")).is_ok());
+    }
+
+    #[test]
     fn private_networks_can_be_opted_in() {
-        let policy = DestinationPolicy::new(true, &[], &[]);
+        let policy = DestinationPolicy::new(true, &[], &[], &[]);
         assert!(policy.check_url("http://127.0.0.1/").is_ok());
         assert!(policy.check_url("http://169.254.169.254/").is_ok());
-        let policy = DestinationPolicy::new(false, &[], &[]);
+        let policy = DestinationPolicy::new(false, &[], &[], &[]);
         assert!(policy.check_url("http://127.0.0.1/").is_err());
         assert!(policy.check_url("http://[::1]/").is_err());
         assert!(policy.check_url("http://169.254.169.254/latest/meta-data").is_err());
@@ -290,6 +340,7 @@ mod tests {
             false,
             &["*.example.com".into(), "api.test".into()],
             &["bad.example.com".into()],
+            &[],
         );
         assert!(policy.check_url("https://example.com/").is_ok());
         assert!(policy.check_url("https://a.b.example.com/").is_ok());
@@ -302,7 +353,7 @@ mod tests {
 
     #[test]
     fn only_http_schemes() {
-        let policy = DestinationPolicy::new(true, &[], &[]);
+        let policy = DestinationPolicy::new(true, &[], &[], &[]);
         assert!(policy.check_url("ftp://example.com/").is_err());
         assert!(policy.check_url("file:///etc/passwd").is_err());
         assert!(policy.check_url("https://example.com/").is_ok());

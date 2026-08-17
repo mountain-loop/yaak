@@ -49,6 +49,13 @@ pub struct Config {
     #[arg(long, env = "YAAK_PROXY_DENY_HOSTS", value_delimiter = ',')]
     pub deny_hosts: Vec<String>,
 
+    /// NAT64 prefixes (/96) in use on this network, comma-separated, e.g. `2001:db8:64::`. The
+    /// well-known (64:ff9b::/96) and local-use (64:ff9b:1::/48) prefixes are always recognised;
+    /// a network-specific prefix has to be named here or an IPv6 address under it could reach
+    /// an internal IPv4 host through the translator.
+    #[arg(long, env = "YAAK_PROXY_NAT64_PREFIXES", value_delimiter = ',')]
+    pub nat64_prefixes: Vec<std::net::Ipv6Addr>,
+
     /// Largest request the proxy accepts from the tab (the rendered request JSON, body included).
     #[arg(long, env = "YAAK_PROXY_MAX_REQUEST_BYTES", default_value_t = 16 * 1024 * 1024)]
     pub max_request_bytes: usize,
