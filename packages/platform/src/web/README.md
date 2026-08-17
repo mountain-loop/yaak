@@ -138,12 +138,15 @@ Reported honestly, so callers gate on the question rather than on the host:
 
 | True | False |
 | --- | --- |
-| `httpSending`, `timeline`, `cookieJar` | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `multiWindow`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
+| `httpSending`, `timeline`, `cookieJar` | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `multiWindow`, `windowChrome`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
 
 `multiWindow: false` means the host cannot open a *second window* on demand —
 what `cmd_new_child_window` does for Settings and workspace switching. It is not
 a claim that nothing else is looking: other tabs may well be open on the same
 worker, and it pushes every write to all of them regardless.
+
+`windowChrome: false` means the browser owns the frame around the page, so the
+header draws no window controls and reserves no room for macOS traffic lights.
 
 ## Multiple tabs
 

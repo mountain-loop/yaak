@@ -54,6 +54,9 @@ function capabilitiesFor(): PlatformCapabilities {
     // else is looking: other tabs may well be open on the same worker, and it
     // pushes every write to all of them regardless of this flag.
     multiWindow: false,
+    // The browser draws the frame around the page. There are no traffic lights
+    // to leave room for and no window controls to draw.
+    windowChrome: false,
     plugins: false,
     encryption: false,
     updater: false,

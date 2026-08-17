@@ -59,6 +59,7 @@ const ALL_CAPABILITIES: PlatformCapabilities = {
   localFiles: true,
   timeline: true,
   multiWindow: true,
+  windowChrome: true,
   plugins: true,
   encryption: true,
   updater: true,
