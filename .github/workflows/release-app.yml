@@ -102,13 +102,19 @@ jobs:
         if: matrix.os == 'ubuntu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils clang-15 llvm-15
+          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils
           # crates/yaak-web compiles SQLite to wasm via sqlite-wasm-rs, whose C shim
-          # uses C23 [[noreturn]]. Ubuntu 22.04's default clang-14 rejects it; clang-15
-          # from the same repos accepts it. Only the wasm build uses this compiler, so
-          # the shipped binary keeps 22.04's glibc floor.
-          echo "CC_wasm32_unknown_unknown=/usr/bin/clang-15" >> "$GITHUB_ENV"
-          echo "AR_wasm32_unknown_unknown=/usr/bin/llvm-ar-15" >> "$GITHUB_ENV"
+          # uses C23 [[noreturn]] and expects a freestanding wasm32 target. Ubuntu
+          # 22.04 ships only clang <=15: 14 rejects the attribute, and 15 falls
+          # through to host glibc headers ("bits/libc-header-start.h" not found).
+          # clang-18 handles it (it is what ubuntu-24.04 uses). Install it from
+          # apt.llvm.org since 22.04's repos stop at 15. Only the wasm build uses
+          # this compiler, so the shipped binary keeps 22.04's glibc floor.
+          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 18
+          echo "CC_wasm32_unknown_unknown=/usr/bin/clang-18" >> "$GITHUB_ENV"
+          echo "AR_wasm32_unknown_unknown=/usr/bin/llvm-ar-18" >> "$GITHUB_ENV"
 
       - name: Install Protoc for plugin-runtime
         uses: arduino/setup-protoc@v3
