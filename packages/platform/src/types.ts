@@ -255,6 +255,13 @@ export interface PlatformCapabilities {
   timeline: boolean;
   /** More than one window or tab on the same data. */
   multiWindow: boolean;
+  /**
+   * The page is the window's titlebar: it draws the drag region and window
+   * controls, and leaves room for macOS traffic lights. False when something
+   * else owns the frame around the page (a browser tab), so none of that
+   * chrome should be reserved or drawn.
+   */
+  windowChrome: boolean;
   /** The plugin runtime. */
   plugins: boolean;
   /** Workspace encryption backed by a key the host keeps. */

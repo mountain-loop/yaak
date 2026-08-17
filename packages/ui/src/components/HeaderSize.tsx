@@ -1,3 +1,4 @@
+import { useCapability } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 import { useMemo } from "react";
@@ -31,6 +32,10 @@ export function HeaderSize({
   interfaceScale,
 }: HeaderSizeProps) {
   const isFullscreen = useIsFullscreen();
+  // The header only doubles as the titlebar when the host hands the page the
+  // window frame (Tauri) and the user hasn't opted for the native one. In a
+  // browser tab the frame is the browser's: no controls, no traffic lights.
+  const drawsWindowChrome = useCapability("windowChrome") && !useNativeTitlebar;
   const finalStyle = useMemo<CSSProperties>(() => {
     const s = { ...style };
 
@@ -38,8 +43,8 @@ export function HeaderSize({
     if (size === "md") s.minHeight = HEADER_SIZE_MD;
     if (size === "lg") s.minHeight = HEADER_SIZE_LG;
 
-    if (useNativeTitlebar) {
-      // No style updates when using native titlebar
+    if (!drawsWindowChrome) {
+      // No style updates when something else draws the titlebar
     } else if (osType === "macos") {
       if (!isFullscreen) {
         // Add large padding for window controls
@@ -57,7 +62,7 @@ export function HeaderSize({
     interfaceScale,
     size,
     style,
-    useNativeTitlebar,
+    drawsWindowChrome,
     osType,
   ]);
 
@@ -82,7 +87,7 @@ export function HeaderSize({
       >
         {children}
       </div>
-      {!hideControls && !useNativeTitlebar && (
+      {!hideControls && drawsWindowChrome && (
         <WindowControls
           onlyX={onlyXWindowControl}
           osType={osType}
