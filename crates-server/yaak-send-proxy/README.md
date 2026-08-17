@@ -35,7 +35,6 @@ arguments; `--help` lists them all.
 | --- | --- | --- |
 | `--bind` | `127.0.0.1:9227` | Listen address. `0.0.0.0:9227` inside a container. |
 | `--allowed-origins` | `*` | CORS origins, comma-separated. A hosted instance should name its web origin. |
-| `--allow-private-networks` | off | Let sends reach private, loopback and link-local addresses. **Off by default; see below.** |
 | `--max-request-bytes` | 16 MiB | Largest rendered request accepted from the tab. |
 | `--max-response-bytes` | 64 MiB | Largest upstream body relayed before the send is cut off. |
 | `--max-timeout-secs` | 60 | Ceiling on a send's timeout; a request asking for more (or none) gets this. |
@@ -47,7 +46,7 @@ arguments; `--help` lists them all.
 
 A hosted proxy is, by construction, a machine that makes HTTP requests on
 behalf of strangers. Left alone that is an open relay into whatever network it
-sits on. So by default it refuses to connect to:
+sits on. So it refuses, always, to connect to:
 
 - loopback (`127/8`, `::1`), private (`10/8`, `172.16/12`, `192.168/16`,
   `fc00::/7`), link-local (`169.254/16` — where cloud metadata lives — and
@@ -62,9 +61,9 @@ caught, and so is a `Location:` header that points at one. It also refuses body
 types that would read files on the proxy's disk (`binary`, multipart file
 fields), since no browser tab could legitimately mean those.
 
-Refusals are logged with the reason. A self-hosted instance on a private network
-that legitimately needs to reach the services next to it turns the range check
-off with `--allow-private-networks`.
+Refusals are logged with the reason. There is no switch to turn this off: the
+proxy's private network is the cloud's, not the user's, so a `localhost` or LAN
+API can never be reached through it — that is what the desktop app is for.
 
 ## Self-hosting
 

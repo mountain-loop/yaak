@@ -22,18 +22,6 @@ pub struct Config {
     )]
     pub allowed_origins: Vec<String>,
 
-    /// Allow sends to private, loopback, link-local and other non-public addresses.
-    ///
-    /// Off by default: a hosted instance must not become a relay into its own network. A
-    /// self-hosted instance on a private network legitimately needs this on to reach the
-    /// services next to it.
-    #[arg(
-        long,
-        env = "YAAK_PROXY_ALLOW_PRIVATE_NETWORKS",
-        default_value_t = false
-    )]
-    pub allow_private_networks: bool,
-
     /// Largest request the proxy accepts from the tab (the rendered request JSON, body included).
     #[arg(long, env = "YAAK_PROXY_MAX_REQUEST_BYTES", default_value_t = 16 * 1024 * 1024)]
     pub max_request_bytes: usize,

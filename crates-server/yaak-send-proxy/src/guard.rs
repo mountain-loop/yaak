@@ -20,17 +20,13 @@ use yaak_http::dns::AddressFilter;
 use yaak_http::sender::{HttpResponse, HttpResponseEvent, HttpSender};
 use yaak_http::types::SendableHttpRequest;
 
-/// The destination policy, built once from config and shared by every send.
-#[derive(Clone)]
-pub struct DestinationPolicy {
-    allow_private_networks: bool,
-}
+/// The destination policy, shared by every send: public addresses only, always. A hosted
+/// proxy's "private network" is the cloud's, not the user's, so there is no configuration
+/// that makes reaching it right.
+#[derive(Clone, Default)]
+pub struct DestinationPolicy;
 
 impl DestinationPolicy {
-    pub fn new(allow_private_networks: bool) -> Self {
-        Self { allow_private_networks }
-    }
-
     /// Check a URL before a hop is attempted: scheme and literal IPs. A hostname that passes
     /// here still has its resolved addresses checked by [`Self::address_filter`].
     pub fn check_url(&self, raw: &str) -> Result<(), String> {
@@ -57,9 +53,6 @@ impl DestinationPolicy {
     }
 
     pub fn check_ip(&self, ip: IpAddr) -> Result<(), String> {
-        if self.allow_private_networks {
-            return Ok(());
-        }
         match non_public_reason(ip) {
             Some(reason) => Err(format!(
                 "Refusing to connect to {ip}: {reason}. This proxy only sends to public addresses"
@@ -248,11 +241,8 @@ mod tests {
     }
 
     #[test]
-    fn private_networks_can_be_opted_in() {
-        let policy = DestinationPolicy::new(true);
-        assert!(policy.check_url("http://127.0.0.1/").is_ok());
-        assert!(policy.check_url("http://169.254.169.254/").is_ok());
-        let policy = DestinationPolicy::new(false);
+    fn literal_private_addresses_in_urls_are_refused() {
+        let policy = DestinationPolicy;
         assert!(policy.check_url("http://127.0.0.1/").is_err());
         assert!(policy.check_url("http://[::1]/").is_err());
         assert!(policy.check_url("http://169.254.169.254/latest/meta-data").is_err());
@@ -260,7 +250,7 @@ mod tests {
 
     #[test]
     fn only_http_schemes() {
-        let policy = DestinationPolicy::new(true);
+        let policy = DestinationPolicy;
         assert!(policy.check_url("ftp://example.com/").is_err());
         assert!(policy.check_url("file:///etc/passwd").is_err());
         assert!(policy.check_url("https://example.com/").is_ok());

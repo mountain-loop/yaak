@@ -49,7 +49,7 @@ async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let config = Config::parse();
 
-    let policy = DestinationPolicy::new(config.allow_private_networks);
+    let policy = DestinationPolicy;
     let state = AppState {
         limits: Arc::new(SendLimits {
             policy,
@@ -81,8 +81,7 @@ async fn main() {
         std::process::exit(1);
     });
     info!(
-        "yaak-send-proxy listening on http://{bind} (private networks: {}, rate limit: {}/min)",
-        if state.config.allow_private_networks { "allowed" } else { "refused" },
+        "yaak-send-proxy listening on http://{bind} (rate limit: {}/min)",
         state.config.rate_limit_per_minute,
     );
 
@@ -108,7 +107,6 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
     Json(json!({
         "ok": true,
         "version": env!("CARGO_PKG_VERSION"),
-        "privateNetworks": state.config.allow_private_networks,
         "maxResponseBytes": state.config.max_response_bytes,
         "maxTimeoutSecs": state.config.max_timeout_secs,
     }))

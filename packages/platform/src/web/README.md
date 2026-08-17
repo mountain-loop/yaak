@@ -208,7 +208,9 @@ template *function* (`${[ timestamp() ]}`) or an authentication plugin (bearer,
 basic, OAuth, …) is refused before anything leaves the tab, with a message naming
 what it needs; those light up when plugins run in the browser. Requests with a
 file body or multipart file fields are refused by the proxy (it has no access to
-your files, and must not read its own).
+your files, and must not read its own). And a request to `localhost` or a LAN
+address can't work from a browser: the proxy runs elsewhere and refuses private
+ranges outright — reaching your own machine's APIs is what the desktop app is for.
 
 The proxy URL is `VITE_YAAK_SEND_PROXY_URL` at build time, defaulting to
 `http://127.0.0.1:9227` (see `proxy.ts`). Run one with `cargo run -p yaak-send-proxy`.
