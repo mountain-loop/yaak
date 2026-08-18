@@ -14,9 +14,8 @@ export function showAlert({ id, title, body, size = "sm" }: AlertArgs) {
   showDialog({
     id,
     title,
-    hideX: true,
     size,
-    disableBackdropClose: true, // Prevent accidental dismisses
+    disableClose: true,
     render: ({ hide }) => Alert({ onHide: hide, body }),
   });
 }

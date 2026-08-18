@@ -10,11 +10,13 @@ export interface DialogProps {
   children: ReactNode;
   open: boolean;
   onClose?: () => void;
-  disableBackdropClose?: boolean;
+  /** Block dismissal from the backdrop, Escape key, and built-in close button. */
+  disableClose?: boolean;
   title?: ReactNode;
   description?: ReactNode;
   className?: string;
   size?: DialogSize;
+  /** Hide the built-in close button without changing backdrop or Escape behavior. */
   hideX?: boolean;
   noPadding?: boolean;
   noScroll?: boolean;
@@ -27,7 +29,7 @@ export function Dialog({
   size = "full",
   open,
   onClose,
-  disableBackdropClose,
+  disableClose,
   title,
   description,
   hideX,
@@ -42,7 +44,7 @@ export function Dialog({
   );
 
   return (
-    <Overlay open={open} onClose={disableBackdropClose ? undefined : onClose} portalName="dialog">
+    <Overlay open={open} onClose={disableClose ? undefined : onClose} portalName="dialog">
       <div
         role="dialog"
         className={classNames(
@@ -58,7 +60,7 @@ export function Dialog({
           // NOTE: We handle Escape on the element itself so that it doesn't close multiple
           //   dialogs and can be intercepted by children if needed.
           if (e.key === "Escape") {
-            onClose?.();
+            if (!disableClose) onClose?.();
             e.stopPropagation();
             e.preventDefault();
           }
@@ -110,7 +112,7 @@ export function Dialog({
           </div>
 
           {/*Put close at the end so that it's the last thing to be tabbed to*/}
-          {!hideX && (
+          {!disableClose && !hideX && (
             <div className="ml-auto absolute right-1 top-1">
               <IconButton
                 className="opacity-70 hover:opacity-100"

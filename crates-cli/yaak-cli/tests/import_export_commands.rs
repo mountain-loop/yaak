@@ -81,14 +81,21 @@ fn import_reads_yaak_workspace_file() {
 
     let query_manager = query_manager(data_dir);
     let db = query_manager.connect();
-    assert_eq!(
-        db.get_workspace("wrk_import").expect("workspace imported").name,
-        "Imported Workspace"
-    );
-    assert_eq!(
-        db.get_http_request("req_import").expect("request imported").url,
-        "https://example.com"
-    );
+    let workspaces = db.list_workspaces().expect("list imported workspaces");
+    let workspace = workspaces
+        .iter()
+        .find(|workspace| workspace.name == "Imported Workspace")
+        .expect("workspace imported");
+    assert_ne!(workspace.id, "wrk_import");
+
+    let requests = db.list_http_requests(&workspace.id).expect("list imported requests");
+    let request = requests
+        .iter()
+        .find(|request| request.name == "Imported Request")
+        .expect("request imported");
+    assert_ne!(request.id, "req_import");
+    assert_eq!(request.workspace_id, workspace.id);
+    assert_eq!(request.url, "https://example.com");
 }
 
 fn write_postman_environment_fixture(path: &std::path::Path) {

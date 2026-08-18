@@ -2,3 +2,13 @@
 import type { Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace } from "./gen_models";
 
 export type BatchUpsertResult = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
+
+export type ImportDestination = { "type": "new_workspace" } | { "type": "current_workspace", workspaceId: string, folderId?: string, };
+
+export type ImportPlan = { importer: string, destination: ImportDestination, resources: ImportPlanResources, warnings: Array<ImportPlanWarning>, };
+
+export type ImportPlanWarning = { title: string, detail: string, };
+
+export type ImportPlanResources = { workspaces: Array<PlannedImportResource<Workspace>>, environments: Array<PlannedImportResource<Environment>>, folders: Array<PlannedImportResource<Folder>>, httpRequests: Array<PlannedImportResource<HttpRequest>>, grpcRequests: Array<PlannedImportResource<GrpcRequest>>, websocketRequests: Array<PlannedImportResource<WebsocketRequest>>, };
+
+export type PlannedImportResource<T> = { sourceKey?: string, resource: T, };
