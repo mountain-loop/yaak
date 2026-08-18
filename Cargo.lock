@@ -619,6 +619,8 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -627,10 +629,15 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -651,6 +658,7 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -9531,6 +9539,7 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -9569,6 +9578,7 @@ version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
+ "log 0.4.29",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -11492,7 +11502,6 @@ dependencies = [
  "log 0.4.29",
  "mime_guess",
  "native-tls",
- "regex 1.11.1",
  "reqwest 0.12.20",
  "serde",
  "serde_json",
@@ -11569,8 +11578,10 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "ts-rs",
+ "urlencoding",
  "yaak-core",
  "yaak-database",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -11662,6 +11673,29 @@ dependencies = [
  "yaak-sync",
  "yaak-templates",
  "yaak-ws",
+]
+
+[[package]]
+name = "yaak-send-proxy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "clap",
+ "env_logger",
+ "futures-util",
+ "log 0.4.29",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "ts-rs",
+ "url",
+ "uuid",
+ "yaak-http",
+ "yaak-models",
 ]
 
 [[package]]
@@ -11758,6 +11792,7 @@ dependencies = [
  "web-sys",
  "yaak-lifecycle",
  "yaak-models",
+ "yaak-templates",
 ]
 
 [[package]]

@@ -122,7 +122,7 @@ async function handle(port: MessagePort, message: ToWorker): Promise<void> {
     send(port, { type: "error", id: message.id, message: bootError ?? "Database failed to open" });
     return;
   }
-  const { rpc, blob_get, blob_put, blob_delete } = engine!;
+  const { rpc, blob_get, blob_put, blob_delete, prepare_http_send } = engine!;
 
   try {
     switch (message.type) {
@@ -140,6 +140,11 @@ async function handle(port: MessagePort, message: ToWorker): Promise<void> {
         if (outcome.events.length > 0) {
           broadcast({ type: "event", event: "model_writes", payload: outcome.events });
         }
+        return;
+      }
+      case "prepare_http_send": {
+        const prepared = await prepare_http_send(message.payload);
+        send(port, { type: "result", id: message.id, result: prepared });
         return;
       }
       case "blob_get": {

@@ -70,6 +70,17 @@ export type HttpResponseHeader = { name: string, value: string, };
 
 export type HttpResponseState = "initialized" | "connected" | "closed";
 
+/**
+ * The resolved send settings, values only: what an executor has to obey, with the sources
+ * (which model each came from) left behind in [`ResolvedHttpRequestSettings`]. This is what
+ * crosses from a tab to the send proxy, and what the proxy reads.
+ */
+export type HttpSendSettings = { validateCertificates: boolean, followRedirects: boolean, 
+/**
+ * Milliseconds. Zero or negative means no timeout.
+ */
+timeoutMs: number, sendCookies: boolean, storeCookies: boolean, };
+
 export type HttpUrlParameter = { enabled?: boolean, 
 /**
  * Colon-prefixed parameters are treated as path parameters if they match, like `/users/:id`

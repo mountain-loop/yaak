@@ -158,6 +158,70 @@ impl Default for ResolvedHttpRequestSettings {
     }
 }
 
+impl ResolvedHttpRequestSettings {
+    /// The `* Setting name=value` lines a send writes at the top of its timeline, sources and
+    /// all. Built here, once, so every host that runs a send — the desktop, the CLI, the browser
+    /// tab handing off to a proxy — records the same lines the same way.
+    pub fn timeline_events(&self) -> Vec<HttpResponseEventData> {
+        fn event<T>(
+            name: &str,
+            value: String,
+            setting: &ResolvedSetting<T>,
+        ) -> HttpResponseEventData {
+            HttpResponseEventData::Setting {
+                name: name.to_string(),
+                value,
+                source_model: Some(setting.source_model.clone()),
+                source_id: setting.source_id.clone(),
+                source_name: setting.source_name.clone(),
+            }
+        }
+        let timeout = if self.request_timeout.value > 0 {
+            format!("{:?}", std::time::Duration::from_millis(self.request_timeout.value as u64))
+        } else {
+            "Infinity".to_string()
+        };
+        vec![
+            event(
+                "validate_certificates",
+                self.validate_certificates.value.to_string(),
+                &self.validate_certificates,
+            ),
+            event("redirects", self.follow_redirects.value.to_string(), &self.follow_redirects),
+            event("timeout", timeout, &self.request_timeout),
+            event("send_cookies", self.send_cookies.value.to_string(), &self.send_cookies),
+            event("store_cookies", self.store_cookies.value.to_string(), &self.store_cookies),
+        ]
+    }
+}
+
+/// The resolved send settings, values only: what an executor has to obey, with the sources
+/// (which model each came from) left behind in [`ResolvedHttpRequestSettings`]. This is what
+/// crosses from a tab to the send proxy, and what the proxy reads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct HttpSendSettings {
+    pub validate_certificates: bool,
+    pub follow_redirects: bool,
+    /// Milliseconds. Zero or negative means no timeout.
+    pub timeout_ms: i32,
+    pub send_cookies: bool,
+    pub store_cookies: bool,
+}
+
+impl From<&ResolvedHttpRequestSettings> for HttpSendSettings {
+    fn from(s: &ResolvedHttpRequestSettings) -> Self {
+        Self {
+            validate_certificates: s.validate_certificates.value,
+            follow_redirects: s.follow_redirects.value,
+            timeout_ms: s.request_timeout.value,
+            send_cookies: s.send_cookies.value,
+            store_cookies: s.store_cookies.value,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]

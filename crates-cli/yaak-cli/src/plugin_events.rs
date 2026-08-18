@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
-use yaak::render::{render_grpc_request, render_http_request};
+use yaak_models::render::{render_grpc_request, render_http_request};
 use yaak::response_body::FileResponseBodyStore;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;

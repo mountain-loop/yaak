@@ -163,6 +163,11 @@ export class WorkerConnection {
     return this.request<T>((id) => ({ type: "rpc", id, cmd, payload, label: this.label }));
   }
 
+  /** See `prepare_http_send` in crates/yaak-web: the database half of a send. */
+  prepareHttpSend<T>(payload: unknown): Promise<T> {
+    return this.request<T>((id) => ({ type: "prepare_http_send", id, payload }));
+  }
+
   async blobGet(blobId: string): Promise<Uint8Array<ArrayBuffer> | null> {
     const buf = await this.request<ArrayBuffer | null>((id) => ({ type: "blob_get", id, blobId }));
     return buf == null ? null : new Uint8Array(buf);

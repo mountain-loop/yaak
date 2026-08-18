@@ -20,15 +20,32 @@ pub struct ResolvedOverride {
     pub ipv6: Vec<Ipv6Addr>,
 }
 
+/// A veto on the addresses a hostname resolves to, consulted after resolution
+/// and before any connection is made. Returning `Err` refuses the whole lookup
+/// with that message; a hostname is never partially allowed.
+///
+/// A hosted sender uses this to refuse private and metadata ranges no matter
+/// what name they hide behind. Checking here rather than on the URL is what
+/// catches a public hostname that resolves to an internal address.
+pub type AddressFilter = Arc<dyn Fn(IpAddr) -> std::result::Result<(), String> + Send + Sync>;
+
 #[derive(Clone)]
 pub struct LocalhostResolver {
     fallback: HyperGaiResolver,
     event_tx: Arc<RwLock<Option<mpsc::Sender<HttpResponseEvent>>>>,
     overrides: Arc<HashMap<String, ResolvedOverride>>,
+    address_filter: Option<AddressFilter>,
 }
 
 impl LocalhostResolver {
     pub fn new(dns_overrides: Vec<DnsOverride>) -> Arc<Self> {
+        Self::with_address_filter(dns_overrides, None)
+    }
+
+    pub fn with_address_filter(
+        dns_overrides: Vec<DnsOverride>,
+        address_filter: Option<AddressFilter>,
+    ) -> Arc<Self> {
         let resolver = HyperGaiResolver::new();
 
         // Pre-parse DNS overrides into a lookup map
@@ -55,7 +72,23 @@ impl LocalhostResolver {
             fallback: resolver,
             event_tx: Arc::new(RwLock::new(None)),
             overrides: Arc::new(overrides),
+            address_filter,
         })
+    }
+
+    /// Apply the address filter, if any, to a resolved address list.
+    fn filter_addrs(
+        filter: &Option<AddressFilter>,
+        addrs: &[SocketAddr],
+    ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if let Some(filter) = filter {
+            for addr in addrs {
+                if let Err(reason) = filter(addr.ip()) {
+                    return Err(Box::new(std::io::Error::other(reason)));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Set the event sender for the current request.
@@ -72,6 +105,7 @@ impl Resolve for LocalhostResolver {
         let host = name.as_str().to_lowercase();
         let event_tx = self.event_tx.clone();
         let overrides = self.overrides.clone();
+        let address_filter = self.address_filter.clone();
 
         info!("DNS resolve called for: {}", host);
 
@@ -94,6 +128,8 @@ impl Resolve for LocalhostResolver {
             let addresses: Vec<String> = addrs.iter().map(|a| a.ip().to_string()).collect();
 
             return Box::pin(async move {
+                Self::filter_addrs(&address_filter, &addrs)?;
+
                 // Emit DNS event for override
                 let guard = event_tx.read().await;
                 if let Some(tx) = guard.as_ref() {
@@ -125,6 +161,8 @@ impl Resolve for LocalhostResolver {
             let addresses: Vec<String> = addrs.iter().map(|a| a.ip().to_string()).collect();
 
             return Box::pin(async move {
+                Self::filter_addrs(&address_filter, &addrs)?;
+
                 // Emit DNS event for localhost resolution
                 let guard = event_tx.read().await;
                 if let Some(tx) = guard.as_ref() {
@@ -161,6 +199,7 @@ impl Resolve for LocalhostResolver {
                 Ok(addrs) => {
                     // Collect addresses for event emission
                     let addr_vec: Vec<SocketAddr> = addrs.collect();
+                    Self::filter_addrs(&address_filter, &addr_vec)?;
                     let addresses: Vec<String> =
                         addr_vec.iter().map(|a| a.ip().to_string()).collect();
 

@@ -10,6 +10,13 @@ wasm-opt = false # Causes errors in CI (haven't figured out why yet)
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["wasm"]
+# The `#[wasm_bindgen]` exports (parse_template etc.) that make up the
+# @yaakapp-internal/templates package. Off for crates that link this one into
+# their own wasm module and do not want these re-exported from theirs.
+wasm = []
+
 [dependencies]
 base64 = "0.22.1"
 serde = { workspace = true, features = ["derive"] }

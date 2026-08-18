@@ -9,7 +9,9 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@yaakapp-internal/models": "^1.0.0",
     "@yaakapp-internal/rpc-schema": "^1.0.0",
+    "@yaakapp-internal/send-proxy": "^1.0.0",
     "@yaakapp-internal/web": "^1.0.0",
     "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",

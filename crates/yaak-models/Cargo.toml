@@ -19,8 +19,10 @@ serde_json = { workspace = true }
 schemars = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+urlencoding = "2.1.3"
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 yaak-core = { workspace = true }
+yaak-templates = { path = "../yaak-templates", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 r2d2 = "0.8.10"

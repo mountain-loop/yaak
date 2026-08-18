@@ -19,7 +19,6 @@ hyper-util = { version = "0.1.17", default-features = false, features = ["client
 log = { workspace = true }
 mime_guess = "2.0.5"
 native-tls = { version = "0.2", features = ["alpn"] }
-regex = "1.11.1"
 reqwest = { workspace = true, features = [
   "rustls-tls-manual-roots-no-provider",
   "native-tls",
