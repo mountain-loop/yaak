@@ -24,9 +24,9 @@ installs the Tauri host exactly as before.
 
 ```
 tab (index.ts, commands.ts) ──MessagePort──▶ worker.ts ──▶ @yaakapp-internal/web (wasm)
-        │                   ◀── model_writes ──          crates/yaak-web → yaak-models → SQLite
+        │                   ◀── model_writes ──          crates/yaak-wasm → yaak-models → SQLite
         │                                                               └─ pages in IndexedDB
-        └── send.ts ──POST rendered request──▶ yaak-server (crates-server) ──▶ the internet
+        └── send.ts ──POST rendered request──▶ yaak-web (crates-server) ──▶ the internet
                      ◀── NDJSON: events, response, body, cookies ──
 ```
 
@@ -36,13 +36,13 @@ tab (index.ts, commands.ts) ──MessagePort──▶ worker.ts ──▶ @yaak
 | `commands.ts` | The command table: model commands forward to the worker; the rest is fixed answers and refusals-with-a-reason. |
 | `connection.ts` | A tab's end of the wire: request/response over a `MessagePort`, event delivery, and the tab's identity (`label`). |
 | `send.ts` | Sending: the worker renders (`prepare_http_send`), the server executes, this file stores what comes back where the desktop stores it. |
-| `server.ts` | Where the Yaak server is, and the wire shapes it speaks (generated from `crates-server/yaak-server/src/wire.rs`). |
+| `server.ts` | Where the Yaak server is, and the wire shapes it speaks (generated from `crates-server/yaak-web/src/wire.rs`). |
 | `worker.ts` | The process that owns the database. Loads the wasm, opens the DB once, answers each port, fans `model_writes` out to every port. |
 | `protocol.ts` | The message shapes both sides import. |
 | `errors.ts` | `UnsupportedCommandError`, the structured refusal. |
 | `storage.ts` | `navigator.storage.persist()`. |
 
-The Rust side is `crates/yaak-web` (`@yaakapp-internal/web`): `boot()`,
+The Rust side is `crates/yaak-wasm` (`@yaakapp-internal/wasm`): `boot()`,
 `rpc(cmd, payload, label)` returning `{ result, events }`, blob get/put, and
 `prepare_http_send(payload)` — the database half of a send (environment chain,
 inherited headers and auth, request settings, cookie jar, rendering), which is
@@ -188,7 +188,7 @@ other's writes for an echo of their own and drop them.
 A page cannot see a response the way a desktop app can — CORS exposes a handful
 of headers, redirects are followed silently, there is no timeline — so the
 network half of a send runs on a small stateless server,
-`crates-server/yaak-server`. This layer stays the only place data lives:
+`crates-server/yaak-web`. This layer stays the only place data lives:
 
 1. `send.ts` creates the `http_response` row (state `initialized`), as the
    desktop does, so anything that goes wrong lands in the response pane.
@@ -219,9 +219,9 @@ is the one case where those addresses are the user's to reach.
 
 **Where the tab sends** (`server.ts`): a production build posts to `/v1/http/send`
 on its own origin, because the server can serve the app itself
-(`yaak-server --serve-web dist/apps/yaak-client`, which is what the
+(`yaak-web --serve dist/apps/yaak-client`, which is what the
 `ghcr.io/mountain-loop/yaak-web` image runs) — same origin, so no CORS and
 nothing to configure. A dev build falls back to `http://127.0.0.1:9227`, since
 the Vite server is a different origin and serves no `/v1`; run one with
-`cargo run -p yaak-server`. `VITE_YAAK_SERVER_URL` overrides both, for a
+`cargo run -p yaak-web`. `VITE_YAAK_WEB_URL` overrides both, for a
 deployment that keeps the app and the server apart.

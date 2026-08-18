@@ -11,8 +11,8 @@
 //! back.
 //!
 //! The TypeScript side of this contract is generated from these types into
-//! `bindings/` (`cargo test -p yaak-server`) and published to the tab as
-//! `@yaakapp-internal/server`, so a change here is a type error there.
+//! `bindings/` (`cargo test -p yaak-web`) and published to the tab as
+//! `@yaakapp-internal/web`, so a change here is a type error there.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -23,7 +23,7 @@ use yaak_models::models::{
 /// The body of `POST /v1/http/send`.
 #[derive(Deserialize, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_server.ts")]
+#[ts(export, export_to = "gen_web.ts")]
 pub struct SendRequest {
     /// The request to send, in the desktop's own model shape but with every template already
     /// rendered by the tab. The server builds the URL, headers and body from it exactly the way
@@ -45,7 +45,7 @@ pub struct SendRequest {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-#[ts(export, export_to = "gen_server.ts")]
+#[ts(export, export_to = "gen_web.ts")]
 pub enum Frame {
     /// A timeline event, in the same shape the desktop stores. Interleaved with everything
     /// else in the order the engine produced it.

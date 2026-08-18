@@ -29,7 +29,7 @@ export function boot(): Promise<void>;
  * Resolve and render a request for sending, exactly as the desktop does before it puts the
  * request on the network: the environment chain, inherited headers and auth, request
  * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
- * posts to the send proxy.
+ * posts to the Yaak server.
  *
  * Refuses, with a message the user can act on, when the request needs something this host
  * doesn't have: an authentication plugin, or a template function.

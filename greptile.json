@@ -1,3 +1,3 @@
 {
-  "ignorePatterns": "crates/yaak-templates/pkg/**\ncrates/yaak-web/pkg/**\n**/bindings/gen_*.ts\npackage-lock.json\nCargo.lock"
+  "ignorePatterns": "crates/yaak-templates/pkg/**\ncrates/yaak-wasm/pkg/**\n**/bindings/gen_*.ts\npackage-lock.json\nCargo.lock"
 }

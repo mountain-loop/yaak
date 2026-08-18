@@ -1,5 +1,5 @@
 {
-  "name": "@yaakapp-internal/server",
+  "name": "@yaakapp-internal/web",
   "version": "1.0.0",
   "private": true,
   "main": "index.ts"

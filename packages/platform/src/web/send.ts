@@ -3,7 +3,7 @@
  *
  * A tab can't see a response the way the desktop can — CORS hides most headers,
  * redirects are followed silently, there is no timeline — so the network half of
- * a send happens on a small stateless server (`crates-server/yaak-server`).
+ * a send happens on a small stateless server (`crates-server/yaak-web`).
  * Everything else happens here, against this tab's own database, in the same
  * order the desktop does it:
  *
@@ -31,7 +31,7 @@ import type {
   HttpResponseEventData,
   HttpSendSettings,
 } from "@yaakapp-internal/models";
-import type { Frame, SendRequest } from "@yaakapp-internal/server";
+import type { Frame, SendRequest } from "@yaakapp-internal/web";
 import type { WorkerConnection } from "./connection";
 import { serverIdentity, serverSendUrl, readFrames } from "./server";
 
@@ -48,7 +48,7 @@ type ResponseRow = Pick<HttpResponse, "model" | "requestId" | "workspaceId"> &
 
 type ResponsePatch = Partial<HttpResponse>;
 
-/** What `prepare_http_send` (crates/yaak-web) hands back. */
+/** What `prepare_http_send` (crates/yaak-wasm) hands back. */
 interface PreparedHttpSend {
   request: HttpRequest;
   settings: HttpSendSettings;

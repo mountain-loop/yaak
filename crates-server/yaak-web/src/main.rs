@@ -1,4 +1,4 @@
-//! yaak-server: the network half of Yaak in a browser.
+//! yaak-web: the network half of Yaak in a browser.
 //!
 //! A tab can't see a response the way a desktop app can — CORS hides most
 //! headers, redirects are followed silently, there is no timeline. So the tab
@@ -6,7 +6,7 @@
 //! with the desktop's own engine and streams back everything that happened,
 //! for the tab to store. It keeps nothing: no database, no files, no session.
 //!
-//! One binary, configured by flags or `YAAK_SERVER_*` environment variables.
+//! One binary, configured by flags or `YAAK_WEB_*` environment variables.
 //! See README.md for running and deploying it, and `guard.rs` for what it
 //! refuses to talk to.
 
@@ -85,7 +85,7 @@ async fn main() {
         .layer(cors)
         .with_state(state.clone());
 
-    let app = match &state.config.serve_web {
+    let app = match &state.config.serve {
         Some(dir) => {
             info!("Serving the web client from {}", dir.display());
             api.merge(web_router(dir))
@@ -99,7 +99,7 @@ async fn main() {
         std::process::exit(1);
     });
     info!(
-        "yaak-server listening on http://{bind} (rate limit: {}/min)",
+        "yaak-web listening on http://{bind} (rate limit: {}/min)",
         state.config.rate_limit_per_minute,
     );
 

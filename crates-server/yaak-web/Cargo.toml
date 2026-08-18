@@ -1,5 +1,5 @@
 [package]
-name = "yaak-server"
+name = "yaak-web"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -13,7 +13,7 @@ description = "The server behind Yaak in the browser: executes sends, and can se
 # its query layer.
 
 [[bin]]
-name = "yaak-server"
+name = "yaak-web"
 path = "src/main.rs"
 
 [dependencies]

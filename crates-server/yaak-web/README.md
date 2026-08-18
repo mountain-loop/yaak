@@ -1,6 +1,6 @@
-# yaak-server
+# yaak-web
 
-The network half of Yaak in a browser — and, with `--serve-web`, the half that
+The network half of Yaak in a browser — and, with `--serve`, the half that
 hands the browser the app in the first place.
 
 A tab can't see an HTTP response the way a desktop app can: CORS hides most
@@ -36,22 +36,22 @@ Two settings are worth knowing about:
 
 ```shell
 docker run -p 8080:8080 \
-  -e YAAK_SERVER_ALLOW_PRIVATE_NETWORKS=true \
-  -e YAAK_SERVER_RATE_LIMIT_PER_MINUTE=0 \
+  -e YAAK_WEB_ALLOW_PRIVATE_NETWORKS=true \
+  -e YAAK_WEB_RATE_LIMIT_PER_MINUTE=0 \
   ghcr.io/mountain-loop/yaak-web
 ```
 
-- **`YAAK_SERVER_ALLOW_PRIVATE_NETWORKS=true`** lets sends reach loopback,
+- **`YAAK_WEB_ALLOW_PRIVATE_NETWORKS=true`** lets sends reach loopback,
   private and link-local addresses. Off by default, and it should stay off on
   anything strangers can reach — see [What it refuses](#what-it-refuses-and-why).
   Turn it on for an instance on your own network, where calling the API on the
   next machine is the whole point. Note that "private" is relative to the
   *container*: `127.0.0.1` is the container itself, and reaching the Docker
   host means `host.docker.internal` (or `--network host`).
-- **`YAAK_SERVER_RATE_LIMIT_PER_MINUTE`** defaults to 120 sends per client IP,
+- **`YAAK_WEB_RATE_LIMIT_PER_MINUTE`** defaults to 120 sends per client IP,
   which suits a public instance and not a team of your own; `0` disables it.
 
-Behind a reverse proxy, add `YAAK_SERVER_TRUST_FORWARDED_FOR=true` so the rate
+Behind a reverse proxy, add `YAAK_WEB_TRUST_FORWARDED_FOR=true` so the rate
 limit sees real client addresses instead of its own — and only then, since
 otherwise anyone can spoof the header. If the reverse proxy buffers responses,
 tell it not to: sends are streamed, and the `X-Accel-Buffering: no` header this
@@ -60,30 +60,30 @@ binary sets is honoured by nginx-shaped ones.
 ## Running it from source
 
 ```shell
-cargo run -p yaak-server -- --serve-web dist/apps/yaak-client
+cargo run -p yaak-web -- --serve dist/apps/yaak-client
 ```
 
 after a `YAAK_TARGET=web SKIP_WASM_BUILD=1 npx vp -C apps/yaak-client build`.
-Without `--serve-web` it is the send executor alone, which is what the frontend
+Without `--serve` it is the send executor alone, which is what the frontend
 dev server wants:
 
 ```shell
-cargo run -p yaak-server
+cargo run -p yaak-web
 YAAK_TARGET=web npm run dev --workspace @yaakapp/yaak-client
 ```
 
 A dev build looks for the server at `http://127.0.0.1:9227` (the Vite server is a
 different origin and serves no `/v1`); a production build sends to its own
-origin unless `VITE_YAAK_SERVER_URL` was set when it was built.
+origin unless `VITE_YAAK_WEB_URL` was set when it was built.
 
 ## Configuration
 
-Every flag has a `YAAK_SERVER_*` environment variable, so a container needs no
+Every flag has a `YAAK_WEB_*` environment variable, so a container needs no
 arguments; `--help` lists them all.
 
 | Flag | Default | What |
 | --- | --- | --- |
-| `--serve-web` | off | Also serve a built web client from this directory, on the same origin. |
+| `--serve` | off | Also serve a built web client from this directory, on the same origin. |
 | `--bind` | `127.0.0.1:9227` | Listen address. The image sets `0.0.0.0:8080`. |
 | `--allow-private-networks` | off | Allow sends to loopback, private and link-local addresses. |
 | `--allowed-origins` | `*` | CORS origins, comma-separated. Unused when the app is served from here: same origin, no CORS. |
@@ -96,7 +96,7 @@ arguments; `--help` lists them all.
 
 ## Serving the app
 
-`--serve-web DIR` puts a file server behind the API routes: `/v1/*` is matched
+`--serve DIR` puts a file server behind the API routes: `/v1/*` is matched
 first, everything else comes from `DIR`, and a path with no file behind it gets
 `index.html` so the app's own routes survive a refresh. Responses are compressed
 (gzip or zstd) on the fly. `/assets/*` is cached forever — Vite content-hashes
@@ -115,7 +115,7 @@ to be told where to send, at build time:
 
 ```shell
 docker build -f Dockerfile.web \
-  --build-arg VITE_YAAK_SERVER_URL=https://send.example.com .
+  --build-arg VITE_YAAK_WEB_URL=https://send.example.com .
 ```
 
 and the server needs the CORS origins its callers use, since the requests are no
@@ -123,12 +123,13 @@ longer same-origin:
 
 ```shell
 docker run -p 8080:8080 \
-  -e YAAK_SERVER_ALLOWED_ORIGINS=https://yaak.example.com \
-  ghcr.io/mountain-loop/yaak-web yaak-server
+  -e YAAK_WEB_ALLOWED_ORIGINS=https://yaak.example.com \
+  ghcr.io/mountain-loop/yaak-web \
+  yaak-web
 ```
 
-That last line is the same image with the `--serve-web` flag dropped: a send
-executor with no app attached.
+The trailing `yaak-web` is a command override: the same image run without
+`--serve`, so it executes sends and serves no app.
 
 ## What it refuses, and why
 
@@ -201,8 +202,8 @@ needs no upgrade handling on either side. A WebSocket only earns its keep when
 traffic is bidirectional, which a single send is not.
 
 The TypeScript side of this contract is generated from `src/wire.rs` by ts-rs
-into `bindings/` (run `cargo test -p yaak-server` after changing a frame)
-and published to the tab as `@yaakapp-internal/server`, so a change to the
+into `bindings/` (run `cargo test -p yaak-web` after changing a frame)
+and published to the tab as `@yaakapp-internal/web`, so a change to the
 wire on one side is a type error on the other.
 
 `GET /v1/health` reports the version and the effective limits.

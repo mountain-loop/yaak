@@ -4,7 +4,7 @@
 #
 #   docker run -p 8080:8080 ghcr.io/mountain-loop/yaak-web
 #
-# See crates-server/yaak-server/README.md for the knobs.
+# See crates-server/yaak-web/README.md for the knobs.
 
 FROM node:22-slim AS web
 WORKDIR /app
@@ -17,10 +17,10 @@ RUN git init -q && git add -A \
     && git -c user.email=build@yaak.app -c user.name=build commit -qm build
 # Empty means the tab posts sends to its own origin, which is what this image serves. Set it
 # only to build a bundle for a deployment whose server lives somewhere else.
-ARG VITE_YAAK_SERVER_URL=""
-ENV VITE_YAAK_SERVER_URL=$VITE_YAAK_SERVER_URL
+ARG VITE_YAAK_WEB_URL=""
+ENV VITE_YAAK_WEB_URL=$VITE_YAAK_WEB_URL
 ENV YAAK_TARGET=web
-# crates/yaak-web's wasm package is committed; rebuilding it needs a clang with a WebAssembly
+# crates/yaak-wasm's wasm package is committed; rebuilding it needs a clang with a WebAssembly
 # backend, which this image has no reason to carry.
 ENV SKIP_WASM_BUILD=1
 RUN npm ci
@@ -31,16 +31,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev protobuf-compiler && rm -rf /var/lib/apt/lists/*
 COPY . .
-RUN cargo build --release -p yaak-server
+RUN cargo build --release -p yaak-web
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
-COPY --from=server /app/target/release/yaak-server /usr/local/bin/yaak-server
+COPY --from=server /app/target/release/yaak-web /usr/local/bin/yaak-web
 COPY --from=web /app/dist/apps/yaak-client /srv
-ENV YAAK_SERVER_BIND=0.0.0.0:8080
+ENV YAAK_WEB_BIND=0.0.0.0:8080
 EXPOSE 8080
 USER nobody
-# Without the flag this is the stateless send executor and nothing else:
-#   docker run ghcr.io/mountain-loop/yaak-web yaak-server
-CMD ["yaak-server", "--serve-web", "/srv"]
+# Overriding the command (dropping --serve) leaves the stateless send executor:
+#   docker run ghcr.io/mountain-loop/yaak-web yaak-web
+CMD ["yaak-web", "--serve", "/srv"]

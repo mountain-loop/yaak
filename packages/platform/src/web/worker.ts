@@ -26,7 +26,7 @@ import { DB_LOCK_NAME, type FromWorker, type ToWorker } from "./protocol";
  * download and compile — and the tab can therefore tell "this worker is dead"
  * from "this worker is busy" with a short timeout.
  */
-type Engine = typeof import("@yaakapp-internal/web");
+type Engine = typeof import("@yaakapp-internal/wasm");
 let engine: Engine | null = null;
 
 const ports = new Set<MessagePort>();
@@ -96,7 +96,7 @@ function bootOnce(): Promise<void> {
 
   booted = (async () => {
     await acquireDatabaseLock();
-    const loaded = await import("@yaakapp-internal/web");
+    const loaded = await import("@yaakapp-internal/wasm");
     await loaded.boot();
     engine = loaded;
   })();

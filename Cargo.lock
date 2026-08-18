@@ -11692,29 +11692,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bytes",
- "clap",
- "env_logger",
- "futures-util",
- "log 0.4.29",
- "serde",
- "serde_json",
- "tokio",
- "tower-http",
- "ts-rs",
- "url",
- "uuid",
- "yaak-http",
- "yaak-models",
-]
-
-[[package]]
 name = "yaak-sse"
 version = "0.1.0"
 dependencies = [
@@ -11792,7 +11769,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-web"
+name = "yaak-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
@@ -11809,6 +11786,29 @@ dependencies = [
  "yaak-lifecycle",
  "yaak-models",
  "yaak-templates",
+]
+
+[[package]]
+name = "yaak-web"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "clap",
+ "env_logger",
+ "futures-util",
+ "log 0.4.29",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "ts-rs",
+ "url",
+ "uuid",
+ "yaak-http",
+ "yaak-models",
 ]
 
 [[package]]

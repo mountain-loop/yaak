@@ -28,7 +28,7 @@ export type HttpResponseHeader = { name: string, value: string, };
 /**
  * The resolved send settings, values only: what an executor has to obey, with the sources
  * (which model each came from) left behind in [`ResolvedHttpRequestSettings`]. This is what
- * crosses from a tab to the send proxy, and what the proxy reads.
+ * crosses from a tab to the Yaak server, and what the server reads.
  */
 export type HttpSendSettings = { validateCertificates: boolean, followRedirects: boolean, 
 /**
