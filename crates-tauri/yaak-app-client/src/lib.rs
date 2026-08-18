@@ -68,6 +68,7 @@ mod notifications;
 mod plugin_events;
 mod plugins_ext;
 mod render;
+mod restart;
 mod rpc_ext;
 mod sync_ext;
 mod updates;
@@ -904,7 +905,7 @@ async fn cmd_grpc_go<R: Runtime>(
 }
 
 async fn cmd_restart<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<()> {
-    app_handle.request_restart();
+    restart::request_restart(&app_handle);
     Ok(())
 }
 
@@ -1408,6 +1409,7 @@ pub fn run() {
                         }
                     });
                 }
+                RunEvent::Exit => restart::relaunch_on_exit(),
                 _ => {}
             };
         });
