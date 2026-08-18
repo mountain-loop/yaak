@@ -31,7 +31,7 @@ pub fn request_restart<R: Runtime>(app_handle: &AppHandle<R>) {
 }
 
 /// Complete a pending macOS restart after Tauri has emitted its exit events.
-pub fn relaunch_on_exit() {
+pub fn relaunch_if_requested() {
     #[cfg(target_os = "macos")]
     {
         if !RELAUNCH_WITH_LAUNCH_SERVICES.swap(false, Ordering::SeqCst) {

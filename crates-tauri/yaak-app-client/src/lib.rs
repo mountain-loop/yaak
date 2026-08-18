@@ -1409,7 +1409,7 @@ pub fn run() {
                         }
                     });
                 }
-                RunEvent::Exit => restart::relaunch_on_exit(),
+                RunEvent::Exit => restart::relaunch_if_requested(),
                 _ => {}
             };
         });
