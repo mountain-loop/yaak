@@ -40,6 +40,44 @@ const SUPPORTED_FLAGS = [
 
 const BOOLEAN_FLAGS = ["G", "get", "digest"];
 
+// Short flags that consume a value, derived so this stays in step with the
+// tables above.
+const VALUE_SHORT_FLAGS = SUPPORTED_FLAGS.flat().filter(
+  (name) => name.length === 1 && !BOOLEAN_FLAGS.includes(name),
+);
+
+/**
+ * Expand a short-flag token into separate arguments.
+ *
+ * curl reads a short cluster left to right, one option per character, until an
+ * option that takes a value — that one swallows the rest of the cluster. So
+ * `-XPOST` is `-X POST`, but `-fsSL` is four boolean flags rather than `-f`
+ * plus a value. Splitting unconditionally after the first character left
+ * `sSL` as a positional argument, and the first positional is read as the URL:
+ * `curl -fsSL https://example.com` imported with a URL of `sSL`.
+ */
+function expandShortFlags(token: string): string[] {
+  if (!token.startsWith("-") || token.startsWith("--") || token.length <= 2) {
+    return [token];
+  }
+
+  const expanded: string[] = [];
+  for (let i = 1; i < token.length; i++) {
+    const name = token[i] ?? "";
+    expanded.push(`-${name}`);
+
+    if (VALUE_SHORT_FLAGS.includes(name)) {
+      const value = token.slice(i + 1);
+      if (value) {
+        expanded.push(value);
+      }
+      break;
+    }
+  }
+
+  return expanded;
+}
+
 type FlagValue = string | boolean;
 
 type FlagsByName = Record<string, FlagValue[]>;
@@ -154,14 +192,7 @@ export function convertCurl(rawData: string) {
 
   const commands: string[][] = splitCommands(rawData).map((cmd) => {
     const tokens = split(cmd);
-
-    // Break up squished arguments like `-XPOST` into `-X POST`
-    return tokens.flatMap((token) => {
-      if (token.startsWith("-") && !token.startsWith("--") && token.length > 2) {
-        return [token.slice(0, 2), token.slice(2)];
-      }
-      return token;
-    });
+    return tokens.flatMap(expandShortFlags);
   });
 
   const workspace: ExportResources["workspaces"][0] = {
@@ -502,7 +533,11 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     if (graphqlBody != null) {
       bodyType = "graphql";
       body = graphqlBody;
-    } else if (mimeType === "application/json" || mimeType === "text/xml" || mimeType === "text/plain") {
+    } else if (
+      mimeType === "application/json" ||
+      mimeType === "text/xml" ||
+      mimeType === "text/plain"
+    ) {
       bodyType = mimeType;
       body = { text };
     } else {
