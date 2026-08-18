@@ -1,6 +1,7 @@
 # yaak-send-proxy
 
-The network half of Yaak in a browser.
+The network half of Yaak in a browser — and, with `--serve-web`, the half that
+hands the browser the app in the first place.
 
 A tab can't see an HTTP response the way a desktop app can: CORS hides most
 headers (2 of 8 in a typical response), redirects are followed silently, and
@@ -13,28 +14,79 @@ It is a **stateless executor**. It keeps nothing: no database, no files, no
 sessions, no cookies between calls. Every byte it sees comes from the tab in the
 request, and every byte it returns is stored by the tab. Restart it any time.
 
-## Running it
+## Self-hosting it
+
+One container, no configuration, nothing behind it:
+
+```shell
+docker run -p 8080:8080 ghcr.io/mountain-loop/yaak-web
+```
+
+Open <http://localhost:8080>. The image carries the built web client and this
+binary, which serves it — so the app and its sends are on one origin, and the
+tab's send URL is a path (`/v1/http/send`) rather than an address anyone has to
+configure. The image is `linux/amd64` and `linux/arm64`, built from
+`Dockerfile.web` at the repo root.
+
+Your data lives in your browser (SQLite compiled to wasm, in IndexedDB), not in
+the container. The container is stateless: nothing is written to disk, so
+upgrading is `docker pull` and nothing else.
+
+Two settings are worth knowing about:
+
+```shell
+docker run -p 8080:8080 \
+  -e YAAK_PROXY_ALLOW_PRIVATE_NETWORKS=true \
+  -e YAAK_PROXY_RATE_LIMIT_PER_MINUTE=0 \
+  ghcr.io/mountain-loop/yaak-web
+```
+
+- **`YAAK_PROXY_ALLOW_PRIVATE_NETWORKS=true`** lets sends reach loopback,
+  private and link-local addresses. Off by default, and it should stay off on
+  anything strangers can reach — see [What it refuses](#what-it-refuses-and-why).
+  Turn it on for an instance on your own network, where calling the API on the
+  next machine is the whole point. Note that "private" is relative to the
+  *container*: `127.0.0.1` is the container itself, and reaching the Docker
+  host means `host.docker.internal` (or `--network host`).
+- **`YAAK_PROXY_RATE_LIMIT_PER_MINUTE`** defaults to 120 sends per client IP,
+  which suits a public instance and not a team of your own; `0` disables it.
+
+Behind a reverse proxy, add `YAAK_PROXY_TRUST_FORWARDED_FOR=true` so the rate
+limit sees real client addresses instead of the proxy's — and only then, since
+otherwise anyone can spoof the header. If the reverse proxy buffers responses,
+tell it not to: sends are streamed, and the `X-Accel-Buffering: no` header this
+binary sets is honoured by nginx-shaped ones.
+
+## Running it from source
+
+```shell
+cargo run -p yaak-send-proxy -- --serve-web dist/apps/yaak-client
+```
+
+after a `YAAK_TARGET=web SKIP_WASM_BUILD=1 npx vp -C apps/yaak-client build`.
+Without `--serve-web` it is the send executor alone, which is what the frontend
+dev server wants:
 
 ```shell
 cargo run -p yaak-send-proxy
-```
-
-Listens on `127.0.0.1:9227`. Then run the web build against it:
-
-```shell
 YAAK_TARGET=web npm run dev --workspace @yaakapp/yaak-client
 ```
 
-The tab looks for the proxy at `http://127.0.0.1:9227` unless
-`VITE_YAAK_SEND_PROXY_URL` says otherwise at build time.
+A dev build looks for the proxy at `http://127.0.0.1:9227` (the Vite server is a
+different origin and serves no `/v1`); a production build sends to its own
+origin unless `VITE_YAAK_SEND_PROXY_URL` was set when it was built.
+
+## Configuration
 
 Every flag has a `YAAK_PROXY_*` environment variable, so a container needs no
 arguments; `--help` lists them all.
 
 | Flag | Default | What |
 | --- | --- | --- |
-| `--bind` | `127.0.0.1:9227` | Listen address. `0.0.0.0:9227` inside a container. |
-| `--allowed-origins` | `*` | CORS origins, comma-separated. A hosted instance should name its web origin. |
+| `--serve-web` | off | Also serve a built web client from this directory, on the same origin. |
+| `--bind` | `127.0.0.1:9227` | Listen address. The image sets `0.0.0.0:8080`. |
+| `--allow-private-networks` | off | Allow sends to loopback, private and link-local addresses. |
+| `--allowed-origins` | `*` | CORS origins, comma-separated. Unused when the app is served from here: same origin, no CORS. |
 | `--max-request-bytes` | 16 MiB | Largest rendered request accepted from the tab. |
 | `--max-response-bytes` | 64 MiB | Largest upstream body relayed before the send is cut off. |
 | `--max-timeout-secs` | 60 | Ceiling on a send's timeout; a request asking for more (or none) gets this. |
@@ -42,11 +94,47 @@ arguments; `--help` lists them all.
 | `--max-concurrent` | 256 | Sends in flight at once. |
 | `--trust-forwarded-for` | off | Take the client IP from `X-Forwarded-For`. Only behind a load balancer that sets it. |
 
+## Serving the app
+
+`--serve-web DIR` puts a file server behind the API routes: `/v1/*` is matched
+first, everything else comes from `DIR`, and a path with no file behind it gets
+`index.html` so the app's own routes survive a refresh. Responses are compressed
+(gzip or zstd) on the fly. `/assets/*` is cached forever — Vite content-hashes
+those names — and everything else is `no-cache`, so a new deploy arrives on the
+next reload.
+
+Serving files changes nothing about sending: the same rendered request, the same
+destination policy, the same stateless executor. It exists so that a
+self-hosted Yaak is one thing to run rather than two.
+
+## Split deployments
+
+The app and the proxy can still be separate services — one CDN-hosted bundle and
+one proxy elsewhere, or one proxy shared by several fronts. Then the bundle has
+to be told where to send, at build time:
+
+```shell
+docker build -f Dockerfile.web \
+  --build-arg VITE_YAAK_SEND_PROXY_URL=https://proxy.example.com .
+```
+
+and the proxy needs the CORS origins its callers use, since the requests are no
+longer same-origin:
+
+```shell
+docker run -p 8080:8080 \
+  -e YAAK_PROXY_ALLOWED_ORIGINS=https://yaak.example.com \
+  ghcr.io/mountain-loop/yaak-web yaak-send-proxy
+```
+
+That last line is the same image with the `--serve-web` flag dropped: a proxy
+with no app attached.
+
 ## What it refuses, and why
 
 A hosted proxy is, by construction, a machine that makes HTTP requests on
 behalf of strangers. Left alone that is an open relay into whatever network it
-sits on. So it refuses, always, to connect to:
+sits on. So by default it refuses to connect to:
 
 - loopback (`127/8`, `::1`), private (`10/8`, `172.16/12`, `192.168/16`,
   `fc00::/7`), link-local (`169.254/16` — where cloud metadata lives — and
@@ -61,28 +149,19 @@ caught, and so is a `Location:` header that points at one. It also refuses body
 types that would read files on the proxy's disk (`binary`, multipart file
 fields), since no browser tab could legitimately mean those.
 
-Refusals are logged with the reason. There is no switch to turn this off: the
-proxy's private network is the cloud's, not the user's, so a `localhost` or LAN
-API can never be reached through it — that is what the desktop app is for.
+Refusals are logged with the reason. On a public instance (`web.yaak.app`, or
+anything else strangers can reach) this must stay on: the machine's private
+network is the host's, not the user's, so a `localhost` or LAN API is not the
+user's to reach through it — the desktop app is what reaches those. On an
+instance you run for yourself, that reasoning is inverted, and
+`--allow-private-networks` inverts the policy with it. It allows every range
+above, including `169.254.169.254`, so use it only where the network on the
+other side is one the users are entitled to.
 
-## Deploying
-
-One binary, no dependencies:
-
-```shell
-cargo build --release -p yaak-send-proxy
-YAAK_PROXY_BIND=0.0.0.0:9227 \
-YAAK_PROXY_ALLOWED_ORIGINS=https://yaak.example.com \
-./target/release/yaak-send-proxy
-```
-
-There is no authentication: an instance is anonymous and protected by the
-per-client rate limit and the destination policy, which is what the hosted
-funnel wants. Anything more (a shared token, per-user quotas) is a later slice
-and would sit in front of `send_http` in `main.rs`. Put TLS in front of it (a
-reverse proxy). If the reverse proxy buffers responses, tell it not to: the reply
-is a stream and the `X-Accel-Buffering: no` header it sets is honoured by
-nginx-shaped ones.
+There is no authentication either way: an instance is anonymous, protected by
+the per-client rate limit and the destination policy. Anything more (a shared
+token, per-user quotas) is a later slice and would sit in front of `send_http`
+in `main.rs`. Put TLS in front of a public instance.
 
 ## The wire
 

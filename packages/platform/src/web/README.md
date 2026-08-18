@@ -211,9 +211,17 @@ template *function* (`${[ timestamp() ]}`) or an authentication plugin (bearer,
 basic, OAuth, …) is refused before anything leaves the tab, with a message naming
 what it needs; those light up when plugins run in the browser. Requests with a
 file body or multipart file fields are refused by the proxy (it has no access to
-your files, and must not read its own). And a request to `localhost` or a LAN
-address can't work from a browser: the proxy runs elsewhere and refuses private
-ranges outright — reaching your own machine's APIs is what the desktop app is for.
+your files, and must not read its own). And on a public instance a request to
+`localhost` or a LAN address can't work: the proxy runs elsewhere and refuses
+private ranges outright — that is what the desktop app is for. A self-hosted
+proxy on your own network can be started with `--allow-private-networks`, which
+is the one case where those addresses are the user's to reach.
 
-The proxy URL is `VITE_YAAK_SEND_PROXY_URL` at build time, defaulting to
-`http://127.0.0.1:9227` (see `proxy.ts`). Run one with `cargo run -p yaak-send-proxy`.
+**Where the tab sends** (`proxy.ts`): a production build posts to `/v1/http/send`
+on its own origin, because the proxy can serve the app itself
+(`yaak-send-proxy --serve-web dist/apps/yaak-client`, which is what the
+`ghcr.io/mountain-loop/yaak-web` image runs) — same origin, so no CORS and
+nothing to configure. A dev build falls back to `http://127.0.0.1:9227`, since
+the Vite server is a different origin and serves no `/v1`; run one with
+`cargo run -p yaak-send-proxy`. `VITE_YAAK_SEND_PROXY_URL` overrides both, for a
+deployment that keeps the app and the proxy apart.

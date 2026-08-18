@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 /// A stateless HTTP send executor for Yaak running in a browser.
 ///
@@ -11,6 +12,19 @@ pub struct Config {
     /// Address to listen on. 127.0.0.1 for a local instance; 0.0.0.0 inside a container.
     #[arg(long, env = "YAAK_PROXY_BIND", default_value = "127.0.0.1:9227")]
     pub bind: SocketAddr,
+
+    /// Also serve a built web client from this directory, on the same origin as the API.
+    /// Unknown paths fall back to `index.html` so the app's own routes work on a refresh.
+    /// Without this the binary is only the send executor.
+    #[arg(long, env = "YAAK_PROXY_SERVE_WEB", value_name = "DIR")]
+    pub serve_web: Option<PathBuf>,
+
+    /// Allow sends to loopback, private and link-local addresses. Off by default, because a
+    /// proxy reachable by strangers is an open relay into the network it sits on. Turn it on
+    /// only for an instance whose users are meant to reach that network — a self-hosted one
+    /// on a LAN, where the point is to call the API on the next machine.
+    #[arg(long, env = "YAAK_PROXY_ALLOW_PRIVATE_NETWORKS", default_value_t = false)]
+    pub allow_private_networks: bool,
 
     /// Browser origins allowed to call this proxy (CORS), comma-separated. `*` allows any.
     /// A local dev instance wants the Vite origin; a hosted instance wants its own web origin.
