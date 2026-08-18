@@ -51,8 +51,8 @@ sits on. So it refuses, always, to connect to:
 - loopback (`127/8`, `::1`), private (`10/8`, `172.16/12`, `192.168/16`,
   `fc00::/7`), link-local (`169.254/16` — where cloud metadata lives — and
   `fe80::/10`), carrier-grade NAT, multicast, reserved and unspecified ranges,
-  and IPv4 addresses carried inside IPv6 forms (`::ffff:a.b.c.d`, the
-  well-known and local-use NAT64 prefixes, 6to4);
+  IPv4 addresses carried inside IPv6 forms (`::ffff:a.b.c.d`, the well-known
+  NAT64 prefix, 6to4), and the whole NAT64 local-use range;
 - anything not `http://` or `https://`.
 
 The check runs **on the resolved addresses, after DNS**, for every hop of a

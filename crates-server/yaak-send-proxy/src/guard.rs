@@ -66,9 +66,11 @@ impl DestinationPolicy {
 ///
 /// Every range here is one a hosted relay must never be talked into reaching: the machine
 /// itself, the network it sits on, and the link-local range where cloud metadata services
-/// (169.254.169.254) live. IPv4 addresses carried inside IPv6 forms — IPv4-mapped, the
-/// well-known and local-use NAT64 prefixes, 6to4 — are unwrapped and judged as IPv4, since
-/// that is where the packets end up. (A network-specific NAT64 prefix is not knowable here.)
+/// (169.254.169.254) live. IPv4 addresses carried inside fixed-layout IPv6 forms — IPv4-mapped,
+/// the well-known NAT64 prefix, 6to4 — are unwrapped and judged as IPv4, since that is where
+/// the packets end up; the NAT64 local-use range is refused outright. This is the stable-Rust
+/// stand-in for `IpAddr::is_global`, which is still behind `#![feature(ip)]`; a network-specific
+/// NAT64 prefix is not knowable here.
 pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
     match ip {
         IpAddr::V4(v4) => non_public_v4(v4),
@@ -76,8 +78,8 @@ pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
             if let Some(v4) = v6.to_ipv4_mapped() {
                 return non_public_v4(v4);
             }
-            if let Some(reason) = embedded_v4(&v6).into_iter().find_map(non_public_v4) {
-                return Some(reason);
+            if let Some(v4) = embedded_v4(&v6) {
+                return non_public_v4(v4);
             }
             if v6.is_loopback() {
                 Some("loopback")
@@ -89,6 +91,10 @@ pub fn non_public_reason(ip: IpAddr) -> Option<&'static str> {
                 Some("link-local (fe80::/10)")
             } else if v6.is_multicast() {
                 Some("multicast")
+            } else if v6.segments()[..3] == [0x64, 0xff9b, 1] {
+                Some("NAT64 local-use (64:ff9b:1::/48)")
+            } else if v6.segments()[..4] == [0x100, 0, 0, 0] {
+                Some("discard-only (100::/64)")
             } else if (v6.segments()[0] & 0xffc0) == 0xfec0 {
                 Some("site-local (fec0::/10)")
             } else if v6.segments()[0] == 0x2001 && v6.segments()[1] == 0x0db8 {
@@ -129,35 +135,21 @@ fn non_public_v4(v4: Ipv4Addr) -> Option<&'static str> {
     }
 }
 
-/// The IPv4 addresses an IPv6 address may stand for, when it is one of the standard
-/// translation forms: the NAT64 well-known prefix (64:ff9b::/96), the NAT64 local-use range
-/// (64:ff9b:1::/48, RFC 8215), or 6to4 (2002::/16, IPv4 in the next 32 bits).
-///
-/// The local-use range is a pool an operator carves their own prefix from, at any of the
-/// lengths RFC 6052 allows, so where the IPv4 sits inside it is not knowable here. Every
-/// position it could occupy is returned, and the caller refuses if any of them is
-/// non-public — a hosted relay would rather turn away an odd address than reach the wrong one.
-fn embedded_v4(v6: &Ipv6Addr) -> Vec<Ipv4Addr> {
+/// The IPv4 address an IPv6 address stands for, when it is one of the fixed-layout translation
+/// forms: the NAT64 well-known prefix (64:ff9b::/96) or 6to4 (2002::/16, IPv4 in the next 32
+/// bits). The NAT64 local-use range (64:ff9b:1::/48) is a pool operators carve their own
+/// prefix from, at a length only they know, so it is refused wholesale in [`non_public_reason`]
+/// rather than decoded — the same call `std`'s (still unstable) `Ipv6Addr::is_global` makes.
+fn embedded_v4(v6: &Ipv6Addr) -> Option<Ipv4Addr> {
     let s = v6.segments();
     let o = v6.octets();
-    let v4 = |a: usize, b: usize, c: usize, d: usize| Ipv4Addr::new(o[a], o[b], o[c], o[d]);
     if s[0] == 0x64 && s[1] == 0xff9b && s[2..6].iter().all(|x| *x == 0) {
-        return vec![v4(12, 13, 14, 15)];
-    }
-    if s[0] == 0x64 && s[1] == 0xff9b && s[2] == 1 {
-        // RFC 6052 layouts for a /48, /56, /64 and /96 prefix; octet 8 is the reserved `u`
-        // byte, skipped by the layouts that straddle it.
-        return vec![
-            v4(6, 7, 9, 10),
-            v4(7, 9, 10, 11),
-            v4(9, 10, 11, 12),
-            v4(12, 13, 14, 15),
-        ];
+        return Some(Ipv4Addr::new(o[12], o[13], o[14], o[15]));
     }
     if s[0] == 0x2002 {
-        return vec![v4(2, 3, 4, 5)];
+        return Some(Ipv4Addr::new(o[2], o[3], o[4], o[5]));
     }
-    Vec::new()
+    None
 }
 
 /// An [`HttpSender`] that checks each hop's URL against the policy before delegating.
