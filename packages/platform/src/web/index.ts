@@ -57,6 +57,9 @@ function capabilitiesFor(): PlatformCapabilities {
     // The browser draws the frame around the page. There are no traffic lights
     // to leave room for and no window controls to draw.
     windowChrome: false,
+    // The browser already zooms the page, on the same keys, and remembers it
+    // per site. The app stays out of the way.
+    interfaceZoom: false,
     plugins: false,
     encryption: false,
     updater: false,

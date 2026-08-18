@@ -31,7 +31,13 @@ export async function fetchAccessToken(
     ],
   };
 
-  if (scope) httpRequest.body?.form.push({ name: "scope", value: scope });
+  // RFC 6749 §4.1.3 doesn't define scope for the authorization code token
+  // request, so strict servers (OpenIddict) reject it outright. Scope belongs on
+  // the authorize request, which already sends it. Every other grant does define
+  // it: §4.3.2 password, §4.4.2 client credentials, §6 refresh.
+  if (scope && grantType !== "authorization_code") {
+    httpRequest.body?.form.push({ name: "scope", value: scope });
+  }
   if (audience) httpRequest.body?.form.push({ name: "audience", value: audience });
 
   if ("clientAssertion" in args) {

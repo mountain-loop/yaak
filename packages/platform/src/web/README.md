@@ -138,7 +138,10 @@ Reported honestly, so callers gate on the question rather than on the host:
 
 | True | False |
 | --- | --- |
-| `httpSending`, `timeline`, `cookieJar` | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `multiWindow`, `windowChrome`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
+| `httpSending`, `timeline`, `cookieJar` | `grpc`, `websocket`, `git`, `sync`, `tlsOptions`, `localFiles`, `multiWindow`, `windowChrome`, `interfaceZoom`, `plugins`, `encryption`, `updater`, `clipboardRead`, `systemFonts`, `license` |
+
+`interfaceZoom: false` leaves Cmd/Ctrl `+`, `-` and `0` to the browser instead
+of swallowing them, and drops those three rows from the hotkeys screen.
 
 `multiWindow: false` means the host cannot open a *second window* on demand —
 what `cmd_new_child_window` does for Settings and workspace switching. It is not

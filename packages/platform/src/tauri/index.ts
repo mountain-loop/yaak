@@ -60,6 +60,7 @@ const ALL_CAPABILITIES: PlatformCapabilities = {
   timeline: true,
   multiWindow: true,
   windowChrome: true,
+  interfaceZoom: true,
   plugins: true,
   encryption: true,
   updater: true,
