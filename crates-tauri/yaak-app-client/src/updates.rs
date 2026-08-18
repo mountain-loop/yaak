@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::error::Result;
 use crate::models_ext::QueryManagerExt;
+use crate::restart;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Listener, Manager, Runtime, WebviewWindow};
@@ -332,7 +333,7 @@ async fn start_native_update<R: Runtime>(window: &WebviewWindow<R>, update: &Upd
                 ))
                 .blocking_show()
             {
-                window.app_handle().request_restart();
+                restart::request_restart(window.app_handle());
             }
         }
         Err(e) => {
