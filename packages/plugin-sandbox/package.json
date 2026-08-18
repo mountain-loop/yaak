@@ -1,0 +1,17 @@
+{
+  "name": "@yaakapp-internal/plugin-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "bootstrap": "npm run build",
+    "build": "node build-guest.mjs"
+  },
+  "dependencies": {
+    "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
+    "quickjs-emscripten-core": "^0.32.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

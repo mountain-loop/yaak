@@ -25,6 +25,7 @@ crate-type = ["cdylib", "rlib"]
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+md5 = "0.7"
 yaak-lifecycle = { workspace = true }
 yaak-models = { workspace = true }
 # No default features: the template exports belong to @yaakapp-internal/templates, not this module

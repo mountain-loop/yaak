@@ -66,15 +66,37 @@ export function boot() {
  * Resolve and render a request for sending, exactly as the desktop does before it puts the
  * request on the network: the environment chain, inherited headers and auth, request
  * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
- * posts to the Yaak server.
+ * posts to the send proxy.
  *
- * Refuses, with a message the user can act on, when the request needs something this host
- * doesn't have: an authentication plugin, or a template function.
+ * `plugins` is the template function bridge — a JavaScript function taking a name and its
+ * JSON arguments and resolving to the rendered string. Passing nothing is allowed and makes
+ * every template function a refusal naming it.
+ *
+ * Authentication is *not* applied here even though it is part of preparing a send. It is
+ * applied to the rendered request by the caller, because the plugin that applies it wants to
+ * see the request as it will be sent, and the caller is the side that knows that.
  * @param {any} payload
+ * @param {any} plugins
  * @returns {Promise<any>}
  */
-export function prepare_http_send(payload) {
-    const ret = wasm.prepare_http_send(payload);
+export function prepare_http_send(payload, plugins) {
+    const ret = wasm.prepare_http_send(payload, plugins);
+    return ret;
+}
+
+/**
+ * Render one template string against an environment chain.
+ *
+ * What `cmd_render_template` does on the desktop, for the same callers: the value previews
+ * under an editor, and anywhere the app shows what a template will become. `ignore_error`
+ * picks the same behaviour it picks there — a preview shows an empty string where a send
+ * would refuse, because a half-typed template is not yet a mistake.
+ * @param {any} payload
+ * @param {any} plugins
+ * @returns {Promise<any>}
+ */
+export function render_template(payload, plugins) {
+    const ret = wasm.render_template(payload, plugins);
     return ret;
 }
 
@@ -223,6 +245,10 @@ export function __wbg_call_13665d9f14390edc() { return handleError(function (arg
 }, arguments); }
 export function __wbg_call_dfde26266607c996() { return handleError(function (arg0, arg1, arg2) {
     const ret = arg0.call(arg1, arg2);
+    return ret;
+}, arguments); }
+export function __wbg_call_faa0a261f288f846() { return handleError(function (arg0, arg1, arg2, arg3) {
+    const ret = arg0.call(arg1, arg2, arg3);
     return ret;
 }, arguments); }
 export function __wbg_clear_bb1b3ff877b62598() { return handleError(function (arg0) {
@@ -669,6 +695,10 @@ export function __wbg_then_837494e384b37459(arg0, arg1) {
     const ret = arg0.then(arg1);
     return ret;
 }
+export function __wbg_then_bd927500e8905df2(arg0, arg1, arg2) {
+    const ret = arg0.then(arg1, arg2);
+    return ret;
+}
 export function __wbg_toString_1dda136fd8f30a5f(arg0) {
     const ret = arg0.toString();
     return ret;
@@ -697,22 +727,22 @@ export function __wbg_warn_b6f36cac66fc96a4(arg0, arg1) {
     console.warn(arg0, arg1);
 }
 export function __wbindgen_cast_0000000000000001(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1117, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1140, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__ha1c2fa93df0107f3);
     return ret;
 }
 export function __wbindgen_cast_0000000000000002(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 212, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("Event")], shim_idx: 229, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__ha7903b6e296dd8f4);
     return ret;
 }
 export function __wbindgen_cast_0000000000000003(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("IDBVersionChangeEvent")], shim_idx: 83, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h4381d8e749fe46cf);
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("IDBVersionChangeEvent")], shim_idx: 74, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h20ab1db2d80221ce);
     return ret;
 }
 export function __wbindgen_cast_0000000000000004(arg0, arg1) {
-    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 210, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+    // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [], shim_idx: 227, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
     const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__ha1b480b83daa641f);
     return ret;
 }
@@ -765,8 +795,8 @@ function wasm_bindgen__convert__closures_____invoke__ha1c2fa93df0107f3(arg0, arg
     }
 }
 
-function wasm_bindgen__convert__closures_____invoke__h4381d8e749fe46cf(arg0, arg1, arg2) {
-    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h4381d8e749fe46cf(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h20ab1db2d80221ce(arg0, arg1, arg2) {
+    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h20ab1db2d80221ce(arg0, arg1, arg2);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }

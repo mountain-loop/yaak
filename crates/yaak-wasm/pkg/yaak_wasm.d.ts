@@ -31,10 +31,25 @@ export function boot(): Promise<void>;
  * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
  * posts to the Yaak server.
  *
- * Refuses, with a message the user can act on, when the request needs something this host
- * doesn't have: an authentication plugin, or a template function.
+ * `plugins` is the template function bridge — a JavaScript function taking a name and its
+ * JSON arguments and resolving to the rendered string. Passing nothing is allowed and makes
+ * every template function a refusal naming it.
+ *
+ * Authentication is *not* applied here even though it is part of preparing a send. It is
+ * applied to the rendered request by the caller, because the plugin that applies it wants to
+ * see the request as it will be sent, and the caller is the side that knows that.
  */
-export function prepare_http_send(payload: any): Promise<any>;
+export function prepare_http_send(payload: any, plugins: any): Promise<any>;
+
+/**
+ * Render one template string against an environment chain.
+ *
+ * What `cmd_render_template` does on the desktop, for the same callers: the value previews
+ * under an editor, and anywhere the app shows what a template will become. `ignore_error`
+ * picks the same behaviour it picks there — a preview shows an empty string where a send
+ * would refuse, because a half-typed template is not yet a mistake.
+ */
+export function render_template(payload: any, plugins: any): Promise<any>;
 
 /**
  * Run one command as `label` (the calling tab's identity, which stands in for

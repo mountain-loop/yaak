@@ -8,6 +8,12 @@ import type {
   PluginDefinition,
 } from "@yaakapp/api";
 import {
+  applyDynamicFormInput,
+  migrateTemplateFunctionSelectOptions,
+  stripDynamicCallbacks,
+} from "@yaakapp-internal/lib/pluginForms";
+import { createResponseBody, decodeBase64Chunk } from "@yaakapp-internal/lib/responseBody";
+import {
   applyFormInputDefaults,
   validateTemplateFunctionArgs,
 } from "@yaakapp-internal/lib/templateFunction";
@@ -17,7 +23,6 @@ import type {
   DeleteModelResponse,
   FindHttpResponsesResponse,
   Folder,
-  FormInput,
   GetCookieValueRequest,
   GetCookieValueResponse,
   GetHttpRequestByIdResponse,
@@ -49,10 +54,7 @@ import type {
   UpsertModelResponse,
   WindowInfoResponse,
 } from "@yaakapp-internal/plugins";
-import { applyDynamicFormInput } from "./common";
 import { EventChannel } from "./EventChannel";
-import { migrateTemplateFunctionSelectOptions } from "./migrations";
-import { createResponseBody, decodeBase64Chunk } from "./responseBody";
 
 /**
  * A response as a plugin should see it.
@@ -1057,16 +1059,6 @@ export class PluginInstance {
   }
 }
 
-function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
-  return inputs.map((input) => {
-    // oxlint-disable-next-line no-explicit-any -- stripping dynamic from union type
-    const { dynamic: _dynamic, ...rest } = input as any;
-    if ("inputs" in rest && Array.isArray(rest.inputs)) {
-      rest.inputs = stripDynamicCallbacks(rest.inputs);
-    }
-    return rest as FormInput;
-  });
-}
 
 function genId(len = 5): string {
   const alphabet = "01234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
