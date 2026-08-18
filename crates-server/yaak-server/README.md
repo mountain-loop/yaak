@@ -1,4 +1,4 @@
-# yaak-send-proxy
+# yaak-server
 
 The network half of Yaak in a browser — and, with `--serve-web`, the half that
 hands the browser the app in the first place.
@@ -36,23 +36,23 @@ Two settings are worth knowing about:
 
 ```shell
 docker run -p 8080:8080 \
-  -e YAAK_PROXY_ALLOW_PRIVATE_NETWORKS=true \
-  -e YAAK_PROXY_RATE_LIMIT_PER_MINUTE=0 \
+  -e YAAK_SERVER_ALLOW_PRIVATE_NETWORKS=true \
+  -e YAAK_SERVER_RATE_LIMIT_PER_MINUTE=0 \
   ghcr.io/mountain-loop/yaak-web
 ```
 
-- **`YAAK_PROXY_ALLOW_PRIVATE_NETWORKS=true`** lets sends reach loopback,
+- **`YAAK_SERVER_ALLOW_PRIVATE_NETWORKS=true`** lets sends reach loopback,
   private and link-local addresses. Off by default, and it should stay off on
   anything strangers can reach — see [What it refuses](#what-it-refuses-and-why).
   Turn it on for an instance on your own network, where calling the API on the
   next machine is the whole point. Note that "private" is relative to the
   *container*: `127.0.0.1` is the container itself, and reaching the Docker
   host means `host.docker.internal` (or `--network host`).
-- **`YAAK_PROXY_RATE_LIMIT_PER_MINUTE`** defaults to 120 sends per client IP,
+- **`YAAK_SERVER_RATE_LIMIT_PER_MINUTE`** defaults to 120 sends per client IP,
   which suits a public instance and not a team of your own; `0` disables it.
 
-Behind a reverse proxy, add `YAAK_PROXY_TRUST_FORWARDED_FOR=true` so the rate
-limit sees real client addresses instead of the proxy's — and only then, since
+Behind a reverse proxy, add `YAAK_SERVER_TRUST_FORWARDED_FOR=true` so the rate
+limit sees real client addresses instead of its own — and only then, since
 otherwise anyone can spoof the header. If the reverse proxy buffers responses,
 tell it not to: sends are streamed, and the `X-Accel-Buffering: no` header this
 binary sets is honoured by nginx-shaped ones.
@@ -60,7 +60,7 @@ binary sets is honoured by nginx-shaped ones.
 ## Running it from source
 
 ```shell
-cargo run -p yaak-send-proxy -- --serve-web dist/apps/yaak-client
+cargo run -p yaak-server -- --serve-web dist/apps/yaak-client
 ```
 
 after a `YAAK_TARGET=web SKIP_WASM_BUILD=1 npx vp -C apps/yaak-client build`.
@@ -68,17 +68,17 @@ Without `--serve-web` it is the send executor alone, which is what the frontend
 dev server wants:
 
 ```shell
-cargo run -p yaak-send-proxy
+cargo run -p yaak-server
 YAAK_TARGET=web npm run dev --workspace @yaakapp/yaak-client
 ```
 
-A dev build looks for the proxy at `http://127.0.0.1:9227` (the Vite server is a
+A dev build looks for the server at `http://127.0.0.1:9227` (the Vite server is a
 different origin and serves no `/v1`); a production build sends to its own
-origin unless `VITE_YAAK_SEND_PROXY_URL` was set when it was built.
+origin unless `VITE_YAAK_SERVER_URL` was set when it was built.
 
 ## Configuration
 
-Every flag has a `YAAK_PROXY_*` environment variable, so a container needs no
+Every flag has a `YAAK_SERVER_*` environment variable, so a container needs no
 arguments; `--help` lists them all.
 
 | Flag | Default | What |
@@ -109,30 +109,30 @@ self-hosted Yaak is one thing to run rather than two.
 
 ## Split deployments
 
-The app and the proxy can still be separate services — one CDN-hosted bundle and
-one proxy elsewhere, or one proxy shared by several fronts. Then the bundle has
+The app and the sender can still be separate services — one CDN-hosted bundle and
+one server elsewhere, or one server shared by several fronts. Then the bundle has
 to be told where to send, at build time:
 
 ```shell
 docker build -f Dockerfile.web \
-  --build-arg VITE_YAAK_SEND_PROXY_URL=https://proxy.example.com .
+  --build-arg VITE_YAAK_SERVER_URL=https://send.example.com .
 ```
 
-and the proxy needs the CORS origins its callers use, since the requests are no
+and the server needs the CORS origins its callers use, since the requests are no
 longer same-origin:
 
 ```shell
 docker run -p 8080:8080 \
-  -e YAAK_PROXY_ALLOWED_ORIGINS=https://yaak.example.com \
-  ghcr.io/mountain-loop/yaak-web yaak-send-proxy
+  -e YAAK_SERVER_ALLOWED_ORIGINS=https://yaak.example.com \
+  ghcr.io/mountain-loop/yaak-web yaak-server
 ```
 
-That last line is the same image with the `--serve-web` flag dropped: a proxy
-with no app attached.
+That last line is the same image with the `--serve-web` flag dropped: a send
+executor with no app attached.
 
 ## What it refuses, and why
 
-A hosted proxy is, by construction, a machine that makes HTTP requests on
+A hosted sender is, by construction, a machine that makes HTTP requests on
 behalf of strangers. Left alone that is an open relay into whatever network it
 sits on. So by default it refuses to connect to:
 
@@ -146,7 +146,7 @@ sits on. So by default it refuses to connect to:
 The check runs **on the resolved addresses, after DNS**, for every hop of a
 redirect chain, so a public hostname that points at an internal address is
 caught, and so is a `Location:` header that points at one. It also refuses body
-types that would read files on the proxy's disk (`binary`, multipart file
+types that would read files on its own disk (`binary`, multipart file
 fields), since no browser tab could legitimately mean those.
 
 Refusals are logged with the reason. On a public instance (`web.yaak.app`, or
@@ -176,7 +176,7 @@ in `main.rs`. Put TLS in front of a public instance.
 ```
 
 `request` is a Yaak `HttpRequest` in the desktop's own model shape with every
-template already rendered by the tab; the proxy builds the URL, headers and
+template already rendered by the tab; the server builds the URL, headers and
 body from it exactly the way the desktop does after rendering. `cookies` is the
 jar's contents (or `null` for no jar).
 
@@ -201,8 +201,8 @@ needs no upgrade handling on either side. A WebSocket only earns its keep when
 traffic is bidirectional, which a single send is not.
 
 The TypeScript side of this contract is generated from `src/wire.rs` by ts-rs
-into `bindings/` (run `cargo test -p yaak-send-proxy` after changing a frame)
-and published to the tab as `@yaakapp-internal/send-proxy`, so a change to the
+into `bindings/` (run `cargo test -p yaak-server` after changing a frame)
+and published to the tab as `@yaakapp-internal/server`, so a change to the
 wire on one side is a type error on the other.
 
 `GET /v1/health` reports the version and the effective limits.

@@ -21,7 +21,7 @@ use yaak_http::sender::{HttpResponse, HttpResponseEvent, HttpSender};
 use yaak_http::types::SendableHttpRequest;
 
 /// The destination policy, shared by every send: public addresses only, unless the operator
-/// has said otherwise. A hosted proxy's "private network" is the cloud's, not the user's, so
+/// has said otherwise. A hosted server's "private network" is the cloud's, not the user's, so
 /// the default is public-only; a self-hosted instance on a LAN can be told that its private
 /// network *is* the user's, which is what `--allow-private-networks` means.
 #[derive(Clone, Default)]
@@ -65,7 +65,7 @@ impl DestinationPolicy {
         }
         match non_public_reason(ip) {
             Some(reason) => Err(format!(
-                "Refusing to connect to {ip}: {reason}. This proxy only sends to public addresses"
+                "Refusing to connect to {ip}: {reason}. This server only sends to public addresses"
             )),
             None => Ok(()),
         }

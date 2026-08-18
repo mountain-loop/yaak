@@ -1,4 +1,4 @@
-//! What crosses the wire between a tab and this proxy.
+//! What crosses the wire between a tab and this server.
 //!
 //! One `POST /v1/http/send` carries a request the tab has already rendered —
 //! templates resolved, inheritance applied — plus the send settings and the
@@ -6,13 +6,13 @@
 //! JSON frames: timeline events as they happen, the response head as soon as
 //! headers arrive, body chunks as they are read, and one terminal frame.
 //!
-//! Nothing here names a workspace, a request id, or a response id. The proxy
+//! Nothing here names a workspace, a request id, or a response id. The server
 //! does not know what the tab will call this response; it only knows what came
 //! back.
 //!
 //! The TypeScript side of this contract is generated from these types into
-//! `bindings/` (`cargo test -p yaak-send-proxy`) and published to the tab as
-//! `@yaakapp-internal/send-proxy`, so a change here is a type error there.
+//! `bindings/` (`cargo test -p yaak-server`) and published to the tab as
+//! `@yaakapp-internal/server`, so a change here is a type error there.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -23,14 +23,14 @@ use yaak_models::models::{
 /// The body of `POST /v1/http/send`.
 #[derive(Deserialize, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_send_proxy.ts")]
+#[ts(export, export_to = "gen_server.ts")]
 pub struct SendRequest {
     /// The request to send, in the desktop's own model shape but with every template already
-    /// rendered by the tab. The proxy builds the URL, headers and body from it exactly the way
+    /// rendered by the tab. The server builds the URL, headers and body from it exactly the way
     /// the desktop does after rendering.
     pub request: HttpRequest,
     /// The resolved settings, values only. Where they came from is the tab's to record in
-    /// its timeline; the proxy only needs to obey them.
+    /// its timeline; the server only needs to obey them.
     pub settings: HttpSendSettings,
     /// The cookies to start with. `None` means no jar at all: nothing sent, nothing kept.
     #[serde(default)]
@@ -45,7 +45,7 @@ pub struct SendRequest {
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-#[ts(export, export_to = "gen_send_proxy.ts")]
+#[ts(export, export_to = "gen_server.ts")]
 pub enum Frame {
     /// A timeline event, in the same shape the desktop stores. Interleaved with everything
     /// else in the order the engine produced it.

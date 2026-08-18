@@ -1,6 +1,6 @@
 name: Release web image
 
-# Builds ghcr.io/mountain-loop/yaak-web: the browser client and the send proxy that serves it.
+# Builds ghcr.io/mountain-loop/yaak-web: the browser client and the server that serves it.
 # One image per architecture on its own native runner (emulating a Rust release build is hours),
 # joined into one multi-arch tag at the end.
 

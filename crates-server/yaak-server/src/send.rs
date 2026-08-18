@@ -42,7 +42,7 @@ pub struct SendLimits {
 pub enum Refusal {
     /// The request asks for something a browser-originated send cannot mean.
     Unsupported(String),
-    /// The destination is not one this proxy will talk to.
+    /// The destination is not one this server will talk to.
     Destination(String),
     /// The request could not be turned into something sendable.
     Invalid(String),
@@ -57,10 +57,10 @@ pub async fn prepare(limits: Arc<SendLimits>, send: SendRequest) -> Result<Prepa
 
     // The engine reads files for these body types. There are no files here that a browser tab
     // could legitimately mean, and letting a request name a path on this machine would be a
-    // local file read for anyone who can reach the proxy.
+    // local file read for anyone who can reach the server.
     if request.body_type.as_deref() == Some("binary") {
         return Err(Refusal::Unsupported(
-            "Binary file bodies can't be sent from the browser: the proxy has no access to your files"
+            "Binary file bodies can't be sent from the browser: the server has no access to your files"
                 .to_string(),
         ));
     }
@@ -74,7 +74,7 @@ pub async fn prepare(limits: Arc<SendLimits>, send: SendRequest) -> Result<Prepa
             });
         if names_a_file {
             return Err(Refusal::Unsupported(
-                "Multipart file fields can't be sent from the browser: the proxy has no access to your files"
+                "Multipart file fields can't be sent from the browser: the server has no access to your files"
                     .to_string(),
             ));
         }
@@ -204,7 +204,7 @@ impl PreparedSend {
 
         if self.timeout_capped {
             let _ = event_tx.try_send(HttpResponseEvent::Info(format!(
-                "Timeout set to {:?} (this proxy's ceiling)",
+                "Timeout set to {:?} (this server's ceiling)",
                 self.timeout
             )));
         }
@@ -276,7 +276,7 @@ impl PreparedSend {
                     total += n;
                     if total > limits.max_response_bytes {
                         break Err(format!(
-                            "Response body exceeds this proxy's limit of {} bytes",
+                            "Response body exceeds this server's limit of {} bytes",
                             limits.max_response_bytes
                         ));
                     }
@@ -309,7 +309,7 @@ impl PreparedSend {
 ///
 /// A connection error from reqwest arrives wrapped several layers deep, and the layer that
 /// says something useful — "Refusing to connect to ::1: loopback" — is the innermost. The
-/// desktop shows the outer `Debug`; a stranger reading a proxy's reply deserves the reason.
+/// desktop shows the outer `Debug`; a stranger reading its reply deserves the reason.
 fn describe_error(err: &yaak_http::error::Error) -> String {
     match err {
         yaak_http::error::Error::Client(e) => {

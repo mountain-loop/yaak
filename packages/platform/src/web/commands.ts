@@ -71,7 +71,7 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
 
   /* ------------------------------- sending ------------------------------- */
 
-  // The tab renders and stores; a stateless proxy puts the bytes on the wire.
+  // The tab renders and stores; a stateless server puts the bytes on the wire.
   // See send.ts for the whole shape of it.
   cmd_send_http_request: (payload, db) => {
     const requestId = str(payload, "requestId");
@@ -249,7 +249,7 @@ const HTTP_AUTHENTICATION_SUMMARIES = [
  * while the first is a slice away.
  */
 const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityName | null]>> = {
-  // Saved requests send through the proxy (see send.ts). Ephemeral sends — the
+  // Saved requests send through the server (see send.ts). Ephemeral sends — the
   // ones nothing stores, used for GraphQL introspection — take the same road but
   // return the body inline; not wired yet.
   cmd_send_ephemeral_request: ["Sending unsaved requests isn't available in the browser yet", null],
@@ -266,7 +266,7 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
 
   // Anything that needs files the page can't reach.
   cmd_import_data: ["Importing from a file needs a filesystem, which a browser tab has no", "localFiles"],
-  cmd_import_url: ["Importing from a URL needs the send proxy, which isn't available yet", null],
+  cmd_import_url: ["Importing from a URL needs the Yaak server, which isn't available yet", null],
   cmd_export_data: ["Exporting to a file isn't available in the browser yet", "localFiles"],
   cmd_save_response: ["Saving a response to disk isn't available in the browser", "localFiles"],
   cmd_save_base64_to_binary: ["Saving to disk isn't available in the browser", "localFiles"],

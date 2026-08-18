@@ -11692,7 +11692,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-send-proxy"
+name = "yaak-server"
 version = "0.1.0"
 dependencies = [
  "async-trait",

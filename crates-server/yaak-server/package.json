@@ -1,5 +1,5 @@
 {
-  "name": "@yaakapp-internal/send-proxy",
+  "name": "@yaakapp-internal/server",
   "version": "1.0.0",
   "private": true,
   "main": "index.ts"

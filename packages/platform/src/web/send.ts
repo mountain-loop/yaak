@@ -3,7 +3,7 @@
  *
  * A tab can't see a response the way the desktop can — CORS hides most headers,
  * redirects are followed silently, there is no timeline — so the network half of
- * a send happens on a small stateless proxy (`crates-server/yaak-send-proxy`).
+ * a send happens on a small stateless server (`crates-server/yaak-server`).
  * Everything else happens here, against this tab's own database, in the same
  * order the desktop does it:
  *
@@ -11,13 +11,13 @@
  *   2. resolve and render the request in the worker (`prepare_http_send`: the
  *      environment chain, inherited headers and auth, request settings, cookie
  *      jar — the desktop's `HttpSendInputs`, in Rust, on the same model layer);
- *   3. POST the rendered request to the proxy and consume its stream: timeline
+ *   3. POST the rendered request to the server and consume its stream: timeline
  *      events, the response head, body chunks, and a terminal frame;
  *   4. write what comes back where the desktop writes it — the response row as
  *      it progresses, `http_response_event` rows for the timeline, the body
- *      blob under the response id, the cookie jar with the proxy's changes.
+ *      blob under the response id, the cookie jar with the server's changes.
  *
- * The proxy keeps nothing. Every byte it sees comes from this tab and every
+ * The server keeps nothing. Every byte it sees comes from this tab and every
  * byte it returns is stored by this tab.
  */
 
@@ -31,9 +31,9 @@ import type {
   HttpResponseEventData,
   HttpSendSettings,
 } from "@yaakapp-internal/models";
-import type { Frame, SendRequest } from "@yaakapp-internal/send-proxy";
+import type { Frame, SendRequest } from "@yaakapp-internal/server";
 import type { WorkerConnection } from "./connection";
-import { proxyIdentity, proxySendUrl, readFrames } from "./proxy";
+import { serverIdentity, serverSendUrl, readFrames } from "./server";
 
 /* -------------------------------- shapes --------------------------------- */
 
@@ -68,7 +68,7 @@ export async function sendHttpRequest(
   cookieJarId: string | null,
 ): Promise<ResponseRow> {
   // The response row exists before anything can go wrong, as on the desktop, so
-  // a failure to render or to reach the proxy lands in the response pane as
+  // a failure to render or to reach the server lands in the response pane as
   // that response's error rather than as a toast that names no request.
   const workspaceId = await workspaceIdOfRequest(db, requestId);
   const response = new ResponseWriter(db, { model: "http_response", requestId, workspaceId });
@@ -107,7 +107,7 @@ async function runSend(
   // request through a proxy shows a different origin to the server than the
   // user's machine, and this is where that should be visible.
   const timeline = new TimelineWriter(db, response.id, response.workspaceId);
-  timeline.push([{ type: "info", message: `Executed by ${await proxyIdentity()}` }]);
+  timeline.push([{ type: "info", message: `Executed by ${await serverIdentity()}` }]);
   timeline.push(prepared.settingEvents);
 
   const body: SendRequest = {
@@ -116,19 +116,19 @@ async function runSend(
     cookies: prepared.cookieJar?.cookies ?? null,
   };
   const startedAt = performance.now();
-  const res = await fetch(proxySendUrl(), {
+  const res = await fetch(serverSendUrl(), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
     signal,
   }).catch((err: unknown) => {
     if (signal.aborted) throw err;
-    throw new Error(`Couldn't reach the send proxy at ${proxySendUrl()}: ${errorMessage(err)}`);
+    throw new Error(`Couldn't reach the Yaak server at ${serverSendUrl()}: ${errorMessage(err)}`);
   });
 
   if (!res.ok) {
     // A refusal, not a failed send: bad destination, rate limit, a body the
-    // proxy can't build. It comes as JSON with the reason.
+    // server can't build. It comes as JSON with the reason.
     const text = await res.text();
     let reason = text;
     try {
@@ -136,9 +136,9 @@ async function runSend(
     } catch {
       /* not JSON; the text is the reason */
     }
-    throw new Error(reason || `The send proxy answered ${res.status}`);
+    throw new Error(reason || `The Yaak server answered ${res.status}`);
   }
-  if (res.body == null) throw new Error("The send proxy sent no body");
+  if (res.body == null) throw new Error("The Yaak server sent no body");
 
   const chunks: Uint8Array[] = [];
   let received = 0;
@@ -175,12 +175,12 @@ async function runSend(
     if (terminal != null) break;
   }
 
-  // Everything the proxy said about the timeline is in the database before the
+  // Everything the server said about the timeline is in the database before the
   // response is marked closed, so a reader that wakes on "closed" sees all of it.
   await timeline.flush();
 
   if (terminal == null) {
-    throw new Error("The send proxy closed the stream without finishing");
+    throw new Error("The Yaak server closed the stream without finishing");
   }
 
   // Cookies come back on both outcomes: a hop before the failing one may have
@@ -196,7 +196,7 @@ async function runSend(
   // The body is written under the response id, which is how every reader —
   // `cmd_http_response_body`, the image viewer, the download button — asks for
   // it. One write, once the whole body is here: the worker's blob store has no
-  // append, and a body larger than memory is over the proxy's cap anyway.
+  // append, and a body larger than memory is over the server's cap anyway.
   await db.blobPut(response.id, concat(chunks, received));
   await response.finish({
     contentLength: terminal.contentLength,

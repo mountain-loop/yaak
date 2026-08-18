@@ -1,4 +1,4 @@
-//! yaak-send-proxy: the network half of Yaak in a browser.
+//! yaak-server: the network half of Yaak in a browser.
 //!
 //! A tab can't see a response the way a desktop app can — CORS hides most
 //! headers, redirects are followed silently, there is no timeline. So the tab
@@ -6,7 +6,7 @@
 //! with the desktop's own engine and streams back everything that happened,
 //! for the tab to store. It keeps nothing: no database, no files, no session.
 //!
-//! One binary, configured by flags or `YAAK_PROXY_*` environment variables.
+//! One binary, configured by flags or `YAAK_SERVER_*` environment variables.
 //! See README.md for running and deploying it, and `guard.rs` for what it
 //! refuses to talk to.
 
@@ -99,7 +99,7 @@ async fn main() {
         std::process::exit(1);
     });
     info!(
-        "yaak-send-proxy listening on http://{bind} (rate limit: {}/min)",
+        "yaak-server listening on http://{bind} (rate limit: {}/min)",
         state.config.rate_limit_per_minute,
     );
 
@@ -114,7 +114,7 @@ async fn main() {
 
 /// The built web client, served on the same origin as the API.
 ///
-/// This is what makes a single container zero-configuration: the tab's proxy URL is a path on
+/// This is what makes a single container zero-configuration: the tab's send URL is a path on
 /// the page's own origin, so there is no CORS, no second service and no URL to bake in. It is
 /// only a file server — a send behaves exactly as it does without this flag.
 ///
@@ -209,7 +209,7 @@ async fn send_http(
 
     let Ok(permit) = state.in_flight.clone().try_acquire_owned() else {
         warn!("At capacity; refusing {ip}");
-        return error_response(StatusCode::SERVICE_UNAVAILABLE, "This proxy is at capacity");
+        return error_response(StatusCode::SERVICE_UNAVAILABLE, "This server is at capacity");
     };
 
     let prepared = match send::prepare(state.limits.clone(), body).await {

@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-# Yaak in a browser, whole: the web client and the proxy that executes its sends, in one
+# Yaak in a browser, whole: the web client and the server that executes its sends, in one
 # image serving both from one origin.
 #
 #   docker run -p 8080:8080 ghcr.io/mountain-loop/yaak-web
 #
-# See crates-server/yaak-send-proxy/README.md for the knobs.
+# See crates-server/yaak-server/README.md for the knobs.
 
 FROM node:22-slim AS web
 WORKDIR /app
@@ -16,9 +16,9 @@ COPY . .
 RUN git init -q && git add -A \
     && git -c user.email=build@yaak.app -c user.name=build commit -qm build
 # Empty means the tab posts sends to its own origin, which is what this image serves. Set it
-# only to build a bundle for a deployment whose proxy lives somewhere else.
-ARG VITE_YAAK_SEND_PROXY_URL=""
-ENV VITE_YAAK_SEND_PROXY_URL=$VITE_YAAK_SEND_PROXY_URL
+# only to build a bundle for a deployment whose server lives somewhere else.
+ARG VITE_YAAK_SERVER_URL=""
+ENV VITE_YAAK_SERVER_URL=$VITE_YAAK_SERVER_URL
 ENV YAAK_TARGET=web
 # crates/yaak-web's wasm package is committed; rebuilding it needs a clang with a WebAssembly
 # backend, which this image has no reason to carry.
@@ -26,21 +26,21 @@ ENV SKIP_WASM_BUILD=1
 RUN npm ci
 RUN node_modules/.bin/vp -C apps/yaak-client build
 
-FROM rust:1-bookworm AS proxy
+FROM rust:1-bookworm AS server
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev protobuf-compiler && rm -rf /var/lib/apt/lists/*
 COPY . .
-RUN cargo build --release -p yaak-send-proxy
+RUN cargo build --release -p yaak-server
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
-COPY --from=proxy /app/target/release/yaak-send-proxy /usr/local/bin/yaak-send-proxy
+COPY --from=server /app/target/release/yaak-server /usr/local/bin/yaak-server
 COPY --from=web /app/dist/apps/yaak-client /srv
-ENV YAAK_PROXY_BIND=0.0.0.0:8080
+ENV YAAK_SERVER_BIND=0.0.0.0:8080
 EXPOSE 8080
 USER nobody
 # Without the flag this is the stateless send executor and nothing else:
-#   docker run ghcr.io/mountain-loop/yaak-web yaak-send-proxy
-CMD ["yaak-send-proxy", "--serve-web", "/srv"]
+#   docker run ghcr.io/mountain-loop/yaak-web yaak-server
+CMD ["yaak-server", "--serve-web", "/srv"]
