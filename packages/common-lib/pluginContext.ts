@@ -1,12 +1,15 @@
 /**
- * `ctx`, as a plugin sees it, built entirely out of one call to the host.
+ * `ctx`, as a plugin sees it, built once for every runtime that has one.
  *
- * Every method here serializes a request payload, hands it out of the sandbox,
- * and awaits a reply payload. That is the whole capability surface: the sandbox
- * has no socket, no clock it owns, no storage and no DOM, so anything a plugin
- * does to the world is a message the host chose to answer. The payload shapes
- * are the ones in `crates/yaak-plugins/src/events.rs`, unchanged, so a plugin
- * written for the Node runtime runs here without knowing which host it has.
+ * Two runtimes host plugins today — the Node sidecar over a WebSocket, and the
+ * QuickJS sandbox over a message port — and a third will when the sandbox is
+ * embedded in Rust. What `ctx.httpRequest.send(...)` *means* is the same in all
+ * of them, so it is built here, and the only thing a runtime supplies is how a
+ * payload gets to its host and back.
+ *
+ * `stream` and `form` are optional because they are the two places where a host
+ * genuinely differs: both need a conversation rather than one reply, and a
+ * runtime that cannot hold one degrades honestly instead of pretending.
  */
 
 import type {
@@ -14,12 +17,6 @@ import type {
   Context,
   DynamicPromptFormArg,
 } from "@yaakapp/api";
-import {
-  applyDynamicFormInput,
-  stripDynamicCallbacks,
-} from "@yaakapp-internal/lib/pluginForms";
-import { createResponseBody, decodeBase64Chunk } from "@yaakapp-internal/lib/responseBody";
-import { applyFormInputDefaults } from "@yaakapp-internal/lib/templateFunction";
 import type {
   DeleteKeyValueResponse,
   DeleteModelResponse,
@@ -51,19 +48,53 @@ import type {
   UpsertModelResponse,
   WindowInfoResponse,
 } from "@yaakapp-internal/plugins";
+import { applyDynamicFormInput, stripDynamicCallbacks } from "./pluginForms";
+import { createResponseBody, decodeBase64Chunk } from "./responseBody";
+import { applyFormInputDefaults } from "./templateFunction";
 
-/** What the host installs: one request out, one reply back. */
-export type HostCall = (
-  context: PluginContext,
-  payload: InternalEventPayload,
-) => Promise<Record<string, unknown>>;
+export interface PluginTransport {
+  /** One request out, one reply back. Rejects if the host couldn't answer. */
+  request(
+    context: PluginContext,
+    payload: InternalEventPayload,
+  ): Promise<Record<string, unknown>>;
+
+  /** Send with no reply expected. */
+  notify(context: PluginContext, payload: InternalEventPayload): void;
+
+  /**
+   * Send once and keep receiving. Used by windows, which report navigation
+   * until they close. Absent where a host has no windows to open.
+   */
+  stream?(
+    context: PluginContext,
+    payload: InternalEventPayload,
+    onReply: (payload: InternalEventPayload) => void,
+  ): void;
+
+  /**
+   * Show a form that may re-render before it settles.
+   *
+   * `onChange` is called with the values entered so far and answers with the
+   * form to show next, so inputs that compute themselves from other inputs stay
+   * live. A host without it gets a form drawn once from its defaults.
+   */
+  form?(
+    context: PluginContext,
+    payload: InternalEventPayload,
+    onChange: (
+      values: Record<string, unknown>,
+    ) => Promise<InternalEventPayload | null>,
+  ): Promise<PromptFormResponse>;
+}
 
 /**
  * A response as a plugin should see it.
  *
- * `bodyPath` names a file on a host's disk. There is no disk here and there is
- * none in a browser, and plugins address bodies by response id, so it is
- * dropped rather than left for one to grow a dependency on.
+ * `bodyPath` names a file on a host's disk: meaningless to a plugin, absent
+ * once bodies move off the filesystem, impossible in a browser. Plugins address
+ * bodies by response id, so it is dropped rather than left for one to grow a
+ * dependency on.
  */
 function forPlugin(httpResponse: HttpResponse): HttpResponse {
   const { bodyPath: _bodyPath, ...rest } = httpResponse as HttpResponse & {
@@ -72,9 +103,12 @@ function forPlugin(httpResponse: HttpResponse): HttpResponse {
   return rest;
 }
 
-export function newContext(call: HostCall, context: PluginContext): Context {
+export function createPluginContext(
+  transport: PluginTransport,
+  context: PluginContext,
+): Context {
   const send = <T>(payload: InternalEventPayload): Promise<T> =>
-    call(context, payload) as Promise<T>;
+    transport.request(context, payload) as Promise<T>;
 
   /** Read a body the host has stored, a chunk at a time, following it if it is still arriving. */
   const storedBody = async (responseId: string) => {
@@ -132,11 +166,20 @@ export function newContext(call: HostCall, context: PluginContext): Context {
       requestId: async () => (await windowInfo()).requestId,
       workspaceId: async () => (await windowInfo()).workspaceId,
       environmentId: async () => (await windowInfo()).environmentId,
-      openUrl: async () => {
-        // A window is the host's to open, and the browser host has one tab. A
-        // plugin asking is told so rather than handed a handle that does
-        // nothing when it calls `close()`.
-        throw new Error("ctx.window.openUrl is not available in the sandbox runtime");
+      openUrl: async ({ onNavigate, onClose, ...args }) => {
+        if (transport.stream == null) {
+          throw new Error("ctx.window.openUrl is not available in this runtime");
+        }
+        args.label = args.label || `${Math.random()}`;
+        transport.stream(context, { type: "open_window_request", ...args }, (event) => {
+          if (event.type === "window_navigate_event") onNavigate?.(event);
+          else if (event.type === "window_close_event") onClose?.();
+        });
+        return {
+          close: () => {
+            transport.notify(context, { type: "close_window_request", label: args.label });
+          },
+        };
       },
       openExternalUrl: async (url) => {
         await send({ type: "open_external_url_request", url });
@@ -148,22 +191,36 @@ export function newContext(call: HostCall, context: PluginContext): Context {
         return reply.value;
       },
       form: async (args) => {
-        // The inputs a plugin declares may compute themselves from the values
-        // entered so far. The host draws a static form, so they are resolved
-        // against the defaults before it is drawn and the callbacks stripped
-        // — a function cannot cross the boundary, and one left in would
-        // serialize to nothing and take its input's shape with it.
-        const defaults = applyFormInputDefaults(args.inputs, {});
-        const callArgs: CallPromptFormDynamicArgs = { values: defaults };
-        const resolved = await applyDynamicFormInput(
-          ctx,
-          args.inputs as DynamicPromptFormArg[],
-          callArgs,
-        );
-        const reply = await send<PromptFormResponse>({
+        // Inputs may compute themselves from the values entered so far, and a
+        // function cannot cross to a host — so they are resolved against the
+        // defaults before the form is drawn, then stripped.
+        const resolve = async (values: Record<string, unknown>) => {
+          const callArgs: CallPromptFormDynamicArgs = { values } as CallPromptFormDynamicArgs;
+          const resolved = await applyDynamicFormInput(
+            ctx,
+            args.inputs as DynamicPromptFormArg[],
+            callArgs,
+          );
+          return stripDynamicCallbacks(resolved) as FormInput[];
+        };
+
+        const initial = await resolve(applyFormInputDefaults(args.inputs, {}));
+        const payload: InternalEventPayload = {
           type: "prompt_form_request",
           ...args,
-          inputs: stripDynamicCallbacks(resolved) as FormInput[],
+          inputs: initial,
+        };
+
+        if (transport.form == null) {
+          const reply = await send<PromptFormResponse>(payload);
+          return reply.values;
+        }
+
+        const reply = await transport.form(context, payload, async (values) => {
+          // Fired on mount before any interaction, when there is nothing to
+          // recompute from.
+          if (values == null || Object.keys(values).length === 0) return null;
+          return { type: "prompt_form_request", ...args, inputs: await resolve(values) };
         });
         return reply.values;
       },
@@ -202,13 +259,10 @@ export function newContext(call: HostCall, context: PluginContext): Context {
         });
 
         // A send with no request behind it saves nothing, so the reply carries
-        // the only copy of its body. A saved one is read back from the host
-        // like any other. Callers get the same thing either way.
+        // the only copy of its body. A saved one is read back from the host like
+        // any other. Callers get the same thing either way.
         if (body == null) {
-          return {
-            httpResponse: forPlugin(httpResponse),
-            body: await storedBody(httpResponse.id),
-          };
+          return { httpResponse: forPlugin(httpResponse), body: await storedBody(httpResponse.id) };
         }
 
         const bytes = decodeBase64Chunk(body);
@@ -312,6 +366,10 @@ export function newContext(call: HostCall, context: PluginContext): Context {
       },
     },
     templates: {
+      /**
+       * Invoke Yaak's template engine to render a value. If the value is a nested
+       * type (eg. object), it will be recursively rendered.
+       */
       render: async (args: TemplateRenderRequest) => {
         const result = await send<TemplateRenderResponse>({
           type: "template_render_request",
@@ -343,7 +401,7 @@ export function newContext(call: HostCall, context: PluginContext): Context {
     },
     plugin: {
       reload: () => {
-        void send({ type: "reload_response", silent: true });
+        transport.notify(context, { type: "reload_response", silent: true });
       },
     },
     workspace: {
@@ -362,7 +420,11 @@ export function newContext(call: HostCall, context: PluginContext): Context {
         });
       },
       withContext: (handle: { id: string; name: string; _label?: string }) =>
-        newContext(call, { ...context, label: handle._label || null, workspaceId: handle.id }),
+        createPluginContext(transport, {
+          ...context,
+          label: handle._label || null,
+          workspaceId: handle.id,
+        }),
     },
   };
 

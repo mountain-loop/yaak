@@ -35,7 +35,10 @@ import type {
   PluginContext,
   TemplateFunction,
 } from "@yaakapp-internal/plugins";
-import { newContext } from "./context";
+import {
+  createPluginContext,
+  type PluginTransport,
+} from "@yaakapp-internal/lib/pluginContext";
 import { installGlobals } from "./globals";
 
 declare const __yaak_call: (payloadJson: string) => Promise<string>;
@@ -107,11 +110,40 @@ const EMPTY: InternalEventPayload = { type: "empty_response" };
  * `empty_response` rather than silence, so a caller never waits forever for a
  * capability this module doesn't have.
  */
+/**
+ * How a plugin reaches the world from in here: one JSON envelope out, one back.
+ *
+ * No `stream` and no `form`, and that is the honest shape rather than a
+ * shortcut. Both need the host to hold a conversation open, which the sandbox
+ * protocol deliberately does not do — so `ctx.window.openUrl` refuses and a
+ * prompt form is drawn once from its defaults, instead of either quietly doing
+ * nothing.
+ */
+const transport: PluginTransport = {
+  async request(context, payload) {
+    const replyJson = await __yaak_call(
+      // The id rides along because the host multiplexes every loaded module
+      // through one handler, and a plugin's storage is namespaced by which
+      // plugin it is.
+      JSON.stringify({ pluginRefId, context, payload }),
+    );
+    const reply = JSON.parse(replyJson) as InternalEventPayload & { error?: string };
+    if (reply.type === "error_response") {
+      throw new Error(reply.error || `Host failed to handle ${payload.type}`);
+    }
+    const { type: _type, ...rest } = reply;
+    return rest as Record<string, unknown>;
+  },
+  notify(context, payload) {
+    void __yaak_call(JSON.stringify({ pluginRefId, context, payload }));
+  },
+};
+
 async function dispatch(
   context: PluginContext,
   payload: InternalEventPayload,
 ): Promise<InternalEventPayload> {
-  const ctx = newContext(hostCall, context);
+  const ctx = createPluginContext(transport, context);
 
   if (payload.type === "boot_request") {
     await mod.init?.(ctx);
@@ -288,7 +320,7 @@ async function dispatch(
 
 /** The five action kinds, which differ only in which list they index into. */
 async function callAction(
-  ctx: ReturnType<typeof newContext>,
+  ctx: ReturnType<typeof createPluginContext>,
   payload: InternalEventPayload,
 ): Promise<boolean> {
   const lists = {
@@ -309,22 +341,6 @@ async function callAction(
   return true;
 }
 
-/** One outgoing request, JSON out and JSON back. */
-async function hostCall(
-  context: PluginContext,
-  payload: InternalEventPayload,
-): Promise<Record<string, unknown>> {
-  // The id rides along because the host multiplexes every loaded module
-  // through one handler, and a plugin's storage is namespaced by which plugin
-  // it is.
-  const replyJson = await __yaak_call(JSON.stringify({ pluginRefId, context, payload }));
-  const reply = JSON.parse(replyJson) as InternalEventPayload & { error?: string };
-  if (reply.type === "error_response") {
-    throw new Error(reply.error || `Host failed to handle ${payload.type}`);
-  }
-  const { type: _type, ...rest } = reply;
-  return rest as Record<string, unknown>;
-}
 
 /**
  * What the host can reach.

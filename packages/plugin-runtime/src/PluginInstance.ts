@@ -2,74 +2,36 @@ import console from "node:console";
 import { type Stats, statSync, watch } from "node:fs";
 import path from "node:path";
 import type {
-  CallPromptFormDynamicArgs,
   Context,
   DynamicPromptFormArg,
   PluginDefinition,
 } from "@yaakapp/api";
 import {
+  createPluginContext,
+  type PluginTransport,
+} from "@yaakapp-internal/lib/pluginContext";
+import {
   applyDynamicFormInput,
   migrateTemplateFunctionSelectOptions,
   stripDynamicCallbacks,
 } from "@yaakapp-internal/lib/pluginForms";
-import { createResponseBody, decodeBase64Chunk } from "@yaakapp-internal/lib/responseBody";
 import {
   applyFormInputDefaults,
   validateTemplateFunctionArgs,
 } from "@yaakapp-internal/lib/templateFunction";
 import type {
   BootRequest,
-  DeleteKeyValueResponse,
-  DeleteModelResponse,
-  FindHttpResponsesResponse,
-  Folder,
-  GetCookieValueRequest,
-  GetCookieValueResponse,
-  GetHttpRequestByIdResponse,
-  GetHttpResponseBodyInfoResponse,
-  GetKeyValueResponse,
   GrpcRequestAction,
   HttpAuthenticationAction,
-  HttpRequest,
   HttpRequestAction,
-  HttpResponse,
   ImportResources,
   InternalEvent,
   InternalEventPayload,
-  ListCookieNamesResponse,
-  ListFoldersResponse,
-  ListHttpRequestsRequest,
-  ListHttpRequestsResponse,
-  ListOpenWorkspacesResponse,
   PluginContext,
   PromptFormResponse,
-  PromptTextResponse,
-  ReadHttpResponseBodyChunkResponse,
-  RenderGrpcRequestResponse,
-  RenderHttpRequestResponse,
-  SendHttpRequestResponse,
   TemplateFunction,
-  TemplateRenderRequest,
-  TemplateRenderResponse,
-  UpsertModelResponse,
-  WindowInfoResponse,
 } from "@yaakapp-internal/plugins";
 import { EventChannel } from "./EventChannel";
-
-/**
- * A response as a plugin should see it.
- *
- * The host still puts `bodyPath` on the wire for its own callers, but it names
- * a file on the host's disk — meaningless to a plugin, absent once bodies move
- * off the filesystem, and impossible in a browser. Plugins address bodies by
- * response id, so drop it here rather than let one grow a dependency on it.
- */
-function forPlugin(httpResponse: HttpResponse): HttpResponse {
-  const { bodyPath: _bodyPath, ...rest } = httpResponse as HttpResponse & {
-    bodyPath?: string | null;
-  };
-  return rest;
-}
 
 export interface PluginWorkerData {
   bootRequest: BootRequest;
@@ -631,431 +593,61 @@ export class PluginInstance {
     this.#sendEvent(eventToSend);
   }
 
-  #newCtx(context: PluginContext): Context {
-    /** Read a body the host has stored, a chunk at a time, following it if it is still arriving. */
-    const storedBody = async (responseId: string) => {
-      const bodyInfo = () =>
-        this.#sendForReply<GetHttpResponseBodyInfoResponse>(context, {
-          type: "get_http_response_body_info_request",
-          responseId,
-        });
-      const info = await bodyInfo();
+  /**
+   * How a plugin reaches the app from this runtime.
+   *
+   * Every request is an event whose reply is matched by id. This runtime can
+   * hold a conversation open, so it supplies `stream` and `form`: a window
+   * reports navigation until it closes, and a prompt form re-renders as values
+   * change. `ctx` itself is built from these in @yaakapp-internal/lib, the same
+   * way the sandbox runtime builds it.
+   */
+  #transport: PluginTransport = {
+    request: (context, payload) => this.#sendForReply(context, payload),
 
-      return createResponseBody(
-        {
-          responseId,
-          contentLength: info.contentLength,
-          contentType: info.contentType ?? null,
-          complete: info.complete,
-        },
-        async (offset, length) => {
-          const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
-            context,
-            { type: "read_http_response_body_chunk_request", responseId, offset, length },
-          );
-          return decodeBase64Chunk(chunk.data);
-        },
-        { refresh: bodyInfo },
-      );
-    };
+    notify: (context, payload) => {
+      this.#sendPayload(context, payload, null);
+    },
 
-    const _windowInfo = async () => {
-      if (context.label == null) {
-        throw new Error("Can't get window context without an active window");
-      }
-      const payload: InternalEventPayload = {
-        type: "window_info_request",
-        label: context.label,
-      };
+    stream: (context, payload, onReply) => {
+      this.#sendAndListenForEvents(context, payload, onReply);
+    },
 
-      return this.#sendForReply<WindowInfoResponse>(context, payload);
-    };
+    form: (context, payload, onChange) => {
+      // Built by hand so the event id is available: intermediate re-renders
+      // reply to the original request rather than starting a new one.
+      const eventToSend = this.#buildEventToSend(context, payload, null);
 
-    return {
-      clipboard: {
-        copyText: async (text) => {
-          await this.#sendForReply(context, {
-            type: "copy_text_request",
-            text,
-          });
-        },
-      },
-      toast: {
-        show: async (args) => {
-          await this.#sendForReply(context, {
-            type: "show_toast_request",
-            // Handle default here because null/undefined both convert to None in Rust translation
-            timeout: args.timeout === undefined ? 5000 : args.timeout,
-            ...args,
-          });
-        },
-      },
-      window: {
-        requestId: async () => {
-          return (await _windowInfo()).requestId;
-        },
-        async workspaceId(): Promise<string | null> {
-          return (await _windowInfo()).workspaceId;
-        },
-        async environmentId(): Promise<string | null> {
-          return (await _windowInfo()).environmentId;
-        },
-        openUrl: async ({ onNavigate, onClose, ...args }) => {
-          args.label = args.label || `${Math.random()}`;
-          const payload: InternalEventPayload = { type: "open_window_request", ...args };
-          const onEvent = (event: InternalEventPayload) => {
-            if (event.type === "window_navigate_event") {
-              onNavigate?.(event);
-            } else if (event.type === "window_close_event") {
-              onClose?.();
-            }
-          };
-          this.#sendAndListenForEvents(context, payload, onEvent);
-          return {
-            close: () => {
-              const closePayload: InternalEventPayload = {
-                type: "close_window_request",
-                label: args.label,
-              };
-              this.#sendPayload(context, closePayload, null);
-            },
-          };
-        },
-        openExternalUrl: async (url) => {
-          await this.#sendForReply(context, {
-            type: "open_external_url_request",
-            url,
-          });
-        },
-      },
-      prompt: {
-        text: async (args) => {
-          const reply: PromptTextResponse = await this.#sendForReply(context, {
-            type: "prompt_text_request",
-            ...args,
-          });
-          return reply.value;
-        },
-        form: async (args) => {
-          // Resolve dynamic callbacks on initial inputs using default values
-          const defaults = applyFormInputDefaults(args.inputs, {});
-          const callArgs: CallPromptFormDynamicArgs = { values: defaults };
-          const resolvedInputs = await applyDynamicFormInput(
-            this.#newCtx(context),
-            args.inputs,
-            callArgs,
-          );
-          const strippedInputs = stripDynamicCallbacks(resolvedInputs);
+      return new Promise<PromptFormResponse>((resolve) => {
+        const cb = (event: InternalEvent) => {
+          if (event.replyId !== eventToSend.id) return;
+          if (event.payload.type !== "prompt_form_response") return;
 
-          // Build the event manually so we can get the event ID for keying
-          const eventToSend = this.#buildEventToSend(
-            context,
-            { type: "prompt_form_request", ...args, inputs: strippedInputs },
-            null,
-          );
-
-          // Store original inputs (with dynamic callbacks) for later resolution
-          this.#pendingDynamicForms.set(eventToSend.id, args.inputs);
-
-          const reply = await new Promise<PromptFormResponse>((resolve) => {
-            const cb = (event: InternalEvent) => {
-              if (event.replyId !== eventToSend.id) return;
-
-              if (event.payload.type === "prompt_form_response") {
-                const { done, values } = event.payload as PromptFormResponse;
-                if (done) {
-                  // Final response — resolve the promise and clean up
-                  this.#appToPluginEvents.unlisten(cb);
-                  this.#pendingDynamicForms.delete(eventToSend.id);
-                  resolve({ values } as PromptFormResponse);
-                } else {
-                  // Intermediate value change — resolve dynamic inputs and send back
-                  // Skip empty values (fired on initial mount before user interaction)
-                  const storedInputs = this.#pendingDynamicForms.get(eventToSend.id);
-                  if (storedInputs && values && Object.keys(values).length > 0) {
-                    const ctx = this.#newCtx(context);
-                    const callArgs: CallPromptFormDynamicArgs = { values };
-                    applyDynamicFormInput(ctx, storedInputs, callArgs)
-                      .then((resolvedInputs) => {
-                        const stripped = stripDynamicCallbacks(resolvedInputs);
-                        this.#sendPayload(
-                          context,
-                          { type: "prompt_form_request", ...args, inputs: stripped },
-                          eventToSend.id,
-                        );
-                      })
-                      .catch((err) => {
-                        console.error("Failed to resolve dynamic form inputs", err);
-                      });
-                  }
-                }
-              }
-            };
-            this.#appToPluginEvents.listen(cb);
-
-            // Send the initial event after we start listening (to prevent race)
-            this.#sendEvent(eventToSend);
-          });
-
-          return reply.values;
-        },
-      },
-      httpResponse: {
-        find: async (args) => {
-          const payload = {
-            type: "find_http_responses_request",
-            ...args,
-          } as const;
-          const { httpResponses } = await this.#sendForReply<FindHttpResponsesResponse>(
-            context,
-            payload,
-          );
-          return httpResponses.map(forPlugin);
-        },
-        body: ({ responseId }) => storedBody(responseId),
-      },
-      grpcRequest: {
-        render: async (args) => {
-          const payload = {
-            type: "render_grpc_request_request",
-            ...args,
-          } as const;
-          const { grpcRequest } = await this.#sendForReply<RenderGrpcRequestResponse>(
-            context,
-            payload,
-          );
-          return grpcRequest;
-        },
-      },
-      httpRequest: {
-        getById: async (args) => {
-          const payload = {
-            type: "get_http_request_by_id_request",
-            ...args,
-          } as const;
-          const { httpRequest } = await this.#sendForReply<GetHttpRequestByIdResponse>(
-            context,
-            payload,
-          );
-          return httpRequest;
-        },
-        send: async (args) => {
-          const payload = {
-            type: "send_http_request_request",
-            ...args,
-          } as const;
-          const { httpResponse, body } = await this.#sendForReply<SendHttpRequestResponse>(
-            context,
-            payload,
-          );
-
-          // A send with no request behind it saves nothing, so the reply
-          // carries the only copy of its body. A saved one is read back from
-          // the host like any other. Callers get the same thing either way.
-          if (body == null) {
-            return { httpResponse: forPlugin(httpResponse), body: await storedBody(httpResponse.id) };
+          const { done, values } = event.payload as PromptFormResponse;
+          if (done) {
+            this.#appToPluginEvents.unlisten(cb);
+            resolve({ values } as PromptFormResponse);
+            return;
           }
 
-          const bytes = decodeBase64Chunk(body);
-          return {
-            httpResponse: forPlugin(httpResponse),
-            body: createResponseBody(
-              {
-                responseId: httpResponse.id,
-                contentLength: bytes.byteLength,
-                contentType:
-                  httpResponse.headers.find((h) => h.name.toLowerCase() === "content-type")
-                    ?.value ?? null,
-                // The host waited for the whole send before replying.
-                complete: true,
-              },
-              async (offset, length) => bytes.slice(offset, offset + length),
-            ),
-          };
-        },
-        render: async (args) => {
-          const payload = {
-            type: "render_http_request_request",
-            ...args,
-          } as const;
-          const { httpRequest } = await this.#sendForReply<RenderHttpRequestResponse>(
-            context,
-            payload,
-          );
-          return httpRequest;
-        },
-        list: async (args?: { folderId?: string }) => {
-          const payload: InternalEventPayload = {
-            type: "list_http_requests_request",
-            folderId: args?.folderId,
-          } satisfies ListHttpRequestsRequest & { type: "list_http_requests_request" };
-          const { httpRequests } = await this.#sendForReply<ListHttpRequestsResponse>(
-            context,
-            payload,
-          );
-          return httpRequests;
-        },
-        create: async (args) => {
-          const payload = {
-            type: "upsert_model_request",
-            model: {
-              name: "",
-              method: "GET",
-              ...args,
-              id: "",
-              model: "http_request",
-            },
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
-          return response.model as HttpRequest;
-        },
-        update: async (args) => {
-          const payload = {
-            type: "upsert_model_request",
-            model: {
-              model: "http_request",
-              ...args,
-            },
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
-          return response.model as HttpRequest;
-        },
-        delete: async (args) => {
-          const payload = {
-            type: "delete_model_request",
-            model: "http_request",
-            id: args.id,
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<DeleteModelResponse>(context, payload);
-          return response.model as HttpRequest;
-        },
-      },
-      folder: {
-        list: async () => {
-          const payload = { type: "list_folders_request" } as const;
-          const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
-          return folders;
-        },
-        getById: async (args: { id: string }) => {
-          const payload = { type: "list_folders_request" } as const;
-          const { folders } = await this.#sendForReply<ListFoldersResponse>(context, payload);
-          return folders.find((f) => f.id === args.id) ?? null;
-        },
-        create: async ({ name, ...args }) => {
-          const payload = {
-            type: "upsert_model_request",
-            model: {
-              ...args,
-              name: name ?? "",
-              id: "",
-              model: "folder",
-            },
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
-          return response.model as Folder;
-        },
-        update: async (args) => {
-          const payload = {
-            type: "upsert_model_request",
-            model: {
-              model: "folder",
-              ...args,
-            },
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<UpsertModelResponse>(context, payload);
-          return response.model as Folder;
-        },
-        delete: async (args: { id: string }) => {
-          const payload = {
-            type: "delete_model_request",
-            model: "folder",
-            id: args.id,
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<DeleteModelResponse>(context, payload);
-          return response.model as Folder;
-        },
-      },
-      cookies: {
-        getValue: async (args: GetCookieValueRequest) => {
-          const payload = {
-            type: "get_cookie_value_request",
-            ...args,
-          } as const;
-          const { value } = await this.#sendForReply<GetCookieValueResponse>(context, payload);
-          return value;
-        },
-        listNames: async () => {
-          const payload = { type: "list_cookie_names_request" } as const;
-          const { names } = await this.#sendForReply<ListCookieNamesResponse>(context, payload);
-          return names;
-        },
-      },
-      templates: {
-        /**
-         * Invoke Yaak's template engine to render a value. If the value is a nested type
-         * (eg. object), it will be recursively rendered.
-         */
-        render: async (args: TemplateRenderRequest) => {
-          const payload = { type: "template_render_request", ...args } as const;
-          const result = await this.#sendForReply<TemplateRenderResponse>(context, payload);
-          // oxlint-disable-next-line no-explicit-any -- That's okay
-          return result.data as any;
-        },
-      },
-      store: {
-        get: async <T>(key: string) => {
-          const payload = { type: "get_key_value_request", key } as const;
-          const result = await this.#sendForReply<GetKeyValueResponse>(context, payload);
-          return result.value ? (JSON.parse(result.value) as T) : undefined;
-        },
-        set: async <T>(key: string, value: T) => {
-          const valueStr = JSON.stringify(value);
-          const payload: InternalEventPayload = {
-            type: "set_key_value_request",
-            key,
-            value: valueStr,
-          };
-          await this.#sendForReply<GetKeyValueResponse>(context, payload);
-        },
-        delete: async (key: string) => {
-          const payload = { type: "delete_key_value_request", key } as const;
-          const result = await this.#sendForReply<DeleteKeyValueResponse>(context, payload);
-          return result.deleted;
-        },
-      },
-      plugin: {
-        reload: () => {
-          this.#sendPayload(context, { type: "reload_response", silent: true }, null);
-        },
-      },
-      workspace: {
-        list: async () => {
-          const payload = {
-            type: "list_open_workspaces_request",
-          } as InternalEventPayload;
-          const response = await this.#sendForReply<ListOpenWorkspacesResponse>(context, payload);
-          return response.workspaces.map((w) => {
-            // Internal workspace info includes label field not in public API
-            type WorkspaceInfoInternal = typeof w & { label?: string };
-            return {
-              id: w.id,
-              name: w.name,
-              // Hide label from plugin authors, but keep it for internal routing
-              _label: (w as WorkspaceInfoInternal).label as string,
-            };
-          });
-        },
-        withContext: (workspaceHandle: { id: string; name: string; _label?: string }) => {
-          // Create a new context with the workspace's window label
-          const newContext: PluginContext = {
-            ...context,
-            label: workspaceHandle._label || null,
-            workspaceId: workspaceHandle.id,
-          };
-          return this.#newCtx(newContext);
-        },
-      },
-    };
+          onChange(values ?? {})
+            .then((next) => {
+              if (next != null) this.#sendPayload(context, next, eventToSend.id);
+            })
+            .catch((err: unknown) => {
+              console.error("Failed to resolve dynamic form inputs", err);
+            });
+        };
+        this.#appToPluginEvents.listen(cb);
+
+        // Sent after the listener is attached, to prevent a race.
+        this.#sendEvent(eventToSend);
+      });
+    },
+  };
+
+  #newCtx(context: PluginContext): Context {
+    return createPluginContext(this.#transport, context);
   }
 }
 
