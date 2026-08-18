@@ -732,7 +732,7 @@ export function __wbindgen_cast_0000000000000002(arg0, arg1) {
 }
 export function __wbindgen_cast_0000000000000003(arg0, arg1) {
     // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("IDBVersionChangeEvent")], shim_idx: 74, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h20ab1db2d80221ce);
+    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__he166673e9c1b4e95);
     return ret;
 }
 export function __wbindgen_cast_0000000000000004(arg0, arg1) {
@@ -789,8 +789,8 @@ function wasm_bindgen__convert__closures_____invoke__ha1c2fa93df0107f3(arg0, arg
     }
 }
 
-function wasm_bindgen__convert__closures_____invoke__h20ab1db2d80221ce(arg0, arg1, arg2) {
-    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h20ab1db2d80221ce(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__he166673e9c1b4e95(arg0, arg1, arg2) {
+    const ret = wasm.wasm_bindgen__convert__closures_____invoke__he166673e9c1b4e95(arg0, arg1, arg2);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }

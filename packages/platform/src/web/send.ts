@@ -60,12 +60,12 @@ interface PreparedHttpSend {
 }
 
 /**
- * The desktop applies auth to the sendable request; here the proxy builds that,
- * so the plugin's answer goes onto the model and the proxy folds it in. Same
+ * The desktop applies auth to the sendable request; here the server builds that,
+ * so the plugin's answer goes onto the model and the server folds it in. Same
  * bytes for a method that sets a header, which is every one that runs here.
  *
  * Not the same for one that *signs*, since the plugin sees the request before
- * the proxy assembles it. AWS SigV4 and OAuth 1.0 are refused rather than
+ * the server assembles it. AWS SigV4 and OAuth 1.0 are refused rather than
  * mis-signed; see the sandbox README.
  */
 async function applyAuthentication(

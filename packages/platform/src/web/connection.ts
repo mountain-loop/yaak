@@ -202,7 +202,7 @@ export class WorkerConnection {
     return this.request<T>((id) => ({ type: "prepare_http_send", id, payload }));
   }
 
-  /** See `render_template` in crates/yaak-web. */
+  /** See `render_template` in crates/yaak-wasm. */
   renderTemplate(payload: unknown): Promise<string> {
     return this.request<string>((id) => ({ type: "render_template", id, payload }));
   }

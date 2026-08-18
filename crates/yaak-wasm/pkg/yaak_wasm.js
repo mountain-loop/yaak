@@ -5,5 +5,5 @@ import { __wbg_set_wasm } from "./yaak_wasm_bg.js";
 __wbg_set_wasm(wasm);
 wasm.__wbindgen_start();
 export {
-    blob_delete, blob_get, blob_put, boot, prepare_http_send, rpc
+    blob_delete, blob_get, blob_put, boot, prepare_http_send, render_template, rpc
 } from "./yaak_wasm_bg.js";
