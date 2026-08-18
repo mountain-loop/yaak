@@ -50,14 +50,7 @@ export class WorkerConnection {
   /** True once the worker has said anything at all. */
   private heard = false;
 
-  /**
-   * Who answers a template function, once something can.
-   *
-   * The engine renders in the worker but the functions come from plugins in
-   * this tab's sandbox, so the worker asks back through this. Unset until the
-   * sandbox is up, and a render that arrives before then gets the same refusal
-   * a host with no plugins gives — which is the truth at that moment.
-   */
+  /** Unset until the sandbox is up; a render before then gets a refusal. */
   private templateFunctions: ((name: string, args: string) => Promise<string>) | null = null;
 
   constructor() {
@@ -172,7 +165,6 @@ export class WorkerConnection {
     });
   }
 
-  /** Hand the worker somewhere to send template functions. */
   setTemplateFunctionHandler(handler: (name: string, args: string) => Promise<string>): void {
     this.templateFunctions = handler;
   }

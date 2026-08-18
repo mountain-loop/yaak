@@ -16,10 +16,7 @@ export type ToWorker =
    * async in the engine (rendering is), where every `rpc` command is not.
    */
   | { type: "prepare_http_send"; id: number; payload: unknown }
-  /**
-   * Render one template string. Async for the same reason `prepare_http_send`
-   * is: a template function is a call out to a plugin, and plugins are not here.
-   */
+  /** Async for the same reason `prepare_http_send` is: it can call a plugin. */
   | { type: "render_template"; id: number; payload: unknown }
   /** The tab's answer to a `template_function` call. */
   | {
@@ -51,14 +48,7 @@ export type FromWorker =
   | { type: "error"; id: number; message: string }
   /** A backend event for the app — today only `model_writes`. Sent to every port. */
   | { type: "event"; event: string; payload: unknown }
-  /**
-   * Render a template function, please.
-   *
-   * The one message that runs the other way. Rendering happens in the engine,
-   * here, but the functions it calls live in a plugin sandbox the tab owns —
-   * so the engine asks, and it asks the port that started the render rather
-   * than broadcasting, because only that tab is waiting.
-   */
+  /** The one message that runs the other way: the engine asking for a plugin. */
   | { type: "template_function"; id: number; name: string; args: string };
 
 /** What the worker registers itself under. Tabs on one origin share it. */

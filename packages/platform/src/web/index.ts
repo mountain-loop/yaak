@@ -166,9 +166,7 @@ export function createWebPlatform(): Platform {
   const plugins = new WebPlugins(db);
   const capabilities = capabilitiesFor();
 
-  // Rendering happens in the worker and template functions live in the sandbox,
-  // so the worker needs a way back here to call one. Registered before anything
-  // can render, which is why it is here rather than inside the first send.
+  // Registered before anything can render, not inside the first send.
   db.setTemplateFunctionHandler((name, args) => plugins.callTemplateFunction(name, args));
 
   // Without this, IndexedDB is best-effort storage and a browser reclaiming

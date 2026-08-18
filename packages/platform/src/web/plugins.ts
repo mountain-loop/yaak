@@ -1,17 +1,7 @@
 /**
- * The plugins this host runs, and everything they are allowed to reach.
- *
- * Two jobs. Outward: keep a sandbox, load the bundled plugins into it, and know
- * which of them answers what — the app asks for "the bearer auth config" and
- * this decides that means `auth-bearer`. Inward: answer the `ctx` calls those
- * plugins make, which is where the sandbox stops being a sealed box and starts
- * being a host. Everything a plugin can do to the world is in `hostRequest`
- * below, by name, with a refusal for anything not listed.
- *
- * The plugins are bundled into the app rather than installed, for now — see
- * `scripts/bundle-sandbox-plugins.mjs`. Which three, and why only three, is a
- * decision that belongs to this slice and not to the sandbox: the runtime does
- * not know how many plugins exist.
+ * Keeps a sandbox, loads the bundled plugins into it, routes by what each one
+ * contributes, and answers the `ctx` calls they make. `hostRequest` below is
+ * the whole of what a plugin can do to the world here.
  */
 
 import { PluginSandbox, type PluginSummary } from "@yaakapp-internal/plugin-sandbox";
@@ -28,7 +18,6 @@ import type {
 import type { WorkerConnection } from "./connection";
 import { SANDBOX_PLUGINS } from "./sandboxPlugins.generated";
 
-/** What a plugin's own storage is keyed under, matching the desktop's namespacing. */
 type KeyValueRequest = { key: string };
 
 export interface AppliedAuthentication {
@@ -41,7 +30,6 @@ export class WebPlugins {
   private sandbox: PluginSandbox | null = null;
   private loading: Promise<void> | null = null;
 
-  /** Loaded plugin ids, by what they contribute. */
   private readonly byTemplateFunction = new Map<string, string>();
   private readonly byAuthName = new Map<string, string>();
   private readonly importers: string[] = [];
@@ -52,12 +40,8 @@ export class WebPlugins {
   }
 
   /**
-   * Bring the sandbox up and load every bundled plugin, once.
-   *
    * Called from every entry point rather than at construction, so a session
-   * that never touches a plugin never pays for QuickJS — and so a tab that
-   * cannot start the worker still boots the app, with plugin-shaped features
-   * failing individually instead of the page failing entirely.
+   * that never touches a plugin never pays for QuickJS.
    */
   ready(): Promise<void> {
     this.loading ??= this.start();
@@ -68,16 +52,13 @@ export class WebPlugins {
     const sandbox = new PluginSandbox({
       onHostRequest: (envelope) => this.hostRequest(envelope),
       onLog: ({ pluginRefId, level, message }) => {
-        // Prefixed, because otherwise a plugin's console output is
-        // indistinguishable from the app's own and blames the wrong code.
+        // Prefixed, or a plugin's console output blames the app's own code.
         const write = level === "error" ? console.error : console.log;
         write(`[plugin ${pluginRefId}] ${message}`);
       },
     });
     this.sandbox = sandbox;
 
-    // In parallel: each is an independent QuickJS context and none of them
-    // observes the others.
     await Promise.all(
       SANDBOX_PLUGINS.map(async ({ name, source }) => {
         try {
@@ -106,13 +87,7 @@ export class WebPlugins {
     return this.gather("get_http_authentication_summary_request", this.byAuthName.values());
   }
 
-  /**
-   * Ask several plugins the same question and keep the answers that came back.
-   *
-   * A plugin that has nothing to say answers `empty_response`, which is not an
-   * answer and is dropped; one that throws is logged and dropped too, so a
-   * single broken plugin cannot empty the picker for all the others.
-   */
+  /** One broken plugin must not empty the picker for the others. */
   private async gather<T>(type: string, ids: Iterable<string>): Promise<T[]> {
     const replies = await Promise.all(
       Array.from(ids).map(async (id): Promise<{ type: string } | null> => {
@@ -146,13 +121,9 @@ export class WebPlugins {
   }
 
   /**
-   * Run one template function.
-   *
-   * This is what the engine's render calls back into, so its contract is the
-   * engine's: a string, or a throw whose message says what went wrong. A
-   * function nothing provides is a throw naming it rather than an empty
-   * string, because a request sent with a silently blank token is worse than
-   * one that refuses to be sent.
+   * What the engine's render calls back into. A function nothing provides is a
+   * throw naming it, not an empty string: a request sent with a silently blank
+   * token is worse than one that refuses to be sent.
    */
   async callTemplateFunction(name: string, argsJson: string): Promise<string> {
     await this.ready();
@@ -204,13 +175,7 @@ export class WebPlugins {
     } as InternalEventPayload);
   }
 
-  /**
-   * Apply an authentication method to a request that is about to be sent.
-   *
-   * The plugin is shown the request as it stands and hands back headers and
-   * query parameters to add — the same exchange the desktop has, at the same
-   * point in the send.
-   */
+
   async applyHttpAuthentication(
     authName: string,
     request: {
@@ -235,13 +200,7 @@ export class WebPlugins {
     } as InternalEventPayload);
   }
 
-  /**
-   * Import whatever this text turns out to be.
-   *
-   * Every importer is asked and the first one that recognizes it wins, which
-   * is how the desktop's `import_data` decides too — an importer that does not
-   * recognize its input returns nothing rather than guessing.
-   */
+  /** First importer that recognizes the text wins, as `import_data` decides too. */
   async import(content: string): Promise<ImportResources | null> {
     await this.ready();
     for (const id of this.importers) {
@@ -269,26 +228,16 @@ export class WebPlugins {
   }
 
   /**
-   * The context a plugin sees.
-   *
-   * `label` is null and stays null: it names a desktop window, and the calls
-   * that need one — `ctx.window.requestId()` and its neighbours — are refused
-   * rather than answered with a guess about which request the user is looking
-   * at. `workspaceId` is genuinely unknown here for the same reason; the
-   * commands that know it pass it themselves.
+   * `label` names a desktop window, so it stays null and the calls needing one
+   * refuse rather than guess which request the user is looking at.
    */
   private context(): PluginContext {
     return { id: "web", label: null, workspaceId: null };
   }
 
   /**
-   * Answer one `ctx` call.
-   *
-   * The list is short on purpose. What is here is what a plugin can do in a
-   * browser tab today; what is missing refuses by name, so a plugin that needs
-   * it fails with a sentence someone can act on rather than a hang or an
-   * undefined. Every addition to this list is a capability decision, which is
-   * why they are written out one at a time instead of forwarded wholesale.
+   * Every addition here is a capability decision, which is why they are written
+   * out one at a time instead of forwarded wholesale.
    */
   private async hostRequest(envelope: string): Promise<string> {
     const { pluginRefId, payload } = JSON.parse(envelope) as {
@@ -299,7 +248,6 @@ export class WebPlugins {
 
     const reply = async (): Promise<InternalEventPayload> => {
       switch (payload.type) {
-        /* A plugin's own storage, namespaced by plugin in the database. */
         case "get_key_value_request": {
           const value = await this.db.rpc<string | null>("web_plugin_kv_get", {
             pluginName: pluginRefId,
@@ -324,7 +272,6 @@ export class WebPlugins {
           return { type: "delete_key_value_response", deleted } as InternalEventPayload;
         }
 
-        /* A message for the user, delivered where every other one is. */
         case "show_toast_request": {
           const { type: _type, ...toast } = payload;
           this.db.deliver("show_toast", toast);

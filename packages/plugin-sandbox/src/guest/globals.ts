@@ -1,17 +1,6 @@
 /**
- * The globals that exist inside the sandbox.
- *
- * QuickJS is the language and nothing else: it has `Promise`, `BigInt` and the
- * ES2024 built-ins, and no `console`, no `setTimeout`, no `TextEncoder`. The
- * platform globals a browser or Node would supply are not there because there
- * is no platform — which is the point. What a plugin can reach is what this
- * file installs, and every one of these has to exist identically on the Rust
- * host too, so the list is kept short and boring on purpose.
- *
- * Two of them are implemented here in pure JavaScript rather than bridged to
- * the host: the text codecs are twenty lines and a bridge would cost a copy
- * each way for no gain. Timers cannot be — the sandbox has no event loop of its
- * own — so those are the host's.
+ * Everything a plugin can reach that isn't the language itself. The Rust host
+ * must install this same list; see the README.
  */
 
 declare const __yaak_log: (level: string, message: string) => void;
@@ -20,13 +9,7 @@ declare const __yaak_timer_cancel: (id: number) => void;
 
 /* -------------------------------- console -------------------------------- */
 
-/**
- * Arguments as a line of text, formatted here rather than at the host.
- *
- * Only strings cross the boundary, so a plugin logging an object gets it
- * serialized inside the sandbox, where its own prototypes still exist and a
- * cycle is this function's problem rather than the host's.
- */
+/** Formatted in here, so only strings cross the boundary. */
 function formatArgs(args: unknown[]): string {
   return args
     .map((arg) => {
@@ -68,14 +51,7 @@ function installConsole(): void {
 
 /* --------------------------------- timers -------------------------------- */
 
-/**
- * Timers, owned by the host.
- *
- * QuickJS has no clock to wake on: `executePendingJobs` drains microtasks and
- * returns, so a `setTimeout` implemented in here would either never fire or
- * spin. The host holds the real timer and calls back in, which also means a
- * sandbox torn down mid-wait takes its pending timers with it.
- */
+/** QuickJS has no clock to wake on, so the host holds the real timer. */
 const timerCallbacks = new Map<number, () => void>();
 let nextTimerId = 1;
 
@@ -94,14 +70,12 @@ function installTimers(): void {
     __yaak_timer_cancel(id);
   };
 
-  // Same contract, and deliberately not repeating: an interval is a timer that
-  // rearms, and nothing in a plugin should be polling anyway. A plugin that
-  // wants one can build it from `setTimeout`, visibly.
+  // An interval is a timer that rearms, and nothing in a plugin should poll.
   g.setInterval = undefined;
   g.clearInterval = undefined;
 }
 
-/** Called by the host when a timer it is holding comes due. */
+/** Called by the host when a timer comes due. */
 function fireTimer(id: number): void {
   const callback = timerCallbacks.get(id);
   timerCallbacks.delete(id);
@@ -117,8 +91,7 @@ class SandboxTextEncoder {
     const out: number[] = [];
     for (let i = 0; i < input.length; i++) {
       let code = input.charCodeAt(i);
-      // A surrogate pair is one code point; a lone surrogate becomes U+FFFD,
-      // which is what the standard encoder does rather than erroring.
+      // A lone surrogate becomes U+FFFD, as the standard encoder does.
       if (code >= 0xd800 && code <= 0xdbff) {
         const next = input.charCodeAt(i + 1);
         if (next >= 0xdc00 && next <= 0xdfff) {
@@ -220,8 +193,6 @@ const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function installBase64(): void {
   const g = globalThis as Record<string, unknown>;
 
-  // Latin-1 in, base64 out — the same narrow contract the browser's have, so a
-  // plugin that reaches for them behaves the same here as it does there.
   g.btoa = (input: string): string => {
     let out = "";
     for (let i = 0; i < input.length; i += 3) {

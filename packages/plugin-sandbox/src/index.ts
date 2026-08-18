@@ -1,18 +1,12 @@
 /**
- * A tab's handle on its sandbox.
- *
- * Owns the worker, keeps track of what is loaded in it, and turns the two
- * message flows into promises. The interesting half is `onHostRequest`: the
- * caller supplies it, and it is the entire answer to "what can a plugin do
- * here?" — this package deliberately has no idea. A browser host answers those
- * against a wasm database and a send proxy; something else could answer them
- * differently; a host that answers nothing still runs plugins that only compute.
+ * A tab's handle on its sandbox. `onHostRequest` is the entire answer to "what
+ * can a plugin do here?", and this package deliberately has no opinion on it.
  */
 
 import type { FromSandbox, ToSandbox } from "./protocol";
 
 
-/** Answers one `ctx` call. Gets the JSON envelope, returns the JSON reply. */
+/** Answers one `ctx` call: JSON envelope in, JSON reply out. */
 export type HostRequestHandler = (envelope: string) => Promise<string>;
 
 export interface PluginSandboxOptions {
@@ -20,7 +14,6 @@ export interface PluginSandboxOptions {
   onLog?: (log: { pluginRefId: string; level: string; message: string }) => void;
 }
 
-/** What a module turned out to contribute, as reported after loading. */
 export interface PluginSummary {
   templateFunctions: string[];
   authentication: string | null;
@@ -45,9 +38,8 @@ export class PluginSandbox {
   constructor(options: PluginSandboxOptions) {
     this.options = options;
 
-    // `new URL("./worker.ts", import.meta.url)` is written inline because that
-    // exact syntax is what the bundler pattern-matches to know it must bundle a
-    // worker entry. Hoisted into a variable it ships as raw TypeScript.
+    // Written inline because that exact syntax is what the bundler
+    // pattern-matches; hoisted into a variable it ships as raw TypeScript.
     this.worker = new Worker(new URL("./worker.ts", import.meta.url), {
       type: "module",
       name: "yaak-plugins",
@@ -56,7 +48,6 @@ export class PluginSandbox {
     this.worker.onerror = () => this.failEverything("The plugin sandbox failed to start");
   }
 
-  /** Load a module's source under an id, replacing anything already there. */
   load(pluginRefId: string, source: string): Promise<PluginSummary> {
     return this.request<PluginSummary>((id) => ({ type: "load", id, pluginRefId, source }));
   }
@@ -65,7 +56,6 @@ export class PluginSandbox {
     return this.request<void>((id) => ({ type: "unload", id, pluginRefId }));
   }
 
-  /** Send one event to one loaded module; resolves with its reply payload. */
   async dispatch<T>(
     pluginRefId: string,
     context: unknown,
@@ -85,13 +75,7 @@ export class PluginSandbox {
     return parsed as T & { type: string };
   }
 
-  /**
-   * End the sandbox now.
-   *
-   * `terminate()` rather than a polite shutdown, on purpose: the reason to
-   * reach for this is a plugin that will not stop, and asking it to stop is
-   * exactly what does not work then.
-   */
+  /** `terminate()`, not a polite shutdown: the reason to call this is a plugin that won't stop. */
   dispose(): void {
     this.worker.terminate();
     this.failEverything("The plugin sandbox was shut down");

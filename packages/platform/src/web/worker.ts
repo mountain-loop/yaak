@@ -109,17 +109,9 @@ function bootOnce(): Promise<void> {
 }
 
 /**
- * Template functions, which live somewhere this worker cannot reach.
- *
- * Rendering is the engine's, and the engine is here. The functions it calls
- * come from plugins, which run in a sandbox the tab owns — so the engine is
- * handed a function that asks the tab. It asks the port that started the
- * render, not every port, because only that tab is waiting on the answer and
- * only its sandbox has the plugins the render was started against.
- *
- * A failure comes back as a rejection, which the engine turns into a render
- * error naming the function. That matters: rendering `${[ uuid.v4() ]}` to an
- * empty string and sending it would be worse than not sending at all.
+ * Rendering happens here; the functions it calls live in a sandbox the tab
+ * owns. Asked of the port that started the render, not every port, because
+ * only that tab is waiting and only its sandbox has those plugins.
  */
 const pendingTemplateFunctions = new Map<number, (result: string | Error) => void>();
 let nextTemplateFunctionId = 1;

@@ -1,15 +1,8 @@
 /**
- * How much slower is an importer inside the sandbox?
+ * How much slower is an importer inside the sandbox? Yaak's OpenAPI importer is
+ * first-party JavaScript, so a large spec is parsed by whatever engine the
+ * runtime uses. Numbers are in the README.
  *
- * This is the number the tiered-runtime decision rests on. Template functions
- * and auth signing are small enough that engine speed cannot matter; importing
- * is not. Yaak's OpenAPI importer is first-party JavaScript, not Rust, so a
- * large specification is parsed and walked by whatever engine the runtime uses
- * — QuickJS in a browser tab, V8 on the desktop today. If the gap is large
- * enough to be felt on a real document, importers need a different path before
- * the corpus is ported.
- *
- * Usage:
  *   node packages/plugin-sandbox/bench/import.mjs <spec.json> [iterations]
  */
 
@@ -34,10 +27,7 @@ const spec = readFileSync(specPath, "utf8");
 console.log(`Spec: ${specPath} (${(spec.length / 1024 / 1024).toFixed(1)} MB)`);
 console.log(`Iterations: ${iterations}\n`);
 
-/** The sandbox host, bundled for Node so this script can drive it directly. */
 async function loadHost() {
-  // Inside node_modules so the emitted bundle's own imports of the QuickJS
-  // variant resolve the way any other module's would.
   const outDir = join(root, "node_modules", ".cache", "yaak-plugin-sandbox");
   mkdirSync(outDir, { recursive: true });
   const outfile = join(outDir, "host.mjs");
@@ -69,9 +59,8 @@ function report(label, times, resourceCount) {
       `best ${min.toFixed(0).padStart(5)} ms   ` +
       `median ${median.toFixed(0).padStart(5)} ms   (${resourceCount} requests)`,
   );
-  // Every run, because the spread is the point: V8 compiles this workload
-  // across the first few passes and QuickJS, which does not compile at all,
-  // does not. Quoting one ratio would pick a winner by choosing when to look.
+  // The spread is the point: V8 compiles this across the first few passes and
+  // QuickJS does not compile at all.
   console.log(`${" ".repeat(20)} runs: ${times.map((t) => t.toFixed(0)).join(", ")} ms`);
   return { first: times[0], best: min };
 }

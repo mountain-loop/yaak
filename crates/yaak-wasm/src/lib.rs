@@ -423,9 +423,8 @@ fn dispatch(
             to_json(())
         }
 
-        // A plugin's own storage, namespaced by plugin name exactly as the desktop namespaces
-        // it (`build_shared_reply` in crates/yaak/src/plugin_events.rs), so a plugin that keeps
-        // a token here finds it under the same key on either host.
+        // Namespaced by plugin name exactly as `build_shared_reply` does in
+        // crates/yaak/src/plugin_events.rs, so a token is found under the same key on either host.
         "web_plugin_kv_get" => {
             let req: PluginKeyValueReq = from_js(payload)?;
             let found = host.queries.connect().get_plugin_key_value(&req.plugin_name, &req.key);
@@ -476,9 +475,8 @@ struct PreparedHttpSend {
     /// The request with inherited headers and authentication applied and every template
     /// rendered. What the proxy sends, and what the response records as its request.
     request: HttpRequest,
-    /// Identifies whichever model the authentication was inherited from, hashed the way the
-    /// desktop hashes it. Plugins key their stored state on it — an OAuth token cache belongs
-    /// to the folder that declared the auth, not to each request under it.
+    /// Whichever model the auth was inherited from, hashed as the desktop hashes it. An
+    /// OAuth token cache belongs to the folder that declared the auth, not to each request.
     auth_context_id: String,
     settings: HttpSendSettings,
     /// The `* Setting name=value` timeline lines the desktop writes at the top of a send,
@@ -488,15 +486,9 @@ struct PreparedHttpSend {
     cookie_jar: Option<CookieJar>,
 }
 
-/// A template callback that calls a template function wherever the caller keeps them.
-///
-/// The desktop's equivalent (`PluginTemplateCallback`) reaches a plugin process; this one
-/// reaches a JavaScript function the worker installed, which forwards to the sandbox and back.
-/// Both hand the renderer the same thing — a string, or an error naming what failed — so a
-/// template renders identically on either host or fails for the same reason.
-///
-/// Without a function to call, a template function is a clear refusal naming it, which tells
-/// the user what the request needs rather than sending an empty string in its place.
+/// Reaches a template function through a JavaScript function the worker installed, which
+/// forwards to the plugin sandbox. Without one, a template function is a refusal naming it
+/// rather than an empty string sent in its place.
 struct JsTemplateCallback {
     call: Option<js_sys::Function>,
 }
@@ -507,7 +499,6 @@ impl TemplateCallback for JsTemplateCallback {
         fn_name: &str,
         args: HashMap<String, serde_json::Value>,
     ) -> impl std::future::Future<Output = yaak_templates::error::Result<String>> {
-        // Built before the async block so the future holds only owned values.
         let call = self.call.clone();
         let fn_name = fn_name.to_string();
         let args = serde_json::to_string(&args).unwrap_or_else(|_| "{}".into());
@@ -545,7 +536,6 @@ impl TemplateCallback for JsTemplateCallback {
     }
 }
 
-/// The message out of a rejected promise or a thrown error, without the `Error:` wrapper.
 fn js_message(value: &JsValue) -> String {
     if let Some(text) = value.as_string() {
         return text;
@@ -556,23 +546,19 @@ fn js_message(value: &JsValue) -> String {
     message.unwrap_or_else(|| format!("{value:?}"))
 }
 
-/// The template function bridge, or none when the caller passed nothing.
 fn template_callback(plugins: JsValue) -> JsTemplateCallback {
     JsTemplateCallback { call: plugins.dyn_into::<js_sys::Function>().ok() }
 }
 
-/// Resolve and render a request for sending, exactly as the desktop does before it puts the
-/// request on the network: the environment chain, inherited headers and auth, request
-/// settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
-/// posts to the Yaak server.
+/// Resolve and render a request for sending, exactly as the desktop does: the environment
+/// chain, inherited headers and auth, request settings, the cookie jar. Nothing here touches
+/// a socket.
 ///
-/// `plugins` is the template function bridge — a JavaScript function taking a name and its
-/// JSON arguments and resolving to the rendered string. Passing nothing is allowed and makes
-/// every template function a refusal naming it.
+/// `plugins` is the template function bridge: a JS function taking a name and JSON args,
+/// resolving to the rendered string. Passing nothing is allowed.
 ///
-/// Authentication is *not* applied here even though it is part of preparing a send. It is
-/// applied to the rendered request by the caller, because the plugin that applies it wants to
-/// see the request as it will be sent, and the caller is the side that knows that.
+/// Authentication is applied by the caller, not here, because the plugin that applies it
+/// needs to see the request as it will be sent.
 #[wasm_bindgen]
 pub async fn prepare_http_send(payload: JsValue, plugins: JsValue) -> Result<JsValue> {
     let req: PrepareHttpSendReq = from_js(payload)?;
@@ -631,12 +617,9 @@ struct RenderTemplateReq {
     ignore_error: Option<bool>,
 }
 
-/// Render one template string against an environment chain.
-///
-/// What `cmd_render_template` does on the desktop, for the same callers: the value previews
-/// under an editor, and anywhere the app shows what a template will become. `ignore_error`
-/// picks the same behaviour it picks there — a preview shows an empty string where a send
-/// would refuse, because a half-typed template is not yet a mistake.
+/// What `cmd_render_template` does on the desktop. `ignore_error` matches it too: a preview
+/// shows an empty string where a send would refuse, since a half-typed template is not yet a
+/// mistake.
 #[wasm_bindgen]
 pub async fn render_template(payload: JsValue, plugins: JsValue) -> Result<JsValue> {
     let req: RenderTemplateReq = from_js(payload)?;

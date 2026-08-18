@@ -1,16 +1,6 @@
 /**
- * Bundle plugins for the sandbox runtime.
- *
  * A stand-in for `yaakcli build --target sandbox`, which does not exist yet.
- * The difference from the Node target is small and entirely in the resolver:
- * nothing may resolve to a Node built-in, because the sandbox has none — see
- * `packages/plugin-sandbox/README.md` for the full contract. Bundling here
- * rather than in the CLI keeps the CLI out of this slice; what the CLI would
- * need is written down at the bottom of this file.
- *
- * Output is a generated TypeScript module holding each bundle as a string,
- * which is how the browser host ships them today. That is the part most
- * obviously temporary: see the note at the bottom.
+ * What the CLI would need instead is at the bottom of this file.
  */
 
 import { build } from "esbuild";
@@ -20,16 +10,9 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-/**
- * The plugins the browser tier ships.
- *
- * Three, not the whole corpus: this slice is about the runtime existing and
- * being proven, and each of these proves a different path through it — a
- * template function, an importer, an authentication method.
- */
+/** Three, not the corpus: one template function, one importer, one auth method. */
 const PLUGINS = ["template-function-timestamp", "importer-curl", "auth-bearer"];
 
-/** Refuse Node built-ins loudly at build time rather than at first call. */
 const noNodeBuiltins = {
   name: "no-node-builtins",
   setup(build) {
@@ -50,8 +33,6 @@ export async function bundlePlugin(name, { dir = join(root, "plugins", name) } =
     entryPoints: [join(dir, "src", "index.ts")],
     bundle: true,
     write: false,
-    // CommonJS because that is what the shell evaluates: a `new Function` with
-    // `module`, `exports` and a `require` that only throws.
     format: "cjs",
     platform: "browser",
     target: "es2022",

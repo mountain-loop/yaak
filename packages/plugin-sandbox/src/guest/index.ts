@@ -1,19 +1,10 @@
 /**
- * The runtime shell, as it exists inside the sandbox.
+ * What QuickJS evaluates before any untrusted code does: install globals, load
+ * one module, answer events against it.
  *
- * This is the whole of what QuickJS evaluates before any untrusted code does:
- * it installs the globals, loads one module, and answers events against it.
- * The Node runtime's `PluginInstance` does the same job on the other side of a
- * WebSocket; the difference is that this one has no filesystem to load from and
- * no host objects to reach for, so the module arrives as source text and every
- * capability arrives as a reply.
- *
- * It is deliberately not plugin-shaped underneath. `load` takes source and
- * `dispatch` takes an event: what a module *is* — a plugin today, a workspace
- * script later — is decided by the payloads the host sends, not by this file.
- * Scripts are the reason that matters. A plugin is installed, so someone
- * consented to it; a script arrives inside a workspace, as data, with no such
- * moment, which is why scripts will never get a runtime other than this one.
+ * `load` takes source and `dispatch` takes an event, so what a module *is* — a
+ * plugin today, a workspace script later — is the host's decision, not this
+ * file's. See the README on why scripts never get a second runtime.
  */
 
 import type { PluginDefinition } from "@yaakapp/api";
@@ -45,18 +36,13 @@ declare const __yaak_call: (payloadJson: string) => Promise<string>;
 
 const { fireTimer } = installGlobals();
 
-/** The loaded module, and the id the host knows it by. */
 let mod: PluginDefinition = {};
 let pluginRefId = "";
 
 /**
- * Evaluate a module's source.
- *
- * The bundles are CommonJS, so they are handed the three names that implies and
- * nothing else. `require` is the interesting one: it exists only to fail, by
- * name, because a bundle that still calls it did not get bundled for this
- * target and the honest outcome is a message saying which specifier is missing
- * rather than an undefined that surfaces ten frames later.
+ * `require` exists only to fail, by name: a bundle that still calls it was not
+ * built for this target, and naming the specifier beats an undefined that
+ * surfaces ten frames later.
  */
 function load(source: string, refId: string): void {
   const module: { exports: Record<string, unknown> } = { exports: {} };
@@ -67,10 +53,7 @@ function load(source: string, refId: string): void {
     );
   };
 
-  // `new Function` rather than an ES module so the bundle's own top-level names
-  // cannot collide with this shell's, and so the source can arrive as a string
-  // with no loader hook. Evaluating untrusted source is the entire job of this
-  // file; the isolation is the QuickJS context around it, not a lint rule.
+  // Isolation is the QuickJS context around this, not a lint rule.
   // oxlint-disable-next-line no-implied-eval
   const factory = new Function("module", "exports", "require", source);
   factory(module, module.exports, require);
@@ -83,7 +66,6 @@ function load(source: string, refId: string): void {
   pluginRefId = refId;
 }
 
-/** Everything a module contributes, without the functions that implement it. */
 function summary(): Record<string, unknown> {
   return {
     templateFunctions: (mod.templateFunctions ?? []).map((f) => f.name),
@@ -102,31 +84,20 @@ function summary(): Record<string, unknown> {
 const EMPTY: InternalEventPayload = { type: "empty_response" };
 
 /**
- * Answer one event against the loaded module.
- *
- * Every branch mirrors the Node runtime's, because the payloads are the same
- * payloads — a plugin cannot tell which runtime it is in, and that is the
- * promise the whole design exists to keep. An unmatched event gets
- * `empty_response` rather than silence, so a caller never waits forever for a
- * capability this module doesn't have.
+ * Every branch mirrors the Node runtime's: same payloads, so a plugin cannot
+ * tell which runtime it is in. An unmatched event gets `empty_response` rather
+ * than silence, so no caller waits forever.
  */
 /**
- * How a plugin reaches the world from in here: one JSON envelope out, one back.
- *
- * No `stream` and no `form`, and that is the honest shape rather than a
- * shortcut. Both need the host to hold a conversation open, which the sandbox
- * protocol deliberately does not do — so `ctx.window.openUrl` refuses and a
- * prompt form is drawn once from its defaults, instead of either quietly doing
- * nothing.
+ * No `stream` and no `form`: both need the host to hold a conversation open,
+ * which this protocol deliberately does not. `openUrl` refuses and a prompt
+ * form is drawn once from its defaults, rather than quietly doing nothing.
  */
 const transport: PluginTransport = {
   async request(context, payload) {
-    const replyJson = await __yaak_call(
-      // The id rides along because the host multiplexes every loaded module
-      // through one handler, and a plugin's storage is namespaced by which
-      // plugin it is.
-      JSON.stringify({ pluginRefId, context, payload }),
-    );
+    // The id rides along because one host handler serves every loaded module,
+    // and a plugin's storage is namespaced by which plugin it is.
+    const replyJson = await __yaak_call(JSON.stringify({ pluginRefId, context, payload }));
     const reply = JSON.parse(replyJson) as InternalEventPayload & { error?: string };
     if (reply.type === "error_response") {
       throw new Error(reply.error || `Host failed to handle ${payload.type}`);
@@ -318,7 +289,6 @@ async function dispatch(
   return EMPTY;
 }
 
-/** The five action kinds, which differ only in which list they index into. */
 async function callAction(
   ctx: ReturnType<typeof createPluginContext>,
   payload: InternalEventPayload,
@@ -342,13 +312,7 @@ async function callAction(
 }
 
 
-/**
- * What the host can reach.
- *
- * Named on `globalThis` because the host calls them by evaluating an
- * expression, and kept to four: load a module, ask what it has, send it an
- * event, wake a timer.
- */
+
 (globalThis as Record<string, unknown>).__yaak_guest = {
   load,
   summary,
@@ -361,9 +325,7 @@ async function callAction(
     try {
       return JSON.stringify(await dispatch(context, payload));
     } catch (err) {
-      // A throw from inside a plugin is an answer, not a crash: the host turns
-      // it into the same `error_response` the Node runtime sends, and whatever
-      // asked for this gets a message instead of a hang.
+      // A throw from a plugin is an answer, not a crash.
       const error = (err instanceof Error ? err.message : String(err)).replace(/^Error:\s*/g, "");
       return JSON.stringify({ type: "error_response", error });
     }

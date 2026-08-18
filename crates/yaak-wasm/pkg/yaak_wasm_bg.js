@@ -63,18 +63,15 @@ export function boot() {
 }
 
 /**
- * Resolve and render a request for sending, exactly as the desktop does before it puts the
- * request on the network: the environment chain, inherited headers and auth, request
- * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
- * posts to the send proxy.
+ * Resolve and render a request for sending, exactly as the desktop does: the environment
+ * chain, inherited headers and auth, request settings, the cookie jar. Nothing here touches
+ * a socket.
  *
- * `plugins` is the template function bridge — a JavaScript function taking a name and its
- * JSON arguments and resolving to the rendered string. Passing nothing is allowed and makes
- * every template function a refusal naming it.
+ * `plugins` is the template function bridge: a JS function taking a name and JSON args,
+ * resolving to the rendered string. Passing nothing is allowed.
  *
- * Authentication is *not* applied here even though it is part of preparing a send. It is
- * applied to the rendered request by the caller, because the plugin that applies it wants to
- * see the request as it will be sent, and the caller is the side that knows that.
+ * Authentication is applied by the caller, not here, because the plugin that applies it
+ * needs to see the request as it will be sent.
  * @param {any} payload
  * @param {any} plugins
  * @returns {Promise<any>}
@@ -85,12 +82,9 @@ export function prepare_http_send(payload, plugins) {
 }
 
 /**
- * Render one template string against an environment chain.
- *
- * What `cmd_render_template` does on the desktop, for the same callers: the value previews
- * under an editor, and anywhere the app shows what a template will become. `ignore_error`
- * picks the same behaviour it picks there — a preview shows an empty string where a send
- * would refuse, because a half-typed template is not yet a mistake.
+ * What `cmd_render_template` does on the desktop. `ignore_error` matches it too: a preview
+ * shows an empty string where a send would refuse, since a half-typed template is not yet a
+ * mistake.
  * @param {any} payload
  * @param {any} plugins
  * @returns {Promise<any>}

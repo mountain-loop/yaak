@@ -8,14 +8,10 @@ use std::future::Future;
 
 const MAX_DEPTH: usize = 50;
 
-/// `Send`, except where nothing can be.
-///
-/// Rendering a template function is a host call, and on a host with one thread
-/// it is a call into JavaScript: the future holds a `JsFuture` and the callback
-/// holds the `Rc` connection pool, neither of which is `Send` nor can be made
-/// so. Every other host spawns rendering onto a thread pool and needs the bound.
-/// So the bound belongs to the targets that can keep it, rather than to the
-/// trait every host must implement.
+/// `Send`, except on wasm32, where a template function is a call into
+/// JavaScript: the future holds a `JsFuture` and the callback an `Rc` pool,
+/// neither of which can be `Send`. Every other host spawns rendering onto a
+/// thread pool and needs the bound.
 #[cfg(not(target_arch = "wasm32"))]
 pub trait MaybeSend: Send {}
 #[cfg(not(target_arch = "wasm32"))]

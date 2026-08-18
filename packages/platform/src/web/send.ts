@@ -52,7 +52,7 @@ type ResponsePatch = Partial<HttpResponse>;
 /** What `prepare_http_send` (crates/yaak-wasm) hands back. */
 interface PreparedHttpSend {
   request: HttpRequest;
-  /** Hashed id of the model the authentication came from; a plugin keys its state on it. */
+  /** Hashed id of the model the auth came from; plugins key stored state on it. */
   authContextId: string;
   settings: HttpSendSettings;
   settingEvents: HttpResponseEventData[];
@@ -60,20 +60,13 @@ interface PreparedHttpSend {
 }
 
 /**
- * Apply the request's authentication method, if it has one.
+ * The desktop applies auth to the sendable request; here the proxy builds that,
+ * so the plugin's answer goes onto the model and the proxy folds it in. Same
+ * bytes for a method that sets a header, which is every one that runs here.
  *
- * The desktop does this to the request it is about to put on the wire, after
- * rendering and after building the sendable form of it. Here the sendable form
- * is built by the proxy, so the plugin's answer is applied to the model instead
- * — headers onto `headers`, query parameters onto `urlParameters` — and the
- * proxy folds both in exactly as it would any others. The result on the wire is
- * the same for a method that sets a header, which is every method whose plugin
- * runs in the browser today.
- *
- * It is not the same for a method that *signs* the request, because the plugin
- * is shown the request before the proxy assembles it: AWS SigV4 and OAuth 1.0
- * would sign a URL and a header set slightly different from the ones sent. Both
- * are refused rather than silently mis-signed — see the sandbox README.
+ * Not the same for one that *signs*, since the plugin sees the request before
+ * the proxy assembles it. AWS SigV4 and OAuth 1.0 are refused rather than
+ * mis-signed; see the sandbox README.
  */
 async function applyAuthentication(
   plugins: WebPlugins,
@@ -90,17 +83,14 @@ async function applyAuthentication(
     method: request.method,
     url: request.url,
     headers: request.headers.filter((h) => h.enabled !== false),
-    // The desktop passes the body so signing schemes can hash it. This host
-    // does not have it in bytes at this point, and the schemes that would use
-    // it are the ones already refused.
+    // Only signing schemes hash the body, and those are already refused.
     body: null,
   });
 
   const headers = [...request.headers];
   for (const header of applied.setHeaders ?? []) {
     // Replace-or-append, case-insensitively, matching `insert_header` in
-    // crates/yaak-http: a plugin setting Authorization must not end up with the
-    // request's own Authorization also on the wire.
+    // crates/yaak-http.
     const at = headers.findIndex((h) => h.name.toLowerCase() === header.name.toLowerCase());
     const entry = { name: header.name, value: header.value, enabled: true };
     if (at >= 0) headers[at] = { ...headers[at], ...entry };

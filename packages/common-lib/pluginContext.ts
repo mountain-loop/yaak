@@ -1,15 +1,9 @@
 /**
- * `ctx`, as a plugin sees it, built once for every runtime that has one.
+ * `ctx`, built once for every runtime that has one. A runtime supplies only how
+ * a payload reaches its host.
  *
- * Two runtimes host plugins today — the Node sidecar over a WebSocket, and the
- * QuickJS sandbox over a message port — and a third will when the sandbox is
- * embedded in Rust. What `ctx.httpRequest.send(...)` *means* is the same in all
- * of them, so it is built here, and the only thing a runtime supplies is how a
- * payload gets to its host and back.
- *
- * `stream` and `form` are optional because they are the two places where a host
- * genuinely differs: both need a conversation rather than one reply, and a
- * runtime that cannot hold one degrades honestly instead of pretending.
+ * `stream` and `form` are optional because they are the two places a host
+ * genuinely differs: both need a conversation rather than one reply.
  */
 
 import type {
@@ -53,19 +47,14 @@ import { createResponseBody, decodeBase64Chunk } from "./responseBody";
 import { applyFormInputDefaults } from "./templateFunction";
 
 export interface PluginTransport {
-  /** One request out, one reply back. Rejects if the host couldn't answer. */
   request(
     context: PluginContext,
     payload: InternalEventPayload,
   ): Promise<Record<string, unknown>>;
 
-  /** Send with no reply expected. */
   notify(context: PluginContext, payload: InternalEventPayload): void;
 
-  /**
-   * Send once and keep receiving. Used by windows, which report navigation
-   * until they close. Absent where a host has no windows to open.
-   */
+  /** Send once, keep receiving. Windows report navigation until they close. */
   stream?(
     context: PluginContext,
     payload: InternalEventPayload,
@@ -73,11 +62,8 @@ export interface PluginTransport {
   ): void;
 
   /**
-   * Show a form that may re-render before it settles.
-   *
-   * `onChange` is called with the values entered so far and answers with the
-   * form to show next, so inputs that compute themselves from other inputs stay
-   * live. A host without it gets a form drawn once from its defaults.
+   * A form that may re-render before it settles: `onChange` answers with the
+   * form to show next. Without it, a form is drawn once from its defaults.
    */
   form?(
     context: PluginContext,
@@ -88,14 +74,7 @@ export interface PluginTransport {
   ): Promise<PromptFormResponse>;
 }
 
-/**
- * A response as a plugin should see it.
- *
- * `bodyPath` names a file on a host's disk: meaningless to a plugin, absent
- * once bodies move off the filesystem, impossible in a browser. Plugins address
- * bodies by response id, so it is dropped rather than left for one to grow a
- * dependency on.
- */
+/** `bodyPath` names a file on a host's disk; plugins address bodies by id. */
 function forPlugin(httpResponse: HttpResponse): HttpResponse {
   const { bodyPath: _bodyPath, ...rest } = httpResponse as HttpResponse & {
     bodyPath?: string | null;
@@ -110,7 +89,6 @@ export function createPluginContext(
   const send = <T>(payload: InternalEventPayload): Promise<T> =>
     transport.request(context, payload) as Promise<T>;
 
-  /** Read a body the host has stored, a chunk at a time, following it if it is still arriving. */
   const storedBody = async (responseId: string) => {
     const bodyInfo = () =>
       send<GetHttpResponseBodyInfoResponse>({
@@ -191,9 +169,8 @@ export function createPluginContext(
         return reply.value;
       },
       form: async (args) => {
-        // Inputs may compute themselves from the values entered so far, and a
-        // function cannot cross to a host — so they are resolved against the
-        // defaults before the form is drawn, then stripped.
+        // Inputs may compute from the values entered so far, and a function
+        // cannot cross to a host.
         const resolve = async (values: Record<string, unknown>) => {
           const callArgs: CallPromptFormDynamicArgs = { values } as CallPromptFormDynamicArgs;
           const resolved = await applyDynamicFormInput(
@@ -217,8 +194,7 @@ export function createPluginContext(
         }
 
         const reply = await transport.form(context, payload, async (values) => {
-          // Fired on mount before any interaction, when there is nothing to
-          // recompute from.
+          // Fired on mount, before there is anything to recompute from.
           if (values == null || Object.keys(values).length === 0) return null;
           return { type: "prompt_form_request", ...args, inputs: await resolve(values) };
         });
@@ -259,8 +235,7 @@ export function createPluginContext(
         });
 
         // A send with no request behind it saves nothing, so the reply carries
-        // the only copy of its body. A saved one is read back from the host like
-        // any other. Callers get the same thing either way.
+        // the only copy of its body.
         if (body == null) {
           return { httpResponse: forPlugin(httpResponse), body: await storedBody(httpResponse.id) };
         }
@@ -366,10 +341,6 @@ export function createPluginContext(
       },
     },
     templates: {
-      /**
-       * Invoke Yaak's template engine to render a value. If the value is a nested
-       * type (eg. object), it will be recursively rendered.
-       */
       render: async (args: TemplateRenderRequest) => {
         const result = await send<TemplateRenderResponse>({
           type: "template_render_request",

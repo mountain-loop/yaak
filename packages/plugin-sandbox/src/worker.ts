@@ -1,21 +1,8 @@
 /// <reference lib="webworker" />
 
 /**
- * The worker plugins run in.
- *
- * A dedicated worker, owned by the tab that made it — deliberately not the
- * SharedWorker that owns the database, for three reasons. Plugin work is slow
- * by design (see `bench/import.mjs`) and the database worker answers every
- * tab's commands synchronously, so a large import in there would stall every
- * other tab's reads. A plugin that never returns can be ended with
- * `terminate()`, which is not something you can do to the worker holding the
- * database. And the capabilities a plugin actually asks for — a prompt, a
- * toast, the active request — belong to a tab rather than to a database, so
- * routing through the tab is the shorter path anyway, not a detour.
- *
- * That leaves the database one hop further away than it would otherwise be:
- * `ctx.store` goes worker → tab → database worker. It is a message either way,
- * and this direction is the one where a stuck plugin costs nothing.
+ * A dedicated worker owned by the tab, deliberately not the SharedWorker that
+ * owns the database. Reasons and the cost are in the README.
  */
 
 import { PluginSandboxHost } from "./host/sandbox";
@@ -27,7 +14,6 @@ function send(message: FromSandbox): void {
   scope.postMessage(message);
 }
 
-/** Host calls waiting on the tab, by id. */
 const pendingHostCalls = new Map<number, (reply: string | Error) => void>();
 let nextHostCallId = 1;
 

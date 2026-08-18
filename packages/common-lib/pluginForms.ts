@@ -1,13 +1,3 @@
-/**
- * The form handling every plugin runtime does, wherever it runs.
- *
- * A plugin declares its inputs as data, but any of them may compute itself
- * from the values entered so far — so a runtime has to resolve those callbacks
- * before a host can draw the form, then strip them, because a function cannot
- * cross a process, a worker, or a sandbox boundary. That is the same work for
- * the Node runtime and the QuickJS one, so it lives here rather than in either.
- */
-
 import type {
   CallPromptFormDynamicArgs,
   Context,
@@ -86,12 +76,7 @@ export async function applyDynamicFormInput(
   return resolvedArgs;
 }
 
-/**
- * Drop the `dynamic` callbacks, recursively, leaving inputs that serialize.
- *
- * Called on the way out of a runtime, after [`applyDynamicFormInput`] has run
- * them: what a host receives has to be data all the way down.
- */
+/** What a host receives has to be data all the way down. */
 export function stripDynamicCallbacks(inputs: { dynamic?: unknown }[]): FormInput[] {
   return inputs.map((input) => {
     // oxlint-disable-next-line no-explicit-any -- stripping dynamic from union type

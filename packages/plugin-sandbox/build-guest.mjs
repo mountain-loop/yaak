@@ -1,14 +1,7 @@
 /**
- * Bundle the guest shell into a string the host can evaluate.
- *
- * The shell runs inside QuickJS, which has no module loader and no filesystem,
- * so it has to arrive as source text. Emitting it as a `.ts` module rather than
- * a `.js` asset is what lets every consumer — Vite for the browser build, plain
- * Node for the benchmarks — get at it the same way, with no loader plugin and
- * no `?raw` import that only one bundler understands.
- *
- * The output is committed, like the wasm packages are, so a checkout builds
- * without this step having run.
+ * The shell has to reach QuickJS as source text. Emitted as a `.ts` module, not
+ * a `.js` asset, so Vite and plain Node get at it the same way. Committed, like
+ * the wasm packages, so a checkout builds without this having run.
  */
 
 import { build } from "esbuild";
@@ -23,15 +16,8 @@ const result = await build({
   entryPoints: [join(here, "src", "guest", "index.ts")],
   bundle: true,
   write: false,
-  // A script, not a module: the host evaluates it with `evalCode`, and it
-  // announces itself by assigning `globalThis.__yaak_guest`.
   format: "iife",
-  // Nothing here may reach for a Node built-in, and "browser" is the closest
-  // description of a target with globals and no filesystem. QuickJS itself has
-  // fewer globals than any browser, which is what `guest/globals.ts` is for.
   platform: "browser",
-  // QuickJS is ES2023-complete, so nothing needs downleveling. Keeping the
-  // source as written also keeps stack traces from the guest readable.
   target: "es2022",
   minify: false,
   legalComments: "none",
