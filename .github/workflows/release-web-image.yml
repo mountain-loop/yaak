@@ -8,6 +8,11 @@ on:
   push:
     tags: [v*]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish, without the v (e.g. 2026.2.0). Empty publishes main and sha tags only.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -92,15 +97,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # `latest=auto` tags latest for a release tag and leaves it alone for a prerelease
-      # (v2026.2.1-beta.1) or a manual run off a branch.
+      # `latest` follows a release tag, and a manual run that names a version — the way to
+      # publish before the first release. A prerelease (v2026.2.1-beta.1) never takes it.
       - name: Tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=raw,value=latest,enable=${{ inputs.version != '' || (github.event_name == 'push' && !contains(github.ref_name, '-')) }}
             type=ref,event=branch
             type=sha,format=short
 
