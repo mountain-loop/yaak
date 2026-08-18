@@ -14,5 +14,6 @@ export const Route = createFileRoute("/workspaces/$workspaceId/settings")({
 });
 
 function RouteComponent() {
-  return <Settings />;
+  const { tab } = Route.useSearch();
+  return <Settings tab={tab} />;
 }
