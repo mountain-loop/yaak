@@ -3285,6 +3285,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
 
 [[package]]
+name = "http-range-header"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c"
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9548,12 +9554,22 @@ version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68d6fdd9f81c2819c9a8b0e0cd91660e7746a8e6ea2ba7c6b2b057985f6bcb51"
 dependencies = [
+ "async-compression",
  "bitflags 2.11.0",
  "bytes",
+ "futures-core",
  "futures-util",
  "http",
  "http-body",
+ "http-body-util",
+ "http-range-header",
+ "httpdate",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
  "pin-project-lite",
+ "tokio",
+ "tokio-util",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -11676,29 +11692,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-send-proxy"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bytes",
- "clap",
- "env_logger",
- "futures-util",
- "log 0.4.29",
- "serde",
- "serde_json",
- "tokio",
- "tower-http",
- "ts-rs",
- "url",
- "uuid",
- "yaak-http",
- "yaak-models",
-]
-
-[[package]]
 name = "yaak-sse"
 version = "0.1.0"
 dependencies = [
@@ -11776,7 +11769,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-web"
+name = "yaak-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
@@ -11793,6 +11786,29 @@ dependencies = [
  "yaak-lifecycle",
  "yaak-models",
  "yaak-templates",
+]
+
+[[package]]
+name = "yaak-web"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "clap",
+ "env_logger",
+ "futures-util",
+ "log 0.4.29",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "ts-rs",
+ "url",
+ "uuid",
+ "yaak-http",
+ "yaak-models",
 ]
 
 [[package]]

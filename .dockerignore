@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+dist
+**/dist
+target
+**/target
+.claude
+vendored
+**/vendored
+*.log
+.git

@@ -20,13 +20,20 @@ use yaak_http::dns::AddressFilter;
 use yaak_http::sender::{HttpResponse, HttpResponseEvent, HttpSender};
 use yaak_http::types::SendableHttpRequest;
 
-/// The destination policy, shared by every send: public addresses only, always. A hosted
-/// proxy's "private network" is the cloud's, not the user's, so there is no configuration
-/// that makes reaching it right.
+/// The destination policy, shared by every send: public addresses only, unless the operator
+/// has said otherwise. A hosted server's "private network" is the cloud's, not the user's, so
+/// the default is public-only; a self-hosted instance on a LAN can be told that its private
+/// network *is* the user's, which is what `--allow-private-networks` means.
 #[derive(Clone, Default)]
-pub struct DestinationPolicy;
+pub struct DestinationPolicy {
+    allow_private: bool,
+}
 
 impl DestinationPolicy {
+    pub fn new(allow_private: bool) -> Self {
+        Self { allow_private }
+    }
+
     /// Check a URL before a hop is attempted: scheme and literal IPs. A hostname that passes
     /// here still has its resolved addresses checked by [`Self::address_filter`].
     pub fn check_url(&self, raw: &str) -> Result<(), String> {
@@ -53,9 +60,12 @@ impl DestinationPolicy {
     }
 
     pub fn check_ip(&self, ip: IpAddr) -> Result<(), String> {
+        if self.allow_private {
+            return Ok(());
+        }
         match non_public_reason(ip) {
             Some(reason) => Err(format!(
-                "Refusing to connect to {ip}: {reason}. This proxy only sends to public addresses"
+                "Refusing to connect to {ip}: {reason}. This server only sends to public addresses"
             )),
             None => Ok(()),
         }
@@ -236,15 +246,24 @@ mod tests {
 
     #[test]
     fn literal_private_addresses_in_urls_are_refused() {
-        let policy = DestinationPolicy;
+        let policy = DestinationPolicy::new(false);
         assert!(policy.check_url("http://127.0.0.1/").is_err());
         assert!(policy.check_url("http://[::1]/").is_err());
         assert!(policy.check_url("http://169.254.169.254/latest/meta-data").is_err());
     }
 
     #[test]
+    fn allow_private_networks_opens_the_local_ranges_but_not_other_schemes() {
+        let policy = DestinationPolicy::new(true);
+        assert!(policy.check_url("http://127.0.0.1/").is_ok());
+        assert!(policy.check_ip(ip("10.0.0.1")).is_ok());
+        assert!(policy.check_ip(ip("169.254.169.254")).is_ok());
+        assert!(policy.check_url("file:///etc/passwd").is_err());
+    }
+
+    #[test]
     fn only_http_schemes() {
-        let policy = DestinationPolicy;
+        let policy = DestinationPolicy::new(false);
         assert!(policy.check_url("ftp://example.com/").is_err());
         assert!(policy.check_url("file:///etc/passwd").is_err());
         assert!(policy.check_url("https://example.com/").is_ok());

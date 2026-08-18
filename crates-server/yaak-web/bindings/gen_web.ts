@@ -49,13 +49,13 @@ cookies: Array<Cookie> | null, } | { "type": "error", message: string, cookies: 
 export type SendRequest = { 
 /**
  * The request to send, in the desktop's own model shape but with every template already
- * rendered by the tab. The proxy builds the URL, headers and body from it exactly the way
+ * rendered by the tab. The server builds the URL, headers and body from it exactly the way
  * the desktop does after rendering.
  */
 request: HttpRequest, 
 /**
  * The resolved settings, values only. Where they came from is the tab's to record in
- * its timeline; the proxy only needs to obey them.
+ * its timeline; the server only needs to obey them.
  */
 settings: HttpSendSettings, 
 /**

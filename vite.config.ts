@@ -5,7 +5,7 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   lint: {
-    ignorePatterns: ["npm/**", "crates/yaak-templates/pkg/**", "crates/yaak-web/pkg/**", "**/bindings/gen_*.ts"],
+    ignorePatterns: ["npm/**", "crates/yaak-templates/pkg/**", "crates/yaak-wasm/pkg/**", "**/bindings/gen_*.ts"],
     options: {
       typeAware: true,
     },

@@ -163,7 +163,7 @@ export class WorkerConnection {
     return this.request<T>((id) => ({ type: "rpc", id, cmd, payload, label: this.label }));
   }
 
-  /** See `prepare_http_send` in crates/yaak-web: the database half of a send. */
+  /** See `prepare_http_send` in crates/yaak-wasm: the database half of a send. */
   prepareHttpSend<T>(payload: unknown): Promise<T> {
     return this.request<T>((id) => ({ type: "prepare_http_send", id, payload }));
   }

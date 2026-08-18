@@ -66,10 +66,10 @@
     "crates/yaak-sse",
     "crates/yaak-sync",
     "crates/yaak-templates",
-    "crates/yaak-web",
+    "crates/yaak-wasm",
     "crates/yaak-ws",
     "crates-proxy/yaak-proxy-lib",
-    "crates-server/yaak-send-proxy",
+    "crates-server/yaak-web",
     "apps/yaak-client",
     "apps/yaak-proxy"
   ],

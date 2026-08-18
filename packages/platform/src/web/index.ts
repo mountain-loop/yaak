@@ -7,7 +7,7 @@
  * the origin, so two tabs stay coherent for the same reason two desktop windows
  * do: one process holds the data and pushes every write to all of them.
  *
- * Sending goes through a small stateless proxy, because a page cannot see a
+ * Sending goes through a small stateless server, because a page cannot see a
  * response the way a desktop app can (see send.ts). What a page genuinely
  * cannot do is not faked: there is no file dialog, no second window, no
  * clipboard read without a prompt. Those report false through `capabilities`
@@ -33,7 +33,7 @@ import { requestPersistence } from "./storage";
 /** What this host can do, reported honestly. */
 function capabilitiesFor(): PlatformCapabilities {
   return {
-    // Through the send proxy: the tab renders, the proxy executes, the tab
+    // Through the Yaak server: the tab renders, the server executes, the tab
     // stores. Requests needing plugin auth or template functions are refused
     // with the reason until plugins run here.
     httpSending: true,
@@ -42,11 +42,11 @@ function capabilitiesFor(): PlatformCapabilities {
     git: false,
     sync: false,
     // Certificates and proxies are decided by whoever puts the bytes on the
-    // wire, and the send proxy uses its own.
+    // wire, and the Yaak server uses its own.
     tlsOptions: false,
     cookieJar: true,
     localFiles: false,
-    // The proxy streams the engine's events back and the sender stores them.
+    // The server streams the engine's events back and the sender stores them.
     timeline: true,
     // Whether the host can put a *second window* on this data on demand — what
     // `cmd_new_child_window` does for Settings and workspace switching. A tab

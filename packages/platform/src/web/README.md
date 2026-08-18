@@ -24,9 +24,9 @@ installs the Tauri host exactly as before.
 
 ```
 tab (index.ts, commands.ts) ──MessagePort──▶ worker.ts ──▶ @yaakapp-internal/web (wasm)
-        │                   ◀── model_writes ──          crates/yaak-web → yaak-models → SQLite
+        │                   ◀── model_writes ──          crates/yaak-wasm → yaak-models → SQLite
         │                                                               └─ pages in IndexedDB
-        └── send.ts ──POST rendered request──▶ yaak-send-proxy (crates-server) ──▶ the internet
+        └── send.ts ──POST rendered request──▶ yaak-web (crates-server) ──▶ the internet
                      ◀── NDJSON: events, response, body, cookies ──
 ```
 
@@ -35,14 +35,14 @@ tab (index.ts, commands.ts) ──MessagePort──▶ worker.ts ──▶ @yaak
 | `index.ts` | The `Platform` implementation. |
 | `commands.ts` | The command table: model commands forward to the worker; the rest is fixed answers and refusals-with-a-reason. |
 | `connection.ts` | A tab's end of the wire: request/response over a `MessagePort`, event delivery, and the tab's identity (`label`). |
-| `send.ts` | Sending: the worker renders (`prepare_http_send`), the proxy executes, this file stores what comes back where the desktop stores it. |
-| `proxy.ts` | The proxy's location and wire shapes, mirrored by hand from `crates-server/yaak-send-proxy/src/wire.rs`. |
+| `send.ts` | Sending: the worker renders (`prepare_http_send`), the server executes, this file stores what comes back where the desktop stores it. |
+| `server.ts` | Where the Yaak server is, and the wire shapes it speaks (generated from `crates-server/yaak-web/src/wire.rs`). |
 | `worker.ts` | The process that owns the database. Loads the wasm, opens the DB once, answers each port, fans `model_writes` out to every port. |
 | `protocol.ts` | The message shapes both sides import. |
 | `errors.ts` | `UnsupportedCommandError`, the structured refusal. |
 | `storage.ts` | `navigator.storage.persist()`. |
 
-The Rust side is `crates/yaak-web` (`@yaakapp-internal/web`): `boot()`,
+The Rust side is `crates/yaak-wasm` (`@yaakapp-internal/wasm`): `boot()`,
 `rpc(cmd, payload, label)` returning `{ result, events }`, blob get/put, and
 `prepare_http_send(payload)` — the database half of a send (environment chain,
 inherited headers and auth, request settings, cookie jar, rendering), which is
@@ -85,7 +85,7 @@ Behaviours worth knowing before changing anything:
 | Group | Commands |
 | --- | --- |
 | Models | `models_workspace_models`, `models_upsert`, `models_delete`, `models_duplicate`, `models_get_settings`, `models_get_graphql_introspection`, `models_upsert_graphql_introspection`, `models_grpc_events`, `models_websocket_events` |
-| Sending | `cmd_send_http_request` (through the send proxy; see below) |
+| Sending | `cmd_send_http_request` (through the Yaak server; see below) |
 | App | `cmd_metadata`, `cmd_get_workspace_meta`, `cmd_default_headers`, `cmd_get_themes`, `cmd_check_for_updates`, `cmd_dismiss_notification`, `cmd_plugin_init_errors` |
 | Bodies | `cmd_http_response_body`, `cmd_http_response_body_path`, `cmd_http_request_body`, `cmd_get_http_response_events`, `cmd_get_sse_events` |
 | Plugin surfaces (empty results) | `cmd_http_request_actions`, `cmd_websocket_request_actions`, `cmd_grpc_request_actions`, `cmd_workspace_actions`, `cmd_folder_actions`, `cmd_template_function_summaries`, `cmd_get_http_authentication_summaries`, `cmd_get_http_authentication_config` |
@@ -187,8 +187,8 @@ other's writes for an echo of their own and drop them.
 
 A page cannot see a response the way a desktop app can — CORS exposes a handful
 of headers, redirects are followed silently, there is no timeline — so the
-network half of a send runs on a small stateless proxy,
-`crates-server/yaak-send-proxy`. This layer stays the only place data lives:
+network half of a send runs on a small stateless server,
+`crates-server/yaak-web`. This layer stays the only place data lives:
 
 1. `send.ts` creates the `http_response` row (state `initialized`), as the
    desktop does, so anything that goes wrong lands in the response pane.
@@ -198,7 +198,7 @@ network half of a send runs on a small stateless proxy,
    with `yaak_models::render::render_http_request`. Variables (`${[ name ]}`)
    render here with no plugins involved.
 3. The rendered request, the settings and the jar's cookies are POSTed to the
-   proxy. It streams back timeline events, the response head, body chunks and a
+   server. It streams back timeline events, the response head, body chunks and a
    terminal frame carrying the jar as the send left it.
 4. Each frame is written where the desktop writes it: the response row as it
    progresses, `http_response_event` rows for the timeline (which is why
@@ -210,10 +210,18 @@ authentication is none, or an inline header. Sending a request that needs a
 template *function* (`${[ timestamp() ]}`) or an authentication plugin (bearer,
 basic, OAuth, …) is refused before anything leaves the tab, with a message naming
 what it needs; those light up when plugins run in the browser. Requests with a
-file body or multipart file fields are refused by the proxy (it has no access to
-your files, and must not read its own). And a request to `localhost` or a LAN
-address can't work from a browser: the proxy runs elsewhere and refuses private
-ranges outright — reaching your own machine's APIs is what the desktop app is for.
+file body or multipart file fields are refused by the server (it has no access to
+your files, and must not read its own). And on a public instance a request to
+`localhost` or a LAN address can't work: the server runs elsewhere and refuses
+private ranges outright — that is what the desktop app is for. A self-hosted
+server on your own network can be started with `--allow-private-networks`, which
+is the one case where those addresses are the user's to reach.
 
-The proxy URL is `VITE_YAAK_SEND_PROXY_URL` at build time, defaulting to
-`http://127.0.0.1:9227` (see `proxy.ts`). Run one with `cargo run -p yaak-send-proxy`.
+**Where the tab sends** (`server.ts`): a production build posts to `/v1/http/send`
+on its own origin, because the server can serve the app itself
+(`yaak-web --serve dist/apps/yaak-client`, which is what the
+`ghcr.io/mountain-loop/yaak-web` image runs) — same origin, so no CORS and
+nothing to configure. A dev build falls back to `http://127.0.0.1:9227`, since
+the Vite server is a different origin and serves no `/v1`; run one with
+`cargo run -p yaak-web`. `VITE_YAAK_WEB_URL` overrides both, for a
+deployment that keeps the app and the server apart.

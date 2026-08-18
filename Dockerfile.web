@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+# Yaak in a browser, whole: the web client and the server that executes its sends, in one
+# image serving both from one origin.
+#
+#   docker run -p 8080:8080 ghcr.io/mountain-loop/yaak-web
+#
+# See crates-server/yaak-web/README.md for the knobs.
+
+FROM node:22-slim AS web
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git python3 make g++ ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY . .
+# `npm ci` runs a prepare hook (`vp config`) that shells out to git, and there is no .git in
+# the build context — it is ignored, and in a worktree it is a pointer file anyway.
+RUN git init -q && git add -A \
+    && git -c user.email=build@yaak.app -c user.name=build commit -qm build
+# Empty means the tab posts sends to its own origin, which is what this image serves. Set it
+# only to build a bundle for a deployment whose server lives somewhere else.
+ARG VITE_YAAK_WEB_URL=""
+ENV VITE_YAAK_WEB_URL=$VITE_YAAK_WEB_URL
+ENV YAAK_TARGET=web
+# crates/yaak-wasm's wasm package is committed; rebuilding it needs a clang with a WebAssembly
+# backend, which this image has no reason to carry.
+ENV SKIP_WASM_BUILD=1
+RUN npm ci
+RUN node_modules/.bin/vp -C apps/yaak-client build
+
+FROM rust:1-bookworm AS server
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev protobuf-compiler && rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN cargo build --release -p yaak-web
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
+COPY --from=server /app/target/release/yaak-web /usr/local/bin/yaak-web
+COPY --from=web /app/dist/apps/yaak-client /srv
+ENV YAAK_WEB_BIND=0.0.0.0:8080
+EXPOSE 8080
+USER nobody
+# Overriding the command (dropping --serve) leaves the stateless send executor:
+#   docker run ghcr.io/mountain-loop/yaak-web yaak-web
+CMD ["yaak-web", "--serve", "/srv"]

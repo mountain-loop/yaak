@@ -1,9 +1,9 @@
 [package]
-name = "yaak-send-proxy"
+name = "yaak-web"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "Stateless HTTP send executor for Yaak in the browser"
+description = "The server behind Yaak in the browser: executes sends, and can serve the app"
 
 # The send engine (yaak-http) and the model types it speaks (yaak-models, for
 # HttpRequest / Cookie / HttpResponseEventData). Deliberately NOT yaak (the
@@ -13,7 +13,7 @@ description = "Stateless HTTP send executor for Yaak in the browser"
 # its query layer.
 
 [[bin]]
-name = "yaak-send-proxy"
+name = "yaak-web"
 path = "src/main.rs"
 
 [dependencies]
@@ -28,7 +28,7 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "io-util", "time", "net"] }
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.6", features = ["compression-gzip", "compression-zstd", "cors", "fs"] }
 ts-rs = { workspace = true }
 url = "2"
 uuid = { version = "1", features = ["v4"] }

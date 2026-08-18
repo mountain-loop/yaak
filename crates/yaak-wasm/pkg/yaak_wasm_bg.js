@@ -66,7 +66,7 @@ export function boot() {
  * Resolve and render a request for sending, exactly as the desktop does before it puts the
  * request on the network: the environment chain, inherited headers and auth, request
  * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
- * posts to the send proxy.
+ * posts to the Yaak server.
  *
  * Refuses, with a message the user can act on, when the request needs something this host
  * doesn't have: an authentication plugin, or a template function.
@@ -708,7 +708,7 @@ export function __wbindgen_cast_0000000000000002(arg0, arg1) {
 }
 export function __wbindgen_cast_0000000000000003(arg0, arg1) {
     // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("IDBVersionChangeEvent")], shim_idx: 83, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
-    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h38d884a456ef1afe);
+    const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h4381d8e749fe46cf);
     return ret;
 }
 export function __wbindgen_cast_0000000000000004(arg0, arg1) {
@@ -765,8 +765,8 @@ function wasm_bindgen__convert__closures_____invoke__ha1c2fa93df0107f3(arg0, arg
     }
 }
 
-function wasm_bindgen__convert__closures_____invoke__h38d884a456ef1afe(arg0, arg1, arg2) {
-    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h38d884a456ef1afe(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h4381d8e749fe46cf(arg0, arg1, arg2) {
+    const ret = wasm.wasm_bindgen__convert__closures_____invoke__h4381d8e749fe46cf(arg0, arg1, arg2);
     if (ret[1]) {
         throw takeFromExternrefTable0(ret[0]);
     }

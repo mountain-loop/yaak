@@ -1,0 +1,17 @@
+{
+  "name": "yaak-wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "yaak_wasm_bg.wasm",
+    "yaak_wasm.js",
+    "yaak_wasm_bg.js",
+    "yaak_wasm.d.ts"
+  ],
+  "main": "yaak_wasm.js",
+  "types": "yaak_wasm.d.ts",
+  "sideEffects": [
+    "./yaak_wasm.js",
+    "./snippets/*"
+  ]
+}
