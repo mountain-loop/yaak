@@ -25,6 +25,7 @@ type ImportedAuthentication = Pick<HttpRequest, "authentication" | "authenticati
   urlParameters: HttpUrlParameter[];
 };
 type AuthenticationVariableRegistry = Map<string, { name: string; value: string }>;
+type OAuthVariableNames = { clientId: string; clientSecret: string };
 
 const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "query", "trace"];
 const BODY_CONTENT_TYPE_PREFERENCE = [
@@ -68,6 +69,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     httpRequests: [],
   };
   const authenticationVariables: AuthenticationVariableRegistry = new Map();
+  const oauthVariablesByScheme = buildOAuthVariablesByScheme(importState, spec);
   const baseUrl = importBaseUrl(spec);
   // A local spec has no document URL against which OpenAPI's implicit "/"
   // server can resolve. Keep the shared variable even when its initial value
@@ -122,6 +124,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
         importState,
         method,
         operation,
+        oauthVariablesByScheme,
         path: rawPath,
         pathItem,
         pathParameters,
@@ -134,6 +137,31 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
       routeLabels.set(request.id, `${method.toUpperCase()} ${rawPath}`);
       resources.httpRequests.push(request);
     }
+  }
+
+  if (resources.httpRequests.some((request) => request.authenticationType === "oauth2")) {
+    let globalEnvironment = resources.environments[0];
+    if (globalEnvironment == null) {
+      globalEnvironment = {
+        model: "environment",
+        id: importState.generateId("environment"),
+        workspaceId: workspace.id,
+        name: "Global Variables",
+        variables: [],
+        parentModel: "workspace",
+        parentId: null,
+        sortPriority: importState.nextSortPriority(),
+      };
+      resources.environments.push(globalEnvironment);
+    }
+
+    const variableNames = new Set(
+      [...oauthVariablesByScheme.values()].flatMap(({ clientId, clientSecret }) => [
+        clientId,
+        clientSecret,
+      ]),
+    );
+    globalEnvironment.variables.push(...[...variableNames].map((name) => ({ name, value: "" })));
   }
 
   if (resources.httpRequests.length === 0) return undefined;
@@ -218,6 +246,7 @@ function importOperation({
   importState,
   method,
   operation,
+  oauthVariablesByScheme,
   path,
   pathItem,
   pathParameters,
@@ -230,6 +259,7 @@ function importOperation({
   importState: ImportState;
   method: string;
   operation: UnknownRecord;
+  oauthVariablesByScheme: Map<string, OAuthVariableNames>;
   path: string;
   pathItem: UnknownRecord;
   pathParameters: unknown[];
@@ -249,6 +279,7 @@ function importOperation({
   const authentication = importAuthentication({
     authenticationVariables,
     importState,
+    oauthVariablesByScheme,
     operation,
     spec,
   });
@@ -885,11 +916,13 @@ function inferSchemaType(schema: UnknownRecord): string {
 function importAuthentication({
   authenticationVariables,
   importState,
+  oauthVariablesByScheme,
   operation,
   spec,
 }: {
   authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
+  oauthVariablesByScheme: Map<string, OAuthVariableNames>;
   operation: UnknownRecord;
   spec: UnknownRecord;
 }): ImportedAuthentication {
@@ -919,8 +952,10 @@ function importAuthentication({
     const imported = importSecurityRequirement({
       authenticationVariables,
       importState,
+      oauthVariablesByScheme,
       requirement: rawRequirement,
       schemes,
+      spec,
     });
     if (imported != null) return imported;
   }
@@ -931,13 +966,17 @@ function importAuthentication({
 function importSecurityRequirement({
   authenticationVariables,
   importState,
+  oauthVariablesByScheme,
   requirement,
   schemes,
+  spec,
 }: {
   authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
+  oauthVariablesByScheme: Map<string, OAuthVariableNames>;
   requirement: UnknownRecord;
   schemes: UnknownRecord;
+  spec: UnknownRecord;
 }): ImportedAuthentication | null {
   const entries = Object.entries(requirement);
   const headers: HttpRequestHeader[] = [];
@@ -963,7 +1002,15 @@ function importSecurityRequirement({
 
     let candidate: Pick<HttpRequest, "authentication" | "authenticationType"> | null = null;
     if (type === "oauth2") {
-      candidate = importOAuth2(scheme, rawScopes);
+      candidate = importOAuth2(
+        scheme,
+        rawScopes,
+        importBaseUrl(spec),
+        oauthVariablesByScheme.get(schemeName) ?? {
+          clientId: "oauth_client_id",
+          clientSecret: "oauth_client_secret",
+        },
+      );
     } else if (type === "openIdConnect") {
       const token = registerAuthenticationVariable(authenticationVariables, schemeName, "token");
       candidate = {
@@ -1101,6 +1148,8 @@ function templateVariable(name: string): string {
 function importOAuth2(
   scheme: UnknownRecord,
   rawScopes: unknown,
+  baseUrl: string,
+  variableNames: OAuthVariableNames,
 ): Pick<HttpRequest, "authentication" | "authenticationType"> | null {
   const scope = toArray(rawScopes)
     .filter((s): s is string => typeof s === "string")
@@ -1128,24 +1177,36 @@ function importOAuth2(
   }
 
   for (const { grantType, flow } of candidates) {
-    const authorizationUrl = stringAt(flow, "authorizationUrl");
-    const accessTokenUrl = stringAt(flow, "tokenUrl");
+    const authorizationUrl = resolveOAuthUrl(stringAt(flow, "authorizationUrl"), baseUrl);
+    const accessTokenUrl = resolveOAuthUrl(stringAt(flow, "tokenUrl"), baseUrl);
     if (authorizationUrl == null && accessTokenUrl == null) continue;
 
     const grantPatch =
       grantType === "authorization_code"
-        ? { authorizationUrl, accessTokenUrl, clientSecret: "" }
+        ? {
+            authorizationUrl,
+            accessTokenUrl,
+            clientSecret: templateVariable(variableNames.clientSecret),
+          }
         : grantType === "implicit"
           ? { authorizationUrl }
           : grantType === "password"
-            ? { accessTokenUrl, clientSecret: "", username: "", password: "" }
-            : { accessTokenUrl, clientSecret: "" };
+            ? {
+                accessTokenUrl,
+                clientSecret: templateVariable(variableNames.clientSecret),
+                username: "",
+                password: "",
+              }
+            : {
+                accessTokenUrl,
+                clientSecret: templateVariable(variableNames.clientSecret),
+              };
 
     return {
       authenticationType: "oauth2",
       authentication: {
         grantType,
-        clientId: "",
+        clientId: templateVariable(variableNames.clientId),
         headerPrefix: "Bearer",
         ...(scope.length > 0 ? { scope } : {}),
         ...grantPatch,
@@ -1154,6 +1215,46 @@ function importOAuth2(
   }
 
   return null;
+}
+
+function resolveOAuthUrl(value: string | undefined, baseUrl: string): string | undefined {
+  if (value == null || baseUrl.length === 0) return value;
+  try {
+    return new URL(value, `${trimTrailingSlashes(baseUrl)}/`).toString();
+  } catch {
+    return value;
+  }
+}
+
+function buildOAuthVariablesByScheme(
+  importState: ImportState,
+  spec: UnknownRecord,
+): Map<string, OAuthVariableNames> {
+  const schemes = {
+    ...toRecord(toRecord(spec.components).securitySchemes),
+    ...toRecord(spec.securityDefinitions),
+  };
+  const oauthSchemeNames = Object.entries(schemes)
+    .filter(([, scheme]) => stringAt(importState.resolve(scheme), "type") === "oauth2")
+    .map(([name]) => name);
+  const usedPrefixes = new Set<string>();
+
+  return new Map(
+    oauthSchemeNames.map((schemeName) => {
+      const basePrefix =
+        oauthSchemeNames.length === 1
+          ? "oauth"
+          : `oauth_${schemeName.replaceAll(/[^a-zA-Z0-9_]+/g, "_").replaceAll(/^_+|_+$/g, "") || "auth"}`;
+      let prefix = basePrefix;
+      let suffix = 2;
+      while (usedPrefixes.has(prefix)) prefix = `${basePrefix}_${suffix++}`;
+      usedPrefixes.add(prefix);
+      return [
+        schemeName,
+        { clientId: `${prefix}_client_id`, clientSecret: `${prefix}_client_secret` },
+      ];
+    }),
+  );
 }
 
 function mergeHeaders(...headerGroups: HttpRequestHeader[][]): HttpRequestHeader[] {
