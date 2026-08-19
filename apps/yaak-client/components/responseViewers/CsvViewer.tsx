@@ -26,27 +26,32 @@ export function CsvViewer({ text, className }: Props) {
 export function CsvViewerInner({ text, className }: { text: string | null; className?: string }) {
   const parsed = useMemo(() => {
     if (text == null) return null;
-    return Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
+    return Papa.parse<string[]>(text, { skipEmptyLines: true });
   }, [text]);
 
   if (parsed === null) return null;
+
+  const header = parsed.data[0] ?? [];
+  const rows = parsed.data.slice(1);
+  const columnCount = parsed.data.reduce((count, row) => Math.max(count, row.length), 0);
+  const columnIndexes = Array.from({ length: columnCount }, (_, index) => index);
 
   return (
     <div className="overflow-auto h-full">
       <Table className={classNames(className, "text-sm")}>
         <TableHead>
           <TableRow>
-            {parsed.meta.fields?.map((field) => (
-              <TableHeaderCell key={field}>{field}</TableHeaderCell>
+            {columnIndexes.map((columnIndex) => (
+              <TableHeaderCell key={columnIndex}>{header[columnIndex] ?? ""}</TableHeaderCell>
             ))}
           </TableRow>
         </TableHead>
         <TableBody>
-          {parsed.data.map((row, i) => (
+          {rows.map((row, i) => (
             // oxlint-disable-next-line react/no-array-index-key
             <TableRow key={i}>
-              {parsed.meta.fields?.map((key) => (
-                <TableCell key={key}>{row[key] ?? ""}</TableCell>
+              {columnIndexes.map((columnIndex) => (
+                <TableCell key={columnIndex}>{row[columnIndex] ?? ""}</TableCell>
               ))}
             </TableRow>
           ))}
