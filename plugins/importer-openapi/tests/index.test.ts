@@ -30,8 +30,16 @@ describe("importer-openapi", () => {
     );
 
     expect(imported?.resources.httpRequests).toEqual([
-      expect.objectContaining({ method: "QUERY", name: "Query resources", url: "/resources" }),
-      expect.objectContaining({ method: "COPY", name: "Copy resources", url: "/resources" }),
+      expect.objectContaining({
+        method: "QUERY",
+        name: "Query resources",
+        url: "${[baseUrl]}/resources",
+      }),
+      expect.objectContaining({
+        method: "COPY",
+        name: "Copy resources",
+        url: "${[baseUrl]}/resources",
+      }),
     ]);
   });
 
