@@ -26,6 +26,7 @@ type ImportedAuthentication = Pick<HttpRequest, "authentication" | "authenticati
 };
 type AuthenticationVariableRegistry = Map<string, { name: string; value: string }>;
 type OAuthVariableNames = { clientId: string; clientSecret: string };
+type ServerOverrideVariable = { name: string; value: string };
 
 const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "query", "trace"];
 const BODY_CONTENT_TYPE_PREFERENCE = [
@@ -70,7 +71,9 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   };
   const authenticationVariables: AuthenticationVariableRegistry = new Map();
   const oauthVariablesByScheme = buildOAuthVariablesByScheme(importState, spec);
+  const serverOverrides = new Map<string, ServerOverrideVariable>();
   const baseUrl = importBaseUrl(spec);
+  const serverEnvironments = importServerEnvironments(spec);
   // A local spec has no document URL against which OpenAPI's implicit "/"
   // server can resolve. Keep the shared variable even when its initial value
   // is empty so users can configure the host once instead of editing requests.
@@ -129,6 +132,8 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
         pathItem,
         pathParameters,
         requestBaseUrl,
+        serverOverrides,
+        useDynamicServerUrls: serverEnvironments.length > 1,
         spec,
         workspaceId: workspace.id,
         folderId,
@@ -140,21 +145,6 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   }
 
   if (resources.httpRequests.some((request) => request.authenticationType === "oauth2")) {
-    let globalEnvironment = resources.environments[0];
-    if (globalEnvironment == null) {
-      globalEnvironment = {
-        model: "environment",
-        id: importState.generateId("environment"),
-        workspaceId: workspace.id,
-        name: "Global Variables",
-        variables: [],
-        parentModel: "workspace",
-        parentId: null,
-        sortPriority: importState.nextSortPriority(),
-      };
-      resources.environments.push(globalEnvironment);
-    }
-
     const variableNames = new Set(
       [...oauthVariablesByScheme.values()].flatMap(({ clientId, clientSecret }) => [
         clientId,
@@ -173,28 +163,39 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     ) {
       variableNames.add("baseUrlOrigin");
     }
-    globalEnvironment.variables.push(...[...variableNames].map((name) => ({ name, value: "" })));
+    resources.environments[0]?.variables.push(
+      ...[...variableNames].map((name) => ({ name, value: "" })),
+    );
   }
 
   if (resources.httpRequests.length === 0) return undefined;
 
-  if (authenticationVariables.size > 0) {
-    let environment = resources.environments[0];
-    if (environment == null) {
-      environment = {
-        model: "environment",
-        id: importState.generateId("environment"),
-        workspaceId: workspace.id,
-        name: "Global Variables",
-        variables: [],
-        parentModel: "workspace",
-        parentId: null,
-        sortPriority: importState.nextSortPriority(),
-      };
-      resources.environments.push(environment);
-    }
-    environment.variables.push(...authenticationVariables.values());
-  }
+  const baseEnvironment = resources.environments[0];
+  if (baseEnvironment == null) return undefined;
+  baseEnvironment.variables.push(...authenticationVariables.values());
+
+  const environmentSpecificVariables = baseEnvironment.variables;
+  baseEnvironment.variables = [...serverOverrides.values()];
+  resources.environments.push(
+    ...serverEnvironments.map(({ name, url }) => ({
+      model: "environment" as const,
+      id: importState.generateId("environment"),
+      workspaceId: workspace.id,
+      name,
+      variables: environmentSpecificVariables.map((variable) => ({
+        ...variable,
+        value:
+          variable.name === "baseUrl"
+            ? url
+            : variable.name === "baseUrlOrigin"
+              ? serverUrlOrigin(url)
+              : variable.value,
+      })),
+      parentModel: "environment" as const,
+      parentId: null,
+      sortPriority: importState.nextSortPriority(),
+    })),
+  );
 
   disambiguateNames(resources.httpRequests, routeLabels);
 
@@ -263,6 +264,8 @@ function importOperation({
   pathItem,
   pathParameters,
   requestBaseUrl,
+  serverOverrides,
+  useDynamicServerUrls,
   spec,
   workspaceId,
   folderId,
@@ -276,6 +279,8 @@ function importOperation({
   pathItem: UnknownRecord;
   pathParameters: unknown[];
   requestBaseUrl: string;
+  serverOverrides: Map<string, ServerOverrideVariable>;
+  useDynamicServerUrls: boolean;
   spec: UnknownRecord;
   workspaceId: string;
   folderId: string | null;
@@ -294,6 +299,7 @@ function importOperation({
     oauthVariablesByScheme,
     operation,
     spec,
+    useDynamicServerUrls,
   });
   const urlParameters = [
     ...importUrlParameters({ importState, parameters }),
@@ -327,7 +333,10 @@ function importOperation({
     name: importOperationName(operation, method, path),
     description,
     method: method.toUpperCase(),
-    url: buildOperationUrl(operationBaseUrl({ operation, pathItem, requestBaseUrl }), path),
+    url: buildOperationUrl(
+      operationBaseUrl({ operation, pathItem, requestBaseUrl, serverOverrides }),
+      path,
+    ),
     urlParameters,
     headers,
     body: body.body,
@@ -382,18 +391,26 @@ function operationBaseUrl({
   operation,
   pathItem,
   requestBaseUrl,
+  serverOverrides,
 }: {
   operation: UnknownRecord;
   pathItem: UnknownRecord;
   requestBaseUrl: string;
+  serverOverrides: Map<string, ServerOverrideVariable>;
 }): string {
   for (const servers of [operation.servers, pathItem.servers]) {
     const override = toArray(servers)
       .map((s) => interpolateServerUrl(toRecord(s)))
       .find((url) => url.length > 0);
-    // Overrides are inlined rather than shared, since only the spec-level base
-    // URL becomes the baseUrl variable
-    if (override != null) return override;
+    if (override != null) {
+      let variable = serverOverrides.get(override);
+      if (variable == null) {
+        const suffix = serverOverrides.size === 0 ? "" : String(serverOverrides.size + 1);
+        variable = { name: `serverUrl${suffix}`, value: override };
+        serverOverrides.set(override, variable);
+      }
+      return `\${[${variable.name}]}`;
+    }
   }
   return requestBaseUrl;
 }
@@ -644,6 +661,48 @@ function importBaseUrl(spec: UnknownRecord): string {
 
   const scheme = toArray(spec.schemes).find((s): s is string => typeof s === "string") ?? "https";
   return joinUrlParts(`${scheme}://${host}`, stringAt(spec, "basePath") ?? "");
+}
+
+function importServerEnvironments(spec: UnknownRecord): { name: string; url: string }[] {
+  const servers = toArray(spec.servers)
+    .map(toRecord)
+    .map((server, index) => ({
+      name: stringAt(server, "description")?.trim() || `Server ${index + 1}`,
+      url: interpolateServerUrl(server),
+    }))
+    .filter(({ url }) => url.length > 0);
+  if (servers.length === 0) {
+    const hasSwaggerServer =
+      stringAt(spec, "swagger") === "2.0" &&
+      (stringAt(spec, "host") != null || stringAt(spec, "basePath") != null);
+    return [
+      {
+        name: hasSwaggerServer ? "Server 1" : "Default",
+        url: hasSwaggerServer ? importBaseUrl(spec) : "",
+      },
+    ];
+  }
+
+  const nameCounts = new Map<string, number>();
+  return servers.map((server) => {
+    const count = (nameCounts.get(server.name) ?? 0) + 1;
+    nameCounts.set(server.name, count);
+    return { ...server, name: count === 1 ? server.name : `${server.name} ${count}` };
+  });
+}
+
+function serverUrlOrigin(value: string): string {
+  try {
+    const origin = new URL(value).origin;
+    return origin === "null" ? "" : origin;
+  } catch {
+    if (!value.startsWith("//")) return "";
+    try {
+      return `//${new URL(`https:${value}`).host}`;
+    } catch {
+      return "";
+    }
+  }
 }
 
 function interpolateServerUrl(server: UnknownRecord): string {
@@ -931,12 +990,14 @@ function importAuthentication({
   oauthVariablesByScheme,
   operation,
   spec,
+  useDynamicServerUrls,
 }: {
   authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
   oauthVariablesByScheme: Map<string, OAuthVariableNames>;
   operation: UnknownRecord;
   spec: UnknownRecord;
+  useDynamicServerUrls: boolean;
 }): ImportedAuthentication {
   const security = operation.security ?? spec.security;
   if (Array.isArray(operation.security) && operation.security.length === 0) {
@@ -968,6 +1029,7 @@ function importAuthentication({
       requirement: rawRequirement,
       schemes,
       spec,
+      useDynamicServerUrls,
     });
     if (imported != null) return imported;
   }
@@ -982,6 +1044,7 @@ function importSecurityRequirement({
   requirement,
   schemes,
   spec,
+  useDynamicServerUrls,
 }: {
   authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
@@ -989,6 +1052,7 @@ function importSecurityRequirement({
   requirement: UnknownRecord;
   schemes: UnknownRecord;
   spec: UnknownRecord;
+  useDynamicServerUrls: boolean;
 }): ImportedAuthentication | null {
   const entries = Object.entries(requirement);
   const headers: HttpRequestHeader[] = [];
@@ -1022,6 +1086,7 @@ function importSecurityRequirement({
           clientId: "oauth_client_id",
           clientSecret: "oauth_client_secret",
         },
+        useDynamicServerUrls,
       );
     } else if (type === "openIdConnect") {
       const token = registerAuthenticationVariable(authenticationVariables, schemeName, "token");
@@ -1162,6 +1227,7 @@ function importOAuth2(
   rawScopes: unknown,
   baseUrl: string,
   variableNames: OAuthVariableNames,
+  useDynamicServerUrls: boolean,
 ): Pick<HttpRequest, "authentication" | "authenticationType"> | null {
   const scope = toArray(rawScopes)
     .filter((s): s is string => typeof s === "string")
@@ -1189,8 +1255,16 @@ function importOAuth2(
   }
 
   for (const { grantType, flow } of candidates) {
-    const authorizationUrl = resolveOAuthUrl(stringAt(flow, "authorizationUrl"), baseUrl);
-    const accessTokenUrl = resolveOAuthUrl(stringAt(flow, "tokenUrl"), baseUrl);
+    const authorizationUrl = resolveOAuthUrl(
+      stringAt(flow, "authorizationUrl"),
+      baseUrl,
+      useDynamicServerUrls,
+    );
+    const accessTokenUrl = resolveOAuthUrl(
+      stringAt(flow, "tokenUrl"),
+      baseUrl,
+      useDynamicServerUrls,
+    );
     if (authorizationUrl == null && accessTokenUrl == null) continue;
 
     const grantPatch =
@@ -1229,12 +1303,23 @@ function importOAuth2(
   return null;
 }
 
-function resolveOAuthUrl(value: string | undefined, baseUrl: string): string | undefined {
+function resolveOAuthUrl(
+  value: string | undefined,
+  baseUrl: string,
+  useDynamicServerUrls: boolean,
+): string | undefined {
   if (value == null) return undefined;
   try {
     return new URL(value).toString();
   } catch {
     // Relative endpoint; resolve it against the API base below.
+  }
+
+  if (value.startsWith("//")) return value;
+  if (useDynamicServerUrls) {
+    return value.startsWith("/")
+      ? `${templateVariable("baseUrlOrigin")}${value}`
+      : joinUrlParts(templateVariable("baseUrl"), value);
   }
 
   if (baseUrl.length > 0) {
@@ -1246,7 +1331,6 @@ function resolveOAuthUrl(value: string | undefined, baseUrl: string): string | u
     }
   }
 
-  if (value.startsWith("//")) return value;
   try {
     const placeholderOrigin = "https://openapi-import.invalid";
     const relativeBase = new URL(`${trimTrailingSlashes(baseUrl)}/`, placeholderOrigin);
