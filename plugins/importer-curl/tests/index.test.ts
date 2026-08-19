@@ -301,6 +301,50 @@ describe("importer-curl", () => {
     });
   });
 
+  test("Keeps a valid escape decoded when the value also holds a stray percent", () => {
+    // Handing the whole value back untouched would leave `%25` to be encoded a
+    // second time on send, so each valid run decodes on its own.
+    expect(convertCurl(`curl -d 'a=50%25 and 100%' https://yaak.app`)).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            method: "POST",
+            url: "https://yaak.app",
+            bodyType: "application/x-www-form-urlencoded",
+            headers: [
+              {
+                name: "Content-Type",
+                value: "application/x-www-form-urlencoded",
+                enabled: true,
+              },
+            ],
+            body: {
+              form: [{ name: "a", value: "50% and 100%", enabled: true }],
+            },
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Decodes -G --data-urlencode into the query string", () => {
+    // `-G` puts the data in the query string, which is encoded on send just
+    // like the form body, so the value has to arrive here decoded or it goes
+    // out encoded twice.
+    expect(convertCurl(`curl -G --data-urlencode 'q=a&b' https://yaak.app`)).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            urlParameters: [{ name: "q", value: "a&b", enabled: true }],
+          }),
+        ],
+      },
+    });
+  });
+
   test("Imports data params as text", () => {
     expect(
       convertCurl("curl -H Content-Type:text/plain -d a -d b -d c=ccc https://yaak.app"),

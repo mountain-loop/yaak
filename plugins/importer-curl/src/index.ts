@@ -506,7 +506,17 @@ function importCommand(parseEntries: string[], workspaceId: string) {
       form: multipartFormDataFromRaw,
     };
   } else if (dataParameters.length > 0 && bodyAsGET) {
-    urlParameters.push(...dataParameters);
+    // `-G` moves the data into the query string, and Yaak encodes url
+    // parameters on send exactly as it encodes the form body below, so this
+    // needs the same decode -- otherwise a `--data-urlencode` value arrives
+    // here already encoded and goes out encoded twice.
+    urlParameters.push(
+      ...dataParameters.map((parameter) => ({
+        ...parameter,
+        name: decodePercentEncoding(parameter.name),
+        value: decodePercentEncoding(parameter.value),
+      })),
+    );
   } else if (
     dataParameters.length > 0 &&
     (mimeType == null || mimeType === "application/x-www-form-urlencoded")
@@ -607,7 +617,18 @@ function decodePercentEncoding(value: string | undefined): string {
   try {
     return decodeURIComponent(text);
   } catch {
-    return text;
+    // Mixed: some of it is percent-encoded and some of it is a stray `%`.
+    // Returning the whole string untouched would leave the encoded part to be
+    // encoded a second time on send, so decode each valid run on its own and
+    // leave the stray byte alone. A run rather than a single escape, because a
+    // non-ASCII character is several escapes that only decode together.
+    return text.replace(/(%[0-9A-Fa-f]{2})+/g, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        return run;
+      }
+    });
   }
 }
 function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
