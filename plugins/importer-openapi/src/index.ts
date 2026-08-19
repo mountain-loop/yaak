@@ -1218,11 +1218,22 @@ function importOAuth2(
 }
 
 function resolveOAuthUrl(value: string | undefined, baseUrl: string): string | undefined {
-  if (value == null || baseUrl.length === 0) return value;
+  if (value == null) return undefined;
+  try {
+    return new URL(value).toString();
+  } catch {
+    // Relative endpoint; resolve it against the API base below.
+  }
+
+  if (baseUrl.length === 0) {
+    return joinUrlParts(templateVariable("baseUrl"), value);
+  }
   try {
     return new URL(value, `${trimTrailingSlashes(baseUrl)}/`).toString();
   } catch {
-    return value;
+    // A path-only server has no origin to resolve against. Referencing the
+    // shared base variable makes the endpoint usable once its host is filled in.
+    return joinUrlParts(templateVariable("baseUrl"), value);
   }
 }
 

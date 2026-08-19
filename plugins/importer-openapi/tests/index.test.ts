@@ -418,6 +418,40 @@ describe("importer-openapi", () => {
     ]);
   });
 
+  test("Uses the shared base variable for OAuth endpoints with a path-only API base", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Path-only OAuth Test", version: "1.0.0" },
+        servers: [{ url: "/api/v1" }],
+        paths: {
+          "/users": { get: { security: [{ oauth: [] }], responses: {} } },
+        },
+        components: {
+          securitySchemes: {
+            oauth: {
+              type: "oauth2",
+              flows: {
+                authorizationCode: {
+                  authorizationUrl: "oauth/authorize",
+                  tokenUrl: "/oauth/token",
+                  scopes: {},
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.authentication).toEqual(
+      expect.objectContaining({
+        authorizationUrl: "${[baseUrl]}/oauth/authorize",
+        accessTokenUrl: "${[baseUrl]}/oauth/token",
+      }),
+    );
+  });
+
   test("Imports Swagger 2 OAuth2 flows and produces", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
