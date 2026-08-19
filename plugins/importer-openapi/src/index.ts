@@ -21,7 +21,7 @@ type ImportResources = {
   httpRequests: AtLeast<HttpRequest, "name" | "id" | "model" | "workspaceId">[];
 };
 
-const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "trace"];
+const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "query", "trace"];
 const BODY_CONTENT_TYPE_PREFERENCE = [
   "application/json",
   "application/x-www-form-urlencoded",
@@ -103,10 +103,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     if (!isRecord(pathItem)) continue;
 
     const pathParameters = toArray(pathItem.parameters);
-    for (const method of HTTP_METHODS) {
-      const operation = importState.resolve(pathItem[method]);
-      if (!isRecord(operation)) continue;
-
+    for (const { method, operation } of pathItemOperations(pathItem, importState)) {
       const folderId = findOrCreateFolderId({
         folderIdsByTag,
         importState,
@@ -148,6 +145,24 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
       }),
     ) as PartialImportResources,
   };
+}
+
+/** OpenAPI 3.2 adds QUERY plus a map for extension HTTP methods. */
+function pathItemOperations(
+  pathItem: UnknownRecord,
+  importState: ImportState,
+): { method: string; operation: UnknownRecord }[] {
+  const operations = HTTP_METHODS.flatMap((method) => {
+    const operation = importState.resolve(pathItem[method]);
+    return isRecord(operation) ? [{ method, operation }] : [];
+  });
+
+  for (const [method, rawOperation] of Object.entries(toRecord(pathItem.additionalOperations))) {
+    if (HTTP_METHODS.includes(method.toLowerCase())) continue;
+    const operation = importState.resolve(rawOperation);
+    if (isRecord(operation)) operations.push({ method, operation });
+  }
+  return operations;
 }
 
 /**
