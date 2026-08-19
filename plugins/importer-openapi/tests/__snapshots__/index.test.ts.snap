@@ -860,13 +860,7 @@ Responses:
 - 200: Sucessful authentication.
 - 401: Unsuccessful authentication.",
         "folderId": "GENERATE_ID::FOLDER_1",
-        "headers": [
-          {
-            "enabled": false,
-            "name": "Authorization",
-            "value": "",
-          },
-        ],
+        "headers": [],
         "id": "GENERATE_ID::HTTP_REQUEST_15",
         "method": "GET",
         "model": "http_request",

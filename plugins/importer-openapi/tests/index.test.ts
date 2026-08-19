@@ -766,6 +766,126 @@ describe("importer-openapi", () => {
     ]);
   });
 
+  test("Imports cookie and content-based parameters", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Parameter Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              parameters: [
+                {
+                  name: "session",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "string", example: "abc" },
+                },
+                {
+                  name: "X-Filter",
+                  in: "header",
+                  required: true,
+                  content: { "text/plain": { example: "active" } },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: true, name: "X-Filter", value: "active" },
+      { enabled: true, name: "Cookie", value: "session=abc" },
+    ]);
+  });
+
+  test("Serializes structured query parameters according to style and explode", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Serialization Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              parameters: [
+                {
+                  name: "filter",
+                  in: "query",
+                  required: true,
+                  style: "deepObject",
+                  explode: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      role: { example: "admin" },
+                      active: { example: true },
+                    },
+                  },
+                },
+                {
+                  name: "tags",
+                  in: "query",
+                  style: "form",
+                  explode: true,
+                  schema: { type: "array", example: ["one", "two"] },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: true, name: "filter[role]", value: "admin" },
+      { enabled: true, name: "filter[active]", value: "true" },
+      { enabled: false, name: "tags", value: "one" },
+      { enabled: false, name: "tags", value: "two" },
+    ]);
+  });
+
+  test("Serializes label and matrix path parameters", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Path Serialization Test", version: "1.0.0" },
+        paths: {
+          "/labels/{labels}/matrix/{coordinates}": {
+            get: {
+              parameters: [
+                {
+                  name: "labels",
+                  in: "path",
+                  required: true,
+                  style: "label",
+                  explode: true,
+                  schema: { type: "array", example: ["one", "two"] },
+                },
+                {
+                  name: "coordinates",
+                  in: "path",
+                  required: true,
+                  style: "matrix",
+                  explode: true,
+                  schema: { type: "object", example: { x: 1, y: 2 } },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: true, name: ":labels", value: ".one.two" },
+      { enabled: true, name: ":coordinates", value: ";x=1;y=2" },
+    ]);
+  });
+
   test("Prefers operation-level consumes for Swagger bodies", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({

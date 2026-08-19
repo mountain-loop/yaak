@@ -741,15 +741,68 @@ function importUrlParameters({
     .map((p) => importState.resolve(p))
     .filter(isRecord)
     .filter((p) => stringAt(p, "in") === "query" || stringAt(p, "in") === "path")
-    .map((p) => ({
-      enabled: p.required === true,
-      name:
-        stringAt(p, "in") === "path"
-          ? `:${stringAt(p, "name") ?? ""}`
-          : (stringAt(p, "name") ?? ""),
-      value: parameterExample(p, importState),
-    }))
+    .flatMap((p) => serializeUrlParameter(p, importState))
     .filter(({ name }) => name.length > 0);
+}
+
+function serializeUrlParameter(
+  parameter: UnknownRecord,
+  importState: ImportState,
+): HttpUrlParameter[] {
+  const name = stringAt(parameter, "name") ?? "";
+  const location = stringAt(parameter, "in");
+  const enabled = parameter.required === true;
+  const value = parameterExampleValue(parameter, importState);
+  if (isRecord(parameter.content)) {
+    return [
+      {
+        enabled,
+        name: location === "path" ? `:${name}` : name,
+        value: serializeContentParameter(parameter, importState),
+      },
+    ];
+  }
+  if (location === "path") {
+    return [{ enabled, name: `:${name}`, value: serializePathParameter(name, value, parameter) }];
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    const style = stringAt(parameter, "style") ?? "form";
+    const explode = parameter.explode !== false;
+    if (style === "deepObject") {
+      return entries.map(([key, entryValue]) => ({
+        enabled,
+        name: `${name}[${key}]`,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    if (style === "form" && explode) {
+      return entries.map(([key, entryValue]) => ({
+        enabled,
+        name: key,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    const separator = style === "spaceDelimited" ? " " : style === "pipeDelimited" ? "|" : ",";
+    return [{ enabled, name, value: entries.flat().map(stringifyExampleValue).join(separator) }];
+  }
+
+  if (Array.isArray(value)) {
+    const style = stringAt(parameter, "style") ?? "form";
+    const explode = parameter.explode !== false;
+    if (style === "form" && explode) {
+      return value.map((entryValue) => ({
+        enabled,
+        name,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    const separator = style === "spaceDelimited" ? " " : style === "pipeDelimited" ? "|" : ",";
+    return [{ enabled, name, value: value.map(stringifyExampleValue).join(separator) }];
+  }
+
+  return [{ enabled, name, value: stringifyExampleValue(value) }];
 }
 
 function importHeaderParameters({
@@ -763,18 +816,112 @@ function importHeaderParameters({
     .map((p) => importState.resolve(p))
     .filter(isRecord)
     .filter((p) => stringAt(p, "in") === "header")
+    .filter(
+      (p) =>
+        !["accept", "authorization", "content-type"].includes(
+          (stringAt(p, "name") ?? "").toLowerCase(),
+        ),
+    )
     .map((p) => ({
       enabled: p.required === true,
       name: stringAt(p, "name") ?? "",
-      value: parameterExample(p, importState),
+      value: serializeParameterValue(p, importState),
+    }))
+    .filter(({ name }) => name.length > 0)
+    .concat(importCookieHeader(parameters, importState));
+}
+
+function importCookieHeader(parameters: unknown[], importState: ImportState): HttpRequestHeader[] {
+  const cookies = parameters
+    .map((p) => importState.resolve(p))
+    .filter(isRecord)
+    .filter((p) => stringAt(p, "in") === "cookie")
+    .map((p) => ({
+      enabled: p.required === true,
+      name: stringAt(p, "name") ?? "",
+      value: serializeParameterValue(p, importState),
     }))
     .filter(({ name }) => name.length > 0);
+  if (cookies.length === 0) return [];
+  return [
+    {
+      enabled: cookies.some(({ enabled }) => enabled),
+      name: "Cookie",
+      value: cookies.map(({ name, value }) => `${name}=${value}`).join("; "),
+    },
+  ];
+}
+
+function serializeParameterValue(parameter: UnknownRecord, importState: ImportState): string {
+  if (isRecord(parameter.content)) return serializeContentParameter(parameter, importState);
+  return serializeSimpleParameter(parameterExampleValue(parameter, importState), parameter);
+}
+
+function serializeContentParameter(parameter: UnknownRecord, importState: ImportState): string {
+  const [contentType, rawMediaType] = Object.entries(toRecord(parameter.content))[0] ?? [];
+  const value = mediaTypeExample(toRecord(rawMediaType), importState);
+  return contentType?.toLowerCase().includes("json")
+    ? (JSON.stringify(value) ?? "")
+    : stringifyExampleValue(value);
+}
+
+function serializePathParameter(name: string, value: unknown, parameter: UnknownRecord): string {
+  const style = stringAt(parameter, "style") ?? "simple";
+  const explode = parameter.explode === true;
+  const values = Array.isArray(value)
+    ? value.map(stringifyExampleValue)
+    : isRecord(value)
+      ? Object.entries(value).flatMap(([key, entryValue]) => [
+          key,
+          stringifyExampleValue(entryValue),
+        ])
+      : [stringifyExampleValue(value)];
+
+  if (style === "label") {
+    if (explode && isRecord(value)) {
+      return `.${Object.entries(value)
+        .map(([key, entryValue]) => `${key}=${stringifyExampleValue(entryValue)}`)
+        .join(".")}`;
+    }
+    return `.${values.join(explode ? "." : ",")}`;
+  }
+  if (style === "matrix") {
+    if (explode && Array.isArray(value)) {
+      return value.map((entryValue) => `;${name}=${stringifyExampleValue(entryValue)}`).join("");
+    }
+    if (explode && isRecord(value)) {
+      return Object.entries(value)
+        .map(([key, entryValue]) => `;${key}=${stringifyExampleValue(entryValue)}`)
+        .join("");
+    }
+    return `;${name}=${values.join(",")}`;
+  }
+  return serializeSimpleParameter(value, parameter);
+}
+
+function serializeSimpleParameter(value: unknown, parameter: UnknownRecord): string {
+  if (Array.isArray(value)) return value.map(stringifyExampleValue).join(",");
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    return parameter.explode === true
+      ? entries.map(([key, entryValue]) => `${key}=${stringifyExampleValue(entryValue)}`).join(",")
+      : entries.flat().map(stringifyExampleValue).join(",");
+  }
+  return stringifyExampleValue(value);
 }
 
 function parameterExample(parameter: UnknownRecord, importState: ImportState): string {
+  return stringifyExampleValue(parameterExampleValue(parameter, importState));
+}
+
+function parameterExampleValue(parameter: UnknownRecord, importState: ImportState): unknown {
   const directExample = firstPresent(parameter.example, firstExampleValue(parameter.examples));
-  if (directExample != null) return stringifyExampleValue(directExample);
-  return stringifyExampleValue(schemaToExample(importState.resolve(parameter.schema), importState));
+  if (directExample != null) return directExample;
+  if (isRecord(parameter.content)) {
+    const mediaType = toRecord(Object.values(parameter.content)[0]);
+    return mediaTypeExample(mediaType, importState);
+  }
+  return schemaToExample(importState.resolve(parameter.schema), importState);
 }
 
 function importBody({
