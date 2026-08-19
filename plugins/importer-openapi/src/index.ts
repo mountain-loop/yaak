@@ -1289,50 +1289,83 @@ function schemaToExample(
   const enumValues = toArray(resolved.enum);
   if (enumValues.length > 0) return enumValues[0];
 
+  const propertyExample = schemaPropertiesToExample(
+    resolved,
+    importState,
+    depth,
+    nextVisitedRefs,
+  );
   const allOf = toArray(resolved.allOf);
   if (allOf.length > 0) {
-    return allOf.reduce<UnknownRecord>((merged, childSchema) => {
+    const compositionExample = allOf.reduce<UnknownRecord>((merged, childSchema) => {
       const childExample = schemaToExample(childSchema, importState, depth + 1, nextVisitedRefs);
-      return isRecord(childExample) ? { ...merged, ...childExample } : merged;
+      return isRecord(childExample) ? mergeExampleRecords(merged, childExample) : merged;
     }, {});
+    return mergeExampleRecords(compositionExample, propertyExample);
   }
 
   const oneOf = toArray(resolved.oneOf);
   const anyOf = toArray(resolved.anyOf);
   if (oneOf.length > 0 || anyOf.length > 0) {
-    return schemaToExample(oneOf[0] ?? anyOf[0], importState, depth + 1, nextVisitedRefs);
+    const compositionExample = schemaToExample(
+      oneOf[0] ?? anyOf[0],
+      importState,
+      depth + 1,
+      nextVisitedRefs,
+    );
+    return Object.keys(propertyExample).length > 0
+      ? mergeExampleRecords(isRecord(compositionExample) ? compositionExample : {}, propertyExample)
+      : compositionExample;
   }
 
   const type = inferSchemaType(resolved);
   if (type === "array") {
     return [schemaToExample(resolved.items, importState, depth + 1, nextVisitedRefs)];
   }
-  if (type === "object") {
-    const required = toArray(resolved.required).filter(
-      (name): name is string => typeof name === "string",
-    );
-    const properties = Object.entries(toRecord(resolved.properties))
-      .filter(([, property]) => toRecord(importState.resolveSchema(property)).readOnly !== true)
-      .sort(([a], [b]) => {
-        const aRequired = required.includes(a);
-        const bRequired = required.includes(b);
-        return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
-      });
-
-    return Object.fromEntries(
-      properties
-        .slice(0, MAX_EXAMPLE_PROPERTIES)
-        .map(([name, property]) => [
-          name,
-          schemaToExample(property, importState, depth + 1, nextVisitedRefs),
-        ]),
-    );
-  }
+  if (type === "object") return propertyExample;
   if (type === "integer" || type === "number") return 0;
   if (type === "boolean") return false;
   if (stringAt(resolved, "format") === "date-time") return "2026-01-01T00:00:00Z";
   if (stringAt(resolved, "format") === "date") return "2026-01-01";
   return "";
+}
+
+function schemaPropertiesToExample(
+  schema: UnknownRecord,
+  importState: ImportState,
+  depth: number,
+  visitedRefs: Set<string>,
+): UnknownRecord {
+  const required = toArray(schema.required).filter(
+    (name): name is string => typeof name === "string",
+  );
+  const properties = Object.entries(toRecord(schema.properties))
+    .filter(([, property]) => toRecord(importState.resolveSchema(property)).readOnly !== true)
+    .sort(([a], [b]) => {
+      const aRequired = required.includes(a);
+      const bRequired = required.includes(b);
+      return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
+    });
+
+  return Object.fromEntries(
+    properties
+      .slice(0, MAX_EXAMPLE_PROPERTIES)
+      .map(([name, property]) => [
+        name,
+        schemaToExample(property, importState, depth + 1, visitedRefs),
+      ]),
+  );
+}
+
+function mergeExampleRecords(base: UnknownRecord, overlay: UnknownRecord): UnknownRecord {
+  const merged = { ...base };
+  for (const [name, value] of Object.entries(overlay)) {
+    const baseValue = merged[name];
+    merged[name] = isRecord(baseValue) && isRecord(value)
+      ? mergeExampleRecords(baseValue, value)
+      : value;
+  }
+  return merged;
 }
 
 function inferSchemaType(schema: UnknownRecord): string {
@@ -1873,41 +1906,95 @@ class ImportState {
 
   /** Schema Objects allow `$ref` siblings in OpenAPI 3.1 and later. */
   resolveSchema(value: unknown, visitedRefs = new Set<string>()): unknown {
-    if (!isRecord(value) || typeof value.$ref !== "string") return value;
-    if (visitedRefs.has(value.$ref)) return {};
-    if (!value.$ref.startsWith("#/")) {
-      this.#unresolvedRefs.add(value.$ref);
-      return value;
+    if (!isRecord(value)) return value;
+
+    let resolved: UnknownRecord = value;
+    let structureVisitedRefs = visitedRefs;
+    if (typeof value.$ref === "string") {
+      if (visitedRefs.has(value.$ref)) return {};
+      if (!value.$ref.startsWith("#/")) {
+        this.#unresolvedRefs.add(value.$ref);
+        return value;
+      }
+
+      const nextVisitedRefs = new Set(visitedRefs);
+      nextVisitedRefs.add(value.$ref);
+      structureVisitedRefs = nextVisitedRefs;
+      const referenced = this.resolveSchema(
+        this.#resolveLocalReference(value.$ref),
+        nextVisitedRefs,
+      );
+      if (!isRecord(referenced)) return referenced;
+
+      const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$ref"));
+      resolved = this.#mergeSchemaObjects(referenced, siblings);
     }
 
-    const nextVisitedRefs = new Set(visitedRefs);
-    nextVisitedRefs.add(value.$ref);
-    const resolved = this.resolveSchema(
-      this.#resolveLocalReference(value.$ref),
-      nextVisitedRefs,
-    );
-    if (!isRecord(resolved)) return resolved;
+    return this.#mergeAllOfStructure(resolved, structureVisitedRefs);
+  }
 
-    const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$ref"));
-    const resolvedProperties = toRecord(resolved.properties);
-    const siblingProperties = toRecord(siblings.properties);
-    const resolvedRequired = toArray(resolved.required).filter(
+  #mergeAllOfStructure(schema: UnknownRecord, visitedRefs: Set<string>): UnknownRecord {
+    const allOf = toArray(schema.allOf);
+    if (allOf.length === 0) return schema;
+
+    const composed = allOf.reduce<UnknownRecord>((merged, childSchema) => {
+      const child = this.resolveSchema(childSchema, new Set(visitedRefs));
+      if (!isRecord(child)) return merged;
+      const childStructure = Object.fromEntries(
+        Object.entries(child).filter(([key]) => key !== "allOf"),
+      );
+      return this.#mergeSchemaObjects(merged, childStructure);
+    }, {});
+    return this.#mergeSchemaObjects(composed, schema);
+  }
+
+  #mergeSchemaObjects(base: UnknownRecord, overlay: UnknownRecord): UnknownRecord {
+    const merged: UnknownRecord = { ...base, ...overlay };
+    const baseProperties = toRecord(base.properties);
+    const overlayProperties = toRecord(overlay.properties);
+    const propertyNames = new Set([...Object.keys(baseProperties), ...Object.keys(overlayProperties)]);
+    if (propertyNames.size > 0) {
+      merged.properties = Object.fromEntries(
+        [...propertyNames].map((name) => {
+          const baseProperty = baseProperties[name];
+          const overlayProperty = overlayProperties[name];
+          if (isRecord(baseProperty) && isRecord(overlayProperty)) {
+            return [name, this.#mergeSchemaObjects(baseProperty, overlayProperty)];
+          }
+          return [name, overlayProperty ?? baseProperty];
+        }),
+      );
+    }
+
+    const baseRequired = toArray(base.required).filter(
       (name): name is string => typeof name === "string",
     );
-    const siblingRequired = toArray(siblings.required).filter(
+    const overlayRequired = toArray(overlay.required).filter(
       (name): name is string => typeof name === "string",
     );
+    if (baseRequired.length > 0 || overlayRequired.length > 0) {
+      merged.required = [...new Set([...baseRequired, ...overlayRequired])];
+    }
 
-    return {
-      ...resolved,
-      ...siblings,
-      ...(Object.keys(resolvedProperties).length > 0 || Object.keys(siblingProperties).length > 0
-        ? { properties: { ...resolvedProperties, ...siblingProperties } }
-        : {}),
-      ...(resolvedRequired.length > 0 || siblingRequired.length > 0
-        ? { required: [...new Set([...resolvedRequired, ...siblingRequired])] }
-        : {}),
-    };
+    const baseAllOf = toArray(base.allOf);
+    const overlayAllOf = toArray(overlay.allOf);
+    if (baseAllOf.length > 0 && overlayAllOf.length > 0) {
+      merged.allOf = [...baseAllOf, ...overlayAllOf];
+    }
+    if (isRecord(base.xml) && isRecord(overlay.xml)) {
+      merged.xml = { ...base.xml, ...overlay.xml };
+    }
+    if (isRecord(base.items) && isRecord(overlay.items)) {
+      merged.items = this.#mergeSchemaObjects(base.items, overlay.items);
+    }
+    if (isRecord(base.additionalProperties) && isRecord(overlay.additionalProperties)) {
+      merged.additionalProperties = this.#mergeSchemaObjects(
+        base.additionalProperties,
+        overlay.additionalProperties,
+      );
+    }
+
+    return merged;
   }
 
   #resolveLocalReference(ref: string): unknown {

@@ -173,6 +173,151 @@ describe("importer-openapi", () => {
     ]);
   });
 
+  test("Merges colliding and composed schema properties", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Composed Schema Examples", version: "1.0.0" },
+        paths: {
+          "/colliding-property": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      $ref: "#/components/schemas/BasePayload",
+                      properties: {
+                        shared: {
+                          xml: { name: "renamed" },
+                          properties: {
+                            local: { type: "string", default: "sibling" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/composition-siblings": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      allOf: [
+                        {
+                          type: "object",
+                          properties: {
+                            shared: {
+                              type: "object",
+                              properties: {
+                                fromBranch: { type: "string", default: "branch" },
+                              },
+                            },
+                            branchOnly: { type: "string", default: "branch" },
+                          },
+                        },
+                      ],
+                      properties: {
+                        shared: {
+                          type: "object",
+                          properties: {
+                            fromSibling: { type: "string", default: "sibling" },
+                          },
+                        },
+                        siblingOnly: { type: "string", default: "sibling" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/composition-form": {
+            post: {
+              requestBody: {
+                content: {
+                  "multipart/form-data": {
+                    schema: {
+                      $ref: "#/components/schemas/ComposedForm",
+                      required: ["siblingField"],
+                      properties: {
+                        siblingField: { type: "string", default: "sibling" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Shared: {
+              type: "object",
+              xml: { namespace: "urn:shared", prefix: "s" },
+              properties: {
+                inherited: { type: "string", default: "base" },
+              },
+            },
+            BasePayload: {
+              type: "object",
+              xml: { name: "payload" },
+              properties: {
+                shared: {
+                  $ref: "#/components/schemas/Shared",
+                  xml: { name: "base-shared" },
+                },
+              },
+            },
+            ComposedForm: {
+              allOf: [
+                {
+                  type: "object",
+                  required: ["baseField"],
+                  properties: {
+                    baseField: { type: "string", default: "base" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((request) => request.body)).toEqual([
+      {
+        text:
+          '<payload><s:renamed xmlns:s="urn:shared">' +
+          "<inherited>base</inherited><local>sibling</local>" +
+          "</s:renamed></payload>",
+      },
+      {
+        text: JSON.stringify(
+          {
+            shared: { fromBranch: "branch", fromSibling: "sibling" },
+            branchOnly: "branch",
+            siblingOnly: "sibling",
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        form: [
+          { enabled: true, name: "baseField", value: "base" },
+          { enabled: true, name: "siblingField", value: "sibling" },
+        ],
+      },
+    ]);
+  });
+
   test("Stops circular schema references when generating examples", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
