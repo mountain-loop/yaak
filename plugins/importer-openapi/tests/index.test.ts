@@ -446,7 +446,7 @@ describe("importer-openapi", () => {
 
     expect(imported?.resources.httpRequests[0]?.authentication).toEqual(
       expect.objectContaining({
-        authorizationUrl: "${[baseUrl]}/oauth/authorize",
+        authorizationUrl: "${[baseUrlOrigin]}/api/v1/oauth/authorize",
         accessTokenUrl: "${[baseUrlOrigin]}/oauth/token",
       }),
     );

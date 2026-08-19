@@ -1247,8 +1247,14 @@ function resolveOAuthUrl(value: string | undefined, baseUrl: string): string | u
   }
 
   if (value.startsWith("//")) return value;
-  if (value.startsWith("/")) return `${templateVariable("baseUrlOrigin")}${value}`;
-  return joinUrlParts(templateVariable("baseUrl"), value);
+  try {
+    const placeholderOrigin = "https://openapi-import.invalid";
+    const relativeBase = new URL(`${trimTrailingSlashes(baseUrl)}/`, placeholderOrigin);
+    const resolved = new URL(value, relativeBase);
+    return `${templateVariable("baseUrlOrigin")}${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return joinUrlParts(templateVariable("baseUrlOrigin"), value);
+  }
 }
 
 function buildOAuthVariablesByScheme(
