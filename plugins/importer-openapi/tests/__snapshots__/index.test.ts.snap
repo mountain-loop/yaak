@@ -11,6 +11,16 @@ exports[`importer-openapi > Snapshots real-world fixture apis-guru.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 9,
         "variables": [
           {
             "name": "baseUrl",
@@ -326,6 +336,16 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 90,
         "variables": [
           {
             "name": "baseUrl",
@@ -2612,10 +2632,39 @@ exports[`importer-openapi > Snapshots real-world fixture nasa-apod.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 3,
         "variables": [
           {
             "name": "baseUrl",
             "value": "https://api.nasa.gov/planetary",
+          },
+          {
+            "name": "auth_api_key_key",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_2",
+        "model": "environment",
+        "name": "Server 2",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 4,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "http://api.nasa.gov/planetary",
           },
           {
             "name": "auth_api_key_key",
@@ -2715,6 +2764,16 @@ exports[`importer-openapi > Snapshots real-world fixture xkcd.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 3,
         "variables": [
           {
             "name": "baseUrl",

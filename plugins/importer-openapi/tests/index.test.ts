@@ -150,6 +150,11 @@ describe("importer-openapi", () => {
     expect(imported?.resources.environments).toEqual([
       expect.objectContaining({
         name: "Global Variables",
+        variables: [],
+      }),
+      expect.objectContaining({
+        name: "Server 1",
+        parentModel: "environment",
         variables: [
           { name: "baseUrl", value: "https://api.example.com/v1" },
           { name: "auth_token_auth_token", value: "" },
@@ -252,6 +257,11 @@ describe("importer-openapi", () => {
     );
     expect(imported?.resources.environments).toEqual([
       expect.objectContaining({
+        name: "Global Variables",
+        variables: [],
+      }),
+      expect.objectContaining({
+        name: "Server 1",
         variables: [{ name: "baseUrl", value: "https://api.example.com/client/v4" }],
       }),
     ]);
@@ -276,6 +286,11 @@ describe("importer-openapi", () => {
     expect(imported?.resources.environments).toEqual([
       expect.objectContaining({
         name: "Global Variables",
+        variables: [],
+      }),
+      expect.objectContaining({
+        name: "Default",
+        parentModel: "environment",
         variables: [{ name: "baseUrl", value: "" }],
       }),
     ]);
@@ -304,8 +319,119 @@ describe("importer-openapi", () => {
 
     expect(imported?.resources.httpRequests.map((r) => r.url)).toEqual([
       "${[baseUrl]}/root",
-      "https://path.example.com/path-level",
-      "https://operation.example.com/operation-level",
+      "${[serverUrl]}/path-level",
+      "${[serverUrl2]}/operation-level",
+    ]);
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        name: "Global Variables",
+        variables: [
+          { name: "serverUrl", value: "https://path.example.com" },
+          { name: "serverUrl2", value: "https://operation.example.com" },
+        ],
+      }),
+      expect.objectContaining({
+        name: "Server 1",
+        variables: [{ name: "baseUrl", value: "https://root.example.com" }],
+      }),
+    ]);
+  });
+
+  test("Creates selectable environments for multiple OpenAPI servers", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Server Environments Test", version: "1.0.0" },
+        servers: [
+          { url: "https://api.example.com/v1", description: "Production" },
+          { url: "https://sandbox.example.com/v1", description: "Sandbox" },
+        ],
+        paths: {
+          "/oauth": { get: { security: [{ oauth: [] }], responses: {} } },
+          "/api-key": { get: { security: [{ apiKey: [] }], responses: {} } },
+          "/fixed": {
+            servers: [{ url: "https://fixed.example.com" }],
+            get: { responses: {} },
+          },
+        },
+        components: {
+          securitySchemes: {
+            oauth: {
+              type: "oauth2",
+              flows: {
+                authorizationCode: {
+                  authorizationUrl: "/oauth/authorize",
+                  tokenUrl: "oauth/token",
+                  scopes: {},
+                },
+              },
+            },
+            apiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        name: "Global Variables",
+        variables: [{ name: "serverUrl", value: "https://fixed.example.com" }],
+      }),
+      expect.objectContaining({
+        name: "Production",
+        parentModel: "environment",
+        variables: [
+          { name: "baseUrl", value: "https://api.example.com/v1" },
+          { name: "oauth_client_id", value: "" },
+          { name: "oauth_client_secret", value: "" },
+          { name: "baseUrlOrigin", value: "https://api.example.com" },
+          { name: "auth_api_key_key", value: "" },
+        ],
+      }),
+      expect.objectContaining({
+        name: "Sandbox",
+        parentModel: "environment",
+        variables: [
+          { name: "baseUrl", value: "https://sandbox.example.com/v1" },
+          { name: "oauth_client_id", value: "" },
+          { name: "oauth_client_secret", value: "" },
+          { name: "baseUrlOrigin", value: "https://sandbox.example.com" },
+          { name: "auth_api_key_key", value: "" },
+        ],
+      }),
+    ]);
+    expect(imported?.resources.httpRequests[0]?.authentication).toEqual(
+      expect.objectContaining({
+        authorizationUrl: "${[baseUrlOrigin]}/oauth/authorize",
+        accessTokenUrl: "${[baseUrl]}/oauth/token",
+      }),
+    );
+  });
+
+  test("Creates variables for path servers without a top-level server", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Path Server Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            servers: [{ url: "https://path.example.com" }],
+            get: { responses: {} },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.url).toBe("${[serverUrl]}/items");
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        name: "Global Variables",
+        variables: [{ name: "serverUrl", value: "https://path.example.com" }],
+      }),
+      expect.objectContaining({
+        name: "Default",
+        variables: [{ name: "baseUrl", value: "" }],
+      }),
     ]);
   });
 
@@ -361,16 +487,22 @@ describe("importer-openapi", () => {
         },
       }),
     );
-    expect(imported?.resources.environments[0]?.variables).toEqual([
-      { name: "baseUrl", value: "" },
-      { name: "oauth_oauth_client_id", value: "" },
-      { name: "oauth_oauth_client_secret", value: "" },
-      { name: "oauth_implicitOauth_client_id", value: "" },
-      { name: "oauth_implicitOauth_client_secret", value: "" },
-    ]);
+    expect(imported?.resources.environments[0]?.variables).toEqual([]);
+    expect(imported?.resources.environments[1]).toEqual(
+      expect.objectContaining({
+        name: "Default",
+        variables: [
+          { name: "baseUrl", value: "" },
+          { name: "oauth_oauth_client_id", value: "" },
+          { name: "oauth_oauth_client_secret", value: "" },
+          { name: "oauth_implicitOauth_client_id", value: "" },
+          { name: "oauth_implicitOauth_client_secret", value: "" },
+        ],
+      }),
+    );
   });
 
-  test("Uses shared environment variables for OAuth2 client credentials", async () => {
+  test("Uses server environment variables for OAuth2 client credentials", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
         openapi: "3.0.4",
@@ -399,10 +531,16 @@ describe("importer-openapi", () => {
       }),
     );
 
-    expect(imported?.resources.environments[0]?.variables).toEqual([
-      { name: "baseUrl", value: "https://api.example.com" },
-      { name: "oauth_client_id", value: "" },
-      { name: "oauth_client_secret", value: "" },
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({ name: "Global Variables", variables: [] }),
+      expect.objectContaining({
+        name: "Server 1",
+        variables: [
+          { name: "baseUrl", value: "https://api.example.com" },
+          { name: "oauth_client_id", value: "" },
+          { name: "oauth_client_secret", value: "" },
+        ],
+      }),
     ]);
     expect(imported?.resources.httpRequests.map((request) => request.authentication)).toEqual([
       expect.objectContaining({
@@ -418,7 +556,7 @@ describe("importer-openapi", () => {
     ]);
   });
 
-  test("Uses the shared base variable for OAuth endpoints with a path-only API base", async () => {
+  test("Uses the server environment origin for OAuth endpoints with a path-only API base", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
         openapi: "3.0.4",
@@ -450,11 +588,17 @@ describe("importer-openapi", () => {
         accessTokenUrl: "${[baseUrlOrigin]}/oauth/token",
       }),
     );
-    expect(imported?.resources.environments[0]?.variables).toEqual([
-      { name: "baseUrl", value: "/api/v1" },
-      { name: "oauth_client_id", value: "" },
-      { name: "oauth_client_secret", value: "" },
-      { name: "baseUrlOrigin", value: "" },
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({ name: "Global Variables", variables: [] }),
+      expect.objectContaining({
+        name: "Server 1",
+        variables: [
+          { name: "baseUrl", value: "/api/v1" },
+          { name: "oauth_client_id", value: "" },
+          { name: "oauth_client_secret", value: "" },
+          { name: "baseUrlOrigin", value: "" },
+        ],
+      }),
     ]);
   });
 
@@ -691,6 +835,10 @@ describe("importer-openapi", () => {
     expect(imported?.resources.environments).toEqual([
       expect.objectContaining({
         name: "Global Variables",
+        variables: [],
+      }),
+      expect.objectContaining({
+        name: "Server 1",
         variables: [
           { name: "baseUrl", value: "https://example.com/" },
           { name: "auth_basic_auth_username", value: "" },
@@ -790,11 +938,17 @@ describe("importer-openapi", () => {
       }),
     );
 
-    expect(imported?.resources.environments[0]?.variables).toEqual([
-      { name: "baseUrl", value: "" },
-      { name: "auth_api_key_key", value: "" },
-      { name: "auth_api_key_key_2", value: "" },
-    ]);
+    expect(imported?.resources.environments[0]?.variables).toEqual([]);
+    expect(imported?.resources.environments[1]).toEqual(
+      expect.objectContaining({
+        name: "Default",
+        variables: [
+          { name: "baseUrl", value: "" },
+          { name: "auth_api_key_key", value: "" },
+          { name: "auth_api_key_key_2", value: "" },
+        ],
+      }),
+    );
     expect(imported?.resources.httpRequests).toEqual([
       expect.objectContaining({
         authentication: expect.objectContaining({ value: "${[auth_api_key_key]}" }),
