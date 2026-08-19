@@ -63,20 +63,20 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     httpRequests: [],
   };
   const baseUrl = importBaseUrl(spec);
-  const requestBaseUrl = baseUrl.length > 0 ? "${[baseUrl]}" : "";
-
-  if (baseUrl.length > 0) {
-    resources.environments.push({
-      model: "environment",
-      id: importState.generateId("environment"),
-      workspaceId: workspace.id,
-      name: "Global Variables",
-      variables: [{ name: "baseUrl", value: baseUrl }],
-      parentModel: "workspace",
-      parentId: null,
-      sortPriority: importState.nextSortPriority(),
-    });
-  }
+  // A local spec has no document URL against which OpenAPI's implicit "/"
+  // server can resolve. Keep the shared variable even when its initial value
+  // is empty so users can configure the host once instead of editing requests.
+  const requestBaseUrl = "${[baseUrl]}";
+  resources.environments.push({
+    model: "environment",
+    id: importState.generateId("environment"),
+    workspaceId: workspace.id,
+    name: "Global Variables",
+    variables: [{ name: "baseUrl", value: baseUrl }],
+    parentModel: "workspace",
+    parentId: null,
+    sortPriority: importState.nextSortPriority(),
+  });
 
   const folderIdsByTag = new Map<string, string>();
   const routeLabels = new Map<string, string>();
