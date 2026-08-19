@@ -342,8 +342,8 @@ describe("importer-openapi", () => {
         authenticationType: "oauth2",
         authentication: {
           grantType: "client_credentials",
-          clientId: "",
-          clientSecret: "",
+          clientId: "${[oauth_oauth_client_id]}",
+          clientSecret: "${[oauth_oauth_client_secret]}",
           headerPrefix: "Bearer",
           scope: "read write",
           accessTokenUrl: "https://example.com/token",
@@ -355,12 +355,107 @@ describe("importer-openapi", () => {
         authenticationType: "oauth2",
         authentication: {
           grantType: "implicit",
-          clientId: "",
+          clientId: "${[oauth_implicitOauth_client_id]}",
           headerPrefix: "Bearer",
           authorizationUrl: "https://example.com/authorize",
         },
       }),
     );
+    expect(imported?.resources.environments[0]?.variables).toEqual([
+      { name: "baseUrl", value: "" },
+      { name: "oauth_oauth_client_id", value: "" },
+      { name: "oauth_oauth_client_secret", value: "" },
+      { name: "oauth_implicitOauth_client_id", value: "" },
+      { name: "oauth_implicitOauth_client_secret", value: "" },
+    ]);
+  });
+
+  test("Uses shared environment variables for OAuth2 client credentials", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "OAuth Environment Test", version: "1.0.0" },
+        servers: [{ url: "https://api.example.com" }],
+        paths: {
+          "/users": {
+            get: { security: [{ oauth: ["read"] }], responses: {} },
+            post: { security: [{ oauth: ["write"] }], responses: {} },
+          },
+        },
+        components: {
+          securitySchemes: {
+            oauth: {
+              type: "oauth2",
+              flows: {
+                authorizationCode: {
+                  authorizationUrl: "/oauth/authorize",
+                  tokenUrl: "/oauth/token",
+                  scopes: { read: "Read users", write: "Write users" },
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.environments[0]?.variables).toEqual([
+      { name: "baseUrl", value: "https://api.example.com" },
+      { name: "oauth_client_id", value: "" },
+      { name: "oauth_client_secret", value: "" },
+    ]);
+    expect(imported?.resources.httpRequests.map((request) => request.authentication)).toEqual([
+      expect.objectContaining({
+        clientId: "${[oauth_client_id]}",
+        clientSecret: "${[oauth_client_secret]}",
+        authorizationUrl: "https://api.example.com/oauth/authorize",
+        accessTokenUrl: "https://api.example.com/oauth/token",
+      }),
+      expect.objectContaining({
+        clientId: "${[oauth_client_id]}",
+        clientSecret: "${[oauth_client_secret]}",
+      }),
+    ]);
+  });
+
+  test("Uses the shared base variable for OAuth endpoints with a path-only API base", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Path-only OAuth Test", version: "1.0.0" },
+        servers: [{ url: "/api/v1" }],
+        paths: {
+          "/users": { get: { security: [{ oauth: [] }], responses: {} } },
+        },
+        components: {
+          securitySchemes: {
+            oauth: {
+              type: "oauth2",
+              flows: {
+                authorizationCode: {
+                  authorizationUrl: "oauth/authorize",
+                  tokenUrl: "/oauth/token",
+                  scopes: {},
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.authentication).toEqual(
+      expect.objectContaining({
+        authorizationUrl: "${[baseUrlOrigin]}/api/v1/oauth/authorize",
+        accessTokenUrl: "${[baseUrlOrigin]}/oauth/token",
+      }),
+    );
+    expect(imported?.resources.environments[0]?.variables).toEqual([
+      { name: "baseUrl", value: "/api/v1" },
+      { name: "oauth_client_id", value: "" },
+      { name: "oauth_client_secret", value: "" },
+      { name: "baseUrlOrigin", value: "" },
+    ]);
   });
 
   test("Imports Swagger 2 OAuth2 flows and produces", async () => {
@@ -388,8 +483,8 @@ describe("importer-openapi", () => {
         authenticationType: "oauth2",
         authentication: {
           grantType: "authorization_code",
-          clientId: "",
-          clientSecret: "",
+          clientId: "${[oauth_client_id]}",
+          clientSecret: "${[oauth_client_secret]}",
           headerPrefix: "Bearer",
           scope: "admin",
           authorizationUrl: "https://example.com/authorize",
