@@ -20,6 +20,11 @@ type ImportResources = {
   folders: AtLeast<Folder, "name" | "id" | "model" | "workspaceId">[];
   httpRequests: AtLeast<HttpRequest, "name" | "id" | "model" | "workspaceId">[];
 };
+type ImportedAuthentication = Pick<HttpRequest, "authentication" | "authenticationType"> & {
+  headers: HttpRequestHeader[];
+  urlParameters: HttpUrlParameter[];
+};
+type AuthenticationVariableRegistry = Map<string, { name: string; value: string }>;
 
 const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "query", "trace"];
 const BODY_CONTENT_TYPE_PREFERENCE = [
@@ -62,6 +67,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     folders: [],
     httpRequests: [],
   };
+  const authenticationVariables: AuthenticationVariableRegistry = new Map();
   const baseUrl = importBaseUrl(spec);
   // A local spec has no document URL against which OpenAPI's implicit "/"
   // server can resolve. Keep the shared variable even when its initial value
@@ -123,6 +129,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
         spec,
         workspaceId: workspace.id,
         folderId,
+        authenticationVariables,
       });
       routeLabels.set(request.id, `${method.toUpperCase()} ${rawPath}`);
       resources.httpRequests.push(request);
@@ -130,6 +137,24 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   }
 
   if (resources.httpRequests.length === 0) return undefined;
+
+  if (authenticationVariables.size > 0) {
+    let environment = resources.environments[0];
+    if (environment == null) {
+      environment = {
+        model: "environment",
+        id: importState.generateId("environment"),
+        workspaceId: workspace.id,
+        name: "Global Variables",
+        variables: [],
+        parentModel: "workspace",
+        parentId: null,
+        sortPriority: importState.nextSortPriority(),
+      };
+      resources.environments.push(environment);
+    }
+    environment.variables.push(...authenticationVariables.values());
+  }
 
   disambiguateNames(resources.httpRequests, routeLabels);
 
@@ -200,6 +225,7 @@ function importOperation({
   spec,
   workspaceId,
   folderId,
+  authenticationVariables,
 }: {
   importState: ImportState;
   method: string;
@@ -211,6 +237,7 @@ function importOperation({
   spec: UnknownRecord;
   workspaceId: string;
   folderId: string | null;
+  authenticationVariables: AuthenticationVariableRegistry;
 }): ImportResources["httpRequests"][0] {
   importState.beginOperation();
   const parameters = mergeParameters({
@@ -219,13 +246,27 @@ function importOperation({
     operationParameters: toArray(operation.parameters),
   });
   const body = importBody({ importState, operation, parameters, spec });
-  const urlParameters = importUrlParameters({ importState, parameters });
+  const authentication = importAuthentication({
+    authenticationVariables,
+    importState,
+    operation,
+    spec,
+  });
+  const urlParameters = [
+    ...importUrlParameters({ importState, parameters }),
+    ...authentication.urlParameters,
+  ];
   const headers = mergeHeaders(
+    authentication.headers,
     importHeaderParameters({ importState, parameters }),
     body.headers,
     importAcceptHeader({ importState, operation, spec }),
   );
-  const authentication = importAuthentication({ importState, operation, spec });
+  const {
+    headers: _authenticationHeaders,
+    urlParameters: _authenticationParameters,
+    ...auth
+  } = authentication;
 
   // Built after everything else, so it can report the refs they left unresolved
   const description = importOperationDescription({
@@ -249,7 +290,7 @@ function importOperation({
     body: body.body,
     bodyType: body.bodyType,
     sortPriority: importState.nextSortPriority(),
-    ...authentication,
+    ...auth,
   };
 }
 
@@ -842,52 +883,142 @@ function inferSchemaType(schema: UnknownRecord): string {
 }
 
 function importAuthentication({
+  authenticationVariables,
   importState,
   operation,
   spec,
 }: {
+  authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
   operation: UnknownRecord;
   spec: UnknownRecord;
-}): Pick<HttpRequest, "authentication" | "authenticationType"> {
+}): ImportedAuthentication {
   const security = operation.security ?? spec.security;
+  if (Array.isArray(operation.security) && operation.security.length === 0) {
+    return { ...emptyAuthentication(), authenticationType: "none" };
+  }
   if (!Array.isArray(security) || security.length === 0) {
-    return { authenticationType: null, authentication: {} };
+    return emptyAuthentication();
+  }
+
+  // Security Requirement Objects are alternatives. If any alternative is
+  // empty, authentication is optional regardless of where it appears.
+  if (
+    security.some((requirement) => isRecord(requirement) && Object.keys(requirement).length === 0)
+  ) {
+    return { ...emptyAuthentication(), authenticationType: "none" };
   }
 
   const schemes = {
     ...toRecord(toRecord(spec.components).securitySchemes),
     ...toRecord(spec.securityDefinitions),
   };
-  for (const requirement of security) {
-    for (const [schemeName, rawScopes] of Object.entries(toRecord(requirement))) {
-      const scheme = toRecord(importState.resolve(schemes[schemeName]));
-      const type = stringAt(scheme, "type");
-      if (type === "oauth2") {
-        const oauth2 = importOAuth2(scheme, rawScopes);
-        if (oauth2 != null) return oauth2;
-        continue;
-      }
-      if (type === "apiKey") {
-        return { authenticationType: "apikey", authentication: importApiKey(scheme, schemeName) };
-      }
-      // Swagger 2.0 spells basic auth as its own type rather than an HTTP scheme
-      if (type === "basic" || (type === "http" && schemeIs(scheme, "basic"))) {
-        return {
-          authenticationType: "basic",
-          authentication: { username: "", password: "" },
-        };
-      }
-      if (type === "http" && schemeIs(scheme, "bearer")) {
-        return {
-          authenticationType: "bearer",
-          authentication: { token: "", prefix: "Bearer" },
-        };
-      }
-    }
+  for (const rawRequirement of security) {
+    if (!isRecord(rawRequirement)) continue;
+
+    const imported = importSecurityRequirement({
+      authenticationVariables,
+      importState,
+      requirement: rawRequirement,
+      schemes,
+    });
+    if (imported != null) return imported;
   }
 
-  return { authenticationType: null, authentication: {} };
+  return emptyAuthentication();
+}
+
+function importSecurityRequirement({
+  authenticationVariables,
+  importState,
+  requirement,
+  schemes,
+}: {
+  authenticationVariables: AuthenticationVariableRegistry;
+  importState: ImportState;
+  requirement: UnknownRecord;
+  schemes: UnknownRecord;
+}): ImportedAuthentication | null {
+  const entries = Object.entries(requirement);
+  const headers: HttpRequestHeader[] = [];
+  const urlParameters: HttpUrlParameter[] = [];
+  let primaryAuthentication: Pick<HttpRequest, "authentication" | "authenticationType"> | null =
+    null;
+
+  for (const [schemeName, rawScopes] of entries) {
+    const scheme = toRecord(importState.resolve(schemes[schemeName]));
+    const type = stringAt(scheme, "type");
+    if (type === "apiKey") {
+      const variable = registerAuthenticationVariable(authenticationVariables, schemeName, "key");
+      if (entries.length === 1) {
+        primaryAuthentication = {
+          authenticationType: "apikey",
+          authentication: importApiKey(scheme, schemeName, variable),
+        };
+      } else {
+        materializeApiKey(scheme, schemeName, variable, headers, urlParameters);
+      }
+      continue;
+    }
+
+    let candidate: Pick<HttpRequest, "authentication" | "authenticationType"> | null = null;
+    if (type === "oauth2") {
+      candidate = importOAuth2(scheme, rawScopes);
+    } else if (type === "openIdConnect") {
+      const token = registerAuthenticationVariable(authenticationVariables, schemeName, "token");
+      candidate = {
+        authenticationType: "bearer",
+        authentication: { token: templateVariable(token), prefix: "Bearer" },
+      };
+    } else if (type === "basic" || (type === "http" && schemeIs(scheme, "basic"))) {
+      const username = registerAuthenticationVariable(
+        authenticationVariables,
+        schemeName,
+        "username",
+      );
+      const password = registerAuthenticationVariable(
+        authenticationVariables,
+        schemeName,
+        "password",
+      );
+      candidate = {
+        authenticationType: "basic",
+        authentication: {
+          username: templateVariable(username),
+          password: templateVariable(password),
+        },
+      };
+    } else if (type === "http" && schemeIs(scheme, "bearer")) {
+      const token = registerAuthenticationVariable(authenticationVariables, schemeName, "token");
+      candidate = {
+        authenticationType: "bearer",
+        authentication: { token: templateVariable(token), prefix: "Bearer" },
+      };
+    }
+
+    // A requirement is an AND. Yaak can combine one auth plugin with explicit
+    // API-key parameters, but cannot represent two auth plugins on one request.
+    if (candidate == null || primaryAuthentication != null) return null;
+    primaryAuthentication = candidate;
+  }
+
+  return {
+    ...(primaryAuthentication ?? {
+      authenticationType: entries.length > 1 ? "none" : null,
+      authentication: {},
+    }),
+    headers,
+    urlParameters,
+  };
+}
+
+function emptyAuthentication(): ImportedAuthentication {
+  return {
+    authenticationType: null,
+    authentication: {},
+    headers: [],
+    urlParameters: [],
+  };
 }
 
 function schemeIs(scheme: UnknownRecord, name: string): boolean {
@@ -899,14 +1030,67 @@ function schemeIs(scheme: UnknownRecord, name: string): boolean {
  * cookie key becomes the Cookie header it would have ended up in, pre-filled
  * with its name. Sending it as a header named after the cookie would just fail.
  */
-function importApiKey(scheme: UnknownRecord, schemeName: string): Record<string, string> {
+function importApiKey(
+  scheme: UnknownRecord,
+  schemeName: string,
+  variableName: string,
+): Record<string, string> {
   const key = stringAt(scheme, "name") ?? schemeName;
   const location = stringAt(scheme, "in");
+  const value = templateVariable(variableName);
 
   if (location === "cookie") {
-    return { location: "header", key: "Cookie", value: `${key}=` };
+    return { location: "header", key: "Cookie", value: `${key}=${value}` };
   }
-  return { location: location === "query" ? "query" : "header", key, value: "" };
+  return { location: location === "query" ? "query" : "header", key, value };
+}
+
+function materializeApiKey(
+  scheme: UnknownRecord,
+  schemeName: string,
+  variableName: string,
+  headers: HttpRequestHeader[],
+  urlParameters: HttpUrlParameter[],
+): void {
+  const key = stringAt(scheme, "name") ?? schemeName;
+  const location = stringAt(scheme, "in");
+  const value = templateVariable(variableName);
+  if (location === "query") {
+    urlParameters.push({ enabled: true, name: key, value });
+  } else if (location === "cookie") {
+    headers.push({ enabled: true, name: "Cookie", value: `${key}=${value}` });
+  } else {
+    headers.push({ enabled: true, name: key, value });
+  }
+}
+
+function registerAuthenticationVariable(
+  variables: AuthenticationVariableRegistry,
+  schemeName: string,
+  field: string,
+): string {
+  const identity = JSON.stringify([schemeName, field]);
+  const existing = variables.get(identity);
+  if (existing != null) return existing.name;
+
+  const schemePart = schemeName
+    .replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replaceAll(/[^a-zA-Z0-9]+/g, "_")
+    .replaceAll(/^_+|_+$/g, "")
+    .toLowerCase();
+  const baseName = `auth_${schemePart || "security"}_${field}`;
+  let name = baseName;
+  let suffix = 2;
+  const names = new Set([...variables.values()].map((variable) => variable.name));
+  while (names.has(name)) {
+    name = `${baseName}_${suffix++}`;
+  }
+  variables.set(identity, { name, value: "" });
+  return name;
+}
+
+function templateVariable(name: string): string {
+  return `\${[${name}]}`;
 }
 
 /**
