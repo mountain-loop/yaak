@@ -78,8 +78,19 @@ impl SendableHttpRequest {
     }
 
     pub fn insert_header(&mut self, header: (String, String)) {
+        if header.0.eq_ignore_ascii_case("cookie") {
+            if let Some(existing) =
+                self.headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case("cookie"))
+            {
+                existing.1 = format!("{}; {}", existing.1, header.1);
+            } else {
+                self.headers.push(header);
+            }
+            return;
+        }
+
         if let Some(existing) =
-            self.headers.iter_mut().find(|h| h.0.to_lowercase() == header.0.to_lowercase())
+            self.headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case(&header.0))
         {
             existing.1 = header.1;
         } else {
@@ -523,6 +534,27 @@ mod tests {
                 .unwrap();
 
         assert_eq!(sendable.headers, vec![("Cookie".to_string(), "session=abc".to_string())]);
+    }
+
+    #[test]
+    fn test_insert_header_appends_authentication_cookie() {
+        let mut request = SendableHttpRequest {
+            headers: vec![
+                ("Cookie".to_string(), "session=abc".to_string()),
+                ("Cookie".to_string(), "theme=dark".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        request.insert_header(("cookie".to_string(), "api_key=secret".to_string()));
+
+        assert_eq!(
+            request.headers,
+            vec![
+                ("Cookie".to_string(), "session=abc; api_key=secret".to_string()),
+                ("Cookie".to_string(), "theme=dark".to_string()),
+            ],
+        );
     }
 
     #[tokio::test]
