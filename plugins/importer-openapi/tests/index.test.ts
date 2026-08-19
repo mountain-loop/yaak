@@ -150,7 +150,10 @@ describe("importer-openapi", () => {
     expect(imported?.resources.environments).toEqual([
       expect.objectContaining({
         name: "Global Variables",
-        variables: [{ name: "baseUrl", value: "https://api.example.com/v1" }],
+        variables: [
+          { name: "baseUrl", value: "https://api.example.com/v1" },
+          { name: "auth_token_auth_token", value: "" },
+        ],
       }),
     ]);
     expect(imported?.resources.httpRequests).toEqual([
@@ -159,7 +162,7 @@ describe("importer-openapi", () => {
         method: "POST",
         url: "${[baseUrl]}/accounts/:accountId/members",
         authenticationType: "bearer",
-        authentication: { token: "", prefix: "Bearer" },
+        authentication: { token: "${[auth_token_auth_token]}", prefix: "Bearer" },
         bodyType: "application/json",
         body: {
           text: JSON.stringify(
@@ -573,16 +576,116 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[0]).toEqual(
       expect.objectContaining({
         authenticationType: "basic",
-        authentication: { username: "", password: "" },
+        authentication: {
+          username: "${[auth_basic_auth_username]}",
+          password: "${[auth_basic_auth_password]}",
+        },
       }),
     );
     // The auth plugin has no cookie location, so it becomes the Cookie header
     expect(imported?.resources.httpRequests[1]).toEqual(
       expect.objectContaining({
         authenticationType: "apikey",
-        authentication: { location: "header", key: "Cookie", value: "session=" },
+        authentication: {
+          location: "header",
+          key: "Cookie",
+          value: "session=${[auth_cookie_key_key]}",
+        },
       }),
     );
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        name: "Global Variables",
+        variables: [
+          { name: "baseUrl", value: "https://example.com/" },
+          { name: "auth_basic_auth_username", value: "" },
+          { name: "auth_basic_auth_password", value: "" },
+          { name: "auth_cookie_key_key", value: "" },
+        ],
+      }),
+    ]);
+  });
+
+  test("Preserves anonymous security alternatives and explicit auth overrides", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Optional Auth", version: "1.0.0" },
+        security: [{ bearerAuth: [] }],
+        paths: {
+          "/optional": { get: { security: [{}, { bearerAuth: [] }], responses: {} } },
+          "/public": { get: { security: [], responses: {} } },
+        },
+        components: {
+          securitySchemes: {
+            bearerAuth: { type: "http", scheme: "bearer" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({ authenticationType: "none", authentication: {} }),
+      expect.objectContaining({ authenticationType: "none", authentication: {} }),
+    ]);
+  });
+
+  test("Imports AND security requirements without dropping API keys", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Combined Auth", version: "1.0.0" },
+        paths: {
+          "/combined": {
+            get: {
+              security: [{ bearerAuth: [], tenantKey: [], queryKey: [] }],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          securitySchemes: {
+            bearerAuth: { type: "http", scheme: "bearer" },
+            tenantKey: { type: "apiKey", in: "header", name: "X-Tenant-Key" },
+            queryKey: { type: "apiKey", in: "query", name: "api_key" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        authenticationType: "bearer",
+        authentication: { token: "${[auth_bearer_auth_token]}", prefix: "Bearer" },
+        headers: [{ enabled: true, name: "X-Tenant-Key", value: "${[auth_tenant_key_key]}" }],
+        urlParameters: [{ enabled: true, name: "api_key", value: "${[auth_query_key_key]}" }],
+      }),
+    ]);
+  });
+
+  test("Imports OpenID Connect as bearer authentication", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "OpenID Connect", version: "1.0.0" },
+        paths: { "/me": { get: { security: [{ oidc: [] }], responses: {} } } },
+        components: {
+          securitySchemes: {
+            oidc: {
+              type: "openIdConnect",
+              openIdConnectUrl: "https://accounts.example.com/.well-known/openid-configuration",
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        authenticationType: "bearer",
+        authentication: { token: "${[auth_oidc_token]}", prefix: "Bearer" },
+      }),
+    ]);
   });
 
   test("Reports references that point outside the document", async () => {
