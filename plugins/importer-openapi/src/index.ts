@@ -1139,7 +1139,7 @@ function formatMediaTypeBody(
   ) {
     return typeof example === "string"
       ? example
-      : valueToXml(example, schema, importState, "root");
+      : valueToXml(example, schema, importState, "root", true);
   }
   return formatBodyText(example);
 }
@@ -1149,18 +1149,18 @@ function valueToXml(
   schema: unknown,
   importState: ImportState,
   elementName: string,
+  isDocumentRoot = false,
 ): string {
   const resolvedSchema = toRecord(importState.resolve(schema));
   const schemaXml = toRecord(resolvedSchema.xml);
   if (Array.isArray(value)) {
     const itemSchema = importState.resolve(resolvedSchema.items);
+    const shouldWrap = schemaXml.wrapped === true || isDocumentRoot;
     const itemName =
       stringAt(toRecord(itemSchema).xml, "name") ??
-      (schemaXml.wrapped === true ? stringAt(schemaXml, "name") ?? elementName : elementName);
+      (shouldWrap ? stringAt(schemaXml, "name") ?? elementName : elementName);
     const items = value.map((item) => valueToXml(item, itemSchema, importState, itemName)).join("");
-    return schemaXml.wrapped === true
-      ? xmlElement(elementName, schemaXml, items)
-      : items;
+    return shouldWrap ? xmlElement(elementName, schemaXml, items) : items;
   }
   if (isRecord(value)) {
     const properties = toRecord(resolvedSchema.properties);

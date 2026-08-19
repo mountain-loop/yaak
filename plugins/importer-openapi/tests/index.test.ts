@@ -1071,6 +1071,23 @@ describe("importer-openapi", () => {
               responses: {},
             },
           },
+          "/values": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "array",
+                      example: ["one", "two"],
+                      xml: { name: "values", wrapped: false },
+                      items: { type: "string", xml: { name: "value" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
         },
       }),
     );
@@ -1082,6 +1099,9 @@ describe("importer-openapi", () => {
         '<a:alias xmlns:a="urn:aliases">Ada</a:alias>' +
         '<a:alias xmlns:a="urn:aliases">A</a:alias>' +
         "</c:catalog>",
+    });
+    expect(imported?.resources.httpRequests[1]?.body).toEqual({
+      text: "<values><value>one</value><value>two</value></values>",
     });
   });
 
