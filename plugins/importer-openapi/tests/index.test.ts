@@ -13,6 +13,28 @@ describe("importer-openapi", () => {
     .readdirSync(realWorldFixturesPath)
     .filter((fixture) => fixture.endsWith(".yaml"));
 
+  test("Imports OpenAPI 3.2 QUERY and additional operations", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.2.0",
+        info: { title: "OpenAPI 3.2 Operations", version: "1.0.0" },
+        paths: {
+          "/resources": {
+            query: { summary: "Query resources", responses: {} },
+            additionalOperations: {
+              COPY: { summary: "Copy resources", responses: {} },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({ method: "QUERY", name: "Query resources", url: "/resources" }),
+      expect.objectContaining({ method: "COPY", name: "Copy resources", url: "/resources" }),
+    ]);
+  });
+
   test("Maps operation description to request description", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
