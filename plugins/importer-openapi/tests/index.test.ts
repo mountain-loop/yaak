@@ -229,6 +229,26 @@ describe("importer-openapi", () => {
     expect(imported).toBeUndefined();
   });
 
+  test("Creates an editable baseUrl variable when OpenAPI omits servers", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Serverless OpenAPI Test", version: "1.0.0" },
+        paths: {
+          "/api/widgets": { get: { responses: {} } },
+        },
+      }),
+    );
+
+    expect(imported?.resources.environments).toEqual([
+      expect.objectContaining({
+        name: "Global Variables",
+        variables: [{ name: "baseUrl", value: "" }],
+      }),
+    ]);
+    expect(imported?.resources.httpRequests[0]?.url).toBe("${[baseUrl]}/api/widgets");
+  });
+
   test("Prefers operation and path servers over the spec base URL", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
