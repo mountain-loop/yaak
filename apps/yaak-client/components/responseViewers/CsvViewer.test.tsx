@@ -27,5 +27,6 @@ describe("CsvViewer", () => {
 
     expect(markup).toContain("ID de usuario");
     expect(markup).toContain("42041");
+    expect(markup.match(/<td>/g)).toHaveLength(20);
   });
 });

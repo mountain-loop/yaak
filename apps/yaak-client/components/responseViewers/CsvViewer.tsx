@@ -50,8 +50,9 @@ export function CsvViewerInner({ text, className }: { text: string | null; class
           {rows.map((row, i) => (
             // oxlint-disable-next-line react/no-array-index-key
             <TableRow key={i}>
-              {columnIndexes.map((columnIndex) => (
-                <TableCell key={columnIndex}>{row[columnIndex] ?? ""}</TableCell>
+              {row.map((cell, columnIndex) => (
+                // oxlint-disable-next-line react/no-array-index-key
+                <TableCell key={columnIndex}>{cell}</TableCell>
               ))}
             </TableRow>
           ))}
