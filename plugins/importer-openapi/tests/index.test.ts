@@ -447,9 +447,15 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[0]?.authentication).toEqual(
       expect.objectContaining({
         authorizationUrl: "${[baseUrl]}/oauth/authorize",
-        accessTokenUrl: "${[baseUrl]}/oauth/token",
+        accessTokenUrl: "${[baseUrlOrigin]}/oauth/token",
       }),
     );
+    expect(imported?.resources.environments[0]?.variables).toEqual([
+      { name: "baseUrl", value: "/api/v1" },
+      { name: "oauth_client_id", value: "" },
+      { name: "oauth_client_secret", value: "" },
+      { name: "baseUrlOrigin", value: "" },
+    ]);
   });
 
   test("Imports Swagger 2 OAuth2 flows and produces", async () => {

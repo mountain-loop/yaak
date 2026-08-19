@@ -161,6 +161,18 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
         clientSecret,
       ]),
     );
+    if (
+      resources.httpRequests.some(
+        (request) =>
+          request.authenticationType === "oauth2" &&
+          Object.values(toRecord(request.authentication)).some(
+            (value) =>
+              typeof value === "string" && value.includes(templateVariable("baseUrlOrigin")),
+          ),
+      )
+    ) {
+      variableNames.add("baseUrlOrigin");
+    }
     globalEnvironment.variables.push(...[...variableNames].map((name) => ({ name, value: "" })));
   }
 
@@ -1225,16 +1237,18 @@ function resolveOAuthUrl(value: string | undefined, baseUrl: string): string | u
     // Relative endpoint; resolve it against the API base below.
   }
 
-  if (baseUrl.length === 0) {
-    return joinUrlParts(templateVariable("baseUrl"), value);
+  if (baseUrl.length > 0) {
+    try {
+      return new URL(value, `${trimTrailingSlashes(baseUrl)}/`).toString();
+    } catch {
+      // A path-only server has no origin to resolve against. Preserve whether
+      // the OAuth endpoint is relative to that path or to the eventual origin.
+    }
   }
-  try {
-    return new URL(value, `${trimTrailingSlashes(baseUrl)}/`).toString();
-  } catch {
-    // A path-only server has no origin to resolve against. Referencing the
-    // shared base variable makes the endpoint usable once its host is filled in.
-    return joinUrlParts(templateVariable("baseUrl"), value);
-  }
+
+  if (value.startsWith("//")) return value;
+  if (value.startsWith("/")) return `${templateVariable("baseUrlOrigin")}${value}`;
+  return joinUrlParts(templateVariable("baseUrl"), value);
 }
 
 function buildOAuthVariablesByScheme(
