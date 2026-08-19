@@ -24,6 +24,7 @@ type ImportedAuthentication = Pick<HttpRequest, "authentication" | "authenticati
   headers: HttpRequestHeader[];
   urlParameters: HttpUrlParameter[];
 };
+type AuthenticationVariableRegistry = Map<string, { name: string; value: string }>;
 
 const HTTP_METHODS = ["delete", "get", "head", "options", "patch", "post", "put", "query", "trace"];
 const BODY_CONTENT_TYPE_PREFERENCE = [
@@ -66,7 +67,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     folders: [],
     httpRequests: [],
   };
-  const authenticationVariables = new Map<string, string>();
+  const authenticationVariables: AuthenticationVariableRegistry = new Map();
   const baseUrl = importBaseUrl(spec);
   // A local spec has no document URL against which OpenAPI's implicit "/"
   // server can resolve. Keep the shared variable even when its initial value
@@ -152,9 +153,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
       };
       resources.environments.push(environment);
     }
-    environment.variables.push(
-      ...[...authenticationVariables].map(([name, value]) => ({ name, value })),
-    );
+    environment.variables.push(...authenticationVariables.values());
   }
 
   disambiguateNames(resources.httpRequests, routeLabels);
@@ -238,7 +237,7 @@ function importOperation({
   spec: UnknownRecord;
   workspaceId: string;
   folderId: string | null;
-  authenticationVariables: Map<string, string>;
+  authenticationVariables: AuthenticationVariableRegistry;
 }): ImportResources["httpRequests"][0] {
   importState.beginOperation();
   const parameters = mergeParameters({
@@ -258,10 +257,10 @@ function importOperation({
     ...authentication.urlParameters,
   ];
   const headers = mergeHeaders(
+    authentication.headers,
     importHeaderParameters({ importState, parameters }),
     body.headers,
     importAcceptHeader({ importState, operation, spec }),
-    authentication.headers,
   );
   const {
     headers: _authenticationHeaders,
@@ -889,7 +888,7 @@ function importAuthentication({
   operation,
   spec,
 }: {
-  authenticationVariables: Map<string, string>;
+  authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
   operation: UnknownRecord;
   spec: UnknownRecord;
@@ -902,21 +901,25 @@ function importAuthentication({
     return emptyAuthentication();
   }
 
+  // Security Requirement Objects are alternatives. If any alternative is
+  // empty, authentication is optional regardless of where it appears.
+  if (
+    security.some((requirement) => isRecord(requirement) && Object.keys(requirement).length === 0)
+  ) {
+    return { ...emptyAuthentication(), authenticationType: "none" };
+  }
+
   const schemes = {
     ...toRecord(toRecord(spec.components).securitySchemes),
     ...toRecord(spec.securityDefinitions),
   };
   for (const rawRequirement of security) {
-    const requirement = toRecord(rawRequirement);
-    // An empty Security Requirement Object explicitly permits anonymous access.
-    if (Object.keys(requirement).length === 0) {
-      return { ...emptyAuthentication(), authenticationType: "none" };
-    }
+    if (!isRecord(rawRequirement)) continue;
 
     const imported = importSecurityRequirement({
       authenticationVariables,
       importState,
-      requirement,
+      requirement: rawRequirement,
       schemes,
     });
     if (imported != null) return imported;
@@ -931,7 +934,7 @@ function importSecurityRequirement({
   requirement,
   schemes,
 }: {
-  authenticationVariables: Map<string, string>;
+  authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
   requirement: UnknownRecord;
   schemes: UnknownRecord;
@@ -1062,10 +1065,14 @@ function materializeApiKey(
 }
 
 function registerAuthenticationVariable(
-  variables: Map<string, string>,
+  variables: AuthenticationVariableRegistry,
   schemeName: string,
   field: string,
 ): string {
+  const identity = JSON.stringify([schemeName, field]);
+  const existing = variables.get(identity);
+  if (existing != null) return existing.name;
+
   const schemePart = schemeName
     .replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replaceAll(/[^a-zA-Z0-9]+/g, "_")
@@ -1074,11 +1081,11 @@ function registerAuthenticationVariable(
   const baseName = `auth_${schemePart || "security"}_${field}`;
   let name = baseName;
   let suffix = 2;
-  while (variables.has(name)) {
-    if (variables.get(name) === "") return name;
+  const names = new Set([...variables.values()].map((variable) => variable.name));
+  while (names.has(name)) {
     name = `${baseName}_${suffix++}`;
   }
-  variables.set(name, "");
+  variables.set(identity, { name, value: "" });
   return name;
 }
 

@@ -613,7 +613,12 @@ describe("importer-openapi", () => {
         info: { title: "Optional Auth", version: "1.0.0" },
         security: [{ bearerAuth: [] }],
         paths: {
-          "/optional": { get: { security: [{}, { bearerAuth: [] }], responses: {} } },
+          "/optional-auth-first": {
+            get: { security: [{ bearerAuth: [] }, {}], responses: {} },
+          },
+          "/optional-anonymous-first": {
+            get: { security: [{}, { bearerAuth: [] }], responses: {} },
+          },
           "/public": { get: { security: [], responses: {} } },
         },
         components: {
@@ -625,6 +630,7 @@ describe("importer-openapi", () => {
     );
 
     expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({ authenticationType: "none", authentication: {} }),
       expect.objectContaining({ authenticationType: "none", authentication: {} }),
       expect.objectContaining({ authenticationType: "none", authentication: {} }),
     ]);
@@ -639,6 +645,13 @@ describe("importer-openapi", () => {
           "/combined": {
             get: {
               security: [{ bearerAuth: [], tenantKey: [], queryKey: [] }],
+              parameters: [
+                {
+                  in: "header",
+                  name: "X-Tenant-Key",
+                  example: "operation-value-must-not-replace-auth",
+                },
+              ],
               responses: {},
             },
           },
@@ -659,6 +672,43 @@ describe("importer-openapi", () => {
         authentication: { token: "${[auth_bearer_auth_token]}", prefix: "Bearer" },
         headers: [{ enabled: true, name: "X-Tenant-Key", value: "${[auth_tenant_key_key]}" }],
         urlParameters: [{ enabled: true, name: "api_key", value: "${[auth_query_key_key]}" }],
+      }),
+    ]);
+  });
+
+  test("Keeps distinct credentials for security scheme names that normalize alike", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Auth Variable Names", version: "1.0.0" },
+        paths: {
+          "/hyphen": { get: { security: [{ "api-key": [] }], responses: {} } },
+          "/underscore": { get: { security: [{ api_key: [] }], responses: {} } },
+          "/hyphen-again": { get: { security: [{ "api-key": [] }], responses: {} } },
+        },
+        components: {
+          securitySchemes: {
+            "api-key": { type: "apiKey", in: "header", name: "X-Hyphen-Key" },
+            api_key: { type: "apiKey", in: "header", name: "X-Underscore-Key" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.environments[0]?.variables).toEqual([
+      { name: "baseUrl", value: "" },
+      { name: "auth_api_key_key", value: "" },
+      { name: "auth_api_key_key_2", value: "" },
+    ]);
+    expect(imported?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        authentication: expect.objectContaining({ value: "${[auth_api_key_key]}" }),
+      }),
+      expect.objectContaining({
+        authentication: expect.objectContaining({ value: "${[auth_api_key_key_2]}" }),
+      }),
+      expect.objectContaining({
+        authentication: expect.objectContaining({ value: "${[auth_api_key_key]}" }),
       }),
     ]);
   });
