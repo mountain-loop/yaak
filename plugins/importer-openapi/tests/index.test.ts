@@ -807,6 +807,53 @@ describe("importer-openapi", () => {
     ]);
   });
 
+  test("Preserves parameter cookies alongside cookie API-key authentication", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Authenticated Cookie Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              security: [{ basicAuth: [], cookieKey: [] }],
+              parameters: [
+                {
+                  name: "session",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "string", example: "abc" },
+                },
+                {
+                  name: "debug",
+                  in: "cookie",
+                  schema: { type: "string", example: "verbose" },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          securitySchemes: {
+            basicAuth: { type: "http", scheme: "basic" },
+            cookieKey: { type: "apiKey", in: "cookie", name: "api_key" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "basic",
+        headers: [
+          { enabled: true, name: "Cookie", value: "api_key=${[auth_cookie_key_key]}" },
+          { enabled: true, name: "Cookie", value: "session=abc" },
+          { enabled: false, name: "Cookie", value: "debug=verbose" },
+        ],
+      }),
+    );
+  });
+
   test("Serializes structured query parameters according to style and explode", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({

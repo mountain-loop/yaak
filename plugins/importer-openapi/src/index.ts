@@ -1604,7 +1604,8 @@ function mergeHeaders(...headerGroups: HttpRequestHeader[][]): HttpRequestHeader
   for (const group of headerGroups) {
     const namesFromEarlierGroups = new Set(headers.map((header) => header.name.toLowerCase()));
     for (const header of group) {
-      if (!namesFromEarlierGroups.has(header.name.toLowerCase())) {
+      const name = header.name.toLowerCase();
+      if (name === "cookie" || !namesFromEarlierGroups.has(name)) {
         headers.push(header);
       }
     }
