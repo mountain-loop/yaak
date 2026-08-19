@@ -494,7 +494,55 @@ mod tests {
     use bytes::Bytes;
     use serde_json::json;
     use std::collections::BTreeMap;
-    use yaak_models::models::{HttpRequest, HttpUrlParameter};
+    use yaak_models::models::{HttpRequest, HttpRequestHeader, HttpUrlParameter};
+
+    #[tokio::test]
+    async fn test_sendable_request_preserves_independent_cookie_enabled_states() {
+        let request = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            headers: vec![
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "Cookie".to_string(),
+                    value: "session=abc".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: false,
+                    name: "Cookie".to_string(),
+                    value: "debug=verbose".to_string(),
+                    id: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let sendable =
+            SendableHttpRequest::from_http_request(&request, SendableHttpRequestOptions::default())
+                .await
+                .unwrap();
+
+        assert_eq!(sendable.headers, vec![("Cookie".to_string(), "session=abc".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn test_sendable_request_preserves_serialized_path_delimiters() {
+        let request = HttpRequest {
+            url: "https://example.com/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2"
+                .to_string(),
+            ..Default::default()
+        };
+
+        let sendable =
+            SendableHttpRequest::from_http_request(&request, SendableHttpRequestOptions::default())
+                .await
+                .unwrap();
+
+        assert_eq!(
+            sendable.url,
+            "https://example.com/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2",
+        );
+    }
 
     #[test]
     fn test_build_url_no_params() {

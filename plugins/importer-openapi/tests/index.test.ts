@@ -782,6 +782,11 @@ describe("importer-openapi", () => {
                   schema: { type: "string", example: "abc" },
                 },
                 {
+                  name: "debug",
+                  in: "cookie",
+                  schema: { type: "string", example: "verbose" },
+                },
+                {
                   name: "X-Filter",
                   in: "header",
                   required: true,
@@ -798,6 +803,7 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[0]?.headers).toEqual([
       { enabled: true, name: "X-Filter", value: "active" },
       { enabled: true, name: "Cookie", value: "session=abc" },
+      { enabled: false, name: "Cookie", value: "debug=verbose" },
     ]);
   });
 
@@ -847,13 +853,13 @@ describe("importer-openapi", () => {
     ]);
   });
 
-  test("Serializes label and matrix path parameters", async () => {
+  test("Emits executable label and matrix path serializations", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
         openapi: "3.0.4",
         info: { title: "Path Serialization Test", version: "1.0.0" },
         paths: {
-          "/labels/{labels}/matrix/{coordinates}": {
+          "/labels/{labels}/matrix/{coordinates}/report.{format}": {
             get: {
               parameters: [
                 {
@@ -862,7 +868,7 @@ describe("importer-openapi", () => {
                   required: true,
                   style: "label",
                   explode: true,
-                  schema: { type: "array", example: ["one", "two"] },
+                  schema: { type: "array", example: ["one/two", "three"] },
                 },
                 {
                   name: "coordinates",
@@ -870,7 +876,13 @@ describe("importer-openapi", () => {
                   required: true,
                   style: "matrix",
                   explode: true,
-                  schema: { type: "object", example: { x: 1, y: 2 } },
+                  schema: { type: "object", example: { x: "1;spoof=2", y: 2 } },
+                },
+                {
+                  name: "format",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string", example: "json/evil" },
                 },
               ],
               responses: {},
@@ -880,10 +892,12 @@ describe("importer-openapi", () => {
       }),
     );
 
-    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
-      { enabled: true, name: ":labels", value: ".one.two" },
-      { enabled: true, name: ":coordinates", value: ";x=1;y=2" },
-    ]);
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        url: "${[baseUrl]}/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2/report.json%2Fevil",
+        urlParameters: [],
+      }),
+    );
   });
 
   test("Prefers operation-level consumes for Swagger bodies", async () => {
