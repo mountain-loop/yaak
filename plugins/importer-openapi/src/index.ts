@@ -685,8 +685,10 @@ function shouldInlinePathParameter(
   }
   if (isRecord(parameter.content)) return false;
   const value = parameterExampleValue(parameter, importState);
+  const style = stringAt(parameter, "style");
   return (
-    stringAt(parameter, "style") === "matrix" ||
+    style === "label" ||
+    style === "matrix" ||
     Array.isArray(value) ||
     isRecord(value)
   );

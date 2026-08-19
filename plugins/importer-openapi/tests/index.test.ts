@@ -906,7 +906,7 @@ describe("importer-openapi", () => {
         openapi: "3.0.4",
         info: { title: "Path Serialization Test", version: "1.0.0" },
         paths: {
-          "/labels/{labels}/matrix/{coordinates}/report.{format}": {
+          "/labels/{labels}/matrix/{coordinates}/scalar/{color}/report.{format}": {
             get: {
               parameters: [
                 {
@@ -931,6 +931,13 @@ describe("importer-openapi", () => {
                   required: true,
                   schema: { type: "string", example: "json/evil" },
                 },
+                {
+                  name: "color",
+                  in: "path",
+                  required: true,
+                  style: "label",
+                  schema: { type: "string", example: "blue" },
+                },
               ],
               responses: {},
             },
@@ -941,7 +948,7 @@ describe("importer-openapi", () => {
 
     expect(imported?.resources.httpRequests[0]).toEqual(
       expect.objectContaining({
-        url: "${[baseUrl]}/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2/report.json%2Fevil",
+        url: "${[baseUrl]}/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2/scalar/.blue/report.json%2Fevil",
         urlParameters: [],
       }),
     );
