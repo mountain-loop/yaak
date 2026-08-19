@@ -1139,7 +1139,7 @@ function formatMediaTypeBody(
   ) {
     return typeof example === "string"
       ? example
-      : valueToXml(example, schema, importState, stringAt(toRecord(schema).xml, "name") ?? "root");
+      : valueToXml(example, schema, importState, "root");
   }
   return formatBodyText(example);
 }
@@ -1151,30 +1151,66 @@ function valueToXml(
   elementName: string,
 ): string {
   const resolvedSchema = toRecord(importState.resolve(schema));
+  const schemaXml = toRecord(resolvedSchema.xml);
   if (Array.isArray(value)) {
     const itemSchema = importState.resolve(resolvedSchema.items);
-    const itemName = stringAt(toRecord(itemSchema).xml, "name") ?? "item";
+    const itemName =
+      stringAt(toRecord(itemSchema).xml, "name") ??
+      (schemaXml.wrapped === true ? stringAt(schemaXml, "name") ?? elementName : elementName);
     const items = value.map((item) => valueToXml(item, itemSchema, importState, itemName)).join("");
-    return `<${elementName}>${items}</${elementName}>`;
+    return schemaXml.wrapped === true
+      ? xmlElement(elementName, schemaXml, items)
+      : items;
   }
   if (isRecord(value)) {
     const properties = toRecord(resolvedSchema.properties);
     const attributes: string[] = [];
+    const attributeNamespaces: UnknownRecord[] = [];
     const children: string[] = [];
     for (const [name, propertyValue] of Object.entries(value)) {
       const propertySchema = toRecord(importState.resolve(properties[name]));
       const xml = toRecord(propertySchema.xml);
-      const xmlName = stringAt(xml, "name") ?? name;
       if (xml.attribute === true) {
-        attributes.push(`${xmlName}="${escapeXml(stringifyExampleValue(propertyValue))}"`);
+        attributes.push(
+          `${qualifiedXmlName(name, xml)}="${escapeXml(stringifyExampleValue(propertyValue))}"`,
+        );
+        attributeNamespaces.push(xml);
       } else {
-        children.push(valueToXml(propertyValue, propertySchema, importState, xmlName));
+        children.push(valueToXml(propertyValue, propertySchema, importState, name));
       }
     }
-    const attributeText = attributes.length > 0 ? ` ${attributes.join(" ")}` : "";
-    return `<${elementName}${attributeText}>${children.join("")}</${elementName}>`;
+    return xmlElement(elementName, schemaXml, children.join(""), attributes, attributeNamespaces);
   }
-  return `<${elementName}>${escapeXml(stringifyExampleValue(value))}</${elementName}>`;
+  return xmlElement(elementName, schemaXml, escapeXml(stringifyExampleValue(value)));
+}
+
+function xmlElement(
+  fallbackName: string,
+  xml: UnknownRecord,
+  content: string,
+  attributes: string[] = [],
+  additionalNamespaces: UnknownRecord[] = [],
+): string {
+  const name = qualifiedXmlName(fallbackName, xml);
+  const namespaces = new Map<string, string>();
+  for (const metadata of [xml, ...additionalNamespaces]) {
+    const namespace = stringAt(metadata, "namespace");
+    if (namespace == null) continue;
+    const prefix = stringAt(metadata, "prefix");
+    namespaces.set(prefix == null ? "xmlns" : `xmlns:${prefix}`, namespace);
+  }
+  const namespaceAttributes = [...namespaces].map(
+    ([attribute, namespace]) => `${attribute}="${escapeXml(namespace)}"`,
+  );
+  const attributeText = [...namespaceAttributes, ...attributes].join(" ");
+  const openingTag = attributeText.length > 0 ? `<${name} ${attributeText}>` : `<${name}>`;
+  return `${openingTag}${content}</${name}>`;
+}
+
+function qualifiedXmlName(fallbackName: string, xml: UnknownRecord): string {
+  const name = stringAt(xml, "name") ?? fallbackName;
+  const prefix = stringAt(xml, "prefix");
+  return prefix == null ? name : `${prefix}:${name}`;
 }
 
 function escapeXml(value: string): string {

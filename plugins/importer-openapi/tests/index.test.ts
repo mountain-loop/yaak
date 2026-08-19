@@ -1023,6 +1023,68 @@ describe("importer-openapi", () => {
     expect(imported?.resources.httpRequests[1]?.body).toEqual({ text: '"hello"' });
   });
 
+  test("Honors XML array wrapping and namespaces", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "XML Metadata Test", version: "1.0.0" },
+        paths: {
+          "/catalog": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "object",
+                      xml: { name: "catalog", namespace: "urn:catalog", prefix: "c" },
+                      properties: {
+                        id: {
+                          type: "string",
+                          example: "42",
+                          xml: { attribute: true, namespace: "urn:metadata", prefix: "m" },
+                        },
+                        tags: {
+                          type: "array",
+                          example: ["one", "two"],
+                          xml: {
+                            name: "tags",
+                            namespace: "urn:tags",
+                            prefix: "t",
+                            wrapped: true,
+                          },
+                          items: { type: "string", xml: { name: "tag" } },
+                        },
+                        aliases: {
+                          type: "array",
+                          example: ["Ada", "A"],
+                          xml: { name: "ignored", wrapped: false },
+                          items: {
+                            type: "string",
+                            xml: { name: "alias", namespace: "urn:aliases", prefix: "a" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text:
+        '<c:catalog xmlns:c="urn:catalog" xmlns:m="urn:metadata" m:id="42">' +
+        '<t:tags xmlns:t="urn:tags"><tag>one</tag><tag>two</tag></t:tags>' +
+        '<a:alias xmlns:a="urn:aliases">Ada</a:alias>' +
+        '<a:alias xmlns:a="urn:aliases">A</a:alias>' +
+        "</c:catalog>",
+    });
+  });
+
   test("Omits read-only properties from generated request bodies", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
