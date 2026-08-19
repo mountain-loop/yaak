@@ -175,4 +175,21 @@ describe("exporter-curl", () => {
       ].join(" \\\n  "),
     );
   });
+
+  test("Quotes an apostrophe so the command still parses", async () => {
+    // POSIX single quotes take no escapes: `\'` ends the string one
+    // character early and leaves the rest of the command dangling.
+    const command = await convert(
+      {
+        url: "https://yaak.app",
+        service: "Service",
+        method: "Method",
+        message: `{"note":"don't stop"}`,
+        metadata: [{ name: "x-note", value: "it's fine" }],
+      },
+      [],
+    );
+    expect(command).toContain(`'{"note":"don'\\''t stop"}'`);
+    expect(command).toContain(`'x-note: it'\\''s fine'`);
+  });
 });
