@@ -244,6 +244,63 @@ describe("importer-curl", () => {
     });
   });
 
+  test("Keeps an --data-urlencode value whole", () => {
+    // curl encodes the whole argument, so the `&` and the second `=` are data it
+    // percent-encodes, not separators. Splitting on them made two parameters
+    // out of one, and Yaak then re-sent `q=a&b=c` where curl sends
+    // `q=a%26b%3Dc`. One parameter here re-encodes back to what curl sends.
+    expect(convertCurl(`curl --data-urlencode 'q=a&b=c' https://yaak.app`)).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            method: "POST",
+            url: "https://yaak.app",
+            bodyType: "application/x-www-form-urlencoded",
+            headers: [
+              {
+                name: "Content-Type",
+                value: "application/x-www-form-urlencoded",
+                enabled: true,
+              },
+            ],
+            body: {
+              form: [{ name: "q", value: "a&b=c", enabled: true }],
+            },
+          }),
+        ],
+      },
+    });
+  });
+
+  test("Imports a data value that is not valid percent-encoding", () => {
+    // curl sends a `-d` value verbatim and does not require it to decode, so
+    // a lone `%` is an ordinary form value. decodeURIComponent threw URIError
+    // on it and failed the whole import.
+    expect(convertCurl(`curl -d 'a=100%' https://yaak.app`)).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            method: "POST",
+            url: "https://yaak.app",
+            bodyType: "application/x-www-form-urlencoded",
+            headers: [
+              {
+                name: "Content-Type",
+                value: "application/x-www-form-urlencoded",
+                enabled: true,
+              },
+            ],
+            body: {
+              form: [{ name: "a", value: "100%", enabled: true }],
+            },
+          }),
+        ],
+      },
+    });
+  });
+
   test("Imports data params as text", () => {
     expect(
       convertCurl("curl -H Content-Type:text/plain -d a -d b -d c=ccc https://yaak.app"),

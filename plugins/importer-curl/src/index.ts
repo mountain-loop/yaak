@@ -515,8 +515,8 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     body = {
       form: dataParameters.map((parameter) => ({
         ...parameter,
-        name: decodeURIComponent(parameter.name || ""),
-        value: decodeURIComponent(parameter.value || ""),
+        name: decodePercentEncoding(parameter.name),
+        value: decodePercentEncoding(parameter.value),
       })),
     };
     filteredHeaders.push({
@@ -593,6 +593,23 @@ interface DataParameter {
   enabled?: boolean;
 }
 
+/**
+ * Decode a percent-encoded form value, keeping it as-is when it is not one.
+ *
+ * Yaak's form editor holds decoded values and re-encodes them on send, so a
+ * `-d` value has to be decoded on the way in. But curl sends that value
+ * verbatim and does not require it to be valid percent-encoding: `a=100%` is
+ * an ordinary form value, and `decodeURIComponent` throws URIError on it,
+ * which failed the whole import rather than that one parameter.
+ */
+function decodePercentEncoding(value: string | undefined): string {
+  const text = value || "";
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
 function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
   const dataParameters: DataParameter[] = [];
 
@@ -605,7 +622,11 @@ function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
 
     for (const p of pairs) {
       if (typeof p !== "string") continue;
-      const params = p.split("&");
+      // `-d` content really is `&`-separated, so splitting it is right. But
+      // `--data-urlencode` encodes its whole argument — an `&` inside it is
+      // data curl percent-encodes, not a separator, so splitting there turned
+      // one parameter into several and changed what the request sends.
+      const params = flagName === "data-urlencode" ? [p] : p.split("&");
       for (const param of params) {
         const [name, value] = splitOnce(param, "=");
         if (param.startsWith("@")) {
