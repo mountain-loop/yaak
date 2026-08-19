@@ -997,13 +997,16 @@ function parameterExample(parameter: UnknownRecord, importState: ImportState): s
 }
 
 function parameterExampleValue(parameter: UnknownRecord, importState: ImportState): unknown {
-  const directExample = firstPresent(parameter.example, firstExampleValue(parameter.examples));
+  const directExample = firstPresent(
+    parameter.example,
+    firstExampleValue(parameter.examples, importState),
+  );
   if (directExample != null) return directExample;
   if (isRecord(parameter.content)) {
     const mediaType = toRecord(Object.values(parameter.content)[0]);
     return mediaTypeExample(mediaType, importState);
   }
-  return schemaToExample(importState.resolve(parameter.schema), importState);
+  return schemaToExample(parameter.schema, importState);
 }
 
 function importBody({
@@ -1034,7 +1037,7 @@ function importBody({
       (c): c is string => typeof c === "string",
     );
     const bodyType = contentType ?? "application/json";
-    const schema = importState.resolve(bodyParameter.schema);
+    const schema = importState.resolveSchema(bodyParameter.schema);
     const example = schemaToExample(schema, importState);
     const isBinary = stringAt(schema, "format") === "binary";
     return {
@@ -1090,7 +1093,7 @@ function importBodyFromContent(importState: ImportState, content: UnknownRecord)
       bodyType: contentType,
       body: {
         form: schemaToFormParameters(
-          importState.resolve(mediaType.schema),
+          mediaType.schema,
           importState,
           isRecord(example) ? example : undefined,
         ),
@@ -1098,7 +1101,7 @@ function importBodyFromContent(importState: ImportState, content: UnknownRecord)
     };
   }
 
-  const schema = importState.resolve(mediaType.schema);
+  const schema = importState.resolveSchema(mediaType.schema);
   const isBinary =
     contentType === "application/octet-stream" || stringAt(schema, "format") === "binary";
 
@@ -1151,10 +1154,10 @@ function valueToXml(
   elementName: string,
   isDocumentRoot = false,
 ): string {
-  const resolvedSchema = toRecord(importState.resolve(schema));
+  const resolvedSchema = toRecord(importState.resolveSchema(schema));
   const schemaXml = toRecord(resolvedSchema.xml);
   if (Array.isArray(value)) {
-    const itemSchema = importState.resolve(resolvedSchema.items);
+    const itemSchema = importState.resolveSchema(resolvedSchema.items);
     const shouldWrap = schemaXml.wrapped === true || isDocumentRoot;
     const itemName =
       stringAt(toRecord(itemSchema).xml, "name") ??
@@ -1168,7 +1171,7 @@ function valueToXml(
     const attributeNamespaces: UnknownRecord[] = [];
     const children: string[] = [];
     for (const [name, propertyValue] of Object.entries(value)) {
-      const propertySchema = toRecord(importState.resolve(properties[name]));
+      const propertySchema = toRecord(importState.resolveSchema(properties[name]));
       const xml = toRecord(propertySchema.xml);
       if (xml.attribute === true) {
         attributes.push(
@@ -1223,9 +1226,12 @@ function escapeXml(value: string): string {
 }
 
 function mediaTypeExample(mediaType: UnknownRecord, importState: ImportState): unknown {
-  const directExample = firstPresent(mediaType.example, firstExampleValue(mediaType.examples));
+  const directExample = firstPresent(
+    mediaType.example,
+    firstExampleValue(mediaType.examples, importState),
+  );
   if (directExample != null) return directExample;
-  return schemaToExample(importState.resolve(mediaType.schema), importState);
+  return schemaToExample(mediaType.schema, importState);
 }
 
 function schemaToFormParameters(
@@ -1233,16 +1239,16 @@ function schemaToFormParameters(
   importState: ImportState,
   example?: UnknownRecord,
 ) {
-  const resolvedSchema = toRecord(importState.resolve(schema));
+  const resolvedSchema = toRecord(importState.resolveSchema(schema));
   const required = toArray(resolvedSchema.required).filter(
     (name): name is string => typeof name === "string",
   );
   const properties = Object.entries(toRecord(resolvedSchema.properties))
-    .filter(([, property]) => toRecord(importState.resolve(property)).readOnly !== true)
+    .filter(([, property]) => toRecord(importState.resolveSchema(property)).readOnly !== true)
     .slice(0, MAX_EXAMPLE_PROPERTIES);
 
   return properties.map(([name, property]) => {
-    const resolvedProperty = toRecord(importState.resolve(property));
+    const resolvedProperty = toRecord(importState.resolveSchema(property));
     const propertyExample = example?.[name] ?? schemaToExample(resolvedProperty, importState);
     const base = {
       enabled: required.includes(name),
@@ -1263,12 +1269,19 @@ function schemaToExample(
 ): unknown {
   if (depth > MAX_EXAMPLE_DEPTH) return {};
 
-  const resolved = importState.resolve(schema, visitedRefs);
+  const schemaRecord = toRecord(schema);
+  const ref = stringAt(schemaRecord, "$ref");
+  if (ref != null && visitedRefs.has(ref)) return {};
+  const nextVisitedRefs = new Set(visitedRefs);
+  if (ref != null) nextVisitedRefs.add(ref);
+
+  const resolved = importState.resolveSchema(schema, visitedRefs);
   if (!isRecord(resolved)) return "";
 
   const explicitExample = firstPresent(
     resolved.example,
-    firstExampleValue(resolved.examples),
+    firstExampleValue(resolved.examples, importState),
+    resolved.const,
     resolved.default,
   );
   if (explicitExample != null) return explicitExample;
@@ -1279,7 +1292,7 @@ function schemaToExample(
   const allOf = toArray(resolved.allOf);
   if (allOf.length > 0) {
     return allOf.reduce<UnknownRecord>((merged, childSchema) => {
-      const childExample = schemaToExample(childSchema, importState, depth + 1, visitedRefs);
+      const childExample = schemaToExample(childSchema, importState, depth + 1, nextVisitedRefs);
       return isRecord(childExample) ? { ...merged, ...childExample } : merged;
     }, {});
   }
@@ -1287,19 +1300,19 @@ function schemaToExample(
   const oneOf = toArray(resolved.oneOf);
   const anyOf = toArray(resolved.anyOf);
   if (oneOf.length > 0 || anyOf.length > 0) {
-    return schemaToExample(oneOf[0] ?? anyOf[0], importState, depth + 1, visitedRefs);
+    return schemaToExample(oneOf[0] ?? anyOf[0], importState, depth + 1, nextVisitedRefs);
   }
 
   const type = inferSchemaType(resolved);
   if (type === "array") {
-    return [schemaToExample(resolved.items, importState, depth + 1, visitedRefs)];
+    return [schemaToExample(resolved.items, importState, depth + 1, nextVisitedRefs)];
   }
   if (type === "object") {
     const required = toArray(resolved.required).filter(
       (name): name is string => typeof name === "string",
     );
     const properties = Object.entries(toRecord(resolved.properties))
-      .filter(([, property]) => toRecord(importState.resolve(property)).readOnly !== true)
+      .filter(([, property]) => toRecord(importState.resolveSchema(property)).readOnly !== true)
       .sort(([a], [b]) => {
         const aRequired = required.includes(a);
         const bRequired = required.includes(b);
@@ -1311,7 +1324,7 @@ function schemaToExample(
         .slice(0, MAX_EXAMPLE_PROPERTIES)
         .map(([name, property]) => [
           name,
-          schemaToExample(property, importState, depth + 1, visitedRefs),
+          schemaToExample(property, importState, depth + 1, nextVisitedRefs),
         ]),
     );
   }
@@ -1747,8 +1760,9 @@ function stringifyExampleValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function firstExampleValue(examples: unknown): unknown {
-  const firstExample = Object.values(toRecord(examples))[0];
+function firstExampleValue(examples: unknown, importState: ImportState): unknown {
+  if (Array.isArray(examples)) return examples[0];
+  const firstExample = importState.resolve(Object.values(toRecord(examples))[0]);
   if (isRecord(firstExample) && "value" in firstExample) return firstExample.value;
   return firstExample;
 }
@@ -1852,12 +1866,55 @@ class ImportState {
       return value;
     }
 
-    const resolved = value.$ref
+    const resolved = this.#resolveLocalReference(value.$ref);
+
+    return this.resolve(resolved, nextVisitedRefs);
+  }
+
+  /** Schema Objects allow `$ref` siblings in OpenAPI 3.1 and later. */
+  resolveSchema(value: unknown, visitedRefs = new Set<string>()): unknown {
+    if (!isRecord(value) || typeof value.$ref !== "string") return value;
+    if (visitedRefs.has(value.$ref)) return {};
+    if (!value.$ref.startsWith("#/")) {
+      this.#unresolvedRefs.add(value.$ref);
+      return value;
+    }
+
+    const nextVisitedRefs = new Set(visitedRefs);
+    nextVisitedRefs.add(value.$ref);
+    const resolved = this.resolveSchema(
+      this.#resolveLocalReference(value.$ref),
+      nextVisitedRefs,
+    );
+    if (!isRecord(resolved)) return resolved;
+
+    const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$ref"));
+    const resolvedProperties = toRecord(resolved.properties);
+    const siblingProperties = toRecord(siblings.properties);
+    const resolvedRequired = toArray(resolved.required).filter(
+      (name): name is string => typeof name === "string",
+    );
+    const siblingRequired = toArray(siblings.required).filter(
+      (name): name is string => typeof name === "string",
+    );
+
+    return {
+      ...resolved,
+      ...siblings,
+      ...(Object.keys(resolvedProperties).length > 0 || Object.keys(siblingProperties).length > 0
+        ? { properties: { ...resolvedProperties, ...siblingProperties } }
+        : {}),
+      ...(resolvedRequired.length > 0 || siblingRequired.length > 0
+        ? { required: [...new Set([...resolvedRequired, ...siblingRequired])] }
+        : {}),
+    };
+  }
+
+  #resolveLocalReference(ref: string): unknown {
+    return ref
       .slice(2)
       .split("/")
       .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
       .reduce<unknown>((current, part) => toRecord(current)[part], this.#spec);
-
-    return this.resolve(resolved, nextVisitedRefs);
   }
 }

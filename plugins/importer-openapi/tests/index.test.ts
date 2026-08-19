@@ -66,6 +66,149 @@ describe("importer-openapi", () => {
     ]);
   });
 
+  test("Imports OpenAPI 3.1 schema reference siblings and examples", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Reference Examples", version: "1.0.0" },
+        paths: {
+          "/sibling": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/Message",
+                      example: { text: "overridden by sibling" },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/example-ref": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    examples: { sample: { $ref: "#/components/examples/Message" } },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/schema-values": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        fromExamples: { type: "string", examples: ["first", "second"] },
+                        fromConst: { const: "fixed" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/sibling-form": {
+            post: {
+              requestBody: {
+                content: {
+                  "multipart/form-data": {
+                    schema: {
+                      $ref: "#/components/schemas/MessageForm",
+                      required: ["extra"],
+                      properties: { extra: { type: "string", default: "sibling" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Message: { type: "object", properties: { text: { default: "base" } } },
+            MessageForm: {
+              $ref: "#/components/schemas/BaseMessageForm",
+              required: ["middle"],
+              properties: {
+                middle: { type: "string", default: "intermediate" },
+                optional: { type: "string", default: "optional" },
+              },
+            },
+            BaseMessageForm: {
+              type: "object",
+              required: ["base"],
+              properties: { base: { type: "string", default: "referenced" } },
+            },
+          },
+          examples: {
+            Message: { value: { text: "resolved example" } },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((request) => request.body)).toEqual([
+      { text: JSON.stringify({ text: "overridden by sibling" }, null, 2) },
+      { text: JSON.stringify({ text: "resolved example" }, null, 2) },
+      { text: JSON.stringify({ fromExamples: "first", fromConst: "fixed" }, null, 2) },
+      {
+        form: [
+          { enabled: true, name: "base", value: "referenced" },
+          { enabled: true, name: "middle", value: "intermediate" },
+          { enabled: false, name: "optional", value: "optional" },
+          { enabled: true, name: "extra", value: "sibling" },
+        ],
+      },
+    ]);
+  });
+
+  test("Stops circular schema references when generating examples", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Circular References", version: "1.0.0" },
+        paths: {
+          "/nodes": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": { schema: { $ref: "#/components/schemas/Node" } },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Node: {
+              type: "object",
+              properties: {
+                name: { type: "string", example: "root" },
+                child: { $ref: "#/components/schemas/Node" },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ name: "root", child: {} }, null, 2),
+    });
+  });
+
   test("Imports requests directly from OpenAPI details", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
