@@ -1,4 +1,4 @@
-use super::{conflict_free_name, dedupe_headers};
+use super::{conflict_free_name, merge_headers};
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
@@ -110,9 +110,7 @@ impl<'a> ClientDb<'a> {
             metadata.append(&mut workspace_metadata);
         }
 
-        metadata.append(&mut grpc_request.metadata.clone());
-
-        Ok(dedupe_headers(metadata))
+        Ok(merge_headers(metadata, grpc_request.metadata.clone()))
     }
 
     pub fn resolve_settings_for_grpc_request(
