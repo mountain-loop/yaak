@@ -1,4 +1,4 @@
-use super::{conflict_free_name, dedupe_headers};
+use super::{conflict_free_name, merge_headers};
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
@@ -96,9 +96,7 @@ impl<'a> ClientDb<'a> {
             headers.append(&mut workspace_headers);
         }
 
-        headers.append(&mut http_request.headers.clone());
-
-        Ok(dedupe_headers(headers))
+        Ok(merge_headers(headers, http_request.headers.clone()))
     }
 
     pub fn resolve_settings_for_http_request(
@@ -170,5 +168,46 @@ impl<'a> ClientDb<'a> {
             children.push(m);
         }
         Ok(children)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::init_in_memory;
+    use crate::models::{HttpRequest, HttpRequestHeader};
+
+    #[test]
+    fn request_resolution_preserves_duplicate_request_headers() {
+        let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+        let workspace = db.list_workspaces().expect("Failed to list workspaces").remove(0);
+        let request = HttpRequest {
+            workspace_id: workspace.id,
+            headers: vec![
+                HttpRequestHeader {
+                    name: "Cookie".to_string(),
+                    value: "required=1".to_string(),
+                    ..Default::default()
+                },
+                HttpRequestHeader {
+                    enabled: false,
+                    name: "Cookie".to_string(),
+                    value: "optional=1".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let resolved = db.resolve_headers_for_http_request(&request).expect("Failed to resolve");
+        let cookies = resolved
+            .iter()
+            .filter(|header| header.name.eq_ignore_ascii_case("cookie"))
+            .collect::<Vec<_>>();
+
+        assert_eq!(cookies.len(), 2);
+        assert_eq!(cookies[0].value, "required=1");
+        assert_eq!(cookies[1].value, "optional=1");
+        assert!(!cookies[1].enabled);
     }
 }

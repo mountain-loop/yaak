@@ -1,4 +1,4 @@
-use super::conflict_free_name;
+use super::{conflict_free_name, merge_headers};
 use crate::client_db::ClientDb;
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Result;
@@ -144,9 +144,7 @@ impl<'a> ClientDb<'a> {
             headers.append(&mut workspace_headers);
         }
 
-        headers.append(&mut folder.headers.clone());
-
-        Ok(headers)
+        Ok(merge_headers(headers, folder.headers.clone()))
     }
 
     pub fn resolve_settings_for_folder(

@@ -78,8 +78,19 @@ impl SendableHttpRequest {
     }
 
     pub fn insert_header(&mut self, header: (String, String)) {
+        if header.0.eq_ignore_ascii_case("cookie") {
+            if let Some(existing) =
+                self.headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case("cookie"))
+            {
+                existing.1 = format!("{}; {}", existing.1, header.1);
+            } else {
+                self.headers.push(header);
+            }
+            return;
+        }
+
         if let Some(existing) =
-            self.headers.iter_mut().find(|h| h.0.to_lowercase() == header.0.to_lowercase())
+            self.headers.iter_mut().find(|h| h.0.eq_ignore_ascii_case(&header.0))
         {
             existing.1 = header.1;
         } else {
@@ -205,16 +216,23 @@ fn append_graphql_query_params(url: &str, body: &BTreeMap<String, serde_json::Va
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
-    r.headers
-        .iter()
-        .filter_map(|h| {
-            if h.enabled && !h.name.is_empty() {
-                Some((h.name.clone(), h.value.clone()))
-            } else {
-                None
+    // RFC 6265 allows only one Cookie field, so enabled Cookie rows fold into
+    // the first one
+    let mut headers: Vec<(String, String)> = Vec::new();
+    for h in &r.headers {
+        if !h.enabled || h.name.is_empty() {
+            continue;
+        }
+        if h.name.eq_ignore_ascii_case("cookie") {
+            if let Some(existing) = headers.iter_mut().find(|e| e.0.eq_ignore_ascii_case("cookie"))
+            {
+                existing.1 = format!("{}; {}", existing.1, h.value);
+                continue;
             }
-        })
-        .collect()
+        }
+        headers.push((h.name.clone(), h.value.clone()));
+    }
+    headers
 }
 
 async fn build_body(
@@ -494,7 +512,114 @@ mod tests {
     use bytes::Bytes;
     use serde_json::json;
     use std::collections::BTreeMap;
-    use yaak_models::models::{HttpRequest, HttpUrlParameter};
+    use yaak_models::models::{HttpRequest, HttpRequestHeader, HttpUrlParameter};
+
+    #[tokio::test]
+    async fn test_sendable_request_preserves_independent_cookie_enabled_states() {
+        let request = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            headers: vec![
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "Cookie".to_string(),
+                    value: "session=abc".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: false,
+                    name: "Cookie".to_string(),
+                    value: "debug=verbose".to_string(),
+                    id: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let sendable =
+            SendableHttpRequest::from_http_request(&request, SendableHttpRequestOptions::default())
+                .await
+                .unwrap();
+
+        assert_eq!(sendable.headers, vec![("Cookie".to_string(), "session=abc".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn test_sendable_request_merges_enabled_cookie_rows_into_one_field() {
+        let request = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            headers: vec![
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "Cookie".to_string(),
+                    value: "session=abc".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: false,
+                    name: "Cookie".to_string(),
+                    value: "debug=verbose".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "cookie".to_string(),
+                    value: "theme=dark".to_string(),
+                    id: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let sendable =
+            SendableHttpRequest::from_http_request(&request, SendableHttpRequestOptions::default())
+                .await
+                .unwrap();
+
+        assert_eq!(
+            sendable.headers,
+            vec![("Cookie".to_string(), "session=abc; theme=dark".to_string())],
+        );
+    }
+
+    #[test]
+    fn test_insert_header_appends_authentication_cookie() {
+        let mut request = SendableHttpRequest {
+            headers: vec![
+                ("Cookie".to_string(), "session=abc".to_string()),
+                ("Cookie".to_string(), "theme=dark".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        request.insert_header(("cookie".to_string(), "api_key=secret".to_string()));
+
+        assert_eq!(
+            request.headers,
+            vec![
+                ("Cookie".to_string(), "session=abc; api_key=secret".to_string()),
+                ("Cookie".to_string(), "theme=dark".to_string()),
+            ],
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sendable_request_preserves_serialized_path_delimiters() {
+        let request = HttpRequest {
+            url: "https://example.com/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2"
+                .to_string(),
+            ..Default::default()
+        };
+
+        let sendable =
+            SendableHttpRequest::from_http_request(&request, SendableHttpRequestOptions::default())
+                .await
+                .unwrap();
+
+        assert_eq!(
+            sendable.url,
+            "https://example.com/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2",
+        );
+    }
 
     #[test]
     fn test_build_url_no_params() {

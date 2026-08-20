@@ -1,3 +1,4 @@
+use super::merge_headers;
 use crate::blob_manager::BlobManager;
 use crate::client_db::ClientDb;
 use crate::error::Result;
@@ -144,9 +145,7 @@ impl<'a> ClientDb<'a> {
     }
 
     pub fn resolve_headers_for_workspace(&self, workspace: &Workspace) -> Vec<HttpRequestHeader> {
-        let mut headers = default_headers();
-        headers.extend(workspace.headers.clone());
-        headers
+        merge_headers(default_headers(), workspace.headers.clone())
     }
 
     pub fn resolve_settings_for_workspace(

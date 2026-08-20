@@ -1219,7 +1219,8 @@ describe("importer-openapi", () => {
     );
 
     expect(imported?.resources.httpRequests[0]?.description).toContain("{{placeholders}}");
-    expect(imported?.resources.httpRequests[0]?.body).toEqual({ text: "Hi {{name}}" });
+    // Quoted to be a valid JSON document, braces intact
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({ text: '"Hi {{name}}"' });
   });
 
   test("Ignores header parameters the spec reserves for other mechanisms", async () => {
@@ -1269,8 +1270,10 @@ describe("importer-openapi", () => {
       }),
     );
 
+    // One row per cookie so each stays toggleable; the send path merges them
     expect(imported?.resources.httpRequests[0]?.headers).toEqual([
-      { enabled: true, name: "Cookie", value: "session=abc; theme=dark" },
+      { enabled: true, name: "Cookie", value: "session=abc" },
+      { enabled: false, name: "Cookie", value: "theme=dark" },
     ]);
   });
 
@@ -1454,6 +1457,864 @@ describe("importer-openapi", () => {
     expect(imported?.resources.environments[1]?.variables).toEqual([
       { name: "baseUrl", value: "https://api.example.com/v1" },
     ]);
+  });
+
+  test("Imports OpenAPI 3.1 schema reference siblings and examples", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Reference Examples", version: "1.0.0" },
+        paths: {
+          "/sibling": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/Message",
+                      example: { text: "overridden by sibling" },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/example-ref": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    examples: { sample: { $ref: "#/components/examples/Message" } },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/schema-values": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        fromExamples: { type: "string", examples: ["first", "second"] },
+                        fromConst: { const: "fixed" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/sibling-form": {
+            post: {
+              requestBody: {
+                content: {
+                  "multipart/form-data": {
+                    schema: {
+                      $ref: "#/components/schemas/MessageForm",
+                      required: ["extra"],
+                      properties: { extra: { type: "string", default: "sibling" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Message: { type: "object", properties: { text: { default: "base" } } },
+            MessageForm: {
+              $ref: "#/components/schemas/BaseMessageForm",
+              required: ["middle"],
+              properties: {
+                middle: { type: "string", default: "intermediate" },
+                optional: { type: "string", default: "optional" },
+              },
+            },
+            BaseMessageForm: {
+              type: "object",
+              required: ["base"],
+              properties: { base: { type: "string", default: "referenced" } },
+            },
+          },
+          examples: {
+            Message: { value: { text: "resolved example" } },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((request) => request.body)).toEqual([
+      { text: JSON.stringify({ text: "overridden by sibling" }, null, 2) },
+      { text: JSON.stringify({ text: "resolved example" }, null, 2) },
+      { text: JSON.stringify({ fromExamples: "first", fromConst: "fixed" }, null, 2) },
+      {
+        form: [
+          { enabled: true, name: "base", value: "referenced" },
+          { enabled: true, name: "middle", value: "intermediate" },
+          { enabled: false, name: "optional", value: "optional" },
+          { enabled: true, name: "extra", value: "sibling" },
+        ],
+      },
+    ]);
+  });
+
+  test("Merges colliding and composed schema properties", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Composed Schema Examples", version: "1.0.0" },
+        paths: {
+          "/colliding-property": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      $ref: "#/components/schemas/BasePayload",
+                      properties: {
+                        shared: {
+                          xml: { name: "renamed" },
+                          properties: {
+                            local: { type: "string", default: "sibling" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/composition-siblings": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      allOf: [
+                        {
+                          type: "object",
+                          properties: {
+                            shared: {
+                              type: "object",
+                              properties: {
+                                fromBranch: { type: "string", default: "branch" },
+                              },
+                            },
+                            branchOnly: { type: "string", default: "branch" },
+                          },
+                        },
+                      ],
+                      properties: {
+                        shared: {
+                          type: "object",
+                          properties: {
+                            fromSibling: { type: "string", default: "sibling" },
+                          },
+                        },
+                        siblingOnly: { type: "string", default: "sibling" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/composition-form": {
+            post: {
+              requestBody: {
+                content: {
+                  "multipart/form-data": {
+                    schema: {
+                      $ref: "#/components/schemas/ComposedForm",
+                      required: ["siblingField"],
+                      properties: {
+                        siblingField: { type: "string", default: "sibling" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Shared: {
+              type: "object",
+              xml: { namespace: "urn:shared", prefix: "s" },
+              properties: {
+                inherited: { type: "string", default: "base" },
+              },
+            },
+            BasePayload: {
+              type: "object",
+              xml: { name: "payload" },
+              properties: {
+                shared: {
+                  $ref: "#/components/schemas/Shared",
+                  xml: { name: "base-shared" },
+                },
+              },
+            },
+            ComposedForm: {
+              allOf: [
+                {
+                  type: "object",
+                  required: ["baseField"],
+                  properties: {
+                    baseField: { type: "string", default: "base" },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((request) => request.body)).toEqual([
+      {
+        text:
+          '<payload><s:renamed xmlns:s="urn:shared">' +
+          "<inherited>base</inherited><local>sibling</local>" +
+          "</s:renamed></payload>",
+      },
+      {
+        text: JSON.stringify(
+          {
+            shared: { fromBranch: "branch", fromSibling: "sibling" },
+            branchOnly: "branch",
+            siblingOnly: "sibling",
+          },
+          null,
+          2,
+        ),
+      },
+      {
+        form: [
+          { enabled: true, name: "baseField", value: "base" },
+          { enabled: true, name: "siblingField", value: "sibling" },
+        ],
+      },
+    ]);
+  });
+
+  test("Stops circular schema references when generating examples", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Circular References", version: "1.0.0" },
+        paths: {
+          "/nodes": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": { schema: { $ref: "#/components/schemas/Node" } },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: {
+          schemas: {
+            Node: {
+              type: "object",
+              properties: {
+                name: { type: "string", example: "root" },
+                child: {
+                  $ref: "#/components/schemas/Node",
+                  required: ["relationship"],
+                  properties: {
+                    relationship: { type: "string", example: "nested" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ name: "root", child: { relationship: "nested" } }, null, 2),
+    });
+  });
+
+  test("Bounds deeply colliding schema merges", async () => {
+    const depth = 12_000;
+    const nestedSchema = (leaf: string, levels: number) =>
+      '{"type":"object","properties":{"next":'.repeat(levels) + leaf + "}}".repeat(levels);
+    const baseSchema = nestedSchema('{"type":"string","default":"base"}', depth);
+    const siblingProperty = nestedSchema('{"type":"string","example":"sibling"}', depth - 1);
+
+    const imported = await convertOpenApi(
+      '{"openapi":"3.1.0","info":{"title":"Deep Merge","version":"1.0.0"},' +
+        '"paths":{"/deep":{"post":{"requestBody":{"content":{"application/json":' +
+        '{"schema":{"$ref":"#/components/schemas/DeepBase","properties":{"next":' +
+        siblingProperty +
+        '}}}}},"responses":{}}}},"components":{"schemas":{"DeepBase":' +
+        baseSchema +
+        "}}}",
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify(
+        {
+          next: {
+            next: {
+              next: {
+                next: {
+                  next: {
+                    next: {
+                      next: {
+                        next: {
+                          next: {},
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    });
+  });
+
+  test("Bounds deeply nested inline allOf schemas", async () => {
+    const depth = 12_000;
+    const schema =
+      '{"allOf":['.repeat(depth) + '{"type":"string","example":"leaf"}' + "]}".repeat(depth);
+    const imported = await convertOpenApi(
+      '{"openapi":"3.1.0","info":{"title":"Deep allOf","version":"1.0.0"},' +
+        '"paths":{"/deep":{"post":{"requestBody":{"content":{"application/json":{"schema":' +
+        schema +
+        '}}},"responses":{}}}}}',
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({}, null, 2),
+    });
+  });
+
+  test("Resolves long local reference chains without truncating schemas", async () => {
+    const depth = 12_000;
+    const schemas: Record<string, unknown> = {
+      [`Ref${depth}`]: {
+        type: "object",
+        properties: { target: { type: "string", example: "reached" } },
+      },
+    };
+    for (let index = depth - 1; index >= 0; index--) {
+      schemas[`Ref${index}`] = {
+        $ref: `#/components/schemas/Ref${index + 1}`,
+        ...(index === 1 ? { properties: { middle: { type: "string", example: "sibling" } } } : {}),
+      };
+    }
+
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Long Reference Chain", version: "1.0.0" },
+        paths: {
+          "/long-ref": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/Ref0",
+                      properties: { outer: { type: "string", example: "request" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: { schemas },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ target: "reached", middle: "sibling", outer: "request" }, null, 2),
+    });
+  });
+
+  test("Imports cookie and content-based parameters", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Parameter Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              parameters: [
+                {
+                  name: "session",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "string", example: "abc" },
+                },
+                {
+                  name: "debug",
+                  in: "cookie",
+                  schema: { type: "string", example: "verbose" },
+                },
+                {
+                  name: "prefs",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "object", example: { theme: "dark", lang: "en" } },
+                },
+                {
+                  name: "colors",
+                  in: "cookie",
+                  required: true,
+                  explode: false,
+                  schema: { type: "array", example: ["red", "blue"] },
+                },
+                {
+                  name: "X-Filter",
+                  in: "header",
+                  required: true,
+                  content: { "text/plain": { example: "active" } },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: true, name: "X-Filter", value: "active" },
+      { enabled: true, name: "Cookie", value: "session=abc" },
+      { enabled: false, name: "Cookie", value: "debug=verbose" },
+      // Cookie pairs separate with "; ", never "&"
+      { enabled: true, name: "Cookie", value: "theme=dark; lang=en" },
+      { enabled: true, name: "Cookie", value: "colors=red,blue" },
+    ]);
+  });
+
+  test("Preserves parameter cookies alongside cookie API-key authentication", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Authenticated Cookie Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              security: [{ basicAuth: [], cookieKey: [] }],
+              parameters: [
+                {
+                  name: "session",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "string", example: "abc" },
+                },
+                {
+                  name: "debug",
+                  in: "cookie",
+                  schema: { type: "string", example: "verbose" },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          securitySchemes: {
+            basicAuth: { type: "http", scheme: "basic" },
+            cookieKey: { type: "apiKey", in: "cookie", name: "api_key" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "basic",
+        headers: [
+          { enabled: true, name: "Cookie", value: "api_key=${[auth_cookie_key_key]}" },
+          { enabled: true, name: "Cookie", value: "session=abc" },
+          { enabled: false, name: "Cookie", value: "debug=verbose" },
+        ],
+      }),
+    );
+  });
+
+  test("Serializes structured query parameters according to style and explode", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Serialization Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              parameters: [
+                {
+                  name: "filter",
+                  in: "query",
+                  required: true,
+                  style: "deepObject",
+                  explode: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      role: { example: "admin" },
+                      active: { example: true },
+                    },
+                  },
+                },
+                {
+                  name: "tags",
+                  in: "query",
+                  style: "form",
+                  explode: true,
+                  schema: { type: "array", example: ["one", "two"] },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: true, name: "filter[role]", value: "admin" },
+      { enabled: true, name: "filter[active]", value: "true" },
+      { enabled: false, name: "tags", value: "one" },
+      { enabled: false, name: "tags", value: "two" },
+    ]);
+  });
+
+  test("Emits executable label and matrix path serializations", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Path Serialization Test", version: "1.0.0" },
+        paths: {
+          "/labels/{labels}/matrix/{coordinates}/scalar/{color}/report.{format}": {
+            get: {
+              parameters: [
+                {
+                  name: "labels",
+                  in: "path",
+                  required: true,
+                  style: "label",
+                  explode: true,
+                  schema: { type: "array", example: ["one/two", "three"] },
+                },
+                {
+                  name: "coordinates",
+                  in: "path",
+                  required: true,
+                  style: "matrix",
+                  explode: true,
+                  schema: { type: "object", example: { x: "1;spoof=2", y: 2 } },
+                },
+                {
+                  name: "format",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string", example: "json/evil" },
+                },
+                {
+                  name: "color",
+                  in: "path",
+                  required: true,
+                  style: "label",
+                  schema: { type: "string", example: "blue" },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        url: "${[baseUrl]}/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2/scalar/.blue/report.json%2Fevil",
+        urlParameters: [],
+      }),
+    );
+  });
+
+  test("Serializes request examples according to their media type", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Media Type Test", version: "1.0.0" },
+        paths: {
+          "/xml": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "object",
+                      xml: { name: "user" },
+                      properties: { name: { type: "string", example: "Ada" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/json-string": {
+            post: {
+              requestBody: {
+                content: { "application/json": { schema: { type: "string", example: "hello" } } },
+              },
+              responses: {},
+            },
+          },
+          "/json-preserialized": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: { type: "string", example: '{"already": "json"}' },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: "<user><name>Ada</name></user>",
+    });
+    expect(imported?.resources.httpRequests[0]?.bodyType).toBe("text/xml");
+    expect(imported?.resources.httpRequests[1]?.body).toEqual({ text: '"hello"' });
+    expect(imported?.resources.httpRequests[2]?.body).toEqual({ text: '{"already": "json"}' });
+  });
+
+  test("Honors XML array wrapping and namespaces", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "XML Metadata Test", version: "1.0.0" },
+        paths: {
+          "/catalog": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "object",
+                      xml: { name: "catalog", namespace: "urn:catalog", prefix: "c" },
+                      properties: {
+                        id: {
+                          type: "string",
+                          example: "42",
+                          xml: { attribute: true, namespace: "urn:metadata", prefix: "m" },
+                        },
+                        externalId: {
+                          type: "string",
+                          example: "external",
+                          xml: {
+                            attribute: true,
+                            name: "external-id",
+                            namespace: "urn:external",
+                            prefix: "ns1",
+                          },
+                        },
+                        tenant: {
+                          type: "string",
+                          example: "acme",
+                          xml: { attribute: true, namespace: "urn:tenant" },
+                        },
+                        region: {
+                          type: "string",
+                          example: "west",
+                          xml: { attribute: true, namespace: "urn:tenant" },
+                        },
+                        legacy: {
+                          type: "string",
+                          example: "plain",
+                          xml: { attribute: true, namespace: "", prefix: "unbound" },
+                        },
+                        tags: {
+                          type: "array",
+                          example: ["one", "two"],
+                          xml: {
+                            name: "tags",
+                            namespace: "urn:tags",
+                            prefix: "t",
+                            wrapped: true,
+                          },
+                          items: { type: "string", xml: { name: "tag" } },
+                        },
+                        aliases: {
+                          type: "array",
+                          example: ["Ada", "A"],
+                          xml: { name: "ignored", wrapped: false },
+                          items: {
+                            type: "string",
+                            xml: { name: "alias", namespace: "urn:aliases", prefix: "a" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/values": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "array",
+                      example: ["one", "two"],
+                      xml: { name: "values", wrapped: false },
+                      items: { type: "string", xml: { name: "value" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text:
+        '<c:catalog xmlns:c="urn:catalog" xmlns:m="urn:metadata" ' +
+        'xmlns:ns1="urn:external" xmlns:ns2="urn:tenant" ' +
+        'm:id="42" ns1:external-id="external" ns2:tenant="acme" ns2:region="west" ' +
+        'legacy="plain">' +
+        '<t:tags xmlns:t="urn:tags"><tag>one</tag><tag>two</tag></t:tags>' +
+        '<a:alias xmlns:a="urn:aliases">Ada</a:alias>' +
+        '<a:alias xmlns:a="urn:aliases">A</a:alias>' +
+        "</c:catalog>",
+    });
+    expect(imported?.resources.httpRequests[1]?.body).toEqual({
+      text: "<values><value>one</value><value>two</value></values>",
+    });
+  });
+
+  test("Omits read-only properties from generated request bodies", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Read Only Test", version: "1.0.0" },
+        paths: {
+          "/users": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string", readOnly: true, example: "server-id" },
+                        name: { type: "string", example: "Ada" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ name: "Ada" }, null, 2),
+    });
+  });
+
+  test("Imports Swagger 2 file parameters as file form entries", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "File Upload Test", version: "1.0.0" },
+        host: "example.com",
+        consumes: ["multipart/form-data"],
+        paths: {
+          "/upload": {
+            post: {
+              parameters: [{ name: "upload", in: "formData", required: true, type: "file" }],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      form: [{ enabled: true, name: "upload", file: "" }],
+    });
+  });
+
+  test("Serializes Swagger 2 XML request bodies as XML", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "Swagger XML Test", version: "1.0.0" },
+        host: "example.com",
+        consumes: ["application/xml"],
+        paths: {
+          "/users": {
+            post: {
+              parameters: [
+                {
+                  name: "user",
+                  in: "body",
+                  required: true,
+                  schema: {
+                    type: "object",
+                    xml: { name: "user" },
+                    properties: { name: { type: "string", example: "Ada" } },
+                  },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: "<user><name>Ada</name></user>",
+    });
+    expect(imported?.resources.httpRequests[0]?.bodyType).toBe("text/xml");
   });
 
   test("Reports references that point outside the document", async () => {
