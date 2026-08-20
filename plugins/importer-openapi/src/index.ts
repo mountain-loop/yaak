@@ -92,9 +92,10 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
 
   // Spec-level security is the default for every operation, which is exactly
   // Yaak's inheritance model: it lives on the workspace, and only operations
-  // that declare their own security carry per-request authentication. Query
-  // API keys have no workspace-level home, so inheriting requests get those
-  // as parameter rows.
+  // that declare their own security carry per-request authentication. API keys
+  // materialized as headers or query parameters go onto inheriting requests
+  // individually — workspace headers would also reach operations that override
+  // or disable security, leaking the credential to endpoints that opted out.
   const workspaceAuthentication = importAuthentication({
     authenticationVariables,
     importState,
@@ -105,9 +106,6 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   });
   workspace.authentication = workspaceAuthentication.authentication;
   workspace.authenticationType = workspaceAuthentication.authenticationType;
-  if (workspaceAuthentication.headers.length > 0) {
-    workspace.headers = workspaceAuthentication.headers;
-  }
 
   const folderIdsByTag = new Map<string, string>();
   const routeLabels = new Map<string, string>();
@@ -145,7 +143,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
 
       const request = importOperation({
         importState,
-        inheritedUrlParameters: workspaceAuthentication.urlParameters,
+        inheritedAuthentication: workspaceAuthentication,
         method,
         operation,
         oauthVariablesByScheme,
@@ -277,7 +275,7 @@ function disambiguateNames(
 
 function importOperation({
   importState,
-  inheritedUrlParameters,
+  inheritedAuthentication,
   method,
   operation,
   oauthVariablesByScheme,
@@ -293,7 +291,7 @@ function importOperation({
   authenticationVariables,
 }: {
   importState: ImportState;
-  inheritedUrlParameters: HttpUrlParameter[];
+  inheritedAuthentication: ImportedAuthentication;
   method: string;
   operation: UnknownRecord;
   oauthVariablesByScheme: Map<string, OAuthVariableNames>;
@@ -327,7 +325,11 @@ function importOperation({
         spec,
         useDynamicServerUrls,
       })
-    : { ...emptyAuthentication(), urlParameters: inheritedUrlParameters };
+    : {
+        ...emptyAuthentication(),
+        headers: inheritedAuthentication.headers,
+        urlParameters: inheritedAuthentication.urlParameters,
+      };
   const pathExampleValues = new Map(
     parameters
       .map((p) => importState.resolve(p))

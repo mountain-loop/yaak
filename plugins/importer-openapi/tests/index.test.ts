@@ -895,15 +895,17 @@ describe("importer-openapi", () => {
       JSON.stringify({
         openapi: "3.1.0",
         info: { title: "Inherited Auth", version: "1.0.0" },
-        security: [{ bearerAuth: [], queryKey: [] }],
+        security: [{ bearerAuth: [], queryKey: [], headerKey: [] }],
         paths: {
           "/inherits": { get: { responses: {} } },
           "/own-auth": { get: { security: [{ otherKey: [] }], responses: {} } },
+          "/public": { get: { security: [], responses: {} } },
         },
         components: {
           securitySchemes: {
             bearerAuth: { type: "http", scheme: "bearer" },
             queryKey: { type: "apiKey", in: "query", name: "api_key" },
+            headerKey: { type: "apiKey", in: "header", name: "X-Tenant" },
             otherKey: { type: "apiKey", in: "header", name: "X-Other" },
           },
         },
@@ -917,15 +919,23 @@ describe("importer-openapi", () => {
       }),
     );
     expect(imported?.resources.httpRequests).toEqual([
-      // No authenticationType means inherit; the query API key has no
-      // workspace-level home so it rides along as a parameter row
+      // No authenticationType means inherit; materialized API keys ride along
+      // on the request since headers or parameters at the workspace level
+      // would also reach operations that opted out
       expect.objectContaining({
         authentication: {},
+        headers: [{ enabled: true, name: "X-Tenant", value: "${[auth_header_key_key]}" }],
         urlParameters: [{ enabled: true, name: "api_key", value: "${[auth_query_key_key]}" }],
       }),
       expect.objectContaining({
         authenticationType: "apikey",
         authentication: expect.objectContaining({ key: "X-Other" }),
+        headers: [],
+        urlParameters: [],
+      }),
+      expect.objectContaining({
+        authenticationType: "none",
+        headers: [],
         urlParameters: [],
       }),
     ]);
