@@ -1164,17 +1164,31 @@ function valueToXml(
   }
   if (isRecord(value)) {
     const properties = toRecord(resolvedSchema.properties);
+    const entries = Object.entries(value).map(([name, propertyValue]) => {
+      const propertySchema = toRecord(importState.resolve(properties[name]));
+      return { name, propertyValue, propertySchema, xml: toRecord(propertySchema.xml) };
+    });
+    const usedPrefixes = new Set(["xml", "xmlns"]);
+    const prefixesByNamespace = new Map<string, string>();
+    for (const xml of [schemaXml, ...entries.map(({ xml }) => xml)]) {
+      const namespace = stringAt(xml, "namespace");
+      const prefix = stringAt(xml, "prefix");
+      if (prefix == null || prefix.length === 0) continue;
+      usedPrefixes.add(prefix);
+      if (namespace != null && !prefixesByNamespace.has(namespace)) {
+        prefixesByNamespace.set(namespace, prefix);
+      }
+    }
     const attributes: string[] = [];
     const attributeNamespaces: UnknownRecord[] = [];
     const children: string[] = [];
-    for (const [name, propertyValue] of Object.entries(value)) {
-      const propertySchema = toRecord(importState.resolve(properties[name]));
-      const xml = toRecord(propertySchema.xml);
+    for (const { name, propertyValue, propertySchema, xml } of entries) {
       if (xml.attribute === true) {
+        const attributeXml = qualifyXmlAttribute(xml, usedPrefixes, prefixesByNamespace);
         attributes.push(
-          `${qualifiedXmlName(name, xml)}="${escapeXml(stringifyExampleValue(propertyValue))}"`,
+          `${qualifiedXmlName(name, attributeXml)}="${escapeXml(stringifyExampleValue(propertyValue))}"`,
         );
-        attributeNamespaces.push(xml);
+        attributeNamespaces.push(attributeXml);
       } else {
         children.push(valueToXml(propertyValue, propertySchema, importState, name));
       }
@@ -1205,6 +1219,26 @@ function xmlElement(
   const attributeText = [...namespaceAttributes, ...attributes].join(" ");
   const openingTag = attributeText.length > 0 ? `<${name} ${attributeText}>` : `<${name}>`;
   return `${openingTag}${content}</${name}>`;
+}
+
+function qualifyXmlAttribute(
+  xml: UnknownRecord,
+  usedPrefixes: Set<string>,
+  prefixesByNamespace: Map<string, string>,
+): UnknownRecord {
+  const namespace = stringAt(xml, "namespace");
+  const declaredPrefix = stringAt(xml, "prefix");
+  if (namespace == null || (declaredPrefix != null && declaredPrefix.length > 0)) return xml;
+
+  const existingPrefix = prefixesByNamespace.get(namespace);
+  if (existingPrefix != null) return { ...xml, prefix: existingPrefix };
+
+  let suffix = 1;
+  while (usedPrefixes.has(`ns${suffix}`)) suffix++;
+  const generatedPrefix = `ns${suffix}`;
+  usedPrefixes.add(generatedPrefix);
+  prefixesByNamespace.set(namespace, generatedPrefix);
+  return { ...xml, prefix: generatedPrefix };
 }
 
 function qualifiedXmlName(fallbackName: string, xml: UnknownRecord): string {
