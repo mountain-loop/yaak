@@ -83,7 +83,9 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
       if (p.file) {
         let v = `${p.name}=@${p.file}`;
         v += p.contentType ? `;type=${p.contentType}` : "";
-        xs.push(flag, v);
+        // A bare `;` separates commands and a path can hold spaces, so this
+        // argument needs quoting like every other one.
+        xs.push(flag, quote(v));
       } else {
         xs.push(flag, quote(`${p.name}=${p.value}`));
       }
@@ -157,7 +159,10 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
 }
 
 function quote(arg: string): string {
-  const escaped = arg.replace(/'/g, "\\'");
+  // A single-quoted POSIX string takes no escapes, so `\'` does not close it:
+  // the string ends one character early and the rest of the command is left
+  // dangling. Step out of the quotes, emit an escaped quote, step back in.
+  const escaped = arg.replace(/'/g, `'\\''`);
   return `'${escaped}'`;
 }
 
