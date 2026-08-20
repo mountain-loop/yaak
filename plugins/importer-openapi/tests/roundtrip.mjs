@@ -177,12 +177,23 @@ for (const spec of specs) {
       continue;
     }
     // Prism mocks redirect responses without a Location header; following them
-    // would fail the send for a reason unrelated to the import.
+    // would fail the send for a reason unrelated to the import. Workspace-level
+    // OAuth2 gets the same dummy-bearer treatment as request-level below.
+    const workspace = yaakJson(dataDir, ["workspace", "show", workspaceId]);
     yaak(dataDir, [
       "workspace",
       "update",
       "--json",
-      JSON.stringify({ id: workspaceId, settingFollowRedirects: false }),
+      JSON.stringify({
+        id: workspaceId,
+        settingFollowRedirects: false,
+        ...(workspace.authenticationType === "oauth2"
+          ? {
+              authenticationType: "bearer",
+              authentication: { token: "test-token", prefix: "Bearer" },
+            }
+          : {}),
+      }),
     ]);
 
     const { prism, port: boundPort, getLog } = await startPrism(spec, port);
