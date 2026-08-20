@@ -1228,13 +1228,11 @@ function qualifyXmlAttribute(
 ): UnknownRecord {
   const namespace = stringAt(xml, "namespace");
   const declaredPrefix = stringAt(xml, "prefix");
-  if (
-    namespace == null ||
-    namespace.length === 0 ||
-    (declaredPrefix != null && declaredPrefix.length > 0)
-  ) {
-    return xml;
+  if (namespace != null && namespace.length === 0) {
+    const { prefix: _prefix, ...unqualifiedXml } = xml;
+    return unqualifiedXml;
   }
+  if (namespace == null || (declaredPrefix != null && declaredPrefix.length > 0)) return xml;
 
   const existingPrefix = prefixesByNamespace.get(namespace);
   if (existingPrefix != null) return { ...xml, prefix: existingPrefix };

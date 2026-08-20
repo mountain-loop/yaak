@@ -1066,7 +1066,7 @@ describe("importer-openapi", () => {
                         legacy: {
                           type: "string",
                           example: "plain",
-                          xml: { attribute: true, namespace: "" },
+                          xml: { attribute: true, namespace: "", prefix: "unbound" },
                         },
                         tags: {
                           type: "array",
