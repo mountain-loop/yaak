@@ -292,6 +292,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": "none",
         "description": "Wikipedia for Web APIs. Repository of API definitions in OpenAPI format.
 **Warning**: If you want to be notified about changes in advance please join our [Slack channel](https://join.slack.com/t/mermade/shared_invite/zt-g78g7xir-MLE_CTCcXCdfJfG3CJe9qA).
 Client sample: [[Demo]](https://apis.guru/simple-ui) [[Repo]](https://github.com/APIs-guru/simple-ui)
@@ -2587,6 +2589,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": null,
         "description": "A simple HTTP Request & Response Service.<br/> <br/> <b>Run locally: </b> <code>$ docker run -p 80:80 kennethreitz/httpbin</code>
 
 Contact: me@kennethreitz.org",
@@ -2717,6 +2721,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": null,
         "description": "This endpoint structures the APOD imagery and associated metadata so that it can be repurposed for other applications. In addition, if the concept_tags parameter is set to True, then keywords derived from the image explanation are returned. These keywords could be used as auto-generated hashtags for twitter or instagram feeds; but generally help with discoverability of relevant imagery
 
 Contact: evan.t.yates@nasa.gov
@@ -2819,6 +2825,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": null,
         "description": "Webcomic of romance, sarcasm, math, and language.",
         "id": "GENERATE_ID::WORKSPACE_0",
         "model": "workspace",

@@ -15,7 +15,7 @@ import YAML from "yaml";
 type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 type UnknownRecord = Record<string, unknown>;
 type ImportResources = {
-  workspaces: AtLeast<Workspace, "name" | "id" | "model">[];
+  workspaces: AtLeast<Workspace, "name" | "id" | "model" | "authentication">[];
   environments: AtLeast<Environment, "name" | "id" | "model" | "workspaceId" | "variables">[];
   folders: AtLeast<Folder, "name" | "id" | "model" | "workspaceId">[];
   httpRequests: AtLeast<HttpRequest, "name" | "id" | "model" | "workspaceId">[];
@@ -61,6 +61,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     id: importState.generateId("workspace"),
     name: stringAt(spec.info, "title") ?? "OpenAPI Import",
     description: importInfoDescription(toRecord(spec.info)),
+    authentication: {},
   };
 
   const resources: ImportResources = {
@@ -88,6 +89,23 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     parentId: null,
     sortPriority: importState.nextSortPriority(),
   });
+
+  // Spec-level security is the default for every operation, which is exactly
+  // Yaak's inheritance model: it lives on the workspace, and only operations
+  // that declare their own security carry per-request authentication. API keys
+  // materialized as headers or query parameters go onto inheriting requests
+  // individually — workspace headers would also reach operations that override
+  // or disable security, leaking the credential to endpoints that opted out.
+  const workspaceAuthentication = importAuthentication({
+    authenticationVariables,
+    importState,
+    oauthVariablesByScheme,
+    security: spec.security,
+    spec,
+    useDynamicServerUrls: serverEnvironments.length > 1,
+  });
+  workspace.authentication = workspaceAuthentication.authentication;
+  workspace.authenticationType = workspaceAuthentication.authenticationType;
 
   const folderIdsByTag = new Map<string, string>();
   const routeLabels = new Map<string, string>();
@@ -125,6 +143,7 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
 
       const request = importOperation({
         importState,
+        inheritedAuthentication: workspaceAuthentication,
         method,
         operation,
         oauthVariablesByScheme,
@@ -144,7 +163,8 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
     }
   }
 
-  if (resources.httpRequests.some((request) => request.authenticationType === "oauth2")) {
+  const authenticationConfigs = [workspace, ...resources.httpRequests];
+  if (authenticationConfigs.some((model) => model.authenticationType === "oauth2")) {
     const variableNames = new Set(
       [...oauthVariablesByScheme.values()].flatMap(({ clientId, clientSecret }) => [
         clientId,
@@ -152,10 +172,10 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
       ]),
     );
     if (
-      resources.httpRequests.some(
-        (request) =>
-          request.authenticationType === "oauth2" &&
-          Object.values(toRecord(request.authentication)).some(
+      authenticationConfigs.some(
+        (model) =>
+          model.authenticationType === "oauth2" &&
+          Object.values(toRecord(model.authentication)).some(
             (value) =>
               typeof value === "string" && value.includes(templateVariable("baseUrlOrigin")),
           ),
@@ -255,6 +275,7 @@ function disambiguateNames(
 
 function importOperation({
   importState,
+  inheritedAuthentication,
   method,
   operation,
   oauthVariablesByScheme,
@@ -270,6 +291,7 @@ function importOperation({
   authenticationVariables,
 }: {
   importState: ImportState;
+  inheritedAuthentication: ImportedAuthentication;
   method: string;
   operation: UnknownRecord;
   oauthVariablesByScheme: Map<string, OAuthVariableNames>;
@@ -291,14 +313,23 @@ function importOperation({
     operationParameters: toArray(operation.parameters),
   });
   const body = importBody({ importState, operation, parameters, spec });
-  const authentication = importAuthentication({
-    authenticationVariables,
-    importState,
-    oauthVariablesByScheme,
-    operation,
-    spec,
-    useDynamicServerUrls,
-  });
+  // Operations without their own security inherit the workspace's (null
+  // authenticationType), the same way an operation inherits spec security
+  const hasOwnSecurity = Array.isArray(operation.security);
+  const authentication = hasOwnSecurity
+    ? importAuthentication({
+        authenticationVariables,
+        importState,
+        oauthVariablesByScheme,
+        security: operation.security,
+        spec,
+        useDynamicServerUrls,
+      })
+    : {
+        ...emptyAuthentication(),
+        headers: inheritedAuthentication.headers,
+        urlParameters: inheritedAuthentication.urlParameters,
+      };
   const pathExampleValues = new Map(
     parameters
       .map((p) => importState.resolve(p))
@@ -792,18 +823,52 @@ function importUrlParameters({
         stringAt(p, "in") === "query" ||
         (stringAt(p, "in") === "path" && placeholderNames.has(stringAt(p, "name") ?? "")),
     )
-    .map((p) => ({
+    .flatMap((p) => {
+      const name = stringAt(p, "name") ?? "";
+      if (name.length === 0) return [];
+
       // Path parameters are required by definition, and a disabled one would
       // leave the literal `:name` in the sent URL even for sloppy specs that
       // omit `required: true`
-      enabled: p.required === true || stringAt(p, "in") === "path",
-      name:
-        stringAt(p, "in") === "path"
-          ? `:${stringAt(p, "name") ?? ""}`
-          : (stringAt(p, "name") ?? ""),
-      value: parameterExample(p, importState),
-    }))
-    .filter(({ name }) => name.length > 0);
+      const enabled = p.required === true || stringAt(p, "in") === "path";
+      if (stringAt(p, "in") === "query") {
+        const raw = rawParameterExample(p, importState);
+        if (Array.isArray(raw)) {
+          const { separator } = queryArraySerialization(p);
+          if (separator == null) {
+            return raw.map((item) => ({ enabled, name, value: stringifyExampleValue(item) }));
+          }
+          return [{ enabled, name, value: raw.map(stringifyExampleValue).join(separator) }];
+        }
+      }
+
+      return [
+        {
+          enabled,
+          name: stringAt(p, "in") === "path" ? `:${name}` : name,
+          value: parameterExample(p, importState),
+        },
+      ];
+    });
+}
+
+/**
+ * OpenAPI 3 query arrays default to form/explode, one parameter per item;
+ * Swagger 2 defaults to comma-separated unless collectionFormat says otherwise.
+ * A null separator means repeated parameters.
+ */
+function queryArraySerialization(parameter: UnknownRecord): { separator: string | null } {
+  const collectionFormat = stringAt(parameter, "collectionFormat");
+  if (collectionFormat != null || parameter.schema == null) {
+    if (collectionFormat === "multi") return { separator: null };
+    return {
+      separator: { csv: ",", ssv: " ", tsv: "\t", pipes: "|" }[collectionFormat ?? "csv"] ?? ",",
+    };
+  }
+  const style = stringAt(parameter, "style");
+  if (style === "spaceDelimited") return { separator: " " };
+  if (style === "pipeDelimited") return { separator: "|" };
+  return parameter.explode === false ? { separator: "," } : { separator: null };
 }
 
 // The spec says header parameters with these names SHALL be ignored; Accept and
@@ -857,15 +922,23 @@ function importCookieHeader({
   ];
 }
 
-function parameterExample(parameter: UnknownRecord, importState: ImportState): string {
+function rawParameterExample(parameter: UnknownRecord, importState: ImportState): unknown {
   const directExample = firstPresent(
     parameter.example,
     firstExampleValue(parameter.examples, importState),
   );
-  if (directExample != null) return stringifyExampleValue(directExample);
-  const example = stringifyExampleValue(
-    schemaToExample(importState.resolve(parameter.schema), importState),
-  );
+  if (directExample != null) return directExample;
+  // Swagger 2 parameters carry the schema keywords (type, items, default)
+  // directly on the parameter object
+  return schemaToExample(importState.resolve(parameter.schema ?? parameter), importState);
+}
+
+function parameterExample(parameter: UnknownRecord, importState: ImportState): string {
+  const raw = rawParameterExample(parameter, importState);
+  // Simple/csv style, the default everywhere but query strings
+  const example = Array.isArray(raw)
+    ? raw.map(stringifyExampleValue).join(",")
+    : stringifyExampleValue(raw);
   // An empty path segment makes a URL that matches nothing, so the name at
   // least keeps the request sendable and shows what belongs there
   if (example === "" && stringAt(parameter, "in") === "path") {
@@ -1158,34 +1231,28 @@ function inferSchemaType(schema: UnknownRecord): string {
   return "string";
 }
 
+/**
+ * Security Requirement Objects are ordered alternatives, so the first one this
+ * importer can represent wins. That makes `[{bearer}, {}]` import the bearer
+ * auth the author listed first, while `[{}, {bearer}]` imports as anonymous.
+ */
 function importAuthentication({
   authenticationVariables,
   importState,
   oauthVariablesByScheme,
-  operation,
+  security,
   spec,
   useDynamicServerUrls,
 }: {
   authenticationVariables: AuthenticationVariableRegistry;
   importState: ImportState;
   oauthVariablesByScheme: Map<string, OAuthVariableNames>;
-  operation: UnknownRecord;
+  security: unknown;
   spec: UnknownRecord;
   useDynamicServerUrls: boolean;
 }): ImportedAuthentication {
-  const security = operation.security ?? spec.security;
-  if (Array.isArray(operation.security) && operation.security.length === 0) {
-    return { ...emptyAuthentication(), authenticationType: "none" };
-  }
-  if (!Array.isArray(security) || security.length === 0) {
-    return emptyAuthentication();
-  }
-
-  // Security Requirement Objects are alternatives. If any alternative is
-  // empty, authentication is optional regardless of where it appears.
-  if (
-    security.some((requirement) => isRecord(requirement) && Object.keys(requirement).length === 0)
-  ) {
+  if (!Array.isArray(security)) return emptyAuthentication();
+  if (security.length === 0) {
     return { ...emptyAuthentication(), authenticationType: "none" };
   }
 
@@ -1195,6 +1262,9 @@ function importAuthentication({
   };
   for (const rawRequirement of security) {
     if (!isRecord(rawRequirement)) continue;
+    if (Object.keys(rawRequirement).length === 0) {
+      return { ...emptyAuthentication(), authenticationType: "none" };
+    }
 
     const imported = importSecurityRequirement({
       authenticationVariables,
@@ -1208,7 +1278,9 @@ function importAuthentication({
     if (imported != null) return imported;
   }
 
-  return emptyAuthentication();
+  // Declared security this importer cannot represent (e.g. mutualTLS alone)
+  // should not fall back to inheriting some other authentication
+  return { ...emptyAuthentication(), authenticationType: "none" };
 }
 
 function importSecurityRequirement({

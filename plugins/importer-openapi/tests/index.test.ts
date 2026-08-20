@@ -850,7 +850,7 @@ describe("importer-openapi", () => {
     ]);
   });
 
-  test("Preserves anonymous security alternatives and explicit auth overrides", async () => {
+  test("Respects the order of security alternatives and explicit auth overrides", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
         openapi: "3.1.0",
@@ -873,10 +873,158 @@ describe("importer-openapi", () => {
       }),
     );
 
+    expect(imported?.resources.workspaces[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "bearer",
+        authentication: { token: "${[auth_bearer_auth_token]}", prefix: "Bearer" },
+      }),
+    );
     expect(imported?.resources.httpRequests).toEqual([
+      // The author listed bearer before the anonymous alternative
+      expect.objectContaining({
+        authenticationType: "bearer",
+        authentication: { token: "${[auth_bearer_auth_token]}", prefix: "Bearer" },
+      }),
       expect.objectContaining({ authenticationType: "none", authentication: {} }),
       expect.objectContaining({ authenticationType: "none", authentication: {} }),
-      expect.objectContaining({ authenticationType: "none", authentication: {} }),
+    ]);
+  });
+
+  test("Imports spec-level security as inherited workspace authentication", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Inherited Auth", version: "1.0.0" },
+        security: [{ bearerAuth: [], queryKey: [], headerKey: [] }],
+        paths: {
+          "/inherits": { get: { responses: {} } },
+          "/own-auth": { get: { security: [{ otherKey: [] }], responses: {} } },
+          "/public": { get: { security: [], responses: {} } },
+        },
+        components: {
+          securitySchemes: {
+            bearerAuth: { type: "http", scheme: "bearer" },
+            queryKey: { type: "apiKey", in: "query", name: "api_key" },
+            headerKey: { type: "apiKey", in: "header", name: "X-Tenant" },
+            otherKey: { type: "apiKey", in: "header", name: "X-Other" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.workspaces[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "bearer",
+        authentication: { token: "${[auth_bearer_auth_token]}", prefix: "Bearer" },
+      }),
+    );
+    expect(imported?.resources.httpRequests).toEqual([
+      // No authenticationType means inherit; materialized API keys ride along
+      // on the request since headers or parameters at the workspace level
+      // would also reach operations that opted out
+      expect.objectContaining({
+        authentication: {},
+        headers: [{ enabled: true, name: "X-Tenant", value: "${[auth_header_key_key]}" }],
+        urlParameters: [{ enabled: true, name: "api_key", value: "${[auth_query_key_key]}" }],
+      }),
+      expect.objectContaining({
+        authenticationType: "apikey",
+        authentication: expect.objectContaining({ key: "X-Other" }),
+        headers: [],
+        urlParameters: [],
+      }),
+      expect.objectContaining({
+        authenticationType: "none",
+        headers: [],
+        urlParameters: [],
+      }),
+    ]);
+    expect(imported?.resources.httpRequests[0]?.authenticationType).toBeNull();
+  });
+
+  test("Serializes array query parameters per style", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Array Params", version: "1.0.0" },
+        paths: {
+          "/exploded": {
+            get: {
+              parameters: [
+                {
+                  name: "tags",
+                  in: "query",
+                  required: true,
+                  schema: { type: "array", items: { type: "string" }, example: ["a", "b"] },
+                },
+              ],
+              responses: {},
+            },
+          },
+          "/csv": {
+            get: {
+              parameters: [
+                {
+                  name: "ids",
+                  in: "query",
+                  required: true,
+                  explode: false,
+                  schema: { type: "array", example: [1, 2, 3] },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((r) => r.urlParameters)).toEqual([
+      [
+        { enabled: true, name: "tags", value: "a" },
+        { enabled: true, name: "tags", value: "b" },
+      ],
+      [{ enabled: true, name: "ids", value: "1,2,3" }],
+    ]);
+  });
+
+  test("Serializes Swagger 2 array parameters per collectionFormat", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "Swagger Arrays", version: "1.0.0" },
+        host: "example.com",
+        paths: {
+          "/a": {
+            get: {
+              parameters: [
+                {
+                  name: "tags",
+                  in: "query",
+                  required: true,
+                  type: "array",
+                  items: { type: "string", default: "x" },
+                },
+                {
+                  name: "multi",
+                  in: "query",
+                  required: true,
+                  type: "array",
+                  collectionFormat: "multi",
+                  items: { type: "string", enum: ["m1"] },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      // Swagger defaults to csv
+      { enabled: true, name: "tags", value: "x" },
+      { enabled: true, name: "multi", value: "m1" },
     ]);
   });
 
