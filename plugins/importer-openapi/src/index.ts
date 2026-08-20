@@ -1175,7 +1175,7 @@ function valueToXml(
       const prefix = stringAt(xml, "prefix");
       if (prefix == null || prefix.length === 0) continue;
       usedPrefixes.add(prefix);
-      if (namespace != null && !prefixesByNamespace.has(namespace)) {
+      if (namespace != null && namespace.length > 0 && !prefixesByNamespace.has(namespace)) {
         prefixesByNamespace.set(namespace, prefix);
       }
     }
@@ -1209,9 +1209,9 @@ function xmlElement(
   const namespaces = new Map<string, string>();
   for (const metadata of [xml, ...additionalNamespaces]) {
     const namespace = stringAt(metadata, "namespace");
-    if (namespace == null) continue;
+    if (namespace == null || namespace.length === 0) continue;
     const prefix = stringAt(metadata, "prefix");
-    namespaces.set(prefix == null ? "xmlns" : `xmlns:${prefix}`, namespace);
+    namespaces.set(prefix == null || prefix.length === 0 ? "xmlns" : `xmlns:${prefix}`, namespace);
   }
   const namespaceAttributes = [...namespaces].map(
     ([attribute, namespace]) => `${attribute}="${escapeXml(namespace)}"`,
@@ -1228,7 +1228,13 @@ function qualifyXmlAttribute(
 ): UnknownRecord {
   const namespace = stringAt(xml, "namespace");
   const declaredPrefix = stringAt(xml, "prefix");
-  if (namespace == null || (declaredPrefix != null && declaredPrefix.length > 0)) return xml;
+  if (
+    namespace == null ||
+    namespace.length === 0 ||
+    (declaredPrefix != null && declaredPrefix.length > 0)
+  ) {
+    return xml;
+  }
 
   const existingPrefix = prefixesByNamespace.get(namespace);
   if (existingPrefix != null) return { ...xml, prefix: existingPrefix };
@@ -1244,7 +1250,7 @@ function qualifyXmlAttribute(
 function qualifiedXmlName(fallbackName: string, xml: UnknownRecord): string {
   const name = stringAt(xml, "name") ?? fallbackName;
   const prefix = stringAt(xml, "prefix");
-  return prefix == null ? name : `${prefix}:${name}`;
+  return prefix == null || prefix.length === 0 ? name : `${prefix}:${name}`;
 }
 
 function escapeXml(value: string): string {

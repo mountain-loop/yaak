@@ -1063,6 +1063,11 @@ describe("importer-openapi", () => {
                           example: "west",
                           xml: { attribute: true, namespace: "urn:tenant" },
                         },
+                        legacy: {
+                          type: "string",
+                          example: "plain",
+                          xml: { attribute: true, namespace: "" },
+                        },
                         tags: {
                           type: "array",
                           example: ["one", "two"],
@@ -1116,7 +1121,8 @@ describe("importer-openapi", () => {
       text:
         '<c:catalog xmlns:c="urn:catalog" xmlns:m="urn:metadata" ' +
         'xmlns:ns1="urn:external" xmlns:ns2="urn:tenant" ' +
-        'm:id="42" ns1:external-id="external" ns2:tenant="acme" ns2:region="west">' +
+        'm:id="42" ns1:external-id="external" ns2:tenant="acme" ns2:region="west" ' +
+        'legacy="plain">' +
         '<t:tags xmlns:t="urn:tags"><tag>one</tag><tag>two</tag></t:tags>' +
         '<a:alias xmlns:a="urn:aliases">Ada</a:alias>' +
         '<a:alias xmlns:a="urn:aliases">A</a:alias>' +
