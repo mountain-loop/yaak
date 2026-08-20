@@ -37,6 +37,7 @@ const BODY_CONTENT_TYPE_PREFERENCE = [
   "text/plain",
 ];
 const MAX_EXAMPLE_DEPTH = 8;
+const MAX_SCHEMA_RESOLUTION_DEPTH = MAX_EXAMPLE_DEPTH;
 const MAX_EXAMPLE_PROPERTIES = 25;
 const MAX_DESCRIPTION_ITEMS = 40;
 const MAX_NAME_LENGTH = 100;
@@ -330,20 +331,14 @@ function importOperation({
         headers: inheritedAuthentication.headers,
         urlParameters: inheritedAuthentication.urlParameters,
       };
-  const pathExampleValues = new Map(
-    parameters
-      .map((p) => importState.resolve(p))
-      .filter(isRecord)
-      .filter((p) => stringAt(p, "in") === "path" && stringAt(p, "name") != null)
-      .map((p) => [stringAt(p, "name") as string, parameterExample(p, importState)] as const),
-  );
-  const { url, placeholderNames } = buildOperationUrl(
+  const url = buildOperationUrl(
     operationBaseUrl({ operation, pathItem, requestBaseUrl, serverOverrides }),
     path,
-    pathExampleValues,
+    parameters,
+    importState,
   );
   const urlParameters = [
-    ...importUrlParameters({ importState, parameters, placeholderNames }),
+    ...importUrlParameters({ importState, parameters, path }),
     ...authentication.urlParameters,
   ];
   const headers = mergeHeaders(
@@ -700,25 +695,64 @@ function findOrCreateFolderId({
 
 /**
  * Yaak's `:name` placeholders only substitute when they span a whole path
- * segment. A template elsewhere in a segment, like `/report.{format}`, would
- * import as text that never substitutes, and its leftover parameter would then
- * be sent as a query parameter — so those get their example inlined instead.
+ * segment and hold a single plain value. Templates elsewhere in a segment
+ * (like `/report.{format}`), styled ones (label, matrix), and array or object
+ * values get their serialized example inlined instead — a placeholder row
+ * cannot express them, and its leftover parameter would leak into the query
+ * string.
  */
 function buildOperationUrl(
   baseUrl: string,
   path: string,
-  inlineValues: Map<string, string>,
-): { url: string; placeholderNames: Set<string> } {
-  const placeholderNames = new Set<string>();
-  const converted = path.replaceAll(/(^|\/){([^}/]+)}(?=[/?#:]|$)/g, (_, prefix, name) => {
-    placeholderNames.add(name);
-    return `${prefix}:${name}`;
-  });
-  const inlined = converted.replaceAll(/{([^}/]+)}/g, (match, name) => {
-    const value = inlineValues.get(name);
-    return value == null || value === "" ? match : value;
-  });
-  return { url: joinUrlParts(baseUrl, inlined), placeholderNames };
+  parameters: unknown[],
+  importState: ImportState,
+): string {
+  let serializedPath = path;
+  for (const rawParameter of parameters) {
+    const parameter = importState.resolve(rawParameter);
+    if (!isRecord(parameter) || !shouldInlinePathParameter(parameter, importState, path)) continue;
+
+    const name = stringAt(parameter, "name") ?? "";
+    if (name.length === 0) continue;
+    const value = parameterExampleValue(parameter, importState);
+    const serialized = isRecord(parameter.content)
+      ? encodePathComponent(serializeContentParameter(parameter, importState))
+      : serializePathParameter(name, value, parameter, encodePathComponent);
+    // A missing example stays a visible template rather than vanishing
+    if (serialized.length === 0) continue;
+    serializedPath = serializedPath.replaceAll(`{${name}}`, serialized);
+  }
+  return joinUrlParts(baseUrl, serializedPath.replaceAll(/(^|\/){([^}/]+)}(?=[/?#:]|$)/g, "$1:$2"));
+}
+
+function shouldInlinePathParameter(
+  parameter: UnknownRecord,
+  importState: ImportState,
+  path: string,
+): boolean {
+  if (stringAt(parameter, "in") !== "path") return false;
+  const name = stringAt(parameter, "name") ?? "";
+  const template = `{${name}}`;
+  const matchingSegments = path.split("/").filter((segment) => segment.includes(template));
+  // A `:name` placeholder matches from the segment start up to a literal `:`,
+  // so `{id}` and `{id}:cancel` stay placeholders while `report.{format}` can't
+  const placeholderExpressible = matchingSegments.every(
+    (segment) =>
+      segment === template ||
+      (segment.startsWith(template) && segment[template.length] === ":"),
+  );
+  if (matchingSegments.length === 0 || !placeholderExpressible) return true;
+  if (isRecord(parameter.content)) return false;
+  const value = parameterExampleValue(parameter, importState);
+  const style = stringAt(parameter, "style");
+  return style === "label" || style === "matrix" || Array.isArray(value) || isRecord(value);
+}
+
+function encodePathComponent(value: unknown): string {
+  return encodeURIComponent(stringifyExampleValue(value)).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 function importBaseUrl(spec: UnknownRecord): string {
@@ -809,47 +843,84 @@ function trimTrailingSlashes(value: string): string {
 function importUrlParameters({
   importState,
   parameters,
-  placeholderNames,
+  path,
 }: {
   importState: ImportState;
   parameters: unknown[];
-  placeholderNames: Set<string>;
+  path: string;
 }): HttpUrlParameter[] {
   return parameters
     .map((p) => importState.resolve(p))
     .filter(isRecord)
-    .filter(
-      (p) =>
-        stringAt(p, "in") === "query" ||
-        (stringAt(p, "in") === "path" && placeholderNames.has(stringAt(p, "name") ?? "")),
-    )
-    .flatMap((p) => {
-      const name = stringAt(p, "name") ?? "";
-      if (name.length === 0) return [];
+    .filter((p) => stringAt(p, "in") === "query" || stringAt(p, "in") === "path")
+    .flatMap((p) => serializeUrlParameter(p, importState, path))
+    .filter(({ name }) => name.length > 0);
+}
 
-      // Path parameters are required by definition, and a disabled one would
-      // leave the literal `:name` in the sent URL even for sloppy specs that
-      // omit `required: true`
-      const enabled = p.required === true || stringAt(p, "in") === "path";
-      if (stringAt(p, "in") === "query") {
-        const raw = rawParameterExample(p, importState);
-        if (Array.isArray(raw)) {
-          const { separator } = queryArraySerialization(p);
-          if (separator == null) {
-            return raw.map((item) => ({ enabled, name, value: stringifyExampleValue(item) }));
-          }
-          return [{ enabled, name, value: raw.map(stringifyExampleValue).join(separator) }];
-        }
-      }
+function serializeUrlParameter(
+  parameter: UnknownRecord,
+  importState: ImportState,
+  path: string,
+): HttpUrlParameter[] {
+  const name = stringAt(parameter, "name") ?? "";
+  const location = stringAt(parameter, "in");
+  // Path parameters are required by definition, and a disabled one would
+  // leave the literal `:name` in the sent URL even for sloppy specs that
+  // omit `required: true`
+  const enabled = parameter.required === true || location === "path";
+  const value = parameterExampleValue(parameter, importState);
+  if (isRecord(parameter.content)) {
+    return [
+      {
+        enabled,
+        name: location === "path" ? `:${name}` : name,
+        value: serializeContentParameter(parameter, importState),
+      },
+    ];
+  }
+  if (location === "path") {
+    if (shouldInlinePathParameter(parameter, importState, path)) return [];
+    const serialized = serializePathParameter(name, value, parameter);
+    // An empty path segment makes a URL that matches nothing, so the name at
+    // least keeps the request sendable and shows what belongs there
+    return [{ enabled, name: `:${name}`, value: serialized.length > 0 ? serialized : name }];
+  }
 
-      return [
-        {
-          enabled,
-          name: stringAt(p, "in") === "path" ? `:${name}` : name,
-          value: parameterExample(p, importState),
-        },
-      ];
-    });
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    const style = stringAt(parameter, "style") ?? "form";
+    const explode = parameter.explode !== false;
+    if (style === "deepObject") {
+      return entries.map(([key, entryValue]) => ({
+        enabled,
+        name: `${name}[${key}]`,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    if (style === "form" && explode) {
+      return entries.map(([key, entryValue]) => ({
+        enabled,
+        name: key,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    const separator = style === "spaceDelimited" ? " " : style === "pipeDelimited" ? "|" : ",";
+    return [{ enabled, name, value: entries.flat().map(stringifyExampleValue).join(separator) }];
+  }
+
+  if (Array.isArray(value)) {
+    const { separator } = queryArraySerialization(parameter);
+    if (separator == null) {
+      return value.map((entryValue) => ({
+        enabled,
+        name,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    return [{ enabled, name, value: value.map(stringifyExampleValue).join(separator) }];
+  }
+
+  return [{ enabled, name, value: stringifyExampleValue(value) }];
 }
 
 /**
@@ -891,12 +962,16 @@ function importHeaderParameters({
     .map((p) => ({
       enabled: p.required === true,
       name: stringAt(p, "name") ?? "",
-      value: parameterExample(p, importState),
+      value: serializeParameterValue(p, importState),
     }))
     .filter(({ name }) => name.length > 0);
 }
 
-/** Yaak has no cookie parameter row, so cookie parameters become the header they would produce */
+/**
+ * Yaak has no cookie parameter row, so each cookie parameter becomes its own
+ * Cookie header. Rows stay individually toggleable and the send path merges
+ * the enabled ones into a single header.
+ */
 function importCookieHeader({
   importState,
   parameters,
@@ -904,47 +979,128 @@ function importCookieHeader({
   importState: ImportState;
   parameters: unknown[];
 }): HttpRequestHeader[] {
-  const cookieParameters = parameters
+  return parameters
     .map((p) => importState.resolve(p))
     .filter(isRecord)
     .filter((p) => stringAt(p, "in") === "cookie")
-    .filter((p) => (stringAt(p, "name") ?? "").length > 0);
-  if (cookieParameters.length === 0) return [];
-
-  return [
-    {
-      enabled: cookieParameters.some((p) => p.required === true),
+    .map((p) => ({
+      enabled: p.required === true,
       name: "Cookie",
-      value: cookieParameters
-        .map((p) => `${stringAt(p, "name")}=${parameterExample(p, importState)}`)
-        .join("; "),
-    },
-  ];
+      value: serializeCookieParameter(p, importState),
+    }))
+    .filter(({ value }) => value.length > 0);
 }
 
-function rawParameterExample(parameter: UnknownRecord, importState: ImportState): unknown {
+function serializeCookieParameter(parameter: UnknownRecord, importState: ImportState): string {
+  const name = stringAt(parameter, "name") ?? "";
+  if (name.length === 0) return "";
+  if (isRecord(parameter.content)) {
+    return `${name}=${serializeContentParameter(parameter, importState)}`;
+  }
+
+  const value = parameterExampleValue(parameter, importState);
+  const explode = parameter.explode !== false;
+  if (Array.isArray(value)) {
+    return explode
+      ? value.map((entryValue) => `${name}=${stringifyExampleValue(entryValue)}`).join("&")
+      : `${name}=${value.map(stringifyExampleValue).join(",")}`;
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    return explode
+      ? entries.map(([key, entryValue]) => `${key}=${stringifyExampleValue(entryValue)}`).join("&")
+      : `${name}=${entries.flat().map(stringifyExampleValue).join(",")}`;
+  }
+  return `${name}=${stringifyExampleValue(value)}`;
+}
+
+function serializeParameterValue(parameter: UnknownRecord, importState: ImportState): string {
+  if (isRecord(parameter.content)) return serializeContentParameter(parameter, importState);
+  return serializeSimpleParameter(parameterExampleValue(parameter, importState), parameter);
+}
+
+/** A parameter described by a media type serializes as that media type */
+function serializeContentParameter(parameter: UnknownRecord, importState: ImportState): string {
+  const [contentType, rawMediaType] = Object.entries(toRecord(parameter.content))[0] ?? [];
+  const value = mediaTypeExample(toRecord(rawMediaType), importState);
+  return contentType?.toLowerCase().includes("json")
+    ? (JSON.stringify(value) ?? "")
+    : stringifyExampleValue(value);
+}
+
+function serializePathParameter(
+  name: string,
+  value: unknown,
+  parameter: UnknownRecord,
+  serializeValue: (value: unknown) => string = stringifyExampleValue,
+): string {
+  const style = stringAt(parameter, "style") ?? "simple";
+  const explode = parameter.explode === true;
+  const values = Array.isArray(value)
+    ? value.map(serializeValue)
+    : isRecord(value)
+      ? Object.entries(value).flatMap(([key, entryValue]) => [
+          serializeValue(key),
+          serializeValue(entryValue),
+        ])
+      : [serializeValue(value)];
+
+  if (style === "label") {
+    if (explode && isRecord(value)) {
+      return `.${Object.entries(value)
+        .map(([key, entryValue]) => `${serializeValue(key)}=${serializeValue(entryValue)}`)
+        .join(".")}`;
+    }
+    return `.${values.join(explode ? "." : ",")}`;
+  }
+  if (style === "matrix") {
+    if (explode && Array.isArray(value)) {
+      return value.map((entryValue) => `;${name}=${serializeValue(entryValue)}`).join("");
+    }
+    if (explode && isRecord(value)) {
+      return Object.entries(value)
+        .map(([key, entryValue]) => `;${serializeValue(key)}=${serializeValue(entryValue)}`)
+        .join("");
+    }
+    return `;${name}=${values.join(",")}`;
+  }
+  return serializeSimpleParameter(value, parameter, serializeValue);
+}
+
+function serializeSimpleParameter(
+  value: unknown,
+  parameter: UnknownRecord,
+  serializeValue: (value: unknown) => string = stringifyExampleValue,
+): string {
+  if (Array.isArray(value)) return value.map(serializeValue).join(",");
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    return parameter.explode === true
+      ? entries
+          .map(([key, entryValue]) => `${serializeValue(key)}=${serializeValue(entryValue)}`)
+          .join(",")
+      : entries.flat().map(serializeValue).join(",");
+  }
+  return serializeValue(value);
+}
+
+function parameterExampleValue(parameter: UnknownRecord, importState: ImportState): unknown {
   const directExample = firstPresent(
     parameter.example,
     firstExampleValue(parameter.examples, importState),
   );
   if (directExample != null) return directExample;
+  if (isRecord(parameter.content)) {
+    const mediaType = toRecord(Object.values(parameter.content)[0]);
+    return mediaTypeExample(mediaType, importState);
+  }
   // Swagger 2 parameters carry the schema keywords (type, items, default)
   // directly on the parameter object
-  return schemaToExample(importState.resolve(parameter.schema ?? parameter), importState);
+  return schemaToExample(parameter.schema ?? parameter, importState);
 }
 
 function parameterExample(parameter: UnknownRecord, importState: ImportState): string {
-  const raw = rawParameterExample(parameter, importState);
-  // Simple/csv style, the default everywhere but query strings
-  const example = Array.isArray(raw)
-    ? raw.map(stringifyExampleValue).join(",")
-    : stringifyExampleValue(raw);
-  // An empty path segment makes a URL that matches nothing, so the name at
-  // least keeps the request sendable and shows what belongs there
-  if (example === "" && stringAt(parameter, "in") === "path") {
-    return stringAt(parameter, "name") ?? "";
-  }
-  return example;
+  return serializeSimpleParameter(parameterExampleValue(parameter, importState), parameter);
 }
 
 function importBody({
@@ -975,14 +1131,21 @@ function importBody({
       toArray(operation.consumes ?? spec.consumes).find(
         (c): c is string => typeof c === "string",
       ) ?? "application/json";
+    const schema = importState.resolveSchema(bodyParameter.schema);
+    const isBinary = stringAt(schema, "format") === "binary";
     return {
       headers: [{ enabled: true, name: "Content-Type", value: contentType }],
-      bodyType: yaakBodyType(contentType),
-      body: {
-        text: formatBodyText(
-          schemaToExample(importState.resolve(bodyParameter.schema), importState),
-        ),
-      },
+      bodyType: isBinary ? "binary" : yaakBodyType(contentType),
+      body: isBinary
+        ? {}
+        : {
+            text: formatMediaTypeBody(
+              contentType,
+              schemaToExample(schema, importState),
+              schema,
+              importState,
+            ),
+          },
     };
   }
 
@@ -1000,11 +1163,15 @@ function importBody({
       headers: [{ enabled: true, name: "Content-Type", value: contentType }],
       bodyType: contentType,
       body: {
-        form: formParameters.map((p) => ({
-          enabled: p.required === true,
-          name: stringAt(p, "name") ?? "",
-          value: parameterExample(p, importState),
-        })),
+        form: formParameters.map((p) => {
+          const base = {
+            enabled: p.required === true,
+            name: stringAt(p, "name") ?? "",
+          };
+          return stringAt(p, "type") === "file"
+            ? { ...base, file: "" }
+            : { ...base, value: parameterExample(p, importState) };
+        }),
       },
     };
   }
@@ -1020,31 +1187,194 @@ function importBodyFromContent(importState: ImportState, content: UnknownRecord)
   const bodyType = yaakBodyType(contentType);
 
   if (bodyType === "application/x-www-form-urlencoded" || bodyType === "multipart/form-data") {
+    const example = mediaTypeExample(mediaType, importState);
     return {
       headers: [{ enabled: true, name: "Content-Type", value: contentType }],
       bodyType,
       body: {
-        form: schemaToFormParameters(importState.resolve(mediaType.schema), importState),
+        form: schemaToFormParameters(
+          mediaType.schema,
+          importState,
+          isRecord(example) ? example : undefined,
+        ),
       },
     };
   }
 
+  const schema = importState.resolveSchema(mediaType.schema);
+  const isBinary = bodyType === "binary" || stringAt(schema, "format") === "binary";
+
   return {
     headers: [{ enabled: true, name: "Content-Type", value: contentType }],
-    bodyType,
-    body:
-      bodyType === "binary"
-        ? {}
-        : { text: formatBodyText(mediaTypeExample(mediaType, importState)) },
+    bodyType: isBinary ? "binary" : bodyType,
+    body: isBinary
+      ? {}
+      : {
+          text: formatMediaTypeBody(
+            contentType,
+            mediaTypeExample(mediaType, importState),
+            schema,
+            importState,
+          ),
+        },
   };
 }
 
 function chooseContentType(contentTypes: string[]): string | null {
+  const jsonType = contentTypes.find((contentType) => mediaTypeOf(contentType).endsWith("+json"));
   for (const preference of BODY_CONTENT_TYPE_PREFERENCE) {
     const exact = contentTypes.find((c) => mediaTypeOf(c) === preference);
     if (exact != null) return exact;
+    // A +json suffix type ranks with JSON, ahead of the other preferences
+    if (preference === "application/json" && jsonType != null) return jsonType;
   }
   return contentTypes[0] ?? null;
+}
+
+function formatMediaTypeBody(
+  contentType: string,
+  example: unknown,
+  schema: unknown,
+  importState: ImportState,
+): string {
+  const mediaType = mediaTypeOf(contentType);
+  if (mediaType === "application/xml" || mediaType === "text/xml" || mediaType.endsWith("+xml")) {
+    return typeof example === "string"
+      ? example
+      : valueToXml(example, schema, importState, "root", true);
+  }
+  if (mediaType === "application/json" || mediaType.endsWith("+json")) {
+    // A string example may be pre-serialized JSON; otherwise it needs quoting
+    // to be a valid JSON document
+    if (typeof example === "string") {
+      try {
+        JSON.parse(example);
+        return example;
+      } catch {
+        return JSON.stringify(example);
+      }
+    }
+    return JSON.stringify(example, null, 2) ?? "";
+  }
+  return formatBodyText(example);
+}
+
+function valueToXml(
+  value: unknown,
+  schema: unknown,
+  importState: ImportState,
+  elementName: string,
+  isDocumentRoot = false,
+): string {
+  const resolvedSchema = toRecord(importState.resolveSchema(schema));
+  const schemaXml = toRecord(resolvedSchema.xml);
+  if (Array.isArray(value)) {
+    const itemSchema = importState.resolveSchema(resolvedSchema.items);
+    const shouldWrap = schemaXml.wrapped === true || isDocumentRoot;
+    const itemName =
+      stringAt(toRecord(itemSchema).xml, "name") ??
+      (shouldWrap ? (stringAt(schemaXml, "name") ?? elementName) : elementName);
+    const items = value.map((item) => valueToXml(item, itemSchema, importState, itemName)).join("");
+    return shouldWrap ? xmlElement(elementName, schemaXml, items) : items;
+  }
+  if (isRecord(value)) {
+    const properties = toRecord(resolvedSchema.properties);
+    const entries = Object.entries(value).map(([name, propertyValue]) => {
+      const propertySchema = toRecord(importState.resolveSchema(properties[name]));
+      return { name, propertyValue, propertySchema, xml: toRecord(propertySchema.xml) };
+    });
+    const usedPrefixes = new Set(["xml", "xmlns"]);
+    const prefixesByNamespace = new Map<string, string>();
+    for (const xml of [schemaXml, ...entries.map(({ xml }) => xml)]) {
+      const namespace = stringAt(xml, "namespace");
+      const prefix = stringAt(xml, "prefix");
+      if (prefix == null || prefix.length === 0) continue;
+      usedPrefixes.add(prefix);
+      if (namespace != null && namespace.length > 0 && !prefixesByNamespace.has(namespace)) {
+        prefixesByNamespace.set(namespace, prefix);
+      }
+    }
+    const attributes: string[] = [];
+    const attributeNamespaces: UnknownRecord[] = [];
+    const children: string[] = [];
+    for (const { name, propertyValue, propertySchema, xml } of entries) {
+      if (xml.attribute === true) {
+        const attributeXml = qualifyXmlAttribute(xml, usedPrefixes, prefixesByNamespace);
+        attributes.push(
+          `${qualifiedXmlName(name, attributeXml)}="${escapeXml(stringifyExampleValue(propertyValue))}"`,
+        );
+        attributeNamespaces.push(attributeXml);
+      } else {
+        children.push(valueToXml(propertyValue, propertySchema, importState, name));
+      }
+    }
+    return xmlElement(elementName, schemaXml, children.join(""), attributes, attributeNamespaces);
+  }
+  return xmlElement(elementName, schemaXml, escapeXml(stringifyExampleValue(value)));
+}
+
+function xmlElement(
+  fallbackName: string,
+  xml: UnknownRecord,
+  content: string,
+  attributes: string[] = [],
+  additionalNamespaces: UnknownRecord[] = [],
+): string {
+  const name = qualifiedXmlName(fallbackName, xml);
+  const namespaces = new Map<string, string>();
+  for (const metadata of [xml, ...additionalNamespaces]) {
+    const namespace = stringAt(metadata, "namespace");
+    if (namespace == null || namespace.length === 0) continue;
+    const prefix = stringAt(metadata, "prefix");
+    namespaces.set(prefix == null || prefix.length === 0 ? "xmlns" : `xmlns:${prefix}`, namespace);
+  }
+  const namespaceAttributes = [...namespaces].map(
+    ([attribute, namespace]) => `${attribute}="${escapeXml(namespace)}"`,
+  );
+  const attributeText = [...namespaceAttributes, ...attributes].join(" ");
+  const openingTag = attributeText.length > 0 ? `<${name} ${attributeText}>` : `<${name}>`;
+  return `${openingTag}${content}</${name}>`;
+}
+
+function qualifyXmlAttribute(
+  xml: UnknownRecord,
+  usedPrefixes: Set<string>,
+  prefixesByNamespace: Map<string, string>,
+): UnknownRecord {
+  const namespace = stringAt(xml, "namespace");
+  const declaredPrefix = stringAt(xml, "prefix");
+  if (namespace != null && namespace.length === 0) {
+    const { prefix: _prefix, ...unqualifiedXml } = xml;
+    return unqualifiedXml;
+  }
+  if (namespace == null || (declaredPrefix != null && declaredPrefix.length > 0)) return xml;
+
+  // Namespaced attributes need a prefix to be well-formed, so reuse the
+  // namespace's existing prefix or mint one
+  const existingPrefix = prefixesByNamespace.get(namespace);
+  if (existingPrefix != null) return { ...xml, prefix: existingPrefix };
+
+  let suffix = 1;
+  while (usedPrefixes.has(`ns${suffix}`)) suffix++;
+  const generatedPrefix = `ns${suffix}`;
+  usedPrefixes.add(generatedPrefix);
+  prefixesByNamespace.set(namespace, generatedPrefix);
+  return { ...xml, prefix: generatedPrefix };
+}
+
+function qualifiedXmlName(fallbackName: string, xml: UnknownRecord): string {
+  const name = stringAt(xml, "name") ?? fallbackName;
+  const prefix = stringAt(xml, "prefix");
+  return prefix == null || prefix.length === 0 ? name : `${prefix}:${name}`;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 function mediaTypeOf(contentType: string): string {
@@ -1075,25 +1405,21 @@ function mediaTypeExample(mediaType: UnknownRecord, importState: ImportState): u
     firstExampleValue(mediaType.examples, importState),
   );
   if (directExample != null) return directExample;
-  return schemaToExample(importState.resolve(mediaType.schema), importState);
+  return schemaToExample(mediaType.schema, importState);
 }
 
-function schemaToFormParameters(schema: unknown, importState: ImportState) {
-  const resolvedSchema = toRecord(importState.resolve(schema));
-  const sources = [
-    ...toArray(resolvedSchema.allOf).map((s) => toRecord(importState.resolve(s))),
-    resolvedSchema,
-  ];
-  const required = sources
-    .flatMap((s) => toArray(s.required))
-    .filter((name): name is string => typeof name === "string");
-  const properties = [
-    ...new Map(sources.flatMap((s) => Object.entries(toRecord(s.properties)))).entries(),
-  ].slice(0, MAX_EXAMPLE_PROPERTIES);
+function schemaToFormParameters(schema: unknown, importState: ImportState, example?: UnknownRecord) {
+  const resolvedSchema = toRecord(importState.resolveSchema(schema));
+  const required = toArray(resolvedSchema.required).filter(
+    (name): name is string => typeof name === "string",
+  );
+  const properties = Object.entries(toRecord(resolvedSchema.properties))
+    .filter(([, property]) => toRecord(importState.resolveSchema(property)).readOnly !== true)
+    .slice(0, MAX_EXAMPLE_PROPERTIES);
 
   return properties.map(([name, property]) => {
-    const resolvedProperty = toRecord(importState.resolve(property));
-    const example = schemaToExample(resolvedProperty, importState);
+    const resolvedProperty = toRecord(importState.resolveSchema(property));
+    const propertyExample = example?.[name] ?? schemaToExample(resolvedProperty, importState);
     const base = {
       enabled: required.includes(name),
       name,
@@ -1101,7 +1427,7 @@ function schemaToFormParameters(schema: unknown, importState: ImportState) {
     if (stringAt(resolvedProperty, "format") === "binary") {
       return { ...base, file: "" };
     }
-    return { ...base, value: stringifyExampleValue(example) };
+    return { ...base, value: stringifyExampleValue(propertyExample) };
   });
 }
 
@@ -1113,12 +1439,20 @@ function schemaToExample(
 ): unknown {
   if (depth > MAX_EXAMPLE_DEPTH) return {};
 
-  const resolved = importState.resolve(schema, visitedRefs);
+  const schemaRecord = toRecord(schema);
+  const ref = stringAt(schemaRecord, "$ref");
+  const closesReferenceCycle = ref != null && visitedRefs.has(ref);
+  const nextVisitedRefs = new Set(visitedRefs);
+  if (ref != null) nextVisitedRefs.add(ref);
+
+  const resolved = importState.resolveSchema(schema, visitedRefs);
   if (!isRecord(resolved)) return "";
+  if (closesReferenceCycle && Object.keys(resolved).length === 0) return {};
 
   const explicitExample = firstPresent(
     resolved.example,
     firstExampleValue(resolved.examples, importState),
+    resolved.const,
     resolved.default,
   );
   if (explicitExample != null) return coerceToDeclaredType(explicitExample, resolved);
@@ -1126,32 +1460,76 @@ function schemaToExample(
   const enumValues = toArray(resolved.enum);
   if (enumValues.length > 0) return enumValues[0];
 
+  const propertyExample = schemaPropertiesToExample(resolved, importState, depth, nextVisitedRefs);
   const allOf = toArray(resolved.allOf);
   if (allOf.length > 0) {
-    const merged = allOf.reduce<UnknownRecord>((merged, childSchema) => {
-      const childExample = schemaToExample(childSchema, importState, depth + 1, visitedRefs);
-      return isRecord(childExample) ? { ...merged, ...childExample } : merged;
+    const compositionExample = allOf.reduce<UnknownRecord>((merged, childSchema) => {
+      const childExample = schemaToExample(childSchema, importState, depth + 1, nextVisitedRefs);
+      return isRecord(childExample) ? mergeExampleRecords(merged, childExample) : merged;
     }, {});
-    // Sibling properties are their own constraint alongside the allOf branches
-    return { ...merged, ...objectPropertiesExample(resolved, importState, depth, visitedRefs) };
+    return mergeExampleRecords(compositionExample, propertyExample);
   }
 
   const oneOf = toArray(resolved.oneOf);
   const anyOf = toArray(resolved.anyOf);
   if (oneOf.length > 0 || anyOf.length > 0) {
-    return schemaToExample(oneOf[0] ?? anyOf[0], importState, depth + 1, visitedRefs);
+    const compositionExample = schemaToExample(
+      oneOf[0] ?? anyOf[0],
+      importState,
+      depth + 1,
+      nextVisitedRefs,
+    );
+    return Object.keys(propertyExample).length > 0
+      ? mergeExampleRecords(isRecord(compositionExample) ? compositionExample : {}, propertyExample)
+      : compositionExample;
   }
 
   const type = inferSchemaType(resolved);
   if (type === "array") {
-    return [schemaToExample(resolved.items, importState, depth + 1, visitedRefs)];
+    return [schemaToExample(resolved.items, importState, depth + 1, nextVisitedRefs)];
   }
-  if (type === "object") {
-    return objectPropertiesExample(resolved, importState, depth, visitedRefs);
-  }
+  if (type === "object") return propertyExample;
   if (type === "integer" || type === "number") return 0;
   if (type === "boolean") return false;
   return FORMAT_EXAMPLES[stringAt(resolved, "format") ?? ""] ?? "";
+}
+
+/** Request examples omit readOnly properties, which only appear in responses */
+function schemaPropertiesToExample(
+  schema: UnknownRecord,
+  importState: ImportState,
+  depth: number,
+  visitedRefs: Set<string>,
+): UnknownRecord {
+  const required = toArray(schema.required).filter(
+    (name): name is string => typeof name === "string",
+  );
+  const properties = Object.entries(toRecord(schema.properties))
+    .filter(([, property]) => toRecord(importState.resolveSchema(property)).readOnly !== true)
+    .sort(([a], [b]) => {
+      const aRequired = required.includes(a);
+      const bRequired = required.includes(b);
+      return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
+    });
+
+  return Object.fromEntries(
+    properties
+      .slice(0, MAX_EXAMPLE_PROPERTIES)
+      .map(([name, property]) => [
+        name,
+        schemaToExample(property, importState, depth + 1, visitedRefs),
+      ]),
+  );
+}
+
+function mergeExampleRecords(base: UnknownRecord, overlay: UnknownRecord): UnknownRecord {
+  const merged = { ...base };
+  for (const [name, value] of Object.entries(overlay)) {
+    const baseValue = merged[name];
+    merged[name] =
+      isRecord(baseValue) && isRecord(value) ? mergeExampleRecords(baseValue, value) : value;
+  }
+  return merged;
 }
 
 const FORMAT_EXAMPLES: Record<string, string> = {
@@ -1194,30 +1572,6 @@ function coerceToDeclaredType(example: unknown, schema: UnknownRecord): unknown 
   return example;
 }
 
-function objectPropertiesExample(
-  schema: UnknownRecord,
-  importState: ImportState,
-  depth: number,
-  visitedRefs: Set<string>,
-): UnknownRecord {
-  const required = toArray(schema.required).filter(
-    (name): name is string => typeof name === "string",
-  );
-  const properties = Object.entries(toRecord(schema.properties)).sort(([a], [b]) => {
-    const aRequired = required.includes(a);
-    const bRequired = required.includes(b);
-    return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
-  });
-
-  return Object.fromEntries(
-    properties
-      .slice(0, MAX_EXAMPLE_PROPERTIES)
-      .map(([name, property]) => [
-        name,
-        schemaToExample(property, importState, depth + 1, visitedRefs),
-      ]),
-  );
-}
 
 function inferSchemaType(schema: UnknownRecord): string {
   const rawType = schema.type;
@@ -1618,12 +1972,16 @@ function buildOAuthVariablesByScheme(
   );
 }
 
+/** Earlier groups win on a name collision; Cookie rows all pass through since the send path merges them */
 function mergeHeaders(...headerGroups: HttpRequestHeader[][]): HttpRequestHeader[] {
   const headers: HttpRequestHeader[] = [];
-  for (const header of headerGroups.flat()) {
-    const existing = headers.find((h) => h.name.toLowerCase() === header.name.toLowerCase());
-    if (existing == null) {
-      headers.push(header);
+  for (const group of headerGroups) {
+    const namesFromEarlierGroups = new Set(headers.map((header) => header.name.toLowerCase()));
+    for (const header of group) {
+      const name = header.name.toLowerCase();
+      if (name === "cookie" || !namesFromEarlierGroups.has(name)) {
+        headers.push(header);
+      }
     }
   }
   return headers;
@@ -1733,7 +2091,120 @@ class ImportState {
       return value;
     }
 
-    const resolved = value.$ref
+    return this.resolve(this.#resolveLocalReference(value.$ref), nextVisitedRefs);
+  }
+
+  /** Schema Objects allow `$ref` siblings in OpenAPI 3.1 and later. */
+  resolveSchema(value: unknown, visitedRefs = new Set<string>(), compositionDepth = 0): unknown {
+    if (!isRecord(value)) return value;
+
+    let resolved: unknown = value;
+    const structureVisitedRefs = new Set(visitedRefs);
+    const siblingLayers: UnknownRecord[] = [];
+    while (isRecord(resolved) && typeof resolved.$ref === "string") {
+      const ref = resolved.$ref;
+      const siblings = Object.fromEntries(
+        Object.entries(resolved).filter(([key]) => key !== "$ref"),
+      );
+      if (structureVisitedRefs.has(ref)) {
+        resolved = siblings;
+        break;
+      }
+      if (!ref.startsWith("#/")) {
+        this.#unresolvedRefs.add(ref);
+        break;
+      }
+
+      structureVisitedRefs.add(ref);
+      siblingLayers.push(siblings);
+      resolved = this.#resolveLocalReference(ref);
+    }
+    if (!isRecord(resolved)) return resolved;
+
+    let merged: UnknownRecord = resolved;
+    for (let index = siblingLayers.length - 1; index >= 0; index--) {
+      merged = this.#mergeSchemaObjects(merged, siblingLayers[index] ?? {});
+    }
+    return this.#mergeAllOfStructure(merged, structureVisitedRefs, compositionDepth);
+  }
+
+  #mergeAllOfStructure(
+    schema: UnknownRecord,
+    visitedRefs: Set<string>,
+    depth: number,
+  ): UnknownRecord {
+    if (depth > MAX_SCHEMA_RESOLUTION_DEPTH) return schema;
+    const allOf = toArray(schema.allOf);
+    if (allOf.length === 0) return schema;
+
+    const composed = allOf.reduce<UnknownRecord>((merged, childSchema) => {
+      const child = this.resolveSchema(childSchema, new Set(visitedRefs), depth + 1);
+      if (!isRecord(child)) return merged;
+      const childStructure = Object.fromEntries(
+        Object.entries(child).filter(([key]) => key !== "allOf"),
+      );
+      return this.#mergeSchemaObjects(merged, childStructure);
+    }, {});
+    return this.#mergeSchemaObjects(composed, schema);
+  }
+
+  #mergeSchemaObjects(base: UnknownRecord, overlay: UnknownRecord, depth = 0): UnknownRecord {
+    const merged: UnknownRecord = { ...base, ...overlay };
+    if (depth > MAX_SCHEMA_RESOLUTION_DEPTH) return merged;
+
+    const baseProperties = toRecord(base.properties);
+    const overlayProperties = toRecord(overlay.properties);
+    const propertyNames = new Set([
+      ...Object.keys(baseProperties),
+      ...Object.keys(overlayProperties),
+    ]);
+    if (propertyNames.size > 0) {
+      merged.properties = Object.fromEntries(
+        [...propertyNames].map((name) => {
+          const baseProperty = baseProperties[name];
+          const overlayProperty = overlayProperties[name];
+          if (isRecord(baseProperty) && isRecord(overlayProperty)) {
+            return [name, this.#mergeSchemaObjects(baseProperty, overlayProperty, depth + 1)];
+          }
+          return [name, overlayProperty ?? baseProperty];
+        }),
+      );
+    }
+
+    const baseRequired = toArray(base.required).filter(
+      (name): name is string => typeof name === "string",
+    );
+    const overlayRequired = toArray(overlay.required).filter(
+      (name): name is string => typeof name === "string",
+    );
+    if (baseRequired.length > 0 || overlayRequired.length > 0) {
+      merged.required = [...new Set([...baseRequired, ...overlayRequired])];
+    }
+
+    const baseAllOf = toArray(base.allOf);
+    const overlayAllOf = toArray(overlay.allOf);
+    if (baseAllOf.length > 0 && overlayAllOf.length > 0) {
+      merged.allOf = [...baseAllOf, ...overlayAllOf];
+    }
+    if (isRecord(base.xml) && isRecord(overlay.xml)) {
+      merged.xml = { ...base.xml, ...overlay.xml };
+    }
+    if (isRecord(base.items) && isRecord(overlay.items)) {
+      merged.items = this.#mergeSchemaObjects(base.items, overlay.items, depth + 1);
+    }
+    if (isRecord(base.additionalProperties) && isRecord(overlay.additionalProperties)) {
+      merged.additionalProperties = this.#mergeSchemaObjects(
+        base.additionalProperties,
+        overlay.additionalProperties,
+        depth + 1,
+      );
+    }
+
+    return merged;
+  }
+
+  #resolveLocalReference(ref: string): unknown {
+    return ref
       .slice(2)
       .split("/")
       .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
@@ -1742,7 +2213,5 @@ class ImportState {
           Array.isArray(current) ? current[Number(part)] : toRecord(current)[part],
         this.#spec,
       );
-
-    return this.resolve(resolved, nextVisitedRefs);
   }
 }
