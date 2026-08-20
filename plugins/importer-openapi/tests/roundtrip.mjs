@@ -55,22 +55,41 @@ function listIds(output) {
 }
 
 async function startPrism(spec, port) {
-  const prism = spawn(
-    "npx",
-    ["-y", "@stoplight/prism-cli", "mock", "--errors", "-p", String(port), "-h", "127.0.0.1", spec],
-    { stdio: ["ignore", "pipe", "pipe"] },
-  );
-  let log = "";
-  prism.stdout.on("data", (d) => (log += d));
-  prism.stderr.on("data", (d) => (log += d));
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    if (log.includes("Prism is listening")) return { prism, getLog: () => log };
-    if (prism.exitCode != null) throw new Error(`Prism exited:\n${log}`);
-    await new Promise((r) => setTimeout(r, 200));
+  for (let attempt = 0; attempt < 20; attempt++, port++) {
+    const prism = spawn(
+      "npx",
+      [
+        "-y",
+        "@stoplight/prism-cli",
+        "mock",
+        "--errors",
+        "-p",
+        String(port),
+        "-h",
+        "127.0.0.1",
+        spec,
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let log = "";
+    prism.stdout.on("data", (d) => (log += d));
+    prism.stderr.on("data", (d) => (log += d));
+    const deadline = Date.now() + 30_000;
+    let failed = false;
+    while (Date.now() < deadline) {
+      if (log.includes("Prism is listening")) return { prism, port, getLog: () => log };
+      if (log.includes("EADDRINUSE") || prism.exitCode != null) {
+        failed = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    prism.kill();
+    if (failed && log.includes("EADDRINUSE")) continue;
+    if (!failed) throw new Error(`Prism did not start in time:\n${log}`);
+    throw new Error(`Prism exited:\n${log}`);
   }
-  prism.kill();
-  throw new Error(`Prism did not start in time:\n${log}`);
+  throw new Error("No free port found for Prism");
 }
 
 function pointVariablesAtPrism(variables, prismUrl) {
@@ -166,49 +185,49 @@ for (const spec of specs) {
       JSON.stringify({ id: workspaceId, settingFollowRedirects: false }),
     ]);
 
-    const prismUrl = `http://127.0.0.1:${port}`;
-    const environmentIds = listIds(yaak(dataDir, ["environment", "list", workspaceId]));
-    let activeEnvironment = null;
-    for (const id of environmentIds) {
-      const environment = yaakJson(dataDir, ["environment", "show", id]);
-      yaak(dataDir, [
-        "environment",
-        "update",
-        "--json",
-        JSON.stringify({
-          id,
-          variables: pointVariablesAtPrism(environment.variables ?? [], prismUrl),
-        }),
-      ]);
-      if (environment.parentModel === "environment" && activeEnvironment == null) {
-        activeEnvironment = id;
-      }
-    }
-
-    const requestIds = listIds(yaak(dataDir, ["request", "list", workspaceId]));
-    const requests = new Map();
-    for (const id of requestIds) {
-      const request = yaakJson(dataDir, ["request", "show", id]);
-      requests.set(id, request);
-      // OAuth2 would try to fetch a real token; Prism only checks that the
-      // Authorization header is present, so a dummy bearer keeps it satisfied.
-      if (request.authenticationType === "oauth2") {
+    const { prism, port: boundPort, getLog } = await startPrism(spec, port);
+    port = boundPort + 1;
+    try {
+      const prismUrl = `http://127.0.0.1:${boundPort}`;
+      const environmentIds = listIds(yaak(dataDir, ["environment", "list", workspaceId]));
+      let activeEnvironment = null;
+      for (const id of environmentIds) {
+        const environment = yaakJson(dataDir, ["environment", "show", id]);
         yaak(dataDir, [
-          "request",
+          "environment",
           "update",
           "--json",
           JSON.stringify({
             id,
-            authenticationType: "bearer",
-            authentication: { token: "test-token", prefix: "Bearer" },
+            variables: pointVariablesAtPrism(environment.variables ?? [], prismUrl),
           }),
         ]);
+        if (environment.parentModel === "environment" && activeEnvironment == null) {
+          activeEnvironment = id;
+        }
       }
-    }
 
-    const { prism, getLog } = await startPrism(spec, port);
-    port++;
-    try {
+      const requestIds = listIds(yaak(dataDir, ["request", "list", workspaceId]));
+      const requests = new Map();
+      for (const id of requestIds) {
+        const request = yaakJson(dataDir, ["request", "show", id]);
+        requests.set(id, request);
+        // OAuth2 would try to fetch a real token; Prism only checks that the
+        // Authorization header is present, so a dummy bearer keeps it satisfied.
+        if (request.authenticationType === "oauth2") {
+          yaak(dataDir, [
+            "request",
+            "update",
+            "--json",
+            JSON.stringify({
+              id,
+              authenticationType: "bearer",
+              authentication: { token: "test-token", prefix: "Bearer" },
+            }),
+          ]);
+        }
+      }
+
       const sendArgs = ["send", workspaceId];
       if (activeEnvironment != null) sendArgs.push("-e", activeEnvironment);
       try {
