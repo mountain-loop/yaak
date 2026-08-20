@@ -84,9 +84,17 @@ async function startPrism(spec, port) {
       await new Promise((r) => setTimeout(r, 200));
     }
     prism.kill();
-    if (failed && log.includes("EADDRINUSE")) continue;
-    if (!failed) throw new Error(`Prism did not start in time:\n${log}`);
-    throw new Error(`Prism exited:\n${log}`);
+    if (failed) {
+      // The exit can be observed before its buffered stderr arrives; wait for
+      // the streams to close so the bind error is distinguishable
+      await Promise.race([
+        new Promise((r) => prism.once("close", r)),
+        new Promise((r) => setTimeout(r, 2000)),
+      ]);
+      if (log.includes("EADDRINUSE")) continue;
+      throw new Error(`Prism exited:\n${log}`);
+    }
+    throw new Error(`Prism did not start in time:\n${log}`);
   }
   throw new Error("No free port found for Prism");
 }
