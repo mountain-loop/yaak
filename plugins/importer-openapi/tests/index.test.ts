@@ -787,7 +787,8 @@ describe("importer-openapi", () => {
 
     expect(imported?.resources.httpRequests[0]).toEqual(
       expect.objectContaining({
-        bodyType: "application/xml",
+        // Yaak's XML body type; the header keeps the spec's media type
+        bodyType: "text/xml",
         headers: expect.arrayContaining([
           { enabled: true, name: "Content-Type", value: "application/xml" },
         ]),
@@ -840,7 +841,7 @@ describe("importer-openapi", () => {
       expect.objectContaining({
         name: "Server 1",
         variables: [
-          { name: "baseUrl", value: "https://example.com/" },
+          { name: "baseUrl", value: "https://example.com" },
           { name: "auth_basic_auth_username", value: "" },
           { name: "auth_basic_auth_password", value: "" },
           { name: "auth_cookie_key_key", value: "" },
@@ -984,6 +985,318 @@ describe("importer-openapi", () => {
         authenticationType: "bearer",
         authentication: { token: "${[auth_oidc_token]}", prefix: "Bearer" },
       }),
+    ]);
+  });
+
+  test("Resolves references that point into arrays", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Array Ref Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            get: {
+              parameters: [
+                { name: "limit", in: "query", required: true, schema: { example: "42" } },
+              ],
+              responses: {},
+            },
+          },
+          "/b": {
+            get: { parameters: [{ $ref: "#/paths/~1a/get/parameters/0" }], responses: {} },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[1]?.urlParameters).toEqual([
+      { enabled: true, name: "limit", value: "42" },
+    ]);
+  });
+
+  test("Resolves example references and 3.1 example arrays", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Examples Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            post: {
+              parameters: [
+                { name: "q", in: "query", schema: { type: "string", examples: ["hello"] } },
+              ],
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: { type: "object" },
+                    examples: { main: { $ref: "#/components/examples/Main" } },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: { examples: { Main: { value: { x: "from-example" } } } },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ x: "from-example" }, null, 2),
+    });
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: false, name: "q", value: "hello" },
+    ]);
+  });
+
+  test("Keeps template-looking braces in descriptions and examples", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Braces Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            post: {
+              description: "Use {{placeholders}} in the template",
+              requestBody: {
+                content: {
+                  "application/json": { schema: { type: "string", example: "Hi {{name}}" } },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.description).toContain("{{placeholders}}");
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({ text: "Hi {{name}}" });
+  });
+
+  test("Ignores header parameters the spec reserves for other mechanisms", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Reserved Headers Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            post: {
+              parameters: [
+                { name: "Content-Type", in: "header", schema: { example: "application/xml" } },
+                { name: "Accept", in: "header", schema: { example: "text/html" } },
+                { name: "Authorization", in: "header", schema: { example: "custom" } },
+                { name: "X-Custom", in: "header", schema: { example: "kept" } },
+              ],
+              requestBody: { content: { "application/json": { schema: { type: "object" } } } },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: false, name: "X-Custom", value: "kept" },
+      { enabled: true, name: "Content-Type", value: "application/json" },
+    ]);
+  });
+
+  test("Imports cookie parameters as a Cookie header", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Cookie Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            get: {
+              parameters: [
+                { name: "session", in: "cookie", required: true, schema: { example: "abc" } },
+                { name: "theme", in: "cookie", schema: { example: "dark" } },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: true, name: "Cookie", value: "session=abc; theme=dark" },
+    ]);
+  });
+
+  test("Inlines path templates that Yaak placeholders cannot express", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Mid-Segment Test", version: "1.0.0" },
+        paths: {
+          "/report.{format}": {
+            get: {
+              parameters: [
+                { name: "format", in: "path", required: true, schema: { example: "csv" } },
+              ],
+              responses: {},
+            },
+          },
+          "/tasks/{id}:cancel": {
+            post: {
+              parameters: [{ name: "id", in: "path", required: true, schema: { example: "7" } }],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests.map((r) => [r.url, r.urlParameters])).toEqual([
+      ["${[baseUrl]}/report.csv", []],
+      ["${[baseUrl]}/tasks/:id:cancel", [{ enabled: true, name: ":id", value: "7" }]],
+    ]);
+  });
+
+  test("Enables path parameters even when required is omitted", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Sloppy Path Test", version: "1.0.0" },
+        paths: {
+          "/users/{userId}": {
+            get: {
+              parameters: [{ name: "userId", in: "path", schema: { type: "string" } }],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    // No example either, so the name stands in for an empty path segment
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: true, name: ":userId", value: "userId" },
+    ]);
+  });
+
+  test("Coerces examples to the declared schema type", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Coercion Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        password: { type: "string", example: 12345 },
+                        count: { type: "integer", example: "3" },
+                        note: { example: 7 },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ password: "12345", count: 3, note: 7 }, null, 2),
+    });
+  });
+
+  test("Merges allOf branches with sibling properties", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "AllOf Test", version: "1.0.0" },
+        paths: {
+          "/a": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      allOf: [
+                        { type: "object", properties: { fromAllOf: { example: "a" } } },
+                      ],
+                      properties: { sibling: { example: "b" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ fromAllOf: "a", sibling: "b" }, null, 2),
+    });
+  });
+
+  test("Accepts unquoted YAML version numbers", async () => {
+    const imported = await convertOpenApi(
+      ["swagger: 2.0", "info:", "  title: Unquoted Test", '  version: "1"', "host: example.com", "paths:", "  /a:", "    get:", "      responses: {}"].join("\n"),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.url).toBe("${[baseUrl]}/a");
+  });
+
+  test("Normalizes body types to Yaak's editors", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Body Type Test", version: "1.0.0" },
+        paths: {
+          "/vnd-json": {
+            post: {
+              requestBody: {
+                content: { "application/vnd.api+json": { schema: { type: "object" } } },
+              },
+              responses: {},
+            },
+          },
+          "/plain": {
+            post: {
+              requestBody: { content: { "text/plain": { schema: { type: "string" } } } },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(
+      imported?.resources.httpRequests.map((r) => [r.bodyType, r.headers?.[0]?.value]),
+    ).toEqual([
+      ["application/json", "application/vnd.api+json"],
+      ["other", "text/plain"],
+    ]);
+  });
+
+  test("Trims trailing slashes from server URLs", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Trailing Slash Test", version: "1.0.0" },
+        servers: [{ url: "https://api.example.com/v1/" }],
+        paths: { "/pets": { get: { responses: {} } } },
+      }),
+    );
+
+    expect(imported?.resources.environments[1]?.variables).toEqual([
+      { name: "baseUrl", value: "https://api.example.com/v1" },
     ]);
   });
 

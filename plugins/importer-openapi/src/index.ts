@@ -200,16 +200,14 @@ export async function convertOpenApi(contents: string): Promise<ImportPluginResp
   disambiguateNames(resources.httpRequests, routeLabels);
 
   return {
-    resources: deleteUndefinedAttrs(
-      convertTemplateSyntax({
-        environments: resources.environments,
-        folders: resources.folders,
-        grpcRequests: [],
-        httpRequests: resources.httpRequests,
-        websocketRequests: [],
-        workspaces: resources.workspaces,
-      }),
-    ) as PartialImportResources,
+    resources: deleteUndefinedAttrs({
+      environments: resources.environments,
+      folders: resources.folders,
+      grpcRequests: [],
+      httpRequests: resources.httpRequests,
+      websocketRequests: [],
+      workspaces: resources.workspaces,
+    }) as PartialImportResources,
   };
 }
 
@@ -301,13 +299,26 @@ function importOperation({
     spec,
     useDynamicServerUrls,
   });
+  const pathExampleValues = new Map(
+    parameters
+      .map((p) => importState.resolve(p))
+      .filter(isRecord)
+      .filter((p) => stringAt(p, "in") === "path" && stringAt(p, "name") != null)
+      .map((p) => [stringAt(p, "name") as string, parameterExample(p, importState)] as const),
+  );
+  const { url, placeholderNames } = buildOperationUrl(
+    operationBaseUrl({ operation, pathItem, requestBaseUrl, serverOverrides }),
+    path,
+    pathExampleValues,
+  );
   const urlParameters = [
-    ...importUrlParameters({ importState, parameters }),
+    ...importUrlParameters({ importState, parameters, placeholderNames }),
     ...authentication.urlParameters,
   ];
   const headers = mergeHeaders(
     authentication.headers,
     importHeaderParameters({ importState, parameters }),
+    importCookieHeader({ importState, parameters }),
     body.headers,
     importAcceptHeader({ importState, operation, spec }),
   );
@@ -333,10 +344,7 @@ function importOperation({
     name: importOperationName(operation, method, path),
     description,
     method: method.toUpperCase(),
-    url: buildOperationUrl(
-      operationBaseUrl({ operation, pathItem, requestBaseUrl, serverOverrides }),
-      path,
-    ),
+    url,
     urlParameters,
     headers,
     body: body.body,
@@ -466,11 +474,24 @@ function parseSpec(contents: string): unknown {
   }
 }
 
+/**
+ * The spec requires string versions, but unquoted YAML like `swagger: 2.0`
+ * parses as a number and such documents are common enough to accept.
+ */
 function isOpenApiSpec(value: unknown): value is UnknownRecord {
   const spec = toRecord(value);
-  const openapi = stringAt(spec, "openapi");
-  const swagger = stringAt(spec, "swagger");
-  return isRecord(spec.paths) && (openapi?.startsWith("3.") === true || swagger === "2.0");
+  const openapi = versionString(spec.openapi);
+  const swagger = versionString(spec.swagger);
+  return (
+    isRecord(spec.paths) &&
+    (/^3(\.|$)/.test(openapi ?? "") || swagger === "2.0" || swagger === "2")
+  );
+}
+
+function versionString(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return undefined;
 }
 
 function importInfoDescription(info: UnknownRecord): string | undefined {
@@ -645,8 +666,27 @@ function findOrCreateFolderId({
   return folder.id;
 }
 
-function buildOperationUrl(baseUrl: string, path: string): string {
-  return joinUrlParts(baseUrl, path.replaceAll(/{([^}/]+)}/g, ":$1"));
+/**
+ * Yaak's `:name` placeholders only substitute when they span a whole path
+ * segment. A template elsewhere in a segment, like `/report.{format}`, would
+ * import as text that never substitutes, and its leftover parameter would then
+ * be sent as a query parameter — so those get their example inlined instead.
+ */
+function buildOperationUrl(
+  baseUrl: string,
+  path: string,
+  inlineValues: Map<string, string>,
+): { url: string; placeholderNames: Set<string> } {
+  const placeholderNames = new Set<string>();
+  const converted = path.replaceAll(/(^|\/){([^}/]+)}(?=[/?#:]|$)/g, (_, prefix, name) => {
+    placeholderNames.add(name);
+    return `${prefix}:${name}`;
+  });
+  const inlined = converted.replaceAll(/{([^}/]+)}/g, (match, name) => {
+    const value = inlineValues.get(name);
+    return value == null || value === "" ? match : value;
+  });
+  return { url: joinUrlParts(baseUrl, inlined), placeholderNames };
 }
 
 function importBaseUrl(spec: UnknownRecord): string {
@@ -660,7 +700,7 @@ function importBaseUrl(spec: UnknownRecord): string {
   if (host == null) return stringAt(spec, "basePath") ?? "";
 
   const scheme = toArray(spec.schemes).find((s): s is string => typeof s === "string") ?? "https";
-  return joinUrlParts(`${scheme}://${host}`, stringAt(spec, "basePath") ?? "");
+  return trimTrailingSlashes(joinUrlParts(`${scheme}://${host}`, stringAt(spec, "basePath") ?? ""));
 }
 
 function importServerEnvironments(spec: UnknownRecord): { name: string; url: string }[] {
@@ -705,12 +745,17 @@ function serverUrlOrigin(value: string): string {
   }
 }
 
+/**
+ * Request URLs are `${[baseUrl]}/path`, so a trailing slash here would put a
+ * double slash on the wire. Trimming also turns a bare `/` server into "",
+ * which renders the same URLs without a protocol-relative `//path`.
+ */
 function interpolateServerUrl(server: UnknownRecord): string {
   let url = stringAt(server, "url") ?? "";
   for (const [name, variable] of Object.entries(toRecord(server.variables))) {
     url = url.replaceAll(`{${name}}`, stringifyExampleValue(toRecord(variable).default));
   }
-  return url;
+  return trimTrailingSlashes(url);
 }
 
 function joinUrlParts(baseUrl: string, path: string): string {
@@ -733,16 +778,25 @@ function trimTrailingSlashes(value: string): string {
 function importUrlParameters({
   importState,
   parameters,
+  placeholderNames,
 }: {
   importState: ImportState;
   parameters: unknown[];
+  placeholderNames: Set<string>;
 }): HttpUrlParameter[] {
   return parameters
     .map((p) => importState.resolve(p))
     .filter(isRecord)
-    .filter((p) => stringAt(p, "in") === "query" || stringAt(p, "in") === "path")
+    .filter(
+      (p) =>
+        stringAt(p, "in") === "query" ||
+        (stringAt(p, "in") === "path" && placeholderNames.has(stringAt(p, "name") ?? "")),
+    )
     .map((p) => ({
-      enabled: p.required === true,
+      // Path parameters are required by definition, and a disabled one would
+      // leave the literal `:name` in the sent URL even for sloppy specs that
+      // omit `required: true`
+      enabled: p.required === true || stringAt(p, "in") === "path",
       name:
         stringAt(p, "in") === "path"
           ? `:${stringAt(p, "name") ?? ""}`
@@ -751,6 +805,11 @@ function importUrlParameters({
     }))
     .filter(({ name }) => name.length > 0);
 }
+
+// The spec says header parameters with these names SHALL be ignored; Accept and
+// Content-Type come from the operation's media types, Authorization from its
+// security requirements
+const IGNORED_HEADER_PARAMETERS = new Set(["accept", "authorization", "content-type"]);
 
 function importHeaderParameters({
   importState,
@@ -763,6 +822,7 @@ function importHeaderParameters({
     .map((p) => importState.resolve(p))
     .filter(isRecord)
     .filter((p) => stringAt(p, "in") === "header")
+    .filter((p) => !IGNORED_HEADER_PARAMETERS.has((stringAt(p, "name") ?? "").toLowerCase()))
     .map((p) => ({
       enabled: p.required === true,
       name: stringAt(p, "name") ?? "",
@@ -771,10 +831,47 @@ function importHeaderParameters({
     .filter(({ name }) => name.length > 0);
 }
 
+/** Yaak has no cookie parameter row, so cookie parameters become the header they would produce */
+function importCookieHeader({
+  importState,
+  parameters,
+}: {
+  importState: ImportState;
+  parameters: unknown[];
+}): HttpRequestHeader[] {
+  const cookieParameters = parameters
+    .map((p) => importState.resolve(p))
+    .filter(isRecord)
+    .filter((p) => stringAt(p, "in") === "cookie")
+    .filter((p) => (stringAt(p, "name") ?? "").length > 0);
+  if (cookieParameters.length === 0) return [];
+
+  return [
+    {
+      enabled: cookieParameters.some((p) => p.required === true),
+      name: "Cookie",
+      value: cookieParameters
+        .map((p) => `${stringAt(p, "name")}=${parameterExample(p, importState)}`)
+        .join("; "),
+    },
+  ];
+}
+
 function parameterExample(parameter: UnknownRecord, importState: ImportState): string {
-  const directExample = firstPresent(parameter.example, firstExampleValue(parameter.examples));
+  const directExample = firstPresent(
+    parameter.example,
+    firstExampleValue(parameter.examples, importState),
+  );
   if (directExample != null) return stringifyExampleValue(directExample);
-  return stringifyExampleValue(schemaToExample(importState.resolve(parameter.schema), importState));
+  const example = stringifyExampleValue(
+    schemaToExample(importState.resolve(parameter.schema), importState),
+  );
+  // An empty path segment makes a URL that matches nothing, so the name at
+  // least keeps the request sendable and shows what belongs there
+  if (example === "" && stringAt(parameter, "in") === "path") {
+    return stringAt(parameter, "name") ?? "";
+  }
+  return example;
 }
 
 function importBody({
@@ -801,13 +898,13 @@ function importBody({
     .map((p) => importState.resolve(p))
     .find((p) => isRecord(p) && stringAt(p, "in") === "body");
   if (isRecord(bodyParameter)) {
-    const contentType = toArray(operation.consumes ?? spec.consumes).find(
-      (c): c is string => typeof c === "string",
-    );
-    const bodyType = contentType ?? "application/json";
+    const contentType =
+      toArray(operation.consumes ?? spec.consumes).find(
+        (c): c is string => typeof c === "string",
+      ) ?? "application/json";
     return {
-      headers: [{ enabled: true, name: "Content-Type", value: bodyType }],
-      bodyType,
+      headers: [{ enabled: true, name: "Content-Type", value: contentType }],
+      bodyType: yaakBodyType(contentType),
       body: {
         text: formatBodyText(
           schemaToExample(importState.resolve(bodyParameter.schema), importState),
@@ -847,15 +944,12 @@ function importBodyFromContent(importState: ImportState, content: UnknownRecord)
   if (contentType == null) return { headers: [], body: {}, bodyType: null };
 
   const mediaType = toRecord(content[contentType]);
-  const example = mediaTypeExample(mediaType, importState);
+  const bodyType = yaakBodyType(contentType);
 
-  if (
-    contentType === "application/x-www-form-urlencoded" ||
-    contentType === "multipart/form-data"
-  ) {
+  if (bodyType === "application/x-www-form-urlencoded" || bodyType === "multipart/form-data") {
     return {
       headers: [{ enabled: true, name: "Content-Type", value: contentType }],
-      bodyType: contentType,
+      bodyType,
       body: {
         form: schemaToFormParameters(importState.resolve(mediaType.schema), importState),
       },
@@ -864,34 +958,65 @@ function importBodyFromContent(importState: ImportState, content: UnknownRecord)
 
   return {
     headers: [{ enabled: true, name: "Content-Type", value: contentType }],
-    bodyType: contentType === "application/octet-stream" ? "binary" : contentType,
-    body: contentType === "application/octet-stream" ? {} : { text: formatBodyText(example) },
+    bodyType,
+    body:
+      bodyType === "binary"
+        ? {}
+        : { text: formatBodyText(mediaTypeExample(mediaType, importState)) },
   };
 }
 
 function chooseContentType(contentTypes: string[]): string | null {
   for (const preference of BODY_CONTENT_TYPE_PREFERENCE) {
-    const exact = contentTypes.find((c) => c.toLowerCase() === preference);
+    const exact = contentTypes.find((c) => mediaTypeOf(c) === preference);
     if (exact != null) return exact;
   }
   return contentTypes[0] ?? null;
 }
 
+function mediaTypeOf(contentType: string): string {
+  return contentType.toLowerCase().split(";")[0]?.trim() ?? "";
+}
+
+/**
+ * Yaak's body editors key off a fixed set of body types, while the Content-Type
+ * header keeps the spec's exact media type. Anything unrecognized becomes
+ * "other", the app's plain-text body with an explicit Content-Type.
+ */
+function yaakBodyType(contentType: string): string {
+  const mediaType = mediaTypeOf(contentType);
+  if (mediaType === "application/json" || mediaType.endsWith("+json")) return "application/json";
+  if (mediaType === "application/xml" || mediaType === "text/xml" || mediaType.endsWith("+xml")) {
+    return "text/xml";
+  }
+  if (mediaType === "application/x-www-form-urlencoded" || mediaType === "multipart/form-data") {
+    return mediaType;
+  }
+  if (mediaType === "application/octet-stream") return "binary";
+  return "other";
+}
+
 function mediaTypeExample(mediaType: UnknownRecord, importState: ImportState): unknown {
-  const directExample = firstPresent(mediaType.example, firstExampleValue(mediaType.examples));
+  const directExample = firstPresent(
+    mediaType.example,
+    firstExampleValue(mediaType.examples, importState),
+  );
   if (directExample != null) return directExample;
   return schemaToExample(importState.resolve(mediaType.schema), importState);
 }
 
 function schemaToFormParameters(schema: unknown, importState: ImportState) {
   const resolvedSchema = toRecord(importState.resolve(schema));
-  const required = toArray(resolvedSchema.required).filter(
-    (name): name is string => typeof name === "string",
-  );
-  const properties = Object.entries(toRecord(resolvedSchema.properties)).slice(
-    0,
-    MAX_EXAMPLE_PROPERTIES,
-  );
+  const sources = [
+    ...toArray(resolvedSchema.allOf).map((s) => toRecord(importState.resolve(s))),
+    resolvedSchema,
+  ];
+  const required = sources
+    .flatMap((s) => toArray(s.required))
+    .filter((name): name is string => typeof name === "string");
+  const properties = [
+    ...new Map(sources.flatMap((s) => Object.entries(toRecord(s.properties)))).entries(),
+  ].slice(0, MAX_EXAMPLE_PROPERTIES);
 
   return properties.map(([name, property]) => {
     const resolvedProperty = toRecord(importState.resolve(property));
@@ -920,20 +1045,22 @@ function schemaToExample(
 
   const explicitExample = firstPresent(
     resolved.example,
-    firstExampleValue(resolved.examples),
+    firstExampleValue(resolved.examples, importState),
     resolved.default,
   );
-  if (explicitExample != null) return explicitExample;
+  if (explicitExample != null) return coerceToDeclaredType(explicitExample, resolved);
 
   const enumValues = toArray(resolved.enum);
   if (enumValues.length > 0) return enumValues[0];
 
   const allOf = toArray(resolved.allOf);
   if (allOf.length > 0) {
-    return allOf.reduce<UnknownRecord>((merged, childSchema) => {
+    const merged = allOf.reduce<UnknownRecord>((merged, childSchema) => {
       const childExample = schemaToExample(childSchema, importState, depth + 1, visitedRefs);
       return isRecord(childExample) ? { ...merged, ...childExample } : merged;
     }, {});
+    // Sibling properties are their own constraint alongside the allOf branches
+    return { ...merged, ...objectPropertiesExample(resolved, importState, depth, visitedRefs) };
   }
 
   const oneOf = toArray(resolved.oneOf);
@@ -947,29 +1074,76 @@ function schemaToExample(
     return [schemaToExample(resolved.items, importState, depth + 1, visitedRefs)];
   }
   if (type === "object") {
-    const required = toArray(resolved.required).filter(
-      (name): name is string => typeof name === "string",
-    );
-    const properties = Object.entries(toRecord(resolved.properties)).sort(([a], [b]) => {
-      const aRequired = required.includes(a);
-      const bRequired = required.includes(b);
-      return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
-    });
-
-    return Object.fromEntries(
-      properties
-        .slice(0, MAX_EXAMPLE_PROPERTIES)
-        .map(([name, property]) => [
-          name,
-          schemaToExample(property, importState, depth + 1, visitedRefs),
-        ]),
-    );
+    return objectPropertiesExample(resolved, importState, depth, visitedRefs);
   }
   if (type === "integer" || type === "number") return 0;
   if (type === "boolean") return false;
-  if (stringAt(resolved, "format") === "date-time") return "2026-01-01T00:00:00Z";
-  if (stringAt(resolved, "format") === "date") return "2026-01-01";
-  return "";
+  return FORMAT_EXAMPLES[stringAt(resolved, "format") ?? ""] ?? "";
+}
+
+const FORMAT_EXAMPLES: Record<string, string> = {
+  "date-time": "2026-01-01T00:00:00Z",
+  date: "2026-01-01",
+  email: "user@example.com",
+  hostname: "example.com",
+  ipv4: "127.0.0.1",
+  ipv6: "::1",
+  uri: "https://example.com",
+  url: "https://example.com",
+  uuid: "00000000-0000-0000-0000-000000000000",
+};
+
+/**
+ * YAML coerces unquoted scalars, so specs routinely carry `example: 12345` on a
+ * `type: string` field. Sending the number fails the spec's own schema, and the
+ * declared type is the author's stated intent.
+ */
+function coerceToDeclaredType(example: unknown, schema: UnknownRecord): unknown {
+  const rawType = schema.type;
+  const declared =
+    typeof rawType === "string"
+      ? rawType
+      : Array.isArray(rawType)
+        ? rawType.find((t) => t !== "null")
+        : null;
+
+  if (declared === "string" && (typeof example === "number" || typeof example === "boolean")) {
+    return String(example);
+  }
+  if (
+    (declared === "integer" || declared === "number") &&
+    typeof example === "string" &&
+    example.trim() !== "" &&
+    Number.isFinite(Number(example))
+  ) {
+    return Number(example);
+  }
+  return example;
+}
+
+function objectPropertiesExample(
+  schema: UnknownRecord,
+  importState: ImportState,
+  depth: number,
+  visitedRefs: Set<string>,
+): UnknownRecord {
+  const required = toArray(schema.required).filter(
+    (name): name is string => typeof name === "string",
+  );
+  const properties = Object.entries(toRecord(schema.properties)).sort(([a], [b]) => {
+    const aRequired = required.includes(a);
+    const bRequired = required.includes(b);
+    return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
+  });
+
+  return Object.fromEntries(
+    properties
+      .slice(0, MAX_EXAMPLE_PROPERTIES)
+      .map(([name, property]) => [
+        name,
+        schemaToExample(property, importState, depth + 1, visitedRefs),
+      ]),
+  );
 }
 
 function inferSchemaType(schema: UnknownRecord): string {
@@ -1394,8 +1568,13 @@ function stringifyExampleValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function firstExampleValue(examples: unknown): unknown {
-  const firstExample = Object.values(toRecord(examples))[0];
+/**
+ * `examples` is a map of (possibly `$ref`) Example objects on media types and
+ * parameters, but a plain array of values on OpenAPI 3.1 schemas.
+ */
+function firstExampleValue(examples: unknown, importState: ImportState): unknown {
+  if (Array.isArray(examples)) return examples[0];
+  const firstExample = importState.resolve(Object.values(toRecord(examples))[0]);
   if (isRecord(firstExample) && "value" in firstExample) return firstExample.value;
   return firstExample;
 }
@@ -1423,23 +1602,6 @@ function isRecord(value: unknown): value is UnknownRecord {
 
 function isPresent<T>(value: T | null | undefined): value is T {
   return value != null && value !== "";
-}
-
-/** Recursively render all nested object properties */
-function convertTemplateSyntax<T>(obj: T): T {
-  if (typeof obj === "string") {
-    // oxlint-disable-next-line no-template-curly-in-string -- Yaak template syntax
-    return obj.replaceAll(/{{\s*(_\.)?([^}]+)\s*}}/g, "${[$2]}") as T;
-  }
-  if (Array.isArray(obj) && obj != null) {
-    return obj.map(convertTemplateSyntax) as T;
-  }
-  if (typeof obj === "object" && obj != null) {
-    return Object.fromEntries(
-      Object.entries(obj).map(([k, v]) => [k, convertTemplateSyntax(v)]),
-    ) as T;
-  }
-  return obj;
 }
 
 function deleteUndefinedAttrs<T>(obj: T): T {
@@ -1503,7 +1665,11 @@ class ImportState {
       .slice(2)
       .split("/")
       .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"))
-      .reduce<unknown>((current, part) => toRecord(current)[part], this.#spec);
+      .reduce<unknown>(
+        (current, part) =>
+          Array.isArray(current) ? current[Number(part)] : toRecord(current)[part],
+        this.#spec,
+      );
 
     return this.resolve(resolved, nextVisitedRefs);
   }
