@@ -120,7 +120,7 @@ describe("exporter-curl", () => {
         `curl -X PUT 'https://yaak.app'`,
         `--form 'a=aaa'`,
         `--form 'b=bbb'`,
-        "--form f=@/foo/bar.png;type=image/png",
+        "--form 'f=@/foo/bar.png;type=image/png'",
       ].join(" \\\n  "),
     );
   });
@@ -140,11 +140,48 @@ describe("exporter-curl", () => {
       [
         `curl -X POST 'https://yaak.app'`,
         `--header 'Content-Type: application/json'`,
-        `--data '{"foo":"bar\\'s"}'`,
+        `--data '{"foo":"bar'\\''s"}'`,
       ].join(" \\\n  "),
     );
   });
 
+  test("Quotes an apostrophe so the command still parses", async () => {
+    // POSIX single quotes take no escapes: `\'` ends the string one
+    // character early and everything after it is left dangling, so the copied
+    // command is a syntax error rather than a request.
+    const command = await convertToCurl({
+      url: "https://yaak.app/it's",
+      method: "POST",
+      bodyType: "application/json",
+      body: { text: `{"note":"don't stop"}` },
+      headers: [{ name: "X-Note", value: "it's fine" }],
+    });
+
+    expect(command).toEqual(
+      [
+        `curl -X POST 'https://yaak.app/it'\\''s'`,
+        `--header 'X-Note: it'\\''s fine'`,
+        `--data '{"note":"don'\\''t stop"}'`,
+      ].join(" \\\n  "),
+    );
+  });
+
+  test("Quotes a file form field so its type suffix survives", async () => {
+    // A bare `;` separates commands, so an unquoted `f=@x.png;type=image/png`
+    // reaches curl as `f=@x.png` and the rest runs as its own command.
+    expect(
+      await convertToCurl({
+        url: "https://yaak.app",
+        method: "POST",
+        bodyType: "multipart/form-data",
+        body: { form: [{ name: "f", file: "/my files/a.png", contentType: "image/png" }] },
+      }),
+    ).toEqual(
+      [`curl -X POST 'https://yaak.app'`, `--form 'f=@/my files/a.png;type=image/png'`].join(
+        " \\\n  ",
+      ),
+    );
+  });
   test("Exports multi-line JSON body", async () => {
     expect(
       await convertToCurl({
