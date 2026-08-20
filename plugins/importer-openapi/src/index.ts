@@ -37,7 +37,7 @@ const BODY_CONTENT_TYPE_PREFERENCE = [
   "text/plain",
 ];
 const MAX_EXAMPLE_DEPTH = 8;
-const MAX_SCHEMA_MERGE_DEPTH = MAX_EXAMPLE_DEPTH;
+const MAX_SCHEMA_RESOLUTION_DEPTH = MAX_EXAMPLE_DEPTH;
 const MAX_EXAMPLE_PROPERTIES = 25;
 const MAX_DESCRIPTION_ITEMS = 40;
 const MAX_NAME_LENGTH = 100;
@@ -1945,8 +1945,13 @@ class ImportState {
   }
 
   /** Schema Objects allow `$ref` siblings in OpenAPI 3.1 and later. */
-  resolveSchema(value: unknown, visitedRefs = new Set<string>()): unknown {
+  resolveSchema(
+    value: unknown,
+    visitedRefs = new Set<string>(),
+    depth = 0,
+  ): unknown {
     if (!isRecord(value)) return value;
+    if (depth > MAX_SCHEMA_RESOLUTION_DEPTH) return value;
 
     let resolved: UnknownRecord = value;
     let structureVisitedRefs = visitedRefs;
@@ -1964,21 +1969,26 @@ class ImportState {
       const referenced = this.resolveSchema(
         this.#resolveLocalReference(value.$ref),
         nextVisitedRefs,
+        depth + 1,
       );
       if (!isRecord(referenced)) return referenced;
 
       resolved = this.#mergeSchemaObjects(referenced, siblings);
     }
 
-    return this.#mergeAllOfStructure(resolved, structureVisitedRefs);
+    return this.#mergeAllOfStructure(resolved, structureVisitedRefs, depth);
   }
 
-  #mergeAllOfStructure(schema: UnknownRecord, visitedRefs: Set<string>): UnknownRecord {
+  #mergeAllOfStructure(
+    schema: UnknownRecord,
+    visitedRefs: Set<string>,
+    depth: number,
+  ): UnknownRecord {
     const allOf = toArray(schema.allOf);
     if (allOf.length === 0) return schema;
 
     const composed = allOf.reduce<UnknownRecord>((merged, childSchema) => {
-      const child = this.resolveSchema(childSchema, new Set(visitedRefs));
+      const child = this.resolveSchema(childSchema, new Set(visitedRefs), depth + 1);
       if (!isRecord(child)) return merged;
       const childStructure = Object.fromEntries(
         Object.entries(child).filter(([key]) => key !== "allOf"),
@@ -1990,7 +2000,7 @@ class ImportState {
 
   #mergeSchemaObjects(base: UnknownRecord, overlay: UnknownRecord, depth = 0): UnknownRecord {
     const merged: UnknownRecord = { ...base, ...overlay };
-    if (depth > MAX_SCHEMA_MERGE_DEPTH) return merged;
+    if (depth > MAX_SCHEMA_RESOLUTION_DEPTH) return merged;
 
     const baseProperties = toRecord(base.properties);
     const overlayProperties = toRecord(overlay.properties);

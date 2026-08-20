@@ -404,6 +404,21 @@ describe("importer-openapi", () => {
     });
   });
 
+  test("Bounds deeply nested inline allOf schemas", async () => {
+    const depth = 12_000;
+    const schema = '{"allOf":['.repeat(depth) + '{"type":"string","example":"leaf"}' + "]}".repeat(depth);
+    const imported = await convertOpenApi(
+      '{"openapi":"3.1.0","info":{"title":"Deep allOf","version":"1.0.0"},' +
+        '"paths":{"/deep":{"post":{"requestBody":{"content":{"application/json":{"schema":' +
+        schema +
+        '}}},"responses":{}}}}}',
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({}, null, 2),
+    });
+  });
+
   test("Imports requests directly from OpenAPI details", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
