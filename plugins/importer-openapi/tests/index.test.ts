@@ -766,6 +766,194 @@ describe("importer-openapi", () => {
     ]);
   });
 
+  test("Imports cookie and content-based parameters", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Parameter Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              parameters: [
+                {
+                  name: "session",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "string", example: "abc" },
+                },
+                {
+                  name: "debug",
+                  in: "cookie",
+                  schema: { type: "string", example: "verbose" },
+                },
+                {
+                  name: "X-Filter",
+                  in: "header",
+                  required: true,
+                  content: { "text/plain": { example: "active" } },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.headers).toEqual([
+      { enabled: true, name: "X-Filter", value: "active" },
+      { enabled: true, name: "Cookie", value: "session=abc" },
+      { enabled: false, name: "Cookie", value: "debug=verbose" },
+    ]);
+  });
+
+  test("Preserves parameter cookies alongside cookie API-key authentication", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Authenticated Cookie Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              security: [{ basicAuth: [], cookieKey: [] }],
+              parameters: [
+                {
+                  name: "session",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "string", example: "abc" },
+                },
+                {
+                  name: "debug",
+                  in: "cookie",
+                  schema: { type: "string", example: "verbose" },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+        components: {
+          securitySchemes: {
+            basicAuth: { type: "http", scheme: "basic" },
+            cookieKey: { type: "apiKey", in: "cookie", name: "api_key" },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        authenticationType: "basic",
+        headers: [
+          { enabled: true, name: "Cookie", value: "api_key=${[auth_cookie_key_key]}" },
+          { enabled: true, name: "Cookie", value: "session=abc" },
+          { enabled: false, name: "Cookie", value: "debug=verbose" },
+        ],
+      }),
+    );
+  });
+
+  test("Serializes structured query parameters according to style and explode", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Serialization Test", version: "1.0.0" },
+        paths: {
+          "/items": {
+            get: {
+              parameters: [
+                {
+                  name: "filter",
+                  in: "query",
+                  required: true,
+                  style: "deepObject",
+                  explode: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      role: { example: "admin" },
+                      active: { example: true },
+                    },
+                  },
+                },
+                {
+                  name: "tags",
+                  in: "query",
+                  style: "form",
+                  explode: true,
+                  schema: { type: "array", example: ["one", "two"] },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.urlParameters).toEqual([
+      { enabled: true, name: "filter[role]", value: "admin" },
+      { enabled: true, name: "filter[active]", value: "true" },
+      { enabled: false, name: "tags", value: "one" },
+      { enabled: false, name: "tags", value: "two" },
+    ]);
+  });
+
+  test("Emits executable label and matrix path serializations", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Path Serialization Test", version: "1.0.0" },
+        paths: {
+          "/labels/{labels}/matrix/{coordinates}/scalar/{color}/report.{format}": {
+            get: {
+              parameters: [
+                {
+                  name: "labels",
+                  in: "path",
+                  required: true,
+                  style: "label",
+                  explode: true,
+                  schema: { type: "array", example: ["one/two", "three"] },
+                },
+                {
+                  name: "coordinates",
+                  in: "path",
+                  required: true,
+                  style: "matrix",
+                  explode: true,
+                  schema: { type: "object", example: { x: "1;spoof=2", y: 2 } },
+                },
+                {
+                  name: "format",
+                  in: "path",
+                  required: true,
+                  schema: { type: "string", example: "json/evil" },
+                },
+                {
+                  name: "color",
+                  in: "path",
+                  required: true,
+                  style: "label",
+                  schema: { type: "string", example: "blue" },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]).toEqual(
+      expect.objectContaining({
+        url: "${[baseUrl]}/labels/.one%2Ftwo.three/matrix/;x=1%3Bspoof%3D2;y=2/scalar/.blue/report.json%2Fevil",
+        urlParameters: [],
+      }),
+    );
+  });
+
   test("Prefers operation-level consumes for Swagger bodies", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({

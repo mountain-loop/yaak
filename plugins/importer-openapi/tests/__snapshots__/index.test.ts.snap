@@ -163,17 +163,12 @@ Responses:
         "model": "http_request",
         "name": "Retrieve one version of a particular API",
         "sortPriority": 5,
-        "url": "\${[baseUrl]}/specs/:provider/:api.json",
+        "url": "\${[baseUrl]}/specs/:provider/2.1.0.json",
         "urlParameters": [
           {
             "enabled": true,
             "name": ":provider",
             "value": "apis.guru",
-          },
-          {
-            "enabled": true,
-            "name": ":api",
-            "value": "2.1.0",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -207,7 +202,7 @@ Responses:
         "model": "http_request",
         "name": "Retrieve one version of a particular API with a serviceName.",
         "sortPriority": 6,
-        "url": "\${[baseUrl]}/specs/:provider/:service/:api.json",
+        "url": "\${[baseUrl]}/specs/:provider/:service/2.1.0.json",
         "urlParameters": [
           {
             "enabled": true,
@@ -218,11 +213,6 @@ Responses:
             "enabled": true,
             "name": ":service",
             "value": "graph",
-          },
-          {
-            "enabled": true,
-            "name": ":api",
-            "value": "2.1.0",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -256,14 +246,8 @@ Responses:
         "model": "http_request",
         "name": "List all APIs for a particular provider",
         "sortPriority": 7,
-        "url": "\${[baseUrl]}/:provider.json",
-        "urlParameters": [
-          {
-            "enabled": true,
-            "name": ":provider",
-            "value": "apis.guru",
-          },
-        ],
+        "url": "\${[baseUrl]}/apis.guru.json",
+        "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -860,13 +844,7 @@ Responses:
 - 200: Sucessful authentication.
 - 401: Unsuccessful authentication.",
         "folderId": "GENERATE_ID::FOLDER_1",
-        "headers": [
-          {
-            "enabled": false,
-            "name": "Authorization",
-            "value": "",
-          },
-        ],
+        "headers": [],
         "id": "GENERATE_ID::HTTP_REQUEST_15",
         "method": "GET",
         "model": "http_request",

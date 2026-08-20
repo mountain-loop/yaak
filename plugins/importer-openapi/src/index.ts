@@ -302,7 +302,7 @@ function importOperation({
     useDynamicServerUrls,
   });
   const urlParameters = [
-    ...importUrlParameters({ importState, parameters }),
+    ...importUrlParameters({ importState, parameters, path }),
     ...authentication.urlParameters,
   ];
   const headers = mergeHeaders(
@@ -336,6 +336,8 @@ function importOperation({
     url: buildOperationUrl(
       operationBaseUrl({ operation, pathItem, requestBaseUrl, serverOverrides }),
       path,
+      parameters,
+      importState,
     ),
     urlParameters,
     headers,
@@ -645,8 +647,58 @@ function findOrCreateFolderId({
   return folder.id;
 }
 
-function buildOperationUrl(baseUrl: string, path: string): string {
-  return joinUrlParts(baseUrl, path.replaceAll(/{([^}/]+)}/g, ":$1"));
+function buildOperationUrl(
+  baseUrl: string,
+  path: string,
+  parameters: unknown[],
+  importState: ImportState,
+): string {
+  let serializedPath = path;
+  for (const rawParameter of parameters) {
+    const parameter = importState.resolve(rawParameter);
+    if (!isRecord(parameter) || !shouldInlinePathParameter(parameter, importState, path)) continue;
+
+    const name = stringAt(parameter, "name") ?? "";
+    if (name.length === 0) continue;
+    const value = parameterExampleValue(parameter, importState);
+    serializedPath = serializedPath.replaceAll(
+      `{${name}}`,
+      isRecord(parameter.content)
+        ? encodePathComponent(serializeContentParameter(parameter, importState))
+        : serializePathParameter(name, value, parameter, encodePathComponent),
+    );
+  }
+  return joinUrlParts(baseUrl, serializedPath.replaceAll(/{([^}/]+)}/g, ":$1"));
+}
+
+function shouldInlinePathParameter(
+  parameter: UnknownRecord,
+  importState: ImportState,
+  path: string,
+): boolean {
+  if (stringAt(parameter, "in") !== "path") return false;
+  const name = stringAt(parameter, "name") ?? "";
+  const template = `{${name}}`;
+  const matchingSegments = path.split("/").filter((segment) => segment.includes(template));
+  if (matchingSegments.length === 0 || matchingSegments.some((segment) => segment !== template)) {
+    return true;
+  }
+  if (isRecord(parameter.content)) return false;
+  const value = parameterExampleValue(parameter, importState);
+  const style = stringAt(parameter, "style");
+  return (
+    style === "label" ||
+    style === "matrix" ||
+    Array.isArray(value) ||
+    isRecord(value)
+  );
+}
+
+function encodePathComponent(value: unknown): string {
+  return encodeURIComponent(stringifyExampleValue(value)).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 function importBaseUrl(spec: UnknownRecord): string {
@@ -733,23 +785,80 @@ function trimTrailingSlashes(value: string): string {
 function importUrlParameters({
   importState,
   parameters,
+  path,
 }: {
   importState: ImportState;
   parameters: unknown[];
+  path: string;
 }): HttpUrlParameter[] {
   return parameters
     .map((p) => importState.resolve(p))
     .filter(isRecord)
     .filter((p) => stringAt(p, "in") === "query" || stringAt(p, "in") === "path")
-    .map((p) => ({
-      enabled: p.required === true,
-      name:
-        stringAt(p, "in") === "path"
-          ? `:${stringAt(p, "name") ?? ""}`
-          : (stringAt(p, "name") ?? ""),
-      value: parameterExample(p, importState),
-    }))
+    .flatMap((p) => serializeUrlParameter(p, importState, path))
     .filter(({ name }) => name.length > 0);
+}
+
+function serializeUrlParameter(
+  parameter: UnknownRecord,
+  importState: ImportState,
+  path: string,
+): HttpUrlParameter[] {
+  const name = stringAt(parameter, "name") ?? "";
+  const location = stringAt(parameter, "in");
+  const enabled = parameter.required === true;
+  const value = parameterExampleValue(parameter, importState);
+  if (isRecord(parameter.content)) {
+    return [
+      {
+        enabled,
+        name: location === "path" ? `:${name}` : name,
+        value: serializeContentParameter(parameter, importState),
+      },
+    ];
+  }
+  if (location === "path") {
+    if (shouldInlinePathParameter(parameter, importState, path)) return [];
+    return [{ enabled, name: `:${name}`, value: serializePathParameter(name, value, parameter) }];
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    const style = stringAt(parameter, "style") ?? "form";
+    const explode = parameter.explode !== false;
+    if (style === "deepObject") {
+      return entries.map(([key, entryValue]) => ({
+        enabled,
+        name: `${name}[${key}]`,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    if (style === "form" && explode) {
+      return entries.map(([key, entryValue]) => ({
+        enabled,
+        name: key,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    const separator = style === "spaceDelimited" ? " " : style === "pipeDelimited" ? "|" : ",";
+    return [{ enabled, name, value: entries.flat().map(stringifyExampleValue).join(separator) }];
+  }
+
+  if (Array.isArray(value)) {
+    const style = stringAt(parameter, "style") ?? "form";
+    const explode = parameter.explode !== false;
+    if (style === "form" && explode) {
+      return value.map((entryValue) => ({
+        enabled,
+        name,
+        value: stringifyExampleValue(entryValue),
+      }));
+    }
+    const separator = style === "spaceDelimited" ? " " : style === "pipeDelimited" ? "|" : ",";
+    return [{ enabled, name, value: value.map(stringifyExampleValue).join(separator) }];
+  }
+
+  return [{ enabled, name, value: stringifyExampleValue(value) }];
 }
 
 function importHeaderParameters({
@@ -763,18 +872,138 @@ function importHeaderParameters({
     .map((p) => importState.resolve(p))
     .filter(isRecord)
     .filter((p) => stringAt(p, "in") === "header")
+    .filter(
+      (p) =>
+        !["accept", "authorization", "content-type"].includes(
+          (stringAt(p, "name") ?? "").toLowerCase(),
+        ),
+    )
     .map((p) => ({
       enabled: p.required === true,
       name: stringAt(p, "name") ?? "",
-      value: parameterExample(p, importState),
+      value: serializeParameterValue(p, importState),
     }))
-    .filter(({ name }) => name.length > 0);
+    .filter(({ name }) => name.length > 0)
+    .concat(importCookieHeader(parameters, importState));
+}
+
+function importCookieHeader(parameters: unknown[], importState: ImportState): HttpRequestHeader[] {
+  return parameters
+    .map((p) => importState.resolve(p))
+    .filter(isRecord)
+    .filter((p) => stringAt(p, "in") === "cookie")
+    .map((p) => ({
+      enabled: p.required === true,
+      name: "Cookie",
+      value: serializeCookieParameter(p, importState),
+    }))
+    .filter(({ value }) => value.length > 0);
+}
+
+function serializeCookieParameter(parameter: UnknownRecord, importState: ImportState): string {
+  const name = stringAt(parameter, "name") ?? "";
+  if (name.length === 0) return "";
+  if (isRecord(parameter.content)) {
+    return `${name}=${serializeContentParameter(parameter, importState)}`;
+  }
+
+  const value = parameterExampleValue(parameter, importState);
+  const explode = parameter.explode !== false;
+  if (Array.isArray(value)) {
+    return explode
+      ? value.map((entryValue) => `${name}=${stringifyExampleValue(entryValue)}`).join("&")
+      : `${name}=${value.map(stringifyExampleValue).join(",")}`;
+  }
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    return explode
+      ? entries.map(([key, entryValue]) => `${key}=${stringifyExampleValue(entryValue)}`).join("&")
+      : `${name}=${entries.flat().map(stringifyExampleValue).join(",")}`;
+  }
+  return `${name}=${stringifyExampleValue(value)}`;
+}
+
+function serializeParameterValue(parameter: UnknownRecord, importState: ImportState): string {
+  if (isRecord(parameter.content)) return serializeContentParameter(parameter, importState);
+  return serializeSimpleParameter(parameterExampleValue(parameter, importState), parameter);
+}
+
+function serializeContentParameter(parameter: UnknownRecord, importState: ImportState): string {
+  const [contentType, rawMediaType] = Object.entries(toRecord(parameter.content))[0] ?? [];
+  const value = mediaTypeExample(toRecord(rawMediaType), importState);
+  return contentType?.toLowerCase().includes("json")
+    ? (JSON.stringify(value) ?? "")
+    : stringifyExampleValue(value);
+}
+
+function serializePathParameter(
+  name: string,
+  value: unknown,
+  parameter: UnknownRecord,
+  serializeValue: (value: unknown) => string = stringifyExampleValue,
+): string {
+  const style = stringAt(parameter, "style") ?? "simple";
+  const explode = parameter.explode === true;
+  const values = Array.isArray(value)
+    ? value.map(serializeValue)
+    : isRecord(value)
+      ? Object.entries(value).flatMap(([key, entryValue]) => [
+          serializeValue(key),
+          serializeValue(entryValue),
+        ])
+      : [serializeValue(value)];
+
+  if (style === "label") {
+    if (explode && isRecord(value)) {
+      return `.${Object.entries(value)
+        .map(([key, entryValue]) => `${serializeValue(key)}=${serializeValue(entryValue)}`)
+        .join(".")}`;
+    }
+    return `.${values.join(explode ? "." : ",")}`;
+  }
+  if (style === "matrix") {
+    if (explode && Array.isArray(value)) {
+      return value.map((entryValue) => `;${name}=${serializeValue(entryValue)}`).join("");
+    }
+    if (explode && isRecord(value)) {
+      return Object.entries(value)
+        .map(([key, entryValue]) => `;${serializeValue(key)}=${serializeValue(entryValue)}`)
+        .join("");
+    }
+    return `;${name}=${values.join(",")}`;
+  }
+  return serializeSimpleParameter(value, parameter, serializeValue);
+}
+
+function serializeSimpleParameter(
+  value: unknown,
+  parameter: UnknownRecord,
+  serializeValue: (value: unknown) => string = stringifyExampleValue,
+): string {
+  if (Array.isArray(value)) return value.map(serializeValue).join(",");
+  if (isRecord(value)) {
+    const entries = Object.entries(value);
+    return parameter.explode === true
+      ? entries
+          .map(([key, entryValue]) => `${serializeValue(key)}=${serializeValue(entryValue)}`)
+          .join(",")
+      : entries.flat().map(serializeValue).join(",");
+  }
+  return serializeValue(value);
 }
 
 function parameterExample(parameter: UnknownRecord, importState: ImportState): string {
+  return stringifyExampleValue(parameterExampleValue(parameter, importState));
+}
+
+function parameterExampleValue(parameter: UnknownRecord, importState: ImportState): unknown {
   const directExample = firstPresent(parameter.example, firstExampleValue(parameter.examples));
-  if (directExample != null) return stringifyExampleValue(directExample);
-  return stringifyExampleValue(schemaToExample(importState.resolve(parameter.schema), importState));
+  if (directExample != null) return directExample;
+  if (isRecord(parameter.content)) {
+    const mediaType = toRecord(Object.values(parameter.content)[0]);
+    return mediaTypeExample(mediaType, importState);
+  }
+  return schemaToExample(importState.resolve(parameter.schema), importState);
 }
 
 function importBody({
@@ -1374,10 +1603,13 @@ function buildOAuthVariablesByScheme(
 
 function mergeHeaders(...headerGroups: HttpRequestHeader[][]): HttpRequestHeader[] {
   const headers: HttpRequestHeader[] = [];
-  for (const header of headerGroups.flat()) {
-    const existing = headers.find((h) => h.name.toLowerCase() === header.name.toLowerCase());
-    if (existing == null) {
-      headers.push(header);
+  for (const group of headerGroups) {
+    const namesFromEarlierGroups = new Set(headers.map((header) => header.name.toLowerCase()));
+    for (const header of group) {
+      const name = header.name.toLowerCase();
+      if (name === "cookie" || !namesFromEarlierGroups.has(name)) {
+        headers.push(header);
+      }
     }
   }
   return headers;
