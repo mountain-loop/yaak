@@ -67,7 +67,14 @@ export const EnvironmentActionsDropdown = memo(function EnvironmentActionsDropdo
         )}
         // If no environments, the button simply opens the dialog.
         // NOTE: We don't create a new button because we want to reuse the hotkey from the menu items
-        onClick={subEnvironments.length === 0 ? () => editEnvironment(null) : undefined}
+        onClick={
+          subEnvironments.length === 0
+            ? (event) => {
+                event.preventDefault();
+                editEnvironment(null);
+              }
+            : undefined
+        }
         {...buttonProps}
       >
         <EnvironmentColorIndicator environment={activeEnvironment ?? null} />
