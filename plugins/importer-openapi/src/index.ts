@@ -481,11 +481,12 @@ function parseSpec(contents: string): unknown {
 function isOpenApiSpec(value: unknown): value is UnknownRecord {
   const spec = toRecord(value);
   const openapi = versionString(spec.openapi);
+  return isRecord(spec.paths) && (/^3(\.|$)/.test(openapi ?? "") || isSwagger2(spec));
+}
+
+function isSwagger2(spec: UnknownRecord): boolean {
   const swagger = versionString(spec.swagger);
-  return (
-    isRecord(spec.paths) &&
-    (/^3(\.|$)/.test(openapi ?? "") || swagger === "2.0" || swagger === "2")
-  );
+  return swagger === "2.0" || swagger === "2";
 }
 
 function versionString(value: unknown): string | undefined {
@@ -713,8 +714,7 @@ function importServerEnvironments(spec: UnknownRecord): { name: string; url: str
     .filter(({ url }) => url.length > 0);
   if (servers.length === 0) {
     const hasSwaggerServer =
-      stringAt(spec, "swagger") === "2.0" &&
-      (stringAt(spec, "host") != null || stringAt(spec, "basePath") != null);
+      isSwagger2(spec) && (stringAt(spec, "host") != null || stringAt(spec, "basePath") != null);
     return [
       {
         name: hasSwaggerServer ? "Server 1" : "Default",

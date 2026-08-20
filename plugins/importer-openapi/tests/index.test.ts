@@ -1251,6 +1251,14 @@ describe("importer-openapi", () => {
     );
 
     expect(imported?.resources.httpRequests[0]?.url).toBe("${[baseUrl]}/a");
+    // The numeric version must feed server detection too, or the selectable
+    // environment overrides baseUrl with an empty value
+    expect(imported?.resources.environments[1]).toEqual(
+      expect.objectContaining({
+        name: "Server 1",
+        variables: [{ name: "baseUrl", value: "https://example.com" }],
+      }),
+    );
   });
 
   test("Normalizes body types to Yaak's editors", async () => {
