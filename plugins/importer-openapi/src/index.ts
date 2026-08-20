@@ -1034,14 +1034,13 @@ function importBody({
       (c): c is string => typeof c === "string",
     );
     const bodyType = contentType ?? "application/json";
+    const schema = importState.resolve(bodyParameter.schema);
+    const example = schemaToExample(schema, importState);
+    const isBinary = stringAt(schema, "format") === "binary";
     return {
       headers: [{ enabled: true, name: "Content-Type", value: bodyType }],
-      bodyType,
-      body: {
-        text: formatBodyText(
-          schemaToExample(importState.resolve(bodyParameter.schema), importState),
-        ),
-      },
+      bodyType: isBinary ? "binary" : bodyType,
+      body: isBinary ? {} : { text: formatMediaTypeBody(bodyType, example, schema, importState) },
     };
   }
 
@@ -1059,11 +1058,15 @@ function importBody({
       headers: [{ enabled: true, name: "Content-Type", value: contentType }],
       bodyType: contentType,
       body: {
-        form: formParameters.map((p) => ({
-          enabled: p.required === true,
-          name: stringAt(p, "name") ?? "",
-          value: parameterExample(p, importState),
-        })),
+        form: formParameters.map((p) => {
+          const base = {
+            enabled: p.required === true,
+            name: stringAt(p, "name") ?? "",
+          };
+          return stringAt(p, "type") === "file"
+            ? { ...base, file: "" }
+            : { ...base, value: parameterExample(p, importState) };
+        }),
       },
     };
   }
@@ -1086,24 +1089,137 @@ function importBodyFromContent(importState: ImportState, content: UnknownRecord)
       headers: [{ enabled: true, name: "Content-Type", value: contentType }],
       bodyType: contentType,
       body: {
-        form: schemaToFormParameters(importState.resolve(mediaType.schema), importState),
+        form: schemaToFormParameters(
+          importState.resolve(mediaType.schema),
+          importState,
+          isRecord(example) ? example : undefined,
+        ),
       },
     };
   }
 
+  const schema = importState.resolve(mediaType.schema);
+  const isBinary =
+    contentType === "application/octet-stream" || stringAt(schema, "format") === "binary";
+
   return {
     headers: [{ enabled: true, name: "Content-Type", value: contentType }],
-    bodyType: contentType === "application/octet-stream" ? "binary" : contentType,
-    body: contentType === "application/octet-stream" ? {} : { text: formatBodyText(example) },
+    bodyType: isBinary ? "binary" : contentType,
+    body: isBinary ? {} : { text: formatMediaTypeBody(contentType, example, schema, importState) },
   };
 }
 
 function chooseContentType(contentTypes: string[]): string | null {
+  const jsonType = contentTypes.find((contentType) => {
+    const normalized = contentType.toLowerCase().split(";", 1)[0];
+    return normalized?.endsWith("+json") === true;
+  });
   for (const preference of BODY_CONTENT_TYPE_PREFERENCE) {
     const exact = contentTypes.find((c) => c.toLowerCase() === preference);
     if (exact != null) return exact;
+    if (preference === "application/json" && jsonType != null) return jsonType;
   }
   return contentTypes[0] ?? null;
+}
+
+function formatMediaTypeBody(
+  contentType: string,
+  example: unknown,
+  schema: unknown,
+  importState: ImportState,
+): string {
+  const normalized = contentType.toLowerCase().split(";", 1)[0] ?? "";
+  if (normalized === "application/json" || normalized.endsWith("+json")) {
+    return JSON.stringify(example, null, 2) ?? "";
+  }
+  if (
+    normalized === "application/xml" ||
+    normalized === "text/xml" ||
+    normalized.endsWith("+xml")
+  ) {
+    return typeof example === "string"
+      ? example
+      : valueToXml(example, schema, importState, "root", true);
+  }
+  return formatBodyText(example);
+}
+
+function valueToXml(
+  value: unknown,
+  schema: unknown,
+  importState: ImportState,
+  elementName: string,
+  isDocumentRoot = false,
+): string {
+  const resolvedSchema = toRecord(importState.resolve(schema));
+  const schemaXml = toRecord(resolvedSchema.xml);
+  if (Array.isArray(value)) {
+    const itemSchema = importState.resolve(resolvedSchema.items);
+    const shouldWrap = schemaXml.wrapped === true || isDocumentRoot;
+    const itemName =
+      stringAt(toRecord(itemSchema).xml, "name") ??
+      (shouldWrap ? stringAt(schemaXml, "name") ?? elementName : elementName);
+    const items = value.map((item) => valueToXml(item, itemSchema, importState, itemName)).join("");
+    return shouldWrap ? xmlElement(elementName, schemaXml, items) : items;
+  }
+  if (isRecord(value)) {
+    const properties = toRecord(resolvedSchema.properties);
+    const attributes: string[] = [];
+    const attributeNamespaces: UnknownRecord[] = [];
+    const children: string[] = [];
+    for (const [name, propertyValue] of Object.entries(value)) {
+      const propertySchema = toRecord(importState.resolve(properties[name]));
+      const xml = toRecord(propertySchema.xml);
+      if (xml.attribute === true) {
+        attributes.push(
+          `${qualifiedXmlName(name, xml)}="${escapeXml(stringifyExampleValue(propertyValue))}"`,
+        );
+        attributeNamespaces.push(xml);
+      } else {
+        children.push(valueToXml(propertyValue, propertySchema, importState, name));
+      }
+    }
+    return xmlElement(elementName, schemaXml, children.join(""), attributes, attributeNamespaces);
+  }
+  return xmlElement(elementName, schemaXml, escapeXml(stringifyExampleValue(value)));
+}
+
+function xmlElement(
+  fallbackName: string,
+  xml: UnknownRecord,
+  content: string,
+  attributes: string[] = [],
+  additionalNamespaces: UnknownRecord[] = [],
+): string {
+  const name = qualifiedXmlName(fallbackName, xml);
+  const namespaces = new Map<string, string>();
+  for (const metadata of [xml, ...additionalNamespaces]) {
+    const namespace = stringAt(metadata, "namespace");
+    if (namespace == null) continue;
+    const prefix = stringAt(metadata, "prefix");
+    namespaces.set(prefix == null ? "xmlns" : `xmlns:${prefix}`, namespace);
+  }
+  const namespaceAttributes = [...namespaces].map(
+    ([attribute, namespace]) => `${attribute}="${escapeXml(namespace)}"`,
+  );
+  const attributeText = [...namespaceAttributes, ...attributes].join(" ");
+  const openingTag = attributeText.length > 0 ? `<${name} ${attributeText}>` : `<${name}>`;
+  return `${openingTag}${content}</${name}>`;
+}
+
+function qualifiedXmlName(fallbackName: string, xml: UnknownRecord): string {
+  const name = stringAt(xml, "name") ?? fallbackName;
+  const prefix = stringAt(xml, "prefix");
+  return prefix == null ? name : `${prefix}:${name}`;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
 }
 
 function mediaTypeExample(mediaType: UnknownRecord, importState: ImportState): unknown {
@@ -1112,19 +1228,22 @@ function mediaTypeExample(mediaType: UnknownRecord, importState: ImportState): u
   return schemaToExample(importState.resolve(mediaType.schema), importState);
 }
 
-function schemaToFormParameters(schema: unknown, importState: ImportState) {
+function schemaToFormParameters(
+  schema: unknown,
+  importState: ImportState,
+  example?: UnknownRecord,
+) {
   const resolvedSchema = toRecord(importState.resolve(schema));
   const required = toArray(resolvedSchema.required).filter(
     (name): name is string => typeof name === "string",
   );
-  const properties = Object.entries(toRecord(resolvedSchema.properties)).slice(
-    0,
-    MAX_EXAMPLE_PROPERTIES,
-  );
+  const properties = Object.entries(toRecord(resolvedSchema.properties))
+    .filter(([, property]) => toRecord(importState.resolve(property)).readOnly !== true)
+    .slice(0, MAX_EXAMPLE_PROPERTIES);
 
   return properties.map(([name, property]) => {
     const resolvedProperty = toRecord(importState.resolve(property));
-    const example = schemaToExample(resolvedProperty, importState);
+    const propertyExample = example?.[name] ?? schemaToExample(resolvedProperty, importState);
     const base = {
       enabled: required.includes(name),
       name,
@@ -1132,7 +1251,7 @@ function schemaToFormParameters(schema: unknown, importState: ImportState) {
     if (stringAt(resolvedProperty, "format") === "binary") {
       return { ...base, file: "" };
     }
-    return { ...base, value: stringifyExampleValue(example) };
+    return { ...base, value: stringifyExampleValue(propertyExample) };
   });
 }
 
@@ -1179,11 +1298,13 @@ function schemaToExample(
     const required = toArray(resolved.required).filter(
       (name): name is string => typeof name === "string",
     );
-    const properties = Object.entries(toRecord(resolved.properties)).sort(([a], [b]) => {
-      const aRequired = required.includes(a);
-      const bRequired = required.includes(b);
-      return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
-    });
+    const properties = Object.entries(toRecord(resolved.properties))
+      .filter(([, property]) => toRecord(importState.resolve(property)).readOnly !== true)
+      .sort(([a], [b]) => {
+        const aRequired = required.includes(a);
+        const bRequired = required.includes(b);
+        return aRequired === bRequired ? 0 : aRequired ? -1 : 1;
+      });
 
     return Object.fromEntries(
       properties

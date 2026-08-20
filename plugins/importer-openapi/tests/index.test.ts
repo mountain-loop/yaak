@@ -983,6 +983,218 @@ describe("importer-openapi", () => {
     );
   });
 
+  test("Serializes request examples according to their media type", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Media Type Test", version: "1.0.0" },
+        paths: {
+          "/xml": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "object",
+                      xml: { name: "user" },
+                      properties: { name: { type: "string", example: "Ada" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/json-string": {
+            post: {
+              requestBody: {
+                content: { "application/json": { schema: { type: "string", example: "hello" } } },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: "<user><name>Ada</name></user>",
+    });
+    expect(imported?.resources.httpRequests[1]?.body).toEqual({ text: '"hello"' });
+  });
+
+  test("Honors XML array wrapping and namespaces", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "XML Metadata Test", version: "1.0.0" },
+        paths: {
+          "/catalog": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "object",
+                      xml: { name: "catalog", namespace: "urn:catalog", prefix: "c" },
+                      properties: {
+                        id: {
+                          type: "string",
+                          example: "42",
+                          xml: { attribute: true, namespace: "urn:metadata", prefix: "m" },
+                        },
+                        tags: {
+                          type: "array",
+                          example: ["one", "two"],
+                          xml: {
+                            name: "tags",
+                            namespace: "urn:tags",
+                            prefix: "t",
+                            wrapped: true,
+                          },
+                          items: { type: "string", xml: { name: "tag" } },
+                        },
+                        aliases: {
+                          type: "array",
+                          example: ["Ada", "A"],
+                          xml: { name: "ignored", wrapped: false },
+                          items: {
+                            type: "string",
+                            xml: { name: "alias", namespace: "urn:aliases", prefix: "a" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+          "/values": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/xml": {
+                    schema: {
+                      type: "array",
+                      example: ["one", "two"],
+                      xml: { name: "values", wrapped: false },
+                      items: { type: "string", xml: { name: "value" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text:
+        '<c:catalog xmlns:c="urn:catalog" xmlns:m="urn:metadata" m:id="42">' +
+        '<t:tags xmlns:t="urn:tags"><tag>one</tag><tag>two</tag></t:tags>' +
+        '<a:alias xmlns:a="urn:aliases">Ada</a:alias>' +
+        '<a:alias xmlns:a="urn:aliases">A</a:alias>' +
+        "</c:catalog>",
+    });
+    expect(imported?.resources.httpRequests[1]?.body).toEqual({
+      text: "<values><value>one</value><value>two</value></values>",
+    });
+  });
+
+  test("Omits read-only properties from generated request bodies", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.4",
+        info: { title: "Read Only Test", version: "1.0.0" },
+        paths: {
+          "/users": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string", readOnly: true, example: "server-id" },
+                        name: { type: "string", example: "Ada" },
+                      },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify({ name: "Ada" }, null, 2),
+    });
+  });
+
+  test("Imports Swagger 2 file parameters as file form entries", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "File Upload Test", version: "1.0.0" },
+        host: "example.com",
+        consumes: ["multipart/form-data"],
+        paths: {
+          "/upload": {
+            post: {
+              parameters: [{ name: "upload", in: "formData", required: true, type: "file" }],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      form: [{ enabled: true, name: "upload", file: "" }],
+    });
+  });
+
+  test("Serializes Swagger 2 XML request bodies as XML", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        swagger: "2.0",
+        info: { title: "Swagger XML Test", version: "1.0.0" },
+        host: "example.com",
+        consumes: ["application/xml"],
+        paths: {
+          "/users": {
+            post: {
+              parameters: [
+                {
+                  name: "user",
+                  in: "body",
+                  required: true,
+                  schema: {
+                    type: "object",
+                    xml: { name: "user" },
+                    properties: { name: { type: "string", example: "Ada" } },
+                  },
+                },
+              ],
+              responses: {},
+            },
+          },
+        },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: "<user><name>Ada</name></user>",
+    });
+  });
+
   test("Imports Swagger 2 basic auth and cookie API keys", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({
