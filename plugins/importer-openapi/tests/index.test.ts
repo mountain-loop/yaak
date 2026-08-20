@@ -419,6 +419,57 @@ describe("importer-openapi", () => {
     });
   });
 
+  test("Resolves long local reference chains without truncating schemas", async () => {
+    const depth = 12_000;
+    const schemas: Record<string, unknown> = {
+      [`Ref${depth}`]: {
+        type: "object",
+        properties: { target: { type: "string", example: "reached" } },
+      },
+    };
+    for (let index = depth - 1; index >= 0; index--) {
+      schemas[`Ref${index}`] = {
+        $ref: `#/components/schemas/Ref${index + 1}`,
+        ...(index === 1
+          ? { properties: { middle: { type: "string", example: "sibling" } } }
+          : {}),
+      };
+    }
+
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Long Reference Chain", version: "1.0.0" },
+        paths: {
+          "/long-ref": {
+            post: {
+              requestBody: {
+                content: {
+                  "application/json": {
+                    schema: {
+                      $ref: "#/components/schemas/Ref0",
+                      properties: { outer: { type: "string", example: "request" } },
+                    },
+                  },
+                },
+              },
+              responses: {},
+            },
+          },
+        },
+        components: { schemas },
+      }),
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify(
+        { target: "reached", middle: "sibling", outer: "request" },
+        null,
+        2,
+      ),
+    });
+  });
+
   test("Imports requests directly from OpenAPI details", async () => {
     const imported = await convertOpenApi(
       JSON.stringify({

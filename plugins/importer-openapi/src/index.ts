@@ -1948,35 +1948,37 @@ class ImportState {
   resolveSchema(
     value: unknown,
     visitedRefs = new Set<string>(),
-    depth = 0,
+    compositionDepth = 0,
   ): unknown {
     if (!isRecord(value)) return value;
-    if (depth > MAX_SCHEMA_RESOLUTION_DEPTH) return value;
 
-    let resolved: UnknownRecord = value;
-    let structureVisitedRefs = visitedRefs;
-    if (typeof value.$ref === "string") {
-      const siblings = Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$ref"));
-      if (visitedRefs.has(value.$ref)) return siblings;
-      if (!value.$ref.startsWith("#/")) {
-        this.#unresolvedRefs.add(value.$ref);
-        return value;
+    let resolved: unknown = value;
+    const structureVisitedRefs = new Set(visitedRefs);
+    const siblingLayers: UnknownRecord[] = [];
+    while (isRecord(resolved) && typeof resolved.$ref === "string") {
+      const ref = resolved.$ref;
+      const siblings = Object.fromEntries(
+        Object.entries(resolved).filter(([key]) => key !== "$ref"),
+      );
+      if (structureVisitedRefs.has(ref)) {
+        resolved = siblings;
+        break;
+      }
+      if (!ref.startsWith("#/")) {
+        this.#unresolvedRefs.add(ref);
+        break;
       }
 
-      const nextVisitedRefs = new Set(visitedRefs);
-      nextVisitedRefs.add(value.$ref);
-      structureVisitedRefs = nextVisitedRefs;
-      const referenced = this.resolveSchema(
-        this.#resolveLocalReference(value.$ref),
-        nextVisitedRefs,
-        depth + 1,
-      );
-      if (!isRecord(referenced)) return referenced;
-
-      resolved = this.#mergeSchemaObjects(referenced, siblings);
+      structureVisitedRefs.add(ref);
+      siblingLayers.push(siblings);
+      resolved = this.#resolveLocalReference(ref);
     }
+    if (!isRecord(resolved)) return resolved;
 
-    return this.#mergeAllOfStructure(resolved, structureVisitedRefs, depth);
+    for (let index = siblingLayers.length - 1; index >= 0; index--) {
+      resolved = this.#mergeSchemaObjects(resolved, siblingLayers[index] ?? {});
+    }
+    return this.#mergeAllOfStructure(resolved, structureVisitedRefs, compositionDepth);
   }
 
   #mergeAllOfStructure(
@@ -1984,6 +1986,7 @@ class ImportState {
     visitedRefs: Set<string>,
     depth: number,
   ): UnknownRecord {
+    if (depth > MAX_SCHEMA_RESOLUTION_DEPTH) return schema;
     const allOf = toArray(schema.allOf);
     if (allOf.length === 0) return schema;
 
