@@ -341,7 +341,13 @@ describe("importer-openapi", () => {
               type: "object",
               properties: {
                 name: { type: "string", example: "root" },
-                child: { $ref: "#/components/schemas/Node" },
+                child: {
+                  $ref: "#/components/schemas/Node",
+                  required: ["relationship"],
+                  properties: {
+                    relationship: { type: "string", example: "nested" },
+                  },
+                },
               },
             },
           },
@@ -350,7 +356,51 @@ describe("importer-openapi", () => {
     );
 
     expect(imported?.resources.httpRequests[0]?.body).toEqual({
-      text: JSON.stringify({ name: "root", child: {} }, null, 2),
+      text: JSON.stringify({ name: "root", child: { relationship: "nested" } }, null, 2),
+    });
+  });
+
+  test("Bounds deeply colliding schema merges", async () => {
+    const depth = 12_000;
+    const nestedSchema = (leaf: string, levels: number) =>
+      '{"type":"object","properties":{"next":'.repeat(levels) + leaf + "}}".repeat(levels);
+    const baseSchema = nestedSchema('{"type":"string","default":"base"}', depth);
+    const siblingProperty = nestedSchema('{"type":"string","example":"sibling"}', depth - 1);
+
+    const imported = await convertOpenApi(
+      '{"openapi":"3.1.0","info":{"title":"Deep Merge","version":"1.0.0"},' +
+        '"paths":{"/deep":{"post":{"requestBody":{"content":{"application/json":' +
+        '{"schema":{"$ref":"#/components/schemas/DeepBase","properties":{"next":' +
+        siblingProperty +
+        '}}}}},"responses":{}}}},"components":{"schemas":{"DeepBase":' +
+        baseSchema +
+        "}}}",
+    );
+
+    expect(imported?.resources.httpRequests[0]?.body).toEqual({
+      text: JSON.stringify(
+        {
+          next: {
+            next: {
+              next: {
+                next: {
+                  next: {
+                    next: {
+                      next: {
+                        next: {
+                          next: {},
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
     });
   });
 
@@ -1331,6 +1381,31 @@ describe("importer-openapi", () => {
                           example: "42",
                           xml: { attribute: true, namespace: "urn:metadata", prefix: "m" },
                         },
+                        externalId: {
+                          type: "string",
+                          example: "external",
+                          xml: {
+                            attribute: true,
+                            name: "external-id",
+                            namespace: "urn:external",
+                            prefix: "ns1",
+                          },
+                        },
+                        tenant: {
+                          type: "string",
+                          example: "acme",
+                          xml: { attribute: true, namespace: "urn:tenant" },
+                        },
+                        region: {
+                          type: "string",
+                          example: "west",
+                          xml: { attribute: true, namespace: "urn:tenant" },
+                        },
+                        legacy: {
+                          type: "string",
+                          example: "plain",
+                          xml: { attribute: true, namespace: "", prefix: "unbound" },
+                        },
                         tags: {
                           type: "array",
                           example: ["one", "two"],
@@ -1382,7 +1457,10 @@ describe("importer-openapi", () => {
 
     expect(imported?.resources.httpRequests[0]?.body).toEqual({
       text:
-        '<c:catalog xmlns:c="urn:catalog" xmlns:m="urn:metadata" m:id="42">' +
+        '<c:catalog xmlns:c="urn:catalog" xmlns:m="urn:metadata" ' +
+        'xmlns:ns1="urn:external" xmlns:ns2="urn:tenant" ' +
+        'm:id="42" ns1:external-id="external" ns2:tenant="acme" ns2:region="west" ' +
+        'legacy="plain">' +
         '<t:tags xmlns:t="urn:tags"><tag>one</tag><tag>two</tag></t:tags>' +
         '<a:alias xmlns:a="urn:aliases">Ada</a:alias>' +
         '<a:alias xmlns:a="urn:aliases">A</a:alias>' +
