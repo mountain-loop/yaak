@@ -1879,6 +1879,19 @@ describe("importer-openapi", () => {
                   schema: { type: "string", example: "verbose" },
                 },
                 {
+                  name: "prefs",
+                  in: "cookie",
+                  required: true,
+                  schema: { type: "object", example: { theme: "dark", lang: "en" } },
+                },
+                {
+                  name: "colors",
+                  in: "cookie",
+                  required: true,
+                  explode: false,
+                  schema: { type: "array", example: ["red", "blue"] },
+                },
+                {
                   name: "X-Filter",
                   in: "header",
                   required: true,
@@ -1896,6 +1909,9 @@ describe("importer-openapi", () => {
       { enabled: true, name: "X-Filter", value: "active" },
       { enabled: true, name: "Cookie", value: "session=abc" },
       { enabled: false, name: "Cookie", value: "debug=verbose" },
+      // Cookie pairs separate with "; ", never "&"
+      { enabled: true, name: "Cookie", value: "theme=dark; lang=en" },
+      { enabled: true, name: "Cookie", value: "colors=red,blue" },
     ]);
   });
 

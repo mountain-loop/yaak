@@ -216,16 +216,23 @@ fn append_graphql_query_params(url: &str, body: &BTreeMap<String, serde_json::Va
 }
 
 fn build_headers(r: &HttpRequest) -> Vec<(String, String)> {
-    r.headers
-        .iter()
-        .filter_map(|h| {
-            if h.enabled && !h.name.is_empty() {
-                Some((h.name.clone(), h.value.clone()))
-            } else {
-                None
+    // RFC 6265 allows only one Cookie field, so enabled Cookie rows fold into
+    // the first one
+    let mut headers: Vec<(String, String)> = Vec::new();
+    for h in &r.headers {
+        if !h.enabled || h.name.is_empty() {
+            continue;
+        }
+        if h.name.eq_ignore_ascii_case("cookie") {
+            if let Some(existing) = headers.iter_mut().find(|e| e.0.eq_ignore_ascii_case("cookie"))
+            {
+                existing.1 = format!("{}; {}", existing.1, h.value);
+                continue;
             }
-        })
-        .collect()
+        }
+        headers.push((h.name.clone(), h.value.clone()));
+    }
+    headers
 }
 
 async fn build_body(
@@ -534,6 +541,44 @@ mod tests {
                 .unwrap();
 
         assert_eq!(sendable.headers, vec![("Cookie".to_string(), "session=abc".to_string())]);
+    }
+
+    #[tokio::test]
+    async fn test_sendable_request_merges_enabled_cookie_rows_into_one_field() {
+        let request = HttpRequest {
+            url: "https://example.com/api".to_string(),
+            headers: vec![
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "Cookie".to_string(),
+                    value: "session=abc".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: false,
+                    name: "Cookie".to_string(),
+                    value: "debug=verbose".to_string(),
+                    id: None,
+                },
+                HttpRequestHeader {
+                    enabled: true,
+                    name: "cookie".to_string(),
+                    value: "theme=dark".to_string(),
+                    id: None,
+                },
+            ],
+            ..Default::default()
+        };
+
+        let sendable =
+            SendableHttpRequest::from_http_request(&request, SendableHttpRequestOptions::default())
+                .await
+                .unwrap();
+
+        assert_eq!(
+            sendable.headers,
+            vec![("Cookie".to_string(), "session=abc; theme=dark".to_string())],
+        );
     }
 
     #[test]

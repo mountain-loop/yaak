@@ -1000,15 +1000,18 @@ function serializeCookieParameter(parameter: UnknownRecord, importState: ImportS
 
   const value = parameterExampleValue(parameter, importState);
   const explode = parameter.explode !== false;
+  // Exploded pairs are cookie pairs, which RFC 6265 separates with "; "
   if (Array.isArray(value)) {
     return explode
-      ? value.map((entryValue) => `${name}=${stringifyExampleValue(entryValue)}`).join("&")
+      ? value.map((entryValue) => `${name}=${stringifyExampleValue(entryValue)}`).join("; ")
       : `${name}=${value.map(stringifyExampleValue).join(",")}`;
   }
   if (isRecord(value)) {
     const entries = Object.entries(value);
     return explode
-      ? entries.map(([key, entryValue]) => `${key}=${stringifyExampleValue(entryValue)}`).join("&")
+      ? entries
+          .map(([key, entryValue]) => `${key}=${stringifyExampleValue(entryValue)}`)
+          .join("; ")
       : `${name}=${entries.flat().map(stringifyExampleValue).join(",")}`;
   }
   return `${name}=${stringifyExampleValue(value)}`;
