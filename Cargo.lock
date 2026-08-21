@@ -11723,7 +11723,10 @@ name = "yaak-system-appearance"
 version = "0.1.0"
 dependencies = [
  "dark-light",
+ "dispatch2",
  "log 0.4.29",
+ "objc2-app-kit",
+ "objc2-foundation 0.3.1",
  "tauri",
 ]
 
