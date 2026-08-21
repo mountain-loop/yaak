@@ -180,9 +180,56 @@ function showUpdateInstalledToast(version: string) {
 
 async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
   const UPDATE_TOAST_ID = "update-info";
-  const { version, replyEventId, downloaded } = updateInfo;
+  const { version, replyEventId, downloaded, installable } = updateInfo;
 
-  jotaiStore.set(updateAvailableAtom, { version, downloaded });
+  jotaiStore.set(updateAvailableAtom, { version, downloaded, installable });
+
+  const whatsNewButton = (
+    <Button
+      size="xs"
+      color="info"
+      variant="border"
+      rightSlot={<Icon icon="external_link" />}
+      onClick={async () => {
+        await platform.openUrl(`https://yaak.app/changelog/${version}`);
+      }}
+    >
+      What&apos;s New
+    </Button>
+  );
+
+  if (!installable) {
+    // Nothing to reply to here; the backend only told us so we can point the user at the download
+    showToast({
+      id: UPDATE_TOAST_ID,
+      color: "info",
+      timeout: null,
+      message: (
+        <VStack>
+          <h2 className="font-semibold">Yaak {version} is available</h2>
+          <p className="text-text-subtle text-sm">
+            This install can&apos;t update itself. Download the new version to upgrade.
+          </p>
+        </VStack>
+      ),
+      action: () => (
+        <HStack space={1.5}>
+          <Button
+            size="xs"
+            color="info"
+            rightSlot={<Icon icon="external_link" />}
+            onClick={async () => {
+              await platform.openUrl("https://yaak.app/download");
+            }}
+          >
+            Download
+          </Button>
+          {whatsNewButton}
+        </HStack>
+      ),
+    });
+    return;
+  }
 
   // Acknowledge the event, so we don't time out and try the fallback update logic
   await platform.emit(replyEventId, { type: "ack" } satisfies UpdateResponse);
@@ -215,17 +262,7 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
         >
           {downloaded ? "Install Now" : "Download and Install"}
         </ButtonInfiniteLoading>
-        <Button
-          size="xs"
-          color="info"
-          variant="border"
-          rightSlot={<Icon icon="external_link" />}
-          onClick={async () => {
-            await platform.openUrl(`https://yaak.app/changelog/${version}`);
-          }}
-        >
-          What&apos;s New
-        </Button>
+        {whatsNewButton}
       </HStack>
     ),
   });

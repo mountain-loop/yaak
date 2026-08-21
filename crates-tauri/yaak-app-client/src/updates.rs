@@ -76,12 +76,10 @@ impl YaakUpdater {
         auto_download: bool,
         update_trigger: UpdateTrigger,
     ) -> Result<bool> {
-        // Only AppImage supports updates on Linux, so skip if it's not
+        // Flatpak installs are updated through Flathub, never by the in-app updater
         #[cfg(target_os = "linux")]
-        {
-            if std::env::var("APPIMAGE").is_err() {
-                return Ok(false);
-            }
+        if std::env::var_os("FLATPAK_ID").is_some() {
+            return Ok(false);
         }
 
         let settings = window.db().get_settings();
@@ -130,6 +128,14 @@ impl YaakUpdater {
             Some(update) => {
                 let w = window.clone();
                 tauri::async_runtime::spawn(async move {
+                    // This install can't apply the update itself (e.g. a .deb or .rpm), so
+                    // just point the user at the download instead of failing to install it
+                    if !can_install_update(&update) {
+                        info!("{} available but must be installed manually", update.version);
+                        notify_manual_update(&w, &update);
+                        return;
+                    }
+
                     // Force native updater if specified (useful if a release broke the UI)
                     let native_install_mode =
                         update.raw_json.get("install_mode").map(|v| v.as_str()).unwrap_or_default()
@@ -207,6 +213,9 @@ struct UpdateInfo {
     reply_event_id: String,
     version: String,
     downloaded: bool,
+    /// Whether the app can download and install this update itself. When false, the
+    /// user has to go download the new version (e.g. Linux .deb/.rpm installs).
+    installable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
@@ -272,8 +281,12 @@ async fn start_integrated_update<R: Runtime>(
     let _guard = Unlisten { win: window, id: event_id };
 
     // 2) Emit the event now that listener is in place
-    let info =
-        UpdateInfo { version: update.version.to_string(), downloaded, reply_event_id: reply_id };
+    let info = UpdateInfo {
+        version: update.version.to_string(),
+        downloaded,
+        installable: true,
+        reply_event_id: reply_id,
+    };
     window
         .emit_to(window.label(), "update_available", &info)
         .map_err(|e| GenericError(format!("Failed to emit update_available: {e}")))?;
@@ -303,6 +316,20 @@ async fn start_integrated_update<R: Runtime>(
             Some(UpdateResponse::Ack) => { /* ignore extra acks */ }
             None => return Err(GenericError("frontend channel closed before action".into())),
         }
+    }
+}
+
+/// Tell the frontend about an update this install can't apply itself, so the user can go
+/// download it. Unlike the integrated flow, there is nothing to reply to.
+fn notify_manual_update<R: Runtime>(window: &WebviewWindow<R>, update: &Update) {
+    let info = UpdateInfo {
+        version: update.version.to_string(),
+        downloaded: false,
+        installable: false,
+        reply_event_id: generate_id(),
+    };
+    if let Err(e) = window.emit_to(window.label(), "update_available", &info) {
+        warn!("Failed to emit update_available: {e}");
     }
 }
 
@@ -376,7 +403,37 @@ fn detect_install_mode() -> Option<&'static str> {
         return Some("nsis");
     }
     #[allow(unreachable_code)]
-    None
+    if cfg!(target_os = "linux") { linux_installer() } else { None }
+}
+
+/// How Yaak was installed on Linux, as far as the updater plugin can install into it.
+/// The bundle type is stamped into the binary by the bundler; the AppImage updater
+/// additionally needs `$APPIMAGE` since that's the file it replaces.
+fn linux_installer() -> Option<&'static str> {
+    use tauri::utils::{config::BundleType, platform::bundle_type};
+    match bundle_type() {
+        Some(BundleType::Deb) => Some("deb"),
+        Some(BundleType::Rpm) => Some("rpm"),
+        _ if std::env::var_os("APPIMAGE").is_some() => Some("appimage"),
+        _ => None,
+    }
+}
+
+/// Whether the updater plugin can install the artifact the server returned. On Linux the
+/// server may hand back a different package format than the one installed (it currently
+/// serves the AppImage for every Linux install), and unknown install methods (distro
+/// packages, Nix, ...) can't be updated in-app at all.
+fn can_install_update(update: &Update) -> bool {
+    if !cfg!(target_os = "linux") {
+        return true;
+    }
+    let path = update.download_url.path().to_ascii_lowercase();
+    match linux_installer() {
+        Some("deb") => path.ends_with(".deb"),
+        Some("rpm") => path.ends_with(".rpm"),
+        Some("appimage") => path.ends_with(".appimage") || path.ends_with(".appimage.tar.gz"),
+        _ => false,
+    }
 }
 
 pub async fn install_update_maybe_download<R: Runtime>(
