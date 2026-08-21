@@ -1367,6 +1367,16 @@ pub fn run() {
                         debug!("Launched Yaak {:?}", info);
                     });
                 }
+                RunEvent::WindowEvent { event: WindowEvent::ThemeChanged(_), .. } => {
+                    // On macOS this is how OS appearance changes arrive: tao observes
+                    // AppleInterfaceThemeChangedNotification and emits it for every window
+                    #[cfg(any(target_os = "linux", target_os = "macos"))]
+                    if let Some(state) =
+                        app_handle.try_state::<yaak_system_appearance::SystemAppearanceState>()
+                    {
+                        yaak_system_appearance::emit_change(app_handle, &state);
+                    }
+                }
                 RunEvent::WindowEvent { event: WindowEvent::Focused(true), label, .. } => {
                     #[cfg(any(target_os = "linux", target_os = "macos"))]
                     if let Some(state) =
