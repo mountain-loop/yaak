@@ -427,12 +427,61 @@ fn can_install_update(update: &Update) -> bool {
     if !cfg!(target_os = "linux") {
         return true;
     }
-    let path = update.download_url.path().to_ascii_lowercase();
-    match linux_installer() {
+    artifact_matches_installer(linux_installer(), update.download_url.path())
+}
+
+/// Whether the artifact at `url_path` is in the package format `installer` can install.
+fn artifact_matches_installer(installer: Option<&str>, url_path: &str) -> bool {
+    let path = url_path.to_ascii_lowercase();
+    match installer {
         Some("deb") => path.ends_with(".deb"),
         Some("rpm") => path.ends_with(".rpm"),
         Some("appimage") => path.ends_with(".appimage") || path.ends_with(".appimage.tar.gz"),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::artifact_matches_installer;
+
+    const BASE: &str = "/mountain-loop/yaak/releases/download/v2026.6.0/";
+
+    #[test]
+    fn matching_package_format_is_installable() {
+        let cases = [
+            ("deb", "yaak_2026.6.0_amd64.deb"),
+            ("deb", "yaak_2026.6.0_arm64.deb"),
+            ("rpm", "yaak-2026.6.0-1.x86_64.rpm"),
+            ("rpm", "yaak-2026.6.0-1.aarch64.rpm"),
+            ("appimage", "yaak_2026.6.0_amd64.AppImage"),
+            ("appimage", "yaak_2026.6.0_amd64.AppImage.tar.gz"),
+        ];
+        for (installer, asset) in cases {
+            assert!(
+                artifact_matches_installer(Some(installer), &format!("{BASE}{asset}")),
+                "{installer} should install {asset}"
+            );
+        }
+    }
+
+    #[test]
+    fn mismatched_package_format_is_not_installable() {
+        // What the server returns for every Linux install today
+        let appimage = format!("{BASE}yaak_2026.6.0_amd64.AppImage");
+        assert!(!artifact_matches_installer(Some("deb"), &appimage));
+        assert!(!artifact_matches_installer(Some("rpm"), &appimage));
+
+        let deb = format!("{BASE}yaak_2026.6.0_amd64.deb");
+        assert!(!artifact_matches_installer(Some("rpm"), &deb));
+        assert!(!artifact_matches_installer(Some("appimage"), &deb));
+    }
+
+    #[test]
+    fn unknown_installer_is_never_installable() {
+        for asset in ["yaak_2026.6.0_amd64.deb", "yaak_2026.6.0_amd64.AppImage"] {
+            assert!(!artifact_matches_installer(None, &format!("{BASE}{asset}")));
+        }
     }
 }
 
