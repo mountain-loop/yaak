@@ -1,5 +1,5 @@
 use std::sync::{Arc, Mutex};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -11,7 +11,7 @@ use tauri::{AppHandle, Runtime};
 pub const INITIAL_APPEARANCE_GLOBAL: &str = "__YAAK_INITIAL_APPEARANCE__";
 pub const SYSTEM_APPEARANCE_CHANGE_EVENT: &str = "system_appearance_change";
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 const SYSTEM_APPEARANCE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -67,17 +67,18 @@ pub fn system_appearance() -> Option<Appearance> {
 /// Detect the appearance the OS prefers, independent of any appearance that has
 /// been forced onto app windows (which is what the webview itself reports).
 ///
-/// This asks AppKit for the application's effective appearance instead of reading
-/// `AppleInterfaceStyle` from the user defaults: macOS 27 no longer writes that key
-/// when dark mode is on, so anything reading it sees light mode. Appearances forced
-/// per window (yaak-mac-window) don't reach `NSApp`, so this is the OS preference.
+/// This asks AppKit for the application's effective appearance, the same source tauri
+/// uses for `window.theme()`, instead of reading `AppleInterfaceStyle` from the user
+/// defaults: macOS 27 no longer reliably writes that key when dark mode is on, so anything
+/// reading it sees light mode. Appearances forced per window (yaak-mac-window) don't reach
+/// `NSApp`, so this is the OS preference.
 #[cfg(target_os = "macos")]
 pub fn system_appearance() -> Option<Appearance> {
     use objc2_app_kit::{NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication};
     use objc2_foundation::NSArray;
 
-    // AppKit is main-thread only. This runs inline on the main thread and hops over
-    // synchronously from the poll thread.
+    // AppKit is main-thread only. Every caller runs there today; this keeps it correct if
+    // one ever doesn't.
     dispatch2::run_on_main(|mtm| {
         let app = NSApplication::sharedApplication(mtm);
 
@@ -102,8 +103,8 @@ pub fn system_appearance() -> Option<Appearance> {
 }
 
 /// The appearance macOS persists to the global user defaults. Absent means light, except
-/// on macOS 27, which stopped writing the key. Only used when the effective appearance is
-/// forced and can't be trusted.
+/// on macOS 27, which stopped reliably writing the key. Only used when the effective
+/// appearance is forced and can't be trusted.
 #[cfg(target_os = "macos")]
 fn defaults_appearance() -> Option<Appearance> {
     use objc2_foundation::{NSUserDefaults, ns_string};
@@ -123,6 +124,9 @@ pub fn system_appearance() -> Option<Appearance> {
     None
 }
 
+/// Start tracking the OS appearance. Linux polls for changes. macOS gets them from tauri's
+/// `WindowEvent::ThemeChanged` (tao observes `AppleInterfaceThemeChangedNotification`), which
+/// the app forwards to [`emit_change`], so no thread is needed there.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn watch<R: Runtime>(app_handle: AppHandle<R>) -> Option<SystemAppearanceState> {
     let last_appearance = system_appearance();
@@ -132,13 +136,19 @@ pub fn watch<R: Runtime>(app_handle: AppHandle<R>) -> Option<SystemAppearanceSta
     }
 
     let state = SystemAppearanceState { last_appearance: Arc::new(Mutex::new(last_appearance)) };
-    let thread_state = state.clone();
-    let _ = std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(SYSTEM_APPEARANCE_POLL_INTERVAL);
-            emit_change(&app_handle, &thread_state);
-        }
-    });
+
+    #[cfg(target_os = "linux")]
+    {
+        let thread_state = state.clone();
+        let _ = std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(SYSTEM_APPEARANCE_POLL_INTERVAL);
+                emit_change(&app_handle, &thread_state);
+            }
+        });
+    }
+    #[cfg(target_os = "macos")]
+    let _ = app_handle;
 
     Some(state)
 }
