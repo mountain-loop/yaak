@@ -17,15 +17,22 @@
  * up here as a type error rather than as a runtime surprise.
  */
 
+import type { HttpRequest } from "@yaakapp-internal/models";
+import type { JsonPrimitive } from "@yaakapp-internal/plugins";
 import type { RpcSchema } from "@yaakapp-internal/rpc-schema";
 import type { CapabilityName, RpcPayload } from "../types";
 import type { WorkerConnection } from "./connection";
 import { unsupported } from "./errors";
+import type { WebPlugins } from "./plugins";
 import { sendHttpRequest } from "./send";
 
 export type AppCmd = keyof RpcSchema;
 
-type Handler = (payload: RpcPayload, db: WorkerConnection) => Promise<unknown>;
+type Handler = (
+  payload: RpcPayload,
+  db: WorkerConnection,
+  plugins: WebPlugins,
+) => Promise<unknown>;
 
 /** Placeholder shown wherever the desktop would show a real filesystem path. */
 const NO_PATH = "";
@@ -39,6 +46,31 @@ function str(payload: RpcPayload, key: string): string | null {
 function text(payload: RpcPayload, key: string): string {
   const value = payload[key];
   return typeof value === "string" ? value : "";
+}
+
+/** Form values as the plugin protocol carries them. */
+function values(payload: RpcPayload, key = "values"): Record<string, JsonPrimitive> {
+  const value = payload[key];
+  return value != null && typeof value === "object"
+    ? (value as Record<string, JsonPrimitive>)
+    : {};
+}
+
+/**
+ * The id a plugin keys its stored state on.
+ *
+ * The desktop hashes the id of whichever model the configuration was read from,
+ * so two requests inheriting one folder's authentication share a token cache.
+ * The preview paths here have no such model in hand and pass what they were
+ * given, which is enough to be stable per form.
+ */
+function contextId(payload: RpcPayload): string {
+  const model = payload.model;
+  if (model != null && typeof model === "object" && "id" in model) {
+    const id = (model as { id?: unknown }).id;
+    return typeof id === "string" ? id : "";
+  }
+  return "";
 }
 
 /**
@@ -73,10 +105,16 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
 
   // The tab renders and stores; a stateless server puts the bytes on the wire.
   // See send.ts for the whole shape of it.
-  cmd_send_http_request: (payload, db) => {
+  cmd_send_http_request: (payload, db, plugins) => {
     const requestId = str(payload, "requestId");
     if (requestId == null) throw new Error("cmd_send_http_request needs a requestId");
-    return sendHttpRequest(db, requestId, str(payload, "environmentId"), str(payload, "cookieJarId"));
+    return sendHttpRequest(
+      db,
+      plugins,
+      requestId,
+      str(payload, "environmentId"),
+      str(payload, "cookieJarId"),
+    );
   },
 
   /* -------------------------------- app ---------------------------------- */
@@ -146,22 +184,67 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
    * Both of these are polled once a second until they answer with something, so
    * an empty list is not a quiet no — it is a poll that never stops.
    *
-   * The auth list names what Yaak actually offers, so the picker tells the
-   * truth about the product even though the form behind each entry stays empty
-   * until plugins run here. Template functions get the opposite treatment: one
-   * provider contributing no functions. That settles the poll while putting
-   * nothing in the autocomplete, which is the honest answer — a function the
-   * user could insert but nothing could evaluate would be worse than none.
+   * Both now answer from the plugins actually loaded in the sandbox, which is
+   * the only answer that stays true: an authentication method in the picker
+   * that no loaded plugin can apply would be a promise this host cannot keep,
+   * and a template function offered in the autocomplete that nothing can
+   * evaluate would be worse than none.
    */
-  async cmd_get_http_authentication_summaries() {
-    return HTTP_AUTHENTICATION_SUMMARIES;
+  async cmd_get_http_authentication_summaries(_payload, _db, plugins) {
+    return plugins.httpAuthenticationSummaries();
   },
-  async cmd_template_function_summaries() {
-    return [{ pluginRefId: "web", functions: [] }];
+  async cmd_template_function_summaries(_payload, _db, plugins) {
+    return plugins.templateFunctionSummaries();
   },
 
-  async cmd_get_http_authentication_config() {
-    return { args: [], pluginRefId: "web" };
+  async cmd_get_http_authentication_config(payload, _db, plugins) {
+    const authName = str(payload, "authName");
+    const config =
+      authName == null
+        ? null
+        : await plugins.httpAuthenticationConfig(authName, values(payload), contextId(payload));
+    return config ?? { args: [], actions: [], pluginRefId: "web" };
+  },
+
+  async cmd_template_function_config(payload, _db, plugins) {
+    const name = str(payload, "functionName") ?? str(payload, "name");
+    if (name == null) return null;
+    return plugins.templateFunctionConfig(name, values(payload), contextId(payload));
+  },
+
+  async cmd_call_http_authentication_action(payload, _db, plugins) {
+    const authName = str(payload, "authName");
+    if (authName == null) return null;
+    const index = payload.actionIndex;
+    await plugins.callHttpAuthenticationAction(
+      authName,
+      typeof index === "number" ? index : 0,
+      values(payload),
+      contextId(payload),
+    );
+    return null;
+  },
+
+  /**
+   * Turn a pasted cURL command into a request.
+   *
+   * Routed through the same importer the desktop uses, in the sandbox, which
+   * is why this is a handler and no longer a refusal. The reshaping afterwards
+   * matches `cmd_curl_to_request` in crates/yaak-commands: the importer names a
+   * workspace of its own invention and mints an id, and both belong to the
+   * caller instead.
+   */
+  async cmd_curl_to_request(payload, _db, plugins) {
+    const resources = await plugins.import(text(payload, "command"));
+    const imported = resources?.httpRequests?.[0];
+    if (imported == null) {
+      throw new Error("Failed to import cURL command");
+    }
+    return {
+      ...imported,
+      id: "",
+      workspaceId: str(payload, "workspaceId") ?? imported.workspaceId,
+    } as HttpRequest;
   },
 
   async cmd_format_json(payload) {
@@ -176,13 +259,19 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
   },
 
   /**
-   * Rendering resolves variables and calls template functions, and the
-   * functions live in plugins. Handing the template back unrendered is what the
-   * preview then shows — the raw `${[...]}`, which is at least the thing the
-   * user typed rather than a wrong value.
+   * Resolve variables and call template functions, in the engine, exactly as
+   * `cmd_render_template` does on the desktop. The functions come back out to
+   * the sandbox as the render reaches them — see `templateBridge` in worker.ts.
    */
-  async cmd_render_template(payload) {
-    return text(payload, "template");
+  async cmd_render_template(payload, db) {
+    const workspaceId = str(payload, "workspaceId");
+    if (workspaceId == null) return text(payload, "template");
+    return db.renderTemplate({
+      template: text(payload, "template"),
+      workspaceId,
+      environmentId: str(payload, "environmentId"),
+      ignoreError: payload.ignoreError === true,
+    });
   },
 
   /* ------------------------------- bodies -------------------------------- */
@@ -224,21 +313,6 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
   },
 };
 
-/**
- * The auth methods Yaak ships as plugins today (plugins/auth-*). Listed so the
- * picker is truthful about the product; choosing one currently yields an empty
- * config form, because the plugin that defines the form isn't running.
- */
-const HTTP_AUTHENTICATION_SUMMARIES = [
-  { name: "apikey", label: "API Key", shortLabel: "API Key" },
-  { name: "aws", label: "AWS SigV4", shortLabel: "AWS" },
-  { name: "basic", label: "Basic Auth", shortLabel: "Basic" },
-  { name: "bearer", label: "Bearer Token", shortLabel: "Bearer" },
-  { name: "jwt", label: "JWT Bearer", shortLabel: "JWT" },
-  { name: "ntlm", label: "NTLM", shortLabel: "NTLM" },
-  { name: "oauth1", label: "OAuth 1.0", shortLabel: "OAuth 1" },
-  { name: "oauth2", label: "OAuth 2.0", shortLabel: "OAuth 2" },
-];
 
 /**
  * Commands this host declines, each with the reason a user would need.
@@ -253,7 +327,6 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
   // ones nothing stores, used for GraphQL introspection — take the same road but
   // return the body inline; not wired yet.
   cmd_send_ephemeral_request: ["Sending unsaved requests isn't available in the browser yet", null],
-  cmd_curl_to_request: ["Importing from cURL needs a plugin, which this host doesn't run", null],
 
   // Protocols that need a real socket.
   cmd_grpc_reflect: ["gRPC isn't available in the browser", "grpc"],
@@ -295,14 +368,12 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
   cmd_plugins_uninstall: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_plugins_updates: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_plugins_update_all: ["Plugins aren't available in the browser yet", "plugins"],
-  cmd_template_function_config: ["Template functions come from plugins, which this host doesn't run", "plugins"],
   cmd_template_tokens_to_string: ["Template functions come from plugins, which this host doesn't run", "plugins"],
   cmd_call_http_request_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_websocket_request_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_grpc_request_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_workspace_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_folder_action: ["Plugins aren't available in the browser yet", "plugins"],
-  cmd_call_http_authentication_action: ["Plugins aren't available in the browser yet", "plugins"],
 
   cmd_send_feedback: ["Feedback goes through the desktop app for now", null],
 };
@@ -329,9 +400,10 @@ export async function runCommand(
   cmd: string,
   payload: RpcPayload,
   db: WorkerConnection,
+  plugins: WebPlugins,
 ): Promise<unknown> {
   const handler = HANDLERS[cmd as AppCmd];
-  if (handler != null) return handler(payload, db);
+  if (handler != null) return handler(payload, db, plugins);
 
   const declined = DECLINED[cmd as AppCmd];
   if (declined != null) throw unsupported(cmd, declined[0], declined[1]);

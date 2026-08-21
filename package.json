@@ -15,6 +15,7 @@
     "packages/platform",
     "packages/plugin-runtime",
     "packages/plugin-runtime-types",
+    "packages/plugin-sandbox",
     "plugins-external/mcp-server",
     "plugins-external/faker",
     "plugins-external/httpsnippet",

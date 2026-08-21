@@ -8,12 +8,25 @@ use std::future::Future;
 
 const MAX_DEPTH: usize = 50;
 
+/// `Send`, except on wasm32, where a template function is a call into
+/// JavaScript: the future holds a `JsFuture` and the callback an `Rc` pool,
+/// neither of which can be `Send`. Every other host spawns rendering onto a
+/// thread pool and needs the bound.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSend: Send {}
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send> MaybeSend for T {}
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSend {}
+#[cfg(target_arch = "wasm32")]
+impl<T> MaybeSend for T {}
+
 pub trait TemplateCallback {
     fn run(
         &self,
         fn_name: &str,
         args: HashMap<String, serde_json::Value>,
-    ) -> impl Future<Output = Result<String>> + Send;
+    ) -> impl Future<Output = Result<String>> + MaybeSend;
 
     fn transform_arg(&self, fn_name: &str, arg_name: &str, arg_value: &str) -> Result<String>;
 }
