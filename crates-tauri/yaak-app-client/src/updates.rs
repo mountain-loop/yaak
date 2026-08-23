@@ -407,16 +407,38 @@ fn detect_install_mode() -> Option<&'static str> {
 }
 
 /// How Yaak was installed on Linux, as far as the updater plugin can install into it.
-/// The bundle type is stamped into the binary by the bundler; the AppImage updater
-/// additionally needs `$APPIMAGE` since that's the file it replaces.
+///
+/// The bundle type is stamped into the binary by the bundler, but that only says how the
+/// binary was *packaged*: third-party packages (AUR, Nix, ...) repackage the .deb, and
+/// letting dpkg/rpm replace those would stomp on another package manager's files. So a
+/// deb/rpm install also has to be one the package manager actually owns. The AppImage
+/// updater needs `$APPIMAGE` since that's the file it replaces.
 fn linux_installer() -> Option<&'static str> {
     use tauri::utils::{config::BundleType, platform::bundle_type};
     match bundle_type() {
-        Some(BundleType::Deb) => Some("deb"),
-        Some(BundleType::Rpm) => Some("rpm"),
+        Some(BundleType::Deb) if package_manager_owns_exe("dpkg", "-S") => Some("deb"),
+        Some(BundleType::Rpm) if package_manager_owns_exe("rpm", "-qf") => Some("rpm"),
+        Some(BundleType::Deb) | Some(BundleType::Rpm) => None,
         _ if std::env::var_os("APPIMAGE").is_some() => Some("appimage"),
         _ => None,
     }
+}
+
+/// Whether `cmd query_arg <current exe>` succeeds, i.e. that package manager knows the
+/// running executable as one of its files. False when the tool isn't installed at all.
+fn package_manager_owns_exe(cmd: &str, query_arg: &str) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    std::process::Command::new(cmd)
+        .arg(query_arg)
+        .arg(&exe)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 /// Whether the updater plugin can install the artifact the server returned. On Linux the
