@@ -76,7 +76,8 @@ impl YaakUpdater {
         auto_download: bool,
         update_trigger: UpdateTrigger,
     ) -> Result<bool> {
-        // Flatpak installs are updated through Flathub, never by the in-app updater
+        // Flatpak installs (e.g. FlatPark) are updated by flatpak from their remote; the
+        // in-app updater can't write inside the sandbox and must not try
         #[cfg(target_os = "linux")]
         if std::env::var_os("FLATPAK_ID").is_some() {
             return Ok(false);
