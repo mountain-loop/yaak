@@ -9,11 +9,16 @@ export type UpdateInfo = {
   version: string;
   downloaded: boolean;
   /**
-   * Whether the app can download and install this update itself. When false, the
-   * user has to go download the new version (e.g. Linux .deb/.rpm installs).
+   * How this update gets applied. Anything but `Integrated` means the app can't do it
+   * itself and the user is told how to update instead.
    */
-  installable: boolean;
+  install: UpdateInstall;
 };
+
+/**
+ * How an update can be applied to this install.
+ */
+export type UpdateInstall = "integrated" | "flatpak" | "manual";
 
 export type UpdateResponse = { type: "ack" } | { type: "action"; action: UpdateResponseAction };
 

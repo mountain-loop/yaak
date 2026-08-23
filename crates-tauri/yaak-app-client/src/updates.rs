@@ -76,13 +76,6 @@ impl YaakUpdater {
         auto_download: bool,
         update_trigger: UpdateTrigger,
     ) -> Result<bool> {
-        // Flatpak installs (e.g. FlatPark) are updated by flatpak from their remote; the
-        // in-app updater can't write inside the sandbox and must not try
-        #[cfg(target_os = "linux")]
-        if std::env::var_os("FLATPAK_ID").is_some() {
-            return Ok(false);
-        }
-
         let settings = window.db().get_settings();
         let update_key = format!("{:x}", md5::compute(settings.id));
         self.last_check = Some(Instant::now());
@@ -129,11 +122,15 @@ impl YaakUpdater {
             Some(update) => {
                 let w = window.clone();
                 tauri::async_runtime::spawn(async move {
-                    // This install can't apply the update itself (e.g. a .deb or .rpm), so
-                    // just point the user at the download instead of failing to install it
-                    if !can_install_update(&update) {
-                        info!("{} available but must be installed manually", update.version);
-                        notify_manual_update(&w, &update);
+                    // Only hand the artifact to the updater plugin when this install can
+                    // apply it itself; otherwise tell the user how to update instead
+                    let install = update_install_method(&update);
+                    if install != UpdateInstall::Integrated {
+                        info!(
+                            "{} available, but this install updates via {install:?}",
+                            update.version
+                        );
+                        notify_external_update(&w, &update, install);
                         return;
                     }
 
@@ -214,9 +211,23 @@ struct UpdateInfo {
     reply_event_id: String,
     version: String,
     downloaded: bool,
-    /// Whether the app can download and install this update itself. When false, the
-    /// user has to go download the new version (e.g. Linux .deb/.rpm installs).
-    installable: bool,
+    /// How this update gets applied. Anything but `Integrated` means the app can't do it
+    /// itself and the user is told how to update instead.
+    install: UpdateInstall,
+}
+
+/// How an update can be applied to this install.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Default, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "index.ts")]
+enum UpdateInstall {
+    /// The app downloads and installs it itself
+    #[default]
+    Integrated,
+    /// Flatpak install: updated by `flatpak update` from its remote (e.g. FlatPark)
+    Flatpak,
+    /// Nothing can install it in-app (distro package, Nix, unknown); download by hand
+    Manual,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, TS)]
@@ -285,7 +296,7 @@ async fn start_integrated_update<R: Runtime>(
     let info = UpdateInfo {
         version: update.version.to_string(),
         downloaded,
-        installable: true,
+        install: UpdateInstall::Integrated,
         reply_event_id: reply_id,
     };
     window
@@ -320,13 +331,17 @@ async fn start_integrated_update<R: Runtime>(
     }
 }
 
-/// Tell the frontend about an update this install can't apply itself, so the user can go
-/// download it. Unlike the integrated flow, there is nothing to reply to.
-fn notify_manual_update<R: Runtime>(window: &WebviewWindow<R>, update: &Update) {
+/// Tell the frontend about an update this install can't apply itself, so the user can be
+/// told how to get it. Unlike the integrated flow, there is nothing to reply to.
+fn notify_external_update<R: Runtime>(
+    window: &WebviewWindow<R>,
+    update: &Update,
+    install: UpdateInstall,
+) {
     let info = UpdateInfo {
         version: update.version.to_string(),
         downloaded: false,
-        installable: false,
+        install,
         reply_event_id: generate_id(),
     };
     if let Err(e) = window.emit_to(window.label(), "update_available", &info) {
@@ -404,7 +419,19 @@ fn detect_install_mode() -> Option<&'static str> {
         return Some("nsis");
     }
     #[allow(unreachable_code)]
-    if cfg!(target_os = "linux") { linux_installer() } else { None }
+    if !cfg!(target_os = "linux") {
+        None
+    } else if is_flatpak() {
+        Some("flatpak")
+    } else {
+        linux_installer()
+    }
+}
+
+/// Flatpak installs (e.g. FlatPark) are updated by flatpak from their remote; the in-app
+/// updater can't write inside the sandbox and must not try.
+fn is_flatpak() -> bool {
+    std::env::var_os("FLATPAK_ID").is_some()
 }
 
 /// How Yaak was installed on Linux, as far as the updater plugin can install into it.
@@ -442,15 +469,22 @@ fn package_manager_owns_exe(cmd: &str, query_arg: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether the updater plugin can install the artifact the server returned. On Linux the
-/// server may hand back a different package format than the one installed (it currently
-/// serves the AppImage for every Linux install), and unknown install methods (distro
-/// packages, Nix, ...) can't be updated in-app at all.
-fn can_install_update(update: &Update) -> bool {
+/// How the artifact the server returned can be applied to this install. On Linux the
+/// server may hand back a different package format than the one installed, Flatpak can't
+/// be written from inside the sandbox, and unknown install methods (distro packages,
+/// Nix, ...) can't be updated in-app at all.
+fn update_install_method(update: &Update) -> UpdateInstall {
     if !cfg!(target_os = "linux") {
-        return true;
+        return UpdateInstall::Integrated;
     }
-    artifact_matches_installer(linux_installer(), update.download_url.path())
+    if is_flatpak() {
+        return UpdateInstall::Flatpak;
+    }
+    if artifact_matches_installer(linux_installer(), update.download_url.path()) {
+        UpdateInstall::Integrated
+    } else {
+        UpdateInstall::Manual
+    }
 }
 
 /// Whether the artifact at `url_path` is in the package format `installer` can install.

@@ -12,7 +12,7 @@ import type {
   UpdateResponse,
   YaakNotification,
 } from "@yaakapp-internal/tauri-client";
-import { HStack, Icon, VStack } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { openSettings } from "../commands/openSettings";
 import { Button } from "../components/core/Button";
 import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading";
@@ -180,9 +180,9 @@ function showUpdateInstalledToast(version: string) {
 
 async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
   const UPDATE_TOAST_ID = "update-info";
-  const { version, replyEventId, downloaded, installable } = updateInfo;
+  const { version, replyEventId, downloaded, install } = updateInfo;
 
-  jotaiStore.set(updateAvailableAtom, { version, downloaded, installable });
+  jotaiStore.set(updateAvailableAtom, { version, downloaded, install });
 
   const whatsNewButton = (
     <Button
@@ -198,8 +198,9 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
     </Button>
   );
 
-  if (!installable) {
-    // Nothing to reply to here; the backend only told us so we can point the user at the download
+  if (install !== "integrated") {
+    // Nothing to reply to here; the backend only told us so we can say how to update
+    const flatpak = install === "flatpak";
     showToast({
       id: UPDATE_TOAST_ID,
       color: "info",
@@ -208,22 +209,31 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
         <VStack>
           <h2 className="font-semibold">Yaak {version} is available</h2>
           <p className="text-text-subtle text-sm">
-            This install can&apos;t update itself. Download the new version to upgrade.
+            {flatpak ? (
+              <>
+                This install is managed by Flatpak. Update it with{" "}
+                <InlineCode>flatpak update</InlineCode> or your software center.
+              </>
+            ) : (
+              "This install can't update itself. Download the new version to upgrade."
+            )}
           </p>
         </VStack>
       ),
       action: () => (
         <HStack space={1.5}>
-          <Button
-            size="xs"
-            color="info"
-            rightSlot={<Icon icon="external_link" />}
-            onClick={async () => {
-              await platform.openUrl("https://yaak.app/download");
-            }}
-          >
-            Download
-          </Button>
+          {!flatpak && (
+            <Button
+              size="xs"
+              color="info"
+              rightSlot={<Icon icon="external_link" />}
+              onClick={async () => {
+                await platform.openUrl("https://yaak.app/download");
+              }}
+            >
+              Download
+            </Button>
+          )}
           {whatsNewButton}
         </HStack>
       ),
