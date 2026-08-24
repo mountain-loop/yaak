@@ -202,7 +202,10 @@ function hashFunction(signatureMethod: SigMethod) {
       return (base: string, privateKey: string) =>
         crypto.createSign("RSA-SHA512").update(base).sign(privateKey, "base64");
     case signatures.PLAINTEXT:
-      return (base: string) => base;
+      // RFC 5849 3.4.4: the PLAINTEXT signature IS the signing key,
+      // `encoded(consumer secret)&encoded(token secret)`. Returning the base
+      // string put the whole percent-encoded request into oauth_signature.
+      return (_base: string, key: string) => key;
     default:
       return (base: string, key: string) =>
         crypto.createHmac("sha1", key).update(base).digest("base64");
