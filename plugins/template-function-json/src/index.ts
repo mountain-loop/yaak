@@ -85,7 +85,11 @@ export const plugin: PluginDefinition = {
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
         const input = String(args.values.input ?? "");
-        return input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        // JSON.stringify produces a spec-correct string literal: it escapes
+        // the backslash and quote this used to handle, and also the control
+        // characters it did not. Slicing off the surrounding quotes leaves
+        // the escaped inner text this function is meant to emit.
+        return JSON.stringify(input).slice(1, -1);
       },
     },
     {
