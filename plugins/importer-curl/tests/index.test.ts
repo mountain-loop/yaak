@@ -942,6 +942,23 @@ describe("importer-curl", () => {
       },
     });
   });
+  test("Keeps an = inside a --url-query value", () => {
+    const imported = convertCurl(
+      'curl --url-query "filter=type=book" --url-query "t=eyJhIjoxfQ==" https://yaak.app',
+    );
+    expect(imported.resources.httpRequests?.[0]?.urlParameters).toEqual([
+      { enabled: true, name: "filter", value: "type=book" },
+      { enabled: true, name: "t", value: "eyJhIjoxfQ==" },
+    ]);
+  });
+
+  test("Keeps an = inside a form value", () => {
+    const imported = convertCurl('curl -F "t=eyJhIjoxfQ==" -F "q=a=b" https://yaak.app');
+    expect(imported.resources.httpRequests?.[0]?.body?.form).toEqual([
+      { enabled: true, name: "t", value: "eyJhIjoxfQ==" },
+      { enabled: true, name: "q", value: "a=b" },
+    ]);
+  });
 });
 
 const idCount: Partial<Record<string, number>> = {};

@@ -359,7 +359,9 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     if (typeof p !== "string") {
       continue;
     }
-    const [name, value] = p.split("=");
+    // splitOnce: a query value may itself contain "=" (a base64 payload, a
+    // nested filter), and only the first one separates name from value.
+    const [name, value] = splitOnce(p, "=");
     urlParameters.push({
       name: name ?? "",
       value: value ?? "",
@@ -475,7 +477,9 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     ...((flagsByName.form as string[] | undefined) || []),
     ...((flagsByName.F as string[] | undefined) || []),
   ].map((str) => {
-    const parts = str.split("=");
+    // splitOnce for the same reason as --url-query above: base64 padding
+    // ("...==") and any value containing "=" must survive intact.
+    const parts = splitOnce(str, "=");
     const name = parts[0] ?? "";
     const value = parts[1] ?? "";
     const item: { name: string; value?: string; file?: string; enabled: boolean } = {
