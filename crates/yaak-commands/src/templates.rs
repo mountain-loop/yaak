@@ -7,7 +7,7 @@
 
 use crate::error::Result;
 use crate::host::PluginHost;
-use crate::render::render_template;
+use crate::render::{render_form_values, render_template};
 use yaak_plugins::events::{
     GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
     RenderPurpose,
@@ -56,7 +56,19 @@ pub async fn cmd_template_function_config<H: PluginHost>(
     host: H,
     req: CmdTemplateFunctionConfigReq,
 ) -> Result<GetTemplateFunctionConfigResponse> {
-    host.template_function_config(&req.function_name, req.values, req.model.id()).await
+    // A config form is being displayed, so a template that cannot resolve
+    // should show as blank rather than refuse to open the form.
+    let values = render_form_values(
+        &host,
+        &req.model,
+        req.environment_id.as_deref(),
+        req.values,
+        RenderPurpose::Preview,
+        &RenderOptions::return_empty(),
+    )
+    .await?;
+
+    host.template_function_config(&req.function_name, values, req.model.id()).await
 }
 
 pub async fn cmd_get_themes<H: PluginHost>(
