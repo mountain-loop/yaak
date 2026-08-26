@@ -2,7 +2,9 @@ import type {
   Folder,
   GrpcRequest,
   HttpRequest,
+  HttpVersion,
   InheritedBoolSetting,
+  InheritedHttpVersionSetting,
   InheritedIntSetting,
   WebsocketRequest,
   Workspace,
@@ -13,6 +15,7 @@ import {
   modelSupportsSetting,
   type RequestSettingDefinition,
   SETTING_FOLLOW_REDIRECTS,
+  SETTING_HTTP_VERSION,
   SETTING_REQUEST_MESSAGE_SIZE,
   SETTING_REQUEST_TIMEOUT,
   SETTING_SEND_COOKIES,
@@ -21,6 +24,7 @@ import {
 } from "../lib/requestSettings";
 import { Checkbox } from "./core/Checkbox";
 import { PlainInput } from "./core/PlainInput";
+import { Select } from "./core/Select";
 import {
   SettingOverrideRow,
   SettingRow,
@@ -38,37 +42,21 @@ interface Props {
   model: ModelWithSettings;
 }
 
-type ModelWithSettings =
-  | Workspace
-  | Folder
-  | HttpRequest
-  | WebsocketRequest
-  | GrpcRequest;
+type ModelWithSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
 type ModelWithHttpSettings = Workspace | Folder | HttpRequest;
-type ModelWithTlsSettings =
-  | Workspace
-  | Folder
-  | HttpRequest
-  | WebsocketRequest
-  | GrpcRequest;
-type ModelWithCookieSettings =
-  | Workspace
-  | Folder
-  | HttpRequest
-  | WebsocketRequest;
-type ModelWithMessageSizeSettings =
-  | Workspace
-  | Folder
-  | WebsocketRequest
-  | GrpcRequest;
+type ModelWithTlsSettings = Workspace | Folder | HttpRequest | WebsocketRequest | GrpcRequest;
+type ModelWithCookieSettings = Workspace | Folder | HttpRequest | WebsocketRequest;
+type ModelWithMessageSizeSettings = Workspace | Folder | WebsocketRequest | GrpcRequest;
 type BooleanSetting = boolean | InheritedBoolSetting;
 type IntegerSetting = number | InheritedIntSetting;
+type HttpVersionSetting = HttpVersion | InheritedHttpVersionSetting;
 type CookieSettingsPatch = {
   settingSendCookies?: ModelWithCookieSettings["settingSendCookies"];
   settingStoreCookies?: ModelWithCookieSettings["settingStoreCookies"];
 };
 type HttpSettingsPatch = {
   settingFollowRedirects?: ModelWithHttpSettings["settingFollowRedirects"];
+  settingHttpVersion?: ModelWithHttpSettings["settingHttpVersion"];
   settingRequestTimeout?: ModelWithHttpSettings["settingRequestTimeout"];
 };
 type TlsSettingsPatch = {
@@ -78,10 +66,7 @@ type MessageSizeSettingsPatch = {
   settingRequestMessageSize?: ModelWithMessageSizeSettings["settingRequestMessageSize"];
 };
 
-export function ModelSettingsEditor({
-  model,
-  showSectionTitles = false,
-}: Props) {
+export function ModelSettingsEditor({ model, showSectionTitles = false }: Props) {
   const ancestors = useModelAncestors(model);
   const supportsHttpSettings = modelSupportsHttpSettings(model);
   const supportsCookieSettings = modelSupportsCookieSettings(model);
@@ -154,12 +139,26 @@ export function ModelSettingsEditor({
               }
             />
           )}
+          {supportsHttpSettings && (
+            <HttpVersionSettingRow
+              settingDefinition={SETTING_HTTP_VERSION}
+              setting={model.settingHttpVersion}
+              inheritedValue={resolveInheritedValue(
+                ancestors,
+                SETTING_HTTP_VERSION.modelKey,
+                model.settingHttpVersion,
+              )}
+              onChange={(settingHttpVersion) =>
+                patchHttpSettings(model, {
+                  settingHttpVersion,
+                })
+              }
+            />
+          )}
         </SettingsSection>
       )}
       {supportsCookieSettings && (
-        <SettingsSection
-          title={supportsTlsSettings || showSectionTitles ? "Cookies" : null}
-        >
+        <SettingsSection title={supportsTlsSettings || showSectionTitles ? "Cookies" : null}>
           <BooleanSettingRow
             settingDefinition={SETTING_SEND_COOKIES}
             setting={model.settingSendCookies}
@@ -195,7 +194,7 @@ export function ModelSettingsEditor({
 }
 
 export function countOverriddenSettings(model: ModelWithSettings) {
-  const settings: (BooleanSetting | IntegerSetting)[] = [];
+  const settings: (BooleanSetting | IntegerSetting | HttpVersionSetting)[] = [];
 
   if (modelSupportsCookieSettings(model)) {
     settings.push(model.settingSendCookies, model.settingStoreCookies);
@@ -204,22 +203,22 @@ export function countOverriddenSettings(model: ModelWithSettings) {
   settings.push(model.settingValidateCertificates);
 
   if (modelSupportsHttpSettings(model)) {
-    settings.push(model.settingFollowRedirects, model.settingRequestTimeout);
+    settings.push(
+      model.settingFollowRedirects,
+      model.settingRequestTimeout,
+      model.settingHttpVersion,
+    );
   }
 
   if (modelSupportsMessageSizeSettings(model)) {
     settings.push(model.settingRequestMessageSize);
   }
 
-  return settings.filter(
-    (setting) => isInheritedSetting(setting) && setting.enabled === true,
-  ).length;
+  return settings.filter((setting) => isInheritedSetting(setting) && setting.enabled === true)
+    .length;
 }
 
-function patchCookieSettings(
-  model: ModelWithCookieSettings,
-  patch: Partial<CookieSettingsPatch>,
-) {
+function patchCookieSettings(model: ModelWithCookieSettings, patch: Partial<CookieSettingsPatch>) {
   switch (model.model) {
     case "workspace":
       return patchModel(model, patch as Partial<Workspace>);
@@ -232,10 +231,7 @@ function patchCookieSettings(
   }
 }
 
-function patchHttpSettings(
-  model: ModelWithHttpSettings,
-  patch: Partial<HttpSettingsPatch>,
-) {
+function patchHttpSettings(model: ModelWithHttpSettings, patch: Partial<HttpSettingsPatch>) {
   switch (model.model) {
     case "workspace":
       return patchModel(model, patch as Partial<Workspace>);
@@ -246,10 +242,7 @@ function patchHttpSettings(
   }
 }
 
-function patchTlsSettings(
-  model: ModelWithTlsSettings,
-  patch: Partial<TlsSettingsPatch>,
-) {
+function patchTlsSettings(model: ModelWithTlsSettings, patch: Partial<TlsSettingsPatch>) {
   switch (model.model) {
     case "workspace":
       return patchModel(model, patch as Partial<Workspace>);
@@ -280,21 +273,15 @@ function patchMessageSizeSettings(
   }
 }
 
-function modelSupportsHttpSettings(
-  model: ModelWithSettings,
-): model is ModelWithHttpSettings {
+function modelSupportsHttpSettings(model: ModelWithSettings): model is ModelWithHttpSettings {
   return modelSupportsSetting(model, SETTING_REQUEST_TIMEOUT);
 }
 
-function modelSupportsCookieSettings(
-  model: ModelWithSettings,
-): model is ModelWithCookieSettings {
+function modelSupportsCookieSettings(model: ModelWithSettings): model is ModelWithCookieSettings {
   return modelSupportsSetting(model, SETTING_SEND_COOKIES);
 }
 
-function modelSupportsTlsSettings(
-  model: ModelWithSettings,
-): model is ModelWithTlsSettings {
+function modelSupportsTlsSettings(model: ModelWithSettings): model is ModelWithTlsSettings {
   return modelSupportsSetting(model, SETTING_VALIDATE_CERTIFICATES);
 }
 
@@ -317,11 +304,7 @@ function BooleanSettingRow({
 }) {
   const inherited = isInheritedSetting(setting);
   const overridden = inherited ? setting.enabled === true : false;
-  const value = inherited
-    ? overridden
-      ? setting.value
-      : inheritedValue
-    : setting;
+  const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
 
   if (!inherited) {
     return (
@@ -352,6 +335,63 @@ function BooleanSettingRow({
   );
 }
 
+const HTTP_VERSION_OPTIONS: { label: string; value: HttpVersion }[] = [
+  { label: "Automatic", value: "auto" },
+  { label: "HTTP/1.1", value: "http1" },
+  { label: "HTTP/2", value: "http2" },
+];
+
+function HttpVersionSettingRow({
+  inheritedValue,
+  setting,
+  settingDefinition,
+  onChange,
+}: {
+  inheritedValue: HttpVersion;
+  setting: HttpVersionSetting;
+  settingDefinition: RequestSettingDefinition<"settingHttpVersion">;
+  onChange: (setting: HttpVersionSetting) => void;
+}) {
+  const inherited = isInheritedSetting(setting);
+  const overridden = inherited ? setting.enabled === true : false;
+  const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
+
+  if (!inherited) {
+    return (
+      <SettingRow title={settingDefinition.title} description={settingDefinition.description}>
+        <Select
+          hideLabel
+          name={settingDefinition.modelKey}
+          label={settingDefinition.title}
+          size="sm"
+          value={value}
+          options={HTTP_VERSION_OPTIONS}
+          onChange={(value) => onChange(value)}
+        />
+      </SettingRow>
+    );
+  }
+
+  return (
+    <SettingOverrideRow
+      title={settingDefinition.title}
+      description={settingDefinition.description}
+      overridden={overridden}
+      onResetOverride={() => onChange({ ...setting, enabled: false })}
+    >
+      <Select
+        hideLabel
+        name={settingDefinition.modelKey}
+        label={settingDefinition.title}
+        size="sm"
+        value={value}
+        options={HTTP_VERSION_OPTIONS}
+        onChange={(value) => onChange({ ...setting, enabled: true, value })}
+      />
+    </SettingOverrideRow>
+  );
+}
+
 function IntegerSettingRow({
   inheritedValue,
   setting,
@@ -365,18 +405,11 @@ function IntegerSettingRow({
 }) {
   const inherited = isInheritedSetting(setting);
   const overridden = inherited ? setting.enabled === true : false;
-  const value = inherited
-    ? overridden
-      ? setting.value
-      : inheritedValue
-    : setting;
+  const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
 
   if (!inherited) {
     return (
-      <SettingRow
-        title={settingDefinition.title}
-        description={settingDefinition.description}
-      >
+      <SettingRow title={settingDefinition.title} description={settingDefinition.description}>
         <NumberUnitInput
           name={settingDefinition.modelKey}
           label={settingDefinition.title}
@@ -429,20 +462,13 @@ function MessageSizeSettingRow({
 }) {
   const inherited = isInheritedSetting(setting);
   const overridden = inherited ? setting.enabled === true : false;
-  const value = inherited
-    ? overridden
-      ? setting.value
-      : inheritedValue
-    : setting;
+  const value = inherited ? (overridden ? setting.value : inheritedValue) : setting;
   const displayValue = formatMegabytes(value);
   const placeholder = "0";
 
   if (!inherited) {
     return (
-      <SettingRow
-        title={settingDefinition.title}
-        description={settingDefinition.description}
-      >
+      <SettingRow title={settingDefinition.title} description={settingDefinition.description}>
         <MessageSizeInput
           name={settingDefinition.modelKey}
           label={settingDefinition.title}
@@ -569,11 +595,16 @@ function resolveInheritedValue(
 ): boolean;
 function resolveInheritedValue(
   ancestors: (Folder | Workspace)[],
+  key: "settingHttpVersion",
+  fallback: HttpVersionSetting,
+): HttpVersion;
+function resolveInheritedValue(
+  ancestors: (Folder | Workspace)[],
   key: keyof WorkspaceSettings,
-  fallback: BooleanSetting | IntegerSetting,
+  fallback: BooleanSetting | IntegerSetting | HttpVersionSetting,
 ) {
   for (const ancestor of ancestors) {
-    const setting = ancestor[key] as BooleanSetting | IntegerSetting;
+    const setting = ancestor[key] as BooleanSetting | IntegerSetting | HttpVersionSetting;
     if (isInheritedSetting(setting)) {
       if (setting.enabled === true) {
         return setting.value;
@@ -589,6 +620,7 @@ function resolveInheritedValue(
 type WorkspaceSettings = Pick<
   Workspace,
   | "settingFollowRedirects"
+  | "settingHttpVersion"
   | "settingRequestMessageSize"
   | "settingRequestTimeout"
   | "settingSendCookies"
@@ -598,14 +630,12 @@ type WorkspaceSettings = Pick<
 
 type BooleanWorkspaceSettingKey = Exclude<
   keyof WorkspaceSettings,
-  "settingRequestTimeout" | "settingRequestMessageSize"
+  "settingRequestTimeout" | "settingRequestMessageSize" | "settingHttpVersion"
 >;
 
 function formatMegabytes(bytes: number) {
   const megabytes = bytes / BYTES_PER_MB;
-  return Number.isInteger(megabytes)
-    ? `${megabytes}`
-    : megabytes.toFixed(3).replace(/\.?0+$/, "");
+  return Number.isInteger(megabytes) ? `${megabytes}` : megabytes.toFixed(3).replace(/\.?0+$/, "");
 }
 
 function parseMegabytes(value: string) {
@@ -626,9 +656,5 @@ function isValidInteger(value: string) {
 function isValidMegabytes(value: string) {
   if (value === "") return true;
   const megabytes = Number(value);
-  return (
-    Number.isFinite(megabytes) &&
-    megabytes >= 0 &&
-    megabytes <= MAX_MESSAGE_SIZE_MB
-  );
+  return Number.isFinite(megabytes) && megabytes >= 0 && megabytes <= MAX_MESSAGE_SIZE_MB;
 }
