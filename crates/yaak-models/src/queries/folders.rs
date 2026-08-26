@@ -208,6 +208,14 @@ impl<'a> ClientDb<'a> {
             } else {
                 parent.store_cookies
             },
+            http_version: if folder.setting_http_version.enabled {
+                ResolvedSetting::from_model(
+                    folder.setting_http_version.value,
+                    AnyModel::Folder(folder.clone()),
+                )
+            } else {
+                parent.http_version
+            },
         })
     }
 }

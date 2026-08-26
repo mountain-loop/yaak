@@ -1,9 +1,9 @@
 use crate::error::Result;
 use crate::models::HttpRequestIden::{
     Authentication, AuthenticationType, Body, BodyType, CreatedAt, Description, FolderId, Headers,
-    Method, Name, SettingFollowRedirects, SettingRequestTimeout, SettingSendCookies,
-    SettingStoreCookies, SettingValidateCertificates, SortPriority, UpdatedAt, Url, UrlParameters,
-    WorkspaceId,
+    Method, Name, SettingFollowRedirects, SettingHttpVersion, SettingRequestTimeout,
+    SettingSendCookies, SettingStoreCookies, SettingValidateCertificates, SortPriority, UpdatedAt,
+    Url, UrlParameters, WorkspaceId,
 };
 use crate::util::generate_prefixed_id;
 use chrono::{NaiveDateTime, Utc};
@@ -143,6 +143,7 @@ pub struct ResolvedHttpRequestSettings {
     pub request_message_size: ResolvedSetting<i32>,
     pub send_cookies: ResolvedSetting<bool>,
     pub store_cookies: ResolvedSetting<bool>,
+    pub http_version: ResolvedSetting<HttpVersion>,
 }
 
 impl Default for ResolvedHttpRequestSettings {
@@ -154,6 +155,7 @@ impl Default for ResolvedHttpRequestSettings {
             request_message_size: ResolvedSetting::default_source(DEFAULT_REQUEST_MESSAGE_SIZE),
             send_cookies: ResolvedSetting::default_source(true),
             store_cookies: ResolvedSetting::default_source(true),
+            http_version: ResolvedSetting::default_source(HttpVersion::Auto),
         }
     }
 }
@@ -191,6 +193,7 @@ impl ResolvedHttpRequestSettings {
             event("timeout", timeout, &self.request_timeout),
             event("send_cookies", self.send_cookies.value.to_string(), &self.send_cookies),
             event("store_cookies", self.store_cookies.value.to_string(), &self.store_cookies),
+            event("http_version", self.http_version.value.to_string(), &self.http_version),
         ]
     }
 }
@@ -208,6 +211,8 @@ pub struct HttpSendSettings {
     pub timeout_ms: i32,
     pub send_cookies: bool,
     pub store_cookies: bool,
+    #[serde(default)]
+    pub http_version: HttpVersion,
 }
 
 impl From<&ResolvedHttpRequestSettings> for HttpSendSettings {
@@ -218,6 +223,7 @@ impl From<&ResolvedHttpRequestSettings> for HttpSendSettings {
             timeout_ms: s.request_timeout.value,
             send_cookies: s.send_cookies.value,
             store_cookies: s.store_cookies.value,
+            http_version: s.http_version.value,
         }
     }
 }
@@ -253,6 +259,49 @@ impl Default for InheritedIntSetting {
     fn default() -> Self {
         Self { enabled: false, value: 0 }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum HttpVersion {
+    #[default]
+    Auto,
+    Http1,
+    Http2,
+}
+
+impl FromStr for HttpVersion {
+    type Err = crate::error::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "http1" => Ok(Self::Http1),
+            "http2" => Ok(Self::Http2),
+            _ => Ok(Self::Auto),
+        }
+    }
+}
+
+impl Display for HttpVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            HttpVersion::Auto => "auto",
+            HttpVersion::Http1 => "http1",
+            HttpVersion::Http2 => "http2",
+        };
+        write!(f, "{}", str)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct InheritedHttpVersionSetting {
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub enabled: bool,
+    pub value: HttpVersion,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -484,6 +533,7 @@ impl Default for Workspace {
             setting_dns_overrides: Vec::new(),
             setting_send_cookies: true,
             setting_store_cookies: true,
+            setting_http_version: HttpVersion::Auto,
         }
     }
 }
@@ -516,6 +566,7 @@ pub struct Workspace {
     pub setting_dns_overrides: Vec<DnsOverride>,
     pub setting_send_cookies: bool,
     pub setting_store_cookies: bool,
+    pub setting_http_version: HttpVersion,
 }
 
 impl UpsertModelInfo for Workspace {
@@ -560,6 +611,7 @@ impl UpsertModelInfo for Workspace {
             (SettingDnsOverrides, serde_json::to_string(&self.setting_dns_overrides)?.into()),
             (SettingSendCookies, self.setting_send_cookies.into()),
             (SettingStoreCookies, self.setting_store_cookies.into()),
+            (SettingHttpVersion, self.setting_http_version.to_string().into()),
         ])
     }
 
@@ -579,6 +631,7 @@ impl UpsertModelInfo for Workspace {
             WorkspaceIden::SettingDnsOverrides,
             WorkspaceIden::SettingSendCookies,
             WorkspaceIden::SettingStoreCookies,
+            WorkspaceIden::SettingHttpVersion,
         ]
     }
 
@@ -589,6 +642,7 @@ impl UpsertModelInfo for Workspace {
         let headers: String = row.get("headers")?;
         let authentication: String = row.get("authentication")?;
         let setting_dns_overrides: String = row.get("setting_dns_overrides")?;
+        let setting_http_version: String = row.get("setting_http_version")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -607,6 +661,7 @@ impl UpsertModelInfo for Workspace {
             setting_dns_overrides: serde_json::from_str(&setting_dns_overrides).unwrap_or_default(),
             setting_send_cookies: row.get("setting_send_cookies")?,
             setting_store_cookies: row.get("setting_store_cookies")?,
+            setting_http_version: setting_http_version.parse().unwrap_or_default(),
         })
     }
 }
@@ -1078,6 +1133,7 @@ impl Default for Folder {
                 enabled: false,
                 value: DEFAULT_REQUEST_MESSAGE_SIZE,
             },
+            setting_http_version: InheritedHttpVersionSetting::default(),
         }
     }
 }
@@ -1108,6 +1164,7 @@ pub struct Folder {
     pub setting_follow_redirects: InheritedBoolSetting,
     pub setting_request_timeout: InheritedIntSetting,
     pub setting_request_message_size: InheritedIntSetting,
+    pub setting_http_version: InheritedHttpVersionSetting,
 }
 
 impl UpsertModelInfo for Folder {
@@ -1159,6 +1216,7 @@ impl UpsertModelInfo for Folder {
                 SettingRequestMessageSize,
                 serde_json::to_string(&self.setting_request_message_size)?.into(),
             ),
+            (SettingHttpVersion, serde_json::to_string(&self.setting_http_version)?.into()),
         ])
     }
 
@@ -1178,6 +1236,7 @@ impl UpsertModelInfo for Folder {
             FolderIden::SettingFollowRedirects,
             FolderIden::SettingRequestTimeout,
             FolderIden::SettingRequestMessageSize,
+            FolderIden::SettingHttpVersion,
         ]
     }
 
@@ -1193,6 +1252,7 @@ impl UpsertModelInfo for Folder {
         let setting_follow_redirects: String = row.get("setting_follow_redirects")?;
         let setting_request_timeout: String = row.get("setting_request_timeout")?;
         let setting_request_message_size: String = row.get("setting_request_message_size")?;
+        let setting_http_version: String = row.get("setting_http_version")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -1216,6 +1276,7 @@ impl UpsertModelInfo for Folder {
                 .unwrap_or_default(),
             setting_request_message_size: serde_json::from_str(&setting_request_message_size)
                 .unwrap_or_else(|_| default_request_message_size_setting()),
+            setting_http_version: serde_json::from_str(&setting_http_version).unwrap_or_default(),
         })
     }
 }
@@ -1283,6 +1344,7 @@ impl Default for HttpRequest {
             setting_validate_certificates: InheritedBoolSetting::default(),
             setting_follow_redirects: InheritedBoolSetting::default(),
             setting_request_timeout: InheritedIntSetting::default(),
+            setting_http_version: InheritedHttpVersionSetting::default(),
         }
     }
 }
@@ -1319,6 +1381,7 @@ pub struct HttpRequest {
     pub setting_validate_certificates: InheritedBoolSetting,
     pub setting_follow_redirects: InheritedBoolSetting,
     pub setting_request_timeout: InheritedIntSetting,
+    pub setting_http_version: InheritedHttpVersionSetting,
 }
 
 impl UpsertModelInfo for HttpRequest {
@@ -1370,6 +1433,7 @@ impl UpsertModelInfo for HttpRequest {
             ),
             (SettingFollowRedirects, serde_json::to_string(&self.setting_follow_redirects)?.into()),
             (SettingRequestTimeout, serde_json::to_string(&self.setting_request_timeout)?.into()),
+            (SettingHttpVersion, serde_json::to_string(&self.setting_http_version)?.into()),
         ])
     }
 
@@ -1394,6 +1458,7 @@ impl UpsertModelInfo for HttpRequest {
             SettingValidateCertificates,
             SettingFollowRedirects,
             SettingRequestTimeout,
+            SettingHttpVersion,
         ]
     }
 
@@ -1407,6 +1472,7 @@ impl UpsertModelInfo for HttpRequest {
         let setting_validate_certificates: String = row.get("setting_validate_certificates")?;
         let setting_follow_redirects: String = row.get("setting_follow_redirects")?;
         let setting_request_timeout: String = row.get("setting_request_timeout")?;
+        let setting_http_version: String = row.get("setting_http_version")?;
         Ok(Self {
             id: row.get("id")?,
             model: row.get("model")?,
@@ -1433,6 +1499,7 @@ impl UpsertModelInfo for HttpRequest {
                 .unwrap_or_default(),
             setting_request_timeout: serde_json::from_str(&setting_request_timeout)
                 .unwrap_or_default(),
+            setting_http_version: serde_json::from_str(&setting_http_version).unwrap_or_default(),
         })
     }
 }
