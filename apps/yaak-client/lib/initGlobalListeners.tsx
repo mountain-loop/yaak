@@ -211,11 +211,10 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
           <p className="text-text-subtle text-sm">
             {flatpak ? (
               <>
-                This install is managed by Flatpak. Update it with{" "}
-                <InlineCode>flatpak update</InlineCode> or your software center.
+                Update with <InlineCode>flatpak update</InlineCode> or your software center.
               </>
             ) : (
-              "This install can't update itself. Download the new version to upgrade."
+              "Download the new version to upgrade."
             )}
           </p>
         </VStack>
