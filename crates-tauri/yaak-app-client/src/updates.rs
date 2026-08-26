@@ -474,6 +474,16 @@ fn package_manager_owns_exe(cmd: &str, query_arg: &str) -> bool {
 /// be written from inside the sandbox, and unknown install methods (distro packages,
 /// Nix, ...) can't be updated in-app at all.
 fn update_install_method(update: &Update) -> UpdateInstall {
+    // Dev-only override to preview the non-integrated flows on any OS:
+    //   YAAK_SIMULATE_INSTALL=flatpak|manual
+    if is_dev() {
+        match std::env::var("YAAK_SIMULATE_INSTALL").as_deref() {
+            Ok("flatpak") => return UpdateInstall::Flatpak,
+            Ok("manual") => return UpdateInstall::Manual,
+            _ => {}
+        }
+    }
+
     if !cfg!(target_os = "linux") {
         return UpdateInstall::Integrated;
     }
