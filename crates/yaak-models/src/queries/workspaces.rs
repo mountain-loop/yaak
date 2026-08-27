@@ -96,8 +96,8 @@ impl<'a> ClientDb<'a> {
                 deleted
             }
             Err(e) => {
-                let _ = conn
-                    .execute_batch("ROLLBACK TO delete_workspace; RELEASE delete_workspace");
+                let _ =
+                    conn.execute_batch("ROLLBACK TO delete_workspace; RELEASE delete_workspace");
                 return Err(e);
             }
         };
@@ -175,6 +175,10 @@ impl<'a> ClientDb<'a> {
             ),
             store_cookies: ResolvedSetting::from_model(
                 workspace.setting_store_cookies,
+                AnyModel::Workspace(workspace.clone()),
+            ),
+            http_version: ResolvedSetting::from_model(
+                workspace.setting_http_version,
                 AnyModel::Workspace(workspace.clone()),
             ),
         }

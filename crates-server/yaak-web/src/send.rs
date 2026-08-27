@@ -157,6 +157,7 @@ impl PreparedSend {
         let (client, resolver) = HttpConnectionOptions {
             id: uuid::Uuid::new_v4().to_string(),
             validate_certificates: self.settings.validate_certificates,
+            http_version: self.settings.http_version,
             // The proxy connects directly. Going through a system proxy would move DNS, and
             // therefore the address check, somewhere this process can't see.
             proxy: HttpConnectionProxySetting::Disabled,

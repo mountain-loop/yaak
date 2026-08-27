@@ -110,6 +110,7 @@ export type Folder = {
   settingFollowRedirects: InheritedBoolSetting;
   settingRequestTimeout: InheritedIntSetting;
   settingRequestMessageSize: InheritedIntSetting;
+  settingHttpVersion: InheritedHttpVersionSetting;
 };
 
 export type GraphQlIntrospection = {
@@ -214,6 +215,7 @@ export type HttpRequest = {
   settingValidateCertificates: InheritedBoolSetting;
   settingFollowRedirects: InheritedBoolSetting;
   settingRequestTimeout: InheritedIntSetting;
+  settingHttpVersion: InheritedHttpVersionSetting;
 };
 
 export type HttpRequestHeader = { enabled?: boolean; name: string; value: string; id?: string };
@@ -318,6 +320,7 @@ export type HttpSendSettings = {
   timeoutMs: number;
   sendCookies: boolean;
   storeCookies: boolean;
+  httpVersion: HttpVersion;
 };
 
 export type HttpUrlParameter = {
@@ -331,7 +334,11 @@ export type HttpUrlParameter = {
   id?: string;
 };
 
+export type HttpVersion = "auto" | "http1" | "http2";
+
 export type InheritedBoolSetting = { enabled?: boolean; value: boolean };
+
+export type InheritedHttpVersionSetting = { enabled?: boolean; value: HttpVersion };
 
 export type InheritedIntSetting = { enabled?: boolean; value: number };
 
@@ -475,7 +482,14 @@ export type WebsocketEvent = {
 };
 
 export type WebsocketEventType =
-  "binary" | "close" | "error" | "frame" | "open" | "ping" | "pong" | "text";
+  | "binary"
+  | "close"
+  | "error"
+  | "frame"
+  | "open"
+  | "ping"
+  | "pong"
+  | "text";
 
 export type WebsocketMessageType = "text" | "binary";
 
@@ -522,6 +536,7 @@ export type Workspace = {
   settingDnsOverrides: Array<DnsOverride>;
   settingSendCookies: boolean;
   settingStoreCookies: boolean;
+  settingHttpVersion: HttpVersion;
 };
 
 export type WorkspaceMeta = {
