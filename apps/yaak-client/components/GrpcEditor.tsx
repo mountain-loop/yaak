@@ -2,7 +2,7 @@ import { linter } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import { jsoncLanguage } from "@shopify/lang-jsonc";
 import { type GrpcRequest, patchModel } from "@yaakapp-internal/models";
-import { FormattedError, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, FormattedError, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
 import {
   handleRefresh,
   jsonCompletion,
@@ -21,6 +21,7 @@ import { showDialog } from "../lib/dialog";
 import type { JsonSchema } from "../lib/jsonSchemaExample";
 import { buildExampleFromSchema } from "../lib/jsonSchemaExample";
 import { pluralizeCount } from "../lib/pluralize";
+import { queryClient } from "../lib/queryClient";
 import { Button } from "./core/Button";
 import { Dropdown } from "./core/Dropdown";
 import type { EditorProps } from "./core/Editor/Editor";
@@ -160,6 +161,39 @@ export function GrpcEditor({
     wasUpdatedExternally(request.id);
   }, [methodSchema, request]);
 
+  // The reflect query is keyed by request, url and proto files, so a prefix invalidate
+  // reaches it without threading a refetch down from the connection layout.
+  const handleReloadSchema = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ["grpc_reflect", request.id] }),
+    [request.id],
+  );
+
+  const handleShowReflectionError = useCallback(() => {
+    showDialog({
+      id: "grpc-reflection-error",
+      title: "Reflection Failed",
+      size: "sm",
+      render: ({ hide }) => (
+        <>
+          <FormattedError>{reflectionError ?? "unknown"}</FormattedError>
+          <div className="w-full my-4">
+            <Button
+              className="ml-auto"
+              color="primary"
+              size="sm"
+              onClick={async () => {
+                hide();
+                await handleReloadSchema();
+              }}
+            >
+              Retry
+            </Button>
+          </div>
+        </>
+      ),
+    });
+  }, [handleReloadSchema, reflectionError]);
+
   const actions = useMemo(
     () => [
       // Matches the GraphQL editor: one always-visible control labelled by schema state,
@@ -168,6 +202,24 @@ export function GrpcEditor({
         <Dropdown
           items={[
             {
+              // Hidden for servers without reflection, which isn't an error
+              hidden: !reflectionError,
+              type: "content",
+              label: (
+                <Banner color="danger">
+                  <p className="mb-1">Reflection failed</p>
+                  <Button
+                    size="xs"
+                    color="danger"
+                    variant="border"
+                    onClick={handleShowReflectionError}
+                  >
+                    View Error
+                  </Button>
+                </Banner>
+              ),
+            },
+            {
               label: "Generate Example Message",
               leftSlot: <Icon icon="magic_wand" />,
               disabled: methodSchema.type !== "schema",
@@ -175,13 +227,19 @@ export function GrpcEditor({
             },
             { type: "separator" },
             {
+              label: "Reload Schema",
+              leftSlot: <Icon icon="refresh" spin={reflectionLoading} />,
+              keepOpenOnSelect: true,
+              onSelect: handleReloadSchema,
+            },
+            {
               label: protoFiles.length > 0 ? "Select Proto Files\u2026" : "Configure Schema\u2026",
               leftSlot: <Icon icon="settings" />,
               onSelect: () => {
                 showDialog({
                   title: "Configure Schema",
                   size: "md",
-                  id: "reflection-failed",
+                  id: "grpc-configure-schema",
                   render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
                 });
               },
@@ -213,6 +271,8 @@ export function GrpcEditor({
     ],
     [
       handleGenerateExample,
+      handleReloadSchema,
+      handleShowReflectionError,
       methodSchema.type,
       protoFiles.length,
       reflectionError,
