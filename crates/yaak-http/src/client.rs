@@ -1,9 +1,9 @@
-use crate::dns::LocalhostResolver;
+use crate::dns::{AddressFilter, LocalhostResolver};
 use crate::error::Result;
 use log::{debug, info, warn};
 use reqwest::{Client, ClientBuilder, Proxy, redirect};
 use std::sync::{Arc, Mutex};
-use yaak_models::models::DnsOverride;
+use yaak_models::models::{DnsOverride, HttpVersion};
 use yaak_tls::{
     ClientCertificateConfig, NativeClientIdentity, get_tls_config, load_native_client_identity,
 };
@@ -39,6 +39,7 @@ impl ConfiguredClient {
 /// supports TLS 1.0+ for legacy servers.
 fn build_native_tls_connector(
     client_cert: Option<ClientCertificateConfig>,
+    http_version: HttpVersion,
 ) -> Result<native_tls::TlsConnector> {
     let mut builder = native_tls::TlsConnector::builder();
     builder.danger_accept_invalid_certs(true);
@@ -46,7 +47,11 @@ fn build_native_tls_connector(
     builder.min_protocol_version(Some(native_tls::Protocol::Tlsv10));
     // reqwest cannot add ALPN to a connector it did not build, so without this
     // the native path would silently negotiate HTTP/1.1 for every request.
-    builder.request_alpns(&["h2", "http/1.1"]);
+    match http_version {
+        HttpVersion::Auto => builder.request_alpns(&["h2", "http/1.1"]),
+        HttpVersion::Http1 => builder.request_alpns(&["http/1.1"]),
+        HttpVersion::Http2 => builder.request_alpns(&["h2"]),
+    };
 
     if let Some(identity) = build_native_tls_identity(client_cert)? {
         builder.identity(identity);
@@ -100,16 +105,22 @@ pub enum HttpConnectionProxySetting {
 pub struct HttpConnectionOptions {
     pub id: String,
     pub validate_certificates: bool,
+    pub http_version: HttpVersion,
     pub proxy: HttpConnectionProxySetting,
     pub client_certificate: Option<ClientCertificateConfig>,
     pub dns_overrides: Vec<DnsOverride>,
+    /// Refuse connections to addresses a hostname resolves to. `None` means
+    /// every resolved address is connectable, which is what the desktop wants:
+    /// a user sending to their own machine or their own network is the point.
+    /// A hosted sender is the caller that supplies one.
+    pub address_filter: Option<AddressFilter>,
 }
 
 impl HttpConnectionOptions {
     /// Build a reqwest Client and return it along with the DNS resolver.
     /// The resolver is returned separately so it can be configured per-request
     /// to emit DNS timing events to the appropriate channel.
-    pub(crate) fn build_client(&self) -> Result<(ConfiguredClient, Arc<LocalhostResolver>)> {
+    pub fn build_client(&self) -> Result<(ConfiguredClient, Arc<LocalhostResolver>)> {
         let mut client = client_builder()
             .connection_verbose(true)
             .redirect(redirect::Policy::none())
@@ -123,19 +134,36 @@ impl HttpConnectionOptions {
             // This is needed so we can emit DNS timing events for each request
             .pool_max_idle_per_host(0);
 
+        match self.http_version {
+            HttpVersion::Auto => {}
+            HttpVersion::Http1 => client = client.http1_only(),
+            HttpVersion::Http2 => client = client.http2_prior_knowledge(),
+        }
+
         // Configure TLS
         if self.validate_certificates {
             // Use rustls with platform certificate verification (TLS 1.2+ only)
-            let config = get_tls_config(true, true, self.client_certificate.clone())?;
+            let mut config = get_tls_config(true, true, self.client_certificate.clone())?;
+            // A forced version must also constrain ALPN, or the server may
+            // negotiate a protocol the client then refuses to speak
+            match self.http_version {
+                HttpVersion::Auto => {}
+                HttpVersion::Http1 => config.alpn_protocols = vec![b"http/1.1".to_vec()],
+                HttpVersion::Http2 => config.alpn_protocols = vec![b"h2".to_vec()],
+            }
             client = client.use_preconfigured_tls(config);
         } else {
             // Use native TLS for maximum compatibility (supports TLS 1.0+)
-            let connector = build_native_tls_connector(self.client_certificate.clone())?;
+            let connector =
+                build_native_tls_connector(self.client_certificate.clone(), self.http_version)?;
             client = client.use_preconfigured_tls(connector);
         }
 
         // Configure DNS resolver - keep a reference to configure per-request
-        let resolver = LocalhostResolver::new(self.dns_overrides.clone());
+        let resolver = LocalhostResolver::with_address_filter(
+            self.dns_overrides.clone(),
+            self.address_filter.clone(),
+        );
         client = client.dns_resolver(resolver.clone());
 
         // Configure proxy

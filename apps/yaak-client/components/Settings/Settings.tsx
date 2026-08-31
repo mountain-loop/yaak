@@ -1,4 +1,3 @@
-import { useSearch } from "@tanstack/react-router";
 import { platform } from "@yaakapp-internal/platform";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
@@ -20,6 +19,8 @@ import { SettingsProxy } from "./SettingsProxy";
 import { SettingsTheme } from "./SettingsTheme";
 
 interface Props {
+  tab?: SettingsTabWithSubtab | null;
+  /** Set when Settings is in a dialog rather than owning a window. */
   hide?: () => void;
 }
 
@@ -42,25 +43,19 @@ const tabs = [
   TAB_LICENSE,
 ] as const;
 export type SettingsTab = (typeof tabs)[number];
+export type SettingsTabWithSubtab = SettingsTab | `${SettingsTab}:${string}`;
 
-export default function Settings({ hide }: Props) {
-  const { tab: tabFromQuery } = useSearch({ from: "/workspaces/$workspaceId/settings" });
+export default function Settings({ tab, hide }: Props) {
   // Parse tab and subtab (e.g., "plugins:installed")
-  const [mainTab, subtab] = tabFromQuery?.split(":") ?? [];
+  const [mainTab, subtab] = tab?.split(":") ?? [];
   const settings = useAtomValue(settingsAtom);
   const plugins = useAtomValue(pluginsAtom);
   const licenseCheck = useLicense();
 
-  // Close settings window on escape
+  // Close settings window on escape. In a dialog, the dialog handles Escape itself.
   // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window
   useKeyPressEvent("Escape", async () => {
-    if (hide != null) {
-      // It's being shown in a dialog, so close the dialog
-      hide();
-    } else {
-      // It's being shown in a window, so close the window
-      await platform.window.close();
-    }
+    if (hide == null) await platform.window.close();
   });
 
   return (
@@ -90,7 +85,7 @@ export default function Settings({ hide }: Props) {
       )}
       <Tabs
         layout="horizontal"
-        defaultValue={mainTab || tabFromQuery}
+        defaultValue={mainTab}
         addBorders
         tabListClassName="min-w-40 bg-surface x-theme-sidebar border-r border-border pl-3"
         label="Settings"

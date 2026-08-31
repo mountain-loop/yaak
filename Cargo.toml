@@ -14,6 +14,7 @@ members = [
   "crates/yaak-git",
   "crates/yaak-grpc",
   "crates/yaak-http",
+  "crates/yaak-lifecycle",
   "crates/yaak-models",
   "crates/yaak-plugins",
   "crates/yaak-sse",
@@ -21,11 +22,13 @@ members = [
   "crates/yaak-templates",
   "crates/yaak-tls",
   "crates/yaak-ws",
-  "crates/yaak-web",
+  "crates/yaak-wasm",
   "crates/yaak-api",
   "crates/yaak-proxy",
   # Proxy-specific crates
   "crates-proxy/yaak-proxy-lib",
+  # Server crates (the browser tier's hosted send executor)
+  "crates-server/yaak-web",
   # CLI crates
   "crates-cli/yaak-cli",
   # Tauri-specific crates
@@ -77,6 +80,7 @@ yaak-crypto = { path = "crates/yaak-crypto" }
 yaak-git = { path = "crates/yaak-git" }
 yaak-grpc = { path = "crates/yaak-grpc" }
 yaak-http = { path = "crates/yaak-http" }
+yaak-lifecycle = { path = "crates/yaak-lifecycle" }
 yaak-models = { path = "crates/yaak-models" }
 yaak-plugins = { path = "crates/yaak-plugins" }
 yaak-sse = { path = "crates/yaak-sse" }

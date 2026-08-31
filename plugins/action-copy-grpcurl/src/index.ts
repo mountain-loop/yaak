@@ -129,7 +129,10 @@ export async function convert(request: Partial<GrpcRequest>, allProtoFiles: stri
 }
 
 function quote(arg: string): string {
-  const escaped = arg.replace(/'/g, "\\'");
+  // A single-quoted POSIX string takes no escapes, so `\'` does not close it:
+  // the string ends one character early and the rest of the command is left
+  // dangling. Step out of the quotes, emit an escaped quote, step back in.
+  const escaped = arg.replace(/'/g, `'\\''`);
   return `'${escaped}'`;
 }
 

@@ -1,4 +1,3 @@
-use crate::render::render_http_request;
 use async_trait::async_trait;
 use log::warn;
 use std::path::{Path, PathBuf};
@@ -25,10 +24,11 @@ use yaak_http::types::{
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::models::{
     ClientCertificate, Cookie, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
-    HttpResponseEvent, HttpResponseHeader, HttpResponseState, ProxySetting, ProxySettingAuth,
-    ResolvedHttpRequestSettings, ResolvedSetting,
+    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
+    ProxySettingAuth, ResolvedHttpRequestSettings,
 };
 use yaak_models::query_manager::QueryManager;
+use yaak_models::render::render_http_request;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
 use yaak_plugins::events::{
     CallHttpAuthenticationRequest, HttpHeader, PluginContext, RenderPurpose,
@@ -190,9 +190,11 @@ impl SendRequestExecutor for ConnectionManagerSendRequestExecutor<'_> {
             .get_client(&HttpConnectionOptions {
                 id: self.plugin_context_id.clone(),
                 validate_certificates: runtime_config.settings.validate_certificates.value,
+                http_version: runtime_config.settings.http_version.value,
                 proxy: runtime_config.proxy.clone(),
                 client_certificate,
                 dns_overrides: runtime_config.dns_overrides.clone(),
+                address_filter: None,
             })
             .await?;
 
@@ -715,36 +717,24 @@ pub async fn send_http_request<T: TemplateCallback>(
     let started_at = Instant::now();
     let request_started_url = sendable_request.url.clone();
 
-    send_setting_event(
-        &event_tx,
-        "validate_certificates",
-        resolved_settings.validate_certificates.value.to_string(),
-        &resolved_settings.validate_certificates,
-    );
-    send_setting_event(
-        &event_tx,
-        "redirects",
-        sendable_request.options.follow_redirects.to_string(),
-        &resolved_settings.follow_redirects,
-    );
-    send_setting_event(
-        &event_tx,
-        "timeout",
-        timeout_setting_value(sendable_request.options.timeout),
-        &resolved_settings.request_timeout,
-    );
-    send_setting_event(
-        &event_tx,
-        "send_cookies",
-        cookie_behavior.send_cookies.to_string(),
-        &resolved_settings.send_cookies,
-    );
-    send_setting_event(
-        &event_tx,
-        "store_cookies",
-        cookie_behavior.store_cookies.to_string(),
-        &resolved_settings.store_cookies,
-    );
+    for event in resolved_settings.timeline_events() {
+        if let HttpResponseEventData::Setting {
+            name,
+            value,
+            source_model,
+            source_id,
+            source_name,
+        } = event
+        {
+            let _ = event_tx.try_send(SenderHttpResponseEvent::Setting {
+                name,
+                value,
+                source_model,
+                source_id,
+                source_name,
+            });
+        }
+    }
 
     let mut http_response =
         match executor.send(sendable_request, event_tx, cookie_behavior.clone()).await {
@@ -1128,28 +1118,6 @@ pub fn persist_cookies_after_send(
         .upsert_cookie_jar(cookie_jar, &UpdateSource::Background)
         .map_err(SendHttpRequestError::PersistCookieJar)?;
     Ok(())
-}
-
-fn send_setting_event<T>(
-    event_tx: &mpsc::Sender<SenderHttpResponseEvent>,
-    name: impl Into<String>,
-    value: impl Into<String>,
-    setting: &ResolvedSetting<T>,
-) {
-    let _ = event_tx.try_send(SenderHttpResponseEvent::Setting {
-        name: name.into(),
-        value: value.into(),
-        source_model: Some(setting.source_model.clone()),
-        source_id: setting.source_id.clone(),
-        source_name: setting.source_name.clone(),
-    });
-}
-
-fn timeout_setting_value(timeout: Option<Duration>) -> String {
-    match timeout {
-        Some(timeout) if !timeout.is_zero() => format!("{timeout:?}"),
-        _ => "Infinity".to_string(),
-    }
 }
 
 fn proxy_setting_from_settings(proxy: Option<ProxySetting>) -> HttpConnectionProxySetting {

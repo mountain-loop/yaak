@@ -40,6 +40,44 @@ const SUPPORTED_FLAGS = [
 
 const BOOLEAN_FLAGS = ["G", "get", "digest"];
 
+// Short flags that consume a value, derived so this stays in step with the
+// tables above.
+const VALUE_SHORT_FLAGS = SUPPORTED_FLAGS.flat().filter(
+  (name) => name.length === 1 && !BOOLEAN_FLAGS.includes(name),
+);
+
+/**
+ * Expand a short-flag token into separate arguments.
+ *
+ * curl reads a short cluster left to right, one option per character, until an
+ * option that takes a value — that one swallows the rest of the cluster. So
+ * `-XPOST` is `-X POST`, but `-fsSL` is four boolean flags rather than `-f`
+ * plus a value. Splitting unconditionally after the first character left
+ * `sSL` as a positional argument, and the first positional is read as the URL:
+ * `curl -fsSL https://example.com` imported with a URL of `sSL`.
+ */
+function expandShortFlags(token: string): string[] {
+  if (!token.startsWith("-") || token.startsWith("--") || token.length <= 2) {
+    return [token];
+  }
+
+  const expanded: string[] = [];
+  for (let i = 1; i < token.length; i++) {
+    const name = token[i] ?? "";
+    expanded.push(`-${name}`);
+
+    if (VALUE_SHORT_FLAGS.includes(name)) {
+      const value = token.slice(i + 1);
+      if (value) {
+        expanded.push(value);
+      }
+      break;
+    }
+  }
+
+  return expanded;
+}
+
 type FlagValue = string | boolean;
 
 type FlagsByName = Record<string, FlagValue[]>;
@@ -154,14 +192,7 @@ export function convertCurl(rawData: string) {
 
   const commands: string[][] = splitCommands(rawData).map((cmd) => {
     const tokens = split(cmd);
-
-    // Break up squished arguments like `-XPOST` into `-X POST`
-    return tokens.flatMap((token) => {
-      if (token.startsWith("-") && !token.startsWith("--") && token.length > 2) {
-        return [token.slice(0, 2), token.slice(2)];
-      }
-      return token;
-    });
+    return tokens.flatMap(expandShortFlags);
   });
 
   const workspace: ExportResources["workspaces"][0] = {
@@ -328,7 +359,9 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     if (typeof p !== "string") {
       continue;
     }
-    const [name, value] = p.split("=");
+    // splitOnce: a query value may itself contain "=" (a base64 payload, a
+    // nested filter), and only the first one separates name from value.
+    const [name, value] = splitOnce(p, "=");
     urlParameters.push({
       name: name ?? "",
       value: value ?? "",
@@ -444,7 +477,9 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     ...((flagsByName.form as string[] | undefined) || []),
     ...((flagsByName.F as string[] | undefined) || []),
   ].map((str) => {
-    const parts = str.split("=");
+    // splitOnce for the same reason as --url-query above: base64 padding
+    // ("...==") and any value containing "=" must survive intact.
+    const parts = splitOnce(str, "=");
     const name = parts[0] ?? "";
     const value = parts[1] ?? "";
     const item: { name: string; value?: string; file?: string; enabled: boolean } = {
@@ -475,7 +510,17 @@ function importCommand(parseEntries: string[], workspaceId: string) {
       form: multipartFormDataFromRaw,
     };
   } else if (dataParameters.length > 0 && bodyAsGET) {
-    urlParameters.push(...dataParameters);
+    // `-G` moves the data into the query string, and Yaak encodes url
+    // parameters on send exactly as it encodes the form body below, so this
+    // needs the same decode -- otherwise a `--data-urlencode` value arrives
+    // here already encoded and goes out encoded twice.
+    urlParameters.push(
+      ...dataParameters.map((parameter) => ({
+        ...parameter,
+        name: decodePercentEncoding(parameter.name),
+        value: decodePercentEncoding(parameter.value),
+      })),
+    );
   } else if (
     dataParameters.length > 0 &&
     (mimeType == null || mimeType === "application/x-www-form-urlencoded")
@@ -484,8 +529,8 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     body = {
       form: dataParameters.map((parameter) => ({
         ...parameter,
-        name: decodeURIComponent(parameter.name || ""),
-        value: decodeURIComponent(parameter.value || ""),
+        name: decodePercentEncoding(parameter.name),
+        value: decodePercentEncoding(parameter.value),
       })),
     };
     filteredHeaders.push({
@@ -502,7 +547,11 @@ function importCommand(parseEntries: string[], workspaceId: string) {
     if (graphqlBody != null) {
       bodyType = "graphql";
       body = graphqlBody;
-    } else if (mimeType === "application/json" || mimeType === "text/xml" || mimeType === "text/plain") {
+    } else if (
+      mimeType === "application/json" ||
+      mimeType === "text/xml" ||
+      mimeType === "text/plain"
+    ) {
       bodyType = mimeType;
       body = { text };
     } else {
@@ -558,6 +607,34 @@ interface DataParameter {
   enabled?: boolean;
 }
 
+/**
+ * Decode a percent-encoded form value, keeping it as-is when it is not one.
+ *
+ * Yaak's form editor holds decoded values and re-encodes them on send, so a
+ * `-d` value has to be decoded on the way in. But curl sends that value
+ * verbatim and does not require it to be valid percent-encoding: `a=100%` is
+ * an ordinary form value, and `decodeURIComponent` throws URIError on it,
+ * which failed the whole import rather than that one parameter.
+ */
+function decodePercentEncoding(value: string | undefined): string {
+  const text = value || "";
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    // Mixed: some of it is percent-encoded and some of it is a stray `%`.
+    // Returning the whole string untouched would leave the encoded part to be
+    // encoded a second time on send, so decode each valid run on its own and
+    // leave the stray byte alone. A run rather than a single escape, because a
+    // non-ASCII character is several escapes that only decode together.
+    return text.replace(/(%[0-9A-Fa-f]{2})+/g, (run) => {
+      try {
+        return decodeURIComponent(run);
+      } catch {
+        return run;
+      }
+    });
+  }
+}
 function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
   const dataParameters: DataParameter[] = [];
 
@@ -570,7 +647,11 @@ function pairsToDataParameters(keyedPairs: FlagsByName): DataParameter[] {
 
     for (const p of pairs) {
       if (typeof p !== "string") continue;
-      const params = p.split("&");
+      // `-d` content really is `&`-separated, so splitting it is right. But
+      // `--data-urlencode` encodes its whole argument — an `&` inside it is
+      // data curl percent-encodes, not a separator, so splitting there turned
+      // one parameter into several and changed what the request sends.
+      const params = flagName === "data-urlencode" ? [p] : p.split("&");
       for (const param of params) {
         const [name, value] = splitOnce(param, "=");
         if (param.startsWith("@")) {

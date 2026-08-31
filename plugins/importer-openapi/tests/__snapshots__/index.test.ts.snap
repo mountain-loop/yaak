@@ -11,6 +11,16 @@ exports[`importer-openapi > Snapshots real-world fixture apis-guru.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 9,
         "variables": [
           {
             "name": "baseUrl",
@@ -153,17 +163,12 @@ Responses:
         "model": "http_request",
         "name": "Retrieve one version of a particular API",
         "sortPriority": 5,
-        "url": "\${[baseUrl]}/specs/:provider/:api.json",
+        "url": "\${[baseUrl]}/specs/:provider/2.1.0.json",
         "urlParameters": [
           {
             "enabled": true,
             "name": ":provider",
             "value": "apis.guru",
-          },
-          {
-            "enabled": true,
-            "name": ":api",
-            "value": "2.1.0",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -197,7 +202,7 @@ Responses:
         "model": "http_request",
         "name": "Retrieve one version of a particular API with a serviceName.",
         "sortPriority": 6,
-        "url": "\${[baseUrl]}/specs/:provider/:service/:api.json",
+        "url": "\${[baseUrl]}/specs/:provider/:service/2.1.0.json",
         "urlParameters": [
           {
             "enabled": true,
@@ -208,11 +213,6 @@ Responses:
             "enabled": true,
             "name": ":service",
             "value": "graph",
-          },
-          {
-            "enabled": true,
-            "name": ":api",
-            "value": "2.1.0",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -246,14 +246,8 @@ Responses:
         "model": "http_request",
         "name": "List all APIs for a particular provider",
         "sortPriority": 7,
-        "url": "\${[baseUrl]}/:provider.json",
-        "urlParameters": [
-          {
-            "enabled": true,
-            "name": ":provider",
-            "value": "apis.guru",
-          },
-        ],
+        "url": "\${[baseUrl]}/apis.guru.json",
+        "urlParameters": [],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
       },
       {
@@ -298,6 +292,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": "none",
         "description": "Wikipedia for Web APIs. Repository of API definitions in OpenAPI format.
 **Warning**: If you want to be notified about changes in advance please join our [Slack channel](https://join.slack.com/t/mermade/shared_invite/zt-g78g7xir-MLE_CTCcXCdfJfG3CJe9qA).
 Client sample: [[Demo]](https://apis.guru/simple-ui) [[Repo]](https://github.com/APIs-guru/simple-ui)
@@ -326,6 +322,16 @@ exports[`importer-openapi > Snapshots real-world fixture httpbin.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 90,
         "variables": [
           {
             "name": "baseUrl",
@@ -611,7 +617,7 @@ Responses:
           {
             "enabled": true,
             "name": ":anything",
-            "value": "",
+            "value": "anything",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -640,7 +646,7 @@ Responses:
           {
             "enabled": true,
             "name": ":anything",
-            "value": "",
+            "value": "anything",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -669,7 +675,7 @@ Responses:
           {
             "enabled": true,
             "name": ":anything",
-            "value": "",
+            "value": "anything",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -698,7 +704,7 @@ Responses:
           {
             "enabled": true,
             "name": ":anything",
-            "value": "",
+            "value": "anything",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -727,7 +733,7 @@ Responses:
           {
             "enabled": true,
             "name": ":anything",
-            "value": "",
+            "value": "anything",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -756,7 +762,7 @@ Responses:
           {
             "enabled": true,
             "name": ":anything",
-            "value": "",
+            "value": "anything",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -816,12 +822,12 @@ Responses:
           {
             "enabled": true,
             "name": ":user",
-            "value": "",
+            "value": "user",
           },
           {
             "enabled": true,
             "name": ":passwd",
-            "value": "",
+            "value": "passwd",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -840,13 +846,7 @@ Responses:
 - 200: Sucessful authentication.
 - 401: Unsuccessful authentication.",
         "folderId": "GENERATE_ID::FOLDER_1",
-        "headers": [
-          {
-            "enabled": false,
-            "name": "Authorization",
-            "value": "",
-          },
-        ],
+        "headers": [],
         "id": "GENERATE_ID::HTTP_REQUEST_15",
         "method": "GET",
         "model": "http_request",
@@ -1073,12 +1073,12 @@ Responses:
           {
             "enabled": true,
             "name": ":name",
-            "value": "",
+            "value": "name",
           },
           {
             "enabled": true,
             "name": ":value",
-            "value": "",
+            "value": "value",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -1344,17 +1344,17 @@ Responses:
           {
             "enabled": true,
             "name": ":qop",
-            "value": "",
+            "value": "qop",
           },
           {
             "enabled": true,
             "name": ":user",
-            "value": "",
+            "value": "user",
           },
           {
             "enabled": true,
             "name": ":passwd",
-            "value": "",
+            "value": "passwd",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -1387,17 +1387,17 @@ Responses:
           {
             "enabled": true,
             "name": ":qop",
-            "value": "",
+            "value": "qop",
           },
           {
             "enabled": true,
             "name": ":user",
-            "value": "",
+            "value": "user",
           },
           {
             "enabled": true,
             "name": ":passwd",
-            "value": "",
+            "value": "passwd",
           },
           {
             "enabled": true,
@@ -1437,17 +1437,17 @@ Responses:
           {
             "enabled": true,
             "name": ":qop",
-            "value": "",
+            "value": "qop",
           },
           {
             "enabled": true,
             "name": ":user",
-            "value": "",
+            "value": "user",
           },
           {
             "enabled": true,
             "name": ":passwd",
-            "value": "",
+            "value": "passwd",
           },
           {
             "enabled": true,
@@ -1567,7 +1567,7 @@ Responses:
           {
             "enabled": true,
             "name": ":etag",
-            "value": "",
+            "value": "etag",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -1658,12 +1658,12 @@ Responses:
           {
             "enabled": true,
             "name": ":user",
-            "value": "",
+            "value": "user",
           },
           {
             "enabled": true,
             "name": ":passwd",
-            "value": "",
+            "value": "passwd",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2297,7 +2297,7 @@ Responses:
           {
             "enabled": true,
             "name": ":codes",
-            "value": "",
+            "value": "codes",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2330,7 +2330,7 @@ Responses:
           {
             "enabled": true,
             "name": ":codes",
-            "value": "",
+            "value": "codes",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2363,7 +2363,7 @@ Responses:
           {
             "enabled": true,
             "name": ":codes",
-            "value": "",
+            "value": "codes",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2396,7 +2396,7 @@ Responses:
           {
             "enabled": true,
             "name": ":codes",
-            "value": "",
+            "value": "codes",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2429,7 +2429,7 @@ Responses:
           {
             "enabled": true,
             "name": ":codes",
-            "value": "",
+            "value": "codes",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2462,7 +2462,7 @@ Responses:
           {
             "enabled": true,
             "name": ":codes",
-            "value": "",
+            "value": "codes",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2589,6 +2589,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": null,
         "description": "A simple HTTP Request & Response Service.<br/> <br/> <b>Run locally: </b> <code>$ docker run -p 80:80 kennethreitz/httpbin</code>
 
 Contact: me@kennethreitz.org",
@@ -2612,10 +2614,43 @@ exports[`importer-openapi > Snapshots real-world fixture nasa-apod.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 3,
         "variables": [
           {
             "name": "baseUrl",
             "value": "https://api.nasa.gov/planetary",
+          },
+          {
+            "name": "auth_api_key_key",
+            "value": "",
+          },
+        ],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_2",
+        "model": "environment",
+        "name": "Server 2",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 4,
+        "variables": [
+          {
+            "name": "baseUrl",
+            "value": "http://api.nasa.gov/planetary",
+          },
+          {
+            "name": "auth_api_key_key",
+            "value": "",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2640,7 +2675,7 @@ Here's a link: https://example.com",
         "authentication": {
           "key": "api_key",
           "location": "query",
-          "value": "",
+          "value": "\${[auth_api_key_key]}",
         },
         "authenticationType": "apikey",
         "body": {},
@@ -2686,6 +2721,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": null,
         "description": "This endpoint structures the APOD imagery and associated metadata so that it can be repurposed for other applications. In addition, if the concept_tags parameter is set to True, then keywords derived from the image explanation are returned. These keywords could be used as auto-generated hashtags for twitter or instagram feeds; but generally help with discoverability of relevant imagery
 
 Contact: evan.t.yates@nasa.gov
@@ -2711,10 +2748,20 @@ exports[`importer-openapi > Snapshots real-world fixture xkcd.yaml 1`] = `
         "parentId": null,
         "parentModel": "workspace",
         "sortPriority": 0,
+        "variables": [],
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+      },
+      {
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "model": "environment",
+        "name": "Server 1",
+        "parentId": null,
+        "parentModel": "environment",
+        "sortPriority": 3,
         "variables": [
           {
             "name": "baseUrl",
-            "value": "http://xkcd.com/",
+            "value": "http://xkcd.com",
           },
         ],
         "workspaceId": "GENERATE_ID::WORKSPACE_0",
@@ -2778,6 +2825,8 @@ Responses:
     "websocketRequests": [],
     "workspaces": [
       {
+        "authentication": {},
+        "authenticationType": null,
         "description": "Webcomic of romance, sarcasm, math, and language.",
         "id": "GENERATE_ID::WORKSPACE_0",
         "model": "workspace",

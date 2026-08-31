@@ -103,7 +103,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils
-          # crates/yaak-web compiles SQLite to wasm via sqlite-wasm-rs, whose C shim
+          # crates/yaak-wasm compiles SQLite to wasm via sqlite-wasm-rs, whose C shim
           # uses C23 [[noreturn]] and expects a freestanding wasm32 target. Ubuntu
           # 22.04 ships only clang <=15: 14 rejects the attribute, and 15 falls
           # through to host glibc headers ("bits/libc-header-start.h" not found).

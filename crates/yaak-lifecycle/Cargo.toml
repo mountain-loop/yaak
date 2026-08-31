@@ -1,0 +1,10 @@
+[package]
+name = "yaak-lifecycle"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+[dependencies]
+log = { workspace = true }
+yaak-models = { workspace = true }

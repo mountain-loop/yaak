@@ -26,7 +26,7 @@ import { DB_LOCK_NAME, type FromWorker, type ToWorker } from "./protocol";
  * download and compile — and the tab can therefore tell "this worker is dead"
  * from "this worker is busy" with a short timeout.
  */
-type Engine = typeof import("@yaakapp-internal/web");
+type Engine = typeof import("@yaakapp-internal/wasm");
 let engine: Engine | null = null;
 
 const ports = new Set<MessagePort>();
@@ -96,7 +96,7 @@ function bootOnce(): Promise<void> {
 
   booted = (async () => {
     await acquireDatabaseLock();
-    const loaded = await import("@yaakapp-internal/web");
+    const loaded = await import("@yaakapp-internal/wasm");
     await loaded.boot();
     engine = loaded;
   })();
@@ -122,7 +122,7 @@ async function handle(port: MessagePort, message: ToWorker): Promise<void> {
     send(port, { type: "error", id: message.id, message: bootError ?? "Database failed to open" });
     return;
   }
-  const { rpc, blob_get, blob_put, blob_delete } = engine!;
+  const { rpc, blob_get, blob_put, blob_delete, prepare_http_send } = engine!;
 
   try {
     switch (message.type) {
@@ -140,6 +140,11 @@ async function handle(port: MessagePort, message: ToWorker): Promise<void> {
         if (outcome.events.length > 0) {
           broadcast({ type: "event", event: "model_writes", payload: outcome.events });
         }
+        return;
+      }
+      case "prepare_http_send": {
+        const prepared = await prepare_http_send(message.payload);
+        send(port, { type: "result", id: message.id, result: prepared });
         return;
       }
       case "blob_get": {

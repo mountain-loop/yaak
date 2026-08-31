@@ -237,6 +237,8 @@ export interface Platform {
  * from the cargo features they were built with.
  */
 export interface PlatformCapabilities {
+  /** Send HTTP requests and see the whole response: every header, the redirect chain, timing. */
+  httpSending: boolean;
   /** Send gRPC requests. Needs HTTP/2 trailers, so it needs a real backend. */
   grpc: boolean;
   /** Send WebSocket requests with custom headers and auth. */
@@ -262,6 +264,11 @@ export interface PlatformCapabilities {
    * chrome should be reserved or drawn.
    */
   windowChrome: boolean;
+  /**
+   * The app zooms its own interface, and so owns Cmd/Ctrl `+`, `-` and `0`.
+   * False in a browser, where those keys are already the browser's.
+   */
+  interfaceZoom: boolean;
   /** The plugin runtime. */
   plugins: boolean;
   /** Workspace encryption backed by a key the host keeps. */

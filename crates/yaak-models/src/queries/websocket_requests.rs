@@ -1,4 +1,4 @@
-use super::{conflict_free_name, dedupe_headers};
+use super::{conflict_free_name, merge_headers};
 use crate::client_db::ClientDb;
 use crate::error::Result;
 use crate::models::{
@@ -103,12 +103,8 @@ impl<'a> ClientDb<'a> {
         &self,
         websocket_request: &WebsocketRequest,
     ) -> Result<Vec<HttpRequestHeader>> {
-        let workspace = self.get_workspace(&websocket_request.workspace_id)?;
-
         // Resolved headers should be from furthest to closest ancestor, to override logically.
         let mut headers = Vec::new();
-
-        headers.append(&mut workspace.headers.clone());
 
         if let Some(folder_id) = websocket_request.folder_id.clone() {
             let parent_folder = self.get_folder(&folder_id)?;
@@ -120,9 +116,7 @@ impl<'a> ClientDb<'a> {
             headers.append(&mut workspace_headers);
         }
 
-        headers.append(&mut websocket_request.headers.clone());
-
-        Ok(dedupe_headers(headers))
+        Ok(merge_headers(headers, websocket_request.headers.clone()))
     }
 
     pub fn resolve_settings_for_websocket_request(

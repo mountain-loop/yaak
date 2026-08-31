@@ -61,7 +61,9 @@ export function createOrderedModelAtom<M extends AnyModel["model"]>(
       const modelData = data[modelType] ?? {};
       return Object.values(modelData).sort(
         (a: ExtractModel<AnyModel, M>, b: ExtractModel<AnyModel, M>) => {
-          const n = a[field] > b[field] ? 1 : -1;
+          // NOTE: ties must return 0, or the comparator is inconsistent and V8 reorders
+          //  equal-keyed rows. Sort is stable, so 0 preserves store (DB) insertion order.
+          const n = a[field] === b[field] ? 0 : a[field] > b[field] ? 1 : -1;
           return order === "desc" ? n * -1 : n;
         },
       );

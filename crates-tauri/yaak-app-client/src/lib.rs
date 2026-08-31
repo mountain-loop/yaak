@@ -68,6 +68,7 @@ mod notifications;
 mod plugin_events;
 mod plugins_ext;
 mod render;
+mod restart;
 mod rpc_ext;
 mod sync_ext;
 mod updates;
@@ -904,7 +905,7 @@ async fn cmd_grpc_go<R: Runtime>(
 }
 
 async fn cmd_restart<R: Runtime>(app_handle: AppHandle<R>) -> YaakResult<()> {
-    app_handle.request_restart();
+    restart::request_restart(&app_handle);
     Ok(())
 }
 
@@ -1267,6 +1268,14 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            let lifecycle_host = yaak_lifecycle::Host::owner()
+                .with_responses_dir(app.path().app_data_dir()?.join("responses"));
+            if let Err(e) =
+                yaak_lifecycle::on_launch(&lifecycle_host, &app.db(), &app.blob_manager())
+            {
+                error!("on_launch hook failed: {e:?}");
+            }
+
             // The RPC command registry — every frontend command dispatches
             // through this via the single `rpc` Tauri command
             app.manage(rpc_ext::build_rpc_router::<TauriRuntime>());
@@ -1366,15 +1375,16 @@ pub fn run() {
                         let info = history::get_or_upsert_launch_info(&h);
                         debug!("Launched Yaak {:?}", info);
                     });
-
-                    // Cancel pending requests
-                    let h = app_handle.clone();
-                    tauri::async_runtime::block_on(async move {
-                        let db = h.db();
-                        let _ = db.cancel_pending_http_responses();
-                        let _ = db.cancel_pending_grpc_connections();
-                        let _ = db.cancel_pending_websocket_connections();
-                    });
+                }
+                RunEvent::WindowEvent { event: WindowEvent::ThemeChanged(_), .. } => {
+                    // On macOS this is how OS appearance changes arrive: tao observes
+                    // AppleInterfaceThemeChangedNotification and emits it for every window
+                    #[cfg(any(target_os = "linux", target_os = "macos"))]
+                    if let Some(state) =
+                        app_handle.try_state::<yaak_system_appearance::SystemAppearanceState>()
+                    {
+                        yaak_system_appearance::emit_change(app_handle, &state);
+                    }
                 }
                 RunEvent::WindowEvent { event: WindowEvent::Focused(true), label, .. } => {
                     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -1418,6 +1428,7 @@ pub fn run() {
                         }
                     });
                 }
+                RunEvent::Exit => restart::relaunch_if_requested(),
                 _ => {}
             };
         });

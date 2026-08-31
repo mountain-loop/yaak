@@ -1,3 +1,4 @@
+use super::merge_headers;
 use crate::blob_manager::BlobManager;
 use crate::client_db::ClientDb;
 use crate::error::Result;
@@ -25,13 +26,7 @@ impl<'a> ClientDb<'a> {
 
         if workspaces.is_empty() {
             workspaces.push(self.upsert_workspace(
-                &Workspace {
-                    name: "Yaak".to_string(),
-                    setting_follow_redirects: true,
-                    setting_request_message_size: crate::models::DEFAULT_REQUEST_MESSAGE_SIZE,
-                    setting_validate_certificates: true,
-                    ..Default::default()
-                },
+                &Workspace { name: "Yaak".to_string(), ..Default::default() },
                 &UpdateSource::Background,
             )?)
         }
@@ -101,8 +96,8 @@ impl<'a> ClientDb<'a> {
                 deleted
             }
             Err(e) => {
-                let _ = conn
-                    .execute_batch("ROLLBACK TO delete_workspace; RELEASE delete_workspace");
+                let _ =
+                    conn.execute_batch("ROLLBACK TO delete_workspace; RELEASE delete_workspace");
                 return Err(e);
             }
         };
@@ -150,9 +145,7 @@ impl<'a> ClientDb<'a> {
     }
 
     pub fn resolve_headers_for_workspace(&self, workspace: &Workspace) -> Vec<HttpRequestHeader> {
-        let mut headers = default_headers();
-        headers.extend(workspace.headers.clone());
-        headers
+        merge_headers(default_headers(), workspace.headers.clone())
     }
 
     pub fn resolve_settings_for_workspace(
@@ -184,6 +177,10 @@ impl<'a> ClientDb<'a> {
                 workspace.setting_store_cookies,
                 AnyModel::Workspace(workspace.clone()),
             ),
+            http_version: ResolvedSetting::from_model(
+                workspace.setting_http_version,
+                AnyModel::Workspace(workspace.clone()),
+            ),
         }
     }
 }
@@ -194,16 +191,40 @@ impl<'a> ClientDb<'a> {
 pub fn default_headers() -> Vec<HttpRequestHeader> {
     vec![
         HttpRequestHeader {
-            enabled: true,
             name: "User-Agent".to_string(),
             value: "yaak".to_string(),
-            id: None,
+            ..Default::default()
         },
         HttpRequestHeader {
-            enabled: true,
             name: "Accept".to_string(),
             value: "*/*".to_string(),
-            id: None,
+            ..Default::default()
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::init_in_memory;
+
+    #[test]
+    fn bootstraps_first_workspace_with_real_defaults() {
+        let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+
+        let workspaces = db.list_workspaces().expect("Failed to list workspaces");
+        let workspace = workspaces.first().expect("No workspace was bootstrapped");
+
+        // This workspace is built in Rust and never deserialized, so it only gets
+        // these values if `Workspace::default()` carries them. Asserted through the
+        // DB round trip, since the column values are what a fresh install lives with.
+        assert!(workspace.setting_send_cookies, "setting_send_cookies");
+        assert!(workspace.setting_store_cookies, "setting_store_cookies");
+        assert!(workspace.setting_follow_redirects, "setting_follow_redirects");
+        assert!(workspace.setting_validate_certificates, "setting_validate_certificates");
+        assert_eq!(
+            workspace.setting_request_message_size,
+            crate::models::DEFAULT_REQUEST_MESSAGE_SIZE
+        );
+    }
 }

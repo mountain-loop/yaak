@@ -21,6 +21,7 @@ import type { RpcSchema } from "@yaakapp-internal/rpc-schema";
 import type { CapabilityName, RpcPayload } from "../types";
 import type { WorkerConnection } from "./connection";
 import { unsupported } from "./errors";
+import { sendHttpRequest } from "./send";
 
 export type AppCmd = keyof RpcSchema;
 
@@ -65,6 +66,18 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
   models_grpc_events: (payload, db) => db.rpc("models_grpc_events", payload),
   models_websocket_events: (payload, db) => db.rpc("models_websocket_events", payload),
   cmd_get_workspace_meta: (payload, db) => db.rpc("cmd_get_workspace_meta", payload),
+  cmd_delete_all_http_responses: (payload, db) => db.rpc("cmd_delete_all_http_responses", payload),
+  cmd_delete_send_history: (payload, db) => db.rpc("cmd_delete_send_history", payload),
+
+  /* ------------------------------- sending ------------------------------- */
+
+  // The tab renders and stores; a stateless server puts the bytes on the wire.
+  // See send.ts for the whole shape of it.
+  cmd_send_http_request: (payload, db) => {
+    const requestId = str(payload, "requestId");
+    if (requestId == null) throw new Error("cmd_send_http_request needs a requestId");
+    return sendHttpRequest(db, requestId, str(payload, "environmentId"), str(payload, "cookieJarId"));
+  },
 
   /* -------------------------------- app ---------------------------------- */
 
@@ -203,9 +216,8 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
     return bytes == null ? null : Array.from(bytes);
   },
 
-  async cmd_get_http_response_events() {
-    return [];
-  },
+  // The rows the sender wrote for that response, same table as the desktop.
+  cmd_get_http_response_events: (payload, db) => db.rpc("cmd_get_http_response_events", payload),
 
   async cmd_get_sse_events() {
     return [];
@@ -237,16 +249,10 @@ const HTTP_AUTHENTICATION_SUMMARIES = [
  * while the first is a slice away.
  */
 const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityName | null]>> = {
-  // Sending — the next slice. Everything else about a request works today;
-  // only the part that puts bytes on the network is missing.
-  cmd_send_http_request: [
-    "Sending isn't available in the browser yet — everything else about this request is saved",
-    null,
-  ],
-  cmd_send_ephemeral_request: [
-    "Sending isn't available in the browser yet — everything else about this request is saved",
-    null,
-  ],
+  // Saved requests send through the server (see send.ts). Ephemeral sends — the
+  // ones nothing stores, used for GraphQL introspection — take the same road but
+  // return the body inline; not wired yet.
+  cmd_send_ephemeral_request: ["Sending unsaved requests isn't available in the browser yet", null],
   cmd_curl_to_request: ["Importing from cURL needs a plugin, which this host doesn't run", null],
 
   // Protocols that need a real socket.
@@ -260,7 +266,7 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
 
   // Anything that needs files the page can't reach.
   cmd_import_data: ["Importing from a file needs a filesystem, which a browser tab has no", "localFiles"],
-  cmd_import_url: ["Importing from a URL needs the send proxy, which isn't available yet", null],
+  cmd_import_url: ["Importing from a URL needs the Yaak server, which isn't available yet", null],
   cmd_commit_import: ["Importing needs a plugin, which this host doesn't run", null],
   cmd_export_data: ["Exporting to a file isn't available in the browser yet", "localFiles"],
   cmd_save_response: ["Saving a response to disk isn't available in the browser", "localFiles"],
@@ -298,10 +304,6 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
   cmd_call_workspace_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_folder_action: ["Plugins aren't available in the browser yet", "plugins"],
   cmd_call_http_authentication_action: ["Plugins aren't available in the browser yet", "plugins"],
-
-  // Sending history and its bookkeeping belong to the send slice.
-  cmd_delete_send_history: ["Sending isn't available in the browser yet", null],
-  cmd_delete_all_http_responses: ["Sending isn't available in the browser yet", null],
 
   cmd_send_feedback: ["Feedback goes through the desktop app for now", null],
 };

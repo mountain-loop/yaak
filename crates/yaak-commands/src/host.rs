@@ -130,6 +130,7 @@ pub trait PluginHost: Host {
     ) -> impl Future<Output = crate::Result<Vec<GetTemplateFunctionSummaryResponse>>>;
 
     /// The form a template function wants to show for the given values.
+    /// `values` arrive already rendered.
     fn template_function_config(
         &self,
         function_name: &str,

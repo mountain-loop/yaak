@@ -12,7 +12,7 @@ import type {
   UpdateResponse,
   YaakNotification,
 } from "@yaakapp-internal/tauri-client";
-import { HStack, Icon, VStack } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { openSettings } from "../commands/openSettings";
 import { Button } from "../components/core/Button";
 import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading";
@@ -180,9 +180,65 @@ function showUpdateInstalledToast(version: string) {
 
 async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
   const UPDATE_TOAST_ID = "update-info";
-  const { version, replyEventId, downloaded } = updateInfo;
+  const { version, replyEventId, downloaded, install } = updateInfo;
 
-  jotaiStore.set(updateAvailableAtom, { version, downloaded });
+  jotaiStore.set(updateAvailableAtom, { version, downloaded, install });
+
+  const whatsNewButton = (
+    <Button
+      size="xs"
+      color="info"
+      variant="border"
+      rightSlot={<Icon icon="external_link" />}
+      onClick={async () => {
+        await platform.openUrl(`https://yaak.app/changelog/${version}`);
+      }}
+    >
+      What&apos;s New
+    </Button>
+  );
+
+  if (install !== "integrated") {
+    // Nothing to reply to here; the backend only told us so we can say how to update
+    const flatpak = install === "flatpak";
+    showToast({
+      id: UPDATE_TOAST_ID,
+      color: "info",
+      timeout: null,
+      message: (
+        <VStack>
+          <h2 className="font-semibold">Yaak {version} is available</h2>
+          <p className="text-text-subtle text-sm">
+            {flatpak ? (
+              <>
+                Update with <InlineCode>flatpak update</InlineCode> or your software center.
+              </>
+            ) : (
+              "Download the new version to upgrade."
+            )}
+          </p>
+        </VStack>
+      ),
+      action: () => (
+        <HStack space={1.5}>
+          {!flatpak && (
+            <Button
+              size="xs"
+              color="info"
+              rightSlot={<Icon icon="external_link" />}
+              onClick={async () => {
+                await platform.openUrl("https://yaak.app/download");
+              }}
+            >
+              Download
+            </Button>
+          )}
+          {whatsNewButton}
+        </HStack>
+      ),
+    });
+    return;
+  }
 
   // Acknowledge the event, so we don't time out and try the fallback update logic
   await platform.emit(replyEventId, { type: "ack" } satisfies UpdateResponse);
@@ -215,17 +271,7 @@ async function showUpdateAvailableToast(updateInfo: UpdateInfo) {
         >
           {downloaded ? "Install Now" : "Download and Install"}
         </ButtonInfiniteLoading>
-        <Button
-          size="xs"
-          color="info"
-          variant="border"
-          rightSlot={<Icon icon="external_link" />}
-          onClick={async () => {
-            await platform.openUrl(`https://yaak.app/changelog/${version}`);
-          }}
-        >
-          What&apos;s New
-        </Button>
+        {whatsNewButton}
       </HStack>
     ),
   });

@@ -619,6 +619,8 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -627,10 +629,15 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -651,6 +658,7 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -3275,6 +3283,12 @@ name = "http-range"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
+
+[[package]]
+name = "http-range-header"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c"
 
 [[package]]
 name = "httparse"
@@ -9531,6 +9545,7 @@ dependencies = [
  "tokio",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -9539,12 +9554,22 @@ version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68d6fdd9f81c2819c9a8b0e0cd91660e7746a8e6ea2ba7c6b2b057985f6bcb51"
 dependencies = [
+ "async-compression",
  "bitflags 2.11.0",
  "bytes",
+ "futures-core",
  "futures-util",
  "http",
  "http-body",
+ "http-body-util",
+ "http-range-header",
+ "httpdate",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
  "pin-project-lite",
+ "tokio",
+ "tokio-util",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -9569,6 +9594,7 @@ version = "0.1.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
+ "log 0.4.29",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -11278,6 +11304,7 @@ dependencies = [
  "yaak-grpc",
  "yaak-http",
  "yaak-license",
+ "yaak-lifecycle",
  "yaak-mac-window",
  "yaak-models",
  "yaak-plugins",
@@ -11343,6 +11370,7 @@ dependencies = [
  "yaak-core",
  "yaak-crypto",
  "yaak-http",
+ "yaak-lifecycle",
  "yaak-models",
  "yaak-plugins",
  "yaak-templates",
@@ -11491,7 +11519,6 @@ dependencies = [
  "log 0.4.29",
  "mime_guess",
  "native-tls",
- "regex 1.11.1",
  "reqwest 0.12.20",
  "serde",
  "serde_json",
@@ -11528,6 +11555,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-lifecycle"
+version = "0.0.0"
+dependencies = [
+ "log 0.4.29",
+ "yaak-models",
+]
+
+[[package]]
 name = "yaak-mac-window"
 version = "0.1.0"
 dependencies = [
@@ -11560,8 +11595,10 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "ts-rs",
+ "urlencoding",
  "yaak-core",
  "yaak-database",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -11687,7 +11724,10 @@ name = "yaak-system-appearance"
 version = "0.1.0"
 dependencies = [
  "dark-light",
+ "dispatch2",
  "log 0.4.29",
+ "objc2-app-kit",
+ "objc2-foundation 0.3.1",
  "tauri",
 ]
 
@@ -11733,7 +11773,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "yaak-web"
+name = "yaak-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
@@ -11746,6 +11786,32 @@ dependencies = [
  "sqlite-wasm-vfs",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
+ "yaak-lifecycle",
+ "yaak-models",
+ "yaak-templates",
+]
+
+[[package]]
+name = "yaak-web"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "clap",
+ "env_logger",
+ "futures-util",
+ "log 0.4.29",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "ts-rs",
+ "url",
+ "uuid",
+ "yaak-http",
  "yaak-models",
 ]
 

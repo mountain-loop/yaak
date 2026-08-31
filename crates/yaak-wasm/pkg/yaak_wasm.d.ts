@@ -26,6 +26,17 @@ export function blob_put(id: string, bytes: Uint8Array): void;
 export function boot(): Promise<void>;
 
 /**
+ * Resolve and render a request for sending, exactly as the desktop does before it puts the
+ * request on the network: the environment chain, inherited headers and auth, request
+ * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
+ * posts to the Yaak server.
+ *
+ * Refuses, with a message the user can act on, when the request needs something this host
+ * doesn't have: an authentication plugin, or a template function.
+ */
+export function prepare_http_send(payload: any): Promise<any>;
+
+/**
  * Run one command as `label` (the calling tab's identity, which stands in for
  * the desktop's window label on every write it makes).
  *

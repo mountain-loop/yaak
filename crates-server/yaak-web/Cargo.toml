@@ -1,0 +1,36 @@
+[package]
+name = "yaak-web"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "The server behind Yaak in the browser: executes sends, and can serve the app"
+
+# The send engine (yaak-http) and the model types it speaks (yaak-models, for
+# HttpRequest / Cookie / HttpResponseEventData). Deliberately NOT yaak (the
+# render + storage orchestration), yaak-plugins, or the RPC router: this binary
+# opens no database, runs no plugins, and renders nothing. yaak-models comes
+# along only because yaak-http's types are its types; nothing here calls into
+# its query layer.
+
+[[bin]]
+name = "yaak-web"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+axum = "0.7"
+base64 = "0.22.1"
+bytes = "1.11.1"
+clap = { version = "4.5", features = ["derive", "env"] }
+env_logger = "0.11"
+futures-util = "0.3"
+log = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "sync", "io-util", "time", "net"] }
+tower-http = { version = "0.6", features = ["compression-gzip", "compression-zstd", "cors", "fs"] }
+ts-rs = { workspace = true }
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+yaak-http = { workspace = true }
+yaak-models = { workspace = true }

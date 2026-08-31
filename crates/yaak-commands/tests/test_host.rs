@@ -18,7 +18,7 @@ use yaak_commands::models::{
     cmd_default_headers, cmd_get_workspace_meta, models_delete, models_upsert,
     models_workspace_models,
 };
-use yaak_commands::templates::cmd_render_template;
+use yaak_commands::templates::{cmd_render_template, cmd_template_function_config};
 use yaak_commands::{Host, PluginHost};
 use yaak_core::WorkspaceContext;
 use yaak_crypto::manager::EncryptionManager;
@@ -172,6 +172,8 @@ struct SingleThreadedHost {
     /// The values the last auth-config call arrived with, so a test can check
     /// they were rendered before the host ever saw them.
     auth_values: Rc<RefCell<Option<HashMap<String, JsonPrimitive>>>>,
+    /// Same, for the last template-function-config call.
+    fn_values: Rc<RefCell<Option<HashMap<String, JsonPrimitive>>>>,
 }
 
 impl Host for SingleThreadedHost {
@@ -261,9 +263,10 @@ impl PluginHost for SingleThreadedHost {
     async fn template_function_config(
         &self,
         function_name: &str,
-        _values: HashMap<String, JsonPrimitive>,
+        values: HashMap<String, JsonPrimitive>,
         _model_id: &str,
     ) -> yaak_commands::Result<GetTemplateFunctionConfigResponse> {
+        *self.fn_values.borrow_mut() = Some(values);
         Err(yaak_commands::Error::Generic(format!("no plugin provides {function_name}()")))
     }
 
@@ -376,6 +379,7 @@ async fn a_single_threaded_host_can_implement_the_trait() {
     let host = SingleThreadedHost {
         inner: Rc::new(Arc::into_inner(inner).expect("sole owner")),
         auth_values: Rc::new(RefCell::new(None)),
+        fn_values: Rc::new(RefCell::new(None)),
     };
 
     let workspace = Workspace { name: "From one thread".to_string(), ..Default::default() };
@@ -448,6 +452,7 @@ async fn auth_values_are_rendered_before_the_host_sees_them() {
     let host = SingleThreadedHost {
         inner: Rc::new(Arc::into_inner(inner).expect("sole owner")),
         auth_values: Rc::new(RefCell::new(None)),
+        fn_values: Rc::new(RefCell::new(None)),
     };
 
     let workspace = host
@@ -497,5 +502,67 @@ async fn auth_values_are_rendered_before_the_host_sees_them() {
         matches!(seen.get("password"), Some(JsonPrimitive::String(v)) if v == "s3cret"),
         "the template should have been rendered before reaching the host, got {:?}",
         seen.get("password"),
+    );
+}
+
+/// Same contract as auth: template function argument values may contain
+/// templates (the 1Password token argument defaults to `${[1PASSWORD_TOKEN]}`),
+/// and the shared handler renders them before the host is called.
+#[tokio::test]
+async fn template_function_values_are_rendered_before_the_host_sees_them() {
+    let TestHost { inner } = TestHost::new();
+    let host = SingleThreadedHost {
+        inner: Rc::new(Arc::into_inner(inner).expect("sole owner")),
+        auth_values: Rc::new(RefCell::new(None)),
+        fn_values: Rc::new(RefCell::new(None)),
+    };
+
+    let workspace = host
+        .db()
+        .upsert_workspace(
+            &Workspace { name: "Functions".to_string(), ..Default::default() },
+            &host.update_source(),
+        )
+        .expect("workspace");
+    host.db()
+        .upsert_environment(
+            &Environment {
+                workspace_id: workspace.id.clone(),
+                name: "Env".to_string(),
+                variables: vec![EnvironmentVariable {
+                    enabled: true,
+                    name: "1PASSWORD_TOKEN".to_string(),
+                    value: "ops_abc123".to_string(),
+                    id: None,
+                }],
+                ..Default::default()
+            },
+            &host.update_source(),
+        )
+        .expect("environment");
+    let environment =
+        host.db().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
+
+    let mut values = HashMap::new();
+    values.insert("token".to_string(), JsonPrimitive::String("${[1PASSWORD_TOKEN]}".to_string()));
+
+    // The host refuses the call itself — it has no plugins — but only after the
+    // handler has rendered and handed over the values, which is what matters.
+    let _ = cmd_template_function_config(
+        host.clone(),
+        yaak_rpc_schema::CmdTemplateFunctionConfigReq {
+            function_name: "1password.item".to_string(),
+            values,
+            model: AnyModel::Workspace(workspace),
+            environment_id: Some(environment.id),
+        },
+    )
+    .await;
+
+    let seen = host.fn_values.borrow().clone().expect("the host should have been called");
+    assert!(
+        matches!(seen.get("token"), Some(JsonPrimitive::String(v)) if v == "ops_abc123"),
+        "the template should have been rendered before reaching the host, got {:?}",
+        seen.get("token"),
     );
 }

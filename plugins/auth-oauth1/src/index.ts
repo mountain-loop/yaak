@@ -161,7 +161,7 @@ export const plugin: PluginDefinition = {
       if (values.timestamp) requestData.data.oauth_timestamp = String(values.timestamp);
       if (values.verifier) requestData.data.oauth_verifier = String(values.verifier);
 
-      let token: OAuth.Token | { key: string } | undefined;
+      let token: OAuth.Token | { key: string } | { secret: string } | undefined;
 
       if (pkSigs.includes(signatureMethod)) {
         token = {
@@ -172,6 +172,10 @@ export const plugin: PluginDefinition = {
         token = { key: String(values.tokenKey), secret: String(values.tokenSecret) };
       } else if (values.tokenKey) {
         token = { key: String(values.tokenKey) };
+      } else if (values.tokenSecret) {
+        // The secret still joins the signing key without an access token;
+        // leaving `key` out keeps oauth_token out of the header entirely
+        token = { secret: String(values.tokenSecret) };
       }
 
       const authParams = oauth.authorize(requestData, token as OAuth.Token | undefined);
@@ -202,7 +206,10 @@ function hashFunction(signatureMethod: SigMethod) {
       return (base: string, privateKey: string) =>
         crypto.createSign("RSA-SHA512").update(base).sign(privateKey, "base64");
     case signatures.PLAINTEXT:
-      return (base: string) => base;
+      // RFC 5849 3.4.4: the PLAINTEXT signature IS the signing key,
+      // `encoded(consumer secret)&encoded(token secret)`. Returning the base
+      // string put the whole percent-encoded request into oauth_signature.
+      return (_base: string, key: string) => key;
     default:
       return (base: string, key: string) =>
         crypto.createHmac("sha1", key).update(base).digest("base64");

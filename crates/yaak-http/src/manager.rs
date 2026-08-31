@@ -28,7 +28,10 @@ impl HttpConnectionManager {
 
     pub async fn get_client(&self, opt: &HttpConnectionOptions) -> Result<CachedClient> {
         let mut connections = self.connections.write().await;
-        let id = opt.id.clone();
+        // The key must include any per-request option that changes how the
+        // client is built, or a send after a settings change reuses a client
+        // built with the old value for up to the cache TTL.
+        let id = format!("{}::{}::{}", opt.id, opt.validate_certificates, opt.http_version);
 
         // Clean old connections
         connections.retain(|_, (_, last_used)| last_used.elapsed() <= self.ttl);
