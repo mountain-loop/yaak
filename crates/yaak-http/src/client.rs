@@ -3,7 +3,7 @@ use crate::error::Result;
 use log::{debug, info, warn};
 use reqwest::{Client, ClientBuilder, Proxy, redirect};
 use std::sync::{Arc, Mutex};
-use yaak_models::models::DnsOverride;
+use yaak_models::models::{DnsOverride, HttpVersion};
 use yaak_tls::{
     ClientCertificateConfig, NativeClientIdentity, get_tls_config, load_native_client_identity,
 };
@@ -39,6 +39,7 @@ impl ConfiguredClient {
 /// supports TLS 1.0+ for legacy servers.
 fn build_native_tls_connector(
     client_cert: Option<ClientCertificateConfig>,
+    http_version: HttpVersion,
 ) -> Result<native_tls::TlsConnector> {
     let mut builder = native_tls::TlsConnector::builder();
     builder.danger_accept_invalid_certs(true);
@@ -46,7 +47,11 @@ fn build_native_tls_connector(
     builder.min_protocol_version(Some(native_tls::Protocol::Tlsv10));
     // reqwest cannot add ALPN to a connector it did not build, so without this
     // the native path would silently negotiate HTTP/1.1 for every request.
-    builder.request_alpns(&["h2", "http/1.1"]);
+    match http_version {
+        HttpVersion::Auto => builder.request_alpns(&["h2", "http/1.1"]),
+        HttpVersion::Http1 => builder.request_alpns(&["http/1.1"]),
+        HttpVersion::Http2 => builder.request_alpns(&["h2"]),
+    };
 
     if let Some(identity) = build_native_tls_identity(client_cert)? {
         builder.identity(identity);
@@ -100,6 +105,7 @@ pub enum HttpConnectionProxySetting {
 pub struct HttpConnectionOptions {
     pub id: String,
     pub validate_certificates: bool,
+    pub http_version: HttpVersion,
     pub proxy: HttpConnectionProxySetting,
     pub client_certificate: Option<ClientCertificateConfig>,
     pub dns_overrides: Vec<DnsOverride>,
@@ -128,14 +134,28 @@ impl HttpConnectionOptions {
             // This is needed so we can emit DNS timing events for each request
             .pool_max_idle_per_host(0);
 
+        match self.http_version {
+            HttpVersion::Auto => {}
+            HttpVersion::Http1 => client = client.http1_only(),
+            HttpVersion::Http2 => client = client.http2_prior_knowledge(),
+        }
+
         // Configure TLS
         if self.validate_certificates {
             // Use rustls with platform certificate verification (TLS 1.2+ only)
-            let config = get_tls_config(true, true, self.client_certificate.clone())?;
+            let mut config = get_tls_config(true, true, self.client_certificate.clone())?;
+            // A forced version must also constrain ALPN, or the server may
+            // negotiate a protocol the client then refuses to speak
+            match self.http_version {
+                HttpVersion::Auto => {}
+                HttpVersion::Http1 => config.alpn_protocols = vec![b"http/1.1".to_vec()],
+                HttpVersion::Http2 => config.alpn_protocols = vec![b"h2".to_vec()],
+            }
             client = client.use_preconfigured_tls(config);
         } else {
             // Use native TLS for maximum compatibility (supports TLS 1.0+)
-            let connector = build_native_tls_connector(self.client_certificate.clone())?;
+            let connector =
+                build_native_tls_connector(self.client_certificate.clone(), self.http_version)?;
             client = client.use_preconfigured_tls(connector);
         }
 

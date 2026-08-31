@@ -190,6 +190,7 @@ impl SendRequestExecutor for ConnectionManagerSendRequestExecutor<'_> {
             .get_client(&HttpConnectionOptions {
                 id: self.plugin_context_id.clone(),
                 validate_certificates: runtime_config.settings.validate_certificates.value,
+                http_version: runtime_config.settings.http_version.value,
                 proxy: runtime_config.proxy.clone(),
                 client_certificate,
                 dns_overrides: runtime_config.dns_overrides.clone(),

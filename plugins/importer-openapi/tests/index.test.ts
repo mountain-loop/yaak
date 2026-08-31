@@ -384,6 +384,7 @@ describe("importer-openapi", () => {
           { name: "baseUrl", value: "https://api.example.com/v1" },
           { name: "oauth_client_id", value: "" },
           { name: "oauth_client_secret", value: "" },
+          { name: "oauth_redirect_uri", value: "" },
           { name: "baseUrlOrigin", value: "https://api.example.com" },
           { name: "auth_api_key_key", value: "" },
         ],
@@ -395,6 +396,7 @@ describe("importer-openapi", () => {
           { name: "baseUrl", value: "https://sandbox.example.com/v1" },
           { name: "oauth_client_id", value: "" },
           { name: "oauth_client_secret", value: "" },
+          { name: "oauth_redirect_uri", value: "" },
           { name: "baseUrlOrigin", value: "https://sandbox.example.com" },
           { name: "auth_api_key_key", value: "" },
         ],
@@ -484,6 +486,7 @@ describe("importer-openapi", () => {
           clientId: "${[oauth_implicitOauth_client_id]}",
           headerPrefix: "Bearer",
           authorizationUrl: "https://example.com/authorize",
+          redirectUri: "${[oauth_implicitOauth_redirect_uri]}",
         },
       }),
     );
@@ -497,6 +500,7 @@ describe("importer-openapi", () => {
           { name: "oauth_oauth_client_secret", value: "" },
           { name: "oauth_implicitOauth_client_id", value: "" },
           { name: "oauth_implicitOauth_client_secret", value: "" },
+          { name: "oauth_implicitOauth_redirect_uri", value: "" },
         ],
       }),
     );
@@ -539,6 +543,7 @@ describe("importer-openapi", () => {
           { name: "baseUrl", value: "https://api.example.com" },
           { name: "oauth_client_id", value: "" },
           { name: "oauth_client_secret", value: "" },
+          { name: "oauth_redirect_uri", value: "" },
         ],
       }),
     ]);
@@ -596,6 +601,7 @@ describe("importer-openapi", () => {
           { name: "baseUrl", value: "/api/v1" },
           { name: "oauth_client_id", value: "" },
           { name: "oauth_client_secret", value: "" },
+          { name: "oauth_redirect_uri", value: "" },
           { name: "baseUrlOrigin", value: "" },
         ],
       }),
@@ -633,6 +639,7 @@ describe("importer-openapi", () => {
           scope: "admin",
           authorizationUrl: "https://example.com/authorize",
           accessTokenUrl: "https://example.com/token",
+          redirectUri: "${[oauth_redirect_uri]}",
         },
         headers: [{ enabled: true, name: "Accept", value: "application/json" }],
       }),
@@ -1376,9 +1383,7 @@ describe("importer-openapi", () => {
                   "application/json": {
                     schema: {
                       type: "object",
-                      allOf: [
-                        { type: "object", properties: { fromAllOf: { example: "a" } } },
-                      ],
+                      allOf: [{ type: "object", properties: { fromAllOf: { example: "a" } } }],
                       properties: { sibling: { example: "b" } },
                     },
                   },
@@ -1398,7 +1403,17 @@ describe("importer-openapi", () => {
 
   test("Accepts unquoted YAML version numbers", async () => {
     const imported = await convertOpenApi(
-      ["swagger: 2.0", "info:", "  title: Unquoted Test", '  version: "1"', "host: example.com", "paths:", "  /a:", "    get:", "      responses: {}"].join("\n"),
+      [
+        "swagger: 2.0",
+        "info:",
+        "  title: Unquoted Test",
+        '  version: "1"',
+        "host: example.com",
+        "paths:",
+        "  /a:",
+        "    get:",
+        "      responses: {}",
+      ].join("\n"),
     );
 
     expect(imported?.resources.httpRequests[0]?.url).toBe("${[baseUrl]}/a");

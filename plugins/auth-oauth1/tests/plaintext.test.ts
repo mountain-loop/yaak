@@ -34,6 +34,21 @@ describe("PLAINTEXT signature", () => {
     expect(sign(base)).toBe("cs&");
   });
 
+  test("includes the token secret without an access token, omitting oauth_token", () => {
+    const result = plugin.authentication!.onApply!(
+      {} as never,
+      {
+        values: { ...base, tokenSecret: "ts" },
+        method: "GET",
+        url: "https://api.example.com/resource",
+      } as never,
+    ) as { setHeaders: { name: string; value: string }[] };
+    const header = result.setHeaders[0]!.value;
+    const match = header.match(/oauth_signature="([^"]*)"/);
+    expect(decodeURIComponent(match![1]!)).toBe("cs&ts");
+    expect(header).not.toContain("oauth_token=");
+  });
+
   test("percent-encodes reserved characters in the secrets", () => {
     expect(sign({ ...base, consumerSecret: "c s", tokenKey: "tk", tokenSecret: "t&s" })).toBe(
       "c%20s&t%26s",
