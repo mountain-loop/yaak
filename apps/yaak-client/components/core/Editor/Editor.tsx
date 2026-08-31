@@ -601,6 +601,8 @@ function getExtensions({
     EditorView.contentAttributes.of({
       autocapitalize: "off",
       autocorrect: "off",
+      // Keeps macOS Writing Tools from offering to write code for us
+      writingsuggestions: "false",
     }),
     EditorView.domEventHandlers({
       focus: () => {
