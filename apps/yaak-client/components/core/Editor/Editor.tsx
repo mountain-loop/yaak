@@ -26,6 +26,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { activeEnvironmentAtom } from "../../../hooks/useActiveEnvironment";
 import type { WrappedEnvironmentVariable } from "../../../hooks/useEnvironmentVariables";
@@ -72,6 +73,8 @@ export interface EditorProps {
   defaultValue?: string | null;
   disableTabIndent?: boolean;
   disabled?: boolean;
+  // Rendered over the editor while the document is empty, for actions that fill it
+  emptyState?: ReactNode;
   extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
@@ -119,6 +122,7 @@ function EditorInner({
   defaultValue,
   disableTabIndent,
   disabled,
+  emptyState,
   extraExtensions,
   forcedEnvironmentId,
   forceUpdateKey,
@@ -144,6 +148,7 @@ function EditorInner({
   setRef,
 }: EditorProps) {
   const settings = useAtomValue(settingsAtom);
+  const [isEmpty, setIsEmpty] = useState((defaultValue ?? "") === "");
 
   const allEnvironmentVariables = useEnvironmentVariables(forcedEnvironmentId ?? null);
   const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
@@ -426,6 +431,9 @@ function EditorInner({
             onBlur: handleBlur,
             onKeyDown: handleKeyDown,
           }),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) setIsEmpty(update.state.doc.length === 0);
+          }),
           ...(Array.isArray(extraExtensions)
             ? extraExtensions
             : extraExtensions
@@ -450,6 +458,7 @@ function EditorInner({
         forceParsing(view, 9e6, 100);
 
         cm.current = { view, languageCompartment };
+        setIsEmpty(view.state.doc.length === 0);
         if (autoFocus) {
           view.focus();
         }
@@ -553,6 +562,16 @@ function EditorInner({
   return (
     <div className="group relative h-full w-full x-theme-editor bg-surface">
       {cmContainer}
+      {emptyState && isEmpty && (
+        <div
+          className={classNames(
+            "absolute inset-0 flex items-center justify-center",
+            "pointer-events-none", // No pointer events, so we don't block the editor
+          )}
+        >
+          {emptyState}
+        </div>
+      )}
       {decoratedActions && (
         <HStack
           space={1}

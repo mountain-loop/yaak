@@ -2,7 +2,7 @@ import { linter } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import { jsoncLanguage } from "@shopify/lang-jsonc";
 import { type GrpcRequest, patchModel } from "@yaakapp-internal/models";
-import { FormattedError, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { FormattedError, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import {
   handleRefresh,
@@ -160,9 +160,23 @@ export function GrpcEditor({
     wasUpdatedExternally(request.id);
   }, [methodSchema, request]);
 
+  const emptyState = useMemo(() => {
+    if (methodSchema.type !== "schema") return null;
+    return (
+      <Button
+        variant="border"
+        size="sm"
+        leftSlot={<Icon size="sm" icon="magic_wand" />}
+        onClick={handleGenerateExample}
+      >
+        Generate Example
+      </Button>
+    );
+  }, [handleGenerateExample, methodSchema.type]);
+
   const actions = useMemo(
     () => [
-      ...(methodSchema.type === "schema"
+      ...(methodSchema.type === "schema" && request.message !== ""
         ? [
             <Button key="example" size="xs" color="secondary" onClick={handleGenerateExample}>
               Generate Example
@@ -209,6 +223,7 @@ export function GrpcEditor({
       handleGenerateExample,
       methodSchema.type,
       protoFiles.length,
+      request.message,
       reflectionError,
       reflectionLoading,
       reflectionUnavailable,
@@ -228,6 +243,7 @@ export function GrpcEditor({
         placeholder="..."
         extraExtensions={extraExtensions}
         actions={actions}
+        emptyState={emptyState}
         stateKey={`grpc_message.${request.id}`}
         {...extraEditorProps}
       />
