@@ -1,4 +1,9 @@
-import type { BatchUpsertResult, ImportDestination, ImportPlan } from "@yaakapp-internal/models";
+import {
+  type BatchUpsertResult,
+  type ImportDestination,
+  type ImportPlan,
+  workspacesAtom,
+} from "@yaakapp-internal/models";
 import { FormattedError, VStack } from "@yaakapp-internal/ui";
 import { Button } from "../components/core/Button";
 import { ImportDataDialog } from "../components/ImportDataDialog";
@@ -25,6 +30,7 @@ export const importData = createFastMutation({
   mutationFn: async () => {
     return new Promise<void>((resolve, reject) => {
       const currentWorkspace = jotaiStore.get(activeWorkspaceAtom);
+      const workspaces = jotaiStore.get(workspacesAtom);
       const selectedFolder = jotaiStore.get(activeFolderAtom);
       showDialog({
         id: "import",
@@ -49,6 +55,7 @@ export const importData = createFastMutation({
           return (
             <ImportDataDialog
               currentWorkspace={currentWorkspace}
+              workspaces={workspaces}
               selectedFolder={selectedFolder}
               planFile={(filePath: string, destination: ImportDestination) =>
                 rpc<ImportPlan>("cmd_import_data", { filePath, destination })

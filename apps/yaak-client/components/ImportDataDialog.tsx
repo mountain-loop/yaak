@@ -15,10 +15,11 @@ import { CommercialUseBanner } from "./CommercialUseBanner";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
 import { PlainInput } from "./core/PlainInput";
-import { RadioCards } from "./core/RadioCards";
+import { Select } from "./core/Select";
 
 interface Props {
   currentWorkspace: Workspace | null;
+  workspaces: Workspace[];
   selectedFolder: Folder | null;
   planFile: (filePath: string, destination: ImportDestination) => Promise<ImportPlan>;
   planUrl: (url: string, destination: ImportDestination) => Promise<ImportPlan>;
@@ -27,7 +28,9 @@ interface Props {
   onError: (err: unknown) => void;
 }
 
-type DestinationChoice = "new_workspace" | "current_workspace";
+/** Sentinel for the "create a new workspace" option. Workspace IDs are prefixed `wk_`, so this
+ * can never collide with a real one. */
+const NEW_WORKSPACE = "new_workspace";
 
 /**
  * An absolute or relative path is unambiguously a file. Everything else is treated as a URL, so a
@@ -50,6 +53,7 @@ function fileName(path: string): string {
 
 export function ImportDataDialog({
   currentWorkspace,
+  workspaces,
   selectedFolder,
   planFile,
   planUrl,
@@ -59,9 +63,7 @@ export function ImportDataDialog({
 }: Props) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
-  const [destinationChoice, setDestinationChoice] = useState<DestinationChoice>(
-    currentWorkspace == null ? "new_workspace" : "current_workspace",
-  );
+  const [destinationId, setDestinationId] = useState<string>(NEW_WORKSPACE);
   const [targetSelectedFolder, setTargetSelectedFolder] = useState(selectedFolder != null);
   // A file path or a URL. Both inputs write here, so there is only ever one thing to import
   const [source, setSource] = useLocalStorage<string | null>("importPathOrUrl", null);
@@ -101,15 +103,20 @@ export function ImportDataDialog({
     selectSource(selected);
   };
 
+  // The selected folder belongs to the workspace being viewed, so it is only offerable when that
+  // is also the destination.
+  const canTargetSelectedFolder =
+    selectedFolder != null && destinationId === currentWorkspace?.id;
+
   const destination = (): ImportDestination => {
-    if (destinationChoice === "current_workspace" && currentWorkspace != null) {
-      return {
-        type: "current_workspace",
-        workspaceId: currentWorkspace.id,
-        folderId: targetSelectedFolder ? selectedFolder?.id : undefined,
-      };
+    if (destinationId === NEW_WORKSPACE) {
+      return { type: "new_workspace" };
     }
-    return { type: "new_workspace" };
+    return {
+      type: "existing_workspace",
+      workspaceId: destinationId,
+      folderId: canTargetSelectedFolder && targetSelectedFolder ? selectedFolder.id : undefined,
+    };
   };
 
   const handlePreview = async () => {
@@ -148,12 +155,14 @@ export function ImportDataDialog({
       [plan.resources.grpcRequests[0]?.resource, plan.resources.grpcRequests.length],
       [plan.resources.websocketRequests[0]?.resource, plan.resources.websocketRequests.length],
     ] as const;
-    const destinationLabel =
-      plan.destination.type === "new_workspace"
-        ? "New workspace"
-        : selectedFolder != null && plan.destination.folderId === selectedFolder.id
-          ? `${currentWorkspace?.name ?? "Current workspace"} / ${selectedFolder.name}`
-          : (currentWorkspace?.name ?? "Current workspace");
+    const destinationLabel = (() => {
+      if (plan.destination.type === "new_workspace") return "New workspace";
+      const { workspaceId, folderId } = plan.destination;
+      const name = workspaces.find((w) => w.id === workspaceId)?.name ?? "Unknown workspace";
+      return folderId != null && folderId === selectedFolder?.id
+        ? `${name} / ${selectedFolder.name}`
+        : name;
+    })();
 
     return (
       <VStack space={4} className="pb-4">
@@ -246,29 +255,23 @@ export function ImportDataDialog({
       />
 
       <VStack space={2}>
-        <div className="text-sm font-semibold">Import destination</div>
-        <RadioCards
+        <Select
           name="import-destination"
-          value={destinationChoice}
-          onChange={setDestinationChoice}
+          label="Import location"
+          size="sm"
+          value={destinationId}
+          onChange={setDestinationId}
+          // The native macOS select drops separators
+          filterable
           options={[
-            {
-              value: "new_workspace",
-              label: "New workspace",
-              description: "Create imported resources in a separate workspace.",
-            },
-            ...(currentWorkspace == null
-              ? []
-              : [
-                  {
-                    value: "current_workspace" as const,
-                    label: currentWorkspace.name,
-                    description: "Add resources without changing this workspace's settings.",
-                  },
-                ]),
+            { value: NEW_WORKSPACE, label: "New Workspace" },
+            ...(workspaces.length > 0
+              ? [{ type: "separator" as const, label: "Existing Workspaces" }]
+              : []),
+            ...workspaces.map((w) => ({ value: w.id, label: w.name })),
           ]}
         />
-        {destinationChoice === "current_workspace" && selectedFolder != null && (
+        {canTargetSelectedFolder && (
           <Checkbox
             checked={targetSelectedFolder}
             title={`Place root resources in selected folder “${selectedFolder.name}”`}

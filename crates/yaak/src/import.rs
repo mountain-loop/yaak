@@ -82,7 +82,7 @@ pub fn plan_import_resources(
 
             (workspaces[0].resource.id.clone(), None)
         }
-        ImportDestination::CurrentWorkspace { workspace_id, folder_id } => {
+        ImportDestination::ExistingWorkspace { workspace_id, folder_id } => {
             for source in &resources.workspaces {
                 workspace_ids.insert(source.id.clone(), workspace_id.clone());
             }
@@ -166,7 +166,7 @@ pub fn plan_import_resources(
         })
         .collect();
 
-    let importing_into_current = matches!(destination, ImportDestination::CurrentWorkspace { .. });
+    let importing_into_existing = matches!(destination, ImportDestination::ExistingWorkspace { .. });
     let mut separated_base_environments = Vec::new();
     let mut converted_duplicate_base_environment = false;
     let mut converted_duplicate_folder_environment = false;
@@ -180,7 +180,7 @@ pub fn plan_import_resources(
             environment.workspace_id = resolve_workspace_id(&environment.workspace_id);
 
             match (environment.parent_model.as_str(), environment.parent_id.clone()) {
-                ("workspace", _) if importing_into_current => {
+                ("workspace", _) if importing_into_existing => {
                     environment.parent_model = "environment".to_string();
                     environment.parent_id = None;
                     let source_name = environment.name.clone();
@@ -296,7 +296,7 @@ fn validate_destination(
 }
 
 fn validate_destination_db(db: &ClientDb<'_>, destination: &ImportDestination) -> Result<()> {
-    let ImportDestination::CurrentWorkspace { workspace_id, folder_id } = destination else {
+    let ImportDestination::ExistingWorkspace { workspace_id, folder_id } = destination else {
         return Ok(());
     };
 
@@ -319,10 +319,10 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
     };
 
     match &plan.destination {
-        ImportDestination::CurrentWorkspace { workspace_id, .. } => {
+        ImportDestination::ExistingWorkspace { workspace_id, .. } => {
             if !plan.resources.workspaces.is_empty() {
                 return invalid(
-                    "A current-workspace import plan must not contain workspace updates"
+                    "An existing-workspace import plan must not contain workspace updates"
                         .to_string(),
                 );
             }
@@ -338,14 +338,14 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 .chain(plan.resources.websocket_requests.iter().map(|v| &v.resource.workspace_id));
             if all_workspace_ids.into_iter().any(|id| id != workspace_id) {
                 return invalid(
-                    "A current-workspace import plan contains resources for another workspace"
+                    "An existing-workspace import plan contains resources for another workspace"
                         .to_string(),
                 );
             }
 
             if plan.resources.environments.iter().any(|v| v.resource.parent_model == "workspace") {
                 return invalid(
-                    "A current-workspace import plan must not replace the base environment"
+                    "An existing-workspace import plan must not replace the base environment"
                         .to_string(),
                 );
             }
@@ -551,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn current_workspace_plan_does_not_mutate_and_preserves_workspace_settings() {
+    fn existing_workspace_plan_does_not_mutate_and_preserves_workspace_settings() {
         let (query_manager, _blob_manager, _rx) =
             yaak_models::init_in_memory().expect("initialize database");
         let mut destination = destination_workspace();
@@ -592,7 +592,7 @@ mod tests {
         let plan = plan_import_resources(
             &query_manager,
             "OpenAPI".to_string(),
-            ImportDestination::CurrentWorkspace {
+            ImportDestination::ExistingWorkspace {
                 workspace_id: destination.id.clone(),
                 folder_id: Some(selected_folder.id.clone()),
             },
@@ -769,7 +769,7 @@ mod tests {
         let plan = plan_import_resources(
             &query_manager,
             "Compatibility".to_string(),
-            ImportDestination::CurrentWorkspace {
+            ImportDestination::ExistingWorkspace {
                 workspace_id: destination.id.clone(),
                 folder_id: None,
             },

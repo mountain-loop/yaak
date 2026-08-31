@@ -87,14 +87,14 @@ pub struct BatchUpsertResult {
 
 /// Where a staged import will be committed.
 ///
-/// The current workspace and optional folder IDs are captured in the plan so the preview describes
+/// The destination workspace and optional folder IDs are captured in the plan so the preview describes
 /// the exact destination that confirmation will use.
 #[derive(Debug, Clone, Deserialize, Serialize, TS)]
 #[serde(rename_all = "snake_case", tag = "type")]
 #[ts(export, export_to = "gen_util.ts")]
 pub enum ImportDestination {
     NewWorkspace,
-    CurrentWorkspace {
+    ExistingWorkspace {
         #[serde(rename = "workspaceId")]
         workspace_id: String,
         #[serde(rename = "folderId")]
