@@ -194,13 +194,6 @@ export function GrpcRequestPane({
               type: "default",
               shortLabel: o.label,
             }))}
-            itemsAfter={[
-              {
-                label: "Refresh",
-                type: "default",
-                leftSlot: <Icon size="sm" icon="refresh" />,
-              },
-            ]}
           >
             <Button
               size="sm"
