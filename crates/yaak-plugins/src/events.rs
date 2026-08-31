@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use ts_rs::TS;
 use yaak_models::models::{
     AnyModel, Environment, Folder, GrpcRequest, HttpRequest, HttpResponse, WebsocketRequest,
@@ -250,6 +250,13 @@ pub struct ImportResponse {
     /// Display name of the importer that recognized the input.
     pub importer: String,
     pub resources: ImportResources,
+
+    /// Identifies the same source element across re-parses, keyed by the IDs in `resources`.
+    ///
+    /// Must come from the document, never from anything the user can rename in Yaak. Only set
+    /// for formats that carry their own identifiers; the host derives the rest.
+    #[ts(optional)]
+    pub source_keys: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

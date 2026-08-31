@@ -959,6 +959,10 @@ describe("importer-curl", () => {
       { enabled: true, name: "q", value: "a=b" },
     ]);
   });
+
+  test("Emits no source keys", () => {
+    expect(convertCurl("curl https://yaak.app")).not.toHaveProperty("sourceKeys");
+  });
 });
 
 const idCount: Partial<Record<string, number>> = {};

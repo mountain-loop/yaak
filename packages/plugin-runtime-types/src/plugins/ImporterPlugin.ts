@@ -1,4 +1,4 @@
-import type { ImportResources } from "../bindings/gen_events";
+import type { ImportResources, ImportResponse } from "../bindings/gen_events";
 import type { AtLeast, MaybePromise } from "../helpers";
 import type { Context } from "./Context";
 
@@ -14,9 +14,12 @@ export type PartialImportResources = {
   websocketRequests: Array<AtLeast<ImportResources["websocketRequests"][0], CommonFields>>;
 };
 
-export type ImportPluginResponse = null | {
-  resources: PartialImportResources;
-};
+/** `importer` is omitted because the host fills it in from the plugin's own name. */
+export type ImportPluginResponse =
+  | null
+  | (Omit<ImportResponse, "importer" | "resources"> & {
+      resources: PartialImportResources;
+    });
 
 export type ImporterPlugin = {
   name: string;

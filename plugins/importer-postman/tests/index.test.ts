@@ -87,4 +87,55 @@ describe("importer-postman", () => {
       }),
     ]);
   });
+
+  test("Keys items by their Postman ID, unchanged by a rename", () => {
+    const collection = (requestName: string) =>
+      JSON.stringify({
+        info: {
+          _postman_id: "collection-id",
+          name: "Keys",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        item: [
+          {
+            id: "folder-id",
+            name: "Folder",
+            item: [
+              {
+                id: "request-id",
+                name: requestName,
+                request: { method: "GET", url: "https://yaak.app" },
+              },
+            ],
+          },
+        ],
+      });
+
+    const before = convertPostman(collection("Original"));
+    const after = convertPostman(collection("Renamed"));
+
+    const keyOf = (result: ReturnType<typeof convertPostman>, id: string | undefined) =>
+      id == null ? undefined : result?.sourceKeys?.[id];
+
+    expect(keyOf(before, before?.resources.httpRequests[0]?.id)).toBe("item:request-id");
+    expect(keyOf(after, after?.resources.httpRequests[0]?.id)).toBe("item:request-id");
+    expect(keyOf(before, before?.resources.folders[0]?.id)).toBe("item:folder-id");
+    expect(keyOf(before, before?.resources.workspaces[0]?.id)).toBe("collection:collection-id");
+  });
+
+  test("Omits keys for items the collection never identified", () => {
+    const result = convertPostman(
+      JSON.stringify({
+        info: {
+          name: "No IDs",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        item: [{ name: "Request", request: { method: "GET", url: "https://yaak.app" } }],
+      }),
+    );
+
+    const requestId = result?.resources.httpRequests[0]?.id;
+    expect(requestId).toBeDefined();
+    expect(result?.sourceKeys).not.toHaveProperty(requestId as string);
+  });
 });

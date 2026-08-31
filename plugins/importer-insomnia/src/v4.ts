@@ -1,10 +1,18 @@
 /* oxlint-disable no-explicit-any */
 import type { PartialImportResources } from "@yaakapp/api";
-import { convertId, convertTemplateSyntax, importHttpBodyAndHeaders, isJSObject } from "./common";
+import {
+  convertId,
+  convertTemplateSyntax,
+  createSourceKeys,
+  importHttpBodyAndHeaders,
+  isJSObject,
+  type SourceKeys,
+} from "./common";
 
 export function convertInsomniaV4(parsed: any) {
   if (!Array.isArray(parsed.resources)) return null;
 
+  const keys = createSourceKeys();
   const resources: PartialImportResources = {
     environments: [],
     folders: [],
@@ -20,7 +28,7 @@ export function convertInsomniaV4(parsed: any) {
   );
   for (const w of workspacesToImport) {
     resources.workspaces.push({
-      id: convertId(w._id),
+      id: keys.own(w._id),
       createdAt: w.created ? new Date(w.created).toISOString().replace("Z", "") : undefined,
       updatedAt: w.updated ? new Date(w.updated).toISOString().replace("Z", "") : undefined,
       model: "workspace",
@@ -31,7 +39,7 @@ export function convertInsomniaV4(parsed: any) {
       (r: any) => isJSObject(r) && r._type === "environment",
     );
     resources.environments.push(
-      ...environmentsToImport.map((r: any) => importEnvironment(r, w._id)),
+      ...environmentsToImport.map((r: any) => importEnvironment(r, w._id, keys)),
     );
 
     const nextFolder = (parentId: string) => {
@@ -40,12 +48,12 @@ export function convertInsomniaV4(parsed: any) {
         if (!isJSObject(child)) continue;
 
         if (child._type === "request_group") {
-          resources.folders.push(importFolder(child, w._id));
+          resources.folders.push(importFolder(child, w._id, keys));
           nextFolder(child._id);
         } else if (child._type === "request") {
-          resources.httpRequests.push(importHttpRequest(child, w._id));
+          resources.httpRequests.push(importHttpRequest(child, w._id, keys));
         } else if (child._type === "grpc_request") {
-          resources.grpcRequests.push(importGrpcRequest(child, w._id));
+          resources.grpcRequests.push(importGrpcRequest(child, w._id, keys));
         }
       }
     };
@@ -60,10 +68,14 @@ export function convertInsomniaV4(parsed: any) {
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
 
-  return { resources: convertTemplateSyntax(resources) };
+  return { resources: convertTemplateSyntax(resources), sourceKeys: keys.all() };
 }
 
-function importHttpRequest(r: any, workspaceId: string): PartialImportResources["httpRequests"][0] {
+function importHttpRequest(
+  r: any,
+  workspaceId: string,
+  keys: SourceKeys,
+): PartialImportResources["httpRequests"][0] {
   let authenticationType: string | null = null;
   let authentication = {};
   if (r.authentication.type === "bearer") {
@@ -80,7 +92,7 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
   }
 
   return {
-    id: convertId(r.meta?.id ?? r._id),
+    id: keys.own(r.meta?.id ?? r._id),
     createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : undefined,
     updatedAt: r.modified ? new Date(r.modified).toISOString().replace("Z", "") : undefined,
     workspaceId: convertId(workspaceId),
@@ -102,13 +114,17 @@ function importHttpRequest(r: any, workspaceId: string): PartialImportResources[
   };
 }
 
-function importGrpcRequest(r: any, workspaceId: string): PartialImportResources["grpcRequests"][0] {
+function importGrpcRequest(
+  r: any,
+  workspaceId: string,
+  keys: SourceKeys,
+): PartialImportResources["grpcRequests"][0] {
   const parts = r.protoMethodName.split("/").filter((p: any) => p !== "");
   const service = parts[0] ?? null;
   const method = parts[1] ?? null;
 
   return {
-    id: convertId(r.meta?.id ?? r._id),
+    id: keys.own(r.meta?.id ?? r._id),
     createdAt: r.created ? new Date(r.created).toISOString().replace("Z", "") : undefined,
     updatedAt: r.modified ? new Date(r.modified).toISOString().replace("Z", "") : undefined,
     workspaceId: convertId(workspaceId),
@@ -131,9 +147,13 @@ function importGrpcRequest(r: any, workspaceId: string): PartialImportResources[
   };
 }
 
-function importFolder(f: any, workspaceId: string): PartialImportResources["folders"][0] {
+function importFolder(
+  f: any,
+  workspaceId: string,
+  keys: SourceKeys,
+): PartialImportResources["folders"][0] {
   return {
-    id: convertId(f._id),
+    id: keys.own(f._id),
     createdAt: f.created ? new Date(f.created).toISOString().replace("Z", "") : undefined,
     updatedAt: f.modified ? new Date(f.modified).toISOString().replace("Z", "") : undefined,
     folderId: f.parentId === workspaceId ? null : convertId(f.parentId),
@@ -147,11 +167,12 @@ function importFolder(f: any, workspaceId: string): PartialImportResources["fold
 function importEnvironment(
   e: any,
   workspaceId: string,
+  keys: SourceKeys,
   isParentOg?: boolean,
 ): PartialImportResources["environments"][0] {
   const isParent = isParentOg ?? e.parentId === workspaceId;
   return {
-    id: convertId(e._id),
+    id: keys.own(e._id),
     createdAt: e.created ? new Date(e.created).toISOString().replace("Z", "") : undefined,
     updatedAt: e.modified ? new Date(e.modified).toISOString().replace("Z", "") : undefined,
     workspaceId: convertId(workspaceId),

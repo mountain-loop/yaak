@@ -15,6 +15,21 @@ export function convertId(id: string): string {
   return `GENERATE_ID::${id}`;
 }
 
+export function createSourceKeys() {
+  const keys: Record<string, string> = {};
+  return {
+    /** Convert a resource's own document ID, keeping it as that resource's source key. */
+    own(id: string): string {
+      const converted = convertId(id);
+      keys[converted] = id;
+      return converted;
+    },
+    all: (): Record<string, string> => keys,
+  };
+}
+
+export type SourceKeys = ReturnType<typeof createSourceKeys>;
+
 export function importHttpBodyAndHeaders(obj: any) {
   const { headers } = importHeaders(obj);
   const { body, bodyType } = importHttpBody(obj.body);

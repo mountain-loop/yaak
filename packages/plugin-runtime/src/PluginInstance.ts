@@ -169,6 +169,7 @@ export class PluginInstance {
             type: "import_response",
             importer: this.#mod.importer.name,
             resources: reply.resources as ImportResources,
+            sourceKeys: reply.sourceKeys ?? null,
           };
           this.#sendPayload(context, replyPayload, replyId);
           return;

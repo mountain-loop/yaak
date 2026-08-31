@@ -2382,4 +2382,38 @@ describe("importer-openapi", () => {
       expect(imported).toMatchSnapshot();
     });
   }
+
+  test("Keys operations by operationId, unchanged by a rename", async () => {
+    const spec = (summary: string) =>
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Keys", version: "1" },
+        paths: {
+          "/pets": {
+            get: { operationId: "listPets", summary, tags: ["pets"], responses: {} },
+          },
+        },
+      });
+
+    const before = await convertOpenApi(spec("List pets"));
+    const after = await convertOpenApi(spec("Fetch every pet"));
+
+    expect(before?.sourceKeys?.[before.resources.httpRequests[0]!.id]).toBe("op:listPets");
+    expect(after?.sourceKeys?.[after.resources.httpRequests[0]!.id]).toBe("op:listPets");
+    expect(before?.sourceKeys?.[before.resources.folders[0]!.id]).toBe("tag:pets");
+  });
+
+  test("Falls back to the route when an operation has no operationId", async () => {
+    const imported = await convertOpenApi(
+      JSON.stringify({
+        openapi: "3.0.0",
+        info: { title: "Keys", version: "1" },
+        paths: { "/pets/{id}": { delete: { summary: "Remove", responses: {} } } },
+      }),
+    );
+
+    expect(imported?.sourceKeys?.[imported.resources.httpRequests[0]!.id]).toBe(
+      "route:DELETE /pets/{id}",
+    );
+  });
 });

@@ -63,8 +63,14 @@ async fn import(ctx: &CliContext, args: ImportArgs) -> CommandResult<BatchUpsert
         Some(workspace_id) => ImportDestination::ExistingWorkspace { workspace_id, folder_id: None },
         None => ImportDestination::NewWorkspace,
     };
-    let plan = import::plan_import_resources(ctx.query_manager(), importer, destination, resources)
-        .map_err(|e| format!("Failed to plan import: {e}"))?;
+    let plan = import::plan_import_resources(
+        ctx.query_manager(),
+        importer,
+        destination,
+        resources,
+        import_result.source_keys,
+    )
+    .map_err(|e| format!("Failed to plan import: {e}"))?;
     let imported = import::commit_import_plan(ctx.query_manager(), plan)
         .map_err(|e| format!("Failed to import data: {e}"))?;
     Ok(imported)

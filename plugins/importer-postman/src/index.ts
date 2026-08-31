@@ -49,6 +49,12 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
 
   const globalAuth = importAuth(root.auth);
 
+  const sourceKeys: Record<string, string> = {};
+  const trackSourceKey = (modelId: string, v: Record<string, unknown>, prefix: string) => {
+    const id = v.id ?? v._postman_id;
+    if (typeof id === "string" && id !== "") sourceKeys[modelId] = `${prefix}:${id}`;
+  };
+
   const exportResources: ExportResources = {
     workspaces: [],
     environments: [],
@@ -63,6 +69,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     description: importDescription(info.description),
     ...globalAuth,
   };
+  trackSourceKey(workspace.id, info, "collection");
   exportResources.workspaces.push(workspace);
 
   // Create the base environment
@@ -92,6 +99,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
         name: v.name,
         folderId,
       };
+      trackSourceKey(folder.id, v, "item");
       exportResources.folders.push(folder);
       for (const child of v.item) {
         importItem(child, folder.id);
@@ -142,6 +150,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
         headers,
         ...requestAuth,
       };
+      trackSourceKey(request.id, v, "item");
       exportResources.httpRequests.push(request);
     } else {
       console.log("Unknown item", v, folderId);
@@ -156,7 +165,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
     convertTemplateSyntax(exportResources),
   ) as PartialImportResources;
 
-  return { resources };
+  return { resources, sourceKeys };
 }
 
 function convertUrl(rawUrl: unknown): Pick<HttpRequest, "url" | "urlParameters"> {
