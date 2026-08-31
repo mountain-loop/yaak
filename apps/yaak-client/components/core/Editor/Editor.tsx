@@ -26,7 +26,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import { activeEnvironmentAtom } from "../../../hooks/useActiveEnvironment";
 import type { WrappedEnvironmentVariable } from "../../../hooks/useEnvironmentVariables";
@@ -73,9 +72,6 @@ export interface EditorProps {
   defaultValue?: string | null;
   disableTabIndent?: boolean;
   disabled?: boolean;
-  // Rendered in the space below the first line while the document is empty, for actions
-  // that fill it
-  emptyState?: ReactNode;
   extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
   forceUpdateKey?: string | number;
@@ -123,7 +119,6 @@ function EditorInner({
   defaultValue,
   disableTabIndent,
   disabled,
-  emptyState,
   extraExtensions,
   forcedEnvironmentId,
   forceUpdateKey,
@@ -149,8 +144,6 @@ function EditorInner({
   setRef,
 }: EditorProps) {
   const settings = useAtomValue(settingsAtom);
-  const [isEmpty, setIsEmpty] = useState((defaultValue ?? "") === "");
-  const [emptyStateTop, setEmptyStateTop] = useState<number | null>(null);
 
   const allEnvironmentVariables = useEnvironmentVariables(forcedEnvironmentId ?? null);
   const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
@@ -433,9 +426,6 @@ function EditorInner({
             onBlur: handleBlur,
             onKeyDown: handleKeyDown,
           }),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) setIsEmpty(update.state.doc.length === 0);
-          }),
           ...(Array.isArray(extraExtensions)
             ? extraExtensions
             : extraExtensions
@@ -460,7 +450,6 @@ function EditorInner({
         forceParsing(view, 9e6, 100);
 
         cm.current = { view, languageCompartment };
-        setIsEmpty(view.state.doc.length === 0);
         if (autoFocus) {
           view.focus();
         }
@@ -494,30 +483,6 @@ function EditorInner({
       }
     },
     [defaultValue],
-  );
-
-  // Give the empty state the space below the first line, so it never covers the cursor. The
-  // line height depends on the editor font size, so it has to be measured rather than assumed.
-  useLayoutEffect(
-    function positionEmptyState() {
-      const view = cm.current?.view;
-      if (emptyState == null || !isEmpty || view == null) {
-        return;
-      }
-
-      const measure = () => {
-        const editor = view.dom.getBoundingClientRect();
-        const content = view.contentDOM.getBoundingClientRect();
-        setEmptyStateTop(content.top - editor.top + view.defaultLineHeight + 8);
-      };
-
-      // Codemirror lays the content out on its own schedule, so the first measure can land
-      // before it has a height. Measure again once it has settled.
-      measure();
-      const raf = requestAnimationFrame(measure);
-      return () => cancelAnimationFrame(raf);
-    },
-    [emptyState, isEmpty],
   );
 
   // Add bg classes to actions, so they appear over the text
@@ -588,17 +553,6 @@ function EditorInner({
   return (
     <div className="group relative h-full w-full x-theme-editor bg-surface">
       {cmContainer}
-      {emptyState && isEmpty && emptyStateTop != null && (
-        <div
-          style={{ top: emptyStateTop }}
-          className={classNames(
-            "absolute inset-x-0 bottom-0 px-2",
-            "pointer-events-none", // No pointer events, so we don't block the editor
-          )}
-        >
-          {emptyState}
-        </div>
-      )}
       {decoratedActions && (
         <HStack
           space={1}

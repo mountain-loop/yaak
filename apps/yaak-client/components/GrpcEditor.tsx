@@ -2,7 +2,7 @@ import { linter } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import { jsoncLanguage } from "@shopify/lang-jsonc";
 import { type GrpcRequest, patchModel } from "@yaakapp-internal/models";
-import { FormattedError, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { FormattedError, InlineCode, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import {
   handleRefresh,
@@ -25,7 +25,6 @@ import { pluralizeCount } from "../lib/pluralize";
 import { Button } from "./core/Button";
 import type { EditorProps } from "./core/Editor/Editor";
 import { Editor } from "./core/Editor/LazyEditor";
-import { EmptyStateText } from "./EmptyStateText";
 import { GrpcProtoSelectionDialog } from "./GrpcProtoSelectionDialog";
 
 type Props = Pick<EditorProps, "heightMode" | "onChange" | "className" | "forceUpdateKey"> & {
@@ -161,28 +160,9 @@ export function GrpcEditor({
     wasUpdatedExternally(request.id);
   }, [methodSchema, request]);
 
-  const emptyState = useMemo(() => {
-    if (methodSchema.type !== "schema") return null;
-    return (
-      <EmptyStateText>
-        <VStack alignItems="center" space={2}>
-          <p>Fill this message with an example built from the method schema</p>
-          <Button
-            variant="border"
-            size="sm"
-            leftSlot={<Icon size="sm" icon="magic_wand" />}
-            onClick={handleGenerateExample}
-          >
-            Generate Example
-          </Button>
-        </VStack>
-      </EmptyStateText>
-    );
-  }, [handleGenerateExample, methodSchema.type]);
-
   const actions = useMemo(
     () => [
-      ...(methodSchema.type === "schema" && request.message !== ""
+      ...(methodSchema.type === "schema"
         ? [
             <Button key="example" size="xs" color="secondary" onClick={handleGenerateExample}>
               Generate Example
@@ -229,7 +209,6 @@ export function GrpcEditor({
       handleGenerateExample,
       methodSchema.type,
       protoFiles.length,
-      request.message,
       reflectionError,
       reflectionLoading,
       reflectionUnavailable,
@@ -249,7 +228,6 @@ export function GrpcEditor({
         placeholder="..."
         extraExtensions={extraExtensions}
         actions={actions}
-        emptyState={emptyState}
         stateKey={`grpc_message.${request.id}`}
         {...extraEditorProps}
       />
