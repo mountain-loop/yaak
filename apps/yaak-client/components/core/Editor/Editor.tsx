@@ -149,6 +149,7 @@ function EditorInner({
 }: EditorProps) {
   const settings = useAtomValue(settingsAtom);
   const [isEmpty, setIsEmpty] = useState((defaultValue ?? "") === "");
+  const [emptyStatePos, setEmptyStatePos] = useState<{ left: number; top: number } | null>(null);
 
   const allEnvironmentVariables = useEnvironmentVariables(forcedEnvironmentId ?? null);
   const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
@@ -494,6 +495,34 @@ function EditorInner({
     [defaultValue],
   );
 
+  // Sit the empty state just below the first line, aligned with the text column. The gutter
+  // width depends on the editor font size, so it has to be measured rather than assumed.
+  useLayoutEffect(
+    function positionEmptyState() {
+      const view = cm.current?.view;
+      if (emptyState == null || !isEmpty || view == null) {
+        return;
+      }
+
+      const measure = () => {
+        const editor = view.dom.getBoundingClientRect();
+        const content = view.contentDOM.getBoundingClientRect();
+        const left = content.left - editor.left;
+        const top = content.top - editor.top + view.defaultLineHeight + 8;
+        setEmptyStatePos((prev) =>
+          prev?.left === left && prev.top === top ? prev : { left, top },
+        );
+      };
+
+      // Codemirror lays the gutters out on its own schedule, so the first measure can land
+      // before they have a width. Measure again once it has settled.
+      measure();
+      const raf = requestAnimationFrame(measure);
+      return () => cancelAnimationFrame(raf);
+    },
+    [emptyState, isEmpty],
+  );
+
   // Add bg classes to actions, so they appear over the text
   const decoratedActions = useMemo(() => {
     const results = [];
@@ -562,10 +591,11 @@ function EditorInner({
   return (
     <div className="group relative h-full w-full x-theme-editor bg-surface">
       {cmContainer}
-      {emptyState && isEmpty && (
+      {emptyState && isEmpty && emptyStatePos != null && (
         <div
+          style={emptyStatePos}
           className={classNames(
-            "absolute inset-0 flex items-center justify-center",
+            "absolute",
             "pointer-events-none", // No pointer events, so we don't block the editor
           )}
         >
