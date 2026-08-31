@@ -103,31 +103,6 @@ pub enum ImportDestination {
     },
 }
 
-#[derive(Default, Debug, Clone, Deserialize, Serialize, TS)]
-#[serde(default, rename_all = "camelCase")]
-#[ts(export, export_to = "gen_util.ts")]
-pub struct ImportPlanResources {
-    pub workspaces: Vec<Workspace>,
-    pub environments: Vec<Environment>,
-    pub folders: Vec<Folder>,
-    pub http_requests: Vec<HttpRequest>,
-    pub grpc_requests: Vec<GrpcRequest>,
-    pub websocket_requests: Vec<WebsocketRequest>,
-}
-
-impl ImportPlanResources {
-    pub fn into_batch(self) -> BatchUpsertResult {
-        BatchUpsertResult {
-            workspaces: self.workspaces,
-            environments: self.environments,
-            folders: self.folders,
-            http_requests: self.http_requests,
-            grpc_requests: self.grpc_requests,
-            websocket_requests: self.websocket_requests,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
@@ -136,13 +111,13 @@ pub struct ImportPlanWarning {
     pub detail: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
 pub struct ImportPlan {
     pub importer: String,
     pub destination: ImportDestination,
-    pub resources: ImportPlanResources,
+    pub resources: BatchUpsertResult,
     pub warnings: Vec<ImportPlanWarning>,
 }
 

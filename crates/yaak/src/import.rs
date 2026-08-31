@@ -8,8 +8,7 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{
-    BatchUpsertResult, ImportDestination, ImportPlan, ImportPlanResources, ImportPlanWarning,
-    UpdateSource,
+    BatchUpsertResult, ImportDestination, ImportPlan, ImportPlanWarning, UpdateSource,
 };
 use yaak_plugins::events::{ImportResources, PluginContext};
 use yaak_plugins::manager::PluginManager;
@@ -166,7 +165,8 @@ pub fn plan_import_resources(
         })
         .collect();
 
-    let importing_into_existing = matches!(destination, ImportDestination::ExistingWorkspace { .. });
+    let importing_into_existing =
+        matches!(destination, ImportDestination::ExistingWorkspace { .. });
     let mut separated_base_environments = Vec::new();
     let mut converted_duplicate_base_environment = false;
     let mut converted_duplicate_folder_environment = false;
@@ -251,7 +251,7 @@ pub fn plan_import_resources(
     Ok(ImportPlan {
         importer,
         destination,
-        resources: ImportPlanResources {
+        resources: BatchUpsertResult {
             workspaces,
             environments,
             folders,
@@ -269,7 +269,7 @@ pub fn commit_import_plan(
     plan: ImportPlan,
 ) -> Result<BatchUpsertResult> {
     validate_plan(&plan)?;
-    let resources = plan.resources.into_batch();
+    let resources = plan.resources;
 
     info!("Committing staged import from {}", plan.importer);
     query_manager.with_tx(|tx| {
@@ -351,12 +351,8 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
             }
         }
         ImportDestination::NewWorkspace => {
-            let workspace_ids = plan
-                .resources
-                .workspaces
-                .iter()
-                .map(|v| v.id.as_str())
-                .collect::<BTreeSet<_>>();
+            let workspace_ids =
+                plan.resources.workspaces.iter().map(|v| v.id.as_str()).collect::<BTreeSet<_>>();
             if workspace_ids.is_empty() {
                 return invalid("A new-workspace import plan has no workspace".to_string());
             }
@@ -366,18 +362,9 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 .iter()
                 .map(|v| v.workspace_id.as_str())
                 .chain(plan.resources.folders.iter().map(|v| v.workspace_id.as_str()))
-                .chain(
-                    plan.resources.http_requests.iter().map(|v| v.workspace_id.as_str()),
-                )
-                .chain(
-                    plan.resources.grpc_requests.iter().map(|v| v.workspace_id.as_str()),
-                )
-                .chain(
-                    plan.resources
-                        .websocket_requests
-                        .iter()
-                        .map(|v| v.workspace_id.as_str()),
-                );
+                .chain(plan.resources.http_requests.iter().map(|v| v.workspace_id.as_str()))
+                .chain(plan.resources.grpc_requests.iter().map(|v| v.workspace_id.as_str()))
+                .chain(plan.resources.websocket_requests.iter().map(|v| v.workspace_id.as_str()));
             if all_workspace_ids.into_iter().any(|id| !workspace_ids.contains(id)) {
                 return invalid(
                     "A new-workspace import plan contains resources outside its workspaces"
@@ -632,10 +619,7 @@ mod tests {
             .iter()
             .find(|v| v.name == "Nested Request")
             .expect("nested request");
-        assert_eq!(
-            nested_request.folder_id,
-            Some(plan.resources.folders[0].id.clone())
-        );
+        assert_eq!(nested_request.folder_id, Some(plan.resources.folders[0].id.clone()));
         assert_eq!(plan.resources.environments[0].parent_model, "environment");
         assert!(plan.resources.environments[0].name.ends_with("(Imported)"));
         assert_eq!(plan.warnings.len(), 2);
@@ -705,19 +689,11 @@ mod tests {
         .expect("plan import");
 
         assert_eq!(
-            plan.resources
-                .environments
-                .iter()
-                .filter(|v| v.parent_model == "workspace")
-                .count(),
+            plan.resources.environments.iter().filter(|v| v.parent_model == "workspace").count(),
             1
         );
         assert_eq!(
-            plan.resources
-                .environments
-                .iter()
-                .filter(|v| v.parent_model == "folder")
-                .count(),
+            plan.resources.environments.iter().filter(|v| v.parent_model == "folder").count(),
             1
         );
         assert_eq!(plan.warnings.len(), 2);
@@ -778,9 +754,7 @@ mod tests {
         .expect("plan import");
 
         assert!(plan.resources.workspaces.is_empty());
-        assert!(
-            plan.resources.http_requests.iter().all(|v| v.workspace_id == destination.id)
-        );
+        assert!(plan.resources.http_requests.iter().all(|v| v.workspace_id == destination.id));
         assert_eq!(
             plan.resources
                 .http_requests
