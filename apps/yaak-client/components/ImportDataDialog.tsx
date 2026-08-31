@@ -148,12 +148,12 @@ export function ImportDataDialog({
 
   if (plan != null) {
     const counts = [
-      [plan.resources.workspaces[0]?.resource, plan.resources.workspaces.length],
-      [plan.resources.environments[0]?.resource, plan.resources.environments.length],
-      [plan.resources.folders[0]?.resource, plan.resources.folders.length],
-      [plan.resources.httpRequests[0]?.resource, plan.resources.httpRequests.length],
-      [plan.resources.grpcRequests[0]?.resource, plan.resources.grpcRequests.length],
-      [plan.resources.websocketRequests[0]?.resource, plan.resources.websocketRequests.length],
+      [plan.resources.workspaces[0], plan.resources.workspaces.length],
+      [plan.resources.environments[0], plan.resources.environments.length],
+      [plan.resources.folders[0], plan.resources.folders.length],
+      [plan.resources.httpRequests[0], plan.resources.httpRequests.length],
+      [plan.resources.grpcRequests[0], plan.resources.grpcRequests.length],
+      [plan.resources.websocketRequests[0], plan.resources.websocketRequests.length],
     ] as const;
     const destinationLabel = (() => {
       if (plan.destination.type === "new_workspace") return "New workspace";

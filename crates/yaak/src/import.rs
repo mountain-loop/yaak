@@ -9,7 +9,7 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{
     BatchUpsertResult, ImportDestination, ImportPlan, ImportPlanResources, ImportPlanWarning,
-    PlannedImportResource, UpdateSource,
+    UpdateSource,
 };
 use yaak_plugins::events::{ImportResources, PluginContext};
 use yaak_plugins::manager::PluginManager;
@@ -62,7 +62,7 @@ pub fn plan_import_resources(
                 let mut workspace = source.clone();
                 workspace.id = Workspace::generate_id();
                 workspace_ids.insert(source.id.clone(), workspace.id.clone());
-                workspaces.push(PlannedImportResource::new(workspace));
+                workspaces.push(workspace);
             }
 
             if workspaces.is_empty() {
@@ -77,10 +77,10 @@ pub fn plan_import_resources(
                     setting_store_cookies: true,
                     ..Default::default()
                 };
-                workspaces.push(PlannedImportResource::new(workspace));
+                workspaces.push(workspace);
             }
 
-            (workspaces[0].resource.id.clone(), None)
+            (workspaces[0].id.clone(), None)
         }
         ImportDestination::ExistingWorkspace { workspace_id, folder_id } => {
             for source in &resources.workspaces {
@@ -129,7 +129,7 @@ pub fn plan_import_resources(
             folder.id = folder_ids.get(&folder.id).cloned().unwrap_or_else(Folder::generate_id);
             folder.workspace_id = resolve_workspace_id(&folder.workspace_id);
             folder.folder_id = resolve_folder_id(folder.folder_id);
-            PlannedImportResource::new(folder)
+            folder
         })
         .collect();
 
@@ -140,7 +140,7 @@ pub fn plan_import_resources(
             request.id = HttpRequest::generate_id();
             request.workspace_id = resolve_workspace_id(&request.workspace_id);
             request.folder_id = resolve_folder_id(request.folder_id);
-            PlannedImportResource::new(request)
+            request
         })
         .collect();
 
@@ -151,7 +151,7 @@ pub fn plan_import_resources(
             request.id = GrpcRequest::generate_id();
             request.workspace_id = resolve_workspace_id(&request.workspace_id);
             request.folder_id = resolve_folder_id(request.folder_id);
-            PlannedImportResource::new(request)
+            request
         })
         .collect();
 
@@ -162,7 +162,7 @@ pub fn plan_import_resources(
             request.id = WebsocketRequest::generate_id();
             request.workspace_id = resolve_workspace_id(&request.workspace_id);
             request.folder_id = resolve_folder_id(request.folder_id);
-            PlannedImportResource::new(request)
+            request
         })
         .collect();
 
@@ -224,7 +224,7 @@ pub fn plan_import_resources(
                 }
             }
 
-            PlannedImportResource::new(environment)
+            environment
         })
         .collect();
 
@@ -331,11 +331,11 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 .resources
                 .environments
                 .iter()
-                .map(|v| &v.resource.workspace_id)
-                .chain(plan.resources.folders.iter().map(|v| &v.resource.workspace_id))
-                .chain(plan.resources.http_requests.iter().map(|v| &v.resource.workspace_id))
-                .chain(plan.resources.grpc_requests.iter().map(|v| &v.resource.workspace_id))
-                .chain(plan.resources.websocket_requests.iter().map(|v| &v.resource.workspace_id));
+                .map(|v| &v.workspace_id)
+                .chain(plan.resources.folders.iter().map(|v| &v.workspace_id))
+                .chain(plan.resources.http_requests.iter().map(|v| &v.workspace_id))
+                .chain(plan.resources.grpc_requests.iter().map(|v| &v.workspace_id))
+                .chain(plan.resources.websocket_requests.iter().map(|v| &v.workspace_id));
             if all_workspace_ids.into_iter().any(|id| id != workspace_id) {
                 return invalid(
                     "An existing-workspace import plan contains resources for another workspace"
@@ -343,7 +343,7 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 );
             }
 
-            if plan.resources.environments.iter().any(|v| v.resource.parent_model == "workspace") {
+            if plan.resources.environments.iter().any(|v| v.parent_model == "workspace") {
                 return invalid(
                     "An existing-workspace import plan must not replace the base environment"
                         .to_string(),
@@ -355,7 +355,7 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 .resources
                 .workspaces
                 .iter()
-                .map(|v| v.resource.id.as_str())
+                .map(|v| v.id.as_str())
                 .collect::<BTreeSet<_>>();
             if workspace_ids.is_empty() {
                 return invalid("A new-workspace import plan has no workspace".to_string());
@@ -364,19 +364,19 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 .resources
                 .environments
                 .iter()
-                .map(|v| v.resource.workspace_id.as_str())
-                .chain(plan.resources.folders.iter().map(|v| v.resource.workspace_id.as_str()))
+                .map(|v| v.workspace_id.as_str())
+                .chain(plan.resources.folders.iter().map(|v| v.workspace_id.as_str()))
                 .chain(
-                    plan.resources.http_requests.iter().map(|v| v.resource.workspace_id.as_str()),
+                    plan.resources.http_requests.iter().map(|v| v.workspace_id.as_str()),
                 )
                 .chain(
-                    plan.resources.grpc_requests.iter().map(|v| v.resource.workspace_id.as_str()),
+                    plan.resources.grpc_requests.iter().map(|v| v.workspace_id.as_str()),
                 )
                 .chain(
                     plan.resources
                         .websocket_requests
                         .iter()
-                        .map(|v| v.resource.workspace_id.as_str()),
+                        .map(|v| v.workspace_id.as_str()),
                 );
             if all_workspace_ids.into_iter().any(|id| !workspace_ids.contains(id)) {
                 return invalid(
@@ -387,8 +387,8 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
 
             let mut base_environment_workspaces = BTreeSet::new();
             if plan.resources.environments.iter().any(|v| {
-                v.resource.parent_model == "workspace"
-                    && !base_environment_workspaces.insert(v.resource.workspace_id.as_str())
+                v.parent_model == "workspace"
+                    && !base_environment_workspaces.insert(v.workspace_id.as_str())
             }) {
                 return invalid(
                     "A new-workspace import plan contains multiple base environments for one workspace"
@@ -399,10 +399,10 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
     }
 
     let planned_folder_ids =
-        plan.resources.folders.iter().map(|v| v.resource.id.as_str()).collect::<BTreeSet<_>>();
+        plan.resources.folders.iter().map(|v| v.id.as_str()).collect::<BTreeSet<_>>();
     if plan.resources.environments.iter().any(|v| {
-        v.resource.parent_model == "folder"
-            && v.resource.parent_id.as_deref().is_none_or(|id| !planned_folder_ids.contains(id))
+        v.parent_model == "folder"
+            && v.parent_id.as_deref().is_none_or(|id| !planned_folder_ids.contains(id))
     }) {
         return invalid(
             "An import plan must not replace an existing folder environment".to_string(),
@@ -614,30 +614,30 @@ mod tests {
         }
 
         assert!(plan.resources.workspaces.is_empty());
-        assert_eq!(plan.resources.folders[0].resource.workspace_id, destination.id);
+        assert_eq!(plan.resources.folders[0].workspace_id, destination.id);
         assert_eq!(
-            plan.resources.folders[0].resource.folder_id.as_deref(),
+            plan.resources.folders[0].folder_id.as_deref(),
             Some(selected_folder.id.as_str())
         );
         let root_request = plan
             .resources
             .http_requests
             .iter()
-            .find(|v| v.resource.name == "Root Request")
+            .find(|v| v.name == "Root Request")
             .expect("root request");
-        assert_eq!(root_request.resource.folder_id.as_deref(), Some(selected_folder.id.as_str()));
+        assert_eq!(root_request.folder_id.as_deref(), Some(selected_folder.id.as_str()));
         let nested_request = plan
             .resources
             .http_requests
             .iter()
-            .find(|v| v.resource.name == "Nested Request")
+            .find(|v| v.name == "Nested Request")
             .expect("nested request");
         assert_eq!(
-            nested_request.resource.folder_id,
-            Some(plan.resources.folders[0].resource.id.clone())
+            nested_request.folder_id,
+            Some(plan.resources.folders[0].id.clone())
         );
-        assert_eq!(plan.resources.environments[0].resource.parent_model, "environment");
-        assert!(plan.resources.environments[0].resource.name.ends_with("(Imported)"));
+        assert_eq!(plan.resources.environments[0].parent_model, "environment");
+        assert!(plan.resources.environments[0].name.ends_with("(Imported)"));
         assert_eq!(plan.warnings.len(), 2);
         assert!(plan.warnings.iter().any(|warning| {
             warning.title == "Workspace settings skipped"
@@ -708,7 +708,7 @@ mod tests {
             plan.resources
                 .environments
                 .iter()
-                .filter(|v| v.resource.parent_model == "workspace")
+                .filter(|v| v.parent_model == "workspace")
                 .count(),
             1
         );
@@ -716,7 +716,7 @@ mod tests {
             plan.resources
                 .environments
                 .iter()
-                .filter(|v| v.resource.parent_model == "folder")
+                .filter(|v| v.parent_model == "folder")
                 .count(),
             1
         );
@@ -779,13 +779,13 @@ mod tests {
 
         assert!(plan.resources.workspaces.is_empty());
         assert!(
-            plan.resources.http_requests.iter().all(|v| v.resource.workspace_id == destination.id)
+            plan.resources.http_requests.iter().all(|v| v.workspace_id == destination.id)
         );
         assert_eq!(
             plan.resources
                 .http_requests
                 .iter()
-                .map(|v| v.resource.id.as_str())
+                .map(|v| v.id.as_str())
                 .collect::<BTreeSet<_>>()
                 .len(),
             3
@@ -806,8 +806,8 @@ mod tests {
             imported_resources(),
         )
         .expect("plan import");
-        let workspace_id = plan.resources.workspaces[0].resource.id.clone();
-        let environment_id = plan.resources.environments[0].resource.id.clone();
+        let workspace_id = plan.resources.workspaces[0].id.clone();
+        let environment_id = plan.resources.environments[0].id.clone();
 
         let connection = rusqlite::Connection::open(&db_path).expect("open test database");
         connection

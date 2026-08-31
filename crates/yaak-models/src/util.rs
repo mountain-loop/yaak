@@ -103,46 +103,27 @@ pub enum ImportDestination {
     },
 }
 
-/// A model staged for import.
-///
-/// `source_key` is intentionally part of the plan boundary even though the first import slice does
-/// not persist it. Future linked imports can populate it without changing how plans contain models.
-#[derive(Debug, Clone, Deserialize, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_util.ts")]
-pub struct PlannedImportResource<T> {
-    #[ts(optional)]
-    pub source_key: Option<String>,
-    pub resource: T,
-}
-
-impl<T> PlannedImportResource<T> {
-    pub fn new(resource: T) -> Self {
-        Self { source_key: None, resource }
-    }
-}
-
 #[derive(Default, Debug, Clone, Deserialize, Serialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
 pub struct ImportPlanResources {
-    pub workspaces: Vec<PlannedImportResource<Workspace>>,
-    pub environments: Vec<PlannedImportResource<Environment>>,
-    pub folders: Vec<PlannedImportResource<Folder>>,
-    pub http_requests: Vec<PlannedImportResource<HttpRequest>>,
-    pub grpc_requests: Vec<PlannedImportResource<GrpcRequest>>,
-    pub websocket_requests: Vec<PlannedImportResource<WebsocketRequest>>,
+    pub workspaces: Vec<Workspace>,
+    pub environments: Vec<Environment>,
+    pub folders: Vec<Folder>,
+    pub http_requests: Vec<HttpRequest>,
+    pub grpc_requests: Vec<GrpcRequest>,
+    pub websocket_requests: Vec<WebsocketRequest>,
 }
 
 impl ImportPlanResources {
     pub fn into_batch(self) -> BatchUpsertResult {
         BatchUpsertResult {
-            workspaces: self.workspaces.into_iter().map(|v| v.resource).collect(),
-            environments: self.environments.into_iter().map(|v| v.resource).collect(),
-            folders: self.folders.into_iter().map(|v| v.resource).collect(),
-            http_requests: self.http_requests.into_iter().map(|v| v.resource).collect(),
-            grpc_requests: self.grpc_requests.into_iter().map(|v| v.resource).collect(),
-            websocket_requests: self.websocket_requests.into_iter().map(|v| v.resource).collect(),
+            workspaces: self.workspaces,
+            environments: self.environments,
+            folders: self.folders,
+            http_requests: self.http_requests,
+            grpc_requests: self.grpc_requests,
+            websocket_requests: self.websocket_requests,
         }
     }
 }

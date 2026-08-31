@@ -13,14 +13,6 @@ export type ImportDestination = { "type": "new_workspace" } | { "type": "existin
 
 export type ImportPlan = { importer: string, destination: ImportDestination, resources: ImportPlanResources, warnings: Array<ImportPlanWarning>, };
 
-export type ImportPlanResources = { workspaces: Array<PlannedImportResource<Workspace>>, environments: Array<PlannedImportResource<Environment>>, folders: Array<PlannedImportResource<Folder>>, httpRequests: Array<PlannedImportResource<HttpRequest>>, grpcRequests: Array<PlannedImportResource<GrpcRequest>>, websocketRequests: Array<PlannedImportResource<WebsocketRequest>>, };
+export type ImportPlanResources = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
 
 export type ImportPlanWarning = { title: string, detail: string, };
-
-/**
- * A model staged for import.
- *
- * `source_key` is intentionally part of the plan boundary even though the first import slice does
- * not persist it. Future linked imports can populate it without changing how plans contain models.
- */
-export type PlannedImportResource<T> = { sourceKey?: string, resource: T, };
