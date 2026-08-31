@@ -18,9 +18,8 @@ export async function showConfirm({
   return new Promise((onResult: ConfirmProps["onResult"]) => {
     showDialog({
       ...extraProps,
-      hideX: true,
       size,
-      disableBackdropClose: true, // Prevent accidental dismisses
+      disableClose: true,
       render: ({ hide }) => Confirm({ onHide: hide, color, onResult, confirmText, requireTyping }),
     });
   });

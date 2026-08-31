@@ -85,6 +85,42 @@ pub struct BatchUpsertResult {
     pub websocket_requests: Vec<WebsocketRequest>,
 }
 
+/// Where a staged import will be committed.
+///
+/// The destination workspace and optional folder IDs are captured in the plan so the preview describes
+/// the exact destination that confirmation will use.
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportDestination {
+    NewWorkspace,
+    ExistingWorkspace {
+        #[serde(rename = "workspaceId")]
+        workspace_id: String,
+        #[serde(rename = "folderId")]
+        #[ts(optional)]
+        folder_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlanWarning {
+    pub title: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlan {
+    pub importer: String,
+    pub destination: ImportDestination,
+    pub resources: BatchUpsertResult,
+    pub warnings: Vec<ImportPlanWarning>,
+}
+
 pub fn get_workspace_export_resources(
     db: &ClientDb,
     yaak_version: &str,

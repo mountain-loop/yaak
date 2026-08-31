@@ -247,6 +247,8 @@ pub struct ImportRequest {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct ImportResponse {
+    /// Display name of the importer that recognized the input.
+    pub importer: String,
     pub resources: ImportResources,
 }
 

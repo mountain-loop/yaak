@@ -23,7 +23,7 @@ use yaak_models::models::{
     AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
     HttpResponseEvent, Plugin, Settings, WebsocketConnection, WebsocketEvent, WorkspaceMeta,
 };
-use yaak_models::util::BatchUpsertResult;
+use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan};
 use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::events::{
     CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
@@ -229,6 +229,7 @@ pub struct CmdGetHttpResponseEventsReq {
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct CmdImportDataReq {
     pub file_path: String,
+    pub destination: ImportDestination,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -236,6 +237,14 @@ pub struct CmdImportDataReq {
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct CmdImportUrlReq {
     pub url: String,
+    pub destination: ImportDestination,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdCommitImportReq {
+    pub plan: ImportPlan,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -909,8 +918,9 @@ macro_rules! with_commands {
     cmd_http_request_body(CmdHttpRequestBodyReq) -> Option<Vec<u8>>,
     cmd_get_sse_events(CmdGetSseEventsReq) -> Vec<ServerSentEvent>,
     cmd_get_http_response_events(CmdGetHttpResponseEventsReq) -> Vec<HttpResponseEvent>,
-    cmd_import_data(CmdImportDataReq) -> BatchUpsertResult,
-    cmd_import_url(CmdImportUrlReq) -> BatchUpsertResult,
+    cmd_import_data(CmdImportDataReq) -> ImportPlan,
+    cmd_import_url(CmdImportUrlReq) -> ImportPlan,
+    cmd_commit_import(CmdCommitImportReq) -> BatchUpsertResult,
     cmd_http_request_actions(CmdHttpRequestActionsReq) -> Vec<GetHttpRequestActionsResponse>,
     cmd_websocket_request_actions(CmdWebsocketRequestActionsReq) -> Vec<GetWebsocketRequestActionsResponse>,
     cmd_call_websocket_request_action(CmdCallWebsocketRequestActionReq) -> (),

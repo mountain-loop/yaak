@@ -1,16 +1,36 @@
+import {
+  type Folder,
+  type ImportDestination,
+  type ImportPlan,
+  modelTypeLabel,
+  type Workspace,
+} from "@yaakapp-internal/models";
+import { HStack, Icon, VStack } from "@yaakapp-internal/ui";
 import { platform } from "@yaakapp-internal/platform";
-import { Icon, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "react-use";
+import { pluralizeCount } from "../lib/pluralize";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import { Button } from "./core/Button";
+import { Checkbox } from "./core/Checkbox";
 import { PlainInput } from "./core/PlainInput";
+import { Select } from "./core/Select";
 
 interface Props {
-  importFile: (filePath: string) => Promise<void>;
-  importUrl: (url: string) => Promise<void>;
+  currentWorkspace: Workspace | null;
+  workspaces: Workspace[];
+  selectedFolder: Folder | null;
+  planFile: (filePath: string, destination: ImportDestination) => Promise<ImportPlan>;
+  planUrl: (url: string, destination: ImportDestination) => Promise<ImportPlan>;
+  commit: (plan: ImportPlan) => Promise<void>;
+  cancel: () => void;
+  onError: (err: unknown) => void;
 }
+
+/** Sentinel for the "create a new workspace" option. Workspace IDs are prefixed `wk_`, so this
+ * can never collide with a real one. */
+const NEW_WORKSPACE = "new_workspace";
 
 /**
  * An absolute or relative path is unambiguously a file. Everything else is treated as a URL, so a
@@ -31,8 +51,20 @@ function fileName(path: string): string {
   return path.split(/[/\\]/).at(-1) || path;
 }
 
-export function ImportDataDialog({ importFile, importUrl }: Props) {
+export function ImportDataDialog({
+  currentWorkspace,
+  workspaces,
+  selectedFolder,
+  planFile,
+  planUrl,
+  commit,
+  cancel,
+  onError,
+}: Props) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [plan, setPlan] = useState<ImportPlan | null>(null);
+  const [destinationId, setDestinationId] = useState<string>(NEW_WORKSPACE);
+  const [targetSelectedFolder, setTargetSelectedFolder] = useState(selectedFolder != null);
   // A file path or a URL. Both inputs write here, so there is only ever one thing to import
   const [source, setSource] = useLocalStorage<string | null>("importPathOrUrl", null);
   const [forceUpdateKey, setForceUpdateKey] = useState<number>(0);
@@ -71,18 +103,116 @@ export function ImportDataDialog({ importFile, importUrl }: Props) {
     selectSource(selected);
   };
 
-  const handleImport = async () => {
+  // The selected folder belongs to the workspace being viewed, so it is only offerable when that
+  // is also the destination.
+  const canTargetSelectedFolder =
+    selectedFolder != null && destinationId === currentWorkspace?.id;
+
+  const destination = (): ImportDestination => {
+    if (destinationId === NEW_WORKSPACE) {
+      return { type: "new_workspace" };
+    }
+    return {
+      type: "existing_workspace",
+      workspaceId: destinationId,
+      folderId: canTargetSelectedFolder && targetSelectedFolder ? selectedFolder.id : undefined,
+    };
+  };
+
+  const handlePreview = async () => {
     setIsLoading(true);
     try {
-      if (filePath != null) {
-        await importFile(filePath);
-      } else {
-        await importUrl(trimmedSource);
-      }
+      const nextPlan =
+        filePath != null
+          ? await planFile(filePath, destination())
+          : await planUrl(trimmedSource, destination());
+      setPlan(nextPlan);
+    } catch (err) {
+      onError(err);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleCommit = async () => {
+    if (plan == null) return;
+    setIsLoading(true);
+    try {
+      await commit(plan);
+    } catch (err) {
+      onError(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (plan != null) {
+    const counts = [
+      [plan.resources.workspaces[0], plan.resources.workspaces.length],
+      [plan.resources.environments[0], plan.resources.environments.length],
+      [plan.resources.folders[0], plan.resources.folders.length],
+      [plan.resources.httpRequests[0], plan.resources.httpRequests.length],
+      [plan.resources.grpcRequests[0], plan.resources.grpcRequests.length],
+      [plan.resources.websocketRequests[0], plan.resources.websocketRequests.length],
+    ] as const;
+    const destinationLabel = (() => {
+      if (plan.destination.type === "new_workspace") return "New workspace";
+      const { workspaceId, folderId } = plan.destination;
+      const name = workspaces.find((w) => w.id === workspaceId)?.name ?? "Unknown workspace";
+      return folderId != null && folderId === selectedFolder?.id
+        ? `${name} / ${selectedFolder.name}`
+        : name;
+    })();
+
+    return (
+      <VStack space={4} className="pb-4">
+        <div className="rounded-lg border border-border-subtle divide-y divide-border-subtle">
+          <PreviewRow label="Detected format" value={plan.importer} />
+          <PreviewRow label="Destination" value={destinationLabel} />
+        </div>
+
+        <div>
+          <div className="text-sm font-semibold mb-1">Resources</div>
+          <ul className="list-disc pl-6 text-sm text-text-subtle">
+            {counts.map(([model, count]) =>
+              model == null ? null : (
+                <li key={model.model}>{pluralizeCount(modelTypeLabel(model), count)}</li>
+              ),
+            )}
+          </ul>
+        </div>
+
+        {plan.warnings.length > 0 && (
+          <div>
+            <div className="text-sm font-semibold mb-1">Import details</div>
+            <div className="rounded-lg border border-border-subtle divide-y divide-border-subtle">
+              {plan.warnings.map((warning) => (
+                <div
+                  key={`${warning.title}:${warning.detail}`}
+                  className="flex items-start gap-2.5 px-3 py-2.5"
+                >
+                  <Icon icon="info" color="info" size="sm" className="mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{warning.title}</div>
+                    <div className="text-xs text-text-subtle mt-0.5">{warning.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <HStack space={2} justifyContent="end">
+          <Button color="secondary" variant="border" disabled={isLoading} onClick={cancel}>
+            Cancel
+          </Button>
+          <Button color="primary" isLoading={isLoading} onClick={handleCommit}>
+            {isLoading ? "Importing" : "Confirm Import"}
+          </Button>
+        </HStack>
+      </VStack>
+    );
+  }
 
   return (
     <VStack ref={ref} space={4} className="pb-4">
@@ -115,25 +245,66 @@ export function ImportDataDialog({ importFile, importUrl }: Props) {
         </div>
       </button>
 
+      <PlainInput
+        label="Or enter a file path or URL"
+        size="sm"
+        placeholder="https://example.com/openapi.json"
+        defaultValue={source ?? ""}
+        forceUpdateKey={String(forceUpdateKey)}
+        onChange={setSource}
+      />
+
       <VStack space={2}>
-        <PlainInput
-          label="Or enter a file path or URL"
+        <Select
+          name="import-destination"
+          label="Import location"
           size="sm"
-          placeholder="https://example.com/openapi.json"
-          defaultValue={source ?? ""}
-          forceUpdateKey={String(forceUpdateKey)}
-          onChange={setSource}
+          value={destinationId}
+          onChange={setDestinationId}
+          // The native macOS select drops separators
+          filterable
+          options={[
+            { value: NEW_WORKSPACE, label: "New Workspace" },
+            ...(workspaces.length > 0
+              ? [{ type: "separator" as const, label: "Existing Workspaces" }]
+              : []),
+            ...workspaces.map((w) => ({
+              value: w.id,
+              label: w.id === currentWorkspace?.id ? `${w.name} (current workspace)` : w.name,
+            })),
+          ]}
         />
+        {canTargetSelectedFolder && (
+          <Checkbox
+            checked={targetSelectedFolder}
+            title={`Place root resources in selected folder “${selectedFolder.name}”`}
+            onChange={setTargetSelectedFolder}
+          />
+        )}
+      </VStack>
+
+      <HStack space={2} justifyContent="end">
+        <Button color="secondary" variant="border" disabled={isLoading} onClick={cancel}>
+          Cancel
+        </Button>
         <Button
           color="primary"
           disabled={trimmedSource === "" || isLoading}
           isLoading={isLoading}
-          size="sm"
-          onClick={handleImport}
+          onClick={handlePreview}
         >
-          {isLoading ? "Importing" : "Import"}
+          {isLoading ? "Analyzing" : "Preview Import"}
         </Button>
-      </VStack>
+      </HStack>
     </VStack>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-3 py-2 text-sm">
+      <span className="text-text-subtle">{label}</span>
+      <span className="text-right font-medium">{value}</span>
+    </div>
   );
 }

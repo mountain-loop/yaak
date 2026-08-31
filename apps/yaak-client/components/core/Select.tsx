@@ -119,9 +119,13 @@ export function Select<T extends string>({
           )}
         >
           <Button
-            className="w-full text-sm font-mono"
+            className={classNames(
+              "w-full text-sm font-mono",
+              disabled && "border-dotted",
+              isInvalidSelection && "border-danger",
+            )}
             justify="start"
-            variant="border"
+            variant="input"
             size={size}
             leftSlot={leftSlot}
             disabled={disabled}

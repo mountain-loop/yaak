@@ -1,10 +1,18 @@
-import type { BatchUpsertResult } from "@yaakapp-internal/models";
+import {
+  type BatchUpsertResult,
+  type ImportDestination,
+  type ImportPlan,
+  workspacesAtom,
+} from "@yaakapp-internal/models";
 import { FormattedError, VStack } from "@yaakapp-internal/ui";
 import { Button } from "../components/core/Button";
 import { ImportDataDialog } from "../components/ImportDataDialog";
+import { activeFolderAtom } from "../hooks/useActiveFolder";
+import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
 import { showAlert } from "./alert";
 import { showDialog } from "./dialog";
+import { jotaiStore } from "./jotai";
 import { pluralizeCount } from "./pluralize";
 import { router } from "./router";
 import { rpc } from "./rpc";
@@ -21,29 +29,43 @@ export const importData = createFastMutation({
   },
   mutationFn: async () => {
     return new Promise<void>((resolve, reject) => {
+      const currentWorkspace = jotaiStore.get(activeWorkspaceAtom);
+      const workspaces = jotaiStore.get(workspacesAtom);
+      const selectedFolder = jotaiStore.get(activeFolderAtom);
       showDialog({
         id: "import",
         title: "Import Data",
         size: "sm",
+        disableClose: true,
         render: ({ hide }) => {
-          const importAndHide = async (runImport: () => Promise<BatchUpsertResult>) => {
-            try {
-              await finishImport(await runImport());
-              resolve();
-            } catch (err) {
-              reject(err);
-            } finally {
-              hide();
-            }
+          const cancel = () => {
+            hide();
+            resolve();
+          };
+          const fail = (err: unknown) => {
+            hide();
+            reject(err);
+          };
+          const commit = async (plan: ImportPlan) => {
+            const imported = await rpc<BatchUpsertResult>("cmd_commit_import", { plan });
+            hide();
+            await finishImport(imported);
+            resolve();
           };
           return (
             <ImportDataDialog
-              importFile={(filePath) =>
-                importAndHide(() => rpc<BatchUpsertResult>("cmd_import_data", { filePath }))
+              currentWorkspace={currentWorkspace}
+              workspaces={workspaces}
+              selectedFolder={selectedFolder}
+              planFile={(filePath: string, destination: ImportDestination) =>
+                rpc<ImportPlan>("cmd_import_data", { filePath, destination })
               }
-              importUrl={(url) =>
-                importAndHide(() => rpc<BatchUpsertResult>("cmd_import_url", { url }))
+              planUrl={(url: string, destination: ImportDestination) =>
+                rpc<ImportPlan>("cmd_import_url", { url, destination })
               }
+              commit={commit}
+              cancel={cancel}
+              onError={fail}
             />
           );
         },

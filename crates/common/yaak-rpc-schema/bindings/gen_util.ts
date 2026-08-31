@@ -2,3 +2,15 @@
 import type { Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace } from "./gen_models";
 
 export type BatchUpsertResult = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
+
+/**
+ * Where a staged import will be committed.
+ *
+ * The destination workspace and optional folder IDs are captured in the plan so the preview describes
+ * the exact destination that confirmation will use.
+ */
+export type ImportDestination = { "type": "new_workspace" } | { "type": "existing_workspace", workspaceId: string, folderId?: string, };
+
+export type ImportPlan = { importer: string, destination: ImportDestination, resources: BatchUpsertResult, warnings: Array<ImportPlanWarning>, };
+
+export type ImportPlanWarning = { title: string, detail: string, };
