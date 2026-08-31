@@ -45,6 +45,16 @@ describe("buildExampleFromSchema", () => {
     expect(Number.isNaN(Date.parse(example.createdAt))).toBe(false);
   });
 
+  test("fills a duration with a value that parses", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: { timeout: { type: "string", format: "duration" } },
+    };
+
+    // An empty string fails protobuf's Duration parsing, so the message wouldn't send
+    expect(buildExampleFromSchema(schema)).toEqual({ timeout: "0s" });
+  });
+
   test("expands nested messages through $defs", () => {
     const schema: JsonSchema = {
       type: "object",
@@ -191,6 +201,31 @@ describe("buildExampleFromSchema", () => {
     });
   });
 
+  test("stops expanding once the node budget runs out", () => {
+    // Every level references the next one twice, so an unbounded walk would build 2^depth
+    // nodes without ever repeating a ref on the same path.
+    const depth = 16;
+    const $defs: Record<string, JsonSchema> = { [`d${depth}`]: { type: "string" } };
+    for (let i = 0; i < depth; i++) {
+      $defs[`d${i}`] = {
+        type: "object",
+        properties: {
+          a: { $ref: `#/$defs/d${i + 1}` },
+          b: { $ref: `#/$defs/d${i + 1}` },
+        },
+      };
+    }
+
+    const example = buildExampleFromSchema({
+      type: "object",
+      properties: { root: { $ref: "#/$defs/d0" } },
+      $defs,
+    });
+
+    // 2 ** 16 nodes unbounded; the budget holds it to a couple of thousand
+    expect(countNodes(example)).toBeLessThan(10_000);
+  });
+
   test("handles messages without a known type", () => {
     const schema: JsonSchema = {
       type: "object",
@@ -204,3 +239,13 @@ describe("buildExampleFromSchema", () => {
     expect(buildExampleFromSchema(schema)).toEqual({ empty: null, struct: {}, missing: {} });
   });
 });
+
+function countNodes(value: unknown): number {
+  if (Array.isArray(value)) {
+    return 1 + value.reduce((total: number, v) => total + countNodes(v), 0);
+  }
+  if (value !== null && typeof value === "object") {
+    return 1 + Object.values(value).reduce((total: number, v) => total + countNodes(v), 0);
+  }
+  return 1;
+}

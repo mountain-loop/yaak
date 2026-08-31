@@ -19,16 +19,29 @@ const ROOT_REF = "#";
 // Protobuf 64-bit integers are encoded as strings in the JSON mapping
 const STRING_NUMBER_FORMATS = ["int64", "uint64", "sint64", "fixed64", "sfixed64"];
 
+// Refs on sibling branches each expand their own subtree, so a schema that references the
+// same messages repeatedly can produce exponentially many nodes without ever cycling.
+const MAX_NODES = 5000;
+
+type Budget = { remaining: number };
+
 /** Build a sample message with placeholder values for every field in the schema */
 export function buildExampleFromSchema(schema: JsonSchema): unknown {
   // The root is already being built, so a `#` ref anywhere below it is a cycle
-  return buildValue(schema, schema, new Set([ROOT_REF]));
+  return buildValue(schema, schema, new Set([ROOT_REF]), { remaining: MAX_NODES });
 }
 
-function buildValue(schema: JsonSchema, root: JsonSchema, refPath: Set<string>): unknown {
-  if (schema == null || typeof schema !== "object") {
+function buildValue(
+  schema: JsonSchema,
+  root: JsonSchema,
+  refPath: Set<string>,
+  budget: Budget,
+): unknown {
+  if (schema == null || typeof schema !== "object" || budget.remaining <= 0) {
     return null;
   }
+
+  budget.remaining -= 1;
 
   if (typeof schema.$ref === "string") {
     if (refPath.has(schema.$ref)) {
@@ -38,7 +51,7 @@ function buildValue(schema: JsonSchema, root: JsonSchema, refPath: Set<string>):
     if (resolved == null) {
       return {};
     }
-    return buildValue(resolved, root, new Set(refPath).add(schema.$ref));
+    return buildValue(resolved, root, new Set(refPath).add(schema.$ref), budget);
   }
 
   if (Array.isArray(schema.enum)) {
@@ -47,9 +60,9 @@ function buildValue(schema: JsonSchema, root: JsonSchema, refPath: Set<string>):
 
   switch (schema.type) {
     case "object":
-      return buildObject(schema, root, refPath);
+      return buildObject(schema, root, refPath, budget);
     case "array":
-      return schema.items == null ? [] : [buildValue(schema.items, root, refPath)];
+      return schema.items == null ? [] : [buildValue(schema.items, root, refPath, budget)];
     case "string":
       return buildString(schema.format);
     case "number":
@@ -61,18 +74,23 @@ function buildValue(schema: JsonSchema, root: JsonSchema, refPath: Set<string>):
   }
 }
 
-function buildObject(schema: JsonSchema, root: JsonSchema, refPath: Set<string>): unknown {
+function buildObject(
+  schema: JsonSchema,
+  root: JsonSchema,
+  refPath: Set<string>,
+  budget: Budget,
+): unknown {
   if (schema.properties != null && typeof schema.properties === "object") {
     const example: Record<string, unknown> = {};
     for (const [name, propertySchema] of Object.entries(schema.properties)) {
-      example[name] = buildValue(propertySchema, root, refPath);
+      example[name] = buildValue(propertySchema, root, refPath, budget);
     }
     return example;
   }
 
   // Maps have no properties, only a value schema
   if (schema.additionalProperties != null) {
-    return { key: buildValue(schema.additionalProperties, root, refPath) };
+    return { key: buildValue(schema.additionalProperties, root, refPath, budget) };
   }
 
   return {};
@@ -81,6 +99,10 @@ function buildObject(schema: JsonSchema, root: JsonSchema, refPath: Set<string>)
 function buildString(format: string | undefined): string {
   if (format === "date-time") {
     return new Date().toISOString();
+  }
+  // Duration JSON is a decimal string with an `s` suffix, and an empty one fails to parse
+  if (format === "duration") {
+    return "0s";
   }
   if (format != null && STRING_NUMBER_FORMATS.includes(format)) {
     return "0";
