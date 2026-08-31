@@ -210,7 +210,7 @@ fn field_to_type_or_ref(root_name: &str, field: FieldDescriptor) -> JsonSchemaEn
                 // [Protocol Buffers Well-Known Types]: https://protobuf.dev/reference/protobuf/google.protobuf/
                 "google.protobuf.FieldMask" => JsonSchemaEntry::string(),
                 "google.protobuf.Timestamp" => JsonSchemaEntry::string_with_format("date-time"),
-                "google.protobuf.Duration" => JsonSchemaEntry::string(),
+                "google.protobuf.Duration" => JsonSchemaEntry::string_with_format("duration"),
                 "google.protobuf.StringValue" => JsonSchemaEntry::string(),
                 "google.protobuf.BytesValue" => JsonSchemaEntry::string_with_format("byte"),
                 "google.protobuf.Int32Value" => JsonSchemaEntry::number("int32"),
