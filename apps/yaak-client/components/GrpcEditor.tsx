@@ -2,8 +2,7 @@ import { linter } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import { jsoncLanguage } from "@shopify/lang-jsonc";
 import { type GrpcRequest, patchModel } from "@yaakapp-internal/models";
-import { FormattedError, InlineCode, VStack } from "@yaakapp-internal/ui";
-import classNames from "classnames";
+import { FormattedError, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
 import {
   handleRefresh,
   jsonCompletion,
@@ -23,6 +22,7 @@ import type { JsonSchema } from "../lib/jsonSchemaExample";
 import { buildExampleFromSchema } from "../lib/jsonSchemaExample";
 import { pluralizeCount } from "../lib/pluralize";
 import { Button } from "./core/Button";
+import { Dropdown } from "./core/Dropdown";
 import type { EditorProps } from "./core/Editor/Editor";
 import { Editor } from "./core/Editor/LazyEditor";
 import { GrpcProtoSelectionDialog } from "./GrpcProtoSelectionDialog";
@@ -162,47 +162,53 @@ export function GrpcEditor({
 
   const actions = useMemo(
     () => [
-      ...(methodSchema.type === "schema"
-        ? [
-            <Button key="example" size="xs" color="secondary" onClick={handleGenerateExample}>
-              Generate Example
-            </Button>,
-          ]
-        : []),
-      <div key="reflection" className={classNames(services == null && "opacity-100!")}>
-        <Button
-          size="xs"
-          color={
-            reflectionLoading
-              ? "secondary"
-              : reflectionUnavailable
-                ? "info"
-                : reflectionError
-                  ? "danger"
-                  : "secondary"
-          }
-          isLoading={reflectionLoading}
-          onClick={() => {
-            showDialog({
-              title: "Configure Schema",
-              size: "md",
-              id: "reflection-failed",
-              render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
-            });
-          }}
+      // Matches the GraphQL editor: one always-visible control labelled by schema state,
+      // with everything schema-related behind it.
+      <div key="schema" className="opacity-100!">
+        <Dropdown
+          items={[
+            {
+              label: "Generate Example Message",
+              leftSlot: <Icon icon="magic_wand" />,
+              disabled: methodSchema.type !== "schema",
+              onSelect: handleGenerateExample,
+            },
+            { type: "separator" },
+            {
+              label: protoFiles.length > 0 ? "Select Proto Files\u2026" : "Configure Schema\u2026",
+              leftSlot: <Icon icon="settings" />,
+              onSelect: () => {
+                showDialog({
+                  title: "Configure Schema",
+                  size: "md",
+                  id: "reflection-failed",
+                  render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
+                });
+              },
+            },
+          ]}
         >
-          {reflectionLoading
-            ? "Inspecting Schema"
-            : reflectionUnavailable
-              ? "Select Proto Files"
-              : reflectionError
-                ? "Server Error"
-                : protoFiles.length > 0
-                  ? pluralizeCount("File", protoFiles.length)
-                  : services != null && protoFiles.length === 0
-                    ? "Schema Detected"
-                    : "Select Schema"}
-        </Button>
+          <Button
+            size="sm"
+            variant="border"
+            title="Schema"
+            forDropdown
+            isLoading={reflectionLoading}
+            color={reflectionUnavailable ? "info" : reflectionError ? "danger" : "default"}
+          >
+            {reflectionLoading
+              ? "Inspecting Schema"
+              : reflectionUnavailable
+                ? "Select Proto Files"
+                : reflectionError
+                  ? "Server Error"
+                  : protoFiles.length > 0
+                    ? pluralizeCount("File", protoFiles.length)
+                    : services != null
+                      ? "Schema Detected"
+                      : "Select Schema"}
+          </Button>
+        </Dropdown>
       </div>,
     ],
     [
