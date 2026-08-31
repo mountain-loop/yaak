@@ -268,7 +268,10 @@ export function ImportDataDialog({
             ...(workspaces.length > 0
               ? [{ type: "separator" as const, label: "Existing Workspaces" }]
               : []),
-            ...workspaces.map((w) => ({ value: w.id, label: w.name })),
+            ...workspaces.map((w) => ({
+              value: w.id,
+              label: w.id === currentWorkspace?.id ? `${w.name} (current workspace)` : w.name,
+            })),
           ]}
         />
         {canTargetSelectedFolder && (
