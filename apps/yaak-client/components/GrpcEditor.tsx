@@ -25,6 +25,7 @@ import { pluralizeCount } from "../lib/pluralize";
 import { Button } from "./core/Button";
 import type { EditorProps } from "./core/Editor/Editor";
 import { Editor } from "./core/Editor/LazyEditor";
+import { EmptyStateText } from "./EmptyStateText";
 import { GrpcProtoSelectionDialog } from "./GrpcProtoSelectionDialog";
 
 type Props = Pick<EditorProps, "heightMode" | "onChange" | "className" | "forceUpdateKey"> & {
@@ -163,14 +164,19 @@ export function GrpcEditor({
   const emptyState = useMemo(() => {
     if (methodSchema.type !== "schema") return null;
     return (
-      <Button
-        variant="border"
-        size="sm"
-        leftSlot={<Icon size="sm" icon="magic_wand" />}
-        onClick={handleGenerateExample}
-      >
-        Generate Example
-      </Button>
+      <EmptyStateText>
+        <VStack alignItems="center" space={2}>
+          <p>Fill this message with an example built from the method schema</p>
+          <Button
+            variant="border"
+            size="sm"
+            leftSlot={<Icon size="sm" icon="magic_wand" />}
+            onClick={handleGenerateExample}
+          >
+            Generate Example
+          </Button>
+        </VStack>
+      </EmptyStateText>
     );
   }, [handleGenerateExample, methodSchema.type]);
 

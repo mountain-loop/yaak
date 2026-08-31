@@ -73,7 +73,8 @@ export interface EditorProps {
   defaultValue?: string | null;
   disableTabIndent?: boolean;
   disabled?: boolean;
-  // Rendered over the editor while the document is empty, for actions that fill it
+  // Rendered in the space below the first line while the document is empty, for actions
+  // that fill it
   emptyState?: ReactNode;
   extraExtensions?: Extension[] | Extension;
   forcedEnvironmentId?: string;
@@ -149,7 +150,7 @@ function EditorInner({
 }: EditorProps) {
   const settings = useAtomValue(settingsAtom);
   const [isEmpty, setIsEmpty] = useState((defaultValue ?? "") === "");
-  const [emptyStatePos, setEmptyStatePos] = useState<{ left: number; top: number } | null>(null);
+  const [emptyStateTop, setEmptyStateTop] = useState<number | null>(null);
 
   const allEnvironmentVariables = useEnvironmentVariables(forcedEnvironmentId ?? null);
   const useTemplating = !!(autocompleteFunctions || autocompleteVariables || autocomplete);
@@ -495,8 +496,8 @@ function EditorInner({
     [defaultValue],
   );
 
-  // Sit the empty state just below the first line, aligned with the text column. The gutter
-  // width depends on the editor font size, so it has to be measured rather than assumed.
+  // Give the empty state the space below the first line, so it never covers the cursor. The
+  // line height depends on the editor font size, so it has to be measured rather than assumed.
   useLayoutEffect(
     function positionEmptyState() {
       const view = cm.current?.view;
@@ -507,15 +508,11 @@ function EditorInner({
       const measure = () => {
         const editor = view.dom.getBoundingClientRect();
         const content = view.contentDOM.getBoundingClientRect();
-        const left = content.left - editor.left;
-        const top = content.top - editor.top + view.defaultLineHeight + 8;
-        setEmptyStatePos((prev) =>
-          prev?.left === left && prev.top === top ? prev : { left, top },
-        );
+        setEmptyStateTop(content.top - editor.top + view.defaultLineHeight + 8);
       };
 
-      // Codemirror lays the gutters out on its own schedule, so the first measure can land
-      // before they have a width. Measure again once it has settled.
+      // Codemirror lays the content out on its own schedule, so the first measure can land
+      // before it has a height. Measure again once it has settled.
       measure();
       const raf = requestAnimationFrame(measure);
       return () => cancelAnimationFrame(raf);
@@ -591,11 +588,11 @@ function EditorInner({
   return (
     <div className="group relative h-full w-full x-theme-editor bg-surface">
       {cmContainer}
-      {emptyState && isEmpty && emptyStatePos != null && (
+      {emptyState && isEmpty && emptyStateTop != null && (
         <div
-          style={emptyStatePos}
+          style={{ top: emptyStateTop }}
           className={classNames(
-            "absolute",
+            "absolute inset-x-0 bottom-0 px-2",
             "pointer-events-none", // No pointer events, so we don't block the editor
           )}
         >
