@@ -113,7 +113,15 @@ function toPairData({ commitName: _commitName, ...pair }: EditablePairWithId): P
 /** Max number of pairs to show before prompting the user to reveal the rest */
 const MAX_INITIAL_PAIRS = 30;
 
-export function PairEditor({
+// Keyed on `stateKey` so no state survives a change of owner. Row ids alone can't tell owners
+// apart — two pair sets can share ids (eg. one duplicated from the other), and the same-rows
+// fast path below would swap in the new data without rebuilding the row editors, leaving any
+// still-focused input showing the old owner's text.
+export function PairEditor(props: PairEditorProps) {
+  return <PairEditorInner key={props.stateKey} {...props} />;
+}
+
+function PairEditorInner({
   allowFileValues,
   allowMultilineValues,
   className,
