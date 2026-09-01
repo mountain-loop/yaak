@@ -3,6 +3,8 @@ import type { Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, W
 
 export type BatchUpsertResult = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
 
+export type ImportConflictResolution = "keep_mine" | "take_source";
+
 /**
  * Where a staged import will be committed.
  *
@@ -11,10 +13,31 @@ export type BatchUpsertResult = { workspaces: Array<Workspace>, environments: Ar
  */
 export type ImportDestination = { "type": "new_workspace" } | { "type": "existing_workspace", workspaceId: string, folderId?: string, };
 
+/**
+ * Where an import's contents came from, used to link the committed workspace back to it.
+ */
+export type ImportOrigin = { 
+/**
+ * The absolute file path or URL the contents were read from.
+ */
+origin: string, label: string, };
+
 export type ImportPlan = { importer: string, destination: ImportDestination, resources: BatchUpsertResult, warnings: Array<ImportPlanWarning>, 
 /**
- * Stable source key for every model in `resources`, keyed by its freshly minted ID.
+ * Stable source key for every model in `resources`, keyed by its planned ID.
  */
-sourceKeys: { [key in string]?: string }, };
+sourceKeys: { [key in string]?: string }, 
+/**
+ * One entry per plannable resource; commit applies only the selected ones.
+ */
+items: Array<ImportPlanItem>, origin?: ImportOrigin, };
+
+export type ImportPlanAction = "create" | "update" | "delete" | "unchanged" | "keep_local" | "conflict";
+
+export type ImportPlanItem = { action: ImportPlanAction, model: string, modelId: string, name: string, 
+/**
+ * Planned parent folder ID for incoming resources; current parent for deletions.
+ */
+parentId?: string, selected: boolean, resolution?: ImportConflictResolution, };
 
 export type ImportPlanWarning = { title: string, detail: string, };

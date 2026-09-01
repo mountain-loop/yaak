@@ -37,7 +37,8 @@ use yaak_grpc::ServiceDefinition;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::{
     GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
-    HttpResponseEvent, Plugin, Settings, WebsocketConnection, WebsocketEvent, WorkspaceMeta,
+    HttpResponseEvent, ImportSource, Plugin, Settings, WebsocketConnection, WebsocketEvent,
+    WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{BatchUpsertResult, ImportPlan};
@@ -462,6 +463,24 @@ async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> 
 
 async fn cmd_commit_import<R: Runtime>(ctx: ClientCtx<R>, req: CmdCommitImportReq) -> Result<BatchUpsertResult> {
     Ok(crate::cmd_commit_import(ctx.window.clone(), req.plan).await?)
+}
+
+async fn cmd_list_import_sources<R: Runtime>(ctx: ClientCtx<R>, req: CmdListImportSourcesReq) -> Result<Vec<ImportSource>> {
+    use crate::models_ext::QueryManagerExt;
+    Ok(ctx.window.db().list_import_sources(&req.workspace_id)?)
+}
+
+async fn cmd_import_sources_for_origin<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportSourcesForOriginReq) -> Result<Vec<ImportSource>> {
+    use crate::models_ext::QueryManagerExt;
+    let origin = match (req.file_path, req.url) {
+        (Some(file_path), _) => crate::import::file_origin(&file_path).origin,
+        (None, Some(url)) => match crate::import::normalize_import_url(&url) {
+            Ok(url) => crate::import::url_origin(&url).origin,
+            Err(_) => return Ok(Vec::new()),
+        },
+        (None, None) => return Ok(Vec::new()),
+    };
+    Ok(ctx.window.db().list_import_sources_by_origin(&origin)?)
 }
 
 async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {

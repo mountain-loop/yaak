@@ -1,6 +1,6 @@
 use crate::PluginContextExt;
 use crate::error::Result;
-use crate::import::import_data;
+use crate::import::{file_origin, import_data, url_origin};
 use crate::models_ext::QueryManagerExt;
 use log::{info, warn};
 use std::collections::HashMap;
@@ -69,6 +69,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
         }
         "import-data" => {
             let mut file_path = query_map.get("path").map(|s| s.to_owned());
+            let mut origin = None;
             let name = query_map.get("name").map(|s| s.to_owned()).unwrap_or("data".to_string());
             _ = window.set_focus();
 
@@ -98,6 +99,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                     .to_string();
                 fs::write(&p, json)?;
                 file_path = Some(p);
+                origin = Some(url_origin(file_url));
             }
 
             let file_path = match file_path {
@@ -116,7 +118,8 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 }
             };
 
-            let results = import_data(window, &file_path).await?;
+            let origin = origin.unwrap_or_else(|| file_origin(&file_path));
+            let results = import_data(window, &file_path, Some(origin)).await?;
             window.emit(
                 "show_toast",
                 ShowToastRequest {

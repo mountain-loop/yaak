@@ -167,3 +167,93 @@ fn import_postman_environment_uses_workspace_id() {
         environments.iter().find(|e| e.name == "Local").expect("postman environment imported");
     assert_eq!(imported_environment.workspace_id, workspace_id);
 }
+
+fn write_linked_fixture(path: &std::path::Path, requests: &[(&str, &str, &str)]) {
+    let requests = requests
+        .iter()
+        .map(|(id, name, url)| {
+            format!(
+                r#"{{ "model": "http_request", "id": "{id}", "workspaceId": "wrk_link",
+                     "name": "{name}", "method": "GET", "url": "{url}" }}"#
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    std::fs::write(
+        path,
+        format!(
+            r#"{{
+  "yaakVersion": "test",
+  "yaakSchema": 4,
+  "resources": {{
+    "workspaces": [{{ "model": "workspace", "id": "wrk_link", "name": "Linked Workspace" }}],
+    "httpRequests": [{requests}]
+  }}
+}}"#
+        ),
+    )
+    .expect("write linked fixture");
+}
+
+#[test]
+fn re_import_merges_into_linked_workspace() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    let import_path = temp_dir.path().join("linked.json");
+
+    write_linked_fixture(
+        &import_path,
+        &[
+            ("req_a", "Request A", "https://example.com/a"),
+            ("req_b", "Request B", "https://example.com/b"),
+        ],
+    );
+    cli_cmd(data_dir)
+        .args(["import", import_path.to_str().expect("import path is utf-8")])
+        .assert()
+        .success()
+        .stdout(contains("Imported 1 workspace, 2 HTTP requests"));
+
+    let workspace_id = {
+        let query_manager = query_manager(data_dir);
+        let db = query_manager.connect();
+        db.list_workspaces()
+            .expect("list workspaces")
+            .into_iter()
+            .find(|w| w.name == "Linked Workspace")
+            .expect("workspace imported")
+            .id
+    };
+
+    // The source doc changes A, drops B, and adds C. The default selection applies the
+    // update and the create but leaves the removal as an offer.
+    write_linked_fixture(
+        &import_path,
+        &[
+            ("req_a", "Request A", "https://example.com/a-v2"),
+            ("req_c", "Request C", "https://example.com/c"),
+        ],
+    );
+    cli_cmd(data_dir)
+        .args([
+            "import",
+            import_path.to_str().expect("import path is utf-8"),
+            "--workspace-id",
+            &workspace_id,
+        ])
+        .assert()
+        .success()
+        .stdout(contains("Imported 2 HTTP requests"))
+        .stdout(contains("Skipped 1 removed from source"));
+
+    let query_manager = query_manager(data_dir);
+    let db = query_manager.connect();
+    let requests = db.list_http_requests(&workspace_id).expect("list requests");
+    assert_eq!(requests.len(), 3, "merge must not duplicate: {requests:?}");
+    assert_eq!(
+        requests.iter().find(|r| r.name == "Request A").expect("request A").url,
+        "https://example.com/a-v2"
+    );
+    assert!(requests.iter().any(|r| r.name == "Request B"), "removal must not auto-apply");
+    assert!(requests.iter().any(|r| r.name == "Request C"));
+}
