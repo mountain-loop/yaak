@@ -14,7 +14,6 @@ use yaak_http::manager::HttpConnectionManager;
 use yaak_models::models::{CookieJar, Environment, HttpRequest, HttpResponse, HttpResponseState};
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::PluginContext;
-use yaak_plugins::manager::PluginManager;
 
 /// Context for managing response state during HTTP transactions.
 /// Handles both persisted responses (stored in DB) and ephemeral responses (in-memory only).
@@ -149,7 +148,7 @@ async fn send_http_request_inner<R: Runtime>(
     response_ctx: &mut ResponseContext<R>,
 ) -> Result<SentHttpRequest> {
     let app_handle = window.app_handle().clone();
-    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(&app_handle).await?);
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let connection_manager = app_handle.state::<HttpConnectionManager>();
     let environment_id = environment.map(|e| e.id);

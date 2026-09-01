@@ -7,7 +7,6 @@ use tauri::{Manager, Runtime, WebviewWindow};
 use yaak::import::{self, PlanImportDataParams};
 use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan};
-use yaak_plugins::manager::PluginManager;
 
 pub(crate) async fn import_data<R: Runtime>(
     window: &WebviewWindow<R>,
@@ -40,7 +39,7 @@ async fn plan_import_contents<R: Runtime>(
     contents: &str,
     destination: ImportDestination,
 ) -> Result<ImportPlan> {
-    let plugin_manager = window.state::<PluginManager>();
+    let plugin_manager = crate::plugins_ext::plugin_manager(window).await?;
     let query_manager = window.db_manager();
     let plugin_context = window.plugin_context();
 

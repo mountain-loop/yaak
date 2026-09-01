@@ -21,7 +21,7 @@ pub async fn cmd_render_template<H: PluginHost>(
 ) -> Result<String> {
     let environment_chain =
         host.db().resolve_environments(&req.workspace_id, None, req.environment_id.as_deref())?;
-    let cb = host.template_callback(req.purpose.unwrap_or(RenderPurpose::Preview));
+    let cb = host.template_callback(req.purpose.unwrap_or(RenderPurpose::Preview)).await?;
     let options = RenderOptions {
         // A preview that throws would show the user an error where they expect
         // to see the value so far, so callers rendering *into the UI* ask for
@@ -41,7 +41,7 @@ pub async fn cmd_template_tokens_to_string<H: PluginHost>(
     host: H,
     req: CmdTemplateTokensToStringReq,
 ) -> Result<String> {
-    let cb = host.template_callback(RenderPurpose::Preview);
+    let cb = host.template_callback(RenderPurpose::Preview).await?;
     Ok(transform_args(req.tokens, &cb)?.to_string())
 }
 
