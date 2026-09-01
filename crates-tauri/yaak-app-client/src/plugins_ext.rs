@@ -200,6 +200,9 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     window: WebviewWindow<R>,
     directory: &str,
 ) -> Result<Plugin> {
+    // Resolve the manager before writing the row so startup's plugin snapshot
+    // can't include it and boot it a second time
+    let plugin_manager = Arc::new(plugin_manager(&window).await?);
     let plugin = window.db().upsert_plugin(
         &Plugin {
             directory: directory.into(),
@@ -211,7 +214,6 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
         &UpdateSource::from_window_label(window.label()),
     )?;
 
-    let plugin_manager = Arc::new(plugin_manager(&window).await?);
     plugin_manager.add_plugin(&window.plugin_context(), &plugin).await?;
 
     Ok(plugin)
