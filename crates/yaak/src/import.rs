@@ -1,14 +1,17 @@
 use crate::Result;
+use chrono::Utc;
 use log::info;
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use yaak_models::client_db::ClientDb;
 use yaak_models::models::{
-    DEFAULT_REQUEST_MESSAGE_SIZE, Environment, Folder, GrpcRequest, HttpRequest, UpsertModelInfo,
-    WebsocketRequest, Workspace,
+    AnyModel, DEFAULT_REQUEST_MESSAGE_SIZE, Environment, Folder, GrpcRequest, HttpRequest,
+    ImportSource, ImportSourceResource, UpsertModelInfo, WebsocketRequest, Workspace,
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{
-    BatchUpsertResult, ImportDestination, ImportPlan, ImportPlanWarning, UpdateSource,
+    BatchUpsertResult, ImportConflictResolution, ImportDestination, ImportOrigin, ImportPlan,
+    ImportPlanAction, ImportPlanItem, ImportPlanWarning, ImportResourceType, UpdateSource,
 };
 use yaak_plugins::events::{ImportResources, PluginContext};
 use yaak_plugins::manager::PluginManager;
@@ -19,6 +22,7 @@ pub struct PlanImportDataParams<'a> {
     pub plugin_context: &'a PluginContext,
     pub destination: ImportDestination,
     pub contents: &'a str,
+    pub origin: Option<ImportOrigin>,
 }
 
 /// Parse importer output and turn it into a commit-ready plan without mutating the database.
@@ -32,6 +36,7 @@ pub async fn plan_import_data(params: PlanImportDataParams<'_>) -> Result<Import
         params.destination,
         import_result.resources,
         import_result.source_keys,
+        params.origin,
     )
 }
 
@@ -45,12 +50,15 @@ pub fn plan_import_resources(
     destination: ImportDestination,
     resources: ImportResources,
     source_keys: Option<BTreeMap<String, String>>,
+    origin: Option<ImportOrigin>,
 ) -> Result<ImportPlan> {
     let mut warnings = Vec::new();
     validate_destination(query_manager, &destination)?;
 
     let plugin_keys = source_keys.unwrap_or_default();
-    let source_ids = SourceIds::collect(&resources);
+    // Source keys and merge decisions describe the document as the importer produced it, not as
+    // this destination reshapes it, so keep the original around.
+    let original = resources.clone();
 
     let source_folder_ids = resources.folders.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>();
     let mut folder_ids = BTreeMap::new();
@@ -262,37 +270,603 @@ pub fn plan_import_resources(
         websocket_requests,
     };
 
-    Ok(ImportPlan {
+    let mut plan = ImportPlan {
         importer,
         destination,
-        source_keys: assign_source_keys(&resources, &source_ids, &plugin_keys),
+        source_keys: assign_source_keys(&resources, &original, &plugin_keys),
         resources,
         warnings,
-    })
+        items: Vec::new(),
+        origin,
+    };
+    merge_with_linked_source(query_manager, &mut plan, &original)?;
+    Ok(plan)
 }
 
-/// Commit a previously prepared plan in one transaction.
+/// Commit a previously prepared plan in one transaction, applying only its selected items.
 pub fn commit_import_plan(
     query_manager: &QueryManager,
     plan: ImportPlan,
 ) -> Result<BatchUpsertResult> {
     validate_plan(&plan)?;
-    let resources = plan.resources;
 
     info!("Committing staged import from {}", plan.importer);
     query_manager.with_tx(|tx| {
         validate_destination_db(tx, &plan.destination)?;
-        tx.batch_upsert(
-            resources.workspaces,
-            resources.environments,
-            resources.folders,
-            resources.http_requests,
-            resources.grpc_requests,
-            resources.websocket_requests,
-            &UpdateSource::Import,
-        )
-        .map_err(crate::Error::from)
+        commit_plan_in_tx(tx, plan)
     })
+}
+
+fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResult> {
+    let items: BTreeMap<String, ImportPlanItem> =
+        plan.items.iter().map(|item| (item.model_id.clone(), item.clone())).collect();
+
+    // A resource without an item (workspaces, plans from older callers) always applies.
+    // A selected keep-local item is an explicit request to revert the local edits.
+    let applies = |id: &str| match items.get(id) {
+        None => true,
+        Some(item) => match item.action {
+            ImportPlanAction::Create | ImportPlanAction::Update | ImportPlanAction::KeepLocal => {
+                item.selected
+            }
+            ImportPlanAction::Conflict => {
+                item.resolution == Some(ImportConflictResolution::TakeSource)
+            }
+            ImportPlanAction::Delete | ImportPlanAction::Unchanged => false,
+        },
+    };
+
+    // A deselected new folder takes its planned descendants with it: nothing can be
+    // created inside a folder that will not exist.
+    let is_new_folder = |id: &str| items.get(id).is_some_and(|i| i.action == ImportPlanAction::Create);
+    let mut missing_folders: BTreeSet<String> = plan
+        .resources
+        .folders
+        .iter()
+        .filter(|f| is_new_folder(&f.id) && !applies(&f.id))
+        .map(|f| f.id.clone())
+        .collect();
+    loop {
+        let before = missing_folders.len();
+        for folder in &plan.resources.folders {
+            if let Some(parent_id) = &folder.folder_id
+                && missing_folders.contains(parent_id)
+            {
+                missing_folders.insert(folder.id.clone());
+            }
+        }
+        if missing_folders.len() == before {
+            break;
+        }
+    }
+
+    let folder_available = |folder_id: &Option<String>| match folder_id {
+        Some(id) => !missing_folders.contains(id),
+        None => true,
+    };
+
+    let resources = &plan.resources;
+    let upserted = db.batch_upsert(
+        resources.workspaces.clone(),
+        resources
+            .environments
+            .iter()
+            .filter(|v| applies(&v.id))
+            .filter(|v| v.parent_model != "folder" || folder_available(&v.parent_id))
+            .cloned()
+            .collect(),
+        resources
+            .folders
+            .iter()
+            .filter(|v| applies(&v.id) && !missing_folders.contains(&v.id))
+            .cloned()
+            .collect(),
+        resources
+            .http_requests
+            .iter()
+            .filter(|v| applies(&v.id) && folder_available(&v.folder_id))
+            .cloned()
+            .collect(),
+        resources
+            .grpc_requests
+            .iter()
+            .filter(|v| applies(&v.id) && folder_available(&v.folder_id))
+            .cloned()
+            .collect(),
+        resources
+            .websocket_requests
+            .iter()
+            .filter(|v| applies(&v.id) && folder_available(&v.folder_id))
+            .cloned()
+            .collect(),
+        &UpdateSource::Import,
+    )?;
+
+    let selected_deletes = plan
+        .items
+        .iter()
+        .filter(|i| i.action == ImportPlanAction::Delete && i.selected)
+        .collect::<Vec<_>>();
+    // Folders last so their cascade only has to cover what was not deleted explicitly.
+    for item in selected_deletes.iter().filter(|i| i.model != ImportResourceType::Folder) {
+        delete_existing_model(db, item.model, &item.model_id)?;
+    }
+    for item in selected_deletes.iter().filter(|i| i.model == ImportResourceType::Folder) {
+        delete_existing_model(db, item.model, &item.model_id)?;
+    }
+
+    record_import_source(db, &plan, &items, &upserted)?;
+
+    Ok(upserted)
+}
+
+/// A folder deletion may have already cascaded over the model, so absent models are skipped.
+fn delete_existing_model(db: &ClientDb, resource: ImportResourceType, id: &str) -> Result<()> {
+    use ImportResourceType::*;
+    let source = &UpdateSource::Import;
+    match resource {
+        Environment => {
+            if db.get_environment(id).is_ok() {
+                db.delete_environment_by_id(id, source)?;
+            }
+        }
+        Folder => {
+            if db.get_folder(id).is_ok() {
+                db.delete_folder_by_id(id, source)?;
+            }
+        }
+        HttpRequest => {
+            if db.get_http_request(id).is_ok() {
+                db.delete_http_request_by_id(id, source)?;
+            }
+        }
+        GrpcRequest => {
+            if db.get_grpc_request(id).is_ok() {
+                db.delete_grpc_request_by_id(id, source)?;
+            }
+        }
+        WebsocketRequest => {
+            if db.get_websocket_request(id).is_ok() {
+                db.delete_websocket_request_by_id(id, source)?;
+            }
+        }
+        // The destination workspace is never a plan item, so there is nothing to delete
+        Workspace => {}
+    }
+    Ok(())
+}
+
+/// Link the committed workspace to the import's origin and store a snapshot per resource, so the
+/// next import from the same origin can three-way merge instead of duplicating everything.
+///
+/// Snapshots advance for everything the user decided on this round — applied items and keep-mine
+/// conflicts alike — while deselected updates and deletions keep their old snapshot so they are
+/// offered again next time.
+fn record_import_source(
+    db: &ClientDb,
+    plan: &ImportPlan,
+    items: &BTreeMap<String, ImportPlanItem>,
+    upserted: &BatchUpsertResult,
+) -> Result<()> {
+    let Some(origin) = &plan.origin else {
+        return Ok(());
+    };
+
+    let workspace_id = match &plan.destination {
+        ImportDestination::ExistingWorkspace { workspace_id, .. } => workspace_id.clone(),
+        ImportDestination::NewWorkspace => match upserted.workspaces.first() {
+            Some(workspace) => workspace.id.clone(),
+            None => return Ok(()),
+        },
+    };
+
+    let existing = db.find_import_source(&workspace_id, &plan.importer, &origin.origin)?;
+    let import_source = db.upsert_import_source(
+        &ImportSource {
+            id: existing.map(|s| s.id).unwrap_or_default(),
+            workspace_id,
+            importer: plan.importer.clone(),
+            origin: origin.origin.clone(),
+            origin_label: origin.label.clone(),
+            last_imported_at: Utc::now().naive_utc(),
+            ..Default::default()
+        },
+        &UpdateSource::Import,
+    )?;
+
+    let mut committed: BTreeMap<&str, String> = BTreeMap::new();
+    for v in &upserted.environments {
+        committed.insert(&v.id, serde_json::to_string(v)?);
+    }
+    for v in &upserted.folders {
+        committed.insert(&v.id, serde_json::to_string(v)?);
+    }
+    for v in &upserted.http_requests {
+        committed.insert(&v.id, serde_json::to_string(v)?);
+    }
+    for v in &upserted.grpc_requests {
+        committed.insert(&v.id, serde_json::to_string(v)?);
+    }
+    for v in &upserted.websocket_requests {
+        committed.insert(&v.id, serde_json::to_string(v)?);
+    }
+
+    let write_row = |model_id: &str, resource: ImportResourceType, incoming: &dyn Fn() -> Result<String>| -> Result<()> {
+        let Some(source_key) = plan.source_keys.get(model_id) else {
+            return Ok(());
+        };
+        let snapshot = match committed.get(model_id) {
+            Some(json) => json.clone(),
+            None => match items.get(model_id).map(|i| i.action) {
+                Some(
+                    ImportPlanAction::Unchanged
+                    | ImportPlanAction::KeepLocal
+                    | ImportPlanAction::Conflict,
+                ) => incoming()?,
+                // A deselected create, update, or delete stays offered next import
+                Some(
+                    ImportPlanAction::Create
+                    | ImportPlanAction::Update
+                    | ImportPlanAction::Delete,
+                )
+                | None => return Ok(()),
+            },
+        };
+        db.upsert_import_source_resource(&ImportSourceResource {
+            import_source_id: import_source.id.clone(),
+            source_key: source_key.clone(),
+            model_type: resource.as_str().to_string(),
+            model_id: model_id.to_string(),
+            snapshot,
+            ..Default::default()
+        })?;
+        Ok(())
+    };
+
+    for v in &plan.resources.environments {
+        write_row(&v.id, ImportResourceType::Environment, &|| Ok(serde_json::to_string(v)?))?;
+    }
+    for v in &plan.resources.folders {
+        write_row(&v.id, ImportResourceType::Folder, &|| Ok(serde_json::to_string(v)?))?;
+    }
+    for v in &plan.resources.http_requests {
+        write_row(&v.id, ImportResourceType::HttpRequest, &|| Ok(serde_json::to_string(v)?))?;
+    }
+    for v in &plan.resources.grpc_requests {
+        write_row(&v.id, ImportResourceType::GrpcRequest, &|| Ok(serde_json::to_string(v)?))?;
+    }
+    for v in &plan.resources.websocket_requests {
+        write_row(&v.id, ImportResourceType::WebsocketRequest, &|| Ok(serde_json::to_string(v)?))?;
+    }
+
+    let incoming_keys: BTreeSet<&String> = plan.source_keys.values().collect();
+    for row in db.list_import_source_resources(&import_source.id)? {
+        if incoming_keys.contains(&row.source_key) {
+            continue;
+        }
+        // Keep only rows that back a deletion the user deselected; it will be offered again.
+        let keep = match ImportResourceType::from_str(&row.model_type) {
+            Some(resource) => {
+                items
+                    .get(&row.model_id)
+                    .is_some_and(|i| i.action == ImportPlanAction::Delete && !i.selected)
+                    && existing_model_json(db, resource, &row.model_id)?.is_some()
+            }
+            None => false,
+        };
+        if !keep {
+            db.delete_import_source_resource(&import_source.id, &row.source_key)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Rewrite a plan against the destination's linked import source, if it has one: resources whose
+/// source key was seen before adopt the existing model's ID, and every resource gets a plan item
+/// describing the create / update / delete / conflict decision to preview.
+fn merge_with_linked_source(
+    query_manager: &QueryManager,
+    plan: &mut ImportPlan,
+    original: &ImportResources,
+) -> Result<()> {
+    let db = query_manager.connect();
+
+    let linked = match (&plan.origin, &plan.destination) {
+        (Some(origin), ImportDestination::ExistingWorkspace { workspace_id, .. }) => {
+            db.find_import_source(workspace_id, &plan.importer, &origin.origin)?
+        }
+        (None, _) | (Some(_), ImportDestination::NewWorkspace) => None,
+    };
+
+    let Some(source) = linked else {
+        plan.items = create_only_items(plan);
+        return Ok(());
+    };
+
+    let workspace_id = source.workspace_id.clone();
+    let rows: BTreeMap<String, ImportSourceResource> = db
+        .list_import_source_resources(&source.id)?
+        .into_iter()
+        .map(|row| (row.source_key.clone(), row))
+        .collect();
+
+    // Resources whose key maps to a model that still exists adopt that model's ID.
+    let mut remap: BTreeMap<String, String> = BTreeMap::new();
+    let mut current_models: BTreeMap<String, Value> = BTreeMap::new();
+    {
+        let mut consider = |planned_id: &str, resource: ImportResourceType| -> Result<()> {
+            let Some(key) = plan.source_keys.get(planned_id) else { return Ok(()) };
+            let Some(row) = rows.get(key) else { return Ok(()) };
+            if ImportResourceType::from_str(&row.model_type) != Some(resource) {
+                return Ok(());
+            }
+            let Some(current) = existing_model_json(&db, resource, &row.model_id)? else {
+                return Ok(());
+            };
+            if current.get("workspaceId").and_then(|v| v.as_str()) != Some(workspace_id.as_str()) {
+                return Ok(());
+            }
+            remap.insert(planned_id.to_string(), row.model_id.clone());
+            current_models.insert(row.model_id.clone(), current);
+            Ok(())
+        };
+        for v in &plan.resources.folders {
+            consider(&v.id, ImportResourceType::Folder)?;
+        }
+        for v in &plan.resources.environments {
+            consider(&v.id, ImportResourceType::Environment)?;
+        }
+        for v in &plan.resources.http_requests {
+            consider(&v.id, ImportResourceType::HttpRequest)?;
+        }
+        for v in &plan.resources.grpc_requests {
+            consider(&v.id, ImportResourceType::GrpcRequest)?;
+        }
+        for v in &plan.resources.websocket_requests {
+            consider(&v.id, ImportResourceType::WebsocketRequest)?;
+        }
+    }
+
+    let remap_ref = |id: Option<String>| id.map(|v| remap.get(&v).cloned().unwrap_or(v));
+    for v in &mut plan.resources.folders {
+        if let Some(existing_id) = remap.get(&v.id) {
+            v.id = existing_id.clone();
+        }
+        v.folder_id = remap_ref(v.folder_id.take());
+    }
+    for v in &mut plan.resources.environments {
+        if let Some(existing_id) = remap.get(&v.id) {
+            v.id = existing_id.clone();
+        }
+        if v.parent_model == "folder" {
+            v.parent_id = remap_ref(v.parent_id.take());
+        }
+    }
+    for v in &mut plan.resources.http_requests {
+        if let Some(existing_id) = remap.get(&v.id) {
+            v.id = existing_id.clone();
+        }
+        v.folder_id = remap_ref(v.folder_id.take());
+    }
+    for v in &mut plan.resources.grpc_requests {
+        if let Some(existing_id) = remap.get(&v.id) {
+            v.id = existing_id.clone();
+        }
+        v.folder_id = remap_ref(v.folder_id.take());
+    }
+    for v in &mut plan.resources.websocket_requests {
+        if let Some(existing_id) = remap.get(&v.id) {
+            v.id = existing_id.clone();
+        }
+        v.folder_id = remap_ref(v.folder_id.take());
+    }
+    plan.source_keys = plan
+        .source_keys
+        .iter()
+        .map(|(id, key)| (remap.get(id).cloned().unwrap_or_else(|| id.clone()), key.clone()))
+        .collect();
+
+    // A mapped environment that is currently the destination's base environment stays the base
+    // environment: it came from this source, so the imported-copy separation does not apply.
+    let mut restored_base_names = BTreeSet::new();
+    for (i, v) in plan.resources.environments.iter_mut().enumerate() {
+        let is_current_base = current_models
+            .get(&v.id)
+            .and_then(|m| m.get("parentModel"))
+            .and_then(|p| p.as_str())
+            == Some("workspace");
+        if !is_current_base {
+            continue;
+        }
+        if let Some(source) = original.environments.get(i) {
+            v.name = source.name.clone();
+        }
+        v.parent_model = "workspace".to_string();
+        v.parent_id = None;
+        restored_base_names.insert(v.name.clone());
+    }
+    if !restored_base_names.is_empty() {
+        plan.warnings.retain(|w| {
+            !(w.title == "Base environment kept separate"
+                && restored_base_names.iter().any(|n| w.detail.starts_with(&format!("{n} →"))))
+        });
+    }
+
+    let mut items = Vec::new();
+    {
+        let mut classify = |any: AnyModel,
+                            resource: ImportResourceType,
+                            parent_id: Option<String>|
+         -> Result<()> {
+            let planned_id = any.id().to_string();
+            let name = any.resolved_name();
+
+            let mapped = plan
+                .source_keys
+                .get(&planned_id)
+                .and_then(|key| rows.get(key))
+                .filter(|row| row.model_id == planned_id);
+            let Some(row) = mapped else {
+                items.push(ImportPlanItem {
+                    action: ImportPlanAction::Create,
+                    model: resource,
+                    model_id: planned_id,
+                    name,
+                    parent_id,
+                    selected: true,
+                    resolution: None,
+                });
+                return Ok(());
+            };
+
+            let incoming = comparable(serde_json::to_value(&any)?);
+            let current = current_models
+                .get(&planned_id)
+                .cloned()
+                .map(comparable)
+                .unwrap_or_default();
+            let (source_changed, local_changed) =
+                match serde_json::from_str::<Value>(&row.snapshot).ok().map(comparable) {
+                    Some(snapshot) => (incoming != snapshot, current != snapshot),
+                    // An unreadable snapshot can't prove anything unchanged, so surface a conflict.
+                    None => (true, true),
+                };
+
+            let (action, selected, resolution) = match (source_changed, local_changed) {
+                (false, false) => (ImportPlanAction::Unchanged, false, None),
+                (true, false) => (ImportPlanAction::Update, true, None),
+                (false, true) => (ImportPlanAction::KeepLocal, false, None),
+                (true, true) => (
+                    ImportPlanAction::Conflict,
+                    true,
+                    Some(ImportConflictResolution::KeepMine),
+                ),
+            };
+            items.push(ImportPlanItem {
+                action,
+                model: resource,
+                model_id: planned_id,
+                name,
+                parent_id,
+                selected,
+                resolution,
+            });
+            Ok(())
+        };
+
+        for v in &plan.resources.folders {
+            classify(AnyModel::Folder(v.clone()), ImportResourceType::Folder, v.folder_id.clone())?;
+        }
+        for v in &plan.resources.http_requests {
+            classify(AnyModel::HttpRequest(v.clone()), ImportResourceType::HttpRequest, v.folder_id.clone())?;
+        }
+        for v in &plan.resources.grpc_requests {
+            classify(AnyModel::GrpcRequest(v.clone()), ImportResourceType::GrpcRequest, v.folder_id.clone())?;
+        }
+        for v in &plan.resources.websocket_requests {
+            classify(AnyModel::WebsocketRequest(v.clone()), ImportResourceType::WebsocketRequest, v.folder_id.clone())?;
+        }
+        for v in &plan.resources.environments {
+            classify(AnyModel::Environment(v.clone()), ImportResourceType::Environment, v.parent_id.clone())?;
+        }
+    }
+
+    // Mapped models the source no longer has become deletion offers, deselected by default.
+    let incoming_keys: BTreeSet<&String> = plan.source_keys.values().collect();
+    for (key, row) in &rows {
+        if incoming_keys.contains(key) {
+            continue;
+        }
+        let Some(resource) = ImportResourceType::from_str(&row.model_type) else {
+            continue;
+        };
+        let Some(current) = existing_model_json(&db, resource, &row.model_id)? else {
+            continue;
+        };
+        if current.get("workspaceId").and_then(|v| v.as_str()) != Some(workspace_id.as_str()) {
+            continue;
+        }
+        let name = serde_json::from_value::<AnyModel>(current.clone())
+            .map(|m| m.resolved_name())
+            .unwrap_or_else(|_| "Unknown".to_string());
+        let parent_id = current
+            .get("folderId")
+            .or_else(|| current.get("parentId"))
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        items.push(ImportPlanItem {
+            action: ImportPlanAction::Delete,
+            model: resource,
+            model_id: row.model_id.clone(),
+            name,
+            parent_id,
+            selected: false,
+            resolution: None,
+        });
+    }
+
+    plan.items = items;
+    Ok(())
+}
+
+fn create_only_items(plan: &ImportPlan) -> Vec<ImportPlanItem> {
+    let mut items = Vec::new();
+    let mut push = |any: AnyModel, resource: ImportResourceType, parent_id: Option<String>| {
+        items.push(ImportPlanItem {
+            action: ImportPlanAction::Create,
+            model: resource,
+            model_id: any.id().to_string(),
+            name: any.resolved_name(),
+            parent_id,
+            selected: true,
+            resolution: None,
+        });
+    };
+    for v in &plan.resources.folders {
+        push(AnyModel::Folder(v.clone()), ImportResourceType::Folder, v.folder_id.clone());
+    }
+    for v in &plan.resources.http_requests {
+        push(AnyModel::HttpRequest(v.clone()), ImportResourceType::HttpRequest, v.folder_id.clone());
+    }
+    for v in &plan.resources.grpc_requests {
+        push(AnyModel::GrpcRequest(v.clone()), ImportResourceType::GrpcRequest, v.folder_id.clone());
+    }
+    for v in &plan.resources.websocket_requests {
+        push(AnyModel::WebsocketRequest(v.clone()), ImportResourceType::WebsocketRequest, v.folder_id.clone());
+    }
+    for v in &plan.resources.environments {
+        push(AnyModel::Environment(v.clone()), ImportResourceType::Environment, v.parent_id.clone());
+    }
+    items
+}
+
+/// Strip identity and bookkeeping fields so equality means "same content in the same place".
+/// The deprecated environment `base` flag mirrors `parentModel`, which is compared already.
+fn comparable(mut value: Value) -> Value {
+    if let Some(object) = value.as_object_mut() {
+        for field in ["id", "model", "workspaceId", "createdAt", "updatedAt", "base"] {
+            object.remove(field);
+        }
+    }
+    value
+}
+
+fn existing_model_json(
+    db: &ClientDb,
+    resource: ImportResourceType,
+    id: &str,
+) -> Result<Option<Value>> {
+    use ImportResourceType::*;
+    let value = match resource {
+        Environment => db.get_environment(id).ok().map(|m| serde_json::to_value(&m)),
+        Folder => db.get_folder(id).ok().map(|m| serde_json::to_value(&m)),
+        HttpRequest => db.get_http_request(id).ok().map(|m| serde_json::to_value(&m)),
+        GrpcRequest => db.get_grpc_request(id).ok().map(|m| serde_json::to_value(&m)),
+        WebsocketRequest => db.get_websocket_request(id).ok().map(|m| serde_json::to_value(&m)),
+        Workspace => None,
+    };
+    Ok(value.transpose()?)
 }
 
 fn validate_destination(
@@ -351,7 +925,19 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                 );
             }
 
-            if plan.resources.environments.iter().any(|v| v.parent_model == "workspace") {
+            // A merging plan may update the base environment it created earlier, which its plan
+            // item records; anything else must not replace the destination's base environment.
+            let updates_own_base = |id: &str| {
+                plan.items
+                    .iter()
+                    .any(|i| i.model_id == id && i.action != ImportPlanAction::Create)
+            };
+            if plan
+                .resources
+                .environments
+                .iter()
+                .any(|v| v.parent_model == "workspace" && !updates_own_base(&v.id))
+            {
                 return invalid(
                     "An existing-workspace import plan must not replace the base environment"
                         .to_string(),
@@ -463,38 +1049,16 @@ fn display_list(items: &BTreeSet<&str>) -> String {
     }
 }
 
-/// Importer-assigned IDs, captured before planning replaces them with freshly minted ones.
-///
-/// Positional: each vector lines up with the same-named planned collection, in order.
-struct SourceIds {
-    workspaces: Vec<String>,
-    environments: Vec<String>,
-    folders: Vec<String>,
-    http_requests: Vec<String>,
-    grpc_requests: Vec<String>,
-    websocket_requests: Vec<String>,
-}
-
-impl SourceIds {
-    fn collect(resources: &ImportResources) -> Self {
-        let ids = |ids: &mut dyn Iterator<Item = &String>| ids.cloned().collect::<Vec<_>>();
-        SourceIds {
-            workspaces: ids(&mut resources.workspaces.iter().map(|v| &v.id)),
-            environments: ids(&mut resources.environments.iter().map(|v| &v.id)),
-            folders: ids(&mut resources.folders.iter().map(|v| &v.id)),
-            http_requests: ids(&mut resources.http_requests.iter().map(|v| &v.id)),
-            grpc_requests: ids(&mut resources.grpc_requests.iter().map(|v| &v.id)),
-            websocket_requests: ids(&mut resources.websocket_requests.iter().map(|v| &v.id)),
-        }
-    }
-}
-
+/// Keys are derived from the document as the importer produced it — names, routes, and folder
+/// ancestry before any destination re-rooting or renaming — so the same document maps onto the
+/// same keys no matter which workspace it is imported into. Collections are positional: planned
+/// entry `i` came from original entry `i`.
 fn assign_source_keys(
     resources: &BatchUpsertResult,
-    source_ids: &SourceIds,
+    original: &ImportResources,
     plugin_keys: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
-    let folder_tree = resources
+    let folder_tree = original
         .folders
         .iter()
         .map(|v| (v.id.clone(), (v.name.clone(), v.folder_id.clone())))
@@ -506,43 +1070,54 @@ fn assign_source_keys(
     let mut candidates: Vec<(&str, Option<&String>, String, String)> = Vec::new();
 
     for (i, v) in resources.workspaces.iter().enumerate() {
-        let key = fallback_key("workspace", &[], &v.name);
-        candidates.push((&v.id, plugin_key(source_ids.workspaces.get(i)), key.clone(), key));
+        let source = original.workspaces.get(i);
+        let name = source.map(|s| s.name.as_str()).unwrap_or(v.name.as_str());
+        let key = fallback_key("workspace", &[], name);
+        candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), key.clone(), key));
     }
     for (i, v) in resources.environments.iter().enumerate() {
-        let ancestry = ancestry_path(&folder_tree, v.parent_id.as_deref());
-        let key = fallback_key("environment", &ancestry, &v.name);
-        candidates.push((&v.id, plugin_key(source_ids.environments.get(i)), key.clone(), key));
+        let source = original.environments.get(i);
+        let name = source.map(|s| s.name.as_str()).unwrap_or(v.name.as_str());
+        let parent_id = source.and_then(|s| {
+            if s.parent_model == "folder" { s.parent_id.as_deref() } else { None }
+        });
+        let ancestry = ancestry_path(&folder_tree, parent_id);
+        let key = fallback_key("environment", &ancestry, name);
+        candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), key.clone(), key));
     }
     for (i, v) in resources.folders.iter().enumerate() {
-        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
-        let key = fallback_key("folder", &ancestry, &v.name);
-        candidates.push((&v.id, plugin_key(source_ids.folders.get(i)), key.clone(), key));
+        let source = original.folders.get(i);
+        let name = source.map(|s| s.name.as_str()).unwrap_or(v.name.as_str());
+        let ancestry =
+            ancestry_path(&folder_tree, source.and_then(|s| s.folder_id.as_deref()));
+        let key = fallback_key("folder", &ancestry, name);
+        candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), key.clone(), key));
     }
     for (i, v) in resources.http_requests.iter().enumerate() {
-        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
-        let method = if v.method.is_empty() { "GET" } else { v.method.as_str() };
-        let route = format!("{method} {}", v.url);
-        let (by_name, by_content) = derived_pair("http_request", &ancestry, &v.name, &route);
-        candidates.push((&v.id, plugin_key(source_ids.http_requests.get(i)), by_name, by_content));
+        let source = original.http_requests.get(i);
+        let s = source.unwrap_or(v);
+        let ancestry = ancestry_path(&folder_tree, s.folder_id.as_deref());
+        let method = if s.method.is_empty() { "GET" } else { s.method.as_str() };
+        let route = format!("{method} {}", s.url);
+        let (by_name, by_content) = derived_pair("http_request", &ancestry, &s.name, &route);
+        candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), by_name, by_content));
     }
     for (i, v) in resources.grpc_requests.iter().enumerate() {
-        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
-        let service = v.service.clone().unwrap_or_default();
-        let method = v.method.clone().unwrap_or_default();
-        let route = format!("{} {service}/{method}", v.url);
-        let (by_name, by_content) = derived_pair("grpc_request", &ancestry, &v.name, &route);
-        candidates.push((&v.id, plugin_key(source_ids.grpc_requests.get(i)), by_name, by_content));
+        let source = original.grpc_requests.get(i);
+        let s = source.unwrap_or(v);
+        let ancestry = ancestry_path(&folder_tree, s.folder_id.as_deref());
+        let service = s.service.clone().unwrap_or_default();
+        let method = s.method.clone().unwrap_or_default();
+        let route = format!("{} {service}/{method}", s.url);
+        let (by_name, by_content) = derived_pair("grpc_request", &ancestry, &s.name, &route);
+        candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), by_name, by_content));
     }
     for (i, v) in resources.websocket_requests.iter().enumerate() {
-        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
-        let (by_name, by_content) = derived_pair("websocket_request", &ancestry, &v.name, &v.url);
-        candidates.push((
-            &v.id,
-            plugin_key(source_ids.websocket_requests.get(i)),
-            by_name,
-            by_content,
-        ));
+        let source = original.websocket_requests.get(i);
+        let s = source.unwrap_or(v);
+        let ancestry = ancestry_path(&folder_tree, s.folder_id.as_deref());
+        let (by_name, by_content) = derived_pair("websocket_request", &ancestry, &s.name, &s.url);
+        candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), by_name, by_content));
     }
 
     // A name shared by several resources identifies none of them, so every member of the group
@@ -753,6 +1328,7 @@ mod tests {
             },
             imported_resources(),
             None,
+            None,
         )
         .expect("plan import");
 
@@ -855,6 +1431,7 @@ mod tests {
             ImportDestination::NewWorkspace,
             resources,
             None,
+            None,
         )
         .expect("plan import");
 
@@ -921,6 +1498,7 @@ mod tests {
             },
             resources,
             None,
+            None,
         )
         .expect("plan import");
 
@@ -950,6 +1528,7 @@ mod tests {
             ImportDestination::NewWorkspace,
             imported_resources(),
             None,
+            Some(linked_origin()),
         )
         .expect("plan import");
         let workspace_id = plan.resources.workspaces[0].id.clone();
@@ -968,6 +1547,10 @@ mod tests {
         let db = query_manager.connect();
         assert!(db.get_workspace(&workspace_id).is_err(), "workspace insert must roll back");
         assert!(db.get_environment(&environment_id).is_err(), "environment must not exist");
+        assert!(
+            db.list_import_sources(&workspace_id).expect("list import sources").is_empty(),
+            "import source must roll back"
+        );
     }
 
     fn request_key<'a>(plan: &'a ImportPlan, name: &str) -> &'a str {
@@ -992,6 +1575,7 @@ mod tests {
             ImportDestination::NewWorkspace,
             resources,
             source_keys,
+            None,
         )
         .expect("plan import")
     }
@@ -1105,4 +1689,491 @@ mod tests {
         assert!(!request_key(&plan, "Root Request").starts_with("fb:"));
         assert!(request_key(&plan, "Nested Request").starts_with("fb:"));
     }
+
+    fn linked_origin() -> ImportOrigin {
+        ImportOrigin { origin: "/tmp/api.yaml".to_string(), label: "api.yaml".to_string() }
+    }
+
+    fn importer_keys() -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("ev_source_base".to_string(), "env:base".to_string()),
+            ("fl_source".to_string(), "folder:src".to_string()),
+            ("rq_root".to_string(), "op:root".to_string()),
+            ("rq_nested".to_string(), "op:nested".to_string()),
+            ("rq_extra".to_string(), "op:extra".to_string()),
+        ])
+    }
+
+    fn first_import(query_manager: &QueryManager) -> BatchUpsertResult {
+        let plan = plan_import_resources(
+            query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            Some(importer_keys()),
+            Some(linked_origin()),
+        )
+        .expect("plan first import");
+        commit_import_plan(query_manager, plan).expect("commit first import")
+    }
+
+    fn replan(
+        query_manager: &QueryManager,
+        workspace_id: &str,
+        resources: ImportResources,
+    ) -> ImportPlan {
+        plan_import_resources(
+            query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::ExistingWorkspace {
+                workspace_id: workspace_id.to_string(),
+                folder_id: None,
+            },
+            resources,
+            Some(importer_keys()),
+            Some(linked_origin()),
+        )
+        .expect("plan re-import")
+    }
+
+    fn item_by_name<'a>(plan: &'a ImportPlan, name: &str) -> &'a ImportPlanItem {
+        plan.items
+            .iter()
+            .find(|i| i.name == name)
+            .unwrap_or_else(|| panic!("no plan item named {name}: {:?}", plan.items))
+    }
+
+    #[test]
+    fn commit_records_the_linked_source_and_snapshots() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+
+        let source = {
+            let db = query_manager.connect();
+            let source = db
+                .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
+                .expect("query import source")
+                .expect("import source recorded");
+            assert_eq!(source.origin_label, "api.yaml");
+
+            let rows = db.list_import_source_resources(&source.id).expect("list resource rows");
+            assert_eq!(rows.len(), 4, "one row per non-workspace resource: {rows:?}");
+            for row in &rows {
+                let snapshot: Value = serde_json::from_str(&row.snapshot).expect("parse snapshot");
+                let resource = ImportResourceType::from_str(&row.model_type)
+                    .expect("row has a known resource type");
+                let current = existing_model_json(&db, resource, &row.model_id)
+                    .expect("query current model")
+                    .expect("row target exists");
+                assert_eq!(comparable(snapshot), comparable(current));
+            }
+            source
+        };
+
+        // Re-importing the identical document is a no-op offer: everything unchanged,
+        // ancestry re-rooting does not count as a change, and the base environment it
+        // created stays the base environment.
+        let plan = replan(&query_manager, &workspace_id, imported_resources());
+        assert!(
+            plan.items.iter().all(|i| i.action == ImportPlanAction::Unchanged),
+            "expected all unchanged: {:?}",
+            plan.items
+        );
+        let base = plan
+            .resources
+            .environments
+            .iter()
+            .find(|e| e.name == "Global Variables")
+            .expect("base environment keeps its original name");
+        assert_eq!(base.parent_model, "workspace");
+        commit_import_plan(&query_manager, plan).expect("commit re-import");
+
+        let db = query_manager.connect();
+        assert_eq!(db.list_http_requests(&workspace_id).expect("list requests").len(), 2);
+        assert_eq!(db.list_folders(&workspace_id).expect("list folders").len(), 1);
+        assert_eq!(
+            db.list_environments_ensure_base(&workspace_id).expect("list environments").len(),
+            1
+        );
+        let rows = db.list_import_source_resources(&source.id).expect("list resource rows");
+        assert_eq!(rows.len(), 4, "re-commit replaces rows instead of accumulating");
+    }
+
+    #[test]
+    fn re_import_merges_source_and_local_changes() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        {
+            let db = query_manager.connect();
+            let nested = db
+                .list_http_requests(&workspace_id)
+                .expect("list requests")
+                .into_iter()
+                .find(|r| r.name == "Nested Request")
+                .expect("nested request");
+            db.upsert_http_request(
+                &HttpRequest {
+                    url: "https://example.com/nested-local".to_string(),
+                    ..nested.clone()
+                },
+                &UpdateSource::Background,
+            )
+            .expect("edit nested request locally");
+        }
+
+        let mut resources = imported_resources();
+        resources.http_requests[0].url = "https://example.com/root-v2".to_string();
+        resources.http_requests.push(HttpRequest {
+            id: "rq_extra".to_string(),
+            model: "http_request".to_string(),
+            workspace_id: "wk_source".to_string(),
+            name: "Extra Request".to_string(),
+            method: "GET".to_string(),
+            url: "https://example.com/extra".to_string(),
+            ..Default::default()
+        });
+
+        let plan = replan(&query_manager, &workspace_id, resources);
+        let root = item_by_name(&plan, "Root Request");
+        assert_eq!(root.action, ImportPlanAction::Update);
+        assert!(root.selected);
+        assert_eq!(root.model_id, root_id, "update targets the mapped model");
+        let nested = item_by_name(&plan, "Nested Request");
+        assert_eq!(nested.action, ImportPlanAction::KeepLocal);
+        assert!(!nested.selected);
+        let extra = item_by_name(&plan, "Extra Request");
+        assert_eq!(extra.action, ImportPlanAction::Create);
+        assert!(extra.selected);
+        assert_eq!(item_by_name(&plan, "Imported Folder").action, ImportPlanAction::Unchanged);
+
+        commit_import_plan(&query_manager, plan).expect("commit merge");
+
+        let db = query_manager.connect();
+        let requests = db.list_http_requests(&workspace_id).expect("list requests");
+        assert_eq!(requests.len(), 3);
+        assert_eq!(
+            requests.iter().find(|r| r.name == "Root Request").expect("root").url,
+            "https://example.com/root-v2"
+        );
+        assert_eq!(
+            requests.iter().find(|r| r.name == "Nested Request").expect("nested").url,
+            "https://example.com/nested-local"
+        );
+    }
+
+    #[test]
+    fn rename_in_source_updates_the_same_model() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        let mut resources = imported_resources();
+        resources.http_requests[0].name = "Root Request Renamed".to_string();
+        let plan = replan(&query_manager, &workspace_id, resources);
+        let renamed = item_by_name(&plan, "Root Request Renamed");
+        assert_eq!(renamed.action, ImportPlanAction::Update);
+        assert_eq!(renamed.model_id, root_id);
+
+        commit_import_plan(&query_manager, plan).expect("commit rename");
+        let requests =
+            query_manager.connect().list_http_requests(&workspace_id).expect("list requests");
+        assert_eq!(requests.len(), 2, "rename must not duplicate");
+        assert!(requests.iter().any(|r| r.id == root_id && r.name == "Root Request Renamed"));
+    }
+
+    #[test]
+    fn keep_mine_conflicts_advance_and_are_not_offered_again() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        {
+            let db = query_manager.connect();
+            let root = db.get_http_request(&root_id).expect("get root");
+            db.upsert_http_request(
+                &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
+                &UpdateSource::Background,
+            )
+            .expect("edit root locally");
+        }
+
+        let mut resources = imported_resources();
+        resources.http_requests[0].url = "https://example.com/root-v2".to_string();
+
+        let plan = replan(&query_manager, &workspace_id, resources.clone());
+        let root = item_by_name(&plan, "Root Request");
+        assert_eq!(root.action, ImportPlanAction::Conflict);
+        assert_eq!(root.resolution, Some(ImportConflictResolution::KeepMine));
+        commit_import_plan(&query_manager, plan).expect("commit keep-mine");
+
+        assert_eq!(
+            query_manager.connect().get_http_request(&root_id).expect("get root").url,
+            "https://example.com/root-local",
+            "keep-mine must not overwrite the local edit"
+        );
+
+        // The decision was recorded, so the same source version stops nagging.
+        let plan = replan(&query_manager, &workspace_id, resources);
+        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::KeepLocal);
+
+        // A newer source version conflicts again; taking it overwrites the local edit.
+        let mut resources = imported_resources();
+        resources.http_requests[0].url = "https://example.com/root-v3".to_string();
+        let mut plan = replan(&query_manager, &workspace_id, resources.clone());
+        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Conflict);
+        for item in plan.items.iter_mut() {
+            if item.action == ImportPlanAction::Conflict {
+                item.resolution = Some(ImportConflictResolution::TakeSource);
+            }
+        }
+        commit_import_plan(&query_manager, plan).expect("commit take-source");
+        assert_eq!(
+            query_manager.connect().get_http_request(&root_id).expect("get root").url,
+            "https://example.com/root-v3"
+        );
+        let plan = replan(&query_manager, &workspace_id, resources);
+        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Unchanged);
+    }
+
+    #[test]
+    fn deselected_update_is_offered_again_next_import() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+
+        let mut resources = imported_resources();
+        resources.http_requests[0].url = "https://example.com/root-v2".to_string();
+
+        let mut plan = replan(&query_manager, &workspace_id, resources.clone());
+        for item in plan.items.iter_mut() {
+            if item.action == ImportPlanAction::Update {
+                item.selected = false;
+            }
+        }
+        commit_import_plan(&query_manager, plan).expect("commit with deselected update");
+
+        let db = query_manager.connect();
+        let root = db
+            .list_http_requests(&workspace_id)
+            .expect("list requests")
+            .into_iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request");
+        assert_eq!(root.url, "https://example.com/root", "deselected update must not apply");
+        drop(db);
+
+        let plan = replan(&query_manager, &workspace_id, resources);
+        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Update);
+    }
+
+    #[test]
+    fn source_removals_are_deselected_offers_until_applied() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+
+        let mut resources = imported_resources();
+        resources.http_requests.remove(1);
+
+        let plan = replan(&query_manager, &workspace_id, resources.clone());
+        let removal = item_by_name(&plan, "Nested Request");
+        assert_eq!(removal.action, ImportPlanAction::Delete);
+        assert!(!removal.selected, "deletions default to deselected");
+        commit_import_plan(&query_manager, plan).expect("commit with default selection");
+        assert_eq!(
+            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            2,
+            "deselected deletion must not delete"
+        );
+
+        let mut plan = replan(&query_manager, &workspace_id, resources.clone());
+        assert_eq!(item_by_name(&plan, "Nested Request").action, ImportPlanAction::Delete);
+        for item in plan.items.iter_mut() {
+            if item.action == ImportPlanAction::Delete {
+                item.selected = true;
+            }
+        }
+        commit_import_plan(&query_manager, plan).expect("commit with deletion");
+        assert_eq!(
+            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            1
+        );
+
+        let plan = replan(&query_manager, &workspace_id, resources);
+        assert!(
+            plan.items.iter().all(|i| i.action != ImportPlanAction::Delete),
+            "applied deletion must not be offered again: {:?}",
+            plan.items
+        );
+    }
+
+    #[test]
+    fn locally_deleted_mapped_model_plans_as_create() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        query_manager
+            .connect()
+            .delete_http_request_by_id(&root_id, &UpdateSource::Background)
+            .expect("delete root locally");
+
+        let plan = replan(&query_manager, &workspace_id, imported_resources());
+        let root = item_by_name(&plan, "Root Request");
+        assert_eq!(root.action, ImportPlanAction::Create, "no silent resurrection as an update");
+        assert_ne!(root.model_id, root_id);
+
+        commit_import_plan(&query_manager, plan).expect("commit re-create");
+        assert_eq!(
+            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            2
+        );
+    }
+
+    #[test]
+    fn deselecting_a_new_folder_skips_its_descendants() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let mut plan = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            Some(importer_keys()),
+            Some(linked_origin()),
+        )
+        .expect("plan import");
+
+        assert_eq!(plan.items.len(), 4, "one create item per non-workspace resource");
+        assert!(plan.items.iter().all(|i| i.action == ImportPlanAction::Create && i.selected));
+
+        for item in plan.items.iter_mut() {
+            if item.model == ImportResourceType::Folder {
+                item.selected = false;
+            }
+        }
+        let committed = commit_import_plan(&query_manager, plan).expect("commit import");
+        let workspace_id = committed.workspaces[0].id.clone();
+
+        let db = query_manager.connect();
+        assert!(db.list_folders(&workspace_id).expect("list folders").is_empty());
+        let requests = db.list_http_requests(&workspace_id).expect("list requests");
+        assert_eq!(requests.len(), 1, "requests inside the skipped folder are skipped too");
+        assert_eq!(requests[0].name, "Root Request");
+
+        let source = db
+            .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
+            .expect("query import source")
+            .expect("import source recorded");
+        let rows = db.list_import_source_resources(&source.id).expect("list resource rows");
+        assert_eq!(rows.len(), 2, "skipped resources must not advance snapshots: {rows:?}");
+    }
+
+
+#[test]
+fn desktop_style_json_roundtrip_records_source() {
+    let (query_manager, _blob_manager, _rx) =
+        yaak_models::init_in_memory().expect("initialize database");
+    let plan = plan_import_resources(
+        &query_manager,
+        "OpenAPI".to_string(),
+        ImportDestination::NewWorkspace,
+        imported_resources(),
+        None,
+        Some(linked_origin()),
+    )
+    .expect("plan import");
+    let json = serde_json::to_string(&plan).expect("serialize plan");
+    let plan: ImportPlan = serde_json::from_str(&json).expect("deserialize plan");
+    let committed = commit_import_plan(&query_manager, plan).expect("commit");
+    let workspace_id = committed.workspaces[0].id.clone();
+    let source = query_manager
+        .connect()
+        .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
+        .expect("query")
+        .expect("source recorded after JSON round-trip");
+    assert_eq!(source.origin_label, "api.yaml");
+}
+
+#[test]
+fn selected_keep_local_reverts_the_local_edit() {
+    let (query_manager, _blob_manager, _rx) =
+        yaak_models::init_in_memory().expect("initialize database");
+    let committed = first_import(&query_manager);
+    let workspace_id = committed.workspaces[0].id.clone();
+    let root_id = committed
+        .http_requests
+        .iter()
+        .find(|r| r.name == "Root Request")
+        .expect("root request")
+        .id
+        .clone();
+
+    {
+        let db = query_manager.connect();
+        let root = db.get_http_request(&root_id).expect("get root");
+        db.upsert_http_request(
+            &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
+            &UpdateSource::Background,
+        )
+        .expect("edit root locally");
+    }
+
+    let mut plan = replan(&query_manager, &workspace_id, imported_resources());
+    let root = item_by_name(&plan, "Root Request");
+    assert_eq!(root.action, ImportPlanAction::KeepLocal);
+    assert!(!root.selected, "keep-local defaults to keeping the local edit");
+    for item in plan.items.iter_mut() {
+        if item.action == ImportPlanAction::KeepLocal {
+            item.selected = true;
+        }
+    }
+    commit_import_plan(&query_manager, plan).expect("commit revert");
+
+    assert_eq!(
+        query_manager.connect().get_http_request(&root_id).expect("get root").url,
+        "https://example.com/root",
+        "selected keep-local must revert to the source version"
+    );
+    let plan = replan(&query_manager, &workspace_id, imported_resources());
+    assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Unchanged);
+}
 }

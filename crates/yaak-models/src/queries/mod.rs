@@ -11,6 +11,8 @@ mod grpc_requests;
 mod http_requests;
 mod http_response_events;
 mod http_responses;
+mod import_source_resources;
+mod import_sources;
 mod key_values;
 mod model_changes;
 mod plugin_key_values;

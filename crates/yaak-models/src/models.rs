@@ -3022,6 +3022,123 @@ impl<'s> TryFrom<&Row<'s>> for PluginKeyValue {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "import_sources")]
+pub struct ImportSource {
+    #[ts(type = "\"import_source\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+
+    pub importer: String,
+    pub origin: String,
+    pub origin_label: String,
+    pub last_imported_at: NaiveDateTime,
+}
+
+impl UpsertModelInfo for ImportSource {
+    fn table_name() -> impl IntoTableRef + IntoIden {
+        ImportSourceIden::Table
+    }
+
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        ImportSourceIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("im")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (ImportSourceIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use ImportSourceIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (Importer, self.importer.into()),
+            (Origin, self.origin.into()),
+            (OriginLabel, self.origin_label.into()),
+            (LastImportedAt, self.last_imported_at.into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![
+            ImportSourceIden::UpdatedAt,
+            ImportSourceIden::Importer,
+            ImportSourceIden::Origin,
+            ImportSourceIden::OriginLabel,
+            ImportSourceIden::LastImportedAt,
+        ]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self {
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            workspace_id: row.get("workspace_id")?,
+            importer: row.get("importer")?,
+            origin: row.get("origin")?,
+            origin_label: row.get("origin_label")?,
+            last_imported_at: row.get("last_imported_at")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "import_source_resources")]
+pub struct ImportSourceResource {
+    #[ts(type = "\"import_source_resource\"")]
+    pub model: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+
+    pub import_source_id: String,
+    pub source_key: String,
+    pub model_type: String,
+    pub model_id: String,
+    pub snapshot: String,
+}
+
+impl<'s> TryFrom<&Row<'s>> for ImportSourceResource {
+    type Error = rusqlite::Error;
+
+    fn try_from(r: &Row<'s>) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            model: r.get("model")?,
+            created_at: r.get("created_at")?,
+            updated_at: r.get("updated_at")?,
+            import_source_id: r.get("import_source_id")?,
+            source_key: r.get("source_key")?,
+            model_type: r.get("model_type")?,
+            model_id: r.get("model_id")?,
+            snapshot: r.get("snapshot")?,
+        })
+    }
+}
+
 /// Only used as a `from_row` fallback for an unparseable settings column. The
 /// value a *new* model gets comes from that model's `Default` impl.
 fn default_request_message_size_setting() -> InheritedIntSetting {
@@ -3093,6 +3210,7 @@ define_any_model! {
     HttpRequest,
     HttpResponse,
     HttpResponseEvent,
+    ImportSource,
     KeyValue,
     Plugin,
     Settings,
@@ -3125,6 +3243,7 @@ impl<'de> Deserialize<'de> for AnyModel {
             Some(m) if m == "http_request" => HttpRequest(fv(value).unwrap()),
             Some(m) if m == "http_response" => HttpResponse(fv(value).unwrap()),
             Some(m) if m == "http_response_event" => HttpResponseEvent(fv(value).unwrap()),
+            Some(m) if m == "import_source" => ImportSource(fv(value).unwrap()),
             Some(m) if m == "key_value" => KeyValue(fv(value).unwrap()),
             Some(m) if m == "plugin" => Plugin(fv(value).unwrap()),
             Some(m) if m == "settings" => Settings(fv(value).unwrap()),

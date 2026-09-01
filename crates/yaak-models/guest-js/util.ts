@@ -12,6 +12,7 @@ export function newStoreData(): ModelStoreData {
     http_request: {},
     http_response: {},
     http_response_event: {},
+    import_source: {},
     key_value: {},
     plugin: {},
     settings: {},

@@ -209,6 +209,7 @@ impl TryFrom<AnyModel> for SyncModel {
             AnyModel::GrpcEvent(m) => return Err(UnknownModel(m.model)),
             AnyModel::HttpResponse(m) => return Err(UnknownModel(m.model)),
             AnyModel::HttpResponseEvent(m) => return Err(UnknownModel(m.model)),
+            AnyModel::ImportSource(m) => return Err(UnknownModel(m.model)),
             AnyModel::KeyValue(m) => return Err(UnknownModel(m.model)),
             AnyModel::Plugin(m) => return Err(UnknownModel(m.model)),
             AnyModel::Settings(m) => return Err(UnknownModel(m.model)),
@@ -225,6 +226,14 @@ impl TryFrom<AnyModel> for SyncModel {
 mod migration_tests {
     use crate::error::Result;
     use crate::models::SyncModel;
+
+    #[test]
+    fn import_sources_are_excluded_from_sync() {
+        let model = yaak_models::models::AnyModel::ImportSource(
+            yaak_models::models::ImportSource::default(),
+        );
+        assert!(SyncModel::try_from(model).is_err());
+    }
 
     #[test]
     fn deserializes_environment_via_syncmodel_with_fixups() -> Result<()> {

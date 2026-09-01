@@ -5,15 +5,20 @@ use std::fs;
 use std::io::ErrorKind;
 use yaak::export::{self, ExportDataParams};
 use yaak::import;
-use yaak_models::util::{BatchUpsertResult, ImportDestination};
+use yaak_models::util::{
+    BatchUpsertResult, ImportDestination, ImportOrigin, ImportPlanAction, ImportPlanItem,
+};
 use yaak_plugins::events::{ImportResources, PluginContext};
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
 
 pub async fn run_import(ctx: &CliContext, args: ImportArgs) -> i32 {
     match import(ctx, args).await {
-        Ok(result) => {
+        Ok((result, items)) => {
             println!("Imported {}", format_counts(&result));
+            if let Some(skipped) = format_skipped(&items) {
+                println!("Skipped {skipped}");
+            }
             0
         }
         Err(error) => {
@@ -36,7 +41,10 @@ pub fn run_export(ctx: &CliContext, args: ExportArgs) -> i32 {
     }
 }
 
-async fn import(ctx: &CliContext, args: ImportArgs) -> CommandResult<BatchUpsertResult> {
+async fn import(
+    ctx: &CliContext,
+    args: ImportArgs,
+) -> CommandResult<(BatchUpsertResult, Vec<ImportPlanItem>)> {
     if let Some(workspace_id) = args.workspace_id.as_deref() {
         ctx.db()
             .get_workspace(workspace_id)
@@ -69,11 +77,48 @@ async fn import(ctx: &CliContext, args: ImportArgs) -> CommandResult<BatchUpsert
         destination,
         resources,
         import_result.source_keys,
+        Some(file_origin(&args.file)),
     )
     .map_err(|e| format!("Failed to plan import: {e}"))?;
+    let items = plan.items.clone();
     let imported = import::commit_import_plan(ctx.query_manager(), plan)
         .map_err(|e| format!("Failed to import data: {e}"))?;
-    Ok(imported)
+    Ok((imported, items))
+}
+
+fn file_origin(path: &std::path::Path) -> ImportOrigin {
+    let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let label = canonical
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.display().to_string());
+    ImportOrigin { origin: canonical.to_string_lossy().to_string(), label }
+}
+
+/// Summarize what the default selection left untouched during a merging re-import.
+fn format_skipped(items: &[ImportPlanItem]) -> Option<String> {
+    let count = |action: ImportPlanAction| items.iter().filter(|i| i.action == action).count();
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
+
+    let mut parts = Vec::new();
+    let deletions = count(ImportPlanAction::Delete);
+    if deletions > 0 {
+        parts.push(format!("{deletions} removed from source (not deleted locally)"));
+    }
+    let conflicts = count(ImportPlanAction::Conflict);
+    if conflicts > 0 {
+        parts.push(format!("{conflicts} conflict{} (kept local changes)", plural(conflicts)));
+    }
+    let keep_local = count(ImportPlanAction::KeepLocal);
+    if keep_local > 0 {
+        parts.push(format!("{keep_local} with local edits"));
+    }
+    let unchanged = count(ImportPlanAction::Unchanged);
+    if unchanged > 0 {
+        parts.push(format!("{unchanged} unchanged"));
+    }
+
+    if parts.is_empty() { None } else { Some(parts.join(", ")) }
 }
 
 fn export(ctx: &CliContext, args: ExportArgs) -> CommandResult<usize> {

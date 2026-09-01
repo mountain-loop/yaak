@@ -21,7 +21,8 @@ use yaak_git::{
 use yaak_grpc::ServiceDefinition;
 use yaak_models::models::{
     AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
-    HttpResponseEvent, Plugin, Settings, WebsocketConnection, WebsocketEvent, WorkspaceMeta,
+    HttpResponseEvent, ImportSource, Plugin, Settings, WebsocketConnection, WebsocketEvent,
+    WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan};
 use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
@@ -245,6 +246,23 @@ pub struct CmdImportUrlReq {
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct CmdCommitImportReq {
     pub plan: ImportPlan,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdListImportSourcesReq {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdImportSourcesForOriginReq {
+    #[ts(optional)]
+    pub file_path: Option<String>,
+    #[ts(optional)]
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -921,6 +939,8 @@ macro_rules! with_commands {
     cmd_import_data(CmdImportDataReq) -> ImportPlan,
     cmd_import_url(CmdImportUrlReq) -> ImportPlan,
     cmd_commit_import(CmdCommitImportReq) -> BatchUpsertResult,
+    cmd_list_import_sources(CmdListImportSourcesReq) -> Vec<ImportSource>,
+    cmd_import_sources_for_origin(CmdImportSourcesForOriginReq) -> Vec<ImportSource>,
     cmd_http_request_actions(CmdHttpRequestActionsReq) -> Vec<GetHttpRequestActionsResponse>,
     cmd_websocket_request_actions(CmdWebsocketRequestActionsReq) -> Vec<GetWebsocketRequestActionsResponse>,
     cmd_call_websocket_request_action(CmdCallWebsocketRequestActionReq) -> (),

@@ -111,6 +111,90 @@ pub struct ImportPlanWarning {
     pub detail: String,
 }
 
+/// Where an import's contents came from, used to link the committed workspace back to it.
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportOrigin {
+    /// The absolute file path or URL the contents were read from.
+    pub origin: String,
+    pub label: String,
+}
+
+/// The model types an import plan can contain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportResourceType {
+    Environment,
+    Folder,
+    GrpcRequest,
+    HttpRequest,
+    WebsocketRequest,
+    Workspace,
+}
+
+impl ImportResourceType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImportResourceType::Environment => "environment",
+            ImportResourceType::Folder => "folder",
+            ImportResourceType::GrpcRequest => "grpc_request",
+            ImportResourceType::HttpRequest => "http_request",
+            ImportResourceType::WebsocketRequest => "websocket_request",
+            ImportResourceType::Workspace => "workspace",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "environment" => Some(ImportResourceType::Environment),
+            "folder" => Some(ImportResourceType::Folder),
+            "grpc_request" => Some(ImportResourceType::GrpcRequest),
+            "http_request" => Some(ImportResourceType::HttpRequest),
+            "websocket_request" => Some(ImportResourceType::WebsocketRequest),
+            "workspace" => Some(ImportResourceType::Workspace),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportPlanAction {
+    Create,
+    Update,
+    Delete,
+    Unchanged,
+    KeepLocal,
+    Conflict,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportConflictResolution {
+    KeepMine,
+    TakeSource,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlanItem {
+    pub action: ImportPlanAction,
+    pub model: ImportResourceType,
+    pub model_id: String,
+    pub name: String,
+    /// Planned parent folder ID for incoming resources; current parent for deletions.
+    #[ts(optional)]
+    pub parent_id: Option<String>,
+    pub selected: bool,
+    #[ts(optional)]
+    pub resolution: Option<ImportConflictResolution>,
+}
+
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
@@ -120,8 +204,16 @@ pub struct ImportPlan {
     pub resources: BatchUpsertResult,
     pub warnings: Vec<ImportPlanWarning>,
 
-    /// Stable source key for every model in `resources`, keyed by its freshly minted ID.
+    /// Stable source key for every model in `resources`, keyed by its planned ID.
     pub source_keys: BTreeMap<String, String>,
+
+    /// One entry per plannable resource; commit applies only the selected ones.
+    #[serde(default)]
+    pub items: Vec<ImportPlanItem>,
+
+    #[serde(default)]
+    #[ts(optional)]
+    pub origin: Option<ImportOrigin>,
 }
 
 pub fn get_workspace_export_resources(
