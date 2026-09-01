@@ -32,7 +32,6 @@ use yaak_plugins::events::{
     ShowToastRequest, TemplateRenderResponse, WindowInfoResponse, WindowNavigateEvent,
     WorkspaceInfo,
 };
-use yaak_plugins::manager::PluginManager;
 use yaak_plugins::plugin_handle::PluginHandle;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
@@ -205,7 +204,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 req.grpc_request.folder_id.as_deref(),
                 environment_id.as_deref(),
             )?;
-            let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+            let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(app_handle).await?);
             let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
             let cb = PluginTemplateCallback::new(
                 plugin_manager,
@@ -231,7 +230,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 req.http_request.folder_id.as_deref(),
                 environment_id.as_deref(),
             )?;
-            let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+            let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(app_handle).await?);
             let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
             let cb = PluginTemplateCallback::new(
                 plugin_manager,
@@ -267,7 +266,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 folder_id.as_deref(),
                 environment_id.as_deref(),
             )?;
-            let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+            let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(app_handle).await?);
             let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
             let cb = PluginTemplateCallback::new(
                 plugin_manager,

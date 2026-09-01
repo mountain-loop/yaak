@@ -14,7 +14,6 @@ use tokio::task::block_in_place;
 use tokio::time::sleep;
 use ts_rs::TS;
 use yaak_models::util::generate_id;
-use yaak_plugins::manager::PluginManager;
 
 use url::Url;
 use yaak_api::get_system_proxy_url;
@@ -98,8 +97,9 @@ impl YaakUpdater {
                 block_in_place(|| {
                     tauri::async_runtime::block_on(async move {
                         info!("Shutting down plugin manager before update");
-                        let plugin_manager = w.state::<PluginManager>();
-                        plugin_manager.terminate().await;
+                        if let Ok(plugin_manager) = crate::plugins_ext::plugin_manager(&w).await {
+                            plugin_manager.terminate().await;
+                        }
                     });
                 });
             })

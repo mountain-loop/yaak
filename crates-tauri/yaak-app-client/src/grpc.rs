@@ -3,11 +3,10 @@ use std::collections::BTreeMap;
 use crate::PluginContextExt;
 use crate::error::Result;
 use KeyAndValueRef::{Ascii, Binary};
-use tauri::{Manager, Runtime, WebviewWindow};
+use tauri::{Runtime, WebviewWindow};
 use yaak_grpc::{KeyAndValueRef, MetadataMap};
 use yaak_models::models::GrpcRequest;
 use yaak_plugins::events::{CallHttpAuthenticationRequest, HttpHeader};
-use yaak_plugins::manager::PluginManager;
 
 pub(crate) fn metadata_to_map(metadata: MetadataMap) -> BTreeMap<String, String> {
     let mut entries = BTreeMap::new();
@@ -26,7 +25,7 @@ pub(crate) async fn build_metadata<R: Runtime>(
     request: &GrpcRequest,
     authentication_context_id: &str,
 ) -> Result<BTreeMap<String, String>> {
-    let plugin_manager = window.state::<PluginManager>();
+    let plugin_manager = crate::plugins_ext::plugin_manager(window).await?;
     let mut metadata = BTreeMap::new();
 
     // Add the rest of metadata

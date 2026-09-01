@@ -31,9 +31,42 @@ use yaak_plugins::api::{
 use yaak_plugins::events::{Color, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
+use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::plugin_meta::get_plugin_meta;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
+
+// ============================================================================
+// Plugin Manager Handle
+// ============================================================================
+
+/// The plugin runtime boots in the background so startup doesn't wait on it.
+/// This handle is the only way to reach the manager: [`PluginManagerHandle::get`]
+/// resolves once boot completes, so callers can never observe a
+/// partially-initialized runtime.
+#[derive(Clone)]
+pub struct PluginManagerHandle {
+    rx: tokio::sync::watch::Receiver<Option<std::result::Result<PluginManager, String>>>,
+}
+
+impl PluginManagerHandle {
+    pub async fn get(&self) -> yaak_plugins::error::Result<PluginManager> {
+        let mut rx = self.rx.clone();
+        let result = rx
+            .wait_for(|v| v.is_some())
+            .await
+            .map_err(|_| PluginErr("Plugin runtime boot task died".to_string()))?;
+        result.clone().unwrap().map_err(PluginErr)
+    }
+}
+
+/// Wait for the plugin runtime to finish booting and return the manager.
+pub async fn plugin_manager<R: Runtime>(
+    manager: &impl Manager<R>,
+) -> yaak_plugins::error::Result<PluginManager> {
+    let handle = manager.state::<PluginManagerHandle>().inner().clone();
+    handle.get().await
+}
 
 // ============================================================================
 // Plugin Updater
@@ -146,7 +179,7 @@ pub async fn cmd_plugins_install<R: Runtime>(
     name: &str,
     version: Option<String>,
 ) -> Result<()> {
-    let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
+    let plugin_manager = Arc::new(plugin_manager(&window).await?);
     let app_version = window.app_handle().package_info().version.to_string();
     let http_client = yaak_api_client(ApiClientKind::App, &app_version)?;
     let query_manager = window.state::<yaak_models::query_manager::QueryManager>();
@@ -167,6 +200,9 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     window: WebviewWindow<R>,
     directory: &str,
 ) -> Result<Plugin> {
+    // Resolve the manager before writing the row so startup's plugin snapshot
+    // can't include it and boot it a second time
+    let plugin_manager = Arc::new(plugin_manager(&window).await?);
     let plugin = window.db().upsert_plugin(
         &Plugin {
             directory: directory.into(),
@@ -178,7 +214,6 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
         &UpdateSource::from_window_label(window.label()),
     )?;
 
-    let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
     plugin_manager.add_plugin(&window.plugin_context(), &plugin).await?;
 
     Ok(plugin)
@@ -188,7 +223,7 @@ pub async fn cmd_plugins_uninstall<R: Runtime>(
     plugin_id: &str,
     window: WebviewWindow<R>,
 ) -> Result<Plugin> {
-    let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
+    let plugin_manager = Arc::new(plugin_manager(&window).await?);
     let query_manager = window.state::<yaak_models::query_manager::QueryManager>();
     let plugin_context = window.plugin_context();
     Ok(delete_and_uninstall(plugin_manager, &query_manager, &plugin_context, plugin_id).await?)
@@ -217,7 +252,7 @@ pub async fn cmd_plugins_update_all<R: Runtime>(
         return Ok(Vec::new());
     }
 
-    let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
+    let plugin_manager = Arc::new(plugin_manager(&window).await?);
     let query_manager = window.state::<yaak_models::query_manager::QueryManager>();
     let plugin_context = window.plugin_context();
 
@@ -300,20 +335,38 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let query_manager =
                 app_handle.state::<yaak_models::query_manager::QueryManager>().inner().clone();
 
-            // Create plugin manager asynchronously
+            // Boot the plugin runtime in the background so the window shows
+            // immediately. Everything that needs plugins resolves the handle,
+            // which waits for this task to finish.
+            let (tx, rx) = tokio::sync::watch::channel(None);
+            app_handle.manage(PluginManagerHandle { rx });
             let app_handle_clone = app_handle.clone();
-            tauri::async_runtime::block_on(async move {
-                let manager = PluginManager::new(
-                    vendored_plugin_dir,
-                    installed_plugin_dir,
-                    node_bin_path,
-                    plugin_runtime_main,
-                    &query_manager,
-                    &PluginContext::new_empty(),
-                    dev_mode,
+            tauri::async_runtime::spawn(async move {
+                let result = tokio::time::timeout(
+                    Duration::from_secs(60),
+                    PluginManager::new(
+                        vendored_plugin_dir,
+                        installed_plugin_dir,
+                        node_bin_path,
+                        plugin_runtime_main,
+                        &query_manager,
+                        &PluginContext::new_empty(),
+                        dev_mode,
+                    ),
                 )
                 .await
-                .expect("Failed to start plugin runtime");
+                .unwrap_or_else(|_| Err(yaak_plugins::error::Error::PluginErr(
+                    "Timed out starting the plugin runtime".to_string(),
+                )));
+
+                let manager = match result {
+                    Ok(manager) => manager,
+                    Err(e) => {
+                        error!("Failed to start plugin runtime: {e:?}");
+                        let _ = tx.send(Some(Err(e.to_string())));
+                        return;
+                    }
+                };
 
                 // Surface unexpected runtime crashes to the user
                 let mut crash_rx = manager.runtime_crash_rx();
@@ -339,7 +392,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 });
 
-                app_handle_clone.manage(manager);
+                let _ = tx.send(Some(Ok(manager)));
             });
 
             let plugin_updater = PluginUpdater::new();
@@ -355,8 +408,14 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 api.prevent_exit();
                 tauri::async_runtime::block_on(async move {
                     info!("Exiting plugin runtime due to app exit");
-                    let manager: State<PluginManager> = app.state();
-                    manager.terminate().await;
+                    // Bound the wait in case the exit comes while boot is still
+                    // in flight
+                    let get_manager = plugin_manager(app);
+                    if let Ok(Ok(manager)) =
+                        tokio::time::timeout(Duration::from_secs(5), get_manager).await
+                    {
+                        manager.terminate().await;
+                    }
                     app.exit(0);
                 });
             }

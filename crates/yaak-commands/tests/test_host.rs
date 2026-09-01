@@ -250,8 +250,11 @@ impl PluginHost for SingleThreadedHost {
         Err(yaak_commands::Error::Generic("no plugin runtime on this host".into()))
     }
 
-    fn template_callback(&self, _purpose: RenderPurpose) -> impl TemplateCallback {
-        NoTemplateFunctions
+    async fn template_callback(
+        &self,
+        _purpose: RenderPurpose,
+    ) -> yaak_commands::Result<impl TemplateCallback> {
+        Ok(NoTemplateFunctions)
     }
 
     async fn template_function_summaries(

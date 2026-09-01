@@ -45,7 +45,6 @@ use yaak_plugins::events::{
     Color, ErrorResponse, FilterResponse, InternalEvent, InternalEventPayload, PluginContext,
     RenderPurpose, ShowToastRequest,
 };
-use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_rpc_schema::{AppMetaData, EphemeralHttpResponse};
 use yaak_sse::sse::ServerSentEvent;
@@ -250,7 +249,7 @@ async fn cmd_grpc_reflect<R: Runtime>(
     let resolved_settings =
         app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
-    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(&app_handle).await?);
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let req = render_grpc_request(
         &resolved_request,
@@ -310,7 +309,7 @@ async fn cmd_grpc_go<R: Runtime>(
     let resolved_settings =
         app_handle.db().resolve_settings_for_grpc_request(&unrendered_request)?;
 
-    let plugin_manager = Arc::new((*app_handle.state::<PluginManager>()).clone());
+    let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(&app_handle).await?);
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_grpc_request(
         &resolved_request,
@@ -962,7 +961,6 @@ async fn cmd_format_graphql(text: &str) -> YaakResult<String> {
 
 async fn cmd_http_response_body<R: Runtime>(
     window: WebviewWindow<R>,
-    plugin_manager: State<'_, PluginManager>,
     response_id: &str,
     filter: Option<&str>,
 ) -> YaakResult<FilterResponse> {
@@ -977,7 +975,8 @@ async fn cmd_http_response_body<R: Runtime>(
         .ok_or(GenericError("Failed to find response body".to_string()))?;
 
     match filter {
-        Some(filter) if !filter.is_empty() => Ok(plugin_manager
+        Some(filter) if !filter.is_empty() => Ok(plugins_ext::plugin_manager(&window)
+            .await?
             .filter_data(&window.plugin_context(), filter, &body, content_type)
             .await?),
         _ => Ok(FilterResponse { content: body, error: None }),
@@ -1450,7 +1449,10 @@ fn safe_uri(endpoint: &str) -> String {
 fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
-        let plugin_manager: State<'_, PluginManager> = app_handle.state();
+        let plugin_manager = match plugins_ext::plugin_manager(&app_handle).await {
+            Ok(pm) => pm,
+            Err(_) => return, // The runtime failed to boot; there are no events
+        };
         let (rx_id, mut rx) = plugin_manager.subscribe("app").await;
 
         while let Some(event) = rx.recv().await {
@@ -1491,9 +1493,13 @@ fn monitor_plugin_events<R: Runtime>(app_handle: &AppHandle<R>) {
                     }
                 };
 
-                let plugin_manager: State<'_, PluginManager> = app_handle.state();
-                if let Err(e) = plugin_manager.reply(&event, &ev).await {
-                    warn!("Failed to reply to plugin manager: {:?}", e)
+                match plugins_ext::plugin_manager(&app_handle).await {
+                    Ok(pm) => {
+                        if let Err(e) = pm.reply(&event, &ev).await {
+                            warn!("Failed to reply to plugin manager: {:?}", e)
+                        }
+                    }
+                    Err(e) => warn!("Failed to get plugin manager for reply: {e:?}"),
                 }
             });
         }

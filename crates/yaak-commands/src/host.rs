@@ -121,7 +121,12 @@ pub trait PluginHost: Host {
     /// a render — the variables come from the environment chain, which is an
     /// ordinary database read — so handing back the callback keeps the rest of
     /// rendering shared instead of pushing whole commands behind this trait.
-    fn template_callback(&self, purpose: RenderPurpose) -> impl TemplateCallback;
+    /// Async so hosts that finish booting their plugin runtime in the
+    /// background can wait for it here.
+    fn template_callback(
+        &self,
+        purpose: RenderPurpose,
+    ) -> impl Future<Output = crate::Result<impl TemplateCallback>>;
 
     /// Every template function the installed plugins expose, for the
     /// autocomplete menu.

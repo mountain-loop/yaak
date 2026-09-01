@@ -12,7 +12,6 @@ use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
-use yaak_plugins::manager::PluginManager;
 
 pub(crate) async fn handle_deep_link<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -44,7 +43,7 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                 return Ok(());
             }
 
-            let plugin_manager = Arc::new((*window.state::<PluginManager>()).clone());
+            let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(window).await?);
             let query_manager = app_handle.db_manager();
             let app_version = app_handle.package_info().version.to_string();
             let http_client = yaak_api_client(ApiClientKind::App, &app_version)?;
