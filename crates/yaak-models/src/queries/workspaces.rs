@@ -6,8 +6,9 @@ use crate::models::{
     AnyModel, CookieJar, CookieJarIden, Environment, EnvironmentIden, Folder, FolderIden,
     GraphQlIntrospection, GraphQlIntrospectionIden, GrpcConnection, GrpcConnectionIden, GrpcEvent,
     GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader, HttpRequestIden,
-    HttpResponse, HttpResponseEvent, HttpResponseEventIden, HttpResponseIden,
-    ResolvedHttpRequestSettings, ResolvedSetting, SyncState, SyncStateIden, WebsocketConnection,
+    HttpResponse, HttpResponseEvent, HttpResponseEventIden, HttpResponseIden, ImportSource,
+    ImportSourceIden, ResolvedHttpRequestSettings, ResolvedSetting, SyncState, SyncStateIden,
+    WebsocketConnection,
     WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden, WebsocketRequest,
     WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
 };
@@ -85,6 +86,10 @@ impl<'a> ClientDb<'a> {
             self.delete_many_untracked::<Folder>(FolderIden::WorkspaceId, wid)?;
             self.delete_many_untracked::<Environment>(EnvironmentIden::WorkspaceId, wid)?;
             self.delete_many_untracked::<CookieJar>(CookieJarIden::WorkspaceId, wid)?;
+            for import_source in self.list_import_sources(wid)? {
+                self.delete_import_source_resources(&import_source.id)?;
+            }
+            self.delete_many_untracked::<ImportSource>(ImportSourceIden::WorkspaceId, wid)?;
             self.delete_many_untracked::<SyncState>(SyncStateIden::WorkspaceId, wid)?;
             self.delete_many_untracked::<WorkspaceMeta>(WorkspaceMetaIden::WorkspaceId, wid)?;
             self.delete(workspace, source)
