@@ -121,6 +121,44 @@ pub struct ImportOrigin {
     pub label: String,
 }
 
+/// The model types an import plan can contain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportResourceType {
+    Environment,
+    Folder,
+    GrpcRequest,
+    HttpRequest,
+    WebsocketRequest,
+    Workspace,
+}
+
+impl ImportResourceType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImportResourceType::Environment => "environment",
+            ImportResourceType::Folder => "folder",
+            ImportResourceType::GrpcRequest => "grpc_request",
+            ImportResourceType::HttpRequest => "http_request",
+            ImportResourceType::WebsocketRequest => "websocket_request",
+            ImportResourceType::Workspace => "workspace",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "environment" => Some(ImportResourceType::Environment),
+            "folder" => Some(ImportResourceType::Folder),
+            "grpc_request" => Some(ImportResourceType::GrpcRequest),
+            "http_request" => Some(ImportResourceType::HttpRequest),
+            "websocket_request" => Some(ImportResourceType::WebsocketRequest),
+            "workspace" => Some(ImportResourceType::Workspace),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_util.ts")]
@@ -146,7 +184,7 @@ pub enum ImportConflictResolution {
 #[ts(export, export_to = "gen_util.ts")]
 pub struct ImportPlanItem {
     pub action: ImportPlanAction,
-    pub model: String,
+    pub model: ImportResourceType,
     pub model_id: String,
     pub name: String,
     /// Planned parent folder ID for incoming resources; current parent for deletions.

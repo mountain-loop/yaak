@@ -11,7 +11,7 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{
     BatchUpsertResult, ImportConflictResolution, ImportDestination, ImportOrigin, ImportPlan,
-    ImportPlanAction, ImportPlanItem, ImportPlanWarning, UpdateSource,
+    ImportPlanAction, ImportPlanItem, ImportPlanWarning, ImportResourceType, UpdateSource,
 };
 use yaak_plugins::events::{ImportResources, PluginContext};
 use yaak_plugins::manager::PluginManager;
@@ -388,11 +388,11 @@ fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResul
         .filter(|i| i.action == ImportPlanAction::Delete && i.selected)
         .collect::<Vec<_>>();
     // Folders last so their cascade only has to cover what was not deleted explicitly.
-    for item in selected_deletes.iter().filter(|i| i.model != "folder") {
-        delete_existing_model(db, &item.model, &item.model_id)?;
+    for item in selected_deletes.iter().filter(|i| i.model != ImportResourceType::Folder) {
+        delete_existing_model(db, item.model, &item.model_id)?;
     }
-    for item in selected_deletes.iter().filter(|i| i.model == "folder") {
-        delete_existing_model(db, &item.model, &item.model_id)?;
+    for item in selected_deletes.iter().filter(|i| i.model == ImportResourceType::Folder) {
+        delete_existing_model(db, item.model, &item.model_id)?;
     }
 
     record_import_source(db, &plan, &items, &upserted)?;
@@ -400,25 +400,38 @@ fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResul
     Ok(upserted)
 }
 
-fn delete_existing_model(db: &ClientDb, model_type: &str, id: &str) -> Result<()> {
+/// A folder deletion may have already cascaded over the model, so absent models are skipped.
+fn delete_existing_model(db: &ClientDb, resource: ImportResourceType, id: &str) -> Result<()> {
+    use ImportResourceType::*;
     let source = &UpdateSource::Import;
-    match model_type {
-        "environment" if db.get_environment(id).is_ok() => {
-            db.delete_environment_by_id(id, source)?;
+    match resource {
+        Environment => {
+            if db.get_environment(id).is_ok() {
+                db.delete_environment_by_id(id, source)?;
+            }
         }
-        "folder" if db.get_folder(id).is_ok() => {
-            db.delete_folder_by_id(id, source)?;
+        Folder => {
+            if db.get_folder(id).is_ok() {
+                db.delete_folder_by_id(id, source)?;
+            }
         }
-        "http_request" if db.get_http_request(id).is_ok() => {
-            db.delete_http_request_by_id(id, source)?;
+        HttpRequest => {
+            if db.get_http_request(id).is_ok() {
+                db.delete_http_request_by_id(id, source)?;
+            }
         }
-        "grpc_request" if db.get_grpc_request(id).is_ok() => {
-            db.delete_grpc_request_by_id(id, source)?;
+        GrpcRequest => {
+            if db.get_grpc_request(id).is_ok() {
+                db.delete_grpc_request_by_id(id, source)?;
+            }
         }
-        "websocket_request" if db.get_websocket_request(id).is_ok() => {
-            db.delete_websocket_request_by_id(id, source)?;
+        WebsocketRequest => {
+            if db.get_websocket_request(id).is_ok() {
+                db.delete_websocket_request_by_id(id, source)?;
+            }
         }
-        _ => {}
+        // The destination workspace is never a plan item, so there is nothing to delete
+        Workspace => {}
     }
     Ok(())
 }
@@ -451,7 +464,6 @@ fn record_import_source(
     let import_source = db.upsert_import_source(
         &ImportSource {
             id: existing.map(|s| s.id).unwrap_or_default(),
-            model: "import_source".to_string(),
             workspace_id,
             importer: plan.importer.clone(),
             origin: origin.origin.clone(),
@@ -479,7 +491,7 @@ fn record_import_source(
         committed.insert(&v.id, serde_json::to_string(v)?);
     }
 
-    let write_row = |model_id: &str, model_type: &str, incoming: &dyn Fn() -> Result<String>| -> Result<()> {
+    let write_row = |model_id: &str, resource: ImportResourceType, incoming: &dyn Fn() -> Result<String>| -> Result<()> {
         let Some(source_key) = plan.source_keys.get(model_id) else {
             return Ok(());
         };
@@ -491,14 +503,19 @@ fn record_import_source(
                     | ImportPlanAction::KeepLocal
                     | ImportPlanAction::Conflict,
                 ) => incoming()?,
-                _ => return Ok(()),
+                // A deselected create, update, or delete stays offered next import
+                Some(
+                    ImportPlanAction::Create
+                    | ImportPlanAction::Update
+                    | ImportPlanAction::Delete,
+                )
+                | None => return Ok(()),
             },
         };
         db.upsert_import_source_resource(&ImportSourceResource {
-            model: "import_source_resource".to_string(),
             import_source_id: import_source.id.clone(),
             source_key: source_key.clone(),
-            model_type: model_type.to_string(),
+            model_type: resource.as_str().to_string(),
             model_id: model_id.to_string(),
             snapshot,
             ..Default::default()
@@ -507,19 +524,19 @@ fn record_import_source(
     };
 
     for v in &plan.resources.environments {
-        write_row(&v.id, "environment", &|| Ok(serde_json::to_string(v)?))?;
+        write_row(&v.id, ImportResourceType::Environment, &|| Ok(serde_json::to_string(v)?))?;
     }
     for v in &plan.resources.folders {
-        write_row(&v.id, "folder", &|| Ok(serde_json::to_string(v)?))?;
+        write_row(&v.id, ImportResourceType::Folder, &|| Ok(serde_json::to_string(v)?))?;
     }
     for v in &plan.resources.http_requests {
-        write_row(&v.id, "http_request", &|| Ok(serde_json::to_string(v)?))?;
+        write_row(&v.id, ImportResourceType::HttpRequest, &|| Ok(serde_json::to_string(v)?))?;
     }
     for v in &plan.resources.grpc_requests {
-        write_row(&v.id, "grpc_request", &|| Ok(serde_json::to_string(v)?))?;
+        write_row(&v.id, ImportResourceType::GrpcRequest, &|| Ok(serde_json::to_string(v)?))?;
     }
     for v in &plan.resources.websocket_requests {
-        write_row(&v.id, "websocket_request", &|| Ok(serde_json::to_string(v)?))?;
+        write_row(&v.id, ImportResourceType::WebsocketRequest, &|| Ok(serde_json::to_string(v)?))?;
     }
 
     let incoming_keys: BTreeSet<&String> = plan.source_keys.values().collect();
@@ -528,10 +545,15 @@ fn record_import_source(
             continue;
         }
         // Keep only rows that back a deletion the user deselected; it will be offered again.
-        let keep = items
-            .get(&row.model_id)
-            .is_some_and(|i| i.action == ImportPlanAction::Delete && !i.selected)
-            && existing_model_json(db, &row.model_type, &row.model_id)?.is_some();
+        let keep = match ImportResourceType::from_str(&row.model_type) {
+            Some(resource) => {
+                items
+                    .get(&row.model_id)
+                    .is_some_and(|i| i.action == ImportPlanAction::Delete && !i.selected)
+                    && existing_model_json(db, resource, &row.model_id)?.is_some()
+            }
+            None => false,
+        };
         if !keep {
             db.delete_import_source_resource(&import_source.id, &row.source_key)?;
         }
@@ -554,7 +576,7 @@ fn merge_with_linked_source(
         (Some(origin), ImportDestination::ExistingWorkspace { workspace_id, .. }) => {
             db.find_import_source(workspace_id, &plan.importer, &origin.origin)?
         }
-        _ => None,
+        (None, _) | (Some(_), ImportDestination::NewWorkspace) => None,
     };
 
     let Some(source) = linked else {
@@ -573,13 +595,13 @@ fn merge_with_linked_source(
     let mut remap: BTreeMap<String, String> = BTreeMap::new();
     let mut current_models: BTreeMap<String, Value> = BTreeMap::new();
     {
-        let mut consider = |planned_id: &str, model_type: &str| -> Result<()> {
+        let mut consider = |planned_id: &str, resource: ImportResourceType| -> Result<()> {
             let Some(key) = plan.source_keys.get(planned_id) else { return Ok(()) };
             let Some(row) = rows.get(key) else { return Ok(()) };
-            if row.model_type != model_type {
+            if ImportResourceType::from_str(&row.model_type) != Some(resource) {
                 return Ok(());
             }
-            let Some(current) = existing_model_json(&db, model_type, &row.model_id)? else {
+            let Some(current) = existing_model_json(&db, resource, &row.model_id)? else {
                 return Ok(());
             };
             if current.get("workspaceId").and_then(|v| v.as_str()) != Some(workspace_id.as_str()) {
@@ -590,19 +612,19 @@ fn merge_with_linked_source(
             Ok(())
         };
         for v in &plan.resources.folders {
-            consider(&v.id, "folder")?;
+            consider(&v.id, ImportResourceType::Folder)?;
         }
         for v in &plan.resources.environments {
-            consider(&v.id, "environment")?;
+            consider(&v.id, ImportResourceType::Environment)?;
         }
         for v in &plan.resources.http_requests {
-            consider(&v.id, "http_request")?;
+            consider(&v.id, ImportResourceType::HttpRequest)?;
         }
         for v in &plan.resources.grpc_requests {
-            consider(&v.id, "grpc_request")?;
+            consider(&v.id, ImportResourceType::GrpcRequest)?;
         }
         for v in &plan.resources.websocket_requests {
-            consider(&v.id, "websocket_request")?;
+            consider(&v.id, ImportResourceType::WebsocketRequest)?;
         }
     }
 
@@ -673,10 +695,12 @@ fn merge_with_linked_source(
 
     let mut items = Vec::new();
     {
-        let mut classify = |any: AnyModel, parent_id: Option<String>| -> Result<()> {
+        let mut classify = |any: AnyModel,
+                            resource: ImportResourceType,
+                            parent_id: Option<String>|
+         -> Result<()> {
             let planned_id = any.id().to_string();
             let name = any.resolved_name();
-            let model_type = any.model().to_string();
 
             let mapped = plan
                 .source_keys
@@ -686,7 +710,7 @@ fn merge_with_linked_source(
             let Some(row) = mapped else {
                 items.push(ImportPlanItem {
                     action: ImportPlanAction::Create,
-                    model: model_type,
+                    model: resource,
                     model_id: planned_id,
                     name,
                     parent_id,
@@ -721,7 +745,7 @@ fn merge_with_linked_source(
             };
             items.push(ImportPlanItem {
                 action,
-                model: model_type,
+                model: resource,
                 model_id: planned_id,
                 name,
                 parent_id,
@@ -732,19 +756,19 @@ fn merge_with_linked_source(
         };
 
         for v in &plan.resources.folders {
-            classify(AnyModel::Folder(v.clone()), v.folder_id.clone())?;
+            classify(AnyModel::Folder(v.clone()), ImportResourceType::Folder, v.folder_id.clone())?;
         }
         for v in &plan.resources.http_requests {
-            classify(AnyModel::HttpRequest(v.clone()), v.folder_id.clone())?;
+            classify(AnyModel::HttpRequest(v.clone()), ImportResourceType::HttpRequest, v.folder_id.clone())?;
         }
         for v in &plan.resources.grpc_requests {
-            classify(AnyModel::GrpcRequest(v.clone()), v.folder_id.clone())?;
+            classify(AnyModel::GrpcRequest(v.clone()), ImportResourceType::GrpcRequest, v.folder_id.clone())?;
         }
         for v in &plan.resources.websocket_requests {
-            classify(AnyModel::WebsocketRequest(v.clone()), v.folder_id.clone())?;
+            classify(AnyModel::WebsocketRequest(v.clone()), ImportResourceType::WebsocketRequest, v.folder_id.clone())?;
         }
         for v in &plan.resources.environments {
-            classify(AnyModel::Environment(v.clone()), v.parent_id.clone())?;
+            classify(AnyModel::Environment(v.clone()), ImportResourceType::Environment, v.parent_id.clone())?;
         }
     }
 
@@ -754,7 +778,10 @@ fn merge_with_linked_source(
         if incoming_keys.contains(key) {
             continue;
         }
-        let Some(current) = existing_model_json(&db, &row.model_type, &row.model_id)? else {
+        let Some(resource) = ImportResourceType::from_str(&row.model_type) else {
+            continue;
+        };
+        let Some(current) = existing_model_json(&db, resource, &row.model_id)? else {
             continue;
         };
         if current.get("workspaceId").and_then(|v| v.as_str()) != Some(workspace_id.as_str()) {
@@ -770,7 +797,7 @@ fn merge_with_linked_source(
             .map(str::to_string);
         items.push(ImportPlanItem {
             action: ImportPlanAction::Delete,
-            model: row.model_type.clone(),
+            model: resource,
             model_id: row.model_id.clone(),
             name,
             parent_id,
@@ -785,10 +812,10 @@ fn merge_with_linked_source(
 
 fn create_only_items(plan: &ImportPlan) -> Vec<ImportPlanItem> {
     let mut items = Vec::new();
-    let mut push = |any: AnyModel, parent_id: Option<String>| {
+    let mut push = |any: AnyModel, resource: ImportResourceType, parent_id: Option<String>| {
         items.push(ImportPlanItem {
             action: ImportPlanAction::Create,
-            model: any.model().to_string(),
+            model: resource,
             model_id: any.id().to_string(),
             name: any.resolved_name(),
             parent_id,
@@ -797,19 +824,19 @@ fn create_only_items(plan: &ImportPlan) -> Vec<ImportPlanItem> {
         });
     };
     for v in &plan.resources.folders {
-        push(AnyModel::Folder(v.clone()), v.folder_id.clone());
+        push(AnyModel::Folder(v.clone()), ImportResourceType::Folder, v.folder_id.clone());
     }
     for v in &plan.resources.http_requests {
-        push(AnyModel::HttpRequest(v.clone()), v.folder_id.clone());
+        push(AnyModel::HttpRequest(v.clone()), ImportResourceType::HttpRequest, v.folder_id.clone());
     }
     for v in &plan.resources.grpc_requests {
-        push(AnyModel::GrpcRequest(v.clone()), v.folder_id.clone());
+        push(AnyModel::GrpcRequest(v.clone()), ImportResourceType::GrpcRequest, v.folder_id.clone());
     }
     for v in &plan.resources.websocket_requests {
-        push(AnyModel::WebsocketRequest(v.clone()), v.folder_id.clone());
+        push(AnyModel::WebsocketRequest(v.clone()), ImportResourceType::WebsocketRequest, v.folder_id.clone());
     }
     for v in &plan.resources.environments {
-        push(AnyModel::Environment(v.clone()), v.parent_id.clone());
+        push(AnyModel::Environment(v.clone()), ImportResourceType::Environment, v.parent_id.clone());
     }
     items
 }
@@ -825,14 +852,19 @@ fn comparable(mut value: Value) -> Value {
     value
 }
 
-fn existing_model_json(db: &ClientDb, model_type: &str, id: &str) -> Result<Option<Value>> {
-    let value = match model_type {
-        "environment" => db.get_environment(id).ok().map(|m| serde_json::to_value(&m)),
-        "folder" => db.get_folder(id).ok().map(|m| serde_json::to_value(&m)),
-        "http_request" => db.get_http_request(id).ok().map(|m| serde_json::to_value(&m)),
-        "grpc_request" => db.get_grpc_request(id).ok().map(|m| serde_json::to_value(&m)),
-        "websocket_request" => db.get_websocket_request(id).ok().map(|m| serde_json::to_value(&m)),
-        _ => None,
+fn existing_model_json(
+    db: &ClientDb,
+    resource: ImportResourceType,
+    id: &str,
+) -> Result<Option<Value>> {
+    use ImportResourceType::*;
+    let value = match resource {
+        Environment => db.get_environment(id).ok().map(|m| serde_json::to_value(&m)),
+        Folder => db.get_folder(id).ok().map(|m| serde_json::to_value(&m)),
+        HttpRequest => db.get_http_request(id).ok().map(|m| serde_json::to_value(&m)),
+        GrpcRequest => db.get_grpc_request(id).ok().map(|m| serde_json::to_value(&m)),
+        WebsocketRequest => db.get_websocket_request(id).ok().map(|m| serde_json::to_value(&m)),
+        Workspace => None,
     };
     Ok(value.transpose()?)
 }
@@ -1730,7 +1762,9 @@ mod tests {
             assert_eq!(rows.len(), 4, "one row per non-workspace resource: {rows:?}");
             for row in &rows {
                 let snapshot: Value = serde_json::from_str(&row.snapshot).expect("parse snapshot");
-                let current = existing_model_json(&db, &row.model_type, &row.model_id)
+                let resource = ImportResourceType::from_str(&row.model_type)
+                    .expect("row has a known resource type");
+                let current = existing_model_json(&db, resource, &row.model_id)
                     .expect("query current model")
                     .expect("row target exists");
                 assert_eq!(comparable(snapshot), comparable(current));
@@ -2052,7 +2086,7 @@ mod tests {
         assert!(plan.items.iter().all(|i| i.action == ImportPlanAction::Create && i.selected));
 
         for item in plan.items.iter_mut() {
-            if item.model == "folder" {
+            if item.model == ImportResourceType::Folder {
                 item.selected = false;
             }
         }

@@ -34,10 +34,15 @@ items: Array<ImportPlanItem>, origin?: ImportOrigin, };
 
 export type ImportPlanAction = "create" | "update" | "delete" | "unchanged" | "keep_local" | "conflict";
 
-export type ImportPlanItem = { action: ImportPlanAction, model: string, modelId: string, name: string, 
+export type ImportPlanItem = { action: ImportPlanAction, model: ImportResourceType, modelId: string, name: string, 
 /**
  * Planned parent folder ID for incoming resources; current parent for deletions.
  */
 parentId?: string, selected: boolean, resolution?: ImportConflictResolution, };
 
 export type ImportPlanWarning = { title: string, detail: string, };
+
+/**
+ * The model types an import plan can contain.
+ */
+export type ImportResourceType = "environment" | "folder" | "grpc_request" | "http_request" | "websocket_request" | "workspace";
