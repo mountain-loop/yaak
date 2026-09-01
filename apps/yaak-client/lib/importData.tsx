@@ -2,6 +2,7 @@ import {
   type BatchUpsertResult,
   type ImportDestination,
   type ImportPlan,
+  type ImportSource,
   workspacesAtom,
 } from "@yaakapp-internal/models";
 import { FormattedError, VStack } from "@yaakapp-internal/ui";
@@ -16,6 +17,17 @@ import { jotaiStore } from "./jotai";
 import { pluralizeCount } from "./pluralize";
 import { router } from "./router";
 import { rpc } from "./rpc";
+
+// Stable identities so the dialog's effects don't re-run (and cancel in-flight
+// fetches) every time the dialog container re-renders.
+const planFile = (filePath: string, destination: ImportDestination) =>
+  rpc<ImportPlan>("cmd_import_data", { filePath, destination });
+const planUrl = (url: string, destination: ImportDestination) =>
+  rpc<ImportPlan>("cmd_import_url", { url, destination });
+const listSources = (workspaceId: string) =>
+  rpc<ImportSource[]>("cmd_list_import_sources", { workspaceId });
+const findSourcesForOrigin = (args: { filePath?: string; url?: string }) =>
+  rpc<ImportSource[]>("cmd_import_sources_for_origin", args);
 
 export const importData = createFastMutation({
   mutationKey: ["import_data"],
@@ -35,7 +47,7 @@ export const importData = createFastMutation({
       showDialog({
         id: "import",
         title: "Import Data",
-        size: "sm",
+        size: "lg",
         disableClose: true,
         render: ({ hide }) => {
           const cancel = () => {
@@ -57,12 +69,10 @@ export const importData = createFastMutation({
               currentWorkspace={currentWorkspace}
               workspaces={workspaces}
               selectedFolder={selectedFolder}
-              planFile={(filePath: string, destination: ImportDestination) =>
-                rpc<ImportPlan>("cmd_import_data", { filePath, destination })
-              }
-              planUrl={(url: string, destination: ImportDestination) =>
-                rpc<ImportPlan>("cmd_import_url", { url, destination })
-              }
+              planFile={planFile}
+              planUrl={planUrl}
+              listSources={listSources}
+              findSourcesForOrigin={findSourcesForOrigin}
               commit={commit}
               cancel={cancel}
               onError={fail}
