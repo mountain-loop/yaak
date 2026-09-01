@@ -234,6 +234,14 @@ struct PersistSendCookiesReq {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct PluginKeyValueReq {
+    plugin_name: String,
+    key: String,
+    value: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct InsertResponseEventsReq {
     response_id: String,
     workspace_id: String,
@@ -415,6 +423,34 @@ fn dispatch(
             to_json(())
         }
 
+        // Namespaced by plugin name exactly as `build_shared_reply` does in
+        // crates/yaak/src/plugin_events.rs, so a token is found under the same key on either host.
+        "web_plugin_kv_get" => {
+            let req: PluginKeyValueReq = from_js(payload)?;
+            let found = host.queries.connect().get_plugin_key_value(&req.plugin_name, &req.key);
+            to_json(found.map(|kv| kv.value))
+        }
+
+        "web_plugin_kv_set" => {
+            let req: PluginKeyValueReq = from_js(payload)?;
+            host.queries.connect().set_plugin_key_value(
+                &req.plugin_name,
+                &req.key,
+                &req.value.unwrap_or_default(),
+            );
+            to_json(())
+        }
+
+        "web_plugin_kv_delete" => {
+            let req: PluginKeyValueReq = from_js(payload)?;
+            let deleted = host
+                .queries
+                .connect()
+                .delete_plugin_key_value(&req.plugin_name, &req.key)
+                .map_err(js_error)?;
+            to_json(deleted)
+        }
+
         other => Err(js_error(format!("yaak-web: `{other}` is not a command this host answers"))),
     }
 }
@@ -439,6 +475,9 @@ struct PreparedHttpSend {
     /// The request with inherited headers and authentication applied and every template
     /// rendered. What the proxy sends, and what the response records as its request.
     request: HttpRequest,
+    /// Whichever model the auth was inherited from, hashed as the desktop hashes it. An
+    /// OAuth token cache belongs to the folder that declared the auth, not to each request.
+    auth_context_id: String,
     settings: HttpSendSettings,
     /// The `* Setting name=value` timeline lines the desktop writes at the top of a send,
     /// sources and all. The tab records them before the proxy's own events.
@@ -447,22 +486,44 @@ struct PreparedHttpSend {
     cookie_jar: Option<CookieJar>,
 }
 
-/// A template callback for a host with no plugins. Variables render; a function is a clear
-/// refusal naming the function, so the user knows what the request needs rather than seeing
-/// an empty string sent in its place.
-struct NoPluginsCallback;
+/// Reaches a template function through a JavaScript function the worker installed, which
+/// forwards to the plugin sandbox. Without one, a template function is a refusal naming it
+/// rather than an empty string sent in its place.
+struct JsTemplateCallback {
+    call: Option<js_sys::Function>,
+}
 
-impl TemplateCallback for NoPluginsCallback {
+impl TemplateCallback for JsTemplateCallback {
     fn run(
         &self,
         fn_name: &str,
-        _args: HashMap<String, serde_json::Value>,
-    ) -> impl std::future::Future<Output = yaak_templates::error::Result<String>> + Send {
-        let message = format!(
-            "This request uses the template function \"{fn_name}\", which needs plugins. \
-             Plugins aren't available in the browser yet"
-        );
-        async move { Err(yaak_templates::error::Error::RenderError(message)) }
+        args: HashMap<String, serde_json::Value>,
+    ) -> impl std::future::Future<Output = yaak_templates::error::Result<String>> {
+        let call = self.call.clone();
+        let fn_name = fn_name.to_string();
+        let args = serde_json::to_string(&args).unwrap_or_else(|_| "{}".into());
+
+        async move {
+            use yaak_templates::error::Error::RenderError;
+
+            let Some(call) = call else {
+                return Err(RenderError(format!(
+                    "This request uses the template function \"{fn_name}\", which needs plugins. \
+                     No plugin provides it"
+                )));
+            };
+
+            let promise = call
+                .call2(&JsValue::NULL, &JsValue::from_str(&fn_name), &JsValue::from_str(&args))
+                .map_err(|e| RenderError(js_message(&e)))?;
+            let value = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise))
+                .await
+                .map_err(|e| RenderError(js_message(&e)))?;
+
+            value.as_string().ok_or_else(|| {
+                RenderError(format!("Template function \"{fn_name}\" did not return a string"))
+            })
+        }
     }
 
     fn transform_arg(
@@ -475,19 +536,35 @@ impl TemplateCallback for NoPluginsCallback {
     }
 }
 
-/// Resolve and render a request for sending, exactly as the desktop does before it puts the
-/// request on the network: the environment chain, inherited headers and auth, request
-/// settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
-/// posts to the Yaak server.
+fn js_message(value: &JsValue) -> String {
+    if let Some(text) = value.as_string() {
+        return text;
+    }
+    let message = js_sys::Reflect::get(value, &JsValue::from_str("message"))
+        .ok()
+        .and_then(|m| m.as_string());
+    message.unwrap_or_else(|| format!("{value:?}"))
+}
+
+fn template_callback(plugins: JsValue) -> JsTemplateCallback {
+    JsTemplateCallback { call: plugins.dyn_into::<js_sys::Function>().ok() }
+}
+
+/// Resolve and render a request for sending, exactly as the desktop does: the environment
+/// chain, inherited headers and auth, request settings, the cookie jar. Nothing here touches
+/// a socket.
 ///
-/// Refuses, with a message the user can act on, when the request needs something this host
-/// doesn't have: an authentication plugin, or a template function.
+/// `plugins` is the template function bridge: a JS function taking a name and JSON args,
+/// resolving to the rendered string. Passing nothing is allowed.
+///
+/// Authentication is applied by the caller, not here, because the plugin that applies it
+/// needs to see the request as it will be sent.
 #[wasm_bindgen]
-pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
+pub async fn prepare_http_send(payload: JsValue, plugins: JsValue) -> Result<JsValue> {
     let req: PrepareHttpSendReq = from_js(payload)?;
 
     // Everything from the database first, then release the host borrow before rendering.
-    let (request, environment_chain, settings, cookie_jar) = with_host(|host| {
+    let (request, environment_chain, settings, cookie_jar, auth_context_id) = with_host(|host| {
         let db = host.queries.connect();
         let request = db.get_http_request(&req.request_id).map_err(js_error)?;
         let environment_chain = db
@@ -497,7 +574,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
                 req.environment_id.as_deref(),
             )
             .map_err(js_error)?;
-        let (authentication_type, authentication, _auth_context_id) =
+        let (authentication_type, authentication, auth_context_id) =
             db.resolve_auth_for_http_request(&request).map_err(js_error)?;
         let headers = db.resolve_headers_for_http_request(&request).map_err(js_error)?;
         let settings = db.resolve_settings_for_http_request(&request).map_err(js_error)?;
@@ -506,34 +583,21 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
             None => None,
         };
         let request = HttpRequest { authentication_type, authentication, headers, ..request };
-        Ok((request, environment_chain, settings, cookie_jar))
+        Ok((request, environment_chain, settings, cookie_jar, auth_context_id))
     })?;
 
     let rendered = render_http_request(
         &request,
         environment_chain,
-        &NoPluginsCallback,
+        &template_callback(plugins),
         &RenderOptions::throw(),
     )
     .await
     .map_err(js_error)?;
 
-    // Authentication is applied by a plugin on the desktop. There is no plugin here, and a
-    // request sent without the auth it asked for is worse than one refused with the reason.
-    let auth_disabled =
-        rendered.authentication.get("disabled").and_then(|v| v.as_bool()) == Some(true);
-    if let Some(auth_type) = rendered.authentication_type.as_deref()
-        && auth_type != "none"
-        && !auth_disabled
-    {
-        return Err(js_error(format!(
-            "This request uses {auth_type} authentication, which needs plugins. \
-             Plugins aren't available in the browser yet"
-        )));
-    }
-
     let prepared = PreparedHttpSend {
         request: rendered,
+        auth_context_id: format!("{:x}", md5::compute(auth_context_id)),
         settings: HttpSendSettings::from(&settings),
         setting_events: settings.timeline_events(),
         cookie_jar,
@@ -542,6 +606,43 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
     // and the default serializer's `Map` for the request body would stringify to `{}`.
     use serde::Serialize as _;
     prepared.serialize(&serde_wasm_bindgen::Serializer::json_compatible()).map_err(js_error)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenderTemplateReq {
+    template: String,
+    workspace_id: String,
+    environment_id: Option<String>,
+    ignore_error: Option<bool>,
+}
+
+/// What `cmd_render_template` does on the desktop. `ignore_error` matches it too: a preview
+/// shows an empty string where a send would refuse, since a half-typed template is not yet a
+/// mistake.
+#[wasm_bindgen]
+pub async fn render_template(payload: JsValue, plugins: JsValue) -> Result<JsValue> {
+    let req: RenderTemplateReq = from_js(payload)?;
+
+    let environment_chain = with_host(|host| {
+        host.queries
+            .connect()
+            .resolve_environments(&req.workspace_id, None, req.environment_id.as_deref())
+            .map_err(js_error)
+    })?;
+
+    let vars = yaak_models::render::make_vars_hashmap(environment_chain);
+    let options = if req.ignore_error == Some(true) {
+        RenderOptions::return_empty()
+    } else {
+        RenderOptions::throw()
+    };
+
+    let rendered =
+        yaak_templates::parse_and_render(&req.template, &vars, &template_callback(plugins), &options)
+            .await
+            .map_err(js_error)?;
+    to_json(rendered).map(|v| JsValue::from_str(v.as_str().unwrap_or_default()))
 }
 
 /* -------------------------------------------------------------------------- */

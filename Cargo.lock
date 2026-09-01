@@ -11780,6 +11780,7 @@ dependencies = [
  "console_error_panic_hook",
  "js-sys",
  "log 0.4.29",
+ "md5 0.7.0",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

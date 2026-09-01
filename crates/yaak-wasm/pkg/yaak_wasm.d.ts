@@ -26,15 +26,24 @@ export function blob_put(id: string, bytes: Uint8Array): void;
 export function boot(): Promise<void>;
 
 /**
- * Resolve and render a request for sending, exactly as the desktop does before it puts the
- * request on the network: the environment chain, inherited headers and auth, request
- * settings, the cookie jar. Nothing here touches a socket. What comes back is what the tab
- * posts to the Yaak server.
+ * Resolve and render a request for sending, exactly as the desktop does: the environment
+ * chain, inherited headers and auth, request settings, the cookie jar. Nothing here touches
+ * a socket.
  *
- * Refuses, with a message the user can act on, when the request needs something this host
- * doesn't have: an authentication plugin, or a template function.
+ * `plugins` is the template function bridge: a JS function taking a name and JSON args,
+ * resolving to the rendered string. Passing nothing is allowed.
+ *
+ * Authentication is applied by the caller, not here, because the plugin that applies it
+ * needs to see the request as it will be sent.
  */
-export function prepare_http_send(payload: any): Promise<any>;
+export function prepare_http_send(payload: any, plugins: any): Promise<any>;
+
+/**
+ * What `cmd_render_template` does on the desktop. `ignore_error` matches it too: a preview
+ * shows an empty string where a send would refuse, since a half-typed template is not yet a
+ * mistake.
+ */
+export function render_template(payload: any, plugins: any): Promise<any>;
 
 /**
  * Run one command as `label` (the calling tab's identity, which stands in for

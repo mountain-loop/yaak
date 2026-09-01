@@ -108,9 +108,33 @@ function bootOnce(): Promise<void> {
   return booted;
 }
 
+/**
+ * Rendering happens here; the functions it calls live in a sandbox the tab
+ * owns. Asked of the port that started the render, not every port, because
+ * only that tab is waiting and only its sandbox has those plugins.
+ */
+const pendingTemplateFunctions = new Map<number, (result: string | Error) => void>();
+let nextTemplateFunctionId = 1;
+
+function templateBridge(port: MessagePort): (name: string, args: string) => Promise<string> {
+  return (name, args) =>
+    new Promise<string>((resolve, reject) => {
+      const id = nextTemplateFunctionId++;
+      pendingTemplateFunctions.set(id, (r) => (r instanceof Error ? reject(r) : resolve(r)));
+      send(port, { type: "template_function", id, name, args });
+    });
+}
+
 async function handle(port: MessagePort, message: ToWorker): Promise<void> {
   if (message.type === "goodbye") {
     ports.delete(port);
+    return;
+  }
+
+  if (message.type === "template_function_result") {
+    const settle = pendingTemplateFunctions.get(message.id);
+    pendingTemplateFunctions.delete(message.id);
+    settle?.(message.error != null ? new Error(message.error) : (message.value ?? ""));
     return;
   }
 
@@ -122,7 +146,8 @@ async function handle(port: MessagePort, message: ToWorker): Promise<void> {
     send(port, { type: "error", id: message.id, message: bootError ?? "Database failed to open" });
     return;
   }
-  const { rpc, blob_get, blob_put, blob_delete, prepare_http_send } = engine!;
+  const { rpc, blob_get, blob_put, blob_delete, prepare_http_send, render_template } =
+    engine!;
 
   try {
     switch (message.type) {
@@ -143,8 +168,13 @@ async function handle(port: MessagePort, message: ToWorker): Promise<void> {
         return;
       }
       case "prepare_http_send": {
-        const prepared = await prepare_http_send(message.payload);
+        const prepared = await prepare_http_send(message.payload, templateBridge(port));
         send(port, { type: "result", id: message.id, result: prepared });
+        return;
+      }
+      case "render_template": {
+        const rendered = await render_template(message.payload, templateBridge(port));
+        send(port, { type: "result", id: message.id, result: rendered });
         return;
       }
       case "blob_get": {

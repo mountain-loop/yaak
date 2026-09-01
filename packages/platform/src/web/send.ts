@@ -33,7 +33,8 @@ import type {
 } from "@yaakapp-internal/models";
 import type { Frame, SendRequest } from "@yaakapp-internal/web";
 import type { WorkerConnection } from "./connection";
-import { serverIdentity, serverSendUrl, readFrames } from "./server";
+import type { WebPlugins } from "./plugins";
+import { readFrames, serverIdentity, serverSendUrl } from "./server";
 
 /* -------------------------------- shapes --------------------------------- */
 
@@ -51,9 +52,57 @@ type ResponsePatch = Partial<HttpResponse>;
 /** What `prepare_http_send` (crates/yaak-wasm) hands back. */
 interface PreparedHttpSend {
   request: HttpRequest;
+  /** Hashed id of the model the auth came from; plugins key stored state on it. */
+  authContextId: string;
   settings: HttpSendSettings;
   settingEvents: HttpResponseEventData[];
   cookieJar: CookieJar | null;
+}
+
+/**
+ * The desktop applies auth to the sendable request; here the server builds that,
+ * so the plugin's answer goes onto the model and the server folds it in. Same
+ * bytes for a method that sets a header, which is every one that runs here.
+ *
+ * Not the same for one that *signs*, since the plugin sees the request before
+ * the server assembles it. AWS SigV4 and OAuth 1.0 are refused rather than
+ * mis-signed; see the sandbox README.
+ */
+async function applyAuthentication(
+  plugins: WebPlugins,
+  prepared: PreparedHttpSend,
+): Promise<HttpRequest> {
+  const { request } = prepared;
+  const authType = request.authenticationType;
+  const disabled = request.authentication?.disabled === true;
+  if (authType == null || authType === "none" || disabled) return request;
+
+  const applied = await plugins.applyHttpAuthentication(authType, {
+    contextId: prepared.authContextId,
+    values: request.authentication as Record<string, never>,
+    method: request.method,
+    url: request.url,
+    headers: request.headers.filter((h) => h.enabled !== false),
+    // Only signing schemes hash the body, and those are already refused.
+    body: null,
+  });
+
+  const headers = [...request.headers];
+  for (const header of applied.setHeaders ?? []) {
+    // Replace-or-append, case-insensitively, matching `insert_header` in
+    // crates/yaak-http.
+    const at = headers.findIndex((h) => h.name.toLowerCase() === header.name.toLowerCase());
+    const entry = { name: header.name, value: header.value, enabled: true };
+    if (at >= 0) headers[at] = { ...headers[at], ...entry };
+    else headers.push(entry);
+  }
+
+  const urlParameters = [...request.urlParameters];
+  for (const param of applied.setQueryParameters ?? []) {
+    urlParameters.push({ name: param.name, value: param.value, enabled: true });
+  }
+
+  return { ...request, headers, urlParameters };
 }
 
 /** The desktop writes progress at most this often while a body streams in. */
@@ -63,6 +112,7 @@ const PROGRESS_INTERVAL_MS = 100;
 
 export async function sendHttpRequest(
   db: WorkerConnection,
+  plugins: WebPlugins,
   requestId: string,
   environmentId: string | null,
   cookieJarId: string | null,
@@ -78,7 +128,7 @@ export async function sendHttpRequest(
   const unlistenCancel = db.listen(`cancel_http_response_${response.id}`, () => cancel.abort());
 
   try {
-    await runSend(db, response, requestId, environmentId, cookieJarId, cancel.signal);
+    await runSend(db, plugins, response, requestId, environmentId, cookieJarId, cancel.signal);
   } catch (err) {
     const message = cancel.signal.aborted ? "Request canceled" : errorMessage(err);
     await response.finish({ error: message });
@@ -90,6 +140,7 @@ export async function sendHttpRequest(
 
 async function runSend(
   db: WorkerConnection,
+  plugins: WebPlugins,
   response: ResponseWriter,
   requestId: string,
   environmentId: string | null,
@@ -101,7 +152,8 @@ async function runSend(
     environmentId,
     cookieJarId,
   });
-  await response.patch({ url: prepared.request.url });
+  const request = await applyAuthentication(plugins, prepared);
+  await response.patch({ url: request.url });
 
   // The first line of the timeline says what did the sending and where. A
   // request through a proxy shows a different origin to the server than the
@@ -111,7 +163,7 @@ async function runSend(
   timeline.push(prepared.settingEvents);
 
   const body: SendRequest = {
-    request: prepared.request,
+    request,
     settings: prepared.settings,
     cookies: prepared.cookieJar?.cookies ?? null,
   };

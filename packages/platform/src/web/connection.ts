@@ -50,6 +50,9 @@ export class WorkerConnection {
   /** True once the worker has said anything at all. */
   private heard = false;
 
+  /** Unset until the sandbox is up; a render before then gets a refusal. */
+  private templateFunctions: ((name: string, args: string) => Promise<string>) | null = null;
+
   constructor() {
     // Both are required and neither is faked. Without a shared worker every
     // tab would need its own SQLite over the same pages; without Web Locks
@@ -147,6 +150,9 @@ export class WorkerConnection {
       case "event":
         this.deliver(message.event, message.payload);
         return;
+      case "template_function":
+        void this.runTemplateFunction(message.id, message.name, message.args);
+        return;
     }
   }
 
@@ -159,6 +165,34 @@ export class WorkerConnection {
     });
   }
 
+  setTemplateFunctionHandler(handler: (name: string, args: string) => Promise<string>): void {
+    this.templateFunctions = handler;
+  }
+
+  private async runTemplateFunction(id: number, name: string, args: string): Promise<void> {
+    if (this.templateFunctions == null) {
+      this.post({
+        type: "template_function_result",
+        id,
+        error: `The template function \`${name}\` needs a plugin, and none are loaded yet`,
+      });
+      return;
+    }
+    try {
+      this.post({
+        type: "template_function_result",
+        id,
+        value: await this.templateFunctions(name, args),
+      });
+    } catch (err) {
+      this.post({
+        type: "template_function_result",
+        id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   rpc<T>(cmd: string, payload: unknown): Promise<T> {
     return this.request<T>((id) => ({ type: "rpc", id, cmd, payload, label: this.label }));
   }
@@ -166,6 +200,11 @@ export class WorkerConnection {
   /** See `prepare_http_send` in crates/yaak-wasm: the database half of a send. */
   prepareHttpSend<T>(payload: unknown): Promise<T> {
     return this.request<T>((id) => ({ type: "prepare_http_send", id, payload }));
+  }
+
+  /** See `render_template` in crates/yaak-wasm. */
+  renderTemplate(payload: unknown): Promise<string> {
+    return this.request<string>((id) => ({ type: "render_template", id, payload }));
   }
 
   async blobGet(blobId: string): Promise<Uint8Array<ArrayBuffer> | null> {

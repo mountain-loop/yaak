@@ -28,6 +28,7 @@ import type {
 import { commandSupport, runCommand } from "./commands";
 import { WorkerConnection } from "./connection";
 import { unsupported } from "./errors";
+import { WebPlugins } from "./plugins";
 import { requestPersistence } from "./storage";
 
 /** What this host can do, reported honestly. */
@@ -60,7 +61,9 @@ function capabilitiesFor(): PlatformCapabilities {
     // The browser already zooms the page, on the same keys, and remembers it
     // per site. The app stays out of the way.
     interfaceZoom: false,
-    plugins: false,
+    // Plugins run in a QuickJS sandbox, but only the bundled set: there is no
+    // installing them, so the plugin manager stays unavailable and says so.
+    plugins: true,
     encryption: false,
     updater: false,
     // Reading needs a permission prompt at first paint, which is a bad ask for
@@ -160,7 +163,11 @@ function createWindow(db: WorkerConnection): PlatformWindow {
 
 export function createWebPlatform(): Platform {
   const db = new WorkerConnection();
+  const plugins = new WebPlugins(db);
   const capabilities = capabilitiesFor();
+
+  // Registered before anything can render, not inside the first send.
+  db.setTemplateFunctionHandler((name, args) => plugins.callTemplateFunction(name, args));
 
   // Without this, IndexedDB is best-effort storage and a browser reclaiming
   // space may drop someone's workspaces. Asking is all we can do, and there is
@@ -231,7 +238,7 @@ export function createWebPlatform(): Platform {
       // `plugin:` commands are Tauri host plugins, not engine commands, and
       // never reached the router even on the desktop.
       if (cmd.startsWith("plugin:")) return hostPluginCommand<T>(cmd, payload);
-      return runCommand(cmd, payload ?? {}, db) as Promise<T>;
+      return runCommand(cmd, payload ?? {}, db, plugins) as Promise<T>;
     },
 
     async rpcStream<T, M>(
@@ -244,7 +251,7 @@ export function createWebPlatform(): Platform {
       const streamId = crypto.randomUUID();
       const unlisten = db.listen(`stream_${streamId}`, (p) => onMessage(p as M));
       try {
-        const result = (await runCommand(cmd, { ...payload, streamId }, db)) as T;
+        const result = (await runCommand(cmd, { ...payload, streamId }, db, plugins)) as T;
         return { result, unlisten };
       } catch (err) {
         unlisten();
