@@ -80,7 +80,15 @@ export function migrateImport(contents: string) {
     }
   }
 
-  return { resources: parsed.resources };
+  const sourceKeys: Record<string, string> = {};
+  for (const models of Object.values(parsed.resources)) {
+    if (!Array.isArray(models)) continue;
+    for (const model of models) {
+      if (typeof model?.id === "string") sourceKeys[model.id] = model.id;
+    }
+  }
+
+  return { resources: parsed.resources, sourceKeys };
 }
 
 function isJSObject(obj: unknown) {

@@ -474,7 +474,18 @@ export type ImportRequest = { content: string, };
 
 export type ImportResources = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
 
-export type ImportResponse = { importer: string, resources: ImportResources, };
+export type ImportResponse = { 
+/**
+ * Display name of the importer that recognized the input.
+ */
+importer: string, resources: ImportResources, 
+/**
+ * Identifies the same source element across re-parses, keyed by the IDs in `resources`.
+ *
+ * Must come from the document, never from anything the user can rename in Yaak. Only set
+ * for formats that carry their own identifiers; the host derives the rest.
+ */
+sourceKeys?: { [key in string]?: string }, };
 
 export type InternalEvent = { id: string, pluginRefId: string, pluginName: string, replyId: string | null, context: PluginContext, payload: InternalEventPayload, };
 

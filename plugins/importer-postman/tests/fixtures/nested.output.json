@@ -88,5 +88,8 @@
         "folderId": "GENERATE_ID::FOLDER_0"
       }
     ]
+  },
+  "sourceKeys": {
+    "GENERATE_ID::WORKSPACE_1": "collection:9e6dfada-256c-49ea-a38f-7d1b05b7ca2d"
   }
 }

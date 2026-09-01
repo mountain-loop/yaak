@@ -11,6 +11,10 @@ export type BatchUpsertResult = { workspaces: Array<Workspace>, environments: Ar
  */
 export type ImportDestination = { "type": "new_workspace" } | { "type": "existing_workspace", workspaceId: string, folderId?: string, };
 
-export type ImportPlan = { importer: string, destination: ImportDestination, resources: BatchUpsertResult, warnings: Array<ImportPlanWarning>, };
+export type ImportPlan = { importer: string, destination: ImportDestination, resources: BatchUpsertResult, warnings: Array<ImportPlanWarning>, 
+/**
+ * Stable source key for every model in `resources`, keyed by its freshly minted ID.
+ */
+sourceKeys: { [key in string]?: string }, };
 
 export type ImportPlanWarning = { title: string, detail: string, };

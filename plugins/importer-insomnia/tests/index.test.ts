@@ -24,6 +24,38 @@ describe("importer-yaak", () => {
       expect(result).toEqual(parseJsonOrYaml(expected));
     });
   }
+
+  test("Keys resources by their Insomnia _id, unchanged by a rename", () => {
+    const collection = (requestName: string) =>
+      YAML.stringify({
+        type: "collection.insomnia.rest/5.0",
+        name: "Keys",
+        meta: { id: "wrk_1" },
+        environments: { meta: { id: "env_1" }, name: "Base", data: {} },
+        collection: [
+          {
+            meta: { id: "fld_1" },
+            name: "Folder",
+            children: [
+              {
+                meta: { id: "req_1" },
+                name: requestName,
+                method: "GET",
+                url: "https://yaak.app",
+              },
+            ],
+          },
+        ],
+      });
+
+    const before = convertInsomnia(collection("Original"));
+    const after = convertInsomnia(collection("Renamed"));
+
+    expect(before?.sourceKeys?.[before.resources.httpRequests[0]!.id]).toBe("req_1");
+    expect(after?.sourceKeys?.[after.resources.httpRequests[0]!.id]).toBe("req_1");
+    expect(before?.sourceKeys?.[before.resources.folders[0]!.id]).toBe("fld_1");
+    expect(before?.sourceKeys?.[before.resources.workspaces[0]!.id]).toBe("wrk_1");
+  });
 });
 
 function parseJsonOrYaml(text: string): unknown {

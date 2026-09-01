@@ -148,4 +148,32 @@ describe("importer-yaak", () => {
       }),
     );
   });
+
+  test("Keys models by their Yaak ID, unchanged by a rename", () => {
+    const exported = (requestName: string) =>
+      JSON.stringify({
+        yaakSchema: 5,
+        resources: {
+          workspaces: [{ id: "wk_1", model: "workspace", name: "Keys" }],
+          httpRequests: [
+            {
+              id: "rq_1",
+              model: "http_request",
+              workspaceId: "wk_1",
+              name: requestName,
+              url: "https://yaak.app",
+            },
+          ],
+        },
+      });
+
+    expect(migrateImport(exported("Original"))?.sourceKeys).toEqual({
+      wk_1: "wk_1",
+      rq_1: "rq_1",
+    });
+    expect(migrateImport(exported("Renamed"))?.sourceKeys).toEqual({
+      wk_1: "wk_1",
+      rq_1: "rq_1",
+    });
+  });
 });

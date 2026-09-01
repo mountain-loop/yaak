@@ -119,6 +119,9 @@ pub struct ImportPlan {
     pub destination: ImportDestination,
     pub resources: BatchUpsertResult,
     pub warnings: Vec<ImportPlanWarning>,
+
+    /// Stable source key for every model in `resources`, keyed by its freshly minted ID.
+    pub source_keys: BTreeMap<String, String>,
 }
 
 pub fn get_workspace_export_resources(

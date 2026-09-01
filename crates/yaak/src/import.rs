@@ -31,6 +31,7 @@ pub async fn plan_import_data(params: PlanImportDataParams<'_>) -> Result<Import
         import_result.importer,
         params.destination,
         import_result.resources,
+        import_result.source_keys,
     )
 }
 
@@ -43,9 +44,13 @@ pub fn plan_import_resources(
     importer: String,
     destination: ImportDestination,
     resources: ImportResources,
+    source_keys: Option<BTreeMap<String, String>>,
 ) -> Result<ImportPlan> {
     let mut warnings = Vec::new();
     validate_destination(query_manager, &destination)?;
+
+    let plugin_keys = source_keys.unwrap_or_default();
+    let source_ids = SourceIds::collect(&resources);
 
     let source_folder_ids = resources.folders.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>();
     let mut folder_ids = BTreeMap::new();
@@ -248,17 +253,20 @@ pub fn plan_import_resources(
         });
     }
 
+    let resources = BatchUpsertResult {
+        workspaces,
+        environments,
+        folders,
+        http_requests,
+        grpc_requests,
+        websocket_requests,
+    };
+
     Ok(ImportPlan {
         importer,
         destination,
-        resources: BatchUpsertResult {
-            workspaces,
-            environments,
-            folders,
-            http_requests,
-            grpc_requests,
-            websocket_requests,
-        },
+        source_keys: assign_source_keys(&resources, &source_ids, &plugin_keys),
+        resources,
         warnings,
     })
 }
@@ -455,6 +463,166 @@ fn display_list(items: &BTreeSet<&str>) -> String {
     }
 }
 
+/// Importer-assigned IDs, captured before planning replaces them with freshly minted ones.
+///
+/// Positional: each vector lines up with the same-named planned collection, in order.
+struct SourceIds {
+    workspaces: Vec<String>,
+    environments: Vec<String>,
+    folders: Vec<String>,
+    http_requests: Vec<String>,
+    grpc_requests: Vec<String>,
+    websocket_requests: Vec<String>,
+}
+
+impl SourceIds {
+    fn collect(resources: &ImportResources) -> Self {
+        let ids = |ids: &mut dyn Iterator<Item = &String>| ids.cloned().collect::<Vec<_>>();
+        SourceIds {
+            workspaces: ids(&mut resources.workspaces.iter().map(|v| &v.id)),
+            environments: ids(&mut resources.environments.iter().map(|v| &v.id)),
+            folders: ids(&mut resources.folders.iter().map(|v| &v.id)),
+            http_requests: ids(&mut resources.http_requests.iter().map(|v| &v.id)),
+            grpc_requests: ids(&mut resources.grpc_requests.iter().map(|v| &v.id)),
+            websocket_requests: ids(&mut resources.websocket_requests.iter().map(|v| &v.id)),
+        }
+    }
+}
+
+fn assign_source_keys(
+    resources: &BatchUpsertResult,
+    source_ids: &SourceIds,
+    plugin_keys: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let folder_tree = resources
+        .folders
+        .iter()
+        .map(|v| (v.id.clone(), (v.name.clone(), v.folder_id.clone())))
+        .collect::<BTreeMap<_, _>>();
+
+    let plugin_key = |source_id: Option<&String>| source_id.and_then(|id| plugin_keys.get(id));
+
+    // (model ID, importer key, key by name, key by name and content)
+    let mut candidates: Vec<(&str, Option<&String>, String, String)> = Vec::new();
+
+    for (i, v) in resources.workspaces.iter().enumerate() {
+        let key = fallback_key("workspace", &[], &v.name);
+        candidates.push((&v.id, plugin_key(source_ids.workspaces.get(i)), key.clone(), key));
+    }
+    for (i, v) in resources.environments.iter().enumerate() {
+        let ancestry = ancestry_path(&folder_tree, v.parent_id.as_deref());
+        let key = fallback_key("environment", &ancestry, &v.name);
+        candidates.push((&v.id, plugin_key(source_ids.environments.get(i)), key.clone(), key));
+    }
+    for (i, v) in resources.folders.iter().enumerate() {
+        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
+        let key = fallback_key("folder", &ancestry, &v.name);
+        candidates.push((&v.id, plugin_key(source_ids.folders.get(i)), key.clone(), key));
+    }
+    for (i, v) in resources.http_requests.iter().enumerate() {
+        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
+        let method = if v.method.is_empty() { "GET" } else { v.method.as_str() };
+        let route = format!("{method} {}", v.url);
+        let (by_name, by_content) = derived_pair("http_request", &ancestry, &v.name, &route);
+        candidates.push((&v.id, plugin_key(source_ids.http_requests.get(i)), by_name, by_content));
+    }
+    for (i, v) in resources.grpc_requests.iter().enumerate() {
+        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
+        let service = v.service.clone().unwrap_or_default();
+        let method = v.method.clone().unwrap_or_default();
+        let route = format!("{} {service}/{method}", v.url);
+        let (by_name, by_content) = derived_pair("grpc_request", &ancestry, &v.name, &route);
+        candidates.push((&v.id, plugin_key(source_ids.grpc_requests.get(i)), by_name, by_content));
+    }
+    for (i, v) in resources.websocket_requests.iter().enumerate() {
+        let ancestry = ancestry_path(&folder_tree, v.folder_id.as_deref());
+        let (by_name, by_content) = derived_pair("websocket_request", &ancestry, &v.name, &v.url);
+        candidates.push((
+            &v.id,
+            plugin_key(source_ids.websocket_requests.get(i)),
+            by_name,
+            by_content,
+        ));
+    }
+
+    // A name shared by several resources identifies none of them, so every member of the group
+    // falls back to its own content. Counting the whole document first keeps that decision
+    // independent of the order the resources happen to be listed in.
+    let mut shared_names: BTreeMap<&str, usize> = BTreeMap::new();
+    for (_, plugin_key, by_name, _) in &candidates {
+        if plugin_key.is_none() {
+            *shared_names.entry(by_name.as_str()).or_default() += 1;
+        }
+    }
+
+    let mut keys = BTreeMap::new();
+    let mut used = BTreeSet::new();
+    for (model_id, plugin_key, by_name, by_content) in &candidates {
+        let key = match plugin_key {
+            Some(plugin_key) => (*plugin_key).clone(),
+            None if shared_names.get(by_name.as_str()).is_some_and(|n| *n > 1) => {
+                by_content.clone()
+            }
+            None => by_name.clone(),
+        };
+
+        // A key identifies one model, so a repeat has to be broken apart rather than overwrite.
+        // Reaching here means the resources are indistinguishable by name and content alike.
+        let mut unique = key.clone();
+        let mut attempt = 1;
+        while !used.insert(unique.clone()) {
+            attempt += 1;
+            unique = format!("{key}~{attempt}");
+        }
+
+        keys.insert((*model_id).to_string(), unique);
+    }
+
+    keys
+}
+
+const IDENTITY_SEP: char = '\u{1f}';
+
+/// A resource's key by name, plus the one to use when another resource already took it.
+fn derived_pair(model: &str, ancestry: &[String], name: &str, route: &str) -> (String, String) {
+    let by_name = if name.is_empty() { route } else { name };
+    let by_content = format!("{by_name}{IDENTITY_SEP}{route}");
+    (fallback_key(model, ancestry, by_name), fallback_key(model, ancestry, &by_content))
+}
+
+/// Stops at the first folder outside the plan, which is the existing folder an import targets.
+fn ancestry_path(
+    folders: &BTreeMap<String, (String, Option<String>)>,
+    folder_id: Option<&str>,
+) -> Vec<String> {
+    let mut path = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut next = folder_id.map(str::to_string);
+    while let Some(id) = next {
+        if !seen.insert(id.clone()) {
+            break;
+        }
+        let Some((name, parent_id)) = folders.get(&id) else {
+            break;
+        };
+        path.push(name.clone());
+        next = parent_id.clone();
+    }
+    path.reverse();
+    path
+}
+
+/// Known limitation: this changes when the source document renames or moves the resource, so a
+/// re-import sees a rename as a delete plus an add.
+fn fallback_key(model: &str, ancestry: &[String], identity: &str) -> String {
+    const RECORD: char = '\u{1e}';
+    let ancestry = ancestry.join(RECORD.to_string().as_str());
+    format!(
+        "fb:{:x}",
+        md5::compute(format!("{model}{IDENTITY_SEP}{ancestry}{IDENTITY_SEP}{identity}"))
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -584,6 +752,7 @@ mod tests {
                 folder_id: Some(selected_folder.id.clone()),
             },
             imported_resources(),
+            None,
         )
         .expect("plan import");
 
@@ -685,6 +854,7 @@ mod tests {
             "Yaak".to_string(),
             ImportDestination::NewWorkspace,
             resources,
+            None,
         )
         .expect("plan import");
 
@@ -750,6 +920,7 @@ mod tests {
                 folder_id: None,
             },
             resources,
+            None,
         )
         .expect("plan import");
 
@@ -778,6 +949,7 @@ mod tests {
             "OpenAPI".to_string(),
             ImportDestination::NewWorkspace,
             imported_resources(),
+            None,
         )
         .expect("plan import");
         let workspace_id = plan.resources.workspaces[0].id.clone();
@@ -796,5 +968,141 @@ mod tests {
         let db = query_manager.connect();
         assert!(db.get_workspace(&workspace_id).is_err(), "workspace insert must roll back");
         assert!(db.get_environment(&environment_id).is_err(), "environment must not exist");
+    }
+
+    fn request_key<'a>(plan: &'a ImportPlan, name: &str) -> &'a str {
+        let request = plan
+            .resources
+            .http_requests
+            .iter()
+            .find(|v| v.name == name)
+            .unwrap_or_else(|| panic!("no planned request named {name}"));
+        plan.source_keys.get(&request.id).expect("request has a source key")
+    }
+
+    fn plan_with_keys(
+        resources: ImportResources,
+        source_keys: Option<BTreeMap<String, String>>,
+    ) -> ImportPlan {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        plan_import_resources(
+            &query_manager,
+            "Yaak".to_string(),
+            ImportDestination::NewWorkspace,
+            resources,
+            source_keys,
+        )
+        .expect("plan import")
+    }
+
+    #[test]
+    fn every_planned_model_gets_a_source_key() {
+        let plan = plan_with_keys(imported_resources(), None);
+
+        let planned_ids = plan
+            .resources
+            .workspaces
+            .iter()
+            .map(|v| v.id.clone())
+            .chain(plan.resources.environments.iter().map(|v| v.id.clone()))
+            .chain(plan.resources.folders.iter().map(|v| v.id.clone()))
+            .chain(plan.resources.http_requests.iter().map(|v| v.id.clone()))
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(plan.source_keys.keys().cloned().collect::<BTreeSet<_>>(), planned_ids);
+        assert!(
+            plan.source_keys.values().all(|key| key.starts_with("fb:")),
+            "an importer that supplied no keys should leave every key derived: {:?}",
+            plan.source_keys,
+        );
+    }
+
+    #[test]
+    fn importer_keys_win_over_derived_ones() {
+        let source_keys = BTreeMap::from([("rq_nested".to_string(), "op:listPets".to_string())]);
+        let plan = plan_with_keys(imported_resources(), Some(source_keys));
+
+        assert_eq!(request_key(&plan, "Nested Request"), "op:listPets");
+        assert!(request_key(&plan, "Root Request").starts_with("fb:"));
+    }
+
+    #[test]
+    fn derived_keys_survive_a_re_parse_that_mints_new_ids() {
+        let first = plan_with_keys(imported_resources(), None);
+
+        let mut edited = imported_resources();
+        for (i, request) in edited.http_requests.iter_mut().enumerate() {
+            request.id = format!("reparsed_{i}");
+            request.url = format!("{}?added=1", request.url);
+        }
+        edited.folders[0].id = "reparsed_folder".to_string();
+        edited.http_requests[1].folder_id = Some("reparsed_folder".to_string());
+        let second = plan_with_keys(edited, None);
+
+        assert_eq!(request_key(&first, "Root Request"), request_key(&second, "Root Request"));
+        assert_eq!(request_key(&first, "Nested Request"), request_key(&second, "Nested Request"));
+    }
+
+    #[test]
+    fn derived_keys_distinguish_same_named_requests_by_folder() {
+        let mut resources = imported_resources();
+        resources.http_requests[1].name = resources.http_requests[0].name.clone();
+        let plan = plan_with_keys(resources, None);
+
+        let keys = plan.source_keys.values().collect::<BTreeSet<_>>();
+        assert_eq!(keys.len(), plan.source_keys.len(), "keys collided: {:?}", plan.source_keys);
+    }
+
+    #[test]
+    fn duplicate_keys_are_broken_apart_so_none_are_lost() {
+        let mut resources = imported_resources();
+        resources.http_requests[1].folder_id = None;
+        resources.http_requests[1].name = resources.http_requests[0].name.clone();
+        resources.http_requests[1].url = resources.http_requests[0].url.clone();
+        let plan = plan_with_keys(resources, None);
+
+        assert_eq!(plan.source_keys.len(), 5);
+        let keys = plan.source_keys.values().collect::<BTreeSet<_>>();
+        assert_eq!(keys.len(), 5, "keys collided: {:?}", plan.source_keys);
+        assert!(
+            plan.source_keys.values().any(|key| key.ends_with("~2")),
+            "the repeat should be suffixed: {:?}",
+            plan.source_keys,
+        );
+    }
+
+    #[test]
+    fn same_named_siblings_keep_their_keys_when_the_document_reorders() {
+        let build = |swap: bool| {
+            let mut resources = imported_resources();
+            resources.http_requests[0].name = "Get".to_string();
+            resources.http_requests[1].name = "Get".to_string();
+            resources.http_requests[0].folder_id = Some("fl_source".to_string());
+            resources.http_requests[0].url = "https://example.com/a".to_string();
+            resources.http_requests[1].url = "https://example.com/b".to_string();
+            if swap {
+                resources.http_requests.swap(0, 1);
+            }
+            let plan = plan_with_keys(resources, None);
+            plan.resources
+                .http_requests
+                .iter()
+                .map(|r| (r.url.clone(), plan.source_keys[&r.id].clone()))
+                .collect::<BTreeMap<_, _>>()
+        };
+
+        // Listing the pair the other way round must not hand each other's key over, or a later
+        // re-import would credit one request's edits to the other.
+        assert_eq!(build(false), build(true));
+    }
+
+    #[test]
+    fn derived_keys_are_prefixed_so_importer_keys_stay_distinguishable() {
+        let source_keys = BTreeMap::from([("rq_root".to_string(), "op:root".to_string())]);
+        let plan = plan_with_keys(imported_resources(), Some(source_keys));
+
+        assert!(!request_key(&plan, "Root Request").starts_with("fb:"));
+        assert!(request_key(&plan, "Nested Request").starts_with("fb:"));
     }
 }
