@@ -1005,15 +1005,31 @@ enum KeyStatus<'a> {
 /// The deprecated environment `base` flag mirrors `parentModel`, which is compared already.
 /// Importers number `sortPriority` from source order, so comparing it would turn one insertion
 /// into an update of everything after it.
-fn comparable(mut value: Value) -> Value {
+fn comparable(value: Value) -> Value {
+    let mut value = strip_ids(value);
     if let Some(object) = value.as_object_mut() {
-        for field in
-            ["id", "model", "workspaceId", "createdAt", "updatedAt", "base", "sortPriority"]
-        {
+        for field in ["model", "workspaceId", "createdAt", "updatedAt", "base", "sortPriority"] {
             object.remove(field);
         }
     }
     value
+}
+
+/// A header, parameter, or variable carries an `id` that identifies its row to the editor rather
+/// than anything about its content, and the editor fills those in the first time it touches a
+/// resource. Dropping every `id` keeps that from reading as a local edit.
+fn strip_ids(value: Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(
+            object
+                .into_iter()
+                .filter(|(key, _)| key != "id")
+                .map(|(key, value)| (key, strip_ids(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(strip_ids).collect()),
+        other => other,
+    }
 }
 
 const CONTENT_HASH_VERSION: &str = "v1:";
@@ -1920,11 +1936,18 @@ mod tests {
     }
 
     fn first_import(query_manager: &QueryManager) -> BatchUpsertResult {
+        first_import_with(query_manager, imported_resources())
+    }
+
+    fn first_import_with(
+        query_manager: &QueryManager,
+        resources: ImportResources,
+    ) -> BatchUpsertResult {
         let plan = plan_import_resources(
             query_manager,
             "OpenAPI".to_string(),
             ImportDestination::NewWorkspace,
-            imported_resources(),
+            resources,
             Some(importer_keys()),
             Some(linked_origin()),
         )
@@ -2561,6 +2584,49 @@ mod tests {
         let root = item_by_name(&plan, "Root Request");
         assert_eq!(root.action, ImportPlanAction::Conflict, "a difference can't be attributed");
         assert_eq!(root.resolution, Some(ImportConflictResolution::KeepMine));
+    }
+
+    #[test]
+    fn filling_in_editor_row_ids_is_not_an_edit() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let mut resources = imported_resources();
+        resources.http_requests[0].headers = vec![HttpRequestHeader {
+            enabled: true,
+            name: "Accept".to_string(),
+            value: "application/json".to_string(),
+            id: None,
+        }];
+        let committed = first_import_with(&query_manager, resources.clone());
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        // Opening the request in the editor stamps a row ID onto every header it renders.
+        {
+            let db = query_manager.connect();
+            let root = db.get_http_request(&root_id).expect("get root");
+            let headers = root
+                .headers
+                .iter()
+                .map(|h| HttpRequestHeader { id: Some("hd_generated".to_string()), ..h.clone() })
+                .collect();
+            db.upsert_http_request(&HttpRequest { headers, ..root }, &UpdateSource::Background)
+                .expect("stamp row ids");
+        }
+
+        let plan = replan(&query_manager, &workspace_id, resources);
+        assert_eq!(
+            item_by_name(&plan, "Root Request").action,
+            ImportPlanAction::Unchanged,
+            "a row ID is not content: {:?}",
+            item_by_name(&plan, "Root Request").changed_fields,
+        );
     }
 
     #[test]
