@@ -77,6 +77,10 @@ export type ImportPlanItem = {
   selected: boolean;
   resolution?: ImportConflictResolution;
   reason?: ImportPlanReason;
+  /**
+   * Fields where the source and the local copy disagree, so the preview can say why
+   */
+  changedFields: Array<string>;
 };
 
 /**

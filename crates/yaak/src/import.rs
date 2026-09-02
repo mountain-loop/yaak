@@ -842,6 +842,7 @@ fn merge_with_linked_source(
                 selected,
                 resolution,
                 reason,
+                changed_fields: Vec::new(),
             };
 
             // Nothing can be created inside a folder that isn't imported, so it starts unchecked
@@ -870,13 +871,15 @@ fn merge_with_linked_source(
                 return Ok(());
             }
 
-            let incoming = serde_json::to_value(&any)?;
-            let current = current_models.get(&planned_id).cloned().unwrap_or_default();
+            let incoming = comparable(serde_json::to_value(&any)?);
+            let current = comparable(current_models.get(&planned_id).cloned().unwrap_or_default());
             let (source_changed, local_changed) = match recorded_hash(row) {
-                Some(hash) => (content_hash(incoming) != hash, content_hash(current) != hash),
+                Some(hash) => {
+                    (hash_comparable(&incoming) != hash, hash_comparable(&current) != hash)
+                }
                 // Without a recorded version, all that can be told is whether the two sides differ
                 None => {
-                    let differs = comparable(incoming) != comparable(current);
+                    let differs = incoming != current;
                     (differs, differs)
                 }
             };
@@ -891,7 +894,9 @@ fn merge_with_linked_source(
                     Some(ImportConflictResolution::KeepMine),
                 ),
             };
-            items.push(item(action, selected, resolution, None));
+            let mut planned = item(action, selected, resolution, None);
+            planned.changed_fields = changed_fields(&incoming, &current);
+            items.push(planned);
             Ok(())
         };
 
@@ -946,6 +951,7 @@ fn merge_with_linked_source(
             selected: false,
             resolution: None,
             reason: None,
+            changed_fields: Vec::new(),
         });
     }
 
@@ -965,6 +971,7 @@ fn create_only_items(plan: &ImportPlan) -> Vec<ImportPlanItem> {
             selected: true,
             resolution: None,
             reason: None,
+            changed_fields: Vec::new(),
         });
     };
     for v in &plan.resources.folders {
@@ -1014,8 +1021,27 @@ const CONTENT_HASH_VERSION: &str = "v1:";
 /// Identifies a resource's content well enough to tell "changed since the last import" from
 /// "unchanged", without keeping a copy of every imported resource around.
 fn content_hash(value: Value) -> String {
-    let canonical = serde_json::to_string(&sorted_keys(comparable(value))).unwrap_or_default();
+    hash_comparable(&comparable(value))
+}
+
+fn hash_comparable(value: &Value) -> String {
+    let canonical = serde_json::to_string(&sorted_keys(value.clone())).unwrap_or_default();
     format!("{CONTENT_HASH_VERSION}{:x}", Sha256::digest(canonical.as_bytes()))
+}
+
+/// The fields two comparable forms disagree on, so a preview row can explain itself.
+fn changed_fields(incoming: &Value, current: &Value) -> Vec<String> {
+    let (Some(incoming), Some(current)) = (incoming.as_object(), current.as_object()) else {
+        return Vec::new();
+    };
+    incoming
+        .keys()
+        .chain(current.keys())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .filter(|key| incoming.get(*key) != current.get(*key))
+        .cloned()
+        .collect()
 }
 
 /// A hash written by a version this build doesn't understand says nothing about the resource.
@@ -2079,6 +2105,7 @@ mod tests {
         let nested = item_by_name(&plan, "Nested Request");
         assert_eq!(nested.action, ImportPlanAction::KeepLocal);
         assert!(!nested.selected);
+        assert_eq!(nested.changed_fields, vec!["url".to_string()], "the preview names the edit");
         let extra = item_by_name(&plan, "Extra Request");
         assert_eq!(extra.action, ImportPlanAction::Create);
         assert!(extra.selected);

@@ -205,6 +205,9 @@ pub struct ImportPlanItem {
     pub resolution: Option<ImportConflictResolution>,
     #[ts(optional)]
     pub reason: Option<ImportPlanReason>,
+    /// Fields where the source and the local copy disagree, so the preview can say why
+    #[serde(default)]
+    pub changed_fields: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]

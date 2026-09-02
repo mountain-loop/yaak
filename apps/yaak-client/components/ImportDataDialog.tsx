@@ -345,6 +345,7 @@ function LoadedImportDataDialog({
           modelId: existing?.id ?? planned?.id ?? "workspace",
           name: existing?.name ?? planned?.name ?? "New workspace",
           selected: true,
+          changedFields: [],
         },
         children: itemTree,
       };
@@ -408,7 +409,7 @@ function LoadedImportDataDialog({
               ? "Importing"
               : changeCount > 0
                 ? `Apply ${changeCount} ${changeCount === 1 ? "Change" : "Changes"}`
-                : "Apply"}
+                : "Done"}
           </Button>
         </HStack>
       </VStack>
@@ -626,24 +627,32 @@ function actionLabel(item: ImportPlanItem): string | null {
 }
 
 function actionHelp(item: ImportPlanItem): string | null {
+  const help = (text: string) =>
+    item.changedFields.length > 0
+      ? `${text} · ${item.changedFields.map(fieldLabel).join(", ")}`
+      : text;
   switch (item.action) {
     case "create":
       return "Added since the last import";
     case "update":
-      return "Changed since the last import";
+      return help("Changed since the last import");
     case "delete":
       return item.reason === "moved_into_not_imported_folder"
         ? "Moved into a folder that isn't imported. Import that folder instead to follow the move"
         : "Deleted since the last import";
     case "keep_local":
-      return "Local edits made since the last import. Importing will revert them if checked";
+      return help("Local edits made since the last import. Importing will revert them if checked");
     case "conflict":
-      return "Changed both here and in the file since the last import";
+      return help("Changed both here and in the file since the last import");
     case "not_imported":
       return "In the file, but not imported. Check it to import it";
     default:
       return null;
   }
+}
+
+function fieldLabel(field: string): string {
+  return field.replace(/([A-Z])/g, " $1").toLowerCase();
 }
 
 /** Every plan item above `item`, nearest first. */
