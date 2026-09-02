@@ -261,13 +261,20 @@ function LoadedImportDataDialog({
   const itemTree = useMemo(() => buildItemTree(items), [items]);
 
   // A folder row's checkbox aggregates its subtree the way the git commit tree does: creates and
-  // updates toggle together, while removals only ever cascade beneath a removed folder.
+  // updates toggle together, while removals only ever cascade beneath a removed folder. Checking
+  // anything also brings back the folders it needs to live in.
   const toggleNode = (node: CheckboxTreeNode<ImportPlanItem>, checked: boolean) => {
     const targets = new Set(
       collectItems(node)
         .filter((i) => togglesWith(node.data, i))
         .map((i) => i.modelId),
     );
+    if (checked) {
+      const byId = new Map(items.map((i) => [i.modelId, i]));
+      for (const ancestor of ancestorsOf(node.data, byId)) {
+        if (ancestor.action === "not_imported") targets.add(ancestor.modelId);
+      }
+    }
     setItems((prev) => prev.map((i) => (targets.has(i.modelId) ? { ...i, selected: checked } : i)));
   };
 
@@ -283,19 +290,17 @@ function LoadedImportDataDialog({
     const disabled = new Set<string>();
     const byId = new Map(items.map((i) => [i.modelId, i]));
     for (const item of items) {
-      const seen = new Set<string>();
-      let parentId = item.parentId;
-      while (parentId != null && !seen.has(parentId)) {
-        seen.add(parentId);
-        const parent = byId.get(parentId);
-        if (parent == null || parent.model !== "folder") break;
-        if (parent.action === "create" && !parent.selected && item.action !== "delete") {
+      for (const parent of ancestorsOf(item, byId)) {
+        if (parent.model !== "folder") break;
+        const missing =
+          (parent.action === "create" || parent.action === "not_imported") && !parent.selected;
+        // A not-imported row stays checkable: checking it brings its folders back with it
+        if (missing && item.action !== "delete" && item.action !== "not_imported") {
           disabled.add(item.modelId);
         }
         if (parent.action === "delete" && parent.selected && item.action === "delete") {
           disabled.add(item.modelId);
         }
-        parentId = parent.parentId;
       }
     }
     return disabled;
@@ -340,6 +345,7 @@ function LoadedImportDataDialog({
           modelId: existing?.id ?? planned?.id ?? "workspace",
           name: existing?.name ?? planned?.name ?? "New workspace",
           selected: true,
+          changedFields: [],
         },
         children: itemTree,
       };
@@ -358,6 +364,7 @@ function LoadedImportDataDialog({
             checked={nodeCheckedStatus}
             onCheck={toggleNode}
             isCheckboxDisabled={(n) => disabledIds.has(n.key)}
+            isCollapsedByDefault={(n) => n.data.action === "not_imported"}
             isRelevant={(n) => n.data.model === "workspace" || n.data.action !== "unchanged"}
             renderRow={(n) => <ImportTreeRow item={n.data} onResolveConflict={resolveConflict} />}
           />
@@ -402,7 +409,7 @@ function LoadedImportDataDialog({
               ? "Importing"
               : changeCount > 0
                 ? `Apply ${changeCount} ${changeCount === 1 ? "Change" : "Changes"}`
-                : "Apply"}
+                : "Done"}
           </Button>
         </HStack>
       </VStack>
@@ -565,11 +572,13 @@ function ImportTreeRow({
       )}
       <div className="truncate flex-1">{item.name}</div>
       {item.action === "conflict" ? (
-        <div className="shrink-0 flex items-center gap-1.5">
+        <div className="shrink-0">
           <SegmentedControl
             name={`conflict-${item.modelId}`}
             label={`Resolve conflict for ${item.name}`}
             hideLabel
+            size="2xs"
+            help={actionHelp(item)}
             value={item.resolution ?? "keep_mine"}
             onChange={(v) => onResolveConflict(item.modelId, v)}
             options={[
@@ -577,7 +586,6 @@ function ImportTreeRow({
               { value: "take_source", label: "Take source" },
             ]}
           />
-          <IconTooltip content={actionHelp(item)} iconSize="sm" />
         </div>
       ) : (
         actionLabel(item) && (
@@ -589,6 +597,7 @@ function ImportTreeRow({
               item.action === "update" && "text-info",
               item.action === "delete" && "text-danger",
               item.action === "keep_local" && item.selected && "text-warning",
+              item.action === "not_imported" && "text-text-subtlest",
             )}
           >
             {actionLabel(item)}
@@ -610,26 +619,55 @@ function actionLabel(item: ImportPlanItem): string | null {
       return "removed";
     case "keep_local":
       return "edited";
+    case "not_imported":
+      return "not imported";
     default:
       return null;
   }
 }
 
 function actionHelp(item: ImportPlanItem): string | null {
+  const help = (text: string) =>
+    item.changedFields.length > 0
+      ? `${text} · ${item.changedFields.map(fieldLabel).join(", ")}`
+      : text;
   switch (item.action) {
     case "create":
       return "Added since the last import";
     case "update":
-      return "Changed since the last import";
+      return help("Changed since the last import");
     case "delete":
-      return "Deleted since the last import";
+      return item.reason === "moved_into_not_imported_folder"
+        ? "Moved into a folder that isn't imported. Import that folder instead to follow the move"
+        : "Deleted since the last import";
     case "keep_local":
-      return "Local edits made since the last import. Importing will revert them if checked";
+      return help("Local edits made since the last import. Importing will revert them if checked");
     case "conflict":
-      return "Changed both here and in the file since the last import";
+      return help("Changed both here and in the file since the last import");
+    case "not_imported":
+      return "In the file, but not imported. Check it to import it";
     default:
       return null;
   }
+}
+
+function fieldLabel(field: string): string {
+  return field.replace(/([A-Z])/g, " $1").toLowerCase();
+}
+
+/** Every plan item above `item`, nearest first. */
+function ancestorsOf(item: ImportPlanItem, byId: Map<string, ImportPlanItem>): ImportPlanItem[] {
+  const ancestors: ImportPlanItem[] = [];
+  const seen = new Set<string>();
+  let parentId = item.parentId;
+  while (parentId != null && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = byId.get(parentId);
+    if (parent == null) break;
+    ancestors.push(parent);
+    parentId = parent.parentId;
+  }
+  return ancestors;
 }
 
 function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem>[] {
@@ -678,7 +716,7 @@ function togglesWith(root: ImportPlanItem, item: ImportPlanItem): boolean {
   if (item.action === "keep_local") {
     return root.modelId === item.modelId && item.model !== "folder";
   }
-  return item.action === "create" || item.action === "update";
+  return item.action === "create" || item.action === "update" || item.action === "not_imported";
 }
 
 function nodeCheckedStatus(

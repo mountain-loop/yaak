@@ -21,6 +21,8 @@ interface Props<T> {
   isCheckboxDisabled?: (node: CheckboxTreeNode<T>) => boolean;
   /** An irrelevant row is hidden unless one of its descendants is relevant */
   isRelevant: (node: CheckboxTreeNode<T>) => boolean;
+  /** A node that starts collapsed, so a large subtree doesn't crowd out the rest */
+  isCollapsedByDefault?: (node: CheckboxTreeNode<T>) => boolean;
   renderRow: (node: CheckboxTreeNode<T>) => ReactNode;
   onSelectRow?: (node: CheckboxTreeNode<T>) => void;
   canSelectRow?: (node: CheckboxTreeNode<T>) => boolean;
@@ -29,7 +31,9 @@ interface Props<T> {
 
 export function CheckboxTree<T>(props: Props<T>) {
   const { node, depth = 0 } = props;
-  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [collapsed, setCollapsed] = useState<boolean>(
+    () => props.isCollapsedByDefault?.(node) ?? false,
+  );
   if (!hasRelevantNode(node, props.isRelevant)) return null;
 
   const checked = props.checked(node);

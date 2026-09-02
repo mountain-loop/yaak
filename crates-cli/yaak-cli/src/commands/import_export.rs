@@ -113,6 +113,10 @@ fn format_skipped(items: &[ImportPlanItem]) -> Option<String> {
     if keep_local > 0 {
         parts.push(format!("{keep_local} with local edits"));
     }
+    let not_imported = count(ImportPlanAction::NotImported);
+    if not_imported > 0 {
+        parts.push(format!("{not_imported} previously not imported"));
+    }
     let unchanged = count(ImportPlanAction::Unchanged);
     if unchanged > 0 {
         parts.push(format!("{unchanged} unchanged"));

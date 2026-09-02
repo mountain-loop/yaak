@@ -4,6 +4,7 @@ use common::{cli_cmd, parse_created_id, query_manager, seed_request};
 use predicates::str::contains;
 use serde_json::Value;
 use tempfile::TempDir;
+use yaak_models::util::UpdateSource;
 
 #[test]
 fn export_writes_yaak_workspace_file() {
@@ -256,4 +257,61 @@ fn re_import_merges_into_linked_workspace() {
     );
     assert!(requests.iter().any(|r| r.name == "Request B"), "removal must not auto-apply");
     assert!(requests.iter().any(|r| r.name == "Request C"));
+}
+
+#[test]
+fn re_import_leaves_deleted_resources_alone() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    let import_path = temp_dir.path().join("linked.json");
+
+    write_linked_fixture(
+        &import_path,
+        &[
+            ("req_a", "Request A", "https://example.com/a"),
+            ("req_b", "Request B", "https://example.com/b"),
+        ],
+    );
+    cli_cmd(data_dir)
+        .args(["import", import_path.to_str().expect("import path is utf-8")])
+        .assert()
+        .success();
+
+    let workspace_id = {
+        let query_manager = query_manager(data_dir);
+        let db = query_manager.connect();
+        let workspace_id = db
+            .list_workspaces()
+            .expect("list workspaces")
+            .into_iter()
+            .find(|w| w.name == "Linked Workspace")
+            .expect("workspace imported")
+            .id;
+        let request_b = db
+            .list_http_requests(&workspace_id)
+            .expect("list requests")
+            .into_iter()
+            .find(|r| r.name == "Request B")
+            .expect("request B imported");
+        db.delete_http_request_by_id(&request_b.id, &UpdateSource::Sync)
+            .expect("delete request B");
+        workspace_id
+    };
+
+    cli_cmd(data_dir)
+        .args([
+            "import",
+            import_path.to_str().expect("import path is utf-8"),
+            "--workspace-id",
+            &workspace_id,
+        ])
+        .assert()
+        .success()
+        .stdout(contains("Skipped 1 previously not imported"));
+
+    let query_manager = query_manager(data_dir);
+    let requests =
+        query_manager.connect().list_http_requests(&workspace_id).expect("list requests");
+    assert_eq!(requests.len(), 1, "a deleted request must not come back: {requests:?}");
+    assert_eq!(requests[0].name, "Request A");
 }
