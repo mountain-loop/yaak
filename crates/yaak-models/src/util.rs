@@ -169,6 +169,16 @@ pub enum ImportPlanAction {
     Unchanged,
     KeepLocal,
     Conflict,
+    /// Present in the source but previously turned down; selecting it imports it again
+    NotImported,
+}
+
+/// Extra context for an action that would otherwise be indistinguishable from its plain form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportPlanReason {
+    MovedIntoNotImportedFolder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
@@ -193,6 +203,8 @@ pub struct ImportPlanItem {
     pub selected: bool,
     #[ts(optional)]
     pub resolution: Option<ImportConflictResolution>,
+    #[ts(optional)]
+    pub reason: Option<ImportPlanReason>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]

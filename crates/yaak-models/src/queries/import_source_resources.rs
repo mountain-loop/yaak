@@ -34,7 +34,7 @@ impl<'a> ClientDb<'a> {
                 ImportSourceResourceIden::SourceKey,
                 ImportSourceResourceIden::ModelType,
                 ImportSourceResourceIden::ModelId,
-                ImportSourceResourceIden::Snapshot,
+                ImportSourceResourceIden::ContentHash,
             ])
             .values_panic([
                 CurrentTimestamp.into(),
@@ -42,8 +42,8 @@ impl<'a> ClientDb<'a> {
                 resource.import_source_id.as_str().into(),
                 resource.source_key.as_str().into(),
                 resource.model_type.as_str().into(),
-                resource.model_id.as_str().into(),
-                resource.snapshot.as_str().into(),
+                resource.model_id.clone().into(),
+                resource.content_hash.clone().into(),
             ])
             .on_conflict(
                 OnConflict::columns([
@@ -54,7 +54,7 @@ impl<'a> ClientDb<'a> {
                     ImportSourceResourceIden::UpdatedAt,
                     ImportSourceResourceIden::ModelType,
                     ImportSourceResourceIden::ModelId,
-                    ImportSourceResourceIden::Snapshot,
+                    ImportSourceResourceIden::ContentHash,
                 ])
                 .to_owned(),
             )

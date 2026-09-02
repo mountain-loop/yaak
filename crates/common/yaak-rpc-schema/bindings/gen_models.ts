@@ -331,17 +331,6 @@ export type ImportSource = {
   lastImportedAt: string;
 };
 
-export type ImportSourceResource = {
-  model: "import_source_resource";
-  createdAt: string;
-  updatedAt: string;
-  importSourceId: string;
-  sourceKey: string;
-  modelType: string;
-  modelId: string;
-  snapshot: string;
-};
-
 export type InheritedBoolSetting = { enabled?: boolean; value: boolean };
 
 export type InheritedHttpVersionSetting = { enabled?: boolean; value: HttpVersion };
