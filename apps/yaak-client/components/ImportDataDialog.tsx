@@ -571,11 +571,13 @@ function ImportTreeRow({
       )}
       <div className="truncate flex-1">{item.name}</div>
       {item.action === "conflict" ? (
-        <div className="shrink-0 flex items-center gap-1.5">
+        <div className="shrink-0">
           <SegmentedControl
             name={`conflict-${item.modelId}`}
             label={`Resolve conflict for ${item.name}`}
             hideLabel
+            size="2xs"
+            help={actionHelp(item)}
             value={item.resolution ?? "keep_mine"}
             onChange={(v) => onResolveConflict(item.modelId, v)}
             options={[
@@ -583,7 +585,6 @@ function ImportTreeRow({
               { value: "take_source", label: "Take source" },
             ]}
           />
-          <IconTooltip content={actionHelp(item)} iconSize="sm" />
         </div>
       ) : (
         actionLabel(item) && (
