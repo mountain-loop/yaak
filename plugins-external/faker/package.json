@@ -15,7 +15,7 @@
     "test": "vp test --run tests"
   },
   "dependencies": {
-    "@faker-js/faker": "^10.1.0"
+    "@faker-js/faker": "^10.5.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
