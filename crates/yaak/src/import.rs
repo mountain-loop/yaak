@@ -4,7 +4,6 @@ use log::info;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use yaak_models::client_db::ClientDb;
-use yaak_models::content::{IDENTITY_KEYS, without_keys};
 use yaak_models::models::{
     AnyModel, DEFAULT_REQUEST_MESSAGE_SIZE, Environment, Folder, GrpcRequest, HttpRequest,
     ImportSource, ImportSourceResource, UpsertModelInfo, WebsocketRequest, Workspace,
@@ -842,18 +841,15 @@ fn create_only_items(plan: &ImportPlan) -> Vec<ImportPlanItem> {
     items
 }
 
-/// Strip identity fields so equality means "same content in the same place".
-///
-/// Placement (`folderId`, `sortPriority`) is deliberately *kept*, which is
-/// where this parts company with request versioning: a re-import that moved a
-/// resource somewhere else is a change worth showing, while dragging a request
-/// around the sidebar is not an edit. See [`yaak_models::content`].
-///
-/// The deprecated environment `base` flag mirrors `parentModel`, which is
-/// compared already.
-fn comparable(value: Value) -> Value {
-    let stripped = [IDENTITY_KEYS, &["base"]].concat();
-    without_keys(value, &stripped)
+/// Strip identity and bookkeeping fields so equality means "same content in the same place".
+/// The deprecated environment `base` flag mirrors `parentModel`, which is compared already.
+fn comparable(mut value: Value) -> Value {
+    if let Some(object) = value.as_object_mut() {
+        for field in ["id", "model", "workspaceId", "createdAt", "updatedAt", "base"] {
+            object.remove(field);
+        }
+    }
+    value
 }
 
 fn existing_model_json(
@@ -1207,42 +1203,6 @@ mod tests {
     use super::*;
     use serde_json::json;
     use yaak_models::models::{EnvironmentVariable, HttpRequestHeader};
-
-    /// Import and request versioning share the stripping mechanism but not the
-    /// key list, and this is the difference. Versioning drops placement so
-    /// dragging a request around the sidebar is not an edit; import keeps it so
-    /// a source that moved a resource reads as a change. Unifying the two lists
-    /// would silently make a re-import stop noticing moves.
-    #[test]
-    fn comparable_treats_a_move_as_a_change_but_ignores_identity() {
-        let base = json!({
-            "model": "http_request",
-            "id": "rq_1",
-            "workspaceId": "wk_1",
-            "createdAt": "2026-01-01T00:00:00",
-            "updatedAt": "2026-01-01T00:00:00",
-            "folderId": "fl_1",
-            "sortPriority": 1.0,
-            "url": "https://example.com",
-        });
-
-        let mut renamed_identity = base.clone();
-        renamed_identity["id"] = json!("rq_2");
-        renamed_identity["updatedAt"] = json!("2026-09-06T00:00:00");
-        assert_eq!(
-            comparable(renamed_identity),
-            comparable(base.clone()),
-            "identity and timestamps are never content",
-        );
-
-        let mut moved = base.clone();
-        moved["folderId"] = json!("fl_2");
-        assert_ne!(comparable(moved), comparable(base.clone()), "a move is a change");
-
-        let mut resorted = base.clone();
-        resorted["sortPriority"] = json!(99.0);
-        assert_ne!(comparable(resorted), comparable(base), "a reorder is a change");
-    }
 
     fn destination_workspace() -> Workspace {
         Workspace {

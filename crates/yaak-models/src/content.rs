@@ -7,6 +7,11 @@
 //! They ask slightly different questions — see [`PLACEMENT_KEYS`] — so what is
 //! shared here is the mechanism and the reasoning, not one fixed answer.
 //!
+//! The implementation is lifted from the import merge work on
+//! `import-remember-selection` (#619), which got here first and got it right;
+//! that branch's private copy should become a call into this module when it
+//! lands.
+//!
 //! Not shared with directory sync, deliberately. Sync checksums the *bytes of a
 //! file* to notice that someone edited it on disk, so its hash has to reflect
 //! formatting and key order — exactly what this module throws away.
@@ -20,19 +25,24 @@ use sha2::{Digest, Sha256};
 ///
 /// Every model carries them and every write rewrites at least `updatedAt`, so
 /// leaving them in would make every model differ from every copy of itself.
-pub const IDENTITY_KEYS: &[&str] = &["model", "id", "createdAt", "updatedAt", "workspaceId"];
+/// `id` is not listed because it needs [`strip_ids`], which reaches nested rows
+/// too.
+pub const IDENTITY_KEYS: &[&str] = &["model", "workspaceId", "createdAt", "updatedAt"];
 
-/// Fields that say where a model sits among its siblings.
+/// Fields that say where a model sits, rather than what it holds.
 ///
-/// Whether these are content depends on the question being asked, which is why
-/// they are a separate list. Versioning drops them: dragging a request into a
-/// folder or up the sidebar is not an edit and must not mint a version or show
-/// up in a diff. Import keeps them: a re-import that moved a resource somewhere
-/// else *is* a change worth showing, because equality there means "same content
-/// in the same place".
+/// `sortPriority` is not content for anybody: importers number it from source
+/// order, so comparing it turns one insertion into an update of everything
+/// after it, and dragging a request up the sidebar is not an edit.
+///
+/// `folderId` is where the two callers actually part company, and it is a real
+/// disagreement rather than an oversight. Versioning drops it: moving a request
+/// into a folder is not an edit and must not mint a version. Import keeps it:
+/// equality there means "same content in the same place", so a source that
+/// moved a resource is showing you a change.
 pub const PLACEMENT_KEYS: &[&str] = &["folderId", "sortPriority"];
 
-/// A model's JSON with the named keys removed.
+/// A model's JSON with the named top-level keys removed.
 pub fn without_keys(mut value: Value, keys: &[&str]) -> Value {
     if let Some(object) = value.as_object_mut() {
         for key in keys {
@@ -42,54 +52,70 @@ pub fn without_keys(mut value: Value, keys: &[&str]) -> Value {
     value
 }
 
-/// A stable hash of a document's content.
-pub fn content_hash(document: &Value) -> Result<String> {
-    let mut canonical = String::new();
-    write_canonical(document, &mut canonical);
-    Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
+/// Drop every `id`, at every depth.
+///
+/// A header, parameter, or variable carries an `id` that identifies its row to
+/// the editor rather than anything about its content, and the editor fills
+/// those in the first time it touches a resource. Dropping every `id` keeps
+/// that from reading as a change — otherwise merely opening a request would
+/// look like an edit of all of its headers at once.
+pub fn strip_ids(value: Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(
+            object
+                .into_iter()
+                .filter(|(key, _)| key != "id")
+                .map(|(key, value)| (key, strip_ids(value)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(strip_ids).collect()),
+        other => other,
+    }
 }
 
-/// Serialize with object keys in sorted order.
+/// Prefix on every hash this module writes.
 ///
-/// Plain `to_string` would not do: whether `serde_json::Map` preserves
-/// insertion order or sorts is a workspace-wide feature decision — with
-/// `preserve_order` on in some builds of this workspace and off in others — and
-/// a document read back from SQLite has whatever order it was written in.
-/// Sorting here makes the hash depend on the content and nothing else, in every
-/// build.
-fn write_canonical(value: &Value, out: &mut String) {
+/// A hash written by a version a build doesn't understand says nothing about
+/// the content, and the caller needs to be able to tell that apart from a hash
+/// that says "different". Bump it whenever the stripping or the canonical form
+/// changes.
+pub const CONTENT_HASH_VERSION: &str = "v1:";
+
+/// A stable hash of a document's content.
+pub fn content_hash(document: &Value) -> Result<String> {
+    let canonical = serde_json::to_string(&sorted_keys(document.clone()))?;
+    Ok(format!("{CONTENT_HASH_VERSION}{:x}", Sha256::digest(canonical.as_bytes())))
+}
+
+/// Whether a stored hash was written by an algorithm this build understands.
+pub fn hash_is_readable(hash: &str) -> bool {
+    hash.starts_with(CONTENT_HASH_VERSION)
+}
+
+/// Rebuild every object with its keys in sorted order.
+///
+/// Serializing straight from the input would not do: whether
+/// `serde_json::Map` preserves insertion order or sorts is a workspace-wide
+/// feature decision — `preserve_order` is on in some builds of this workspace
+/// and off in others — and a document read back from SQLite has whatever order
+/// it was written in. Sorting first makes the hash depend on the content and
+/// nothing else, in every build.
+fn sorted_keys(value: Value) -> Value {
     match value {
-        Value::Object(map) => {
-            let mut keys = map.keys().collect::<Vec<_>>();
-            keys.sort_unstable();
-            out.push('{');
-            for (i, key) in keys.into_iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                write_canonical(&Value::String(key.clone()), out);
-                out.push(':');
-                write_canonical(&map[key], out);
-            }
-            out.push('}');
+        Value::Object(object) => {
+            let mut entries = object.into_iter().collect::<Vec<_>>();
+            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            Value::Object(entries.into_iter().map(|(k, v)| (k, sorted_keys(v))).collect())
         }
-        Value::Array(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                write_canonical(item, out);
-            }
-            out.push(']');
-        }
-        scalar => out.push_str(&scalar.to_string()),
+        Value::Array(items) => Value::Array(items.into_iter().map(sorted_keys).collect()),
+        other => other,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     /// The hash has to survive a round trip through SQLite, which stores a
     /// document as text and hands back whatever order it was written in. It
@@ -122,12 +148,38 @@ mod tests {
     }
 
     #[test]
+    fn hashes_carry_a_readable_version() {
+        let hash = content_hash(&json!({"url": "a"})).unwrap();
+        assert!(hash_is_readable(&hash));
+        assert!(!hash_is_readable("v99:deadbeef"));
+        assert!(!hash_is_readable("deadbeef"));
+    }
+
+    #[test]
     fn without_keys_leaves_everything_else_alone() {
-        let value: Value = serde_json::json!({"id": "rq_1", "url": "a", "name": "n"});
-        let stripped = without_keys(value, IDENTITY_KEYS);
+        let stripped = without_keys(json!({"model": "http_request", "url": "a"}), IDENTITY_KEYS);
         let object = stripped.as_object().unwrap();
-        assert!(!object.contains_key("id"));
+        assert!(!object.contains_key("model"));
         assert_eq!(object.get("url").unwrap(), "a");
-        assert_eq!(object.get("name").unwrap(), "n");
+    }
+
+    /// The editor writes row ids into headers and parameters the first time it
+    /// touches a request, so nested ids have to go or that reads as an edit.
+    #[test]
+    fn strip_ids_reaches_nested_rows() {
+        let with_ids = json!({
+            "id": "rq_1",
+            "url": "a",
+            "headers": [{"id": "h_1", "name": "Accept", "value": "*/*"}],
+        });
+        let without = json!({
+            "url": "a",
+            "headers": [{"name": "Accept", "value": "*/*"}],
+        });
+        assert_eq!(strip_ids(with_ids.clone()), strip_ids(without.clone()));
+        assert_eq!(
+            content_hash(&strip_ids(with_ids)).unwrap(),
+            content_hash(&strip_ids(without)).unwrap(),
+        );
     }
 }

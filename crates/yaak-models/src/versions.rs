@@ -4,7 +4,7 @@
 //! decided here is versioning's own policy: placement is not content, and a
 //! restore lays a document back over the model it came from.
 
-use crate::content::{IDENTITY_KEYS, PLACEMENT_KEYS, without_keys};
+use crate::content::{IDENTITY_KEYS, PLACEMENT_KEYS, strip_ids, without_keys};
 use crate::error::Result;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -14,12 +14,15 @@ use serde_json::{Map, Value};
 /// Dropping [`PLACEMENT_KEYS`] as well as [`IDENTITY_KEYS`] is what makes a
 /// version stable: moving a request into a folder, dragging it up the sidebar,
 /// or simply saving it again rewrite those and nothing else, and none of them
-/// should mint a version or show up in a diff. It is also why one rule covers
-/// HTTP, gRPC and WebSocket — the three differ only in the content fields,
-/// which are all kept.
+/// should mint a version or show up in a diff. `strip_ids` does the same job
+/// for the row ids the editor writes into headers and parameters — without it,
+/// opening a request would mint a version whose diff is nothing but ids.
+///
+/// One rule covers HTTP, gRPC and WebSocket, because the three differ only in
+/// the content fields, which are all kept.
 pub fn version_document<T: Serialize>(model: &T) -> Result<Value> {
     let stripped = [IDENTITY_KEYS, PLACEMENT_KEYS].concat();
-    Ok(without_keys(serde_json::to_value(model)?, &stripped))
+    Ok(without_keys(strip_ids(serde_json::to_value(model)?), &stripped))
 }
 
 /// Lay a version's document back over a live model.
@@ -109,8 +112,9 @@ mod tests {
     }
 
     /// The other half of the split documented on [`PLACEMENT_KEYS`]. Import
-    /// counts a move as a change; versioning must not, or dragging a request
-    /// around the sidebar would mint versions nobody asked for.
+    /// counts a move between folders as a change; versioning must not, or
+    /// dragging a request around the sidebar would mint versions nobody asked
+    /// for.
     #[test]
     fn placement_is_not_content_here_even_though_import_says_it_is() {
         let base = version_document(&request()).unwrap();

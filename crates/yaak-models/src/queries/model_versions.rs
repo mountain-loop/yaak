@@ -267,6 +267,53 @@ mod tests {
         assert_eq!(db.list_model_versions(&request.id).unwrap().len(), 1);
     }
 
+    /// The pair editor writes a generated `id` into every header row the first
+    /// time it touches a request, and that write reaches the database like any
+    /// other. Without nested id stripping, merely opening a request would mint
+    /// a version whose diff is nothing but ids.
+    #[test]
+    fn row_ids_written_by_the_editor_do_not_mint_a_version() {
+        let (query_manager, _blobs, _rx) = init_in_memory().expect("Failed to init DB");
+        let db = query_manager.connect();
+        let (_workspace, request) = seed(&db);
+
+        let header = |id: Option<&str>| crate::models::HttpRequestHeader {
+            name: "Accept".to_string(),
+            value: "application/json".to_string(),
+            id: id.map(str::to_string),
+            ..Default::default()
+        };
+
+        let request = db
+            .upsert_http_request(&HttpRequest { headers: vec![header(None)], ..request }, &source())
+            .unwrap();
+        let first = snapshot(&db, &request.id, ModelVersionReason::Send);
+
+        // Opening the request in the editor fills the row id in
+        db.upsert_http_request(
+            &HttpRequest { headers: vec![header(Some("row_generated"))], ..request.clone() },
+            &source(),
+        )
+        .unwrap();
+
+        assert_eq!(snapshot(&db, &request.id, ModelVersionReason::Idle).id, first.id);
+        assert_eq!(db.list_model_versions(&request.id).unwrap().len(), 1);
+
+        // A real edit to the same row still counts
+        db.upsert_http_request(
+            &HttpRequest {
+                headers: vec![crate::models::HttpRequestHeader {
+                    value: "text/plain".to_string(),
+                    ..header(Some("row_generated"))
+                }],
+                ..request.clone()
+            },
+            &source(),
+        )
+        .unwrap();
+        assert_ne!(snapshot(&db, &request.id, ModelVersionReason::Idle).id, first.id);
+    }
+
     #[test]
     fn editing_content_mints_a_version() {
         let (query_manager, _blobs, _rx) = init_in_memory().expect("Failed to init DB");
