@@ -1,78 +1,25 @@
-//! Content addressing for model versions.
+//! Request versioning's answer to "what is this request's content?"
 //!
-//! A version's identity is its *content*, so the two functions here — what
-//! counts as content, and how content becomes a hash — are the whole of it.
-//! Everything else about versioning (when to capture, what to keep, how to
-//! restore) is built on top and stays in `queries::model_versions`.
+//! The mechanism lives in [`crate::content`], shared with import. What is
+//! decided here is versioning's own policy: placement is not content, and a
+//! restore lays a document back over the model it came from.
 
+use crate::content::{IDENTITY_KEYS, PLACEMENT_KEYS, without_keys};
 use crate::error::Result;
 use serde::Serialize;
 use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
-
-/// Keys that describe a model's place in the workspace rather than what the
-/// user typed into it.
-///
-/// Dropping them is what makes a version stable: moving a request into a
-/// folder, dragging it up the sidebar, or simply saving it again all rewrite
-/// these and nothing else, and none of them should mint a version or show up
-/// in a diff. It is also why one rule covers HTTP, gRPC and WebSocket — the
-/// three differ only in the content fields, which are all kept.
-const BOOKKEEPING_KEYS: &[&str] =
-    &["model", "id", "createdAt", "updatedAt", "workspaceId", "folderId", "sortPriority"];
 
 /// The editable content of a model, as the object a version stores.
-pub fn version_document<T: Serialize>(model: &T) -> Result<Value> {
-    let mut value = serde_json::to_value(model)?;
-    if let Some(object) = value.as_object_mut() {
-        for key in BOOKKEEPING_KEYS {
-            object.remove(*key);
-        }
-    }
-    Ok(value)
-}
-
-/// The hash a version is addressed by.
-pub fn content_hash(document: &Value) -> Result<String> {
-    let mut canonical = String::new();
-    write_canonical(document, &mut canonical);
-    Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
-}
-
-/// Serialize with object keys in sorted order.
 ///
-/// Plain `to_string` would not do: whether `serde_json::Map` preserves
-/// insertion order or sorts is a workspace-wide feature decision, and a
-/// document read back from SQLite has whatever order it was written in. Sorting
-/// here makes the hash depend on the content and nothing else, in every build.
-fn write_canonical(value: &Value, out: &mut String) {
-    match value {
-        Value::Object(map) => {
-            let mut keys = map.keys().collect::<Vec<_>>();
-            keys.sort_unstable();
-            out.push('{');
-            for (i, key) in keys.into_iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                write_canonical(&Value::String(key.clone()), out);
-                out.push(':');
-                write_canonical(&map[key], out);
-            }
-            out.push('}');
-        }
-        Value::Array(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                write_canonical(item, out);
-            }
-            out.push(']');
-        }
-        scalar => out.push_str(&scalar.to_string()),
-    }
+/// Dropping [`PLACEMENT_KEYS`] as well as [`IDENTITY_KEYS`] is what makes a
+/// version stable: moving a request into a folder, dragging it up the sidebar,
+/// or simply saving it again rewrite those and nothing else, and none of them
+/// should mint a version or show up in a diff. It is also why one rule covers
+/// HTTP, gRPC and WebSocket — the three differ only in the content fields,
+/// which are all kept.
+pub fn version_document<T: Serialize>(model: &T) -> Result<Value> {
+    let stripped = [IDENTITY_KEYS, PLACEMENT_KEYS].concat();
+    Ok(without_keys(serde_json::to_value(model)?, &stripped))
 }
 
 /// Lay a version's document back over a live model.
@@ -95,6 +42,7 @@ pub fn apply_version_document(live: &Value, document: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::content::content_hash;
     use crate::models::{HttpRequest, HttpRequestHeader};
     use chrono::Utc;
 
@@ -125,8 +73,8 @@ mod tests {
         let document = version_document(&request()).unwrap();
         let object = document.as_object().unwrap();
 
-        for key in BOOKKEEPING_KEYS {
-            assert!(!object.contains_key(*key), "document should not carry {key}");
+        for key in [IDENTITY_KEYS, PLACEMENT_KEYS].concat() {
+            assert!(!object.contains_key(key), "document should not carry {key}");
         }
 
         assert_eq!(object.get("url").unwrap(), "https://example.com/users/1");
@@ -160,6 +108,21 @@ mod tests {
         assert_eq!(hash_of(&moved_workspace), base, "workspace");
     }
 
+    /// The other half of the split documented on [`PLACEMENT_KEYS`]. Import
+    /// counts a move as a change; versioning must not, or dragging a request
+    /// around the sidebar would mint versions nobody asked for.
+    #[test]
+    fn placement_is_not_content_here_even_though_import_says_it_is() {
+        let base = version_document(&request()).unwrap();
+        let moved =
+            version_document(&HttpRequest { folder_id: Some("fl_2".into()), ..request() }).unwrap();
+        let resorted =
+            version_document(&HttpRequest { sort_priority: 99.5, ..request() }).unwrap();
+
+        assert_eq!(moved, base);
+        assert_eq!(resorted, base);
+    }
+
     #[test]
     fn editable_content_changes_the_hash() {
         let base = hash_of(&request());
@@ -175,35 +138,8 @@ mod tests {
         );
     }
 
-    /// The hash has to survive a round trip through SQLite, which stores the
-    /// document as text and hands back whatever order it was written in. It
-    /// also has to survive `serde_json`'s `preserve_order` feature being on in
-    /// one build of the workspace and off in another.
-    #[test]
-    fn key_order_does_not_change_the_hash() {
-        let a: Value = serde_json::from_str(r#"{"url":"a","method":"GET"}"#).unwrap();
-        let b: Value = serde_json::from_str(r#"{"method":"GET","url":"a"}"#).unwrap();
-        assert_eq!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
-    }
 
-    #[test]
-    fn key_order_does_not_change_the_hash_when_nested() {
-        let a: Value =
-            serde_json::from_str(r#"{"body":{"text":"x","type":"json"},"headers":[{"a":1,"b":2}]}"#)
-                .unwrap();
-        let b: Value =
-            serde_json::from_str(r#"{"headers":[{"b":2,"a":1}],"body":{"type":"json","text":"x"}}"#)
-                .unwrap();
-        assert_eq!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
-    }
 
-    /// Sorting keys must not make different documents collide.
-    #[test]
-    fn array_order_still_changes_the_hash() {
-        let a: Value = serde_json::from_str(r#"{"headers":[{"n":"a"},{"n":"b"}]}"#).unwrap();
-        let b: Value = serde_json::from_str(r#"{"headers":[{"n":"b"},{"n":"a"}]}"#).unwrap();
-        assert_ne!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
-    }
 
     #[test]
     fn applying_a_document_keeps_the_live_model_identity() {

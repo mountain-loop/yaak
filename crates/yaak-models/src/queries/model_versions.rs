@@ -6,7 +6,8 @@ use crate::models::{
 };
 use crate::queries::any_request::AnyRequest;
 use crate::util::UpdateSource;
-use crate::versions::{apply_version_document, content_hash, version_document};
+use crate::content::content_hash;
+use crate::versions::{apply_version_document, version_document};
 use log::warn;
 use sea_query::{Expr, ExprTrait, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
