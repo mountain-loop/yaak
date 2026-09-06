@@ -30,6 +30,7 @@ import type {
   HttpResponse,
   HttpResponseEventData,
   HttpSendSettings,
+  ModelVersion,
 } from "@yaakapp-internal/models";
 import type { Frame, SendRequest } from "@yaakapp-internal/web";
 import type { WorkerConnection } from "./connection";
@@ -71,7 +72,13 @@ export async function sendHttpRequest(
   // a failure to render or to reach the server lands in the response pane as
   // that response's error rather than as a toast that names no request.
   const workspaceId = await workspaceIdOfRequest(db, requestId);
-  const response = new ResponseWriter(db, { model: "http_response", requestId, workspaceId });
+  const versionId = await snapshotRequestVersion(db, requestId);
+  const response = new ResponseWriter(db, {
+    model: "http_response",
+    requestId,
+    workspaceId,
+    versionId,
+  });
   await response.create();
 
   const cancel = new AbortController();
@@ -86,6 +93,29 @@ export async function sendHttpRequest(
     unlistenCancel();
   }
   return response.current();
+}
+
+/**
+ * Capture what is about to be sent, so the response can offer it back later.
+ * The desktop does this inside its send pipeline; this host's pipeline is here,
+ * so this is where it goes. Versions are content-addressed, so repeated sends
+ * of an unchanged request all point at the same one.
+ */
+async function snapshotRequestVersion(
+  db: WorkerConnection,
+  requestId: string,
+): Promise<string | undefined> {
+  try {
+    const version = await db.rpc<ModelVersion>("models_snapshot_request", {
+      requestId,
+      reason: "send",
+    });
+    return version.id;
+  } catch (err) {
+    // History is not worth failing a send over
+    console.warn("Failed to snapshot request version", err);
+    return undefined;
+  }
 }
 
 async function runSend(
@@ -315,8 +345,16 @@ class TimelineWriter {
  * yaak-models), so an edit made while the send was in flight survives rather
  * than being written over by the send's stale snapshot.
  */
-async function persistCookies(db: WorkerConnection, jar: CookieJar, cookies: Cookie[]): Promise<void> {
-  await db.rpc("web_persist_send_cookies", { cookieJarId: jar.id, before: jar.cookies, after: cookies });
+async function persistCookies(
+  db: WorkerConnection,
+  jar: CookieJar,
+  cookies: Cookie[],
+): Promise<void> {
+  await db.rpc("web_persist_send_cookies", {
+    cookieJarId: jar.id,
+    before: jar.cookies,
+    after: cookies,
+  });
 }
 
 /**

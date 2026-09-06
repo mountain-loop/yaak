@@ -33,13 +33,46 @@ pub fn version_document<T: Serialize>(model: &T) -> Result<Value> {
 }
 
 /// The hash a version is addressed by.
-///
-/// Canonical by construction: `serde_json::Map` is a `BTreeMap` here, so
-/// serialization already visits keys in sorted order and two documents that
-/// differ only in key order hash the same.
 pub fn content_hash(document: &Value) -> Result<String> {
-    let canonical = serde_json::to_vec(document)?;
-    Ok(hex::encode(Sha256::digest(&canonical)))
+    let mut canonical = String::new();
+    write_canonical(document, &mut canonical);
+    Ok(hex::encode(Sha256::digest(canonical.as_bytes())))
+}
+
+/// Serialize with object keys in sorted order.
+///
+/// Plain `to_string` would not do: whether `serde_json::Map` preserves
+/// insertion order or sorts is a workspace-wide feature decision, and a
+/// document read back from SQLite has whatever order it was written in. Sorting
+/// here makes the hash depend on the content and nothing else, in every build.
+fn write_canonical(value: &Value, out: &mut String) {
+    match value {
+        Value::Object(map) => {
+            let mut keys = map.keys().collect::<Vec<_>>();
+            keys.sort_unstable();
+            out.push('{');
+            for (i, key) in keys.into_iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_canonical(&Value::String(key.clone()), out);
+                out.push(':');
+                write_canonical(&map[key], out);
+            }
+            out.push('}');
+        }
+        Value::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write_canonical(item, out);
+            }
+            out.push(']');
+        }
+        scalar => out.push_str(&scalar.to_string()),
+    }
 }
 
 /// Lay a version's document back over a live model.
@@ -142,13 +175,34 @@ mod tests {
         );
     }
 
-    /// The hash has to survive being written to and read back from the
-    /// database, which does not preserve key order.
+    /// The hash has to survive a round trip through SQLite, which stores the
+    /// document as text and hands back whatever order it was written in. It
+    /// also has to survive `serde_json`'s `preserve_order` feature being on in
+    /// one build of the workspace and off in another.
     #[test]
     fn key_order_does_not_change_the_hash() {
         let a: Value = serde_json::from_str(r#"{"url":"a","method":"GET"}"#).unwrap();
         let b: Value = serde_json::from_str(r#"{"method":"GET","url":"a"}"#).unwrap();
         assert_eq!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
+    }
+
+    #[test]
+    fn key_order_does_not_change_the_hash_when_nested() {
+        let a: Value =
+            serde_json::from_str(r#"{"body":{"text":"x","type":"json"},"headers":[{"a":1,"b":2}]}"#)
+                .unwrap();
+        let b: Value =
+            serde_json::from_str(r#"{"headers":[{"b":2,"a":1}],"body":{"type":"json","text":"x"}}"#)
+                .unwrap();
+        assert_eq!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
+    }
+
+    /// Sorting keys must not make different documents collide.
+    #[test]
+    fn array_order_still_changes_the_hash() {
+        let a: Value = serde_json::from_str(r#"{"headers":[{"n":"a"},{"n":"b"}]}"#).unwrap();
+        let b: Value = serde_json::from_str(r#"{"headers":[{"n":"b"},{"n":"a"}]}"#).unwrap();
+        assert_ne!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
     }
 
     #[test]

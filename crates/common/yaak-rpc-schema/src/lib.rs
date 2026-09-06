@@ -21,8 +21,8 @@ use yaak_git::{
 use yaak_grpc::ServiceDefinition;
 use yaak_models::models::{
     AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
-    HttpResponseEvent, ImportSource, Plugin, Settings, WebsocketConnection, WebsocketEvent,
-    WorkspaceMeta,
+    HttpResponseEvent, ImportSource, ModelVersion, ModelVersionReason, Plugin,
+    RequestVersionComparison, Settings, WebsocketConnection, WebsocketEvent, WorkspaceMeta,
 };
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan};
 use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
@@ -537,6 +537,28 @@ pub struct ModelsDuplicateReq {
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
+pub struct ModelsSnapshotRequestReq {
+    pub request_id: String,
+    pub reason: ModelVersionReason,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ModelsRequestVersionReq {
+    pub version_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ModelsRestoreRequestVersionReq {
+    pub version_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub struct ModelsWebsocketEventsReq {
     pub connection_id: String,
 }
@@ -981,6 +1003,9 @@ macro_rules! with_commands {
     models_upsert(ModelsUpsertReq) -> String,
     models_delete(ModelsDeleteReq) -> String,
     models_duplicate(ModelsDuplicateReq) -> String,
+    models_snapshot_request(ModelsSnapshotRequestReq) -> ModelVersion,
+    models_request_version(ModelsRequestVersionReq) -> RequestVersionComparison,
+    models_restore_request_version(ModelsRestoreRequestVersionReq) -> String,
     models_websocket_events(ModelsWebsocketEventsReq) -> Vec<WebsocketEvent>,
     models_grpc_events(ModelsGrpcEventsReq) -> Vec<GrpcEvent>,
     models_get_settings(ModelsGetSettingsReq) -> Settings,

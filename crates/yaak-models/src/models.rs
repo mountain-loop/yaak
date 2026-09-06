@@ -3285,6 +3285,23 @@ impl UpsertModelInfo for ModelVersion {
     }
 }
 
+/// One version, next to the request as it stands now.
+///
+/// Both halves come from the same place so they are guaranteed comparable: the
+/// frontend renders them side by side, and `differs` is the same content-hash
+/// comparison the backend uses everywhere else rather than a second opinion
+/// formed in TypeScript.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct RequestVersionComparison {
+    pub version: ModelVersion,
+    /// The live request's editable content, in the same shape as the version's document.
+    #[ts(type = "Record<string, any>")]
+    pub current_document: Value,
+    pub differs: bool,
+}
+
 /// Only used as a `from_row` fallback for an unparseable settings column. The
 /// value a *new* model gets comes from that model's `Default` impl.
 fn default_request_message_size_setting() -> InheritedIntSetting {
