@@ -50,11 +50,22 @@ impl<'a> ClientDb<'a> {
             workspace_id: request.workspace_id().to_string(),
             model_type: request.model_type().to_string(),
             model_id: request.id().to_string(),
-            content_hash,
+            content_hash: content_hash.clone(),
             document,
             reason,
             ..Default::default()
-        })?;
+        });
+
+        let version = match version {
+            Ok(version) => version,
+            // Two sends of the same request can both miss the lookup above and
+            // race to insert. The unique index settles it, and the loser wants
+            // exactly what the winner wrote.
+            Err(err) => match self.find_version_by_hash(request.id(), &content_hash) {
+                Some(existing) => return Ok(existing),
+                None => return Err(err),
+            },
+        };
 
         self.prune_model_versions(request.id())?;
 

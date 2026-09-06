@@ -21,8 +21,8 @@ interface Props {
  * existed have no version and stay quiet forever.
  */
 export function RequestVersionDropdown({ response }: Props) {
-  const comparison = useRequestVersion(response.versionId, response.requestId);
-  if (comparison.data == null || !comparison.data.differs) {
+  const { data: comparison } = useRequestVersion(response.versionId, response.requestId);
+  if (comparison == null || !comparison.differs) {
     return null;
   }
 
@@ -32,12 +32,12 @@ export function RequestVersionDropdown({ response }: Props) {
         {
           label: "View Diff",
           leftSlot: <Icon icon="git_branch" />,
-          onSelect: () => showRequestVersionDiff(comparison.data!),
+          onSelect: () => showRequestVersionDiff(comparison),
         },
         {
           label: "Restore This Version",
           leftSlot: <Icon icon="history" />,
-          onSelect: () => restoreRequestVersion(comparison.data!.version),
+          onSelect: () => restoreRequestVersion(comparison.version),
         },
       ]}
     >
