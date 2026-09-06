@@ -7,6 +7,7 @@ use crate::models::{
 use crate::queries::any_request::AnyRequest;
 use crate::util::UpdateSource;
 use crate::versions::{apply_version_document, content_hash, version_document};
+use log::warn;
 use sea_query::{Expr, ExprTrait, Query, SqliteQueryBuilder};
 use sea_query_rusqlite::RusqliteBinder;
 
@@ -66,6 +67,24 @@ impl<'a> ClientDb<'a> {
         reason: ModelVersionReason,
     ) -> Result<ModelVersion> {
         self.snapshot_request(&self.get_any_request(request_id)?, reason)
+    }
+
+    /// What every send calls: capture the request, and don't make a fuss.
+    ///
+    /// A send is not worth failing over history that couldn't be written, and
+    /// a request with no id is ephemeral and has nothing to version. Either way
+    /// the response just has no version to offer.
+    pub fn snapshot_request_for_send(&self, request: &AnyRequest) -> Option<String> {
+        if request.id().is_empty() {
+            return None;
+        }
+        match self.snapshot_request(request, ModelVersionReason::Send) {
+            Ok(version) => Some(version.id),
+            Err(err) => {
+                warn!("Failed to snapshot request before send: {err}");
+                None
+            }
+        }
     }
 
     /// Write a version's content back over the live request.

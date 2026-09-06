@@ -24,9 +24,10 @@ use yaak_http::types::{
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::models::{
     ClientCertificate, Cookie, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
-    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
-    ProxySettingAuth, ResolvedHttpRequestSettings,
+    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState,
+    ProxySetting, ProxySettingAuth, ResolvedHttpRequestSettings,
 };
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
@@ -283,6 +284,9 @@ pub struct HttpSendInputs {
     /// Cookies the send starts with. The store is shared, so reading it back after the send
     /// returns (or fails) yields the cookies the transaction collected.
     pub cookie_store: Option<CookieStore>,
+    /// The version holding the request's content as it was when this send was resolved,
+    /// which the response will point at. `None` for an ephemeral request with no id.
+    pub version_id: Option<String>,
 }
 
 /// Where a send writes its response. Without it, the send keeps everything in memory: no
@@ -434,6 +438,13 @@ pub fn resolve_send_inputs(
             client_certificates: settings.client_certificates,
         },
         cookie_store: cookies.map(CookieStore::from_cookies),
+        // Captured here rather than deeper in the send because this is the last place that
+        // still holds the *stored* request: further down it has been resolved against its
+        // folder and workspace and then rendered, and neither of those is what a restore
+        // should put back. Every host reaches sending through this function — the desktop,
+        // the CLI, plugin-triggered sends — so every response gets a version without each
+        // of them remembering to ask for one.
+        version_id: db.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
     })
 }
 
@@ -581,7 +592,8 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
 pub async fn send_http_request<T: TemplateCallback>(
     params: SendHttpRequestParams<'_, T>,
 ) -> Result<SendHttpRequestResult> {
-    let HttpSendInputs { request, environment_chain, runtime_config, cookie_store } = params.inputs;
+    let HttpSendInputs { request, environment_chain, runtime_config, cookie_store, version_id } =
+        params.inputs;
     let (request, auth_context_id) = request.into_parts();
     let storage = params.storage;
     let send_options = runtime_config.send_options();
@@ -619,6 +631,7 @@ pub async fn send_http_request<T: TemplateCallback>(
     let mut response = params.existing_response.unwrap_or_default();
     response.request_id = request.id.clone();
     response.workspace_id = request.workspace_id.clone();
+    response.version_id = version_id;
     response.request_content_length = request_content_length;
     response.request_headers = sendable_request
         .headers
@@ -1345,6 +1358,7 @@ mod tests {
                     client_certificates: Vec::new(),
                 },
                 cookie_store: Some(CookieStore::new()),
+                version_id: None,
             },
             template_callback: &NoopTemplateCallback,
             storage: None,
@@ -1414,6 +1428,7 @@ mod tests {
                     client_certificates: Vec::new(),
                 },
                 cookie_store: Some(CookieStore::new()),
+                version_id: None,
             },
             template_callback: &NoopTemplateCallback,
             storage: None,
