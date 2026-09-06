@@ -71,9 +71,31 @@ day one and their UI can follow.
 
 ## Status
 
-- [ ] Migration + `ModelVersion` model + bindings
-- [ ] Hashing / document extraction, with tests
-- [ ] Queries: snapshot, prune, restore, cascade
-- [ ] Send pipelines: HTTP, gRPC, WebSocket
-- [ ] RPC commands + web/wasm host
-- [ ] Frontend: snapshot triggers, dropdown, diff dialog, restore
+- [x] Migration + `ModelVersion` model + bindings
+- [x] Hashing / document extraction, with tests
+- [x] Queries: snapshot, prune, restore, cascade
+- [x] Send pipelines: HTTP, gRPC, WebSocket (plus the browser host's own)
+- [x] RPC commands + web/wasm host
+- [x] Frontend: snapshot triggers, dropdown, diff dialog, restore
+
+## Deliberately not in v1
+
+- **No versions timeline panel.** The only entry point is a response, which is
+  what the feedback asked for. A "browse all versions of this request" view is a
+  second feature on the same data and can land later without a schema change.
+- **No gRPC or WebSocket UI.** Both record versions from day one, so the history
+  is accumulating; only the indicator is HTTP-only.
+- **No `manual` trigger.** The reason exists so that adding a "Save version now"
+  action later is a UI change and not a migration.
+- **Folders, environments and workspaces are not versioned.** The response
+  timeline already records what a send inherited from them.
+
+## Notes for later
+
+- The version's `document` is the model minus bookkeeping keys, so a restore
+  merges over the live model and a field added after a version was captured
+  keeps its live value rather than being blanked.
+- `content_hash` sorts object keys before hashing. Relying on
+  `serde_json::Map` being a `BTreeMap` is not safe: `preserve_order` is on in
+  some builds of this workspace and off in others, which is exactly the bug the
+  `key_order_does_not_change_the_hash` test caught.
