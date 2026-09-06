@@ -7,7 +7,7 @@ use crate::models::{
     GraphQlIntrospection, GraphQlIntrospectionIden, GrpcConnection, GrpcConnectionIden, GrpcEvent,
     GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader, HttpRequestIden,
     HttpResponse, HttpResponseEvent, HttpResponseEventIden, HttpResponseIden, ImportSource,
-    ImportSourceIden, ResolvedHttpRequestSettings, ResolvedSetting, SyncState, SyncStateIden,
+    ImportSourceIden, ModelVersion, ModelVersionIden, ResolvedHttpRequestSettings, ResolvedSetting, SyncState, SyncStateIden,
     WebsocketConnection,
     WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden, WebsocketRequest,
     WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
@@ -90,6 +90,7 @@ impl<'a> ClientDb<'a> {
                 self.delete_import_source_resources(&import_source.id)?;
             }
             self.delete_many_untracked::<ImportSource>(ImportSourceIden::WorkspaceId, wid)?;
+            self.delete_many_untracked::<ModelVersion>(ModelVersionIden::WorkspaceId, wid)?;
             self.delete_many_untracked::<SyncState>(SyncStateIden::WorkspaceId, wid)?;
             self.delete_many_untracked::<WorkspaceMeta>(WorkspaceMetaIden::WorkspaceId, wid)?;
             self.delete(workspace, source)

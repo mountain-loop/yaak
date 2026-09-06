@@ -21,6 +21,7 @@ pub mod queries;
 pub mod query_manager;
 pub mod render;
 pub mod util;
+pub mod versions;
 
 /// Per-connection setup, applied by every pool on every connection it opens.
 fn init_connection(conn: &rusqlite::Connection) -> rusqlite::Result<()> {

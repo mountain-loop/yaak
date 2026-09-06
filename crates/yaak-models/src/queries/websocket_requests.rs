@@ -40,6 +40,7 @@ impl<'a> ClientDb<'a> {
         source: &UpdateSource,
     ) -> Result<WebsocketRequest> {
         self.delete_all_websocket_connections_for_request(websocket_request.id.as_str(), source)?;
+        self.delete_model_versions_for_model(websocket_request.id.as_str())?;
         self.delete(websocket_request, source)
     }
 

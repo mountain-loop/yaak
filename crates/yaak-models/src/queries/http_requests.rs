@@ -24,6 +24,7 @@ impl<'a> ClientDb<'a> {
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
         self.delete_all_http_responses_for_request(m.id.as_str(), source)?;
+        self.delete_model_versions_for_model(m.id.as_str())?;
         self.delete(m, source)
     }
 
