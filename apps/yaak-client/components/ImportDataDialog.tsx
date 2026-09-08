@@ -6,7 +6,7 @@ import {
   type ImportSource,
   type Workspace,
 } from "@yaakapp-internal/models";
-import { HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { HStack, Icon, type IconProps, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -263,15 +263,11 @@ function LoadedImportDataDialog({
   // A folder row's checkbox carries everything beneath it, deletions included — the row labels
   // say which of those are destructive. Checking anything also brings back the folders it needs
   // to live in.
-  const toggleNode = (node: CheckboxTreeNode<ImportPlanItem>, checked: boolean) => {
-    const targets = new Set(
-      collectItems(node)
-        .filter(isTogglable)
-        .map((i) => i.modelId),
-    );
-    if (checked) {
+  const toggleNode = (node: CheckboxTreeNode<TreeRow>, checked: boolean) => {
+    const targets = new Set(togglableItems(node).map((i) => i.modelId));
+    if (checked && node.data.kind === "item") {
       const byId = new Map(items.map((i) => [i.modelId, i]));
-      for (const ancestor of ancestorsOf(node.data, byId)) {
+      for (const ancestor of ancestorsOf(node.data.item, byId)) {
         if (isMissingFolder(ancestor)) targets.add(ancestor.modelId);
       }
     }
@@ -323,7 +319,7 @@ function LoadedImportDataDialog({
 
     // The destination workspace roots the tree. It is not a plan item — commit always applies
     // it — so its checkbox only aggregates the subtree.
-    const workspaceRoot: CheckboxTreeNode<ImportPlanItem> = (() => {
+    const workspaceRoot: CheckboxTreeNode<TreeRow> = (() => {
       const planned = plan.resources.workspaces[0];
       const planDestination = plan.destination;
       const existing =
@@ -333,12 +329,8 @@ function LoadedImportDataDialog({
       return {
         key: existing?.id ?? planned?.id ?? "workspace",
         data: {
-          action: plan.destination.type === "new_workspace" ? "create" : "unchanged",
-          model: "workspace",
-          modelId: existing?.id ?? planned?.id ?? "workspace",
-          name: existing?.name ?? planned?.name ?? "New workspace",
-          selected: true,
-          changedFields: [],
+          kind: "destination",
+          label: existing?.name ?? planned?.name ?? "New workspace",
         },
         children: itemTree,
       };
@@ -357,9 +349,12 @@ function LoadedImportDataDialog({
             checked={nodeCheckedStatus}
             onCheck={toggleNode}
             isCheckboxDisabled={(n) => disabledIds.has(n.key)}
-            isCollapsedByDefault={(n) => n.data.action === "ignored"}
-            isRelevant={(n) => n.data.model === "workspace" || n.data.action !== "unchanged"}
-            renderRow={(n) => <ImportTreeRow item={n.data} onResolveConflict={resolveConflict} />}
+            isCollapsedByDefault={(n) => n.data.kind === "item" && n.data.item.action === "ignored"}
+            isRelevant={(n) =>
+              n.data.kind === "destination" ||
+              (n.data.kind === "item" && n.data.item.action !== "unchanged")
+            }
+            renderRow={(n) => <ImportTreeRow row={n.data} onResolveConflict={resolveConflict} />}
           />
         </div>
 
@@ -545,21 +540,26 @@ function LoadedImportDataDialog({
 }
 
 function ImportTreeRow({
-  item,
+  row,
   onResolveConflict,
 }: {
-  item: ImportPlanItem;
+  row: TreeRow;
   onResolveConflict: (modelId: string, resolution: "keep_mine" | "take_source") => void;
 }) {
+  if (row.kind !== "item") {
+    return (
+      <>
+        <Icon color="secondary" icon={row.kind === "destination" ? "house" : row.icon} />
+        <div className="truncate flex-1">{row.label}</div>
+      </>
+    );
+  }
+
+  const { item } = row;
   return (
     <>
-      {item.model === "workspace" || item.model === "folder" || item.model === "environment" ? (
-        <Icon
-          color="secondary"
-          icon={
-            item.model === "workspace" ? "house" : item.model === "folder" ? "folder" : "variable"
-          }
-        />
+      {item.model === "folder" || item.model === "environment" ? (
+        <Icon color="secondary" icon={item.model === "folder" ? "folder" : "variable"} />
       ) : (
         <span aria-hidden className="w-4" />
       )}
@@ -663,7 +663,17 @@ function ancestorsOf(item: ImportPlanItem, byId: Map<string, ImportPlanItem>): I
   return ancestors;
 }
 
-function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem>[] {
+/**
+ * A row of the preview tree. Most are plan items, but the destination workspace and the group the
+ * workspace's environments sit in are headings: they aggregate their children and decide nothing
+ * themselves.
+ */
+type TreeRow =
+  | { kind: "destination"; label: string }
+  | { kind: "group"; label: string; icon: IconProps["icon"] }
+  | { kind: "item"; item: ImportPlanItem };
+
+function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<TreeRow>[] {
   const byId = new Map(items.map((i) => [i.modelId, i]));
   const childrenOf = new Map<string, ImportPlanItem[]>();
   const roots: ImportPlanItem[] = [];
@@ -683,9 +693,9 @@ function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem
     ...list.filter((i) => i.model !== "environment" && i.model !== "folder"),
   ];
 
-  const toNode = (item: ImportPlanItem, seen: Set<string>): CheckboxTreeNode<ImportPlanItem> => ({
+  const toNode = (item: ImportPlanItem, seen: Set<string>): CheckboxTreeNode<TreeRow> => ({
     key: item.modelId,
-    data: item,
+    data: { kind: "item", item },
     children: seen.has(item.modelId)
       ? []
       : byKind(childrenOf.get(item.modelId) ?? []).map((c) =>
@@ -693,11 +703,24 @@ function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem
         ),
   });
 
-  return byKind(roots).map((r) => toNode(r, new Set()));
+  // The workspace's environments have nothing to sit under — a sub-environment is a sibling of
+  // the base one, not its child — so a heading groups them into one thing to turn on and off.
+  const environments = roots.filter((i) => i.model === "environment");
+  const others = byKind(roots.filter((i) => i.model !== "environment"));
+  const nodes = others.map((r) => toNode(r, new Set()));
+  if (environments.length === 0) return nodes;
+  return [
+    {
+      key: "group:environments",
+      data: { kind: "group", label: "Variables", icon: "variable" },
+      children: environments.map((e) => toNode(e, new Set())),
+    },
+    ...nodes,
+  ];
 }
 
-function collectItems(node: CheckboxTreeNode<ImportPlanItem>): ImportPlanItem[] {
-  return [node.data, ...node.children.flatMap(collectItems)];
+function collectRows(node: CheckboxTreeNode<TreeRow>): TreeRow[] {
+  return [node.data, ...node.children.flatMap(collectRows)];
 }
 
 /** A folder that isn't there yet, so anything inside it needs it brought in first. */
@@ -706,18 +729,24 @@ function isMissingFolder(item: ImportPlanItem): boolean {
 }
 
 /**
- * Whether a row's checkbox is the decision for it, and so whether a parent's checkbox carries it.
- * An unchanged resource has nothing to decide, a conflict is decided by its own control, and the
- * destination workspace is not a plan item.
+ * The plan item a row's checkbox decides, if it decides one. An unchanged resource has nothing to
+ * decide and a conflict is decided by its own control, so neither takes a checkbox — nor rides
+ * along with a parent's.
  */
-function isTogglable(item: ImportPlanItem): boolean {
-  return item.model !== "workspace" && item.action !== "unchanged" && item.action !== "conflict";
+function togglableItem(row: TreeRow): ImportPlanItem | null {
+  if (row.kind !== "item") return null;
+  const { item } = row;
+  return item.action === "unchanged" || item.action === "conflict" ? null : item;
 }
 
-function nodeCheckedStatus(
-  node: CheckboxTreeNode<ImportPlanItem>,
-): boolean | "indeterminate" | "hidden" {
-  const covered = collectItems(node).filter(isTogglable);
+function togglableItems(node: CheckboxTreeNode<TreeRow>): ImportPlanItem[] {
+  return collectRows(node)
+    .map(togglableItem)
+    .filter((i) => i != null);
+}
+
+function nodeCheckedStatus(node: CheckboxTreeNode<TreeRow>): boolean | "indeterminate" | "hidden" {
+  const covered = togglableItems(node);
   if (covered.length === 0) return "hidden";
   const selected = covered.filter((i) => i.selected).length;
   if (selected === covered.length) return true;
