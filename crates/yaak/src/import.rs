@@ -94,6 +94,26 @@ pub fn plan_import_resources(
                 workspaces.push(workspace);
             }
 
+            // Two workspaces of the same name are indistinguishable in the sidebar, and importing
+            // a document a second time is the usual way to end up with a pair.
+            let mut taken = query_manager
+                .connect()
+                .list_workspaces()?
+                .into_iter()
+                .map(|w| w.name)
+                .collect::<Vec<_>>();
+            for workspace in &mut workspaces {
+                let unique = unique_name(&workspace.name, &taken);
+                if unique != workspace.name {
+                    warnings.push(ImportPlanWarning {
+                        title: "Workspace renamed".to_string(),
+                        detail: format!("{} → {unique} · that name is taken", workspace.name),
+                    });
+                    workspace.name = unique.clone();
+                }
+                taken.push(unique);
+            }
+
             (workspaces[0].id.clone(), None)
         }
         ImportDestination::ExistingWorkspace { workspace_id, folder_id } => {
@@ -1223,6 +1243,22 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
     Ok(())
 }
 
+/// Number a name up from 2 until it is nobody else's. An empty name is left alone, since the
+/// display falls back to something else for it.
+fn unique_name(name: &str, taken: &[String]) -> String {
+    if name.is_empty() || !taken.iter().any(|t| t == name) {
+        return name.to_string();
+    }
+    let mut n = 2;
+    loop {
+        let candidate = format!("{name} {n}");
+        if !taken.iter().any(|t| *t == candidate) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
 fn display_importer_name(importer: &str) -> &str {
     importer.strip_prefix("@yaak/importer-").unwrap_or(importer)
 }
@@ -1619,6 +1655,63 @@ mod tests {
                 .expect("get destination after commit"),
             destination
         );
+    }
+
+    #[test]
+    fn a_second_import_into_a_new_workspace_is_numbered() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let first = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            None,
+            None,
+        )
+        .expect("plan first import");
+        assert_eq!(first.resources.workspaces[0].name, "Imported");
+        assert!(first.warnings.iter().all(|w| w.title != "Workspace renamed"));
+        commit_import_plan(&query_manager, first).expect("commit first import");
+
+        let second = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            None,
+            None,
+        )
+        .expect("plan second import");
+        assert_eq!(second.resources.workspaces[0].name, "Imported 2");
+        let warning = second
+            .warnings
+            .iter()
+            .find(|w| w.title == "Workspace renamed")
+            .expect("the rename is explained");
+        assert_eq!(warning.detail, "Imported → Imported 2 · that name is taken");
+        commit_import_plan(&query_manager, second).expect("commit second import");
+
+        let third = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            None,
+            None,
+        )
+        .expect("plan third import");
+        assert_eq!(third.resources.workspaces[0].name, "Imported 3");
+
+        let names = query_manager
+            .connect()
+            .list_workspaces()
+            .expect("list workspaces")
+            .into_iter()
+            .map(|w| w.name)
+            .filter(|name| name.starts_with("Imported"))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(names, BTreeSet::from(["Imported".to_string(), "Imported 2".to_string()]));
     }
 
     #[test]
