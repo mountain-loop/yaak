@@ -104,13 +104,7 @@ pub fn plan_import_resources(
                 .collect::<Vec<_>>();
             for workspace in &mut workspaces {
                 let unique = unique_name(&workspace.name, &taken);
-                if unique != workspace.name {
-                    warnings.push(ImportPlanWarning {
-                        title: "Workspace renamed".to_string(),
-                        detail: format!("{} → {unique} · that name is taken", workspace.name),
-                    });
-                    workspace.name = unique.clone();
-                }
+                workspace.name = unique.clone();
                 taken.push(unique);
             }
 
@@ -135,10 +129,10 @@ pub fn plan_import_resources(
                     } else {
                         format!("{} imported workspaces", resources.workspaces.len())
                     };
-                    warnings.push(ImportPlanWarning {
-                        title: "Workspace settings skipped".to_string(),
-                        detail: format!("{source} · {}", display_list(&skipped_fields)),
-                    });
+                    warnings.push(ImportPlanWarning::info(
+                        "Workspace settings skipped",
+                        format!("{source} · {}", display_list(&skipped_fields)),
+                    ));
                 }
             }
             (workspace_id.clone(), folder_id.clone())
@@ -265,22 +259,22 @@ pub fn plan_import_resources(
 
     for (source_name, imported_name, variable_count) in separated_base_environments {
         let variables = if variable_count == 1 { "variable" } else { "variables" };
-        warnings.push(ImportPlanWarning {
-            title: "Base environment kept separate".to_string(),
-            detail: format!("{source_name} → {imported_name} · {variable_count} {variables}"),
-        });
+        warnings.push(ImportPlanWarning::info(
+            "Base environment kept separate",
+            format!("{source_name} → {imported_name} · {variable_count} {variables}"),
+        ));
     }
     if converted_duplicate_base_environment {
-        warnings.push(ImportPlanWarning {
-            title: "Base environments separated".to_string(),
-            detail: "Only the first remains the base environment".to_string(),
-        });
+        warnings.push(ImportPlanWarning::info(
+            "Base environments separated",
+            "Only the first remains the base environment",
+        ));
     }
     if converted_duplicate_folder_environment {
-        warnings.push(ImportPlanWarning {
-            title: "Folder environments separated".to_string(),
-            detail: "Only the first remains attached to each folder".to_string(),
-        });
+        warnings.push(ImportPlanWarning::info(
+            "Folder environments separated",
+            "Only the first remains attached to each folder",
+        ));
     }
 
     let resources = BatchUpsertResult {
@@ -302,7 +296,45 @@ pub fn plan_import_resources(
         origin,
     };
     merge_with_linked_source(query_manager, &mut plan, &original)?;
+    warn_if_imported_elsewhere(&query_manager.connect(), &mut plan)?;
     Ok(plan)
+}
+
+/// A document that already produced a workspace can be merged back into it. Importing it anywhere
+/// else copies it instead, which is worth saying before the user finds two of everything.
+fn warn_if_imported_elsewhere(db: &ClientDb, plan: &mut ImportPlan) -> Result<()> {
+    let destination_id = match &plan.destination {
+        ImportDestination::ExistingWorkspace { workspace_id, .. } => Some(workspace_id.as_str()),
+        ImportDestination::NewWorkspace => None,
+    };
+    let incoming = plan.source_keys.values().collect::<BTreeSet<_>>();
+
+    let mut names = BTreeSet::new();
+    for workspace in db.list_workspaces()? {
+        if Some(workspace.id.as_str()) == destination_id {
+            continue;
+        }
+        for source in db.list_import_sources(&workspace.id)? {
+            let overlaps = db
+                .list_import_source_resources(&source.id)?
+                .iter()
+                .any(|row| incoming.contains(&row.source_key));
+            if overlaps {
+                names.insert(workspace.name.clone());
+                break;
+            }
+        }
+    }
+
+    if names.is_empty() {
+        return Ok(());
+    }
+    let names = names.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    plan.warnings.push(ImportPlanWarning::warning(
+        "Already imported",
+        format!("{} · importing here makes a second copy", display_list(&names)),
+    ));
+    Ok(())
 }
 
 /// Commit a previously prepared plan in one transaction, applying only its selected items.
@@ -654,10 +686,10 @@ fn resolve_linked_source(
 
 fn ambiguous_source_warning(sources: &[ImportSource]) -> ImportPlanWarning {
     let labels = sources.iter().map(|s| s.origin_label.as_str()).collect::<BTreeSet<_>>();
-    ImportPlanWarning {
-        title: "Imported as new".to_string(),
-        detail: format!("{} already contain these resources", display_list(&labels)),
-    }
+    ImportPlanWarning::warning(
+        "Imported as new",
+        format!("{} already contain these resources", display_list(&labels)),
+    )
 }
 
 /// Rewrite a plan against the destination's linked import source, if it has one: resources whose
@@ -1671,7 +1703,6 @@ mod tests {
         )
         .expect("plan first import");
         assert_eq!(first.resources.workspaces[0].name, "Imported");
-        assert!(first.warnings.iter().all(|w| w.title != "Workspace renamed"));
         commit_import_plan(&query_manager, first).expect("commit first import");
 
         let second = plan_import_resources(
@@ -1684,12 +1715,6 @@ mod tests {
         )
         .expect("plan second import");
         assert_eq!(second.resources.workspaces[0].name, "Imported (2)");
-        let warning = second
-            .warnings
-            .iter()
-            .find(|w| w.title == "Workspace renamed")
-            .expect("the rename is explained");
-        assert_eq!(warning.detail, "Imported → Imported (2) · that name is taken");
         commit_import_plan(&query_manager, second).expect("commit second import");
 
         let third = plan_import_resources(
@@ -1712,6 +1737,38 @@ mod tests {
             .filter(|name| name.starts_with("Imported"))
             .collect::<BTreeSet<_>>();
         assert_eq!(names, BTreeSet::from(["Imported".to_string(), "Imported (2)".to_string()]));
+    }
+
+    #[test]
+    fn importing_a_document_that_already_has_a_workspace_warns() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+
+        let elsewhere = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            Some(importer_keys()),
+            Some(linked_origin()),
+        )
+        .expect("plan a second copy");
+        let warning = elsewhere
+            .warnings
+            .iter()
+            .find(|w| w.title == "Already imported")
+            .expect("copying a document that already landed somewhere is called out");
+        assert_eq!(warning.detail, "Imported · importing here makes a second copy");
+
+        // Merging back into the workspace it created is the whole point, so it says nothing.
+        let merging = replan(&query_manager, &workspace_id, imported_resources());
+        assert!(
+            merging.warnings.iter().all(|w| w.title != "Already imported"),
+            "{:?}",
+            merging.warnings
+        );
     }
 
     #[test]

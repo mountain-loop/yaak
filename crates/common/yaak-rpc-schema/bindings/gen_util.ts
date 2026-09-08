@@ -88,7 +88,12 @@ export type ImportPlanItem = {
  */
 export type ImportPlanReason = "moved_into_ignored_folder";
 
-export type ImportPlanWarning = { title: string; detail: string };
+export type ImportPlanWarning = { title: string; detail: string; level: ImportPlanWarningLevel };
+
+/**
+ * Whether a plan's note is something to know or something to think twice about.
+ */
+export type ImportPlanWarningLevel = "info" | "warning";
 
 /**
  * The model types an import plan can contain.

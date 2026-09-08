@@ -109,6 +109,36 @@ pub enum ImportDestination {
 pub struct ImportPlanWarning {
     pub title: String,
     pub detail: String,
+    #[serde(default)]
+    pub level: ImportPlanWarningLevel,
+}
+
+/// Whether a plan's note is something to know or something to think twice about.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportPlanWarningLevel {
+    #[default]
+    Info,
+    Warning,
+}
+
+impl ImportPlanWarning {
+    pub fn info(title: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            detail: detail.into(),
+            level: ImportPlanWarningLevel::Info,
+        }
+    }
+
+    pub fn warning(title: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            detail: detail.into(),
+            level: ImportPlanWarningLevel::Warning,
+        }
+    }
 }
 
 /// Where an import's contents came from, used to link the committed workspace back to it.

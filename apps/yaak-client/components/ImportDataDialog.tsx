@@ -335,6 +335,7 @@ function LoadedImportDataDialog({
         data: {
           kind: "destination",
           label: existing?.name ?? planned?.name ?? "New workspace",
+          isNew: planDestination.type === "new_workspace",
         },
         children: itemTree,
       };
@@ -371,7 +372,12 @@ function LoadedImportDataDialog({
                   key={`${warning.title}:${warning.detail}`}
                   className="flex items-start gap-2.5 px-3 py-2.5"
                 >
-                  <Icon icon="info" color="info" size="sm" className="mt-0.5" />
+                  <Icon
+                    icon={warning.level === "warning" ? "alert_triangle" : "info"}
+                    color={warning.level === "warning" ? "warning" : "info"}
+                    size="sm"
+                    className="mt-0.5"
+                  />
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{warning.title}</div>
                     <div className="text-xs text-text-subtle mt-0.5">{warning.detail}</div>
@@ -555,11 +561,15 @@ function ImportTreeRow({
       <>
         <Icon color="secondary" icon={row.kind === "destination" ? "house" : row.icon} />
         <div className="truncate flex-1">{row.label}</div>
+        {row.kind === "destination" && row.isNew && (
+          <ActionChip label="new" help="Created by this import" className="text-success" />
+        )}
       </>
     );
   }
 
   const { item } = row;
+  const label = actionLabel(item);
   return (
     <>
       {item.model === "folder" || item.model === "environment" ? (
@@ -585,24 +595,44 @@ function ImportTreeRow({
           />
         </div>
       ) : (
-        actionLabel(item) && (
-          <InlineCode
+        label != null && (
+          <ActionChip
+            label={label}
+            help={actionHelp(item)}
             className={classNames(
-              "py-0 bg-transparent w-32 shrink-0 whitespace-nowrap text-xs",
-              "inline-flex items-center justify-center gap-1.5",
               item.action === "create" && "text-success",
               item.action === "update" && "text-info",
               item.action === "delete" && "text-danger",
               item.action === "keep_local" && item.selected && "text-warning",
               item.action === "ignored" && "text-text-subtlest",
             )}
-          >
-            {actionLabel(item)}
-            <IconTooltip content={actionHelp(item)} iconSize="xs" />
-          </InlineCode>
+          />
         )
       )}
     </>
+  );
+}
+
+function ActionChip({
+  label,
+  help,
+  className,
+}: {
+  label: string;
+  help: string | null;
+  className?: string;
+}) {
+  return (
+    <InlineCode
+      className={classNames(
+        "py-0 bg-transparent w-32 shrink-0 whitespace-nowrap text-xs",
+        "inline-flex items-center justify-center gap-1.5",
+        className,
+      )}
+    >
+      {label}
+      {help != null && <IconTooltip content={help} iconSize="xs" />}
+    </InlineCode>
   );
 }
 
@@ -673,7 +703,7 @@ function ancestorsOf(item: ImportPlanItem, byId: Map<string, ImportPlanItem>): I
  * themselves.
  */
 type TreeRow =
-  | { kind: "destination"; label: string }
+  | { kind: "destination"; label: string; isNew: boolean }
   | { kind: "group"; label: string; icon: IconProps["icon"] }
   | { kind: "item"; item: ImportPlanItem };
 
