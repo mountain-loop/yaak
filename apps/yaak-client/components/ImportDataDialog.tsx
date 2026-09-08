@@ -11,7 +11,7 @@ import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { pluralize } from "../lib/pluralize";
+import { pluralize, pluralizeCount } from "../lib/pluralize";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
@@ -309,7 +309,11 @@ function LoadedImportDataDialog({
     }).length;
 
     const destinationLabel = (() => {
-      if (plan.destination.type === "new_workspace") return "New workspace";
+      if (plan.destination.type === "new_workspace") {
+        const names = plan.resources.workspaces.map((w) => w.name).filter((n) => n !== "");
+        if (names.length > 1) return pluralizeCount("new workspace", names.length);
+        return names[0] == null ? "New workspace" : `${names[0]} (new workspace)`;
+      }
       const { workspaceId, folderId } = plan.destination;
       const name = workspaces.find((w) => w.id === workspaceId)?.name ?? "Unknown workspace";
       return folderId != null && folderId === selectedFolder?.id
