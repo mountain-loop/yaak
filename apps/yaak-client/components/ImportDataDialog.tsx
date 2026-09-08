@@ -684,9 +684,10 @@ function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem
     }
   }
 
-  const foldersFirst = (list: ImportPlanItem[]) => [
+  const byKind = (list: ImportPlanItem[]) => [
+    ...list.filter((i) => i.model === "environment"),
     ...list.filter((i) => i.model === "folder"),
-    ...list.filter((i) => i.model !== "folder"),
+    ...list.filter((i) => i.model !== "environment" && i.model !== "folder"),
   ];
 
   const toNode = (item: ImportPlanItem, seen: Set<string>): CheckboxTreeNode<ImportPlanItem> => ({
@@ -694,12 +695,12 @@ function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem
     data: item,
     children: seen.has(item.modelId)
       ? []
-      : foldersFirst(childrenOf.get(item.modelId) ?? []).map((c) =>
+      : byKind(childrenOf.get(item.modelId) ?? []).map((c) =>
           toNode(c, new Set([...seen, item.modelId])),
         ),
   });
 
-  return foldersFirst(roots).map((r) => toNode(r, new Set()));
+  return byKind(roots).map((r) => toNode(r, new Set()));
 }
 
 function collectItems(node: CheckboxTreeNode<ImportPlanItem>): ImportPlanItem[] {
