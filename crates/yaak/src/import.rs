@@ -1251,7 +1251,7 @@ fn unique_name(name: &str, taken: &[String]) -> String {
     }
     let mut n = 2;
     loop {
-        let candidate = format!("{name} {n}");
+        let candidate = format!("{name} ({n})");
         if !taken.iter().any(|t| *t == candidate) {
             return candidate;
         }
@@ -1683,13 +1683,13 @@ mod tests {
             None,
         )
         .expect("plan second import");
-        assert_eq!(second.resources.workspaces[0].name, "Imported 2");
+        assert_eq!(second.resources.workspaces[0].name, "Imported (2)");
         let warning = second
             .warnings
             .iter()
             .find(|w| w.title == "Workspace renamed")
             .expect("the rename is explained");
-        assert_eq!(warning.detail, "Imported → Imported 2 · that name is taken");
+        assert_eq!(warning.detail, "Imported → Imported (2) · that name is taken");
         commit_import_plan(&query_manager, second).expect("commit second import");
 
         let third = plan_import_resources(
@@ -1701,7 +1701,7 @@ mod tests {
             None,
         )
         .expect("plan third import");
-        assert_eq!(third.resources.workspaces[0].name, "Imported 3");
+        assert_eq!(third.resources.workspaces[0].name, "Imported (3)");
 
         let names = query_manager
             .connect()
@@ -1711,7 +1711,7 @@ mod tests {
             .map(|w| w.name)
             .filter(|name| name.starts_with("Imported"))
             .collect::<BTreeSet<_>>();
-        assert_eq!(names, BTreeSet::from(["Imported".to_string(), "Imported 2".to_string()]));
+        assert_eq!(names, BTreeSet::from(["Imported".to_string(), "Imported (2)".to_string()]));
     }
 
     #[test]

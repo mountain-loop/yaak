@@ -312,7 +312,7 @@ function LoadedImportDataDialog({
       if (plan.destination.type === "new_workspace") {
         const names = plan.resources.workspaces.map((w) => w.name).filter((n) => n !== "");
         if (names.length > 1) return pluralizeCount("new workspace", names.length);
-        return names[0] == null ? "New workspace" : `${names[0]} (new workspace)`;
+        return names[0] == null ? "New workspace" : `New workspace · ${names[0]}`;
       }
       const { workspaceId, folderId } = plan.destination;
       const name = workspaces.find((w) => w.id === workspaceId)?.name ?? "Unknown workspace";
