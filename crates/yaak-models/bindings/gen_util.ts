@@ -63,7 +63,7 @@ export type ImportPlanAction =
   | "unchanged"
   | "keep_local"
   | "conflict"
-  | "not_imported";
+  | "ignored";
 
 export type ImportPlanItem = {
   action: ImportPlanAction;
@@ -86,7 +86,7 @@ export type ImportPlanItem = {
 /**
  * Extra context for an action that would otherwise be indistinguishable from its plain form.
  */
-export type ImportPlanReason = "moved_into_not_imported_folder";
+export type ImportPlanReason = "moved_into_ignored_folder";
 
 export type ImportPlanWarning = { title: string; detail: string };
 

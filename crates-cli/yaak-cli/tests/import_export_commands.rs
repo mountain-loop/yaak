@@ -307,7 +307,7 @@ fn re_import_leaves_deleted_resources_alone() {
         ])
         .assert()
         .success()
-        .stdout(contains("Skipped 1 previously not imported"));
+        .stdout(contains("Skipped 1 ignored"));
 
     let query_manager = query_manager(data_dir);
     let requests =

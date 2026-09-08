@@ -311,7 +311,7 @@ fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResul
             ImportPlanAction::Create
             | ImportPlanAction::Update
             | ImportPlanAction::KeepLocal
-            | ImportPlanAction::NotImported => item.selected,
+            | ImportPlanAction::Ignored => item.selected,
             ImportPlanAction::Conflict => {
                 item.resolution == Some(ImportConflictResolution::TakeSource)
             }
@@ -323,7 +323,7 @@ fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResul
     // created inside it.
     let is_new_folder = |id: &str| {
         items.get(id).is_some_and(|i| {
-            matches!(i.action, ImportPlanAction::Create | ImportPlanAction::NotImported)
+            matches!(i.action, ImportPlanAction::Create | ImportPlanAction::Ignored)
         })
     };
     let mut missing_folders: BTreeSet<String> = plan
@@ -526,7 +526,7 @@ fn record_import_source(
                     | ImportPlanAction::Conflict,
                 ) => Some((Some(model_id.to_string()), Some(content_hash(incoming()?)))),
                 // Turned down, so remember it as not wanted rather than offering it again
-                Some(ImportPlanAction::Create | ImportPlanAction::NotImported) => Some((None, None)),
+                Some(ImportPlanAction::Create | ImportPlanAction::Ignored) => Some((None, None)),
                 Some(ImportPlanAction::Delete) if item.is_some_and(|i| i.selected) => {
                     Some((None, None))
                 }
@@ -798,7 +798,7 @@ fn merge_with_linked_source(
         }
     };
 
-    let not_imported_folders = plan
+    let ignored_folders = plan
         .resources
         .folders
         .iter()
@@ -811,14 +811,14 @@ fn merge_with_linked_source(
         .iter()
         .map(|v| (v.id.as_str(), v.folder_id.as_deref()))
         .collect::<BTreeMap<_, _>>();
-    let inside_a_not_imported_folder = |parent_id: Option<&str>| {
+    let inside_an_ignored_folder = |parent_id: Option<&str>| {
         let mut seen = BTreeSet::new();
         let mut next = parent_id;
         while let Some(id) = next {
             if !seen.insert(id) {
                 break;
             }
-            if not_imported_folders.contains(id) {
+            if ignored_folders.contains(id) {
                 return true;
             }
             next = folder_parents.get(id).copied().flatten();
@@ -847,14 +847,14 @@ fn merge_with_linked_source(
 
             // Nothing can be created inside a folder that isn't imported, so it starts unchecked
             // and comes along only if the folder does.
-            let reachable = !inside_a_not_imported_folder(parent_id.as_deref());
+            let reachable = !inside_an_ignored_folder(parent_id.as_deref());
             let row = match status(&planned_id, resource) {
                 KeyStatus::New => {
                     items.push(item(ImportPlanAction::Create, reachable, None, None));
                     return Ok(());
                 }
                 KeyStatus::NotWanted => {
-                    items.push(item(ImportPlanAction::NotImported, false, None, None));
+                    items.push(item(ImportPlanAction::Ignored, false, None, None));
                     return Ok(());
                 }
                 KeyStatus::Wanted(row) => row,
@@ -866,7 +866,7 @@ fn merge_with_linked_source(
                     ImportPlanAction::Delete,
                     false,
                     None,
-                    Some(ImportPlanReason::MovedIntoNotImportedFolder),
+                    Some(ImportPlanReason::MovedIntoIgnoredFolder),
                 ));
                 return Ok(());
             }
@@ -1158,7 +1158,7 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
                     i.model_id == id
                         && !matches!(
                             i.action,
-                            ImportPlanAction::Create | ImportPlanAction::NotImported
+                            ImportPlanAction::Create | ImportPlanAction::Ignored
                         )
                 })
             };
@@ -2334,7 +2334,7 @@ mod tests {
 
         let plan = replan(&query_manager, &workspace_id, imported_resources());
         let root = item_by_name(&plan, "Root Request");
-        assert_eq!(root.action, ImportPlanAction::NotImported, "deleting it means not wanting it");
+        assert_eq!(root.action, ImportPlanAction::Ignored, "deleting it means not wanting it");
         assert!(!root.selected);
         assert_ne!(root.model_id, root_id);
 
@@ -2346,7 +2346,7 @@ mod tests {
         );
 
         let plan = replan(&query_manager, &workspace_id, imported_resources());
-        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::NotImported);
+        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Ignored);
     }
 
     #[test]
@@ -2371,12 +2371,12 @@ mod tests {
 
         let plan = replan(&query_manager, &workspace_id, resources);
         let extra = item_by_name(&plan, "Extra Request");
-        assert_eq!(extra.action, ImportPlanAction::NotImported, "deselecting it is remembered");
+        assert_eq!(extra.action, ImportPlanAction::Ignored, "deselecting it is remembered");
         assert!(!extra.selected);
     }
 
     #[test]
-    fn restoring_a_not_imported_item_relinks_its_source_key() {
+    fn restoring_an_ignored_item_relinks_its_source_key() {
         let (query_manager, _blob_manager, _rx) =
             yaak_models::init_in_memory().expect("initialize database");
         let committed = first_import(&query_manager);
@@ -2390,7 +2390,7 @@ mod tests {
         commit_import_plan(&query_manager, plan).expect("commit with deselected create");
 
         let mut plan = replan(&query_manager, &workspace_id, resources.clone());
-        assert_eq!(item_by_name(&plan, "Extra Request").action, ImportPlanAction::NotImported);
+        assert_eq!(item_by_name(&plan, "Extra Request").action, ImportPlanAction::Ignored);
         select(&mut plan, "Extra Request", true);
         commit_import_plan(&query_manager, plan).expect("commit with restored item");
 
@@ -2410,7 +2410,7 @@ mod tests {
     }
 
     #[test]
-    fn moving_into_a_not_imported_folder_offers_a_delete() {
+    fn moving_into_an_ignored_folder_offers_a_delete() {
         let (query_manager, _blob_manager, _rx) =
             yaak_models::init_in_memory().expect("initialize database");
         let committed = first_import(&query_manager);
@@ -2437,11 +2437,11 @@ mod tests {
 
         // The source moves an imported request into the folder that was turned down.
         let plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
-        assert_eq!(item_by_name(&plan, "Extra Folder").action, ImportPlanAction::NotImported);
+        assert_eq!(item_by_name(&plan, "Extra Folder").action, ImportPlanAction::Ignored);
         let root = item_by_name(&plan, "Root Request");
         assert_eq!(root.action, ImportPlanAction::Delete);
         assert!(!root.selected, "a deletion is never applied by default");
-        assert_eq!(root.reason, Some(ImportPlanReason::MovedIntoNotImportedFolder));
+        assert_eq!(root.reason, Some(ImportPlanReason::MovedIntoIgnoredFolder));
 
         // Anything new inside that folder can't be created either, so it waits for the folder.
         let mut resources = with_extra_folder(true);
@@ -2466,7 +2466,7 @@ mod tests {
         let plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
         assert_eq!(
             item_by_name(&plan, "Root Request").action,
-            ImportPlanAction::NotImported,
+            ImportPlanAction::Ignored,
             "accepting the deletion means the resource is no longer wanted"
         );
     }

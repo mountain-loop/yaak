@@ -272,7 +272,7 @@ function LoadedImportDataDialog({
     if (checked) {
       const byId = new Map(items.map((i) => [i.modelId, i]));
       for (const ancestor of ancestorsOf(node.data, byId)) {
-        if (ancestor.action === "not_imported") targets.add(ancestor.modelId);
+        if (ancestor.action === "ignored") targets.add(ancestor.modelId);
       }
     }
     setItems((prev) => prev.map((i) => (targets.has(i.modelId) ? { ...i, selected: checked } : i)));
@@ -293,9 +293,9 @@ function LoadedImportDataDialog({
       for (const parent of ancestorsOf(item, byId)) {
         if (parent.model !== "folder") break;
         const missing =
-          (parent.action === "create" || parent.action === "not_imported") && !parent.selected;
-        // A not-imported row stays checkable: checking it brings its folders back with it
-        if (missing && item.action !== "delete" && item.action !== "not_imported") {
+          (parent.action === "create" || parent.action === "ignored") && !parent.selected;
+        // An ignored row stays checkable: checking it brings its folders back with it
+        if (missing && item.action !== "delete" && item.action !== "ignored") {
           disabled.add(item.modelId);
         }
         if (parent.action === "delete" && parent.selected && item.action === "delete") {
@@ -364,7 +364,7 @@ function LoadedImportDataDialog({
             checked={nodeCheckedStatus}
             onCheck={toggleNode}
             isCheckboxDisabled={(n) => disabledIds.has(n.key)}
-            isCollapsedByDefault={(n) => n.data.action === "not_imported"}
+            isCollapsedByDefault={(n) => n.data.action === "ignored"}
             isRelevant={(n) => n.data.model === "workspace" || n.data.action !== "unchanged"}
             renderRow={(n) => <ImportTreeRow item={n.data} onResolveConflict={resolveConflict} />}
           />
@@ -597,7 +597,7 @@ function ImportTreeRow({
               item.action === "update" && "text-info",
               item.action === "delete" && "text-danger",
               item.action === "keep_local" && item.selected && "text-warning",
-              item.action === "not_imported" && "text-text-subtlest",
+              item.action === "ignored" && "text-text-subtlest",
             )}
           >
             {actionLabel(item)}
@@ -619,8 +619,8 @@ function actionLabel(item: ImportPlanItem): string | null {
       return "removed";
     case "keep_local":
       return "edited";
-    case "not_imported":
-      return "not imported";
+    case "ignored":
+      return "ignored";
     default:
       return null;
   }
@@ -637,15 +637,15 @@ function actionHelp(item: ImportPlanItem): string | null {
     case "update":
       return help("Changed since the last import");
     case "delete":
-      return item.reason === "moved_into_not_imported_folder"
-        ? "Moved into a folder that isn't imported. Import that folder instead to follow the move"
+      return item.reason === "moved_into_ignored_folder"
+        ? "Moved into an ignored folder. Import that folder instead to follow the move"
         : "Deleted since the last import";
     case "keep_local":
       return help("Local edits made since the last import. Importing will revert them if checked");
     case "conflict":
       return help("Changed both here and in the file since the last import");
-    case "not_imported":
-      return "In the file, but not imported. Check it to import it";
+    case "ignored":
+      return "In the file, but ignored. Check it to import it";
     default:
       return null;
   }
@@ -717,7 +717,7 @@ function togglesWith(root: ImportPlanItem, item: ImportPlanItem): boolean {
   if (item.action === "keep_local") {
     return root.modelId === item.modelId && item.model !== "folder";
   }
-  return item.action === "create" || item.action === "update" || item.action === "not_imported";
+  return item.action === "create" || item.action === "update" || item.action === "ignored";
 }
 
 function nodeCheckedStatus(

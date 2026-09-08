@@ -170,7 +170,7 @@ pub enum ImportPlanAction {
     KeepLocal,
     Conflict,
     /// Present in the source but previously turned down; selecting it imports it again
-    NotImported,
+    Ignored,
 }
 
 /// Extra context for an action that would otherwise be indistinguishable from its plain form.
@@ -178,7 +178,7 @@ pub enum ImportPlanAction {
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_util.ts")]
 pub enum ImportPlanReason {
-    MovedIntoNotImportedFolder,
+    MovedIntoIgnoredFolder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
