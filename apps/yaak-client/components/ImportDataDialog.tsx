@@ -260,19 +260,19 @@ function LoadedImportDataDialog({
 
   const itemTree = useMemo(() => buildItemTree(items), [items]);
 
-  // A folder row's checkbox aggregates its subtree the way the git commit tree does: creates and
-  // updates toggle together, while removals only ever cascade beneath a removed folder. Checking
-  // anything also brings back the folders it needs to live in.
+  // A folder row's checkbox carries everything beneath it, deletions included — the row labels
+  // say which of those are destructive. Checking anything also brings back the folders it needs
+  // to live in.
   const toggleNode = (node: CheckboxTreeNode<ImportPlanItem>, checked: boolean) => {
     const targets = new Set(
       collectItems(node)
-        .filter((i) => togglesWith(node.data, i))
+        .filter(isTogglable)
         .map((i) => i.modelId),
     );
     if (checked) {
       const byId = new Map(items.map((i) => [i.modelId, i]));
       for (const ancestor of ancestorsOf(node.data, byId)) {
-        if (ancestor.action === "ignored") targets.add(ancestor.modelId);
+        if (isMissingFolder(ancestor)) targets.add(ancestor.modelId);
       }
     }
     setItems((prev) => prev.map((i) => (targets.has(i.modelId) ? { ...i, selected: checked } : i)));
@@ -284,21 +284,14 @@ function LoadedImportDataDialog({
     );
   };
 
-  // A row the user can't meaningfully toggle on its own: a planned resource inside a deselected
-  // new folder can't exist, and a removed folder takes its contents with it.
+  // Deleting a folder takes its contents with it, so those rows have nothing left to decide.
   const disabledIds = useMemo(() => {
     const disabled = new Set<string>();
     const byId = new Map(items.map((i) => [i.modelId, i]));
     for (const item of items) {
+      if (item.action !== "delete") continue;
       for (const parent of ancestorsOf(item, byId)) {
-        if (parent.model !== "folder") break;
-        const missing =
-          (parent.action === "create" || parent.action === "ignored") && !parent.selected;
-        // An ignored row stays checkable: checking it brings its folders back with it
-        if (missing && item.action !== "delete" && item.action !== "ignored") {
-          disabled.add(item.modelId);
-        }
-        if (parent.action === "delete" && parent.selected && item.action === "delete") {
+        if (parent.action === "delete" && parent.selected) {
           disabled.add(item.modelId);
         }
       }
@@ -707,23 +700,24 @@ function collectItems(node: CheckboxTreeNode<ImportPlanItem>): ImportPlanItem[] 
   return [node.data, ...node.children.flatMap(collectItems)];
 }
 
+/** A folder that isn't there yet, so anything inside it needs it brought in first. */
+function isMissingFolder(item: ImportPlanItem): boolean {
+  return item.model === "folder" && (item.action === "create" || item.action === "ignored");
+}
+
 /**
- * Whether toggling `root`'s checkbox also toggles `item` in its subtree. Destructive decisions
- * (deletions, reverting local edits) never ride along with a parent toggle.
+ * Whether a row's checkbox is the decision for it, and so whether a parent's checkbox carries it.
+ * An unchanged resource has nothing to decide, a conflict is decided by its own control, and the
+ * destination workspace is not a plan item.
  */
-function togglesWith(root: ImportPlanItem, item: ImportPlanItem): boolean {
-  if (item.model === "workspace") return false;
-  if (root.action === "delete") return item.action === "delete";
-  if (item.action === "keep_local") {
-    return root.modelId === item.modelId && item.model !== "folder";
-  }
-  return item.action === "create" || item.action === "update" || item.action === "ignored";
+function isTogglable(item: ImportPlanItem): boolean {
+  return item.model !== "workspace" && item.action !== "unchanged" && item.action !== "conflict";
 }
 
 function nodeCheckedStatus(
   node: CheckboxTreeNode<ImportPlanItem>,
 ): boolean | "indeterminate" | "hidden" {
-  const covered = collectItems(node).filter((i) => togglesWith(node.data, i));
+  const covered = collectItems(node).filter(isTogglable);
   if (covered.length === 0) return "hidden";
   const selected = covered.filter((i) => i.selected).length;
   if (selected === covered.length) return true;
