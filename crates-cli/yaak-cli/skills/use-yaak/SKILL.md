@@ -1,19 +1,12 @@
 ---
 name: use-yaak
 description: >
-  Build and run HTTP API requests with the Yaak CLI (`yaak`): create workspaces,
-  folders, environments and variables, author HTTP requests, configure
-  authentication (OAuth 2.0, bearer tokens, API keys, basic, JWT, AWS SigV4),
-  send them individually or a whole folder/workspace at once, chain one
-  request's response into the next, and import existing APIs from OpenAPI,
-  Postman, Insomnia, or cURL. Use this skill whenever the user mentions Yaak, a
-  Yaak workspace, or the `yaak` command, and also when they ask to try, hit,
-  call, exercise, or smoke test an HTTP or REST endpoint, to save or organize
-  API requests for reuse, to set up API requests for manual testing, to add auth
-  to a saved request, to turn an OpenAPI or Postman collection into runnable
-  requests, or to run a saved request suite against staging versus production.
-  Prefer this over one-off `curl` commands whenever the requests should be
-  saved, reused, shared, or run as a set.
+  Use when the user mentions Yaak, a Yaak workspace, or the `yaak` command, or
+  asks to call, hit, or smoke test HTTP/REST endpoints, save or organize API
+  requests for reuse or manual testing, configure auth on saved requests, import
+  OpenAPI, Postman, Insomnia, or cURL collections, or run saved requests across
+  environments. Prefer over one-off `curl` when requests should be saved,
+  reused, shared, or run as a set.
 allowed-tools: Bash(yaak:*), Bash(which:*), Bash(command:*), Bash(npm:*), Bash(npx:*)
 ---
 
@@ -34,7 +27,7 @@ only for publishing plugins to the Yaak registry.
 Two consequences worth holding onto. Requests you create are permanent user data
 in an app they use, not scratch files, so name them the way the user would and
 clean up anything created just to test. And because the app is right there, the
-CLI is usually the wrong place to *read* a response in detail; it is the right
+CLI is usually the wrong place to _read_ a response in detail; it is the right
 place to build, organize, and run requests.
 
 ## The CLI describes itself
