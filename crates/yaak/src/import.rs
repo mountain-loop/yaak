@@ -919,17 +919,6 @@ fn merge_with_linked_source(
                 KeyStatus::Wanted(row) => row,
             };
 
-            // The source put it somewhere the workspace has no folder for, so it can't stay
-            if !reachable {
-                items.push(item(
-                    ImportPlanAction::Delete,
-                    false,
-                    None,
-                    Some(ImportPlanReason::MovedIntoIgnoredFolder),
-                ));
-                return Ok(());
-            }
-
             let incoming = comparable(serde_json::to_value(&any)?);
             let current = comparable(current_models.get(&planned_id).cloned().unwrap_or_default());
             let (source_changed, local_changed) = match recorded_hash(row) {
@@ -953,7 +942,11 @@ fn merge_with_linked_source(
                     Some(ImportConflictResolution::KeepMine),
                 ),
             };
-            let mut planned = item(action, selected, resolution, None);
+            // A resource the source moved into a folder that isn't imported keeps its place
+            // until that folder is: nothing can be written into a folder that will not exist.
+            let reason =
+                (!reachable).then_some(ImportPlanReason::MovedIntoIgnoredFolder);
+            let mut planned = item(action, selected && reachable, resolution, reason);
             planned.changed_fields = changed_fields(&incoming, &current);
             items.push(planned);
             Ok(())
@@ -2567,11 +2560,18 @@ mod tests {
     }
 
     #[test]
-    fn moving_into_an_ignored_folder_offers_a_delete() {
+    fn moving_into_an_ignored_folder_waits_for_the_folder() {
         let (query_manager, _blob_manager, _rx) =
             yaak_models::init_in_memory().expect("initialize database");
         let committed = first_import(&query_manager);
         let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
 
         let with_extra_folder = |root_inside: bool| {
             let mut resources = imported_resources();
@@ -2596,8 +2596,8 @@ mod tests {
         let plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
         assert_eq!(item_by_name(&plan, "Extra Folder").action, ImportPlanAction::Ignored);
         let root = item_by_name(&plan, "Root Request");
-        assert_eq!(root.action, ImportPlanAction::Delete);
-        assert!(!root.selected, "a deletion is never applied by default");
+        assert_eq!(root.action, ImportPlanAction::Update, "a move is not a removal");
+        assert!(!root.selected, "it has nowhere to go until the folder is imported");
         assert_eq!(root.reason, Some(ImportPlanReason::MovedIntoIgnoredFolder));
 
         // Anything new inside that folder can't be created either, so it waits for the folder.
@@ -2611,21 +2611,31 @@ mod tests {
         assert_eq!(extra.action, ImportPlanAction::Create);
         assert!(!extra.selected, "a create with nowhere to go starts unchecked");
 
+        // Leaving it alone keeps the request where it is.
+        let plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
+        commit_import_plan(&query_manager, plan).expect("commit the default selection");
+        let root_folder = query_manager
+            .connect()
+            .get_http_request(&root_id)
+            .expect("root request survives")
+            .folder_id;
+        assert_eq!(root_folder, None, "an unapplied move leaves it in place");
+
+        // Importing the folder is what follows the move, in one pass.
         let mut plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
+        select(&mut plan, "Extra Folder", true);
         select(&mut plan, "Root Request", true);
-        commit_import_plan(&query_manager, plan).expect("commit the move as a deletion");
+        commit_import_plan(&query_manager, plan).expect("commit the folder and the move");
 
         let db = query_manager.connect();
-        let requests = db.list_http_requests(&workspace_id).expect("list");
-        assert!(!requests.iter().any(|r| r.name == "Root Request"), "accepting deletes it");
-        drop(db);
-
-        let plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
-        assert_eq!(
-            item_by_name(&plan, "Root Request").action,
-            ImportPlanAction::Ignored,
-            "accepting the deletion means the resource is no longer wanted"
-        );
+        let folder = db
+            .list_folders(&workspace_id)
+            .expect("list folders")
+            .into_iter()
+            .find(|f| f.name == "Extra Folder")
+            .expect("the folder is imported");
+        let root = db.get_http_request(&root_id).expect("root request still exists");
+        assert_eq!(root.folder_id, Some(folder.id), "the request follows the move");
     }
 
     #[test]
