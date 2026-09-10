@@ -6,7 +6,7 @@ import {
   type ImportSource,
   type Workspace,
 } from "@yaakapp-internal/models";
-import { HStack, Icon, type IconProps, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, Icon, type IconProps, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -348,6 +348,24 @@ function LoadedImportDataDialog({
           <PreviewRow label="Destination" value={destinationLabel} />
         </div>
 
+        {plan.warnings.map((warning) => (
+          <Banner
+            key={`${warning.title}:${warning.detail}`}
+            color={warning.level === "warning" ? "warning" : "info"}
+            className="flex items-start gap-2.5"
+          >
+            <Icon
+              icon={warning.level === "warning" ? "alert_triangle" : "info"}
+              size="sm"
+              className="mt-0.5"
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{warning.title}</div>
+              <div className="text-xs text-text-subtle mt-0.5">{warning.detail}</div>
+            </div>
+          </Banner>
+        ))}
+
         <div className="rounded-lg border border-border-subtle px-3 py-2 overflow-y-auto max-h-[40vh]">
           <CheckboxTree
             node={workspaceRoot}
@@ -362,31 +380,6 @@ function LoadedImportDataDialog({
             renderRow={(n) => <ImportTreeRow row={n.data} onResolveConflict={resolveConflict} />}
           />
         </div>
-
-        {plan.warnings.length > 0 && (
-          <div>
-            <div className="text-sm font-semibold mb-1">Import details</div>
-            <div className="rounded-lg border border-border-subtle divide-y divide-border-subtle">
-              {plan.warnings.map((warning) => (
-                <div
-                  key={`${warning.title}:${warning.detail}`}
-                  className="flex items-start gap-2.5 px-3 py-2.5"
-                >
-                  <Icon
-                    icon={warning.level === "warning" ? "alert_triangle" : "info"}
-                    color={warning.level === "warning" ? "warning" : "info"}
-                    size="sm"
-                    className="mt-0.5"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{warning.title}</div>
-                    <div className="text-xs text-text-subtle mt-0.5">{warning.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <HStack space={2} alignItems="center" className="mt-3">
           {footerNote !== "" && <div className="text-xs text-text-subtle">{footerNote}</div>}
