@@ -11,6 +11,7 @@ import {
   DEFAULT_LOCALHOST_PORT,
   stopActiveServer,
 } from "./callbackServer";
+import { readCustomParams } from "./customParams";
 import {
   type CallbackType,
   DEFAULT_PKCE_METHOD,
@@ -468,6 +469,63 @@ export const plugin: PluginDefinition = {
                 values.clientCredentialsMethod === "client_assertion",
             }),
           },
+          {
+            type: "banner",
+            inputs: [
+              {
+                type: "markdown",
+                content:
+                  "**Custom Parameters** are sent in addition to the ones Yaak generates, and " +
+                  "replace a generated entry of the same name. Token request entries are also " +
+                  "sent when refreshing, unless a refresh entry uses the same name.",
+                dynamic: hiddenIfNot(["authorization_code", "password", "client_credentials"]),
+              },
+              {
+                type: "key_value",
+                name: "authorizationParams",
+                label: "Authorization Request Params",
+                description: "Query parameters appended to the authorization URL.",
+                optional: true,
+                dynamic: hiddenIfNot(["authorization_code", "implicit"]),
+              },
+              {
+                type: "key_value",
+                name: "tokenHeaders",
+                label: "Token Request Headers",
+                description:
+                  "Headers sent with the token request, and with the refresh request unless a " +
+                  "refresh header uses the same name.",
+                optional: true,
+                dynamic: hiddenIfNot(["authorization_code", "password", "client_credentials"]),
+              },
+              {
+                type: "key_value",
+                name: "tokenBodyParams",
+                label: "Token Request Body Params",
+                description:
+                  "Form fields sent with the token request, and with the refresh request unless " +
+                  "a refresh body param uses the same name.",
+                optional: true,
+                dynamic: hiddenIfNot(["authorization_code", "password", "client_credentials"]),
+              },
+              {
+                type: "key_value",
+                name: "refreshHeaders",
+                label: "Refresh Request Headers",
+                description: "Headers sent only when refreshing an expired token.",
+                optional: true,
+                dynamic: hiddenIfNot(["authorization_code", "password"]),
+              },
+              {
+                type: "key_value",
+                name: "refreshBodyParams",
+                label: "Refresh Request Body Params",
+                description: "Form fields sent only when refreshing an expired token.",
+                optional: true,
+                dynamic: hiddenIfNot(["authorization_code", "password"]),
+              },
+            ],
+          },
         ],
       },
       {
@@ -506,6 +564,7 @@ export const plugin: PluginDefinition = {
       const headerPrefix = stringArg(values, "headerPrefix");
       const grantType = stringArg(values, "grantType") as GrantType;
       const credentialsInBody = values.credentials === "body";
+      const customParams = readCustomParams(values);
       const tokenName = values.tokenName === "id_token" ? "id_token" : "access_token";
 
       // Build external browser options if enabled
@@ -546,6 +605,7 @@ export const plugin: PluginDefinition = {
             : null,
           tokenName: tokenName,
           externalBrowser: externalBrowserOptions,
+          customParams,
         });
       } else if (grantType === "implicit") {
         const authorizationUrl = stringArg(values, "authorizationUrl");
@@ -561,6 +621,7 @@ export const plugin: PluginDefinition = {
           state: stringArgOrNull(values, "state"),
           tokenName: tokenName,
           externalBrowser: externalBrowserOptions,
+          customParams,
         });
       } else if (grantType === "client_credentials") {
         const accessTokenUrl = stringArg(values, "accessTokenUrl");
@@ -577,6 +638,7 @@ export const plugin: PluginDefinition = {
           scope: stringArgOrNull(values, "scope"),
           audience: stringArgOrNull(values, "audience"),
           credentialsInBody,
+          customParams,
         });
       } else if (grantType === "password") {
         const accessTokenUrl = stringArg(values, "accessTokenUrl");
@@ -591,6 +653,7 @@ export const plugin: PluginDefinition = {
           scope: stringArgOrNull(values, "scope"),
           audience: stringArgOrNull(values, "audience"),
           credentialsInBody,
+          customParams,
         });
       } else {
         throw new Error(`Invalid grant type ${String(grantType)}`);
