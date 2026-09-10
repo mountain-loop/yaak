@@ -33,6 +33,6 @@
     "@types/node": "^24.0.13"
   },
   "devDependencies": {
-    "cpy-cli": "^5.0.0"
+    "cpy-cli": "^7.0.0"
   }
 }
