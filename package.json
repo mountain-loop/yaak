@@ -135,7 +135,9 @@
     "yauzl": "^3.4.0"
   },
   "overrides": {
+    "@vitest/mocker": "^4.1.11",
     "js-yaml": "^4.3.1",
+    "underscore": "^1.13.8",
     "vite": "npm:@voidzero-dev/vite-plus-core@^0.2.9"
   },
   "packageManager": "npm@11.11.1"

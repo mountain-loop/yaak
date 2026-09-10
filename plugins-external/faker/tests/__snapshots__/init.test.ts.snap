@@ -142,6 +142,7 @@ exports[`template-function-faker > exports all expected template functions 1`] =
   "faker.location.longitude",
   "faker.location.nearbyGPSCoordinate",
   "faker.location.ordinalDirection",
+  "faker.location.postalAddress",
   "faker.location.secondaryAddress",
   "faker.location.state",
   "faker.location.street",
