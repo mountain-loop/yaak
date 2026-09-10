@@ -11,7 +11,7 @@ import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { pluralize, pluralizeCount } from "../lib/pluralize";
+import { pluralize } from "../lib/pluralize";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
@@ -308,17 +308,21 @@ function LoadedImportDataDialog({
       return item.selected;
     }).length;
 
-    const destinationLabel = (() => {
+    // The row's label carries what kind of destination it is, so the value can just be its name
+    const [destinationLabel, destinationValue] = ((): [string, string] => {
       if (plan.destination.type === "new_workspace") {
         const names = plan.resources.workspaces.map((w) => w.name).filter((n) => n !== "");
-        if (names.length > 1) return pluralizeCount("new workspace", names.length);
-        return names[0] == null ? "New workspace" : `New workspace · ${names[0]}`;
+        if (names.length === 0) return ["New workspace", "Untitled"];
+        return [pluralize("New workspace", names.length), names.join(", ")];
       }
       const { workspaceId, folderId } = plan.destination;
       const name = workspaces.find((w) => w.id === workspaceId)?.name ?? "Unknown workspace";
-      return folderId != null && folderId === selectedFolder?.id
-        ? `${name} / ${selectedFolder.name}`
-        : name;
+      return [
+        "Destination",
+        folderId != null && folderId === selectedFolder?.id
+          ? `${name} / ${selectedFolder.name}`
+          : name,
+      ];
     })();
 
     // The destination workspace roots the tree. It is not a plan item — commit always applies
@@ -345,7 +349,7 @@ function LoadedImportDataDialog({
       <VStack space={4} className="pb-4">
         <div className="rounded-lg border border-border-subtle divide-y divide-border-subtle">
           <PreviewRow label="Detected format" value={plan.importer} />
-          <PreviewRow label="Destination" value={destinationLabel} />
+          <PreviewRow label={destinationLabel} value={destinationValue} />
         </div>
 
         {plan.warnings.map((warning) => (

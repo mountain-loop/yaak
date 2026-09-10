@@ -331,8 +331,8 @@ fn warn_if_imported_elsewhere(db: &ClientDb, plan: &mut ImportPlan) -> Result<()
     }
     let names = names.iter().map(String::as_str).collect::<BTreeSet<_>>();
     plan.warnings.push(ImportPlanWarning::warning(
-        "Already imported",
-        format!("{} · importing here makes a second copy", display_list(&names)),
+        format!("This document is already imported into {}", display_list(&names)),
+        "Importing it here makes a second copy instead of updating that one",
     ));
     Ok(())
 }
@@ -1758,14 +1758,17 @@ mod tests {
         let warning = elsewhere
             .warnings
             .iter()
-            .find(|w| w.title == "Already imported")
+            .find(|w| w.title == "This document is already imported into Imported")
             .expect("copying a document that already landed somewhere is called out");
-        assert_eq!(warning.detail, "Imported · importing here makes a second copy");
+        assert_eq!(
+            warning.detail,
+            "Importing it here makes a second copy instead of updating that one"
+        );
 
         // Merging back into the workspace it created is the whole point, so it says nothing.
         let merging = replan(&query_manager, &workspace_id, imported_resources());
         assert!(
-            merging.warnings.iter().all(|w| w.title != "Already imported"),
+            merging.warnings.iter().all(|w| !w.title.starts_with("This document is already")),
             "{:?}",
             merging.warnings
         );
