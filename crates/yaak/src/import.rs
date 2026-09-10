@@ -620,8 +620,11 @@ fn record_import_source(
         if incoming_keys.contains(&row.source_key) {
             continue;
         }
-        // Keep only rows that back a deletion the user deselected; it will be offered again.
         let keep = match (ImportResourceType::from_str(&row.model_type), &row.model_id) {
+            // A source that drops a resource for a release must not erase the answer to
+            // "do you want this?", or the answer would be asked again when it returns.
+            (_, None) => true,
+            // Otherwise keep only rows backing a deletion the user deselected; it is offered again
             (Some(resource), Some(model_id)) => {
                 items
                     .get(model_id)
@@ -662,11 +665,15 @@ fn resolve_linked_source(
 
     let mut overlapping = Vec::new();
     for source in &sources {
-        let overlaps = db
-            .list_import_source_resources(&source.id)?
-            .iter()
-            .any(|row| incoming_keys.contains(&row.source_key));
-        if overlaps {
+        // A document keeps its keys between imports, so the same document shows up as most of
+        // both key sets. A stray key in common — two API specs naming an operation the same way
+        // — is a coincidence, and merging on it would rewrite somebody else's resources.
+        if source.importer != importer {
+            continue;
+        }
+        let rows = db.list_import_source_resources(&source.id)?;
+        let shared = rows.iter().filter(|row| incoming_keys.contains(&row.source_key)).count();
+        if shared * 2 > rows.len() && shared * 2 > incoming_keys.len() {
             overlapping.push(source.clone());
         }
     }
@@ -2672,13 +2679,15 @@ mod tests {
                     &UpdateSource::Import,
                 )
                 .expect("create second source");
-            db.upsert_import_source_resource(&ImportSourceResource {
-                import_source_id: other.id,
-                source_key: "op:root".to_string(),
-                model_type: "http_request".to_string(),
-                ..Default::default()
-            })
-            .expect("claim the same key");
+            for key in ["env:base", "folder:src", "op:root", "op:nested"] {
+                db.upsert_import_source_resource(&ImportSourceResource {
+                    import_source_id: other.id.clone(),
+                    source_key: key.to_string(),
+                    model_type: "http_request".to_string(),
+                    ..Default::default()
+                })
+                .expect("claim the same keys");
+            }
         }
 
         let third =
@@ -2696,6 +2705,75 @@ mod tests {
             .expect("ambiguity is surfaced");
         assert!(warning.detail.contains("api.yaml"), "{warning:?}");
         assert!(warning.detail.contains("copy.yaml"), "{warning:?}");
+    }
+
+    #[test]
+    fn a_stray_shared_key_does_not_link_an_unrelated_document() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        // Another document that happens to name one operation the same way.
+        let resources = ImportResources {
+            http_requests: vec![HttpRequest {
+                id: "rq_root".to_string(),
+                model: "http_request".to_string(),
+                workspace_id: "wk_source".to_string(),
+                name: "Unrelated Request".to_string(),
+                method: "GET".to_string(),
+                url: "https://unrelated.example.com".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let origin =
+            ImportOrigin { origin: "/tmp/other.yaml".to_string(), label: "other.yaml".to_string() };
+
+        let plan = replan_from(&query_manager, &workspace_id, resources, origin);
+        let unrelated = item_by_name(&plan, "Unrelated Request");
+        assert_eq!(unrelated.action, ImportPlanAction::Create, "one key in common proves nothing");
+        assert_ne!(unrelated.model_id, root_id, "it must not adopt another document's model");
+
+        commit_import_plan(&query_manager, plan).expect("commit the unrelated import");
+        let db = query_manager.connect();
+        assert_eq!(
+            db.get_http_request(&root_id).expect("root request survives").url,
+            "https://example.com/root"
+        );
+        assert_eq!(db.list_http_requests(&workspace_id).expect("list").len(), 3);
+    }
+
+    #[test]
+    fn an_ignored_key_stays_ignored_while_the_source_omits_it() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+
+        let mut with_extra = imported_resources();
+        with_extra.http_requests.push(extra_request());
+
+        let mut plan = replan(&query_manager, &workspace_id, with_extra.clone());
+        select(&mut plan, "Extra Request", false);
+        commit_import_plan(&query_manager, plan).expect("commit with the create turned down");
+
+        // The source drops it for a release, then brings it back.
+        let plan = replan(&query_manager, &workspace_id, imported_resources());
+        assert!(plan.items.iter().all(|i| i.name != "Extra Request"), "{:?}", plan.items);
+        commit_import_plan(&query_manager, plan).expect("commit without it");
+
+        let plan = replan(&query_manager, &workspace_id, with_extra);
+        let extra = item_by_name(&plan, "Extra Request");
+        assert_eq!(extra.action, ImportPlanAction::Ignored, "the answer outlives the absence");
+        assert!(!extra.selected);
     }
 
     #[test]

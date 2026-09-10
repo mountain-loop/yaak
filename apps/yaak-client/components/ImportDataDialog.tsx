@@ -264,7 +264,7 @@ function LoadedImportDataDialog({
   // say which of those are destructive. Checking anything also brings back the folders it needs
   // to live in.
   const toggleNode = (node: CheckboxTreeNode<TreeRow>, checked: boolean) => {
-    const targets = new Set(togglableItems(node).map((i) => i.modelId));
+    const targets = new Set(carriedItems(node).map((i) => i.modelId));
     if (checked && node.data.kind === "item") {
       const byId = new Map(items.map((i) => [i.modelId, i]));
       for (const ancestor of ancestorsOf(node.data.item, byId)) {
@@ -776,8 +776,20 @@ function togglableItems(node: CheckboxTreeNode<TreeRow>): ImportPlanItem[] {
     .filter((i) => i != null);
 }
 
+/**
+ * What a row's checkbox carries: its subtree, less any deletion that exists only because a folder
+ * above it isn't imported. Checking that folder is how the user keeps those resources, so it must
+ * not be how they delete them — the move follows on the next import.
+ */
+function carriedItems(node: CheckboxTreeNode<TreeRow>): ImportPlanItem[] {
+  const self = node.data.kind === "item" ? node.data.item.modelId : null;
+  return togglableItems(node).filter(
+    (i) => i.modelId === self || i.reason !== "moved_into_ignored_folder",
+  );
+}
+
 function nodeCheckedStatus(node: CheckboxTreeNode<TreeRow>): boolean | "indeterminate" | "hidden" {
-  const covered = togglableItems(node);
+  const covered = carriedItems(node);
   if (covered.length === 0) return "hidden";
   const selected = covered.filter((i) => i.selected).length;
   if (selected === covered.length) return true;
