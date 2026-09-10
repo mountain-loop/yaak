@@ -36,9 +36,9 @@ impl BlobManager {
         Self { pool }
     }
 
-    pub fn connect(&self) -> BlobContext {
-        let conn = self.pool.get().expect("Failed to get blob DB connection from pool");
-        BlobContext { conn }
+    pub fn connect(&self) -> Result<BlobContext> {
+        let conn = self.pool.get()?;
+        Ok(BlobContext { conn })
     }
 }
 
@@ -208,7 +208,7 @@ mod tests {
     fn test_insert_and_get_chunks() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         let body_id = "rs_test123.request";
         let chunk1 = BodyChunk::new(body_id, 0, b"Hello, ".to_vec());
@@ -229,7 +229,7 @@ mod tests {
     fn test_get_chunks_ordered_by_index() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         let body_id = "rs_test123.request";
 
@@ -249,7 +249,7 @@ mod tests {
     fn test_delete_chunks() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         let body_id = "rs_test123.request";
         ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"data".to_vec())).unwrap();
@@ -266,7 +266,7 @@ mod tests {
     fn test_delete_chunks_like() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         // Insert chunks for same response but different body types
         ctx.insert_chunk(&BodyChunk::new("rs_abc.request", 0, b"req".to_vec())).unwrap();
@@ -288,7 +288,7 @@ mod tests {
     fn test_get_body_size() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         let body_id = "rs_test123.request";
         ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"Hello".to_vec())).unwrap();
@@ -302,7 +302,7 @@ mod tests {
     fn test_get_body_size_empty() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         let size = ctx.get_body_size("nonexistent").unwrap();
         assert_eq!(size, 0);
@@ -312,7 +312,7 @@ mod tests {
     fn test_body_exists() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         assert!(!ctx.body_exists("rs_test.request").unwrap());
 
@@ -325,7 +325,7 @@ mod tests {
     fn test_multiple_bodies_isolated() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         ctx.insert_chunk(&BodyChunk::new("body1", 0, b"data1".to_vec())).unwrap();
         ctx.insert_chunk(&BodyChunk::new("body2", 0, b"data2".to_vec())).unwrap();
@@ -343,7 +343,7 @@ mod tests {
     fn test_large_chunk() {
         let pool = create_test_pool();
         let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let ctx = manager.connect().unwrap();
 
         // 1MB chunk
         let large_data: Vec<u8> = (0..1024 * 1024).map(|i| (i % 256) as u8).collect();

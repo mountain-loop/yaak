@@ -37,11 +37,9 @@ fn drain_model_changes_batch<R: Runtime>(
     app_handle: &tauri::AppHandle<R>,
     cursor: &mut ModelChangeCursor,
 ) -> bool {
-    let changes = match query_manager.connect().list_model_changes_since(
-        &cursor.created_at,
-        cursor.id,
-        MODEL_CHANGES_POLL_BATCH_SIZE,
-    ) {
+    let changes = match query_manager.connect().and_then(|db| {
+        db.list_model_changes_since(&cursor.created_at, cursor.id, MODEL_CHANGES_POLL_BATCH_SIZE)
+    }) {
         Ok(changes) => changes,
         Err(err) => {
             error!("Failed to poll model_changes rows: {err:?}");
@@ -92,7 +90,7 @@ async fn run_model_change_poller<R: Runtime>(
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 pub trait QueryManagerExt<'a, R> {
     fn db_manager(&'a self) -> State<'a, QueryManager>;
-    fn db(&'a self) -> ClientDb<'a>;
+    fn db(&'a self) -> Result<ClientDb<'a>>;
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
         F: FnOnce(&ClientDb) -> Result<T>;
@@ -103,7 +101,7 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
         self.state::<QueryManager>()
     }
 
-    fn db(&'a self) -> ClientDb<'a> {
+    fn db(&'a self) -> Result<ClientDb<'a>> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
     }

@@ -42,7 +42,7 @@ fn create_list_show_delete_round_trip() {
         .success()
         .stdout(contains(format!("Deleted environment: {environment_id}")));
 
-    assert!(query_manager(data_dir).connect().get_environment(&environment_id).is_err());
+    assert!(query_manager(data_dir).connect().unwrap().get_environment(&environment_id).is_err());
 }
 
 #[test]

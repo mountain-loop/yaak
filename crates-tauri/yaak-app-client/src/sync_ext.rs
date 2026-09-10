@@ -26,9 +26,10 @@ pub(crate) async fn cmd_sync_calculate<R: Runtime>(
         return Err(InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()).into());
     }
 
-    let db = app_handle.db();
     let version = app_handle.package_info().version.to_string();
-    let db_candidates = get_db_candidates(&db, &version, workspace_id, sync_dir)?;
+    // Scoped so the pooled connection is back before the directory walk below, which is
+    // as slow as the sync directory is large.
+    let db_candidates = get_db_candidates(&app_handle.db()?, &version, workspace_id, sync_dir)?;
     let fs_candidates = get_fs_candidates(sync_dir)?
         .into_iter()
         // Only keep items in the same workspace
@@ -49,7 +50,7 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
     sync_dir: &Path,
     workspace_id: &str,
 ) -> Result<()> {
-    let db = app_handle.db();
+    let db = app_handle.db()?;
     let blobs = app_handle.blob_manager();
     let sync_state_ops = apply_sync_ops(&db, &blobs, workspace_id, sync_dir, sync_ops)?;
     apply_sync_state_ops(&db, workspace_id, sync_dir, sync_state_ops)?;

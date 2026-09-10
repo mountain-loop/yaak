@@ -68,11 +68,11 @@ pub trait Host: Clone {
         PluginContext::new(Some(self.client_id().to_string()), self.session().workspace_id)
     }
 
-    fn db(&self) -> ClientDb<'_> {
+    fn db(&self) -> yaak_models::error::Result<ClientDb<'_>> {
         self.query_manager().connect()
     }
 
-    fn blobs(&self) -> BlobContext {
+    fn blobs(&self) -> yaak_models::error::Result<BlobContext> {
         self.blob_manager().connect()
     }
 }

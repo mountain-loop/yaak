@@ -10,7 +10,7 @@ pub async fn cmd_plugin_info<H: PluginHost>(
     host: H,
     req: CmdPluginInfoReq,
 ) -> Result<PluginMetadata> {
-    let plugin = host.db().get_plugin(&req.id)?;
+    let plugin = host.db()?.get_plugin(&req.id)?;
     if let Some(metadata) = host.loaded_plugin_metadata(&plugin.directory).await {
         return Ok(metadata);
     }

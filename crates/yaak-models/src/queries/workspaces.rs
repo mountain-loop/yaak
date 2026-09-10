@@ -109,7 +109,7 @@ impl<'a> ClientDb<'a> {
 
         // Best-effort cleanup of response bodies (disk files and blob chunks).
         // Failures only orphan unreferenced data, and are logged.
-        let blob_ctx = blobs.connect();
+        let blob_ctx = blobs.connect()?;
         for m in responses {
             if let Some(p) = m.body_path {
                 if let Err(e) = std::fs::remove_file(&p) {
@@ -215,7 +215,7 @@ mod tests {
     #[test]
     fn bootstraps_first_workspace_with_real_defaults() {
         let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let workspaces = db.list_workspaces().expect("Failed to list workspaces");
         let workspace = workspaces.first().expect("No workspace was bootstrapped");

@@ -75,7 +75,7 @@ impl YaakUpdater {
         auto_download: bool,
         update_trigger: UpdateTrigger,
     ) -> Result<bool> {
-        let settings = window.db().get_settings();
+        let settings = window.db()?.get_settings();
         let update_key = format!("{:x}", md5::compute(settings.id));
         self.last_check = Some(Instant::now());
 

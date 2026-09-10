@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn only_the_owner_closes_what_the_last_session_left_open() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let source = &UpdateSource::Background;
 
         let workspace = db
@@ -117,14 +117,14 @@ mod tests {
     #[test]
     fn owner_without_a_filesystem_still_sweeps_blobs() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         {
-            let blob_ctx = blob_manager.connect();
+            let blob_ctx = blob_manager.connect().unwrap();
             blob_ctx.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())).unwrap();
         }
 
         on_launch(&Host::owner(), &db, &blob_manager).unwrap();
 
-        assert!(!blob_manager.connect().body_exists("rs_gone").unwrap());
+        assert!(!blob_manager.connect().unwrap().body_exists("rs_gone").unwrap());
     }
 }

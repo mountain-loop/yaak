@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn records_model_changes_for_upsert_and_delete() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let workspace = db
             .upsert_workspace(
@@ -146,7 +146,7 @@ mod tests {
     #[test]
     fn prunes_old_model_changes() {
         let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         db.upsert_workspace(
             &Workspace {
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn list_model_changes_since_uses_timestamp_with_id_tiebreaker() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let workspace = db
             .upsert_workspace(
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn prunes_old_model_changes_by_hours() {
         let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         db.upsert_workspace(
             &Workspace {
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn list_model_changes_deserializes_http_response_event_payload() {
         let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let payload = json!({
             "model": {

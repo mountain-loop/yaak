@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn request_resolution_preserves_duplicate_request_headers() {
         let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let workspace = db.list_workspaces().expect("Failed to list workspaces").remove(0);
         let request = HttpRequest {
             workspace_id: workspace.id,
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn http_version_resolves_through_the_inheritance_chain() {
         let (query_manager, _blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let workspace = db
             .upsert_workspace(

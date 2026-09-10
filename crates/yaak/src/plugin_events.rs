@@ -217,20 +217,33 @@ fn build_shared_reply(
     request: SharedRequest<'_>,
     context: SharedPluginEventContext<'_>,
 ) -> InternalEventPayload {
+    // Each arm takes its own connection and hands it straight back, so an arm that reads a
+    // response body never holds one while it does. The macro is here so failing to get one
+    // answers the plugin with an error instead of unwinding the event loop.
+    macro_rules! db {
+        () => {
+            match query_manager.connect() {
+                Ok(db) => db,
+                Err(err) => {
+                    return InternalEventPayload::ErrorResponse(ErrorResponse {
+                        error: format!("Failed to get a database connection: {err}"),
+                    });
+                }
+            }
+        };
+    }
+
     match request {
         SharedRequest::GetKeyValue(req) => {
-            let value = query_manager
-                .connect()
-                .get_plugin_key_value(context.plugin_name, &req.key)
-                .map(|v| v.value);
+            let value = db!().get_plugin_key_value(context.plugin_name, &req.key).map(|v| v.value);
             InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value })
         }
         SharedRequest::SetKeyValue(req) => {
-            query_manager.connect().set_plugin_key_value(context.plugin_name, &req.key, &req.value);
+            db!().set_plugin_key_value(context.plugin_name, &req.key, &req.value);
             InternalEventPayload::SetKeyValueResponse(yaak_plugins::events::SetKeyValueResponse {})
         }
         SharedRequest::DeleteKeyValue(req) => {
-            match query_manager.connect().delete_plugin_key_value(context.plugin_name, &req.key) {
+            match db!().delete_plugin_key_value(context.plugin_name, &req.key) {
                 Ok(deleted) => {
                     InternalEventPayload::DeleteKeyValueResponse(DeleteKeyValueResponse { deleted })
                 }
@@ -240,7 +253,7 @@ fn build_shared_reply(
             }
         }
         SharedRequest::GetHttpRequestById(req) => {
-            let http_request = query_manager.connect().get_http_request(&req.id).ok();
+            let http_request = db!().get_http_request(&req.id).ok();
             InternalEventPayload::GetHttpRequestByIdResponse(GetHttpRequestByIdResponse {
                 http_request,
             })
@@ -251,7 +264,7 @@ fn build_shared_reply(
                     error: "workspace_id is required for list_folders_request".to_string(),
                 });
             };
-            let folders = match query_manager.connect().list_folders(workspace_id) {
+            let folders = match db!().list_folders(workspace_id) {
                 Ok(folders) => folders,
                 Err(err) => {
                     return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -263,7 +276,7 @@ fn build_shared_reply(
         }
         SharedRequest::ListHttpRequests(req) => {
             let http_requests = if let Some(folder_id) = req.folder_id.as_deref() {
-                match query_manager.connect().list_http_requests_for_folder_recursive(folder_id) {
+                match db!().list_http_requests_for_folder_recursive(folder_id) {
                     Ok(http_requests) => http_requests,
                     Err(err) => {
                         return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -279,7 +292,7 @@ fn build_shared_reply(
                                 .to_string(),
                     });
                 };
-                match query_manager.connect().list_http_requests(workspace_id) {
+                match db!().list_http_requests(workspace_id) {
                     Ok(http_requests) => http_requests,
                     Err(err) => {
                         return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -293,8 +306,7 @@ fn build_shared_reply(
             })
         }
         SharedRequest::FindHttpResponses(req) => {
-            let http_responses = query_manager
-                .connect()
+            let http_responses = db!()
                 .list_http_responses_for_request(&req.request_id, req.limit.map(|l| l as u64))
                 .unwrap_or_default();
             InternalEventPayload::FindHttpResponsesResponse(FindHttpResponsesResponse {
@@ -330,29 +342,24 @@ fn build_shared_reply(
             use AnyModel::*;
 
             let model = match &req.model {
-                HttpRequest(m) => {
-                    match query_manager.connect().upsert_http_request(m, &UpdateSource::Plugin) {
-                        Ok(model) => HttpRequest(model),
-                        Err(err) => {
-                            return InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to upsert HTTP request: {err}"),
-                            });
-                        }
+                HttpRequest(m) => match db!().upsert_http_request(m, &UpdateSource::Plugin) {
+                    Ok(model) => HttpRequest(model),
+                    Err(err) => {
+                        return InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to upsert HTTP request: {err}"),
+                        });
                     }
-                }
-                GrpcRequest(m) => {
-                    match query_manager.connect().upsert_grpc_request(m, &UpdateSource::Plugin) {
-                        Ok(model) => GrpcRequest(model),
-                        Err(err) => {
-                            return InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to upsert gRPC request: {err}"),
-                            });
-                        }
+                },
+                GrpcRequest(m) => match db!().upsert_grpc_request(m, &UpdateSource::Plugin) {
+                    Ok(model) => GrpcRequest(model),
+                    Err(err) => {
+                        return InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to upsert gRPC request: {err}"),
+                        });
                     }
                 }
                 WebsocketRequest(m) => {
-                    match query_manager.connect().upsert_websocket_request(m, &UpdateSource::Plugin)
-                    {
+                    match db!().upsert_websocket_request(m, &UpdateSource::Plugin) {
                         Ok(model) => WebsocketRequest(model),
                         Err(err) => {
                             return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -361,34 +368,28 @@ fn build_shared_reply(
                         }
                     }
                 }
-                Folder(m) => {
-                    match query_manager.connect().upsert_folder(m, &UpdateSource::Plugin) {
-                        Ok(model) => Folder(model),
-                        Err(err) => {
-                            return InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to upsert folder: {err}"),
-                            });
-                        }
+                Folder(m) => match db!().upsert_folder(m, &UpdateSource::Plugin) {
+                    Ok(model) => Folder(model),
+                    Err(err) => {
+                        return InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to upsert folder: {err}"),
+                        });
                     }
-                }
-                Environment(m) => {
-                    match query_manager.connect().upsert_environment(m, &UpdateSource::Plugin) {
-                        Ok(model) => Environment(model),
-                        Err(err) => {
-                            return InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to upsert environment: {err}"),
-                            });
-                        }
+                },
+                Environment(m) => match db!().upsert_environment(m, &UpdateSource::Plugin) {
+                    Ok(model) => Environment(model),
+                    Err(err) => {
+                        return InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to upsert environment: {err}"),
+                        });
                     }
-                }
-                Workspace(m) => {
-                    match query_manager.connect().upsert_workspace(m, &UpdateSource::Plugin) {
-                        Ok(model) => Workspace(model),
-                        Err(err) => {
-                            return InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to upsert workspace: {err}"),
-                            });
-                        }
+                },
+                Workspace(m) => match db!().upsert_workspace(m, &UpdateSource::Plugin) {
+                    Ok(model) => Workspace(model),
+                    Err(err) => {
+                        return InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to upsert workspace: {err}"),
+                        });
                     }
                 }
                 _ => {
@@ -403,10 +404,7 @@ fn build_shared_reply(
         SharedRequest::DeleteModel(req) => {
             let model = match req.model.as_str() {
                 "http_request" => {
-                    match query_manager
-                        .connect()
-                        .delete_http_request_by_id(&req.id, &UpdateSource::Plugin)
-                    {
+                    match db!().delete_http_request_by_id(&req.id, &UpdateSource::Plugin) {
                         Ok(model) => AnyModel::HttpRequest(model),
                         Err(err) => {
                             return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -416,10 +414,7 @@ fn build_shared_reply(
                     }
                 }
                 "grpc_request" => {
-                    match query_manager
-                        .connect()
-                        .delete_grpc_request_by_id(&req.id, &UpdateSource::Plugin)
-                    {
+                    match db!().delete_grpc_request_by_id(&req.id, &UpdateSource::Plugin) {
                         Ok(model) => AnyModel::GrpcRequest(model),
                         Err(err) => {
                             return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -429,10 +424,7 @@ fn build_shared_reply(
                     }
                 }
                 "websocket_request" => {
-                    match query_manager
-                        .connect()
-                        .delete_websocket_request_by_id(&req.id, &UpdateSource::Plugin)
-                    {
+                    match db!().delete_websocket_request_by_id(&req.id, &UpdateSource::Plugin) {
                         Ok(model) => AnyModel::WebsocketRequest(model),
                         Err(err) => {
                             return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -441,10 +433,7 @@ fn build_shared_reply(
                         }
                     }
                 }
-                "folder" => match query_manager
-                    .connect()
-                    .delete_folder_by_id(&req.id, &UpdateSource::Plugin)
-                {
+                "folder" => match db!().delete_folder_by_id(&req.id, &UpdateSource::Plugin) {
                     Ok(model) => AnyModel::Folder(model),
                     Err(err) => {
                         return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -453,10 +442,7 @@ fn build_shared_reply(
                     }
                 },
                 "environment" => {
-                    match query_manager
-                        .connect()
-                        .delete_environment_by_id(&req.id, &UpdateSource::Plugin)
-                    {
+                    match db!().delete_environment_by_id(&req.id, &UpdateSource::Plugin) {
                         Ok(model) => AnyModel::Environment(model),
                         Err(err) => {
                             return InternalEventPayload::ErrorResponse(ErrorResponse {
@@ -509,6 +495,7 @@ mod tests {
 
         query_manager
             .connect()
+            .unwrap()
             .upsert_workspace(
                 &Workspace {
                     id: "wk_test".to_string(),
@@ -521,6 +508,7 @@ mod tests {
 
         query_manager
             .connect()
+            .unwrap()
             .upsert_folder(
                 &Folder {
                     id: "fl_test".to_string(),
@@ -534,6 +522,7 @@ mod tests {
 
         query_manager
             .connect()
+            .unwrap()
             .upsert_http_request(
                 &HttpRequest {
                     id: "rq_test".to_string(),
@@ -739,6 +728,7 @@ mod tests {
 
         let existing = query_manager
             .connect()
+            .unwrap()
             .get_http_request("rq_test")
             .expect("Failed to load seeded request");
         let upsert_payload = InternalEventPayload::UpsertModelRequest(UpsertModelRequest {

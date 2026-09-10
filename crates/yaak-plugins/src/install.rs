@@ -26,7 +26,7 @@ pub async fn delete_and_uninstall(
     };
     // Scope the db connection so it doesn't live across await
     let plugin = {
-        let db = query_manager.connect();
+        let db = query_manager.connect()?;
         db.delete_plugin_by_id(plugin_id, &update_source)?
     };
     if let Err(err) = plugin_manager.uninstall(plugin_context, plugin.directory.as_str()).await {
@@ -74,7 +74,7 @@ pub async fn download_and_install(
 
     // Scope the db connection so it doesn't live across await
     let plugin = {
-        let db = query_manager.connect();
+        let db = query_manager.connect()?;
         db.upsert_plugin(
             &Plugin {
                 id: plugin_version.id.clone(),

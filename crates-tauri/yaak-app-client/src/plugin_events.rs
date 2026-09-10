@@ -104,14 +104,14 @@ async fn handle_host_plugin_request<R: Runtime>(
             Box::pin(handle_plugin_event(app_handle, &toast_event, plugin_handle)).await
         }
         HostRequest::ReloadResponse(req) => {
-            let plugins = app_handle.db().list_plugins()?;
+            let plugins = app_handle.db()?.list_plugins()?;
             for plugin in plugins {
                 if plugin.directory != plugin_handle.dir {
                     continue;
                 }
 
                 let new_plugin = Plugin { updated_at: Utc::now().naive_utc(), ..plugin };
-                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin)?;
+                app_handle.db()?.upsert_plugin(&new_plugin, &UpdateSource::Plugin)?;
             }
 
             if !req.silent {
@@ -199,7 +199,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment_id = environment_from_window(&window).map(|e| e.id);
-            let environment_chain = window.db().resolve_environments(
+            let environment_chain = window.db()?.resolve_environments(
                 &workspace.id,
                 req.grpc_request.folder_id.as_deref(),
                 environment_id.as_deref(),
@@ -225,7 +225,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             let workspace =
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment_id = environment_from_window(&window).map(|e| e.id);
-            let environment_chain = window.db().resolve_environments(
+            let environment_chain = window.db()?.resolve_environments(
                 &workspace.id,
                 req.http_request.folder_id.as_deref(),
                 environment_id.as_deref(),
@@ -252,7 +252,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
             let environment_id = environment_from_window(&window).map(|e| e.id);
             let folder_id = if let Some(id) = window.request_id() {
-                match window.db().get_any_request(&id) {
+                match window.db()?.get_any_request(&id) {
                     Ok(AnyRequest::HttpRequest(r)) => r.folder_id,
                     Ok(AnyRequest::GrpcRequest(r)) => r.folder_id,
                     Ok(AnyRequest::WebsocketRequest(r)) => r.folder_id,
@@ -261,7 +261,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             } else {
                 None
             };
-            let environment_chain = window.db().resolve_environments(
+            let environment_chain = window.db()?.resolve_environments(
                 &workspace.id,
                 folder_id.as_deref(),
                 environment_id.as_deref(),
@@ -294,7 +294,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 HttpResponse::default()
             } else {
                 let blobs = window.blob_manager();
-                window.db().upsert_http_response(
+                window.db()?.upsert_http_response(
                     &HttpResponse {
                         request_id: http_request.id.clone(),
                         workspace_id: http_request.workspace_id.clone(),
@@ -328,7 +328,7 @@ async fn handle_host_plugin_request<R: Runtime>(
         HostRequest::OpenWindow(req) => {
             let (navigation_tx, mut navigation_rx) = tokio::sync::mpsc::channel(128);
             let (close_tx, mut close_rx) = tokio::sync::mpsc::channel(128);
-            let use_native_titlebar = app_handle.db().get_settings().use_native_titlebar;
+            let use_native_titlebar = app_handle.db()?.get_settings().use_native_titlebar;
             let win_config = CreateWindowConfig {
                 url: &req.url,
                 label: &req.label,
@@ -438,7 +438,7 @@ async fn handle_host_plugin_request<R: Runtime>(
             let environment_id = environment_from_window(&w).map(|m| m.id);
             let workspace_id = workspace_from_window(&w).map(|m| m.id);
             let request_id =
-                match app_handle.db().get_any_request(&w.request_id().unwrap_or_default()) {
+                match app_handle.db()?.get_any_request(&w.request_id().unwrap_or_default()) {
                     Ok(AnyRequest::HttpRequest(r)) => Some(r.id),
                     Ok(AnyRequest::WebsocketRequest(r)) => Some(r.id),
                     Ok(AnyRequest::GrpcRequest(r)) => Some(r.id),

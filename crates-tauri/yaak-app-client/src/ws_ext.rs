@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
+use yaak_commands::resolve::resolve_websocket_request;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::CookieStore;
 use yaak_http::path_placeholders::apply_path_placeholders;
@@ -26,7 +27,6 @@ use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::strip_json_comments::maybe_strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
-use yaak_commands::resolve::resolve_websocket_request;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
 pub async fn cmd_ws_send<R: Runtime>(
@@ -36,14 +36,14 @@ pub async fn cmd_ws_send<R: Runtime>(
     window: WebviewWindow<R>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let connection = app_handle.db().get_websocket_connection(connection_id)?;
+    let connection = app_handle.db()?.get_websocket_connection(connection_id)?;
 
     match send_websocket_message(&connection, environment_id, &app_handle, &window, &ws_manager)
         .await
     {
         Ok(connection) => Ok(connection),
         Err(e) => {
-            app_handle.db().upsert_websocket_event(
+            app_handle.db()?.upsert_websocket_event(
                 &WebsocketEvent {
                     connection_id: connection.id.clone(),
                     request_id: connection.request_id.clone(),
@@ -68,14 +68,14 @@ async fn send_websocket_message<R: Runtime>(
     window: &WebviewWindow<R>,
     ws_manager: &Mutex<WebsocketManager>,
 ) -> Result<WebsocketConnection> {
-    let unrendered_request = app_handle.db().get_websocket_request(&connection.request_id)?;
-    let environment_chain = app_handle.db().resolve_environments(
+    let unrendered_request = app_handle.db()?.get_websocket_request(&connection.request_id)?;
+    let environment_chain = app_handle.db()?.resolve_environments(
         &unrendered_request.workspace_id,
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
     let (resolved_request, _auth_context_id) =
-        resolve_websocket_request(&window.db(), &unrendered_request)?;
+        resolve_websocket_request(&window.db()?, &unrendered_request)?;
     let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(app_handle).await?);
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_websocket_request(
@@ -96,7 +96,7 @@ async fn send_websocket_message<R: Runtime>(
     let mut ws_manager = ws_manager.lock().await;
     ws_manager.send(&connection.id, Message::Text(message.clone().into())).await?;
 
-    app_handle.db().upsert_websocket_event(
+    app_handle.db()?.upsert_websocket_event(
         &WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
@@ -119,7 +119,7 @@ pub async fn cmd_ws_close<R: Runtime>(
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
     let connection = {
-        let db = app_handle.db();
+        let db = app_handle.db()?;
         let connection = db.get_websocket_connection(connection_id)?;
         db.upsert_websocket_connection(
             &WebsocketConnection { state: WebsocketConnectionState::Closing, ..connection },
@@ -143,17 +143,17 @@ pub async fn cmd_ws_connect<R: Runtime>(
     window: WebviewWindow<R>,
     ws_manager: State<'_, Mutex<WebsocketManager>>,
 ) -> Result<WebsocketConnection> {
-    let unrendered_request = app_handle.db().get_websocket_request(request_id)?;
-    let environment_chain = app_handle.db().resolve_environments(
+    let unrendered_request = app_handle.db()?.get_websocket_request(request_id)?;
+    let environment_chain = app_handle.db()?.resolve_environments(
         &unrendered_request.workspace_id,
         unrendered_request.folder_id.as_deref(),
         environment_id,
     )?;
     let resolved_settings =
-        app_handle.db().resolve_settings_for_websocket_request(&unrendered_request)?;
-    let settings = app_handle.db().get_settings();
+        app_handle.db()?.resolve_settings_for_websocket_request(&unrendered_request)?;
+    let settings = app_handle.db()?.get_settings();
     let (resolved_request, auth_context_id) =
-        resolve_websocket_request(&window.db(), &unrendered_request)?;
+        resolve_websocket_request(&window.db()?, &unrendered_request)?;
     let plugin_manager = Arc::new(crate::plugins_ext::plugin_manager(&app_handle).await?);
     let encryption_manager = Arc::new((*app_handle.state::<EncryptionManager>()).clone());
     let request = render_websocket_request(
@@ -169,7 +169,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
     )
     .await?;
 
-    let connection = app_handle.db().upsert_websocket_connection(
+    let connection = app_handle.db()?.upsert_websocket_connection(
         &WebsocketConnection {
             workspace_id: request.workspace_id.clone(),
             request_id: request_id.to_string(),
@@ -187,7 +187,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
     let mut url = match Url::parse(&url) {
         Ok(url) => url,
         Err(e) => {
-            return Ok(app_handle.db().upsert_websocket_connection(
+            return Ok(app_handle.db()?.upsert_websocket_connection(
                 &WebsocketConnection {
                     error: Some(format!("Failed to parse URL {}", e.to_string())),
                     state: WebsocketConnectionState::Closed,
@@ -268,7 +268,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
         resolved_settings.send_cookies.value || resolved_settings.store_cookies.value,
         cookie_jar_id,
     ) {
-        (true, Some(id)) => Some(app_handle.db().get_cookie_jar(id)?),
+        (true, Some(id)) => Some(app_handle.db()?.get_cookie_jar(id)?),
         _ => None,
     };
     let cookie_store =
@@ -321,7 +321,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
     {
         Ok(r) => r,
         Err(e) => {
-            return Ok(app_handle.db().upsert_websocket_connection(
+            return Ok(app_handle.db()?.upsert_websocket_connection(
                 &WebsocketConnection {
                     error: Some(e.to_string()),
                     state: WebsocketConnectionState::Closed,
@@ -332,7 +332,7 @@ pub async fn cmd_ws_connect<R: Runtime>(
         }
     };
 
-    app_handle.db().upsert_websocket_event(
+    app_handle.db()?.upsert_websocket_event(
         &WebsocketEvent {
             connection_id: connection.id.clone(),
             request_id: request.id.clone(),
@@ -366,11 +366,11 @@ pub async fn cmd_ws_connect<R: Runtime>(
         if !set_cookie_headers.is_empty() {
             store.store_cookies_from_response(&convert_ws_url_to_http(&url), &set_cookie_headers);
             cookie_jar.cookies = store.get_all_cookies();
-            app_handle.db().upsert_cookie_jar(cookie_jar, &UpdateSource::Background)?;
+            app_handle.db()?.upsert_cookie_jar(cookie_jar, &UpdateSource::Background)?;
         }
     }
 
-    let connection = app_handle.db().upsert_websocket_connection(
+    let connection = app_handle.db()?.upsert_websocket_connection(
         &WebsocketConnection {
             state: WebsocketConnectionState::Connected,
             headers: response_headers,
@@ -394,9 +394,8 @@ pub async fn cmd_ws_connect<R: Runtime>(
                     has_written_close = true;
                 }
 
-                app_handle
-                    .db()
-                    .upsert_websocket_event(
+                let event = || {
+                    app_handle.db()?.upsert_websocket_event(
                         &WebsocketEvent {
                             connection_id: connection_id.clone(),
                             request_id: request_id.clone(),
@@ -416,13 +415,15 @@ pub async fn cmd_ws_connect<R: Runtime>(
                         },
                         &UpdateSource::from_window_label(&window_label),
                     )
-                    .unwrap();
+                };
+                if let Err(e) = event() {
+                    warn!("Failed to store WebSocket event: {e}");
+                }
             }
             info!("Websocket connection closed");
             if !has_written_close {
-                app_handle
-                    .db()
-                    .upsert_websocket_event(
+                let close_event = app_handle.db().and_then(|db| {
+                    db.upsert_websocket_event(
                         &WebsocketEvent {
                             connection_id: connection_id.clone(),
                             request_id: request_id.clone(),
@@ -433,11 +434,13 @@ pub async fn cmd_ws_connect<R: Runtime>(
                         },
                         &UpdateSource::from_window_label(&window_label),
                     )
-                    .unwrap();
+                });
+                if let Err(e) = close_event {
+                    warn!("Failed to store WebSocket close event: {e}");
+                }
             }
-            app_handle
-                .db()
-                .upsert_websocket_connection(
+            let closed = app_handle.db().and_then(|db| {
+                db.upsert_websocket_connection(
                     &WebsocketConnection {
                         workspace_id: request.workspace_id.clone(),
                         request_id: request_id.to_string(),
@@ -446,7 +449,10 @@ pub async fn cmd_ws_connect<R: Runtime>(
                     },
                     &UpdateSource::from_window_label(&window_label),
                 )
-                .unwrap();
+            });
+            if let Err(e) = closed {
+                warn!("Failed to mark WebSocket connection closed: {e}");
+            }
         });
     }
 

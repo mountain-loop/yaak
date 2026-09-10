@@ -107,7 +107,7 @@ impl PluginUpdater {
 
         let app_version = window.app_handle().package_info().version.to_string();
         let http_client = yaak_api_client(ApiClientKind::App, &app_version)?;
-        let plugins = window.app_handle().db().list_plugins()?;
+        let plugins = window.app_handle().db()?.list_plugins()?;
         let updates = check_plugin_updates(&http_client, plugins.clone()).await?;
 
         if updates.plugins.is_empty() {
@@ -203,7 +203,7 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     // Resolve the manager before writing the row so startup's plugin snapshot
     // can't include it and boot it a second time
     let plugin_manager = Arc::new(plugin_manager(&window).await?);
-    let plugin = window.db().upsert_plugin(
+    let plugin = window.db()?.upsert_plugin(
         &Plugin {
             directory: directory.into(),
             url: None,
@@ -234,7 +234,7 @@ pub async fn cmd_plugins_updates<R: Runtime>(
 ) -> Result<PluginUpdatesResponse> {
     let app_version = app_handle.package_info().version.to_string();
     let http_client = yaak_api_client(ApiClientKind::App, &app_version)?;
-    let plugins = app_handle.db().list_plugins()?;
+    let plugins = app_handle.db()?.list_plugins()?;
     Ok(check_plugin_updates(&http_client, plugins).await?)
 }
 
@@ -243,7 +243,7 @@ pub async fn cmd_plugins_update_all<R: Runtime>(
 ) -> Result<Vec<PluginNameVersion>> {
     let app_version = window.app_handle().package_info().version.to_string();
     let http_client = yaak_api_client(ApiClientKind::App, &app_version)?;
-    let plugins = window.db().list_plugins()?;
+    let plugins = window.db()?.list_plugins()?;
 
     // Get list of available updates (already filtered to only registry plugins)
     let updates = check_plugin_updates(&http_client, plugins).await?;

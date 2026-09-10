@@ -51,7 +51,7 @@ impl EncryptionManager {
     pub fn set_human_key(&self, workspace_id: &str, human_key: &str) -> Result<WorkspaceMeta> {
         let wkey = WorkspaceKey::from_human(human_key)?;
 
-        let workspace = self.query_manager.connect().get_workspace(workspace_id)?;
+        let workspace = self.query_manager.connect()?.get_workspace(workspace_id)?;
         let encryption_key_challenge = match workspace.encryption_key_challenge {
             None => return self.set_workspace_key(workspace_id, &wkey),
             Some(c) => c,
@@ -103,7 +103,7 @@ impl EncryptionManager {
 
     pub fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
         let workspace_meta =
-            self.query_manager.connect().get_or_create_workspace_meta(workspace_id)?;
+            self.query_manager.connect()?.get_or_create_workspace_meta(workspace_id)?;
 
         // Already exists
         if let Some(_) = workspace_meta.encryption_key {
@@ -152,8 +152,10 @@ impl EncryptionManager {
             }
         };
 
-        let db = self.query_manager.connect();
-        let workspace_meta = db.get_or_create_workspace_meta(workspace_id)?;
+        // Scoped so the pooled connection is back before `get_master_key` below, which
+        // can block on the OS keyring for as long as it likes.
+        let workspace_meta =
+            self.query_manager.connect()?.get_or_create_workspace_meta(workspace_id)?;
 
         let key = match workspace_meta.encryption_key {
             None => return Err(MissingWorkspaceKey),

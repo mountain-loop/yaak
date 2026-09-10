@@ -13,7 +13,7 @@ pub struct ExportDataParams<'a> {
 }
 
 pub fn export_data(params: ExportDataParams<'_>) -> Result<()> {
-    let db = params.query_manager.connect();
+    let db = params.query_manager.connect()?;
     let export_data = get_workspace_export_resources(
         &db,
         params.yaak_version,

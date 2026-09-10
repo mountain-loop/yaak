@@ -47,6 +47,7 @@ async fn import(
 ) -> CommandResult<(BatchUpsertResult, Vec<ImportPlanItem>)> {
     if let Some(workspace_id) = args.workspace_id.as_deref() {
         ctx.db()
+            .map_err(|e| e.to_string())?
             .get_workspace(workspace_id)
             .map_err(|e| format!("Failed to get workspace '{workspace_id}': {e}"))?;
     }
@@ -146,8 +147,11 @@ fn resolve_export_workspace_ids(
     all: bool,
 ) -> CommandResult<Vec<String>> {
     if all {
-        let workspaces =
-            ctx.db().list_workspaces().map_err(|e| format!("Failed to list workspaces: {e}"))?;
+        let workspaces = ctx
+            .db()
+            .map_err(|e| e.to_string())?
+            .list_workspaces()
+            .map_err(|e| format!("Failed to list workspaces: {e}"))?;
         if workspaces.is_empty() {
             return Err("No workspaces found to export".to_string());
         }
@@ -160,6 +164,7 @@ fn resolve_export_workspace_ids(
 
     for workspace_id in &workspace_ids {
         ctx.db()
+            .map_err(|e| e.to_string())?
             .get_workspace(workspace_id)
             .map_err(|e| format!("Failed to get workspace '{workspace_id}': {e}"))?;
     }

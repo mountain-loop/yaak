@@ -104,7 +104,9 @@ pub async fn boot() -> Result<()> {
     let (queries, blobs, events) =
         yaak_models::init_standalone(DB_NAME, BLOB_DB_NAME).map_err(js_error)?;
 
-    if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host(), &queries.connect(), &blobs) {
+    if let Err(e) =
+        yaak_lifecycle::on_launch(&lifecycle_host(), &queries.connect().map_err(js_error)?, &blobs)
+    {
         web_sys::console::warn_2(&"on_launch hook failed".into(), &js_error(e));
     }
 
@@ -254,7 +256,7 @@ fn dispatch(
         // because that is what the desktop returns and what the store parses.
         "models_workspace_models" => {
             let req: WorkspaceModelsReq = from_js(payload)?;
-            let db = host.queries.connect();
+            let db = host.queries.connect().map_err(js_error)?;
             let mut list: Vec<AnyModel> = Vec::new();
 
             list.push(db.get_settings().into());
@@ -291,7 +293,7 @@ fn dispatch(
 
         "models_upsert" => {
             let req: ModelReq = from_js(payload)?;
-            let db = host.queries.connect();
+            let db = host.queries.connect().map_err(js_error)?;
             let id =
                 models_ops::upsert_model(&db, &host.blobs, req.model, source).map_err(js_error)?;
             to_json(id)
@@ -319,11 +321,16 @@ fn dispatch(
             to_json(id)
         }
 
-        "models_get_settings" => to_json(host.queries.connect().get_settings()),
+        "models_get_settings" => to_json(host.queries.connect().map_err(js_error)?.get_settings()),
 
         "models_get_graphql_introspection" => {
             let req: RequestIdReq = from_js(payload)?;
-            to_json(host.queries.connect().get_graphql_introspection(&req.request_id))
+            to_json(
+                host.queries
+                    .connect()
+                    .map_err(js_error)?
+                    .get_graphql_introspection(&req.request_id),
+            )
         }
 
         "models_upsert_graphql_introspection" => {
@@ -331,6 +338,7 @@ fn dispatch(
             let saved = host
                 .queries
                 .connect()
+                .map_err(js_error)?
                 .upsert_graphql_introspection(
                     &req.workspace_id,
                     &req.request_id,
@@ -346,7 +354,13 @@ fn dispatch(
 
         "web_get_http_request" => {
             let req: RequestIdReq = from_js(payload)?;
-            to_json(host.queries.connect().get_http_request(&req.request_id).map_err(js_error)?)
+            to_json(
+                host.queries
+                    .connect()
+                    .map_err(js_error)?
+                    .get_http_request(&req.request_id)
+                    .map_err(js_error)?,
+            )
         }
 
         "cmd_get_http_response_events" => {
@@ -354,6 +368,7 @@ fn dispatch(
             to_json(
                 host.queries
                     .connect()
+                    .map_err(js_error)?
                     .list_http_response_events(&req.response_id)
                     .map_err(js_error)?,
             )
@@ -366,7 +381,7 @@ fn dispatch(
             if req.before == req.after {
                 return to_json(());
             }
-            let db = host.queries.connect();
+            let db = host.queries.connect().map_err(js_error)?;
             let jar = db.get_cookie_jar(&req.cookie_jar_id).map_err(js_error)?;
             let cookies = apply_cookie_changes(jar.cookies.clone(), &req.before, &req.after);
             db.upsert_cookie_jar(&CookieJar { cookies, ..jar }, source).map_err(js_error)?;
@@ -378,7 +393,7 @@ fn dispatch(
         // writes fan out to every tab as `model_writes` like any other.
         "web_insert_http_response_events" => {
             let req: InsertResponseEventsReq = from_js(payload)?;
-            let db = host.queries.connect();
+            let db = host.queries.connect().map_err(js_error)?;
             for event in req.events {
                 let model = HttpResponseEvent::new(&req.response_id, &req.workspace_id, event);
                 db.upsert_http_response_event(&model, source).map_err(js_error)?;
@@ -388,7 +403,7 @@ fn dispatch(
 
         "cmd_get_workspace_meta" => {
             let req: WorkspaceIdReq = from_js(payload)?;
-            let db = host.queries.connect();
+            let db = host.queries.connect().map_err(js_error)?;
             let workspace = db.get_workspace(&req.workspace_id).map_err(js_error)?;
             to_json(db.get_or_create_workspace_meta(&workspace.id).map_err(js_error)?)
         }
@@ -397,6 +412,7 @@ fn dispatch(
             let req: RequestIdReq = from_js(payload)?;
             host.queries
                 .connect()
+                .map_err(js_error)?
                 .delete_all_http_responses_for_request(&req.request_id, source)
                 .map_err(js_error)?;
             to_json(())
@@ -488,7 +504,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
 
     // Everything from the database first, then release the host borrow before rendering.
     let (request, environment_chain, settings, cookie_jar) = with_host(|host| {
-        let db = host.queries.connect();
+        let db = host.queries.connect().map_err(js_error)?;
         let request = db.get_http_request(&req.request_id).map_err(js_error)?;
         let environment_chain = db
             .resolve_environments(
@@ -554,7 +570,7 @@ pub async fn prepare_http_send(payload: JsValue) -> Result<JsValue> {
 #[wasm_bindgen]
 pub fn blob_get(id: &str) -> Result<Option<Vec<u8>>> {
     with_host(|host| {
-        let chunks = host.blobs.connect().get_chunks(id).map_err(js_error)?;
+        let chunks = host.blobs.connect().map_err(js_error)?.get_chunks(id).map_err(js_error)?;
         if chunks.is_empty() {
             return Ok(None);
         }
@@ -569,7 +585,7 @@ pub fn blob_get(id: &str) -> Result<Option<Vec<u8>>> {
 pub fn blob_put(id: &str, bytes: &[u8]) -> Result<()> {
     const CHUNK: usize = 512 * 1024;
     with_host(|host| {
-        let ctx = host.blobs.connect();
+        let ctx = host.blobs.connect().map_err(js_error)?;
         ctx.delete_chunks(id).map_err(js_error)?;
         for (i, part) in bytes.chunks(CHUNK).enumerate() {
             ctx.insert_chunk(&BodyChunk::new(id, i as i32, part.to_vec())).map_err(js_error)?;
@@ -580,5 +596,5 @@ pub fn blob_put(id: &str, bytes: &[u8]) -> Result<()> {
 
 #[wasm_bindgen]
 pub fn blob_delete(id: &str) -> Result<()> {
-    with_host(|host| host.blobs.connect().delete_chunks(id).map_err(js_error))
+    with_host(|host| host.blobs.connect().map_err(js_error)?.delete_chunks(id).map_err(js_error))
 }

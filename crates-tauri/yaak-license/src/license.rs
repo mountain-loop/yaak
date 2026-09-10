@@ -16,11 +16,11 @@ use yaak_models::util::UpdateSource;
 /// Extension trait for accessing the QueryManager from Tauri Manager types.
 /// This is needed temporarily until all crates are refactored to not use Tauri.
 trait QueryManagerExt<'a, R> {
-    fn db(&'a self) -> ClientDb<'a>;
+    fn db(&'a self) -> yaak_models::error::Result<ClientDb<'a>>;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
-    fn db(&'a self) -> ClientDb<'a> {
+    fn db(&'a self) -> yaak_models::error::Result<ClientDb<'a>> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
     }
@@ -137,7 +137,7 @@ pub async fn activate_license<R: Runtime>(
     }
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
-    window.app_handle().db().set_key_value_str(
+    window.app_handle().db()?.set_key_value_str(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         body.activation_id.as_str(),
@@ -172,7 +172,7 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
         return Err(ServerError);
     }
 
-    app_handle.db().delete_key_value(
+    app_handle.db()?.delete_key_value(
         KV_ACTIVATION_ID_KEY,
         KV_NAMESPACE,
         &UpdateSource::from_window_label(window.label()),
@@ -191,7 +191,7 @@ pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<Lice
         CheckActivationRequestPayload { app_platform: get_os_str().to_string(), app_version };
     let activation_id = get_activation_id(window.app_handle()).await;
 
-    let settings = window.db().get_settings();
+    let settings = window.db()?.get_settings();
     let trial_end = settings.created_at.add(Duration::from_secs(TRIAL_SECONDS)).and_utc();
 
     let has_activation_id = !activation_id.is_empty();
@@ -238,5 +238,8 @@ fn build_url(path: &str) -> String {
 }
 
 pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
-    app_handle.db().get_key_value_str(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
+    app_handle
+        .db()
+        .map(|db| db.get_key_value_str(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, ""))
+        .unwrap_or_default()
 }

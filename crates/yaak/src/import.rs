@@ -97,7 +97,7 @@ pub fn plan_import_resources(
             // Two workspaces of the same name are indistinguishable in the sidebar, and importing
             // a document a second time is the usual way to end up with a pair.
             let mut taken = query_manager
-                .connect()
+                .connect()?
                 .list_workspaces()?
                 .into_iter()
                 .map(|w| w.name)
@@ -115,7 +115,7 @@ pub fn plan_import_resources(
                 workspace_ids.insert(source.id.clone(), workspace_id.clone());
             }
             if !resources.workspaces.is_empty() {
-                let destination_workspace = query_manager.connect().get_workspace(workspace_id)?;
+                let destination_workspace = query_manager.connect()?.get_workspace(workspace_id)?;
                 let skipped_fields = resources
                     .workspaces
                     .iter()
@@ -296,7 +296,7 @@ pub fn plan_import_resources(
         origin,
     };
     merge_with_linked_source(query_manager, &mut plan, &original)?;
-    warn_if_imported_elsewhere(&query_manager.connect(), &mut plan)?;
+    warn_if_imported_elsewhere(&query_manager.connect()?, &mut plan)?;
     Ok(plan)
 }
 
@@ -708,7 +708,7 @@ fn merge_with_linked_source(
     plan: &mut ImportPlan,
     original: &ImportResources,
 ) -> Result<()> {
-    let db = query_manager.connect();
+    let db = query_manager.connect()?;
 
     let incoming_keys: BTreeSet<String> = plan.source_keys.values().cloned().collect();
     let linked = match (&plan.origin, &plan.destination) {
@@ -1151,7 +1151,7 @@ fn validate_destination(
     query_manager: &QueryManager,
     destination: &ImportDestination,
 ) -> Result<()> {
-    let db = query_manager.connect();
+    let db = query_manager.connect()?;
     validate_destination_db(&db, destination)
 }
 
@@ -1591,7 +1591,7 @@ mod tests {
             ..Default::default()
         };
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             destination = db
                 .upsert_workspace(&destination, &UpdateSource::Import)
                 .expect("create destination");
@@ -1632,7 +1632,7 @@ mod tests {
 
         // Planning performed only reads.
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             assert_eq!(db.list_workspaces().expect("list workspaces").len(), 1);
             assert_eq!(db.list_folders(&destination.id).expect("list folders").len(), 1);
             assert!(db.list_http_requests(&destination.id).expect("list requests").is_empty());
@@ -1682,7 +1682,7 @@ mod tests {
         assert_eq!(committed.http_requests.len(), 2);
         assert_eq!(
             query_manager
-                .connect()
+                .connect().unwrap()
                 .get_workspace(&destination.id)
                 .expect("get destination after commit"),
             destination
@@ -1729,7 +1729,7 @@ mod tests {
         assert_eq!(third.resources.workspaces[0].name, "Imported (3)");
 
         let names = query_manager
-            .connect()
+            .connect().unwrap()
             .list_workspaces()
             .expect("list workspaces")
             .into_iter()
@@ -1832,7 +1832,7 @@ mod tests {
             yaak_models::init_in_memory().expect("initialize database");
         let destination = destination_workspace();
         query_manager
-            .connect()
+            .connect().unwrap()
             .upsert_workspace(&destination, &UpdateSource::Import)
             .expect("create destination");
         let resources = ImportResources {
@@ -1924,7 +1924,7 @@ mod tests {
         drop(connection);
 
         assert!(commit_import_plan(&query_manager, plan).is_err());
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         assert!(db.get_workspace(&workspace_id).is_err(), "workspace insert must roll back");
         assert!(db.get_environment(&environment_id).is_err(), "environment must not exist");
         assert!(
@@ -2155,7 +2155,7 @@ mod tests {
     }
 
     fn source_rows(query_manager: &QueryManager, workspace_id: &str) -> Vec<ImportSourceResource> {
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let sources = db.list_import_sources(workspace_id).expect("list import sources");
         assert_eq!(sources.len(), 1, "expected one linked source: {sources:?}");
         db.list_import_source_resources(&sources[0].id).expect("list resource rows")
@@ -2176,7 +2176,7 @@ mod tests {
         let workspace_id = committed.workspaces[0].id.clone();
 
         let source = {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             let source = db
                 .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
                 .expect("query import source")
@@ -2215,7 +2215,7 @@ mod tests {
         assert_eq!(base.parent_model, "workspace");
         commit_import_plan(&query_manager, plan).expect("commit re-import");
 
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         assert_eq!(db.list_http_requests(&workspace_id).expect("list requests").len(), 2);
         assert_eq!(db.list_folders(&workspace_id).expect("list folders").len(), 1);
         assert_eq!(
@@ -2241,7 +2241,7 @@ mod tests {
             .clone();
 
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             let nested = db
                 .list_http_requests(&workspace_id)
                 .expect("list requests")
@@ -2286,7 +2286,7 @@ mod tests {
 
         commit_import_plan(&query_manager, plan).expect("commit merge");
 
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let requests = db.list_http_requests(&workspace_id).expect("list requests");
         assert_eq!(requests.len(), 3);
         assert_eq!(
@@ -2322,7 +2322,7 @@ mod tests {
 
         commit_import_plan(&query_manager, plan).expect("commit rename");
         let requests =
-            query_manager.connect().list_http_requests(&workspace_id).expect("list requests");
+            query_manager.connect().unwrap().list_http_requests(&workspace_id).expect("list requests");
         assert_eq!(requests.len(), 2, "rename must not duplicate");
         assert!(requests.iter().any(|r| r.id == root_id && r.name == "Root Request Renamed"));
     }
@@ -2342,7 +2342,7 @@ mod tests {
             .clone();
 
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             let root = db.get_http_request(&root_id).expect("get root");
             db.upsert_http_request(
                 &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
@@ -2361,7 +2361,7 @@ mod tests {
         commit_import_plan(&query_manager, plan).expect("commit keep-mine");
 
         assert_eq!(
-            query_manager.connect().get_http_request(&root_id).expect("get root").url,
+            query_manager.connect().unwrap().get_http_request(&root_id).expect("get root").url,
             "https://example.com/root-local",
             "keep-mine must not overwrite the local edit"
         );
@@ -2382,7 +2382,7 @@ mod tests {
         }
         commit_import_plan(&query_manager, plan).expect("commit take-source");
         assert_eq!(
-            query_manager.connect().get_http_request(&root_id).expect("get root").url,
+            query_manager.connect().unwrap().get_http_request(&root_id).expect("get root").url,
             "https://example.com/root-v3"
         );
         let plan = replan(&query_manager, &workspace_id, resources);
@@ -2407,7 +2407,7 @@ mod tests {
         }
         commit_import_plan(&query_manager, plan).expect("commit with deselected update");
 
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let root = db
             .list_http_requests(&workspace_id)
             .expect("list requests")
@@ -2437,7 +2437,7 @@ mod tests {
         assert!(!removal.selected, "deletions default to deselected");
         commit_import_plan(&query_manager, plan).expect("commit with default selection");
         assert_eq!(
-            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            query_manager.connect().unwrap().list_http_requests(&workspace_id).expect("list").len(),
             2,
             "deselected deletion must not delete"
         );
@@ -2451,7 +2451,7 @@ mod tests {
         }
         commit_import_plan(&query_manager, plan).expect("commit with deletion");
         assert_eq!(
-            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            query_manager.connect().unwrap().list_http_requests(&workspace_id).expect("list").len(),
             1
         );
 
@@ -2478,7 +2478,7 @@ mod tests {
             .clone();
 
         query_manager
-            .connect()
+            .connect().unwrap()
             .delete_http_request_by_id(&root_id, &UpdateSource::Background)
             .expect("delete root locally");
 
@@ -2490,7 +2490,7 @@ mod tests {
 
         commit_import_plan(&query_manager, plan).expect("commit re-import");
         assert_eq!(
-            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            query_manager.connect().unwrap().list_http_requests(&workspace_id).expect("list").len(),
             1,
             "a locally deleted resource must not come back"
         );
@@ -2514,7 +2514,7 @@ mod tests {
         select(&mut plan, "Extra Request", false);
         commit_import_plan(&query_manager, plan).expect("commit with deselected create");
         assert_eq!(
-            query_manager.connect().list_http_requests(&workspace_id).expect("list").len(),
+            query_manager.connect().unwrap().list_http_requests(&workspace_id).expect("list").len(),
             2,
             "a deselected create must not be created"
         );
@@ -2545,7 +2545,7 @@ mod tests {
         commit_import_plan(&query_manager, plan).expect("commit with restored item");
 
         let extra = query_manager
-            .connect()
+            .connect().unwrap()
             .list_http_requests(&workspace_id)
             .expect("list")
             .into_iter()
@@ -2615,7 +2615,7 @@ mod tests {
         let plan = replan(&query_manager, &workspace_id, with_extra_folder(true));
         commit_import_plan(&query_manager, plan).expect("commit the default selection");
         let root_folder = query_manager
-            .connect()
+            .connect().unwrap()
             .get_http_request(&root_id)
             .expect("root request survives")
             .folder_id;
@@ -2627,7 +2627,7 @@ mod tests {
         select(&mut plan, "Root Request", true);
         commit_import_plan(&query_manager, plan).expect("commit the folder and the move");
 
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let folder = db
             .list_folders(&workspace_id)
             .expect("list folders")
@@ -2655,7 +2655,7 @@ mod tests {
         assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Update);
         commit_import_plan(&query_manager, plan).expect("commit merge from the new path");
 
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         assert_eq!(
             db.list_http_requests(&workspace_id).expect("list").len(),
             2,
@@ -2676,7 +2676,7 @@ mod tests {
 
         // A second source claiming the same keys leaves nothing to merge into safely.
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             let other = db
                 .upsert_import_source(
                     &ImportSource {
@@ -2753,7 +2753,7 @@ mod tests {
         assert_ne!(unrelated.model_id, root_id, "it must not adopt another document's model");
 
         commit_import_plan(&query_manager, plan).expect("commit the unrelated import");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         assert_eq!(
             db.get_http_request(&root_id).expect("root request survives").url,
             "https://example.com/root"
@@ -2794,7 +2794,7 @@ mod tests {
         let workspace_id = committed.workspaces[0].id.clone();
 
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             let sources = db.list_import_sources(&workspace_id).expect("list import sources");
             let row = db
                 .list_import_source_resources(&sources[0].id)
@@ -2847,7 +2847,7 @@ mod tests {
 
         // Opening the request in the editor stamps a row ID onto every header it renders.
         {
-            let db = query_manager.connect();
+            let db = query_manager.connect().unwrap();
             let root = db.get_http_request(&root_id).expect("get root");
             let headers = root
                 .headers
@@ -2914,7 +2914,7 @@ mod tests {
         let committed = commit_import_plan(&query_manager, plan).expect("commit import");
         let workspace_id = committed.workspaces[0].id.clone();
 
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         assert!(db.list_folders(&workspace_id).expect("list folders").is_empty());
         let requests = db.list_http_requests(&workspace_id).expect("list requests");
         assert_eq!(requests.len(), 1, "requests inside the skipped folder are skipped too");
@@ -2949,7 +2949,7 @@ fn desktop_style_json_roundtrip_records_source() {
     let committed = commit_import_plan(&query_manager, plan).expect("commit");
     let workspace_id = committed.workspaces[0].id.clone();
     let source = query_manager
-        .connect()
+        .connect().unwrap()
         .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
         .expect("query")
         .expect("source recorded after JSON round-trip");
@@ -2971,7 +2971,7 @@ fn selected_keep_local_reverts_the_local_edit() {
         .clone();
 
     {
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let root = db.get_http_request(&root_id).expect("get root");
         db.upsert_http_request(
             &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
@@ -2992,7 +2992,7 @@ fn selected_keep_local_reverts_the_local_edit() {
     commit_import_plan(&query_manager, plan).expect("commit revert");
 
     assert_eq!(
-        query_manager.connect().get_http_request(&root_id).expect("get root").url,
+        query_manager.connect().unwrap().get_http_request(&root_id).expect("get root").url,
         "https://example.com/root",
         "selected keep-local must revert to the source version"
     );

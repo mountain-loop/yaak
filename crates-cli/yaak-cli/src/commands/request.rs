@@ -71,6 +71,7 @@ fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let workspace_id = resolve_workspace_id(ctx, workspace_id, "request list")?;
     let requests = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_http_requests(&workspace_id)
         .map_err(|e| format!("Failed to list requests: {e}"))?;
     if requests.is_empty() {
@@ -425,6 +426,7 @@ fn create(
 
         let created = ctx
             .db()
+            .map_err(|e| e.to_string())?
             .upsert_http_request(&request, &UpdateSource::Sync)
             .map_err(|e| format!("Failed to create request: {e}"))?;
 
@@ -444,6 +446,7 @@ fn create(
 
     let created = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_http_request(&request, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to create request: {e}"))?;
 
@@ -458,12 +461,14 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
 
     let existing = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .get_http_request(&id)
         .map_err(|e| format!("Failed to get request for update: {e}"))?;
     let updated = apply_merge_patch(&existing, &patch, &id, "request update")?;
 
     let saved = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_http_request(&updated, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to update request: {e}"))?;
 
@@ -472,8 +477,11 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
 }
 
 fn show(ctx: &CliContext, request_id: &str) -> CommandResult {
-    let request =
-        ctx.db().get_http_request(request_id).map_err(|e| format!("Failed to get request: {e}"))?;
+    let request = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .get_http_request(request_id)
+        .map_err(|e| format!("Failed to get request: {e}"))?;
     let output = serde_json::to_string_pretty(&request)
         .map_err(|e| format!("Failed to serialize request: {e}"))?;
     println!("{output}");
@@ -488,6 +496,7 @@ fn delete(ctx: &CliContext, request_id: &str, yes: bool) -> CommandResult {
 
     let deleted = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .delete_http_request_by_id(request_id, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to delete request: {e}"))?;
     println!("Deleted request: {}", deleted.id);
@@ -502,8 +511,11 @@ pub async fn send_request_by_id(
     cookie_jar_id: Option<&str>,
     verbose: bool,
 ) -> Result<(), String> {
-    let request =
-        ctx.db().get_any_request(request_id).map_err(|e| format!("Failed to get request: {e}"))?;
+    let request = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .get_any_request(request_id)
+        .map_err(|e| format!("Failed to get request: {e}"))?;
     match request {
         AnyRequest::HttpRequest(http_request) => {
             send_http_request_by_id(
@@ -611,6 +623,7 @@ pub(crate) fn resolve_cookie_jar_id(
 
     let default_cookie_jar = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_cookie_jars(workspace_id)
         .map_err(|e| format!("Failed to list cookie jars: {e}"))?
         .into_iter()

@@ -9,8 +9,11 @@ pub fn resolve_workspace_id(
         return Ok(workspace_id.to_string());
     }
 
-    let workspaces =
-        ctx.db().list_workspaces().map_err(|e| format!("Failed to list workspaces: {e}"))?;
+    let workspaces = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .list_workspaces()
+        .map_err(|e| format!("Failed to list workspaces: {e}"))?;
     match workspaces.as_slice() {
         [] => Err(format!("No workspaces found. {command_name} requires a workspace ID.")),
         [workspace] => Ok(workspace.id.clone()),

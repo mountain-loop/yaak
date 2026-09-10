@@ -34,7 +34,7 @@ async fn send_target(
 ) -> Result<(), String> {
     let mode = if args.parallel { ExecutionMode::Parallel } else { ExecutionMode::Sequential };
 
-    if let Ok(request) = ctx.db().get_any_request(&args.id) {
+    if let Ok(request) = ctx.db().map_err(|e| e.to_string())?.get_any_request(&args.id) {
         let workspace_id = match &request {
             AnyRequest::HttpRequest(r) => r.workspace_id.clone(),
             AnyRequest::GrpcRequest(r) => r.workspace_id.clone(),
@@ -53,7 +53,7 @@ async fn send_target(
         .await;
     }
 
-    if let Ok(folder) = ctx.db().get_folder(&args.id) {
+    if let Ok(folder) = ctx.db().map_err(|e| e.to_string())?.get_folder(&args.id) {
         let resolved_cookie_jar_id =
             request::resolve_cookie_jar_id(ctx, &folder.workspace_id, cookie_jar_id)?;
 
@@ -74,7 +74,7 @@ async fn send_target(
         .await;
     }
 
-    if let Ok(workspace) = ctx.db().get_workspace(&args.id) {
+    if let Ok(workspace) = ctx.db().map_err(|e| e.to_string())?.get_workspace(&args.id) {
         let resolved_cookie_jar_id =
             request::resolve_cookie_jar_id(ctx, &workspace.id, cookie_jar_id)?;
 
@@ -103,6 +103,7 @@ fn collect_folder_request_ids(ctx: &CliContext, folder_id: &str) -> Result<Vec<S
 
     let mut http_ids = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_http_requests_for_folder_recursive(folder_id)
         .map_err(|e| format!("Failed to list HTTP requests in folder: {e}"))?
         .into_iter()
@@ -112,6 +113,7 @@ fn collect_folder_request_ids(ctx: &CliContext, folder_id: &str) -> Result<Vec<S
 
     let mut grpc_ids = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_grpc_requests_for_folder_recursive(folder_id)
         .map_err(|e| format!("Failed to list gRPC requests in folder: {e}"))?
         .into_iter()
@@ -121,6 +123,7 @@ fn collect_folder_request_ids(ctx: &CliContext, folder_id: &str) -> Result<Vec<S
 
     let mut websocket_ids = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_websocket_requests_for_folder_recursive(folder_id)
         .map_err(|e| format!("Failed to list WebSocket requests in folder: {e}"))?
         .into_iter()
@@ -139,6 +142,7 @@ fn collect_workspace_request_ids(
 
     let mut http_ids = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_http_requests(workspace_id)
         .map_err(|e| format!("Failed to list HTTP requests in workspace: {e}"))?
         .into_iter()
@@ -148,6 +152,7 @@ fn collect_workspace_request_ids(
 
     let mut grpc_ids = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_grpc_requests(workspace_id)
         .map_err(|e| format!("Failed to list gRPC requests in workspace: {e}"))?
         .into_iter()
@@ -157,6 +162,7 @@ fn collect_workspace_request_ids(
 
     let mut websocket_ids = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_websocket_requests(workspace_id)
         .map_err(|e| format!("Failed to list WebSocket requests in workspace: {e}"))?
         .into_iter()

@@ -22,6 +22,7 @@ fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let workspace_id = resolve_workspace_id(ctx, workspace_id, "cookie-jar list")?;
     let cookie_jars = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_cookie_jars(&workspace_id)
         .map_err(|e| format!("Failed to list cookie jars: {e}"))?;
 

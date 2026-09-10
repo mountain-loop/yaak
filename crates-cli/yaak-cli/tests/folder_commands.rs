@@ -36,7 +36,7 @@ fn create_list_show_delete_round_trip() {
         .success()
         .stdout(contains(format!("Deleted folder: {folder_id}")));
 
-    assert!(query_manager(data_dir).connect().get_folder(&folder_id).is_err());
+    assert!(query_manager(data_dir).connect().unwrap().get_folder(&folder_id).is_err());
 }
 
 #[test]

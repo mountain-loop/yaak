@@ -43,8 +43,11 @@ fn schema(pretty: bool) -> CommandResult {
 }
 
 fn list(ctx: &CliContext) -> CommandResult {
-    let workspaces =
-        ctx.db().list_workspaces().map_err(|e| format!("Failed to list workspaces: {e}"))?;
+    let workspaces = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .list_workspaces()
+        .map_err(|e| format!("Failed to list workspaces: {e}"))?;
     if workspaces.is_empty() {
         println!("No workspaces found");
     } else {
@@ -58,6 +61,7 @@ fn list(ctx: &CliContext) -> CommandResult {
 fn show(ctx: &CliContext, workspace_id: &str) -> CommandResult {
     let workspace = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .get_workspace(workspace_id)
         .map_err(|e| format!("Failed to get workspace: {e}"))?;
     let output = serde_json::to_string_pretty(&workspace)
@@ -85,6 +89,7 @@ fn create(
 
         let created = ctx
             .db()
+            .map_err(|e| e.to_string())?
             .upsert_workspace(&workspace, &UpdateSource::Sync)
             .map_err(|e| format!("Failed to create workspace: {e}"))?;
         println!("Created workspace: {}", created.id);
@@ -98,6 +103,7 @@ fn create(
     let workspace = Workspace { name, ..Default::default() };
     let created = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_workspace(&workspace, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to create workspace: {e}"))?;
     println!("Created workspace: {}", created.id);
@@ -110,12 +116,14 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
 
     let existing = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .get_workspace(&id)
         .map_err(|e| format!("Failed to get workspace for update: {e}"))?;
     let updated = apply_merge_patch(&existing, &patch, &id, "workspace update")?;
 
     let saved = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_workspace(&updated, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to update workspace: {e}"))?;
 
@@ -131,6 +139,7 @@ fn delete(ctx: &CliContext, workspace_id: &str, yes: bool) -> CommandResult {
 
     let deleted = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .delete_workspace_by_id(workspace_id, &UpdateSource::Sync, ctx.blob_manager())
         .map_err(|e| format!("Failed to delete workspace: {e}"))?;
     println!("Deleted workspace: {}", deleted.id);

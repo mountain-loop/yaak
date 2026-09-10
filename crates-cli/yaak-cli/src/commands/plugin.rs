@@ -349,6 +349,7 @@ async fn install_from_directory(context: &CliContext, source: &str) -> CommandRe
 
     let plugin = context
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_plugin(
             &Plugin {
                 directory: plugin_dir_str,

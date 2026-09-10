@@ -11,7 +11,7 @@ use yaak_models::queries::workspaces::default_headers;
 use yaak_rpc_schema::*;
 
 pub async fn models_upsert<H: Host>(host: H, req: ModelsUpsertReq) -> Result<String> {
-    let db = host.db();
+    let db = host.db()?;
     let blobs = host.blob_manager();
     let source = host.update_source();
     Ok(yaak_models::models_ops::upsert_model(&db, blobs, req.model, &source)?)
@@ -49,25 +49,25 @@ pub async fn models_websocket_events<H: Host>(
     host: H,
     req: ModelsWebsocketEventsReq,
 ) -> Result<Vec<WebsocketEvent>> {
-    Ok(host.db().list_websocket_events(&req.connection_id)?)
+    Ok(host.db()?.list_websocket_events(&req.connection_id)?)
 }
 
 pub async fn models_grpc_events<H: Host>(
     host: H,
     req: ModelsGrpcEventsReq,
 ) -> Result<Vec<GrpcEvent>> {
-    Ok(host.db().list_grpc_events(&req.connection_id)?)
+    Ok(host.db()?.list_grpc_events(&req.connection_id)?)
 }
 
 pub async fn models_get_settings<H: Host>(host: H, _req: ModelsGetSettingsReq) -> Result<Settings> {
-    Ok(host.db().get_settings())
+    Ok(host.db()?.get_settings())
 }
 
 pub async fn models_get_graphql_introspection<H: Host>(
     host: H,
     req: ModelsGetGraphqlIntrospectionReq,
 ) -> Result<Option<GraphQlIntrospection>> {
-    Ok(host.db().get_graphql_introspection(&req.request_id))
+    Ok(host.db()?.get_graphql_introspection(&req.request_id))
 }
 
 pub async fn models_upsert_graphql_introspection<H: Host>(
@@ -75,7 +75,7 @@ pub async fn models_upsert_graphql_introspection<H: Host>(
     req: ModelsUpsertGraphqlIntrospectionReq,
 ) -> Result<GraphQlIntrospection> {
     let source = host.update_source();
-    Ok(host.db().upsert_graphql_introspection(
+    Ok(host.db()?.upsert_graphql_introspection(
         &req.workspace_id,
         &req.request_id,
         req.content,
@@ -96,14 +96,14 @@ pub async fn models_workspace_models<H: PluginHost>(
 
     // Add the global models
     {
-        let db = host.db();
+        let db = host.db()?;
         l.push(db.get_settings().into());
         l.append(&mut db.list_workspaces()?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_key_values()?.into_iter().map(Into::into).collect());
     }
 
     let plugins = {
-        let db = host.db();
+        let db = host.db()?;
         db.list_plugins()?
     };
 
@@ -112,7 +112,7 @@ pub async fn models_workspace_models<H: PluginHost>(
 
     // Add the workspace children
     if let Some(wid) = req.workspace_id.as_deref() {
-        let db = host.db();
+        let db = host.db()?;
         l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_environments_ensure_base(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
@@ -132,7 +132,7 @@ pub async fn cmd_get_workspace_meta<H: Host>(
     host: H,
     req: CmdGetWorkspaceMetaReq,
 ) -> Result<WorkspaceMeta> {
-    let db = host.db();
+    let db = host.db()?;
     let workspace = db.get_workspace(&req.workspace_id)?;
     Ok(db.get_or_create_workspace_meta(&workspace.id)?)
 }
@@ -141,14 +141,16 @@ pub async fn cmd_delete_all_grpc_connections<H: Host>(
     host: H,
     req: CmdDeleteAllGrpcConnectionsReq,
 ) -> Result<()> {
-    Ok(host.db().delete_all_grpc_connections_for_request(&req.request_id, &host.update_source())?)
+    Ok(host
+        .db()?
+        .delete_all_grpc_connections_for_request(&req.request_id, &host.update_source())?)
 }
 
 pub async fn cmd_delete_all_http_responses<H: Host>(
     host: H,
     req: CmdDeleteAllHttpResponsesReq,
 ) -> Result<()> {
-    host.db().delete_all_http_responses_for_request(&req.request_id, &host.update_source())?;
+    host.db()?.delete_all_http_responses_for_request(&req.request_id, &host.update_source())?;
     Ok(())
 }
 
@@ -157,7 +159,7 @@ pub async fn cmd_ws_delete_connections<H: Host>(
     req: CmdWsDeleteConnectionsReq,
 ) -> Result<()> {
     Ok(host
-        .db()
+        .db()?
         .delete_all_websocket_connections_for_request(&req.request_id, &host.update_source())?)
 }
 

@@ -41,7 +41,7 @@ pub async fn cmd_get_http_response_events<H: Host>(
     host: H,
     req: CmdGetHttpResponseEventsReq,
 ) -> Result<Vec<HttpResponseEvent>> {
-    let events: Vec<HttpResponseEvent> = host.db().list_http_response_events(&req.response_id)?;
+    let events: Vec<HttpResponseEvent> = host.db()?.list_http_response_events(&req.response_id)?;
     Ok(events)
 }
 
@@ -55,7 +55,7 @@ pub async fn cmd_http_response_body_path<H: Host>(
     host: H,
     req: CmdHttpResponseBodyPathReq,
 ) -> Result<Option<String>> {
-    let location = locate_response_body(&host.db(), &req.response_id)?;
+    let location = locate_response_body(&host.db()?, &req.response_id)?;
     Ok(location.path.map(|p| p.to_string_lossy().to_string()))
 }
 
@@ -64,7 +64,7 @@ pub async fn cmd_http_request_body<H: Host>(
     req: CmdHttpRequestBodyReq,
 ) -> Result<Option<Vec<u8>>> {
     let body_id = format!("{}.request", req.response_id);
-    let chunks = host.blobs().get_chunks(&body_id)?;
+    let chunks = host.blobs()?.get_chunks(&body_id)?;
 
     if chunks.is_empty() {
         return Ok(None);
@@ -76,7 +76,7 @@ pub async fn cmd_http_request_body<H: Host>(
 }
 
 pub async fn cmd_save_response<H: Host>(host: H, req: CmdSaveResponseReq) -> Result<()> {
-    let response = host.db().get_http_response(&req.response_id)?;
+    let response = host.db()?.get_http_response(&req.response_id)?;
 
     let body_path =
         response.body_path.ok_or(Error::Generic("Response does not have a body".to_string()))?;

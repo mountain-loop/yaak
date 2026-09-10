@@ -63,13 +63,13 @@ impl<'a> FileResponseBodyStore<'a> {
     /// request behind it never reaches the store at all, and its bytes come
     /// back from the send instead — see `SendHttpRequestResponse::body`.
     fn body_path(&self, response_id: &str) -> Result<Option<String>> {
-        Ok(self.query_manager.connect().get_http_response(response_id)?.body_path)
+        Ok(self.query_manager.connect()?.get_http_response(response_id)?.body_path)
     }
 }
 
 impl ResponseBodyStore for FileResponseBodyStore<'_> {
     fn info(&self, response_id: &str) -> Result<ResponseBodyInfo> {
-        let response = self.query_manager.connect().get_http_response(response_id)?;
+        let response = self.query_manager.connect()?.get_http_response(response_id)?;
 
         let content_type = response
             .headers
@@ -127,6 +127,7 @@ mod tests {
 
         query_manager
             .connect()
+            .unwrap()
             .upsert_workspace(
                 &Workspace { id: "wk_test".to_string(), ..Default::default() },
                 &UpdateSource::Sync,
@@ -135,6 +136,7 @@ mod tests {
 
         query_manager
             .connect()
+            .unwrap()
             .upsert_http_request(
                 &HttpRequest {
                     id: "rq_test".to_string(),
@@ -154,6 +156,7 @@ mod tests {
 
         let response = query_manager
             .connect()
+            .unwrap()
             .upsert_http_response(
                 &HttpResponse {
                     workspace_id: "wk_test".to_string(),
@@ -207,9 +210,9 @@ mod tests {
         // Seeded responses default to Initialized: still arriving.
         assert!(!FileResponseBodyStore::new(&qm).info(&id).unwrap().complete);
 
-        let mut response = qm.connect().get_http_response(&id).unwrap();
+        let mut response = qm.connect().unwrap().get_http_response(&id).unwrap();
         response.state = HttpResponseState::Closed;
-        qm.connect().update_http_response_if_id(&response, &UpdateSource::Sync).unwrap();
+        qm.connect().unwrap().update_http_response_if_id(&response, &UpdateSource::Sync).unwrap();
 
         assert!(FileResponseBodyStore::new(&qm).info(&id).unwrap().complete);
     }

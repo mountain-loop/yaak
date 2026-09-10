@@ -63,7 +63,7 @@ pub async fn cmd_call_http_request_action<H: PluginHost>(
     req: CmdCallHttpRequestActionReq,
 ) -> Result<()> {
     let inner = req.req;
-    let http_request = resolve_http_request(&host.db(), &inner.args.http_request)?.0;
+    let http_request = resolve_http_request(&host.db()?, &inner.args.http_request)?.0;
     host.call_http_request_action(CallHttpRequestActionRequest {
         args: CallHttpRequestActionArgs { http_request },
         ..inner
@@ -76,7 +76,7 @@ pub async fn cmd_call_grpc_request_action<H: PluginHost>(
     req: CmdCallGrpcRequestActionReq,
 ) -> Result<()> {
     let inner = req.req;
-    let grpc_request = resolve_grpc_request(&host.db(), &inner.args.grpc_request)?.0;
+    let grpc_request = resolve_grpc_request(&host.db()?, &inner.args.grpc_request)?.0;
     host.call_grpc_request_action(CallGrpcRequestActionRequest {
         args: CallGrpcRequestActionArgs { grpc_request, ..inner.args },
         ..inner
@@ -89,7 +89,7 @@ pub async fn cmd_call_websocket_request_action<H: PluginHost>(
     req: CmdCallWebsocketRequestActionReq,
 ) -> Result<()> {
     let inner = req.req;
-    let websocket_request = host.db().get_websocket_request(&inner.args.websocket_request.id)?;
+    let websocket_request = host.db()?.get_websocket_request(&inner.args.websocket_request.id)?;
     host.call_websocket_request_action(CallWebsocketRequestActionRequest {
         args: CallWebsocketRequestActionArgs { websocket_request },
         ..inner
@@ -102,7 +102,7 @@ pub async fn cmd_call_workspace_action<H: PluginHost>(
     req: CmdCallWorkspaceActionReq,
 ) -> Result<()> {
     let inner = req.req;
-    let workspace = host.db().get_workspace(&inner.args.workspace.id)?;
+    let workspace = host.db()?.get_workspace(&inner.args.workspace.id)?;
     host.call_workspace_action(CallWorkspaceActionRequest {
         args: CallWorkspaceActionArgs { workspace },
         ..inner
@@ -115,7 +115,7 @@ pub async fn cmd_call_folder_action<H: PluginHost>(
     req: CmdCallFolderActionReq,
 ) -> Result<()> {
     let inner = req.req;
-    let folder = host.db().get_folder(&inner.args.folder.id)?;
+    let folder = host.db()?.get_folder(&inner.args.folder.id)?;
     host.call_folder_action(CallFolderActionRequest {
         args: CallFolderActionArgs { folder },
         ..inner
@@ -152,6 +152,6 @@ pub async fn cmd_reload_plugins<H: PluginHost>(
     host: H,
     _req: CmdReloadPluginsReq,
 ) -> Result<Vec<(String, String)>> {
-    let plugins = host.db().list_plugins()?;
+    let plugins = host.db()?.list_plugins()?;
     Ok(host.reload_plugins(plugins).await)
 }

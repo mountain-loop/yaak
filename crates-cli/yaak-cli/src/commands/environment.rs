@@ -50,6 +50,7 @@ fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let workspace_id = resolve_workspace_id(ctx, workspace_id, "environment list")?;
     let environments = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .list_environments_ensure_base(&workspace_id)
         .map_err(|e| format!("Failed to list environments: {e}"))?;
 
@@ -66,6 +67,7 @@ fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
 fn show(ctx: &CliContext, environment_id: &str) -> CommandResult {
     let environment = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .get_environment(environment_id)
         .map_err(|e| format!("Failed to get environment: {e}"))?;
     let output = serde_json::to_string_pretty(&environment)
@@ -112,6 +114,7 @@ fn create(
 
         let created = ctx
             .db()
+            .map_err(|e| e.to_string())?
             .upsert_environment(&environment, &UpdateSource::Sync)
             .map_err(|e| format!("Failed to create environment: {e}"))?;
 
@@ -134,6 +137,7 @@ fn create(
 
     let created = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_environment(&environment, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to create environment: {e}"))?;
 
@@ -147,12 +151,14 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
 
     let existing = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .get_environment(&id)
         .map_err(|e| format!("Failed to get environment for update: {e}"))?;
     let updated = apply_merge_patch(&existing, &patch, &id, "environment update")?;
 
     let saved = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_environment(&updated, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to update environment: {e}"))?;
 
@@ -168,6 +174,7 @@ fn delete(ctx: &CliContext, environment_id: &str, yes: bool) -> CommandResult {
 
     let deleted = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .delete_environment_by_id(environment_id, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to delete environment: {e}"))?;
 

@@ -26,7 +26,7 @@ fn create_show_delete_round_trip() {
         .success()
         .stdout(contains(format!("Deleted workspace: {workspace_id}")));
 
-    assert!(query_manager(data_dir).connect().get_workspace(&workspace_id).is_err());
+    assert!(query_manager(data_dir).connect().unwrap().get_workspace(&workspace_id).is_err());
 }
 
 #[test]

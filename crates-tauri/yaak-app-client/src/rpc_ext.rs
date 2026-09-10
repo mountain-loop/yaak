@@ -42,26 +42,26 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{BatchUpsertResult, ImportPlan};
+use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::events::{
     CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
-    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse, ImportResponse,
-    JsonPrimitive, RenderPurpose, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesResponse, GetWebsocketRequestActionsResponse,
-    GetWorkspaceActionsResponse,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse,
+    GetFolderActionsResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportResponse, JsonPrimitive,
+    RenderPurpose,
 };
-use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::native_template_functions::encrypt_secure_template_function;
-use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_plugins::plugin_meta::PluginMetadata;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_rpc::RpcRouter;
 use yaak_rpc_schema::*;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_sync::sync::SyncOp;
-use yaak_templates::TemplateCallback;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
+use yaak_templates::TemplateCallback;
 use yaak_ws::WebsocketManager;
 
 /// Per-call context: the window a command was invoked from.
@@ -467,7 +467,7 @@ async fn cmd_commit_import<R: Runtime>(ctx: ClientCtx<R>, req: CmdCommitImportRe
 
 async fn cmd_list_import_sources<R: Runtime>(ctx: ClientCtx<R>, req: CmdListImportSourcesReq) -> Result<Vec<ImportSource>> {
     use crate::models_ext::QueryManagerExt;
-    Ok(ctx.window.db().list_import_sources(&req.workspace_id)?)
+    Ok(ctx.window.db()?.list_import_sources(&req.workspace_id)?)
 }
 
 async fn cmd_import_sources_for_origin<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportSourcesForOriginReq) -> Result<Vec<ImportSource>> {
@@ -480,7 +480,7 @@ async fn cmd_import_sources_for_origin<R: Runtime>(ctx: ClientCtx<R>, req: CmdIm
         },
         (None, None) => return Ok(Vec::new()),
     };
-    Ok(ctx.window.db().list_import_sources_by_origin(&origin)?)
+    Ok(ctx.window.db()?.list_import_sources_by_origin(&origin)?)
 }
 
 async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {

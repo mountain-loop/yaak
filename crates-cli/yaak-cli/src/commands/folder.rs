@@ -48,8 +48,11 @@ fn schema(pretty: bool) -> CommandResult {
 
 fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let workspace_id = resolve_workspace_id(ctx, workspace_id, "folder list")?;
-    let folders =
-        ctx.db().list_folders(&workspace_id).map_err(|e| format!("Failed to list folders: {e}"))?;
+    let folders = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .list_folders(&workspace_id)
+        .map_err(|e| format!("Failed to list folders: {e}"))?;
     if folders.is_empty() {
         println!("No folders found in workspace {}", workspace_id);
     } else {
@@ -61,8 +64,11 @@ fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
 }
 
 fn show(ctx: &CliContext, folder_id: &str) -> CommandResult {
-    let folder =
-        ctx.db().get_folder(folder_id).map_err(|e| format!("Failed to get folder: {e}"))?;
+    let folder = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .get_folder(folder_id)
+        .map_err(|e| format!("Failed to get folder: {e}"))?;
     let output = serde_json::to_string_pretty(&folder)
         .map_err(|e| format!("Failed to serialize folder: {e}"))?;
     println!("{output}");
@@ -103,6 +109,7 @@ fn create(
 
         let created = ctx
             .db()
+            .map_err(|e| e.to_string())?
             .upsert_folder(&folder, &UpdateSource::Sync)
             .map_err(|e| format!("Failed to create folder: {e}"))?;
 
@@ -119,6 +126,7 @@ fn create(
 
     let created = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_folder(&folder, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to create folder: {e}"))?;
 
@@ -130,12 +138,16 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
     let patch = parse_required_json(json, json_input, "folder update")?;
     let id = require_id(&patch, "folder update")?;
 
-    let existing =
-        ctx.db().get_folder(&id).map_err(|e| format!("Failed to get folder for update: {e}"))?;
+    let existing = ctx
+        .db()
+        .map_err(|e| e.to_string())?
+        .get_folder(&id)
+        .map_err(|e| format!("Failed to get folder for update: {e}"))?;
     let updated = apply_merge_patch(&existing, &patch, &id, "folder update")?;
 
     let saved = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .upsert_folder(&updated, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to update folder: {e}"))?;
 
@@ -151,6 +163,7 @@ fn delete(ctx: &CliContext, folder_id: &str, yes: bool) -> CommandResult {
 
     let deleted = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .delete_folder_by_id(folder_id, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to delete folder: {e}"))?;
 

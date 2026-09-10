@@ -27,13 +27,14 @@ pub fn run(ctx: &CliContext, args: ResponseArgs) -> i32 {
 
 /// Accepts a response ID, or a request ID meaning "the latest response for that request".
 fn resolve_response(ctx: &CliContext, id: &str) -> CommandResult<HttpResponse> {
-    if let Ok(response) = ctx.db().get_http_response(id) {
+    if let Ok(response) = ctx.db().map_err(|e| e.to_string())?.get_http_response(id) {
         return Ok(response);
     }
 
-    if ctx.db().get_http_request(id).is_ok() {
+    if ctx.db().map_err(|e| e.to_string())?.get_http_request(id).is_ok() {
         return ctx
             .db()
+            .map_err(|e| e.to_string())?
             .list_http_responses_for_request(id, Some(1))
             .map_err(|e| format!("Failed to list responses: {e}"))?
             .into_iter()
@@ -47,13 +48,15 @@ fn resolve_response(ctx: &CliContext, id: &str) -> CommandResult<HttpResponse> {
 fn list(ctx: &CliContext, id: Option<&str>, limit: Option<u64>) -> CommandResult {
     // An explicit request ID scopes to that request; anything else lists the workspace.
     let responses = match id {
-        Some(id) if ctx.db().get_http_request(id).is_ok() => ctx
+        Some(id) if ctx.db().map_err(|e| e.to_string())?.get_http_request(id).is_ok() => ctx
             .db()
+            .map_err(|e| e.to_string())?
             .list_http_responses_for_request(id, limit)
             .map_err(|e| format!("Failed to list responses: {e}"))?,
         other => {
             let workspace_id = resolve_workspace_id(ctx, other, "response list")?;
             ctx.db()
+                .map_err(|e| e.to_string())?
                 .list_http_responses(&workspace_id, limit)
                 .map_err(|e| format!("Failed to list responses: {e}"))?
         }
@@ -112,13 +115,14 @@ fn body(ctx: &CliContext, id: &str) -> CommandResult {
 fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
     // Deleting is scoped to a whole request or workspace, since a single stored
     // response is rarely the thing someone wants to remove.
-    if ctx.db().get_http_request(id).is_ok() {
+    if ctx.db().map_err(|e| e.to_string())?.get_http_request(id).is_ok() {
         if !yes && !confirm_delete("responses for request", id) {
             println!("Aborted");
             return Ok(());
         }
         let count = ctx
             .db()
+            .map_err(|e| e.to_string())?
             .delete_all_http_responses_for_request(id, &UpdateSource::Sync)
             .map_err(|e| format!("Failed to delete responses: {e}"))?;
         println!("Deleted {count} responses for request {id}");
@@ -132,6 +136,7 @@ fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
     }
     let count = ctx
         .db()
+        .map_err(|e| e.to_string())?
         .delete_all_http_responses_for_workspace(&workspace_id, &UpdateSource::Sync)
         .map_err(|e| format!("Failed to delete responses: {e}"))?;
     println!("Deleted {count} responses for workspace {workspace_id}");

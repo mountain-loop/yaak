@@ -81,7 +81,7 @@ fn import_reads_yaak_workspace_file() {
         .stdout(contains("Imported 1 workspace, 1 HTTP request"));
 
     let query_manager = query_manager(data_dir);
-    let db = query_manager.connect();
+    let db = query_manager.connect().unwrap();
     let workspaces = db.list_workspaces().expect("list imported workspaces");
     let workspace = workspaces
         .iter()
@@ -160,7 +160,7 @@ fn import_postman_environment_uses_workspace_id() {
         .stdout(contains("Imported 1 environment"));
 
     let query_manager = query_manager(data_dir);
-    let db = query_manager.connect();
+    let db = query_manager.connect().unwrap();
     let environments =
         db.list_environments_ensure_base(&workspace_id).expect("list imported environments");
 
@@ -217,7 +217,7 @@ fn re_import_merges_into_linked_workspace() {
 
     let workspace_id = {
         let query_manager = query_manager(data_dir);
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         db.list_workspaces()
             .expect("list workspaces")
             .into_iter()
@@ -248,7 +248,7 @@ fn re_import_merges_into_linked_workspace() {
         .stdout(contains("Skipped 1 removed from source"));
 
     let query_manager = query_manager(data_dir);
-    let db = query_manager.connect();
+    let db = query_manager.connect().unwrap();
     let requests = db.list_http_requests(&workspace_id).expect("list requests");
     assert_eq!(requests.len(), 3, "merge must not duplicate: {requests:?}");
     assert_eq!(
@@ -279,7 +279,7 @@ fn re_import_leaves_deleted_resources_alone() {
 
     let workspace_id = {
         let query_manager = query_manager(data_dir);
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
         let workspace_id = db
             .list_workspaces()
             .expect("list workspaces")
@@ -311,7 +311,7 @@ fn re_import_leaves_deleted_resources_alone() {
 
     let query_manager = query_manager(data_dir);
     let requests =
-        query_manager.connect().list_http_requests(&workspace_id).expect("list requests");
+        query_manager.connect().unwrap().list_http_requests(&workspace_id).expect("list requests");
     assert_eq!(requests.len(), 1, "a deleted request must not come back: {requests:?}");
     assert_eq!(requests[0].name, "Request A");
 }

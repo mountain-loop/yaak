@@ -57,7 +57,7 @@ impl<'a> ClientDb<'a> {
     pub fn delete_orphaned_response_body_blobs(&self, blobs: &BlobManager) -> Result<usize> {
         let mut deleted = 0;
 
-        let blob_ctx = blobs.connect();
+        let blob_ctx = blobs.connect()?;
         for body_id in blob_ctx.list_body_ids()? {
             let response_id = body_id.split('.').next().unwrap_or_default();
             if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some() {
@@ -138,7 +138,7 @@ impl<'a> ClientDb<'a> {
         }
 
         // Delete request body blobs (pattern: {response_id}.request)
-        let blob_ctx = blob_manager.connect();
+        let blob_ctx = blob_manager.connect()?;
         let body_id = format!("{}.request", http_response.id);
         if let Err(e) = blob_ctx.delete_chunks(&body_id) {
             error!("Failed to delete request body blobs: {}", e);
@@ -224,14 +224,14 @@ mod tests {
     #[test]
     fn deletes_orphaned_response_body_blobs() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let live = seed_live_response(&db, &blob_manager);
         let live_request_body_id = format!("{}.request", live.id);
         {
             // Scope the connection: the in-memory pool only has one, and the GC
             // needs to take it
-            let blob_ctx = blob_manager.connect();
+            let blob_ctx = blob_manager.connect().unwrap();
             blob_ctx.insert_chunk(&BodyChunk::new(&live.id, 0, b"live".to_vec())).unwrap();
             blob_ctx
                 .insert_chunk(&BodyChunk::new(&live_request_body_id, 0, b"live".to_vec()))
@@ -245,7 +245,7 @@ mod tests {
             .expect("Failed to GC response body blobs");
         assert_eq!(deleted, 2);
 
-        let blob_ctx = blob_manager.connect();
+        let blob_ctx = blob_manager.connect().unwrap();
         assert!(blob_ctx.body_exists(&live.id).unwrap());
         assert!(blob_ctx.body_exists(&live_request_body_id).unwrap());
         assert!(!blob_ctx.body_exists("rs_gone").unwrap());
@@ -255,14 +255,14 @@ mod tests {
     #[test]
     fn deletes_orphaned_response_bodies() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
+        let db = query_manager.connect().unwrap();
 
         let live = seed_live_response(&db, &blob_manager);
         let live_body_id = format!("{}.request", live.id);
         {
             // Scope the connection: the in-memory pool only has one, and the GC
             // needs to take it
-            let blob_ctx = blob_manager.connect();
+            let blob_ctx = blob_manager.connect().unwrap();
             blob_ctx.insert_chunk(&BodyChunk::new(&live_body_id, 0, b"live".to_vec())).unwrap();
             blob_ctx.insert_chunk(&BodyChunk::new("rs_gone.request", 0, b"dead".to_vec())).unwrap();
         }
@@ -278,7 +278,7 @@ mod tests {
         assert_eq!(deleted, 2);
 
         // Live data survives, orphans are gone
-        let blob_ctx = blob_manager.connect();
+        let blob_ctx = blob_manager.connect().unwrap();
         assert!(blob_ctx.body_exists(&live_body_id).unwrap());
         assert!(!blob_ctx.body_exists("rs_gone.request").unwrap());
         assert!(dir.join(&live.id).exists());

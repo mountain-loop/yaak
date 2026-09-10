@@ -27,12 +27,9 @@ pub fn get_or_upsert_launch_info<R: Runtime>(app_handle: &AppHandle<R>) -> &Laun
     LAUNCH_INFO.get_or_init(|| {
         let now = Utc::now().naive_utc();
         let mut info = LaunchEventInfo {
-            version_since: app_handle.db().get_key_value_dte(NAMESPACE, VERSION_SINCE_KEY, now),
             current_version: app_handle.package_info().version.to_string(),
-            user_since: app_handle.db().get_settings().created_at,
-            num_launches: app_handle.db().get_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, 0) + 1,
 
-            // The rest will be set below
+            // The rest is read and written inside the transaction below
             ..Default::default()
         };
 
@@ -42,6 +39,10 @@ pub fn get_or_upsert_launch_info<R: Runtime>(app_handle: &AppHandle<R>) -> &Laun
 
         app_handle
             .with_tx(|tx| {
+                info.version_since = tx.get_key_value_dte(NAMESPACE, VERSION_SINCE_KEY, now);
+                info.user_since = tx.get_settings().created_at;
+                info.num_launches = tx.get_key_value_int(NAMESPACE, NUM_LAUNCHES_KEY, 0) + 1;
+
                 // Load the previously tracked version
                 let curr_db = tx.get_key_value_str(NAMESPACE, LAST_VERSION_KEY, "");
                 let prev_db = tx.get_key_value_str(NAMESPACE, PREV_VERSION_KEY, "");

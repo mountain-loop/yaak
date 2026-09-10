@@ -55,7 +55,7 @@ impl YaakNotifier {
         seen.push(id.to_string());
         debug!("Marked notification as seen {}", id);
         let seen_json = serde_json::to_string(&seen)?;
-        window.db().set_key_value_raw(
+        window.db()?.set_key_value_raw(
             KV_NAMESPACE,
             KV_KEY,
             seen_json.as_str(),
@@ -74,7 +74,7 @@ impl YaakNotifier {
 
         self.last_check = Some(Instant::now());
 
-        if !app_handle.db().get_settings().check_notifications {
+        if !app_handle.db()?.get_settings().check_notifications {
             info!("Notifications are disabled. Skipping check.");
             return Ok(());
         }
@@ -139,7 +139,7 @@ impl YaakNotifier {
 }
 
 async fn get_kv<R: Runtime>(app_handle: &AppHandle<R>) -> Result<Vec<String>> {
-    match app_handle.db().get_key_value_raw("notifications", "seen") {
+    match app_handle.db()?.get_key_value_raw("notifications", "seen") {
         None => Ok(Vec::new()),
         Some(v) => Ok(serde_json::from_str(&v.value)?),
     }
@@ -155,7 +155,7 @@ fn get_updater_status<R: Runtime>(app_handle: &AppHandle<R>) -> &'static str {
 
     #[cfg(all(feature = "updater", target_os = "linux"))]
     {
-        let settings = app_handle.db().get_settings();
+        let settings = app_handle.db()?.get_settings();
         if !settings.autoupdate {
             // Updates are explicitly disabled
             "disabled"
@@ -170,7 +170,7 @@ fn get_updater_status<R: Runtime>(app_handle: &AppHandle<R>) -> &'static str {
 
     #[cfg(all(feature = "updater", not(target_os = "linux")))]
     {
-        let settings = app_handle.db().get_settings();
+        let settings = app_handle.db()?.get_settings();
         if settings.autoupdate { "enabled" } else { "disabled" }
     }
 }

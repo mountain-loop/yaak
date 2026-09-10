@@ -43,7 +43,7 @@ fn show_and_delete_yes_round_trip() {
         .success()
         .stdout(contains(format!("Deleted request: {request_id}")));
 
-    assert!(query_manager(data_dir).connect().get_http_request(&request_id).is_err());
+    assert!(query_manager(data_dir).connect().unwrap().get_http_request(&request_id).is_err());
 }
 
 #[test]
@@ -61,7 +61,11 @@ fn delete_without_yes_fails_in_non_interactive_mode() {
         .stderr(contains("Refusing to delete in non-interactive mode without --yes"));
 
     assert!(
-        query_manager(data_dir).connect().get_http_request("rq_seed_delete_noninteractive").is_ok()
+        query_manager(data_dir)
+            .connect()
+            .unwrap()
+            .get_http_request("rq_seed_delete_noninteractive")
+            .is_ok()
     );
 }
 
@@ -122,6 +126,7 @@ fn create_allows_workspace_only_with_empty_defaults() {
 
     let request = query_manager(data_dir)
         .connect()
+        .unwrap()
         .get_http_request(&request_id)
         .expect("Failed to load created request");
     assert_eq!(request.workspace_id, "wk_test");
@@ -207,7 +212,7 @@ fn request_send_persists_response_body_and_events() {
         .stdout(contains("hello from integration test"));
 
     let qm = query_manager(data_dir);
-    let db = qm.connect();
+    let db = qm.connect().unwrap();
     let responses =
         db.list_http_responses_for_request(&request_id, None).expect("Failed to load responses");
     assert_eq!(responses.len(), 1, "expected exactly one persisted response");

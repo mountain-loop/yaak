@@ -64,7 +64,7 @@ pub(crate) async fn render_form_values<H: PluginHost>(
     };
 
     let environment_chain =
-        host.db().resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
+        host.db()?.resolve_environments(&workspace_id, folder_id.as_deref(), environment_id)?;
 
     let cb = host.template_callback(purpose).await?;
     let rendered =

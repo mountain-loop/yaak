@@ -20,7 +20,7 @@ pub async fn cmd_render_template<H: PluginHost>(
     req: CmdRenderTemplateReq,
 ) -> Result<String> {
     let environment_chain =
-        host.db().resolve_environments(&req.workspace_id, None, req.environment_id.as_deref())?;
+        host.db()?.resolve_environments(&req.workspace_id, None, req.environment_id.as_deref())?;
     let cb = host.template_callback(req.purpose.unwrap_or(RenderPurpose::Preview)).await?;
     let options = RenderOptions {
         // A preview that throws would show the user an error where they expect

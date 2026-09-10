@@ -13,7 +13,6 @@ use tokio::task::JoinHandle;
 use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
-use yaak_models::render::{render_grpc_request, render_http_request};
 use yaak::response_body::FileResponseBodyStore;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
@@ -24,6 +23,7 @@ use yaak_models::models::Environment;
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::make_vars_hashmap;
+use yaak_models::render::{render_grpc_request, render_http_request};
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     EmptyPayload, ErrorResponse, FormInput, GetCookieValueResponse, InternalEvent,
@@ -150,7 +150,11 @@ async fn build_plugin_reply(
                 Some(InternalEventPayload::ShowToastResponse(EmptyPayload {}))
             }
             HostRequest::ListOpenWorkspaces(_) => {
-                let workspaces = match host_context.query_manager.connect().list_workspaces() {
+                let workspaces = match host_context
+                    .query_manager
+                    .connect()
+                    .and_then(|db| db.list_workspaces())
+                {
                     Ok(workspaces) => workspaces
                         .into_iter()
                         .map(|w| WorkspaceInfo { id: w.id.clone(), name: w.name, label: w.id })
@@ -189,7 +193,7 @@ async fn build_plugin_reply(
                         match host_context
                             .query_manager
                             .connect()
-                            .list_cookie_jars(http_request.workspace_id.as_str())
+                            .and_then(|db| db.list_cookie_jars(http_request.workspace_id.as_str()))
                         {
                             Ok(cookie_jars) => cookie_jars
                                 .into_iter()
@@ -264,19 +268,20 @@ async fn build_plugin_reply(
                     ..event.context.clone()
                 };
 
-                let environment_chain =
-                    match host_context.query_manager.connect().resolve_environments(
+                let environment_chain = match host_context.query_manager.connect().and_then(|db| {
+                    db.resolve_environments(
                         &grpc_request.workspace_id,
                         grpc_request.folder_id.as_deref(),
                         execution_context.environment_id.as_deref(),
-                    ) {
-                        Ok(chain) => chain,
-                        Err(err) => {
-                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to resolve environments in CLI: {err}"),
-                            }));
-                        }
-                    };
+                    )
+                }) {
+                    Ok(chain) => chain,
+                    Err(err) => {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to resolve environments in CLI: {err}"),
+                        }));
+                    }
+                };
 
                 let template_callback = PluginTemplateCallback::new(
                     host_context.plugin_manager.clone(),
@@ -324,19 +329,20 @@ async fn build_plugin_reply(
                     ..event.context.clone()
                 };
 
-                let environment_chain =
-                    match host_context.query_manager.connect().resolve_environments(
+                let environment_chain = match host_context.query_manager.connect().and_then(|db| {
+                    db.resolve_environments(
                         &http_request.workspace_id,
                         http_request.folder_id.as_deref(),
                         execution_context.environment_id.as_deref(),
-                    ) {
-                        Ok(chain) => chain,
-                        Err(err) => {
-                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to resolve environments in CLI: {err}"),
-                            }));
-                        }
-                    };
+                    )
+                }) {
+                    Ok(chain) => chain,
+                    Err(err) => {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to resolve environments in CLI: {err}"),
+                        }));
+                    }
+                };
 
                 let template_callback = PluginTemplateCallback::new(
                     host_context.plugin_manager.clone(),
@@ -380,7 +386,11 @@ async fn build_plugin_reply(
                 };
 
                 let folder_id = execution_context.request_id.as_ref().and_then(|rid| {
-                    match host_context.query_manager.connect().get_any_request(rid) {
+                    match host_context
+                        .query_manager
+                        .connect()
+                        .and_then(|db| db.get_any_request(rid))
+                    {
                         Ok(AnyRequest::HttpRequest(r)) => r.folder_id,
                         Ok(AnyRequest::GrpcRequest(r)) => r.folder_id,
                         Ok(AnyRequest::WebsocketRequest(r)) => r.folder_id,
@@ -388,19 +398,20 @@ async fn build_plugin_reply(
                     }
                 });
 
-                let environment_chain =
-                    match host_context.query_manager.connect().resolve_environments(
+                let environment_chain = match host_context.query_manager.connect().and_then(|db| {
+                    db.resolve_environments(
                         &workspace_id,
                         folder_id.as_deref(),
                         execution_context.environment_id.as_deref(),
-                    ) {
-                        Ok(chain) => chain,
-                        Err(err) => {
-                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to resolve environments in CLI: {err}"),
-                            }));
-                        }
-                    };
+                    )
+                }) {
+                    Ok(chain) => chain,
+                    Err(err) => {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to resolve environments in CLI: {err}"),
+                        }));
+                    }
+                };
 
                 let template_callback = PluginTemplateCallback::new(
                     host_context.plugin_manager.clone(),
@@ -476,15 +487,18 @@ async fn build_plugin_reply(
                     ));
                 };
 
-                let cookie_jar =
-                    match host_context.query_manager.connect().get_cookie_jar(cookie_jar_id) {
-                        Ok(cookie_jar) => cookie_jar,
-                        Err(err) => {
-                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to load cookie jar in CLI: {err}"),
-                            }));
-                        }
-                    };
+                let cookie_jar = match host_context
+                    .query_manager
+                    .connect()
+                    .and_then(|db| db.get_cookie_jar(cookie_jar_id))
+                {
+                    Ok(cookie_jar) => cookie_jar,
+                    Err(err) => {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to load cookie jar in CLI: {err}"),
+                        }));
+                    }
+                };
 
                 let names = cookie_jar.cookies.into_iter().map(|c| c.name).collect();
 
@@ -499,15 +513,18 @@ async fn build_plugin_reply(
                     ));
                 };
 
-                let cookie_jar =
-                    match host_context.query_manager.connect().get_cookie_jar(cookie_jar_id) {
-                        Ok(cookie_jar) => cookie_jar,
-                        Err(err) => {
-                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
-                                error: format!("Failed to load cookie jar in CLI: {err}"),
-                            }));
-                        }
-                    };
+                let cookie_jar = match host_context
+                    .query_manager
+                    .connect()
+                    .and_then(|db| db.get_cookie_jar(cookie_jar_id))
+                {
+                    Ok(cookie_jar) => cookie_jar,
+                    Err(err) => {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: format!("Failed to load cookie jar in CLI: {err}"),
+                        }));
+                    }
+                };
 
                 let value =
                     get_cookie_value_from_jar(cookie_jar.cookies, &req.name, req.domain.as_deref());

@@ -141,13 +141,13 @@ async fn writes_carry_the_client_id() {
 
     // Deletes cascade inside a transaction; make sure that path works with no
     // host doing anything special around it.
-    let workspace = host.db().get_workspace(&id).expect("get workspace");
+    let workspace = host.db().unwrap().get_workspace(&id).expect("get workspace");
     let deleted =
         models_delete(host.clone(), ModelsDeleteReq { model: AnyModel::Workspace(workspace) })
             .await
             .expect("delete");
     assert_eq!(deleted, id);
-    assert!(host.db().get_workspace(&id).is_err(), "workspace should be gone");
+    assert!(host.db().unwrap().get_workspace(&id).is_err(), "workspace should be gone");
 }
 
 #[tokio::test]
@@ -407,6 +407,7 @@ async fn a_single_threaded_host_can_implement_the_trait() {
     // variable is what proves the chain was resolved rather than skipped.
     let environment = host
         .db()
+        .unwrap()
         .upsert_environment(
             &Environment {
                 workspace_id: id.clone(),
@@ -439,7 +440,7 @@ async fn a_single_threaded_host_can_implement_the_trait() {
 
     // The delete path too, since it is the one that used to reach for a
     // blocking thread this host does not have.
-    let workspace = host.db().get_workspace(&id).expect("get workspace");
+    let workspace = host.db().unwrap().get_workspace(&id).expect("get workspace");
     let deleted = models_delete(host, ModelsDeleteReq { model: AnyModel::Workspace(workspace) })
         .await
         .expect("delete");
@@ -460,12 +461,14 @@ async fn auth_values_are_rendered_before_the_host_sees_them() {
 
     let workspace = host
         .db()
+        .unwrap()
         .upsert_workspace(
             &Workspace { name: "Auth".to_string(), ..Default::default() },
             &host.update_source(),
         )
         .expect("workspace");
     host.db()
+        .unwrap()
         .upsert_environment(
             &Environment {
                 workspace_id: workspace.id.clone(),
@@ -482,7 +485,7 @@ async fn auth_values_are_rendered_before_the_host_sees_them() {
         )
         .expect("environment");
     let environment =
-        host.db().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
+        host.db().unwrap().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
 
     let mut values = HashMap::new();
     values.insert("password".to_string(), JsonPrimitive::String("${[ token ]}".to_string()));
@@ -522,12 +525,14 @@ async fn template_function_values_are_rendered_before_the_host_sees_them() {
 
     let workspace = host
         .db()
+        .unwrap()
         .upsert_workspace(
             &Workspace { name: "Functions".to_string(), ..Default::default() },
             &host.update_source(),
         )
         .expect("workspace");
     host.db()
+        .unwrap()
         .upsert_environment(
             &Environment {
                 workspace_id: workspace.id.clone(),
@@ -544,7 +549,7 @@ async fn template_function_values_are_rendered_before_the_host_sees_them() {
         )
         .expect("environment");
     let environment =
-        host.db().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
+        host.db().unwrap().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
 
     let mut values = HashMap::new();
     values.insert("token".to_string(), JsonPrimitive::String("${[1PASSWORD_TOKEN]}".to_string()));

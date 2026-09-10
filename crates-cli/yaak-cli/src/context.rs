@@ -51,11 +51,9 @@ impl CliContext {
             };
 
         // Guest: the desktop may have this DB open, so only what's safe beside a live session
-        let _ = yaak_lifecycle::on_launch(
-            &yaak_lifecycle::Host::guest(),
-            &query_manager.connect(),
-            &blob_manager,
-        );
+        if let Ok(db) = query_manager.connect() {
+            let _ = yaak_lifecycle::on_launch(&yaak_lifecycle::Host::guest(), &db, &blob_manager);
+        }
 
         let encryption_manager = Arc::new(EncryptionManager::new(query_manager.clone(), app_id));
 
@@ -120,7 +118,7 @@ impl CliContext {
         &self.data_dir
     }
 
-    pub fn db(&self) -> ClientDb<'_> {
+    pub fn db(&self) -> yaak_models::error::Result<ClientDb<'_>> {
         self.query_manager.connect()
     }
 

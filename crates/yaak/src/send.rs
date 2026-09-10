@@ -45,6 +45,9 @@ const MAX_AUTH_BODY_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum SendHttpRequestError {
+    #[error("Failed to acquire a database connection: {0}")]
+    AcquireDatabase(#[source] yaak_models::error::Error),
+
     #[error("Failed to load request: {0}")]
     LoadRequest(#[source] yaak_models::error::Error),
 
@@ -409,7 +412,7 @@ pub fn resolve_send_inputs(
     environment_id: Option<&str>,
     cookies: Option<Vec<Cookie>>,
 ) -> Result<HttpSendInputs> {
-    let db = query_manager.connect();
+    let db = query_manager.connect().map_err(SendHttpRequestError::AcquireDatabase)?;
 
     let environment_chain = db
         .resolve_environments(&request.workspace_id, request.folder_id.as_deref(), environment_id)
@@ -442,7 +445,7 @@ pub fn resolve_inherited_request(
     query_manager: &QueryManager,
     request: &HttpRequest,
 ) -> Result<ResolvedHttpRequest> {
-    let db = query_manager.connect();
+    let db = query_manager.connect().map_err(SendHttpRequestError::AcquireDatabase)?;
     let (authentication_type, authentication, auth_context_id) = db
         .resolve_auth_for_http_request(request)
         .map_err(SendHttpRequestError::ResolveRequestInheritance)?;
@@ -462,6 +465,7 @@ pub async fn send_http_request_by_id_with_plugins(
     let request = params
         .query_manager
         .connect()
+        .map_err(SendHttpRequestError::AcquireDatabase)?
         .get_http_request(params.request_id)
         .map_err(SendHttpRequestError::LoadRequest)?;
 
@@ -544,6 +548,7 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
     let request = params
         .query_manager
         .connect()
+        .map_err(SendHttpRequestError::AcquireDatabase)?
         .get_http_request(params.request_id)
         .map_err(SendHttpRequestError::LoadRequest)?;
     let mut cookie_jar = load_cookie_jar(params.query_manager, params.cookie_jar_id.as_deref())?;
@@ -647,6 +652,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         response = store
             .query_manager
             .connect()
+            .map_err(SendHttpRequestError::AcquireDatabase)?
             .upsert_http_response(&response, &store.update_source, store.blob_manager)
             .map_err(SendHttpRequestError::PersistResponse)?;
     } else if response.id.is_empty() {
@@ -700,8 +706,10 @@ pub async fn send_http_request<T: TemplateCallback>(
                     &event_workspace_id,
                     event.clone().into(),
                 );
-                if let Err(err) =
-                    query_manager.connect().upsert_http_response_event(&db_event, update_source)
+                if let Err(err) = query_manager
+                    .connect()
+                    .unwrap()
+                    .upsert_http_response_event(&db_event, update_source)
                 {
                     warn!("Failed to persist HTTP response event: {}", err);
                 }
@@ -800,6 +808,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         response = store
             .query_manager
             .connect()
+            .map_err(SendHttpRequestError::AcquireDatabase)?
             .upsert_http_response(&connected_response, &store.update_source, store.blob_manager)
             .map_err(SendHttpRequestError::PersistResponse)?;
     } else {
@@ -887,6 +896,7 @@ pub async fn send_http_request<T: TemplateCallback>(
                         response = store
                             .query_manager
                             .connect()
+                            .map_err(SendHttpRequestError::AcquireDatabase)?
                             .upsert_http_response(
                                 &progress_response,
                                 &store.update_source,
@@ -961,6 +971,7 @@ pub async fn send_http_request<T: TemplateCallback>(
         response = store
             .query_manager
             .connect()
+            .map_err(SendHttpRequestError::AcquireDatabase)?
             .upsert_http_response(&final_response, &store.update_source, store.blob_manager)
             .map_err(SendHttpRequestError::PersistResponse)?;
     } else {
@@ -999,6 +1010,7 @@ pub async fn send_http_request<T: TemplateCallback>(
             response = store
                 .query_manager
                 .connect()
+                .map_err(SendHttpRequestError::AcquireDatabase)?
                 .upsert_http_response(&response, &store.update_source, store.blob_manager)
                 .map_err(SendHttpRequestError::PersistResponse)?;
         }
@@ -1027,7 +1039,7 @@ fn persist_request_body_bytes(
         return Ok(());
     }
 
-    let blob_ctx = blob_manager.connect();
+    let blob_ctx = blob_manager.connect().map_err(|e| e.to_string())?;
     let mut offset = 0;
     let mut chunk_index: i32 = 0;
     while offset < bytes.len() {
@@ -1057,14 +1069,22 @@ async fn persist_request_body_stream(
         while buf.len() >= REQUEST_BODY_CHUNK_SIZE {
             let data = buf.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
             let chunk = BodyChunk::new(&body_id, chunk_index, data);
-            blob_manager.connect().insert_chunk(&chunk).map_err(|e| e.to_string())?;
+            blob_manager
+                .connect()
+                .map_err(|e| e.to_string())?
+                .insert_chunk(&chunk)
+                .map_err(|e| e.to_string())?;
             chunk_index += 1;
         }
     }
 
     if !buf.is_empty() {
         let chunk = BodyChunk::new(&body_id, chunk_index, buf);
-        blob_manager.connect().insert_chunk(&chunk).map_err(|e| e.to_string())?;
+        blob_manager
+            .connect()
+            .map_err(|e| e.to_string())?
+            .insert_chunk(&chunk)
+            .map_err(|e| e.to_string())?;
     }
 
     Ok(total_bytes)
@@ -1087,6 +1107,7 @@ pub fn load_cookie_jar(
 
     query_manager
         .connect()
+        .map_err(SendHttpRequestError::AcquireDatabase)?
         .get_cookie_jar(cookie_jar_id)
         .map(Some)
         .map_err(SendHttpRequestError::LoadCookieJar)
@@ -1115,6 +1136,7 @@ pub fn persist_cookies_after_send(
     cookie_jar.cookies = cookies;
     query_manager
         .connect()
+        .map_err(SendHttpRequestError::AcquireDatabase)?
         .upsert_cookie_jar(cookie_jar, &UpdateSource::Background)
         .map_err(SendHttpRequestError::PersistCookieJar)?;
     Ok(())
@@ -1210,6 +1232,7 @@ fn persist_response_error(
     store
         .query_manager
         .connect()
+        .map_err(SendHttpRequestError::AcquireDatabase)?
         .upsert_http_response(
             &HttpResponse {
                 state: HttpResponseState::Closed,
@@ -1445,6 +1468,7 @@ mod tests {
 
         query_manager
             .connect()
+            .unwrap()
             .upsert_workspace(
                 &Workspace { id: "wk_test".to_string(), ..Default::default() },
                 &UpdateSource::Sync,
@@ -1452,6 +1476,7 @@ mod tests {
             .expect("Failed to seed workspace");
         let cookie_jar = query_manager
             .connect()
+            .unwrap()
             .upsert_cookie_jar(
                 &CookieJar {
                     id: "cj_test".to_string(),
@@ -1493,8 +1518,11 @@ mod tests {
         persist_cookies_after_send(&query_manager, Some(&mut cookie_jar), Some(&store))
             .expect("Failed to persist cookies");
 
-        let stored =
-            query_manager.connect().get_cookie_jar("cj_test").expect("Failed to load cookie jar");
+        let stored = query_manager
+            .connect()
+            .unwrap()
+            .get_cookie_jar("cj_test")
+            .expect("Failed to load cookie jar");
         assert_eq!(stored.cookies.len(), 1);
         assert_eq!(stored.cookies[0].name, "session");
         assert_eq!(stored.cookies[0].value, "abc123");
@@ -1508,6 +1536,7 @@ mod tests {
         cookie_jar.cookies = vec![cookie("original")];
         cookie_jar = query_manager
             .connect()
+            .unwrap()
             .upsert_cookie_jar(&cookie_jar, &UpdateSource::Sync)
             .expect("Failed to seed cookies");
         let store = CookieStore::from_cookies(cookie_jar.cookies.clone());
@@ -1515,6 +1544,7 @@ mod tests {
         // Someone else updates the jar while the send is in flight.
         query_manager
             .connect()
+            .unwrap()
             .upsert_cookie_jar(
                 &CookieJar { cookies: vec![cookie("newer")], ..cookie_jar.clone() },
                 &UpdateSource::Sync,
@@ -1524,8 +1554,11 @@ mod tests {
         persist_cookies_after_send(&query_manager, Some(&mut cookie_jar), Some(&store))
             .expect("Failed to persist cookies");
 
-        let stored =
-            query_manager.connect().get_cookie_jar("cj_test").expect("Failed to load cookie jar");
+        let stored = query_manager
+            .connect()
+            .unwrap()
+            .get_cookie_jar("cj_test")
+            .expect("Failed to load cookie jar");
         assert_eq!(stored.cookies, vec![cookie("newer")]);
     }
 }

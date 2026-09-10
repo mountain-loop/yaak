@@ -27,3 +27,6 @@ yaak-templates = { path = "../yaak-templates", default-features = false }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 r2d2 = "0.8.10"
 r2d2_sqlite = { version = "0.32" }
+
+[dev-dependencies]
+tempfile = "3"

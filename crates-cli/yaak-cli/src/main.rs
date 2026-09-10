@@ -203,7 +203,7 @@ fn resolve_send_execution_context(
     environment: Option<&str>,
     explicit_cookie_jar_id: Option<&str>,
 ) -> Result<CliExecutionContext, String> {
-    if let Ok(request) = context.db().get_any_request(id) {
+    if let Ok(request) = context.db().map_err(|e| e.to_string())?.get_any_request(id) {
         let (request_id, workspace_id) = match request {
             AnyRequest::HttpRequest(r) => (Some(r.id), r.workspace_id),
             AnyRequest::GrpcRequest(r) => (Some(r.id), r.workspace_id),
@@ -218,7 +218,7 @@ fn resolve_send_execution_context(
         });
     }
 
-    if let Ok(folder) = context.db().get_folder(id) {
+    if let Ok(folder) = context.db().map_err(|e| e.to_string())?.get_folder(id) {
         let cookie_jar_id =
             resolve_cookie_jar_id(context, &folder.workspace_id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
@@ -229,7 +229,7 @@ fn resolve_send_execution_context(
         });
     }
 
-    if let Ok(workspace) = context.db().get_workspace(id) {
+    if let Ok(workspace) = context.db().map_err(|e| e.to_string())?.get_workspace(id) {
         let cookie_jar_id = resolve_cookie_jar_id(context, &workspace.id, explicit_cookie_jar_id)?;
         return Ok(CliExecutionContext {
             request_id: None,
@@ -250,6 +250,7 @@ fn resolve_request_execution_context(
 ) -> Result<CliExecutionContext, String> {
     let request = context
         .db()
+        .map_err(|e| e.to_string())?
         .get_any_request(request_id)
         .map_err(|e| format!("Failed to get request: {e}"))?;
 
@@ -279,6 +280,7 @@ fn resolve_cookie_jar_id(
 
     let default_cookie_jar = context
         .db()
+        .map_err(|e| e.to_string())?
         .list_cookie_jars(workspace_id)
         .map_err(|e| format!("Failed to list cookie jars: {e}"))?
         .into_iter()
