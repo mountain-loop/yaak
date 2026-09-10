@@ -6,7 +6,7 @@ import {
   type ImportSource,
   type Workspace,
 } from "@yaakapp-internal/models";
-import { HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, Icon, type IconProps, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -260,14 +260,17 @@ function LoadedImportDataDialog({
 
   const itemTree = useMemo(() => buildItemTree(items), [items]);
 
-  // A folder row's checkbox aggregates its subtree the way the git commit tree does: creates and
-  // updates toggle together, while removals only ever cascade beneath a removed folder.
-  const toggleNode = (node: CheckboxTreeNode<ImportPlanItem>, checked: boolean) => {
-    const targets = new Set(
-      collectItems(node)
-        .filter((i) => togglesWith(node.data, i))
-        .map((i) => i.modelId),
-    );
+  // A folder row's checkbox carries everything beneath it, deletions included — the row labels
+  // say which of those are destructive. Checking anything also brings back the folders it needs
+  // to live in.
+  const toggleNode = (node: CheckboxTreeNode<TreeRow>, checked: boolean) => {
+    const targets = new Set(togglableItems(node).map((i) => i.modelId));
+    if (checked && node.data.kind === "item") {
+      const byId = new Map(items.map((i) => [i.modelId, i]));
+      for (const ancestor of ancestorsOf(node.data.item, byId)) {
+        if (isMissingFolder(ancestor)) targets.add(ancestor.modelId);
+      }
+    }
     setItems((prev) => prev.map((i) => (targets.has(i.modelId) ? { ...i, selected: checked } : i)));
   };
 
@@ -277,25 +280,16 @@ function LoadedImportDataDialog({
     );
   };
 
-  // A row the user can't meaningfully toggle on its own: a planned resource inside a deselected
-  // new folder can't exist, and a removed folder takes its contents with it.
+  // Deleting a folder takes its contents with it, so those rows have nothing left to decide.
   const disabledIds = useMemo(() => {
     const disabled = new Set<string>();
     const byId = new Map(items.map((i) => [i.modelId, i]));
     for (const item of items) {
-      const seen = new Set<string>();
-      let parentId = item.parentId;
-      while (parentId != null && !seen.has(parentId)) {
-        seen.add(parentId);
-        const parent = byId.get(parentId);
-        if (parent == null || parent.model !== "folder") break;
-        if (parent.action === "create" && !parent.selected && item.action !== "delete") {
+      if (item.action !== "delete") continue;
+      for (const parent of ancestorsOf(item, byId)) {
+        if (parent.action === "delete" && parent.selected) {
           disabled.add(item.modelId);
         }
-        if (parent.action === "delete" && parent.selected && item.action === "delete") {
-          disabled.add(item.modelId);
-        }
-        parentId = parent.parentId;
       }
     }
     return disabled;
@@ -314,18 +308,26 @@ function LoadedImportDataDialog({
       return item.selected;
     }).length;
 
-    const destinationLabel = (() => {
-      if (plan.destination.type === "new_workspace") return "New workspace";
+    // The row's label carries what kind of destination it is, so the value can just be its name
+    const [destinationLabel, destinationValue] = ((): [string, string] => {
+      if (plan.destination.type === "new_workspace") {
+        const names = plan.resources.workspaces.map((w) => w.name).filter((n) => n !== "");
+        if (names.length === 0) return ["New workspace", "Untitled"];
+        return [pluralize("New workspace", names.length), names.join(", ")];
+      }
       const { workspaceId, folderId } = plan.destination;
       const name = workspaces.find((w) => w.id === workspaceId)?.name ?? "Unknown workspace";
-      return folderId != null && folderId === selectedFolder?.id
-        ? `${name} / ${selectedFolder.name}`
-        : name;
+      return [
+        "Destination",
+        folderId != null && folderId === selectedFolder?.id
+          ? `${name} / ${selectedFolder.name}`
+          : name,
+      ];
     })();
 
     // The destination workspace roots the tree. It is not a plan item — commit always applies
     // it — so its checkbox only aggregates the subtree.
-    const workspaceRoot: CheckboxTreeNode<ImportPlanItem> = (() => {
+    const workspaceRoot: CheckboxTreeNode<TreeRow> = (() => {
       const planned = plan.resources.workspaces[0];
       const planDestination = plan.destination;
       const existing =
@@ -335,11 +337,9 @@ function LoadedImportDataDialog({
       return {
         key: existing?.id ?? planned?.id ?? "workspace",
         data: {
-          action: plan.destination.type === "new_workspace" ? "create" : "unchanged",
-          model: "workspace",
-          modelId: existing?.id ?? planned?.id ?? "workspace",
-          name: existing?.name ?? planned?.name ?? "New workspace",
-          selected: true,
+          kind: "destination",
+          label: existing?.name ?? planned?.name ?? "New workspace",
+          isNew: planDestination.type === "new_workspace",
         },
         children: itemTree,
       };
@@ -349,8 +349,26 @@ function LoadedImportDataDialog({
       <VStack space={4} className="pb-4">
         <div className="rounded-lg border border-border-subtle divide-y divide-border-subtle">
           <PreviewRow label="Detected format" value={plan.importer} />
-          <PreviewRow label="Destination" value={destinationLabel} />
+          <PreviewRow label={destinationLabel} value={destinationValue} />
         </div>
+
+        {plan.warnings.map((warning) => (
+          <Banner
+            key={`${warning.title}:${warning.detail}`}
+            color={warning.level === "warning" ? "warning" : "info"}
+            className="flex items-start gap-2.5"
+          >
+            <Icon
+              icon={warning.level === "warning" ? "alert_triangle" : "info"}
+              size="sm"
+              className="mt-0.5"
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{warning.title}</div>
+              <div className="text-xs text-text-subtle mt-0.5">{warning.detail}</div>
+            </div>
+          </Banner>
+        ))}
 
         <div className="rounded-lg border border-border-subtle px-3 py-2 overflow-y-auto max-h-[40vh]">
           <CheckboxTree
@@ -358,30 +376,14 @@ function LoadedImportDataDialog({
             checked={nodeCheckedStatus}
             onCheck={toggleNode}
             isCheckboxDisabled={(n) => disabledIds.has(n.key)}
-            isRelevant={(n) => n.data.model === "workspace" || n.data.action !== "unchanged"}
-            renderRow={(n) => <ImportTreeRow item={n.data} onResolveConflict={resolveConflict} />}
+            isCollapsedByDefault={(n) => n.data.kind === "item" && n.data.item.action === "ignored"}
+            isRelevant={(n) =>
+              n.data.kind === "destination" ||
+              (n.data.kind === "item" && n.data.item.action !== "unchanged")
+            }
+            renderRow={(n) => <ImportTreeRow row={n.data} onResolveConflict={resolveConflict} />}
           />
         </div>
-
-        {plan.warnings.length > 0 && (
-          <div>
-            <div className="text-sm font-semibold mb-1">Import details</div>
-            <div className="rounded-lg border border-border-subtle divide-y divide-border-subtle">
-              {plan.warnings.map((warning) => (
-                <div
-                  key={`${warning.title}:${warning.detail}`}
-                  className="flex items-start gap-2.5 px-3 py-2.5"
-                >
-                  <Icon icon="info" color="info" size="sm" className="mt-0.5" />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{warning.title}</div>
-                    <div className="text-xs text-text-subtle mt-0.5">{warning.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <HStack space={2} alignItems="center" className="mt-3">
           {footerNote !== "" && <div className="text-xs text-text-subtle">{footerNote}</div>}
@@ -402,7 +404,7 @@ function LoadedImportDataDialog({
               ? "Importing"
               : changeCount > 0
                 ? `Apply ${changeCount} ${changeCount === 1 ? "Change" : "Changes"}`
-                : "Apply"}
+                : "Done"}
           </Button>
         </HStack>
       </VStack>
@@ -545,31 +547,42 @@ function LoadedImportDataDialog({
 }
 
 function ImportTreeRow({
-  item,
+  row,
   onResolveConflict,
 }: {
-  item: ImportPlanItem;
+  row: TreeRow;
   onResolveConflict: (modelId: string, resolution: "keep_mine" | "take_source") => void;
 }) {
+  if (row.kind !== "item") {
+    return (
+      <>
+        <Icon color="secondary" icon={row.kind === "destination" ? "house" : row.icon} />
+        <div className="truncate flex-1">{row.label}</div>
+        {row.kind === "destination" && row.isNew && (
+          <ActionChip label="new" help="Created by this import" className="text-success" />
+        )}
+      </>
+    );
+  }
+
+  const { item } = row;
+  const label = actionLabel(item);
   return (
     <>
-      {item.model === "workspace" || item.model === "folder" || item.model === "environment" ? (
-        <Icon
-          color="secondary"
-          icon={
-            item.model === "workspace" ? "house" : item.model === "folder" ? "folder" : "variable"
-          }
-        />
+      {item.model === "folder" || item.model === "environment" ? (
+        <Icon color="secondary" icon={item.model === "folder" ? "folder" : "variable"} />
       ) : (
         <span aria-hidden className="w-4" />
       )}
       <div className="truncate flex-1">{item.name}</div>
       {item.action === "conflict" ? (
-        <div className="shrink-0 flex items-center gap-1.5">
+        <div className="shrink-0">
           <SegmentedControl
             name={`conflict-${item.modelId}`}
             label={`Resolve conflict for ${item.name}`}
             hideLabel
+            size="2xs"
+            help={actionHelp(item)}
             value={item.resolution ?? "keep_mine"}
             onChange={(v) => onResolveConflict(item.modelId, v)}
             options={[
@@ -577,26 +590,46 @@ function ImportTreeRow({
               { value: "take_source", label: "Take source" },
             ]}
           />
-          <IconTooltip content={actionHelp(item)} iconSize="sm" />
         </div>
       ) : (
-        actionLabel(item) && (
-          <InlineCode
+        label != null && (
+          <ActionChip
+            label={label}
+            help={actionHelp(item)}
             className={classNames(
-              "py-0 bg-transparent w-32 shrink-0 whitespace-nowrap text-xs",
-              "inline-flex items-center justify-center gap-1.5",
               item.action === "create" && "text-success",
               item.action === "update" && "text-info",
               item.action === "delete" && "text-danger",
               item.action === "keep_local" && item.selected && "text-warning",
+              item.action === "ignored" && "text-text-subtlest",
             )}
-          >
-            {actionLabel(item)}
-            <IconTooltip content={actionHelp(item)} iconSize="xs" />
-          </InlineCode>
+          />
         )
       )}
     </>
+  );
+}
+
+function ActionChip({
+  label,
+  help,
+  className,
+}: {
+  label: string;
+  help: string | null;
+  className?: string;
+}) {
+  return (
+    <InlineCode
+      className={classNames(
+        "py-0 bg-transparent w-32 shrink-0 whitespace-nowrap text-xs",
+        "inline-flex items-center justify-center gap-1.5",
+        className,
+      )}
+    >
+      {label}
+      {help != null && <IconTooltip content={help} iconSize="xs" />}
+    </InlineCode>
   );
 }
 
@@ -610,29 +643,68 @@ function actionLabel(item: ImportPlanItem): string | null {
       return "removed";
     case "keep_local":
       return "edited";
+    case "ignored":
+      return "ignored";
     default:
       return null;
   }
 }
 
 function actionHelp(item: ImportPlanItem): string | null {
+  const help = (text: string) =>
+    item.changedFields.length > 0
+      ? `${text} · ${item.changedFields.map(fieldLabel).join(", ")}`
+      : text;
   switch (item.action) {
     case "create":
-      return "Added since the last import";
+      return "Not in this workspace yet";
     case "update":
-      return "Changed since the last import";
+      return item.reason === "moved_into_ignored_folder"
+        ? "Moved into a folder that isn't imported. Importing that folder brings it along"
+        : help("Changed in the source since the last import");
     case "delete":
-      return "Deleted since the last import";
+      return "Gone from the source since the last import. Checking it deletes it here";
     case "keep_local":
-      return "Local edits made since the last import. Importing will revert them if checked";
+      return help("Changed here since the last import. Checking it reverts to the source");
     case "conflict":
-      return "Changed both here and in the file since the last import";
+      return help("Changed here and in the source since the last import");
+    case "ignored":
+      return "Not in this workspace. Imports leave it alone until you check it";
     default:
       return null;
   }
 }
 
-function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem>[] {
+function fieldLabel(field: string): string {
+  return field.replace(/([A-Z])/g, " $1").toLowerCase();
+}
+
+/** Every plan item above `item`, nearest first. */
+function ancestorsOf(item: ImportPlanItem, byId: Map<string, ImportPlanItem>): ImportPlanItem[] {
+  const ancestors: ImportPlanItem[] = [];
+  const seen = new Set<string>();
+  let parentId = item.parentId;
+  while (parentId != null && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = byId.get(parentId);
+    if (parent == null) break;
+    ancestors.push(parent);
+    parentId = parent.parentId;
+  }
+  return ancestors;
+}
+
+/**
+ * A row of the preview tree. Most are plan items, but the destination workspace and the group the
+ * workspace's environments sit in are headings: they aggregate their children and decide nothing
+ * themselves.
+ */
+type TreeRow =
+  | { kind: "destination"; label: string; isNew: boolean }
+  | { kind: "group"; label: string; icon: IconProps["icon"] }
+  | { kind: "item"; item: ImportPlanItem };
+
+function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<TreeRow>[] {
   const byId = new Map(items.map((i) => [i.modelId, i]));
   const childrenOf = new Map<string, ImportPlanItem[]>();
   const roots: ImportPlanItem[] = [];
@@ -646,45 +718,66 @@ function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<ImportPlanItem
     }
   }
 
-  const foldersFirst = (list: ImportPlanItem[]) => [
+  const byKind = (list: ImportPlanItem[]) => [
+    ...list.filter((i) => i.model === "environment"),
     ...list.filter((i) => i.model === "folder"),
-    ...list.filter((i) => i.model !== "folder"),
+    ...list.filter((i) => i.model !== "environment" && i.model !== "folder"),
   ];
 
-  const toNode = (item: ImportPlanItem, seen: Set<string>): CheckboxTreeNode<ImportPlanItem> => ({
+  const toNode = (item: ImportPlanItem, seen: Set<string>): CheckboxTreeNode<TreeRow> => ({
     key: item.modelId,
-    data: item,
+    data: { kind: "item", item },
     children: seen.has(item.modelId)
       ? []
-      : foldersFirst(childrenOf.get(item.modelId) ?? []).map((c) =>
+      : byKind(childrenOf.get(item.modelId) ?? []).map((c) =>
           toNode(c, new Set([...seen, item.modelId])),
         ),
   });
 
-  return foldersFirst(roots).map((r) => toNode(r, new Set()));
+  // The workspace's environments have nothing to sit under — a sub-environment is a sibling of
+  // the base one, not its child — so a heading groups them into one thing to turn on and off.
+  const environments = roots.filter((i) => i.model === "environment");
+  const others = byKind(roots.filter((i) => i.model !== "environment"));
+  const nodes = others.map((r) => toNode(r, new Set()));
+  if (environments.length === 0) return nodes;
+  return [
+    {
+      key: "group:environments",
+      data: { kind: "group", label: "Variables", icon: "variable" },
+      children: environments.map((e) => toNode(e, new Set())),
+    },
+    ...nodes,
+  ];
 }
 
-function collectItems(node: CheckboxTreeNode<ImportPlanItem>): ImportPlanItem[] {
-  return [node.data, ...node.children.flatMap(collectItems)];
+function collectRows(node: CheckboxTreeNode<TreeRow>): TreeRow[] {
+  return [node.data, ...node.children.flatMap(collectRows)];
+}
+
+/** A folder that isn't there yet, so anything inside it needs it brought in first. */
+function isMissingFolder(item: ImportPlanItem): boolean {
+  return item.model === "folder" && (item.action === "create" || item.action === "ignored");
 }
 
 /**
- * Whether toggling `root`'s checkbox also toggles `item` in its subtree. Destructive decisions
- * (deletions, reverting local edits) never ride along with a parent toggle.
+ * The plan item a row's checkbox decides, if it decides one. An unchanged resource has nothing to
+ * decide and a conflict is decided by its own control, so neither takes a checkbox — nor rides
+ * along with a parent's.
  */
-function togglesWith(root: ImportPlanItem, item: ImportPlanItem): boolean {
-  if (item.model === "workspace") return false;
-  if (root.action === "delete") return item.action === "delete";
-  if (item.action === "keep_local") {
-    return root.modelId === item.modelId && item.model !== "folder";
-  }
-  return item.action === "create" || item.action === "update";
+function togglableItem(row: TreeRow): ImportPlanItem | null {
+  if (row.kind !== "item") return null;
+  const { item } = row;
+  return item.action === "unchanged" || item.action === "conflict" ? null : item;
 }
 
-function nodeCheckedStatus(
-  node: CheckboxTreeNode<ImportPlanItem>,
-): boolean | "indeterminate" | "hidden" {
-  const covered = collectItems(node).filter((i) => togglesWith(node.data, i));
+function togglableItems(node: CheckboxTreeNode<TreeRow>): ImportPlanItem[] {
+  return collectRows(node)
+    .map(togglableItem)
+    .filter((i) => i != null);
+}
+
+function nodeCheckedStatus(node: CheckboxTreeNode<TreeRow>): boolean | "indeterminate" | "hidden" {
+  const covered = togglableItems(node);
   if (covered.length === 0) return "hidden";
   const selected = covered.filter((i) => i.selected).length;
   if (selected === covered.length) return true;

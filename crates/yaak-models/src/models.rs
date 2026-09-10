@@ -3118,8 +3118,12 @@ pub struct ImportSourceResource {
     pub import_source_id: String,
     pub source_key: String,
     pub model_type: String,
-    pub model_id: String,
-    pub snapshot: String,
+    /// `None` once the user has decided not to import this key
+    #[ts(optional)]
+    pub model_id: Option<String>,
+    /// Hash of the resource as last applied or decided from the source, if one was recorded
+    #[ts(optional)]
+    pub content_hash: Option<String>,
 }
 
 impl<'s> TryFrom<&Row<'s>> for ImportSourceResource {
@@ -3134,7 +3138,7 @@ impl<'s> TryFrom<&Row<'s>> for ImportSourceResource {
             source_key: r.get("source_key")?,
             model_type: r.get("model_type")?,
             model_id: r.get("model_id")?,
-            snapshot: r.get("snapshot")?,
+            content_hash: r.get("content_hash")?,
         })
     }
 }

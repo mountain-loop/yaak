@@ -6,6 +6,7 @@ import { useStateWithDeps } from "../../hooks/useStateWithDeps";
 import { generateId } from "../../lib/generateId";
 import { Button } from "./Button";
 import { IconButton, type IconButtonProps } from "./IconButton";
+import { IconTooltip } from "./IconTooltip";
 import { Label } from "./Label";
 
 interface Props<T extends string> {
@@ -36,11 +37,15 @@ export function SegmentedControl<T extends string>({
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useRef(`input-${generateId()}`);
 
+  // A visually hidden label has nowhere to show the help, so the last option carries it
+  const inlineHelp =
+    hideLabel && help ? <IconTooltip tabIndex={-1} content={help} iconSize="xs" /> : null;
+
   return (
     <div className="w-full grid">
       <Label
         htmlFor={id.current}
-        help={help}
+        help={hideLabel ? undefined : help}
         visuallyHidden={hideLabel}
         className={classNames(labelClassName)}
       >
@@ -78,9 +83,10 @@ export function SegmentedControl<T extends string>({
           }
         }}
       >
-        {options.map((o) => {
+        {options.map((o, i) => {
           const isSelected = selectedValue === o.value;
           const isActive = value === o.value;
+          const rightSlot = i === options.length - 1 ? inlineHelp : null;
           if (o.icon == null) {
             return (
               <Button
@@ -95,6 +101,7 @@ export function SegmentedControl<T extends string>({
                   isActive && "text-text!",
                   "focus:ring-1 focus:ring-border-focus",
                 )}
+                rightSlot={rightSlot}
                 onClick={() => onChange(o.value)}
               >
                 {o.label}
@@ -117,6 +124,7 @@ export function SegmentedControl<T extends string>({
                 )}
                 title={o.label}
                 icon={o.icon}
+                rightSlot={rightSlot}
                 onClick={() => onChange(o.value)}
               />
             );

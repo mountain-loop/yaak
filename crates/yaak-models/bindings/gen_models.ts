@@ -356,8 +356,14 @@ export type ImportSourceResource = {
   importSourceId: string;
   sourceKey: string;
   modelType: string;
-  modelId: string;
-  snapshot: string;
+  /**
+   * `None` once the user has decided not to import this key
+   */
+  modelId?: string;
+  /**
+   * Hash of the resource as last applied or decided from the source, if one was recorded
+   */
+  contentHash?: string;
 };
 
 export type InheritedBoolSetting = { enabled?: boolean; value: boolean };
