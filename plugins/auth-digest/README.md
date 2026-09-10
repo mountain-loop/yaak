@@ -17,8 +17,8 @@ over the credentials, the nonce and the request itself.
 Because the digest is computed over a server-issued nonce, the challenge has to
 be fetched before the real request can be signed. On each send, the plugin:
 
-1. Sends an unauthenticated probe of the same method, URL and headers (minus
-   the credentials and anything describing a body it isn't sending)
+1. Sends an unauthenticated probe of the same method and URL, carrying no
+   headers of its own so it cannot authorize anything
 2. Reads the `WWW-Authenticate: Digest …` challenge from the `401` response
 3. Computes the response hash and returns the `Authorization` header
 

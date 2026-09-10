@@ -36,11 +36,11 @@ describe("auth-digest onApply", () => {
     await apply(ctx, { username: "user", password: "pass" }, { method: "POST", body: "hello" });
 
     expect(send).toHaveBeenCalledWith({
-      httpRequest: { method: "POST", url: "https://example.org/dir/index.html?a=b", headers: [] },
+      httpRequest: { method: "POST", url: "https://example.org/dir/index.html?a=b" },
     });
   });
 
-  test("carries the request's headers on the probe, minus the ones about a body", async () => {
+  test("keeps credential-bearing headers off the probe", async () => {
     const { ctx, send } = ctxRespondingWith([
       { name: "WWW-Authenticate", value: 'Digest realm="r", nonce="n", qop=auth' },
     ]);
@@ -49,22 +49,17 @@ describe("auth-digest onApply", () => {
       ctx,
       { username: "user", password: "pass" },
       {
-        method: "POST",
-        body: "hello",
+        method: "DELETE",
         headers: [
-          { name: "X-Tenant", value: "acme" },
-          { name: "Content-Type", value: "application/json" },
+          { name: "Cookie", value: "session=abc" },
+          { name: "X-Api-Key", value: "secret" },
           { name: "Authorization", value: "Bearer stale" },
         ],
       },
     );
 
     expect(send).toHaveBeenCalledWith({
-      httpRequest: {
-        method: "POST",
-        url: "https://example.org/dir/index.html?a=b",
-        headers: [{ name: "X-Tenant", value: "acme" }],
-      },
+      httpRequest: { method: "DELETE", url: "https://example.org/dir/index.html?a=b" },
     });
   });
 
@@ -119,6 +114,47 @@ describe("auth-digest onApply", () => {
   });
 });
 
+function nextComma(value: string, from: number): number {
+  const index = value.indexOf(",", from);
+  return index < 0 ? value.length : index;
+}
+
+/**
+ * Read `Digest name=value, name="value"` credentials by scanning, rather than
+ * with a global regex: a repeated character class in front of the `=` backtracks
+ * quadratically over a long run of the characters it accepts.
+ */
+function parseCredentials(header: string): Record<string, string> {
+  const params: Record<string, string> = {};
+  let i = header.indexOf(" ") + 1;
+
+  while (i < header.length) {
+    const equals = header.indexOf("=", i);
+    if (equals < 0) break;
+
+    const name = header.slice(i, equals).trim().toLowerCase();
+    i = equals + 1;
+
+    let value = "";
+    if (header[i] === '"') {
+      for (i++; i < header.length && header[i] !== '"'; i++) {
+        if (header[i] === "\\") i++;
+        value += header[i];
+      }
+      i++;
+    } else {
+      const end = nextComma(header, i);
+      value = header.slice(i, end).trim();
+      i = end;
+    }
+
+    params[name] = value;
+    i = nextComma(header, i) + 1;
+  }
+
+  return params;
+}
+
 /**
  * A minimally correct Digest server, hashing inline rather than through the
  * plugin's own helpers so the round trip can't agree with itself on a mistake.
@@ -167,12 +203,7 @@ function startDigestServer(config: {
         return;
       }
 
-      const params: Record<string, string> = {};
-      for (const [, name, quoted, bare] of authorization
-        .slice("Digest ".length)
-        .matchAll(/([A-Za-z0-9-]+\*?)=(?:"((?:[^"\\]|\\.)*)"|([^,\s]*))/g)) {
-        params[name!.toLowerCase()] = (quoted ?? bare ?? "").replace(/\\(.)/g, "$1");
-      }
+      const params = parseCredentials(authorization);
 
       const secret = hash(`${config.username}:${config.realm}:${config.password}`);
       const ha1 = sess ? hash(`${secret}:${params.nonce}:${params.cnonce}`) : secret;

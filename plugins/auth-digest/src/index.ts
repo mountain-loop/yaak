@@ -8,14 +8,6 @@ import {
   selectDigestChallenge,
 } from "./digest";
 
-const PROBE_OMITTED_HEADERS = [
-  "authorization",
-  "content-type",
-  "content-length",
-  "transfer-encoding",
-  "expect",
-];
-
 export const plugin: PluginDefinition = {
   authentication: {
     name: "digest",
@@ -49,21 +41,17 @@ export const plugin: PluginDefinition = {
         ],
       },
     ],
-    async onApply(ctx, { values, method, url, headers, body }) {
+    async onApply(ctx, { values, method, url, body }) {
       const username = values.username ? String(values.username) : "";
       const password = values.password ? String(values.password) : "";
       const realm = values.realm ? String(values.realm) : undefined;
 
       // Digest needs a server-issued nonce, so the challenge has to be provoked
-      // before the real request can be signed. The probe carries the request's
-      // own headers so that anything routing on them reaches the same endpoint,
-      // minus the ones that describe a body it isn't sending.
-      const probeHeaders = headers.filter(
-        (h) => !PROBE_OMITTED_HEADERS.includes(h.name.toLowerCase()),
-      );
-      const { httpResponse } = await ctx.httpRequest.send({
-        httpRequest: { method, url, headers: probeHeaders },
-      });
+      // before the real request can be signed. The probe carries nothing but the
+      // method and URL: a cookie or an API key header would let it authorize the
+      // very operation it is only meant to ask permission for, and there is no
+      // telling a routing header from a credential by looking at it.
+      const { httpResponse } = await ctx.httpRequest.send({ httpRequest: { method, url } });
 
       const headerValues = httpResponse.headers
         .filter((h) => h.name.toLowerCase() === "www-authenticate")
