@@ -38,6 +38,7 @@ impl<'a> ClientDb<'a> {
         source: &UpdateSource,
     ) -> Result<GrpcRequest> {
         self.delete_all_grpc_connections_for_request(m.id.as_str(), source)?;
+        self.delete_model_versions_for_model(m.id.as_str())?;
         self.delete(m, source)
     }
 

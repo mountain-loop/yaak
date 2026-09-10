@@ -30,6 +30,7 @@ import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HttpResponseTimeline } from "./HttpResponseTimeline";
 import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";
+import { RequestVersionDropdown } from "./RequestVersionDropdown";
 import { RequestBodyViewer } from "./RequestBodyViewer";
 import { ResponseCookies } from "./ResponseCookies";
 import { ResponseHeaders } from "./ResponseHeaders";
@@ -263,13 +264,14 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 ) : (
                   <span />
                 )}
-                <div className="justify-self-end shrink-0">
+                <HStack space={1} className="justify-self-end shrink-0">
+                  <RequestVersionDropdown response={activeResponse} />
                   <RecentHttpResponsesDropdown
                     responses={responses}
                     activeResponse={activeResponse}
                     onPinnedResponseId={setPinnedResponseId}
                   />
-                </div>
+                </HStack>
               </div>
             )}
           </HStack>

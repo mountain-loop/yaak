@@ -37,8 +37,8 @@ use yaak_grpc::ServiceDefinition;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::{
     GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
-    HttpResponseEvent, ImportSource, Plugin, Settings, WebsocketConnection, WebsocketEvent,
-    WorkspaceMeta,
+    HttpResponseEvent, ImportSource, ModelVersion, Plugin, RequestVersionComparison, Settings,
+    WebsocketConnection, WebsocketEvent, WorkspaceMeta,
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{BatchUpsertResult, ImportPlan};
@@ -651,6 +651,18 @@ async fn models_delete<R: Runtime>(ctx: ClientCtx<R>, req: ModelsDeleteReq) -> R
 
 async fn models_duplicate<R: Runtime>(ctx: ClientCtx<R>, req: ModelsDuplicateReq) -> Result<String> {
     Ok(yaak_commands::models::models_duplicate(ctx, req).await?)
+}
+
+async fn models_snapshot_request<R: Runtime>(ctx: ClientCtx<R>, req: ModelsSnapshotRequestReq) -> Result<ModelVersion> {
+    Ok(yaak_commands::models::models_snapshot_request(ctx, req).await?)
+}
+
+async fn models_request_version<R: Runtime>(ctx: ClientCtx<R>, req: ModelsRequestVersionReq) -> Result<RequestVersionComparison> {
+    Ok(yaak_commands::models::models_request_version(ctx, req).await?)
+}
+
+async fn models_restore_request_version<R: Runtime>(ctx: ClientCtx<R>, req: ModelsRestoreRequestVersionReq) -> Result<String> {
+    Ok(yaak_commands::models::models_restore_request_version(ctx, req).await?)
 }
 
 async fn models_websocket_events<R: Runtime>(ctx: ClientCtx<R>, req: ModelsWebsocketEventsReq) -> Result<Vec<WebsocketEvent>> {

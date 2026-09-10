@@ -10,6 +10,7 @@ use yaak_database::SqlitePool;
 
 pub mod blob_manager;
 pub mod client_db;
+pub mod content;
 pub mod cookies;
 mod connection_or_tx;
 pub mod error;
@@ -21,6 +22,7 @@ pub mod queries;
 pub mod query_manager;
 pub mod render;
 pub mod util;
+pub mod versions;
 
 /// Per-connection setup, applied by every pool on every connection it opens.
 fn init_connection(conn: &rusqlite::Connection) -> rusqlite::Result<()> {

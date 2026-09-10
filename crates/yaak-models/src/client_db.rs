@@ -118,6 +118,20 @@ impl<'a> ClientDb<'a> {
         Ok(m.clone())
     }
 
+    /// Upsert a model WITHOUT recording a model change or emitting an event.
+    ///
+    /// Only for rows that are nobody's business but this process's — model
+    /// versions, whose whole point is that they are local history. Anything the
+    /// frontend, sync or another window should learn about goes through
+    /// [`Self::upsert`].
+    pub(crate) fn upsert_untracked<M>(&self, model: &M) -> Result<M>
+    where
+        M: UpsertModelInfo + Clone,
+    {
+        let (m, _created) = self.ctx.upsert(model, &UpdateSource::Background.to_db())?;
+        Ok(m)
+    }
+
     fn record_model_change(&self, payload: &ModelPayload) -> Result<()> {
         let payload_json = serde_json::to_string(payload)?;
         let source_json = serde_json::to_string(&payload.update_source)?;

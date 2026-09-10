@@ -1539,6 +1539,8 @@ pub struct WebsocketConnection {
     pub state: WebsocketConnectionState,
     pub status: i32,
     pub url: String,
+    /// The request version this connection was opened from, when one was captured.
+    pub version_id: Option<String>,
 }
 
 impl UpsertModelInfo for WebsocketConnection {
@@ -1578,6 +1580,7 @@ impl UpsertModelInfo for WebsocketConnection {
             (State, serde_json::to_value(&self.state)?.as_str().into()),
             (Status, self.status.into()),
             (Url, self.url.into()),
+            (VersionId, self.version_id.into()),
         ])
     }
 
@@ -1590,6 +1593,7 @@ impl UpsertModelInfo for WebsocketConnection {
             WebsocketConnectionIden::State,
             WebsocketConnectionIden::Status,
             WebsocketConnectionIden::Url,
+            WebsocketConnectionIden::VersionId,
         ]
     }
 
@@ -1612,6 +1616,7 @@ impl UpsertModelInfo for WebsocketConnection {
             error: row.get("error")?,
             state: serde_json::from_str(format!(r#""{state}""#).as_str()).unwrap(),
             status: row.get("status")?,
+            version_id: row.get("version_id").unwrap_or_default(),
         })
     }
 }
@@ -1965,6 +1970,8 @@ pub struct HttpResponse {
     pub state: HttpResponseState,
     pub url: String,
     pub version: Option<String>,
+    /// The request version this response was sent from, when one was captured.
+    pub version_id: Option<String>,
 }
 
 impl UpsertModelInfo for HttpResponse {
@@ -2014,6 +2021,7 @@ impl UpsertModelInfo for HttpResponse {
             (Url, self.url.into()),
             (Version, self.version.into()),
             (RequestContentLength, self.request_content_length.into()),
+            (VersionId, self.version_id.into()),
         ])
     }
 
@@ -2036,6 +2044,7 @@ impl UpsertModelInfo for HttpResponse {
             HttpResponseIden::StatusReason,
             HttpResponseIden::Url,
             HttpResponseIden::Version,
+            HttpResponseIden::VersionId,
         ]
     }
 
@@ -2071,6 +2080,7 @@ impl UpsertModelInfo for HttpResponse {
                 r.get::<_, String>("request_headers").unwrap_or_default().as_str(),
             )
             .unwrap_or_default(),
+            version_id: r.get("version_id").unwrap_or_default(),
         })
     }
 }
@@ -2516,6 +2526,8 @@ pub struct GrpcConnection {
     pub state: GrpcConnectionState,
     pub trailers: BTreeMap<String, String>,
     pub url: String,
+    /// The request version this connection was opened from, when one was captured.
+    pub version_id: Option<String>,
 }
 
 impl UpsertModelInfo for GrpcConnection {
@@ -2557,6 +2569,7 @@ impl UpsertModelInfo for GrpcConnection {
             (Error, self.error.as_ref().map(|s| s.as_str()).into()),
             (Trailers, serde_json::to_string(&self.trailers)?.into()),
             (Url, self.url.into()),
+            (VersionId, self.version_id.into()),
         ])
     }
 
@@ -2571,6 +2584,7 @@ impl UpsertModelInfo for GrpcConnection {
             GrpcConnectionIden::Error,
             GrpcConnectionIden::Trailers,
             GrpcConnectionIden::Url,
+            GrpcConnectionIden::VersionId,
         ]
     }
 
@@ -2595,6 +2609,7 @@ impl UpsertModelInfo for GrpcConnection {
             url: row.get("url")?,
             error: row.get("error")?,
             trailers: serde_json::from_str(trailers.as_str()).unwrap_or_default(),
+            version_id: row.get("version_id").unwrap_or_default(),
         })
     }
 }
@@ -3137,6 +3152,154 @@ impl<'s> TryFrom<&Row<'s>> for ImportSourceResource {
             snapshot: r.get("snapshot")?,
         })
     }
+}
+
+/// Why a version was captured. Not a UI label — the frontend decides how to
+/// phrase these — but it is what makes a history readable when debugging.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum ModelVersionReason {
+    Send,
+    Switch,
+    Idle,
+    Restore,
+    /// Reserved: an explicit "save a version now" action, which has no UI yet.
+    Manual,
+}
+
+impl Default for ModelVersionReason {
+    fn default() -> Self {
+        Self::Manual
+    }
+}
+
+/// A point-in-time copy of one request's editable content.
+///
+/// Versions are content-addressed: `content_hash` covers exactly what
+/// `document` holds, and `(model_id, content_hash)` is unique, so capturing the
+/// same content twice returns the row that already exists. That is what lets
+/// every send snapshot unconditionally without growing the table.
+///
+/// Deliberately absent from [`AnyModel`]: versions are local history. They are
+/// not synced, not exported, and not mirrored into the frontend's model store —
+/// the frontend asks for the one version it needs to show.
+impl Default for ModelVersion {
+    fn default() -> Self {
+        Self {
+            model: "model_version".to_string(),
+            id: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            workspace_id: String::new(),
+            model_type: String::new(),
+            model_id: String::new(),
+            content_hash: String::new(),
+            document: Value::Object(Default::default()),
+            reason: ModelVersionReason::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+#[enum_def(table_name = "model_versions")]
+pub struct ModelVersion {
+    #[ts(type = "\"model_version\"")]
+    pub model: String,
+    pub id: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub workspace_id: String,
+
+    /// The `model` field of the versioned model, eg. `http_request`.
+    pub model_type: String,
+    pub model_id: String,
+    pub content_hash: String,
+    #[ts(type = "Record<string, any>")]
+    pub document: Value,
+    pub reason: ModelVersionReason,
+}
+
+impl UpsertModelInfo for ModelVersion {
+    fn table_name() -> impl IntoTableRef + IntoIden {
+        ModelVersionIden::Table
+    }
+
+    fn id_column() -> impl IntoIden + Eq + Clone {
+        ModelVersionIden::Id
+    }
+
+    fn generate_id() -> String {
+        generate_prefixed_id("mv")
+    }
+
+    fn order_by() -> (impl IntoColumnRef, Order) {
+        (ModelVersionIden::CreatedAt, Desc)
+    }
+
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    fn insert_values(
+        self,
+        source: &UpdateSource,
+    ) -> DbResult<Vec<(impl IntoIden + Eq, impl Into<SimpleExpr>)>> {
+        use ModelVersionIden::*;
+        Ok(vec![
+            (CreatedAt, upsert_date(source, self.created_at)),
+            (UpdatedAt, upsert_date(source, self.updated_at)),
+            (WorkspaceId, self.workspace_id.into()),
+            (ModelType, self.model_type.into()),
+            (ModelId, self.model_id.into()),
+            (ContentHash, self.content_hash.into()),
+            (Document, serde_json::to_string(&self.document)?.into()),
+            (Reason, serde_json::to_value(self.reason)?.as_str().into()),
+        ])
+    }
+
+    fn update_columns() -> Vec<impl IntoIden> {
+        vec![ModelVersionIden::UpdatedAt]
+    }
+
+    fn from_row(row: &Row) -> rusqlite::Result<Self>
+    where
+        Self: Sized,
+    {
+        let document: String = row.get("document")?;
+        let reason: String = row.get("reason")?;
+        Ok(Self {
+            id: row.get("id")?,
+            model: row.get("model")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+            workspace_id: row.get("workspace_id")?,
+            model_type: row.get("model_type")?,
+            model_id: row.get("model_id")?,
+            content_hash: row.get("content_hash")?,
+            document: serde_json::from_str(&document).unwrap_or_default(),
+            reason: serde_json::from_str(format!(r#""{reason}""#).as_str()).unwrap_or_default(),
+        })
+    }
+}
+
+/// One version, next to the request as it stands now.
+///
+/// Both halves come from the same place so they are guaranteed comparable: the
+/// frontend renders them side by side, and `differs` is the same content-hash
+/// comparison the backend uses everywhere else rather than a second opinion
+/// formed in TypeScript.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct RequestVersionComparison {
+    pub version: ModelVersion,
+    /// The live request's editable content, in the same shape as the version's document.
+    #[ts(type = "Record<string, any>")]
+    pub current_document: Value,
+    pub differs: bool,
 }
 
 /// Only used as a `from_row` fallback for an unparseable settings column. The

@@ -139,6 +139,10 @@ export type GrpcConnection = {
   state: GrpcConnectionState;
   trailers: { [key in string]?: string };
   url: string;
+  /**
+   * The request version this connection was opened from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type GrpcConnectionState = "initialized" | "connected" | "closed";
@@ -243,6 +247,10 @@ export type HttpResponse = {
   state: HttpResponseState;
   url: string;
   version: string | null;
+  /**
+   * The request version this response was sent from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type HttpResponseEvent = {
@@ -382,6 +390,28 @@ export type ModelPayload = {
   change: ModelChangeEvent;
 };
 
+export type ModelVersion = {
+  model: "model_version";
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  workspaceId: string;
+  /**
+   * The `model` field of the versioned model, eg. `http_request`.
+   */
+  modelType: string;
+  modelId: string;
+  contentHash: string;
+  document: Record<string, any>;
+  reason: ModelVersionReason;
+};
+
+/**
+ * Why a version was captured. Not a UI label — the frontend decides how to
+ * phrase these — but it is what makes a history readable when debugging.
+ */
+export type ModelVersionReason = "send" | "switch" | "idle" | "restore" | "manual";
+
 export type ParentAuthentication = {
   authentication: Record<string, any>;
   authenticationType: string | null;
@@ -424,6 +454,23 @@ export type ProxySetting =
   | { type: "disabled" };
 
 export type ProxySettingAuth = { user: string; password: string };
+
+/**
+ * One version, next to the request as it stands now.
+ *
+ * Both halves come from the same place so they are guaranteed comparable: the
+ * frontend renders them side by side, and `differs` is the same content-hash
+ * comparison the backend uses everywhere else rather than a second opinion
+ * formed in TypeScript.
+ */
+export type RequestVersionComparison = {
+  version: ModelVersion;
+  /**
+   * The live request's editable content, in the same shape as the version's document.
+   */
+  currentDocument: Record<string, any>;
+  differs: boolean;
+};
 
 export type Settings = {
   model: "settings";
@@ -488,6 +535,10 @@ export type WebsocketConnection = {
   state: WebsocketConnectionState;
   status: number;
   url: string;
+  /**
+   * The request version this connection was opened from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type WebsocketConnectionState = "initialized" | "connected" | "closing" | "closed";

@@ -24,9 +24,10 @@ use yaak_http::types::{
 use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::models::{
     ClientCertificate, Cookie, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
-    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
-    ProxySettingAuth, ResolvedHttpRequestSettings,
+    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState,
+    ProxySetting, ProxySettingAuth, ResolvedHttpRequestSettings,
 };
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
@@ -283,6 +284,9 @@ pub struct HttpSendInputs {
     /// Cookies the send starts with. The store is shared, so reading it back after the send
     /// returns (or fails) yields the cookies the transaction collected.
     pub cookie_store: Option<CookieStore>,
+    /// The version holding the request's content as it was when this send was resolved,
+    /// which the response will point at. `None` for an ephemeral request with no id.
+    pub version_id: Option<String>,
 }
 
 /// Where a send writes its response. Without it, the send keeps everything in memory: no
@@ -434,6 +438,13 @@ pub fn resolve_send_inputs(
             client_certificates: settings.client_certificates,
         },
         cookie_store: cookies.map(CookieStore::from_cookies),
+        // Captured here rather than deeper in the send because this is the last place that
+        // still holds the *stored* request: further down it has been resolved against its
+        // folder and workspace and then rendered, and neither of those is what a restore
+        // should put back. Every host reaches sending through this function — the desktop,
+        // the CLI, plugin-triggered sends — so every response gets a version without each
+        // of them remembering to ask for one.
+        version_id: db.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
     })
 }
 
@@ -581,7 +592,8 @@ pub async fn send_http_request_by_id<T: TemplateCallback>(
 pub async fn send_http_request<T: TemplateCallback>(
     params: SendHttpRequestParams<'_, T>,
 ) -> Result<SendHttpRequestResult> {
-    let HttpSendInputs { request, environment_chain, runtime_config, cookie_store } = params.inputs;
+    let HttpSendInputs { request, environment_chain, runtime_config, cookie_store, version_id } =
+        params.inputs;
     let (request, auth_context_id) = request.into_parts();
     let storage = params.storage;
     let send_options = runtime_config.send_options();
@@ -619,6 +631,7 @@ pub async fn send_http_request<T: TemplateCallback>(
     let mut response = params.existing_response.unwrap_or_default();
     response.request_id = request.id.clone();
     response.workspace_id = request.workspace_id.clone();
+    response.version_id = version_id;
     response.request_content_length = request_content_length;
     response.request_headers = sendable_request
         .headers
@@ -1345,6 +1358,7 @@ mod tests {
                     client_certificates: Vec::new(),
                 },
                 cookie_store: Some(CookieStore::new()),
+                version_id: None,
             },
             template_callback: &NoopTemplateCallback,
             storage: None,
@@ -1414,6 +1428,7 @@ mod tests {
                     client_certificates: Vec::new(),
                 },
                 cookie_store: Some(CookieStore::new()),
+                version_id: None,
             },
             template_callback: &NoopTemplateCallback,
             storage: None,
@@ -1464,6 +1479,92 @@ mod tests {
             .expect("Failed to seed cookie jar");
 
         (query_manager, cookie_jar, temp_dir)
+    }
+
+    /// The whole point of the feature, end to end: a stored send must leave a
+    /// response that can name the request behind it, and repeated sends of an
+    /// unchanged request must all name the same one.
+    #[tokio::test]
+    async fn a_stored_send_links_the_request_version_that_produced_it() {
+        let (query_manager, blob_manager, temp_dir) = seed_send_storage();
+        let request = query_manager
+            .connect()
+            .upsert_http_request(
+                &HttpRequest {
+                    workspace_id: "wk_test".to_string(),
+                    url: "http://localhost/test".to_string(),
+                    name: "Original".to_string(),
+                    ..Default::default()
+                },
+                &UpdateSource::Sync,
+            )
+            .expect("Failed to seed request");
+
+        let first = stored_send(&query_manager, &blob_manager, temp_dir.path(), &request).await;
+        let second = stored_send(&query_manager, &blob_manager, temp_dir.path(), &request).await;
+
+        let version_id = first.version_id.clone().expect("a stored send must record a version");
+        assert_eq!(second.version_id, Some(version_id.clone()), "an unchanged request is one version");
+
+        let db = query_manager.connect();
+        let version = db.get_model_version(&version_id).expect("Failed to load version");
+        assert_eq!(version.model_id, request.id);
+        assert_eq!(version.document.get("url").unwrap(), "http://localhost/test");
+        assert_eq!(db.list_model_versions(&request.id).unwrap().len(), 1);
+
+        // Editing after the fact is what the response pane has to be able to notice
+        query_manager
+            .connect()
+            .upsert_http_request(&HttpRequest { name: "Edited".to_string(), ..request.clone() }, &UpdateSource::Sync)
+            .expect("Failed to edit request");
+        assert!(!db.request_matches_version(&version).expect("Failed to compare"));
+    }
+
+    async fn stored_send(
+        query_manager: &QueryManager,
+        blob_manager: &BlobManager,
+        response_dir: &std::path::Path,
+        request: &HttpRequest,
+    ) -> HttpResponse {
+        let executor = StubExecutor { body: b"hello world" };
+        let inputs = resolve_send_inputs(query_manager, request, None, None)
+            .expect("Failed to resolve send inputs");
+        send_http_request(SendHttpRequestParams {
+            inputs,
+            template_callback: &NoopTemplateCallback,
+            storage: Some(ResponseStorage {
+                query_manager,
+                blob_manager,
+                update_source: UpdateSource::Sync,
+                response_dir,
+            }),
+            emit_events_to: None,
+            emit_response_body_chunks_to: None,
+            cancelled_rx: None,
+            existing_response: None,
+            prepare_sendable_request: None,
+            executor: &executor,
+        })
+        .await
+        .expect("send should succeed")
+        .response
+    }
+
+    fn seed_send_storage() -> (QueryManager, BlobManager, TempDir) {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let (query_manager, blob_manager, _rx) = yaak_models::init_standalone(
+            &temp_dir.path().join("db.sqlite"),
+            &temp_dir.path().join("blobs.sqlite"),
+        )
+        .expect("Failed to initialize DB");
+        query_manager
+            .connect()
+            .upsert_workspace(
+                &Workspace { id: "wk_test".to_string(), ..Default::default() },
+                &UpdateSource::Sync,
+            )
+            .expect("Failed to seed workspace");
+        (query_manager, blob_manager, temp_dir)
     }
 
     fn cookie(name: &str) -> Cookie {

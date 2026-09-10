@@ -32,12 +32,13 @@ use yaak_models::blob_manager::{BlobManager, BodyChunk};
 use yaak_models::cookies::apply_cookie_changes;
 use yaak_models::models::{
     AnyModel, Cookie, CookieJar, HttpRequest, HttpResponseEvent, HttpResponseEventData,
-    HttpSendSettings,
+    HttpSendSettings, ModelVersionReason, RequestVersionComparison,
 };
 use yaak_models::models_ops;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{ModelPayload, UpdateSource};
+use yaak_models::versions::version_document;
 use yaak_templates::{RenderOptions, TemplateCallback};
 
 /// Names inside the VFS, not paths on any disk. Two files because the desktop
@@ -220,6 +221,19 @@ struct UpsertIntrospectionReq {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct SnapshotRequestReq {
+    request_id: String,
+    reason: ModelVersionReason,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionIdReq {
+    version_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ResponseIdReq {
     response_id: String,
 }
@@ -317,6 +331,37 @@ fn dispatch(
                 })
                 .map_err(js_error)?;
             to_json(id)
+        }
+
+        "models_snapshot_request" => {
+            let req: SnapshotRequestReq = from_js(payload)?;
+            to_json(
+                host.queries
+                    .connect()
+                    .snapshot_request_by_id(&req.request_id, req.reason)
+                    .map_err(js_error)?,
+            )
+        }
+
+        "models_request_version" => {
+            let req: VersionIdReq = from_js(payload)?;
+            let db = host.queries.connect();
+            let version = db.get_model_version(&req.version_id).map_err(js_error)?;
+            let request = db.get_any_request(&version.model_id).map_err(js_error)?;
+            let current_document =
+                version_document(&request.to_value().map_err(js_error)?).map_err(js_error)?;
+            let differs = !db.request_matches_version(&version).map_err(js_error)?;
+            to_json(RequestVersionComparison { version, current_document, differs })
+        }
+
+        "models_restore_request_version" => {
+            let req: VersionIdReq = from_js(payload)?;
+            let restored = host
+                .queries
+                .connect()
+                .restore_request_version(&req.version_id, source)
+                .map_err(js_error)?;
+            to_json(restored.id().to_string())
         }
 
         "models_get_settings" => to_json(host.queries.connect().get_settings()),
