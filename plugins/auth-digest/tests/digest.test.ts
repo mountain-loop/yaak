@@ -95,6 +95,23 @@ describe("selectDigestChallenge", () => {
     expect(selectDigestChallenge(parseChallenges([unsupported, md5])).nonce).toEqual("n1");
   });
 
+  test("skips challenges whose qop cannot be answered", () => {
+    const unanswerable = 'Digest realm="c", nonce="n0", qop="auth-conf"';
+    expect(selectDigestChallenge(parseChallenges([unanswerable, md5])).nonce).toEqual("n1");
+  });
+
+  test("skips challenges that carry no nonce", () => {
+    expect(selectDigestChallenge(parseChallenges(['Digest realm="c"', md5])).nonce).toEqual("n1");
+  });
+
+  test("reports the first challenge's problem when none can be answered", () => {
+    expect(() =>
+      selectDigestChallenge(
+        parseChallenges(['Digest realm="c", nonce="n", qop="auth-conf"', 'Digest realm="d"']),
+      ),
+    ).toThrow("Unsupported Digest qop: auth-conf");
+  });
+
   test("matches the case-insensitive scheme name", () => {
     expect(selectDigestChallenge(parseChallenges(['digest realm="a", nonce="n1"'])).nonce).toEqual(
       "n1",
@@ -325,6 +342,24 @@ describe("buildDigestAuthorization", () => {
         challenge: selectDigestChallenge(parseChallenges(['Digest realm="r", nonce="n"'])),
       }),
     ).toContain('username="a\\"b"');
+  });
+
+  test("normalizes credentials to NFC before hashing", () => {
+    const challenge = selectDigestChallenge(parseChallenges(['Digest realm="r", nonce="n"']));
+    // "Jäsøn" spelled with a combining diaeresis rather than a precomposed "ä".
+    const decomposed = buildDigestAuthorization({
+      ...base,
+      username: "Ja\u0308s\u00f8n",
+      password: "pa\u0308ss",
+      challenge,
+    });
+    const precomposed = buildDigestAuthorization({
+      ...base,
+      username: "J\u00e4s\u00f8n",
+      password: "p\u00e4ss",
+      challenge,
+    });
+    expect(decomposed).toEqual(precomposed);
   });
 
   test("sends a non-ASCII username as an RFC 5987 extended value", () => {

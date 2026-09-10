@@ -8,6 +8,14 @@ import {
   selectDigestChallenge,
 } from "./digest";
 
+const PROBE_OMITTED_HEADERS = [
+  "authorization",
+  "content-type",
+  "content-length",
+  "transfer-encoding",
+  "expect",
+];
+
 export const plugin: PluginDefinition = {
   authentication: {
     name: "digest",
@@ -41,14 +49,21 @@ export const plugin: PluginDefinition = {
         ],
       },
     ],
-    async onApply(ctx, { values, method, url, body }) {
+    async onApply(ctx, { values, method, url, headers, body }) {
       const username = values.username ? String(values.username) : "";
       const password = values.password ? String(values.password) : "";
       const realm = values.realm ? String(values.realm) : undefined;
 
       // Digest needs a server-issued nonce, so the challenge has to be provoked
-      // before the real request can be signed.
-      const { httpResponse } = await ctx.httpRequest.send({ httpRequest: { method, url } });
+      // before the real request can be signed. The probe carries the request's
+      // own headers so that anything routing on them reaches the same endpoint,
+      // minus the ones that describe a body it isn't sending.
+      const probeHeaders = headers.filter(
+        (h) => !PROBE_OMITTED_HEADERS.includes(h.name.toLowerCase()),
+      );
+      const { httpResponse } = await ctx.httpRequest.send({
+        httpRequest: { method, url, headers: probeHeaders },
+      });
 
       const headerValues = httpResponse.headers
         .filter((h) => h.name.toLowerCase() === "www-authenticate")

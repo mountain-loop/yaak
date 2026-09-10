@@ -36,6 +36,7 @@ const SCHEME_RE = new RegExp(`^(${TOKEN})(?:\\s+([\\s\\S]*))?$`);
 const TOKEN68_RE = /^[A-Za-z0-9\-._~+/]+=*$/;
 
 const SUPPORTED_ALGORITHMS = ["MD5", "MD5-sess", "SHA-256", "SHA-256-sess"];
+const SUPPORTED_QOPS = ["auth", "auth-int"];
 
 /**
  * Split a header value on commas that aren't inside a quoted string. Both
@@ -141,6 +142,38 @@ function resolveAlgorithm(algorithm: string | undefined): { hash: string; sess: 
   return null;
 }
 
+function unsupportedAlgorithmError(algorithm: string | undefined): Error {
+  return new Error(
+    `Unsupported Digest algorithm: ${algorithm ?? "MD5"}. ` +
+      `Supported algorithms are ${SUPPORTED_ALGORITHMS.join(", ")}`,
+  );
+}
+
+function unsupportedQopError(qop: string[]): Error {
+  return new Error(
+    `Unsupported Digest qop: ${qop.join(", ")}. Supported values are ${SUPPORTED_QOPS.join(" and ")}`,
+  );
+}
+
+/**
+ * Everything that would stop this challenge from being answered, or null if it
+ * can be. Selection asks the whole question at once so a challenge that fails
+ * on any count is passed over for the next one the server offered, rather than
+ * chosen and then failed on later.
+ */
+function challengeProblem(challenge: DigestChallenge): Error | null {
+  if (resolveAlgorithm(challenge.algorithm) == null) {
+    return unsupportedAlgorithmError(challenge.algorithm);
+  }
+  if (challenge.nonce === "") {
+    return new Error('Digest challenge is missing the required "nonce" parameter');
+  }
+  if (challenge.qop != null && !challenge.qop.some((q) => SUPPORTED_QOPS.includes(q))) {
+    return unsupportedQopError(challenge.qop);
+  }
+  return null;
+}
+
 /**
  * Pick the challenge to answer. Servers list challenges strongest-first
  * (RFC 7616 §3.7), so the first one we can compute is the one to use.
@@ -170,33 +203,25 @@ export function selectDigestChallenge(
     throw new Error(`Server did not offer a Digest realm named "${realm}". It offered: ${offered}`);
   }
 
-  const supported = inRealm.find((c) => resolveAlgorithm(c.params.algorithm) != null);
-  if (supported == null) {
-    const offered = inRealm.map((c) => c.params.algorithm ?? "MD5").join(", ");
-    throw new Error(
-      `Unsupported Digest algorithm: ${offered}. Supported algorithms are ${SUPPORTED_ALGORITHMS.join(", ")}`,
-    );
-  }
+  const candidates = inRealm.map((c) => toDigestChallenge(c.params));
+  const answerable = candidates.find((c) => challengeProblem(c) == null);
+  if (answerable == null) throw challengeProblem(candidates[0]!);
 
-  const challenge = toDigestChallenge(supported.params);
-  if (challenge.nonce === "") {
-    throw new Error('Digest challenge is missing the required "nonce" parameter');
-  }
-
-  return challenge;
+  return answerable;
 }
 
 /**
  * Prefer `auth-int` only when the body is in hand, since its digest covers the
- * exact bytes sent. A body offered as `null` is a body Yaak didn't hand over
- * (too large, or streamed from a file), not necessarily an empty one.
+ * exact bytes sent. A body offered as `null` is either an empty one or one Yaak
+ * didn't hand over (too large, or streamed from a file), and the two are
+ * indistinguishable from here. When `auth-int` is all the server offers it is
+ * still used, hashing the empty body: that is exactly right for the empty case
+ * and no worse than refusing outright for the other.
  */
 function selectQop(qop: string[], body: string | null): "auth" | "auth-int" {
   if (qop.includes("auth-int") && (body != null || !qop.includes("auth"))) return "auth-int";
   if (qop.includes("auth")) return "auth";
-  throw new Error(
-    `Unsupported Digest qop: ${qop.join(", ")}. Supported values are auth and auth-int`,
-  );
+  throw unsupportedQopError(qop);
 }
 
 function quote(value: string): string {
@@ -213,14 +238,15 @@ function encodeExtended(value: string): string {
 }
 
 export function buildDigestAuthorization(options: DigestAuthorizationOptions): string {
-  const { username, password, method, uri, body, challenge, cnonce, nc } = options;
+  const { method, uri, body, challenge, cnonce, nc } = options;
+
+  // RFC 7616 §4 hashes credentials in Normalization Form C, so a name typed as
+  // a combining sequence digests the same as its precomposed spelling.
+  const username = options.username.normalize("NFC");
+  const password = options.password.normalize("NFC");
 
   const algorithm = resolveAlgorithm(challenge.algorithm);
-  if (algorithm == null) {
-    throw new Error(
-      `Unsupported Digest algorithm: ${challenge.algorithm}. Supported algorithms are ${SUPPORTED_ALGORITHMS.join(", ")}`,
-    );
-  }
+  if (algorithm == null) throw unsupportedAlgorithmError(challenge.algorithm);
 
   const hash = (value: string) => createHash(algorithm.hash).update(value, "utf8").digest("hex");
   const qop = challenge.qop == null ? null : selectQop(challenge.qop, body);

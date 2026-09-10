@@ -36,7 +36,35 @@ describe("auth-digest onApply", () => {
     await apply(ctx, { username: "user", password: "pass" }, { method: "POST", body: "hello" });
 
     expect(send).toHaveBeenCalledWith({
-      httpRequest: { method: "POST", url: "https://example.org/dir/index.html?a=b" },
+      httpRequest: { method: "POST", url: "https://example.org/dir/index.html?a=b", headers: [] },
+    });
+  });
+
+  test("carries the request's headers on the probe, minus the ones about a body", async () => {
+    const { ctx, send } = ctxRespondingWith([
+      { name: "WWW-Authenticate", value: 'Digest realm="r", nonce="n", qop=auth' },
+    ]);
+
+    await apply(
+      ctx,
+      { username: "user", password: "pass" },
+      {
+        method: "POST",
+        body: "hello",
+        headers: [
+          { name: "X-Tenant", value: "acme" },
+          { name: "Content-Type", value: "application/json" },
+          { name: "Authorization", value: "Bearer stale" },
+        ],
+      },
+    );
+
+    expect(send).toHaveBeenCalledWith({
+      httpRequest: {
+        method: "POST",
+        url: "https://example.org/dir/index.html?a=b",
+        headers: [{ name: "X-Tenant", value: "acme" }],
+      },
     });
   });
 
@@ -142,7 +170,7 @@ function startDigestServer(config: {
       const params: Record<string, string> = {};
       for (const [, name, quoted, bare] of authorization
         .slice("Digest ".length)
-        .matchAll(/([A-Za-z0-9*-]+)=(?:"((?:[^"\\]|\\.)*)"|([^,\s]*))/g)) {
+        .matchAll(/([A-Za-z0-9-]+\*?)=(?:"((?:[^"\\]|\\.)*)"|([^,\s]*))/g)) {
         params[name!.toLowerCase()] = (quoted ?? bare ?? "").replace(/\\(.)/g, "$1");
       }
 

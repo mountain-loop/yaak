@@ -17,7 +17,8 @@ over the credentials, the nonce and the request itself.
 Because the digest is computed over a server-issued nonce, the challenge has to
 be fetched before the real request can be signed. On each send, the plugin:
 
-1. Sends an unauthenticated probe of the same method and URL
+1. Sends an unauthenticated probe of the same method, URL and headers (minus
+   the credentials and anything describing a body it isn't sending)
 2. Reads the `WWW-Authenticate: Digest …` challenge from the `401` response
 3. Computes the response hash and returns the `Authorization` header
 
@@ -41,6 +42,7 @@ be fetched before the real request can be signed. On each send, the plugin:
 hand. Bodies that are streamed from disk or above the size Yaak passes to auth
 plugins aren't available to hash, so those requests use `auth` instead.
 
+Credentials are normalized to Unicode NFC before hashing, per RFC 7616 §4.
 Usernames outside ASCII are sent as an RFC 5987 extended value (`username*`).
 
 ## Troubleshooting
