@@ -660,19 +660,19 @@ function actionHelp(item: ImportPlanItem): string | null {
       : text;
   switch (item.action) {
     case "create":
-      return "Added since the last import";
+      return "Not in this workspace yet";
     case "update":
-      return help("Changed since the last import");
+      return help("Changed in the source since the last import");
     case "delete":
       return item.reason === "moved_into_ignored_folder"
-        ? "Moved into an ignored folder. Import that folder instead to follow the move"
-        : "Deleted since the last import";
+        ? "Moved into an ignored folder. Importing that folder instead follows the move"
+        : "Gone from the source since the last import. Checking it deletes it here";
     case "keep_local":
-      return help("Local edits made since the last import. Importing will revert them if checked");
+      return help("Changed here since the last import. Checking it reverts to the source");
     case "conflict":
-      return help("Changed both here and in the file since the last import");
+      return help("Changed here and in the source since the last import");
     case "ignored":
-      return "In the file, but ignored. Check it to import it";
+      return "Not in this workspace. Imports leave it alone until you check it";
     default:
       return null;
   }
