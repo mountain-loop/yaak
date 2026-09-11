@@ -8,9 +8,9 @@ use crate::models::{
     GrpcEventIden, GrpcRequest, GrpcRequestIden, HttpRequest, HttpRequestHeader, HttpRequestIden,
     HttpResponse, HttpResponseEvent, HttpResponseEventIden, HttpResponseIden, ImportSource,
     ImportSourceIden, ResolvedHttpRequestSettings, ResolvedSetting, SyncState, SyncStateIden,
-    WebsocketConnection,
-    WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden, WebsocketRequest,
-    WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta, WorkspaceMetaIden,
+    WebsocketConnection, WebsocketConnectionIden, WebsocketEvent, WebsocketEventIden,
+    WebsocketRequest, WebsocketRequestIden, Workspace, WorkspaceIden, WorkspaceMeta,
+    WorkspaceMetaIden,
 };
 use crate::util::UpdateSource;
 use log::warn;

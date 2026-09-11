@@ -210,7 +210,10 @@ fn re_import_merges_into_linked_workspace() {
         ],
     );
     cli_cmd(data_dir)
-        .args(["import", import_path.to_str().expect("import path is utf-8")])
+        .args([
+            "import",
+            import_path.to_str().expect("import path is utf-8"),
+        ])
         .assert()
         .success()
         .stdout(contains("Imported 1 workspace, 2 HTTP requests"));
@@ -273,7 +276,10 @@ fn re_import_leaves_deleted_resources_alone() {
         ],
     );
     cli_cmd(data_dir)
-        .args(["import", import_path.to_str().expect("import path is utf-8")])
+        .args([
+            "import",
+            import_path.to_str().expect("import path is utf-8"),
+        ])
         .assert()
         .success();
 
@@ -293,8 +299,7 @@ fn re_import_leaves_deleted_resources_alone() {
             .into_iter()
             .find(|r| r.name == "Request B")
             .expect("request B imported");
-        db.delete_http_request_by_id(&request_b.id, &UpdateSource::Sync)
-            .expect("delete request B");
+        db.delete_http_request_by_id(&request_b.id, &UpdateSource::Sync).expect("delete request B");
         workspace_id
     };
 

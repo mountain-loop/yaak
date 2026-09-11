@@ -668,9 +668,10 @@ mod tests {
         let (query_manager, _temp_dir) = seed_query_manager();
         let store = FakeBodyStore { body: b"hello".to_vec(), reads: RefCell::new(Vec::new()) };
 
-        let info_payload = InternalEventPayload::GetHttpResponseBodyInfoRequest(
-            GetHttpResponseBodyInfoRequest { response_id: "rs_test".to_string() },
-        );
+        let info_payload =
+            InternalEventPayload::GetHttpResponseBodyInfoRequest(GetHttpResponseBodyInfoRequest {
+                response_id: "rs_test".to_string(),
+            });
         let info = handle_shared_plugin_event(
             &query_manager,
             &store,
@@ -716,9 +717,10 @@ mod tests {
     #[test]
     fn an_unreadable_response_body_becomes_an_error_reply() {
         let (query_manager, _temp_dir) = seed_query_manager();
-        let payload = InternalEventPayload::GetHttpResponseBodyInfoRequest(
-            GetHttpResponseBodyInfoRequest { response_id: "rs_never_persisted".to_string() },
-        );
+        let payload =
+            InternalEventPayload::GetHttpResponseBodyInfoRequest(GetHttpResponseBodyInfoRequest {
+                response_id: "rs_never_persisted".to_string(),
+            });
         let result = dispatch(
             &query_manager,
             &payload,
@@ -727,7 +729,11 @@ mod tests {
 
         match result {
             GroupedPluginEvent::Handled(Some(InternalEventPayload::ErrorResponse(resp))) => {
-                assert!(resp.error.contains("rs_never_persisted"), "unhelpful error: {}", resp.error)
+                assert!(
+                    resp.error.contains("rs_never_persisted"),
+                    "unhelpful error: {}",
+                    resp.error
+                )
             }
             other => panic!("unexpected missing-response result: {other:?}"),
         }

@@ -13,8 +13,9 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 /// `dispatch` call frame, so it cannot borrow, and contexts are cheap clones
 /// (handles and `Arc`s). Synchronous handlers wrap into this via `rpc_handler!`
 /// with no visible change.
-type HandlerFn<Ctx> =
-    Box<dyn Fn(Ctx, serde_json::Value) -> BoxFuture<Result<serde_json::Value, RpcError>> + Send + Sync>;
+type HandlerFn<Ctx> = Box<
+    dyn Fn(Ctx, serde_json::Value) -> BoxFuture<Result<serde_json::Value, RpcError>> + Send + Sync,
+>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcError {
@@ -249,9 +250,8 @@ macro_rules! rpc_handler_async {
         Box::new(|ctx, payload| {
             Box::pin(async move {
                 let req = serde_json::from_value(payload).map_err($crate::RpcError::from)?;
-                let res = $f(ctx, req)
-                    .await
-                    .map_err(|e| $crate::RpcError { message: e.to_string() })?;
+                let res =
+                    $f(ctx, req).await.map_err(|e| $crate::RpcError { message: e.to_string() })?;
                 serde_json::to_value(res).map_err($crate::RpcError::from)
             })
         })

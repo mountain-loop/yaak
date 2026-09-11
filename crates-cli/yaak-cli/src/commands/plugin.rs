@@ -883,11 +883,8 @@ mod tests {
         fs::create_dir_all(root.join("build")).expect("create build");
         fs::create_dir_all(root.join("vendor")).expect("create vendor");
         fs::write(root.join("vendor/core_bg.wasm"), "asset").expect("write asset");
-        fs::write(
-            root.join("package.json"),
-            r#"{"yaak":{"buildAssets":["vendor/core_bg.wasm"]}}"#,
-        )
-        .expect("write package.json");
+        fs::write(root.join("package.json"), r#"{"yaak":{"buildAssets":["vendor/core_bg.wasm"]}}"#)
+            .expect("write package.json");
 
         copy_build_assets(root).expect("copy assets");
 

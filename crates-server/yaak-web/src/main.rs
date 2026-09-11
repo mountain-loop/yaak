@@ -145,11 +145,8 @@ async fn cache_control(req: Request, next: Next) -> Response {
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.starts_with("text/html"));
-    let value = if hashed_name && !is_html {
-        "public, max-age=31536000, immutable"
-    } else {
-        "no-cache"
-    };
+    let value =
+        if hashed_name && !is_html { "public, max-age=31536000, immutable" } else { "no-cache" };
     res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static(value));
     res
 }

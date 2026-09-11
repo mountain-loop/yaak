@@ -29,11 +29,10 @@ use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesRe
 use yaak_plugins::events::{
     CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
     CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse,
-    GetFolderActionsResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesResponse, GetWebsocketRequestActionsResponse,
-    GetWorkspaceActionsResponse, JsonPrimitive, RenderPurpose,
+    GetFolderActionsResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, JsonPrimitive, RenderPurpose,
 };
 use yaak_plugins::plugin_meta::PluginMetadata;
 use yaak_sse::sse::ServerSentEvent;

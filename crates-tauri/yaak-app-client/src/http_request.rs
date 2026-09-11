@@ -177,4 +177,3 @@ async fn send_http_request_inner<R: Runtime>(
 
     Ok(SentHttpRequest { response: result.response, body: result.response_body })
 }
-

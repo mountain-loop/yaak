@@ -16,8 +16,7 @@ use std::time::{Duration, Instant};
 use tauri::path::BaseDirectory;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{
-    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent,
-    is_dev,
+    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent, is_dev,
 };
 use tokio::sync::Mutex;
 use ts_rs::TS;
@@ -28,10 +27,10 @@ use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
 };
+use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{Color, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::plugin_meta::get_plugin_meta;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
@@ -355,9 +354,11 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     ),
                 )
                 .await
-                .unwrap_or_else(|_| Err(yaak_plugins::error::Error::PluginErr(
-                    "Timed out starting the plugin runtime".to_string(),
-                )));
+                .unwrap_or_else(|_| {
+                    Err(yaak_plugins::error::Error::PluginErr(
+                        "Timed out starting the plugin runtime".to_string(),
+                    ))
+                });
 
                 let manager = match result {
                     Ok(manager) => manager,

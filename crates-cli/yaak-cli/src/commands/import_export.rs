@@ -68,7 +68,9 @@ async fn import(
         );
     }
     let destination = match workspace_id {
-        Some(workspace_id) => ImportDestination::ExistingWorkspace { workspace_id, folder_id: None },
+        Some(workspace_id) => {
+            ImportDestination::ExistingWorkspace { workspace_id, folder_id: None }
+        }
         None => ImportDestination::NewWorkspace,
     };
     let plan = import::plan_import_resources(

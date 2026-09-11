@@ -1,5 +1,4 @@
 use crate::error::Result;
-use yaak_models::blob_manager::BlobManager;
 use crate::models::SyncModel;
 use chrono::Utc;
 use log::{info, warn};
@@ -11,6 +10,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
+use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::ClientDb;
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};

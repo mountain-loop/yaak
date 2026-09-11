@@ -10,8 +10,8 @@ use yaak_database::SqlitePool;
 
 pub mod blob_manager;
 pub mod client_db;
-pub mod cookies;
 mod connection_or_tx;
+pub mod cookies;
 pub mod error;
 pub mod migrate;
 pub mod models;

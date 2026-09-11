@@ -96,8 +96,7 @@ impl<'a> ClientDb<'a> {
                 let Some(response_id) = path.file_name().and_then(|n| n.to_str()) else {
                     continue;
                 };
-                if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some()
-                {
+                if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some() {
                     continue;
                 }
                 if fs::remove_file(&path).is_ok() {

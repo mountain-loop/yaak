@@ -521,16 +521,11 @@ fn record_import_source(
     };
 
     let incoming_keys: BTreeSet<String> = plan.source_keys.values().cloned().collect();
-    let existing = match resolve_linked_source(
-        db,
-        &workspace_id,
-        &plan.importer,
-        origin,
-        &incoming_keys,
-    )? {
-        LinkedSource::Linked(source) => Some(source),
-        LinkedSource::Ambiguous(_) | LinkedSource::Unlinked => None,
-    };
+    let existing =
+        match resolve_linked_source(db, &workspace_id, &plan.importer, origin, &incoming_keys)? {
+            LinkedSource::Linked(source) => Some(source),
+            LinkedSource::Ambiguous(_) | LinkedSource::Unlinked => None,
+        };
     let import_source = db.upsert_import_source(
         &ImportSource {
             id: existing.map(|s| s.id).unwrap_or_default(),
@@ -659,9 +654,8 @@ fn resolve_linked_source(
     incoming_keys: &BTreeSet<String>,
 ) -> Result<LinkedSource> {
     let sources = db.list_import_sources(workspace_id)?;
-    let same_origin = |source: &ImportSource| {
-        source.importer == importer && source.origin == origin.origin
-    };
+    let same_origin =
+        |source: &ImportSource| source.importer == importer && source.origin == origin.origin;
 
     let mut overlapping = Vec::new();
     for source in &sources {
@@ -743,12 +737,18 @@ fn merge_with_linked_source(
     let mut current_models: BTreeMap<String, Value> = BTreeMap::new();
     {
         let mut consider = |planned_id: &str, resource: ImportResourceType| -> Result<()> {
-            let Some(key) = plan.source_keys.get(planned_id) else { return Ok(()) };
-            let Some(row) = rows.get(key) else { return Ok(()) };
+            let Some(key) = plan.source_keys.get(planned_id) else {
+                return Ok(());
+            };
+            let Some(row) = rows.get(key) else {
+                return Ok(());
+            };
             if ImportResourceType::from_str(&row.model_type) != Some(resource) {
                 return Ok(());
             }
-            let Some(model_id) = row.model_id.as_deref() else { return Ok(()) };
+            let Some(model_id) = row.model_id.as_deref() else {
+                return Ok(());
+            };
             let Some(current) = existing_model_json(&db, resource, model_id)? else {
                 return Ok(());
             };
@@ -819,11 +819,9 @@ fn merge_with_linked_source(
     // environment: it came from this source, so the imported-copy separation does not apply.
     let mut restored_base_names = BTreeSet::new();
     for (i, v) in plan.resources.environments.iter_mut().enumerate() {
-        let is_current_base = current_models
-            .get(&v.id)
-            .and_then(|m| m.get("parentModel"))
-            .and_then(|p| p.as_str())
-            == Some("workspace");
+        let is_current_base =
+            current_models.get(&v.id).and_then(|m| m.get("parentModel")).and_then(|p| p.as_str())
+                == Some("workspace");
         if !is_current_base {
             continue;
         }
@@ -936,16 +934,13 @@ fn merge_with_linked_source(
                 (false, false) => (ImportPlanAction::Unchanged, false, None),
                 (true, false) => (ImportPlanAction::Update, true, None),
                 (false, true) => (ImportPlanAction::KeepLocal, false, None),
-                (true, true) => (
-                    ImportPlanAction::Conflict,
-                    true,
-                    Some(ImportConflictResolution::KeepMine),
-                ),
+                (true, true) => {
+                    (ImportPlanAction::Conflict, true, Some(ImportConflictResolution::KeepMine))
+                }
             };
             // A resource the source moved into a folder that isn't imported keeps its place
             // until that folder is: nothing can be written into a folder that will not exist.
-            let reason =
-                (!reachable).then_some(ImportPlanReason::MovedIntoIgnoredFolder);
+            let reason = (!reachable).then_some(ImportPlanReason::MovedIntoIgnoredFolder);
             let mut planned = item(action, selected && reachable, resolution, reason);
             planned.changed_fields = changed_fields(&incoming, &current);
             items.push(planned);
@@ -956,16 +951,32 @@ fn merge_with_linked_source(
             classify(AnyModel::Folder(v.clone()), ImportResourceType::Folder, v.folder_id.clone())?;
         }
         for v in &plan.resources.http_requests {
-            classify(AnyModel::HttpRequest(v.clone()), ImportResourceType::HttpRequest, v.folder_id.clone())?;
+            classify(
+                AnyModel::HttpRequest(v.clone()),
+                ImportResourceType::HttpRequest,
+                v.folder_id.clone(),
+            )?;
         }
         for v in &plan.resources.grpc_requests {
-            classify(AnyModel::GrpcRequest(v.clone()), ImportResourceType::GrpcRequest, v.folder_id.clone())?;
+            classify(
+                AnyModel::GrpcRequest(v.clone()),
+                ImportResourceType::GrpcRequest,
+                v.folder_id.clone(),
+            )?;
         }
         for v in &plan.resources.websocket_requests {
-            classify(AnyModel::WebsocketRequest(v.clone()), ImportResourceType::WebsocketRequest, v.folder_id.clone())?;
+            classify(
+                AnyModel::WebsocketRequest(v.clone()),
+                ImportResourceType::WebsocketRequest,
+                v.folder_id.clone(),
+            )?;
         }
         for v in &plan.resources.environments {
-            classify(AnyModel::Environment(v.clone()), ImportResourceType::Environment, v.parent_id.clone())?;
+            classify(
+                AnyModel::Environment(v.clone()),
+                ImportResourceType::Environment,
+                v.parent_id.clone(),
+            )?;
         }
     }
 
@@ -1030,16 +1041,32 @@ fn create_only_items(plan: &ImportPlan) -> Vec<ImportPlanItem> {
         push(AnyModel::Folder(v.clone()), ImportResourceType::Folder, v.folder_id.clone());
     }
     for v in &plan.resources.http_requests {
-        push(AnyModel::HttpRequest(v.clone()), ImportResourceType::HttpRequest, v.folder_id.clone());
+        push(
+            AnyModel::HttpRequest(v.clone()),
+            ImportResourceType::HttpRequest,
+            v.folder_id.clone(),
+        );
     }
     for v in &plan.resources.grpc_requests {
-        push(AnyModel::GrpcRequest(v.clone()), ImportResourceType::GrpcRequest, v.folder_id.clone());
+        push(
+            AnyModel::GrpcRequest(v.clone()),
+            ImportResourceType::GrpcRequest,
+            v.folder_id.clone(),
+        );
     }
     for v in &plan.resources.websocket_requests {
-        push(AnyModel::WebsocketRequest(v.clone()), ImportResourceType::WebsocketRequest, v.folder_id.clone());
+        push(
+            AnyModel::WebsocketRequest(v.clone()),
+            ImportResourceType::WebsocketRequest,
+            v.folder_id.clone(),
+        );
     }
     for v in &plan.resources.environments {
-        push(AnyModel::Environment(v.clone()), ImportResourceType::Environment, v.parent_id.clone());
+        push(
+            AnyModel::Environment(v.clone()),
+            ImportResourceType::Environment,
+            v.parent_id.clone(),
+        );
     }
     items
 }
@@ -1060,7 +1087,14 @@ enum KeyStatus<'a> {
 fn comparable(value: Value) -> Value {
     let mut value = strip_ids(value);
     if let Some(object) = value.as_object_mut() {
-        for field in ["model", "workspaceId", "createdAt", "updatedAt", "base", "sortPriority"] {
+        for field in [
+            "model",
+            "workspaceId",
+            "createdAt",
+            "updatedAt",
+            "base",
+            "sortPriority",
+        ] {
             object.remove(field);
         }
     }
@@ -1208,10 +1242,7 @@ fn validate_plan(plan: &ImportPlan) -> Result<()> {
             let updates_own_base = |id: &str| {
                 plan.items.iter().any(|i| {
                     i.model_id == id
-                        && !matches!(
-                            i.action,
-                            ImportPlanAction::Create | ImportPlanAction::Ignored
-                        )
+                        && !matches!(i.action, ImportPlanAction::Create | ImportPlanAction::Ignored)
                 })
             };
             if plan
@@ -1376,9 +1407,8 @@ fn assign_source_keys(
     for (i, v) in resources.environments.iter().enumerate() {
         let source = original.environments.get(i);
         let name = source.map(|s| s.name.as_str()).unwrap_or(v.name.as_str());
-        let parent_id = source.and_then(|s| {
-            if s.parent_model == "folder" { s.parent_id.as_deref() } else { None }
-        });
+        let parent_id = source
+            .and_then(|s| if s.parent_model == "folder" { s.parent_id.as_deref() } else { None });
         let ancestry = ancestry_path(&folder_tree, parent_id);
         let key = fallback_key("environment", &ancestry, name);
         candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), key.clone(), key));
@@ -1386,8 +1416,7 @@ fn assign_source_keys(
     for (i, v) in resources.folders.iter().enumerate() {
         let source = original.folders.get(i);
         let name = source.map(|s| s.name.as_str()).unwrap_or(v.name.as_str());
-        let ancestry =
-            ancestry_path(&folder_tree, source.and_then(|s| s.folder_id.as_deref()));
+        let ancestry = ancestry_path(&folder_tree, source.and_then(|s| s.folder_id.as_deref()));
         let key = fallback_key("folder", &ancestry, name);
         candidates.push((&v.id, plugin_key(source.map(|s| &s.id)), key.clone(), key));
     }
@@ -2602,10 +2631,9 @@ mod tests {
 
         // Anything new inside that folder can't be created either, so it waits for the folder.
         let mut resources = with_extra_folder(true);
-        resources.http_requests.push(HttpRequest {
-            folder_id: Some("fl_extra".to_string()),
-            ..extra_request()
-        });
+        resources
+            .http_requests
+            .push(HttpRequest { folder_id: Some("fl_extra".to_string()), ..extra_request() });
         let plan = replan(&query_manager, &workspace_id, resources);
         let extra = item_by_name(&plan, "Extra Request");
         assert_eq!(extra.action, ImportPlanAction::Create);
@@ -2930,73 +2958,72 @@ mod tests {
         assert_eq!(not_wanted, 2, "the skipped folder and its request are remembered: {rows:?}");
     }
 
-
-#[test]
-fn desktop_style_json_roundtrip_records_source() {
-    let (query_manager, _blob_manager, _rx) =
-        yaak_models::init_in_memory().expect("initialize database");
-    let plan = plan_import_resources(
-        &query_manager,
-        "OpenAPI".to_string(),
-        ImportDestination::NewWorkspace,
-        imported_resources(),
-        None,
-        Some(linked_origin()),
-    )
-    .expect("plan import");
-    let json = serde_json::to_string(&plan).expect("serialize plan");
-    let plan: ImportPlan = serde_json::from_str(&json).expect("deserialize plan");
-    let committed = commit_import_plan(&query_manager, plan).expect("commit");
-    let workspace_id = committed.workspaces[0].id.clone();
-    let source = query_manager
-        .connect()
-        .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
-        .expect("query")
-        .expect("source recorded after JSON round-trip");
-    assert_eq!(source.origin_label, "api.yaml");
-}
-
-#[test]
-fn selected_keep_local_reverts_the_local_edit() {
-    let (query_manager, _blob_manager, _rx) =
-        yaak_models::init_in_memory().expect("initialize database");
-    let committed = first_import(&query_manager);
-    let workspace_id = committed.workspaces[0].id.clone();
-    let root_id = committed
-        .http_requests
-        .iter()
-        .find(|r| r.name == "Root Request")
-        .expect("root request")
-        .id
-        .clone();
-
-    {
-        let db = query_manager.connect();
-        let root = db.get_http_request(&root_id).expect("get root");
-        db.upsert_http_request(
-            &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
-            &UpdateSource::Background,
+    #[test]
+    fn desktop_style_json_roundtrip_records_source() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let plan = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            None,
+            Some(linked_origin()),
         )
-        .expect("edit root locally");
+        .expect("plan import");
+        let json = serde_json::to_string(&plan).expect("serialize plan");
+        let plan: ImportPlan = serde_json::from_str(&json).expect("deserialize plan");
+        let committed = commit_import_plan(&query_manager, plan).expect("commit");
+        let workspace_id = committed.workspaces[0].id.clone();
+        let source = query_manager
+            .connect()
+            .find_import_source(&workspace_id, "OpenAPI", "/tmp/api.yaml")
+            .expect("query")
+            .expect("source recorded after JSON round-trip");
+        assert_eq!(source.origin_label, "api.yaml");
     }
 
-    let mut plan = replan(&query_manager, &workspace_id, imported_resources());
-    let root = item_by_name(&plan, "Root Request");
-    assert_eq!(root.action, ImportPlanAction::KeepLocal);
-    assert!(!root.selected, "keep-local defaults to keeping the local edit");
-    for item in plan.items.iter_mut() {
-        if item.action == ImportPlanAction::KeepLocal {
-            item.selected = true;
+    #[test]
+    fn selected_keep_local_reverts_the_local_edit() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let committed = first_import(&query_manager);
+        let workspace_id = committed.workspaces[0].id.clone();
+        let root_id = committed
+            .http_requests
+            .iter()
+            .find(|r| r.name == "Root Request")
+            .expect("root request")
+            .id
+            .clone();
+
+        {
+            let db = query_manager.connect();
+            let root = db.get_http_request(&root_id).expect("get root");
+            db.upsert_http_request(
+                &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
+                &UpdateSource::Background,
+            )
+            .expect("edit root locally");
         }
-    }
-    commit_import_plan(&query_manager, plan).expect("commit revert");
 
-    assert_eq!(
-        query_manager.connect().get_http_request(&root_id).expect("get root").url,
-        "https://example.com/root",
-        "selected keep-local must revert to the source version"
-    );
-    let plan = replan(&query_manager, &workspace_id, imported_resources());
-    assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Unchanged);
-}
+        let mut plan = replan(&query_manager, &workspace_id, imported_resources());
+        let root = item_by_name(&plan, "Root Request");
+        assert_eq!(root.action, ImportPlanAction::KeepLocal);
+        assert!(!root.selected, "keep-local defaults to keeping the local edit");
+        for item in plan.items.iter_mut() {
+            if item.action == ImportPlanAction::KeepLocal {
+                item.selected = true;
+            }
+        }
+        commit_import_plan(&query_manager, plan).expect("commit revert");
+
+        assert_eq!(
+            query_manager.connect().get_http_request(&root_id).expect("get root").url,
+            "https://example.com/root",
+            "selected keep-local must revert to the source version"
+        );
+        let plan = replan(&query_manager, &workspace_id, imported_resources());
+        assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Unchanged);
+    }
 }

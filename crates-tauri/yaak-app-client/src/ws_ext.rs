@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 use tokio::sync::{Mutex, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
+use yaak_commands::resolve::resolve_websocket_request;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::CookieStore;
 use yaak_http::path_placeholders::apply_path_placeholders;
@@ -26,7 +27,6 @@ use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::strip_json_comments::maybe_strip_json_comments;
 use yaak_templates::{RenderErrorBehavior, RenderOptions};
 use yaak_tls::find_client_certificate;
-use yaak_commands::resolve::resolve_websocket_request;
 use yaak_ws::{WebsocketManager, render_websocket_request};
 
 pub async fn cmd_ws_send<R: Runtime>(
@@ -452,7 +452,6 @@ pub async fn cmd_ws_connect<R: Runtime>(
 
     Ok(connection)
 }
-
 
 /// Convert WS URL to HTTP URL for cookie filtering
 /// WebSocket upgrade requests are HTTP requests initially, so HttpOnly cookies should apply

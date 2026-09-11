@@ -21,9 +21,9 @@ use crate::notifications::YaakNotifier;
 use crate::updates::YaakUpdater;
 use log::warn;
 use serde::Serialize;
-use tauri::{Manager, Runtime, State, WebviewWindow};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::{Manager, Runtime, State, WebviewWindow};
 use tokio::sync::Mutex;
 use yaak_commands::{Host, PluginHost};
 use yaak_core::WorkspaceContext;
@@ -32,8 +32,8 @@ use yaak_git::{
     BranchDeleteResult, CloneResult, GitBranchInfo, GitCommit, GitFileDiff, GitRemote,
     GitStatusSummary, GitWorktreeStatus, PullResult, PushResult,
 };
-use yaak_grpc::manager::GrpcHandle;
 use yaak_grpc::ServiceDefinition;
+use yaak_grpc::manager::GrpcHandle;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::{
     GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
@@ -42,26 +42,26 @@ use yaak_models::models::{
 };
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{BatchUpsertResult, ImportPlan};
+use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::events::{
     CallFolderActionRequest, CallGrpcRequestActionRequest, CallHttpRequestActionRequest,
-    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse, ImportResponse,
-    JsonPrimitive, RenderPurpose, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
-    GetHttpRequestActionsResponse, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesResponse, GetWebsocketRequestActionsResponse,
-    GetWorkspaceActionsResponse,
+    CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, FilterResponse,
+    GetFolderActionsResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigResponse,
+    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesResponse,
+    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportResponse, JsonPrimitive,
+    RenderPurpose,
 };
-use yaak_plugins::api::{PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse};
 use yaak_plugins::manager::PluginManager;
 use yaak_plugins::native_template_functions::encrypt_secure_template_function;
-use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_plugins::plugin_meta::PluginMetadata;
+use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_rpc::RpcRouter;
 use yaak_rpc_schema::*;
 use yaak_sse::sse::ServerSentEvent;
 use yaak_sync::sync::SyncOp;
-use yaak_templates::TemplateCallback;
 use yaak_tauri_utils::window::WorkspaceWindowTrait;
+use yaak_templates::TemplateCallback;
 use yaak_ws::WebsocketManager;
 
 /// Per-call context: the window a command was invoked from.
@@ -231,17 +231,15 @@ impl<R: Runtime> PluginHost for ClientCtx<R> {
         Ok(self.pm().await?.call_workspace_action(&self.plugin_context(), req).await?)
     }
 
-    async fn call_folder_action(
-        &self,
-        req: CallFolderActionRequest,
-    ) -> yaak_commands::Result<()> {
+    async fn call_folder_action(&self, req: CallFolderActionRequest) -> yaak_commands::Result<()> {
         Ok(self.pm().await?.call_folder_action(&self.plugin_context(), req).await?)
     }
 
     async fn http_authentication_summaries(
         &self,
     ) -> yaak_commands::Result<Vec<GetHttpAuthenticationSummaryResponse>> {
-        let results = self.pm().await?.get_http_authentication_summaries(&self.plugin_context()).await?;
+        let results =
+            self.pm().await?.get_http_authentication_summaries(&self.plugin_context()).await?;
         Ok(results.into_iter().map(|(_, a)| a).collect())
     }
 
@@ -393,11 +391,17 @@ async fn cmd_metadata<R: Runtime>(ctx: ClientCtx<R>, _req: CmdMetadataReq) -> Re
     Ok(crate::cmd_metadata(ctx.window.app_handle().clone()).await?)
 }
 
-async fn cmd_template_tokens_to_string<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateTokensToStringReq) -> Result<String> {
+async fn cmd_template_tokens_to_string<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdTemplateTokensToStringReq,
+) -> Result<String> {
     Ok(yaak_commands::templates::cmd_template_tokens_to_string(ctx, req).await?)
 }
 
-async fn cmd_render_template<R: Runtime>(ctx: ClientCtx<R>, req: CmdRenderTemplateReq) -> Result<String> {
+async fn cmd_render_template<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdRenderTemplateReq,
+) -> Result<String> {
     Ok(yaak_commands::templates::cmd_render_template(ctx, req).await?)
 }
 
@@ -405,55 +409,114 @@ async fn cmd_send_feedback<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendFeedbackRe
     Ok(crate::cmd_send_feedback(ctx.window.app_handle().clone(), req.feature, req.text).await?)
 }
 
-async fn cmd_dismiss_notification<R: Runtime>(ctx: ClientCtx<R>, req: CmdDismissNotificationReq) -> Result<()> {
-    Ok(crate::cmd_dismiss_notification(ctx.window.clone(), &req.notification_id, ctx.window.app_handle().state::<Mutex<YaakNotifier>>()).await?)
+async fn cmd_dismiss_notification<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDismissNotificationReq,
+) -> Result<()> {
+    Ok(crate::cmd_dismiss_notification(
+        ctx.window.clone(),
+        &req.notification_id,
+        ctx.window.app_handle().state::<Mutex<YaakNotifier>>(),
+    )
+    .await?)
 }
 
-async fn cmd_grpc_reflect<R: Runtime>(ctx: ClientCtx<R>, req: CmdGrpcReflectReq) -> Result<Vec<ServiceDefinition>> {
-    Ok(crate::cmd_grpc_reflect(&req.request_id, req.environment_id.as_deref(), req.proto_files, ctx.window.clone(), ctx.window.app_handle().clone(), ctx.window.app_handle().state::<Mutex<GrpcHandle>>()).await?)
+async fn cmd_grpc_reflect<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGrpcReflectReq,
+) -> Result<Vec<ServiceDefinition>> {
+    Ok(crate::cmd_grpc_reflect(
+        &req.request_id,
+        req.environment_id.as_deref(),
+        req.proto_files,
+        ctx.window.clone(),
+        ctx.window.app_handle().clone(),
+        ctx.window.app_handle().state::<Mutex<GrpcHandle>>(),
+    )
+    .await?)
 }
 
 async fn cmd_grpc_go<R: Runtime>(ctx: ClientCtx<R>, req: CmdGrpcGoReq) -> Result<String> {
-    Ok(crate::cmd_grpc_go(&req.request_id, req.environment_id.as_deref(), req.proto_files, ctx.window.app_handle().clone(), ctx.window.clone(), ctx.window.app_handle().state::<Mutex<GrpcHandle>>()).await?)
+    Ok(crate::cmd_grpc_go(
+        &req.request_id,
+        req.environment_id.as_deref(),
+        req.proto_files,
+        ctx.window.app_handle().clone(),
+        ctx.window.clone(),
+        ctx.window.app_handle().state::<Mutex<GrpcHandle>>(),
+    )
+    .await?)
 }
 
 async fn cmd_restart<R: Runtime>(ctx: ClientCtx<R>, _req: CmdRestartReq) -> Result<()> {
     Ok(crate::cmd_restart(ctx.window.app_handle().clone()).await?)
 }
 
-async fn cmd_send_ephemeral_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendEphemeralRequestReq) -> Result<EphemeralHttpResponse> {
-    Ok(crate::cmd_send_ephemeral_request(req.request, req.environment_id.as_deref(), req.cookie_jar_id.as_deref(), ctx.window.clone(), ctx.window.app_handle().clone()).await?)
+async fn cmd_send_ephemeral_request<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdSendEphemeralRequestReq,
+) -> Result<EphemeralHttpResponse> {
+    Ok(crate::cmd_send_ephemeral_request(
+        req.request,
+        req.environment_id.as_deref(),
+        req.cookie_jar_id.as_deref(),
+        ctx.window.clone(),
+        ctx.window.app_handle().clone(),
+    )
+    .await?)
 }
 
 async fn cmd_format_json<R: Runtime>(ctx: ClientCtx<R>, req: CmdFormatJsonReq) -> Result<String> {
     Ok(yaak_commands::data::cmd_format_json(ctx, req).await?)
 }
 
-async fn cmd_format_graphql<R: Runtime>(_ctx: ClientCtx<R>, req: CmdFormatGraphqlReq) -> Result<String> {
+async fn cmd_format_graphql<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdFormatGraphqlReq,
+) -> Result<String> {
     Ok(crate::cmd_format_graphql(&req.text).await?)
 }
 
-async fn cmd_http_response_body<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpResponseBodyReq) -> Result<FilterResponse> {
-    Ok(crate::cmd_http_response_body(ctx.window.clone(), &req.response_id, req.filter.as_deref()).await?)
+async fn cmd_http_response_body<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdHttpResponseBodyReq,
+) -> Result<FilterResponse> {
+    Ok(crate::cmd_http_response_body(ctx.window.clone(), &req.response_id, req.filter.as_deref())
+        .await?)
 }
 
-async fn cmd_http_response_body_path<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpResponseBodyPathReq) -> Result<Option<String>> {
+async fn cmd_http_response_body_path<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdHttpResponseBodyPathReq,
+) -> Result<Option<String>> {
     Ok(yaak_commands::responses::cmd_http_response_body_path(ctx, req).await?)
 }
 
-async fn cmd_http_request_body<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestBodyReq) -> Result<Option<Vec<u8>>> {
+async fn cmd_http_request_body<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdHttpRequestBodyReq,
+) -> Result<Option<Vec<u8>>> {
     Ok(yaak_commands::responses::cmd_http_request_body(ctx, req).await?)
 }
 
-async fn cmd_get_sse_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetSseEventsReq) -> Result<Vec<ServerSentEvent>> {
+async fn cmd_get_sse_events<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGetSseEventsReq,
+) -> Result<Vec<ServerSentEvent>> {
     Ok(crate::cmd_get_sse_events(ctx.window.app_handle().clone(), &req.response_id).await?)
 }
 
-async fn cmd_get_http_response_events<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpResponseEventsReq) -> Result<Vec<HttpResponseEvent>> {
+async fn cmd_get_http_response_events<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGetHttpResponseEventsReq,
+) -> Result<Vec<HttpResponseEvent>> {
     Ok(yaak_commands::responses::cmd_get_http_response_events(ctx, req).await?)
 }
 
-async fn cmd_import_data<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportDataReq) -> Result<ImportPlan> {
+async fn cmd_import_data<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdImportDataReq,
+) -> Result<ImportPlan> {
     Ok(crate::cmd_import_data(ctx.window.clone(), &req.file_path, req.destination).await?)
 }
 
@@ -461,16 +524,25 @@ async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> 
     Ok(crate::cmd_import_url(ctx.window.clone(), &req.url, req.destination).await?)
 }
 
-async fn cmd_commit_import<R: Runtime>(ctx: ClientCtx<R>, req: CmdCommitImportReq) -> Result<BatchUpsertResult> {
+async fn cmd_commit_import<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCommitImportReq,
+) -> Result<BatchUpsertResult> {
     Ok(crate::cmd_commit_import(ctx.window.clone(), req.plan).await?)
 }
 
-async fn cmd_list_import_sources<R: Runtime>(ctx: ClientCtx<R>, req: CmdListImportSourcesReq) -> Result<Vec<ImportSource>> {
+async fn cmd_list_import_sources<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdListImportSourcesReq,
+) -> Result<Vec<ImportSource>> {
     use crate::models_ext::QueryManagerExt;
     Ok(ctx.window.db().list_import_sources(&req.workspace_id)?)
 }
 
-async fn cmd_import_sources_for_origin<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportSourcesForOriginReq) -> Result<Vec<ImportSource>> {
+async fn cmd_import_sources_for_origin<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdImportSourcesForOriginReq,
+) -> Result<Vec<ImportSource>> {
     use crate::models_ext::QueryManagerExt;
     let origin = match (req.file_path, req.url) {
         (Some(file_path), _) => crate::import::file_origin(&file_path).origin,
@@ -483,67 +555,115 @@ async fn cmd_import_sources_for_origin<R: Runtime>(ctx: ClientCtx<R>, req: CmdIm
     Ok(ctx.window.db().list_import_sources_by_origin(&origin)?)
 }
 
-async fn cmd_http_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdHttpRequestActionsReq) -> Result<Vec<GetHttpRequestActionsResponse>> {
+async fn cmd_http_request_actions<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdHttpRequestActionsReq,
+) -> Result<Vec<GetHttpRequestActionsResponse>> {
     Ok(yaak_commands::actions::cmd_http_request_actions(ctx, req).await?)
 }
 
-async fn cmd_websocket_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdWebsocketRequestActionsReq) -> Result<Vec<GetWebsocketRequestActionsResponse>> {
+async fn cmd_websocket_request_actions<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdWebsocketRequestActionsReq,
+) -> Result<Vec<GetWebsocketRequestActionsResponse>> {
     Ok(yaak_commands::actions::cmd_websocket_request_actions(ctx, req).await?)
 }
 
-async fn cmd_call_websocket_request_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallWebsocketRequestActionReq) -> Result<()> {
+async fn cmd_call_websocket_request_action<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCallWebsocketRequestActionReq,
+) -> Result<()> {
     Ok(yaak_commands::actions::cmd_call_websocket_request_action(ctx, req).await?)
 }
 
-async fn cmd_workspace_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdWorkspaceActionsReq) -> Result<Vec<GetWorkspaceActionsResponse>> {
+async fn cmd_workspace_actions<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdWorkspaceActionsReq,
+) -> Result<Vec<GetWorkspaceActionsResponse>> {
     Ok(yaak_commands::actions::cmd_workspace_actions(ctx, req).await?)
 }
 
-async fn cmd_call_workspace_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallWorkspaceActionReq) -> Result<()> {
+async fn cmd_call_workspace_action<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCallWorkspaceActionReq,
+) -> Result<()> {
     Ok(yaak_commands::actions::cmd_call_workspace_action(ctx, req).await?)
 }
 
-async fn cmd_folder_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdFolderActionsReq) -> Result<Vec<GetFolderActionsResponse>> {
+async fn cmd_folder_actions<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdFolderActionsReq,
+) -> Result<Vec<GetFolderActionsResponse>> {
     Ok(yaak_commands::actions::cmd_folder_actions(ctx, req).await?)
 }
 
-async fn cmd_call_folder_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallFolderActionReq) -> Result<()> {
+async fn cmd_call_folder_action<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCallFolderActionReq,
+) -> Result<()> {
     Ok(yaak_commands::actions::cmd_call_folder_action(ctx, req).await?)
 }
 
-async fn cmd_grpc_request_actions<R: Runtime>(ctx: ClientCtx<R>, req: CmdGrpcRequestActionsReq) -> Result<Vec<GetGrpcRequestActionsResponse>> {
+async fn cmd_grpc_request_actions<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGrpcRequestActionsReq,
+) -> Result<Vec<GetGrpcRequestActionsResponse>> {
     Ok(yaak_commands::actions::cmd_grpc_request_actions(ctx, req).await?)
 }
 
-async fn cmd_template_function_summaries<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateFunctionSummariesReq) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
+async fn cmd_template_function_summaries<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdTemplateFunctionSummariesReq,
+) -> Result<Vec<GetTemplateFunctionSummaryResponse>> {
     Ok(yaak_commands::templates::cmd_template_function_summaries(ctx, req).await?)
 }
 
-async fn cmd_template_function_config<R: Runtime>(ctx: ClientCtx<R>, req: CmdTemplateFunctionConfigReq) -> Result<GetTemplateFunctionConfigResponse> {
+async fn cmd_template_function_config<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdTemplateFunctionConfigReq,
+) -> Result<GetTemplateFunctionConfigResponse> {
     Ok(yaak_commands::templates::cmd_template_function_config(ctx, req).await?)
 }
 
-async fn cmd_get_http_authentication_summaries<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpAuthenticationSummariesReq) -> Result<Vec<GetHttpAuthenticationSummaryResponse>> {
+async fn cmd_get_http_authentication_summaries<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGetHttpAuthenticationSummariesReq,
+) -> Result<Vec<GetHttpAuthenticationSummaryResponse>> {
     Ok(yaak_commands::auth::cmd_get_http_authentication_summaries(ctx, req).await?)
 }
 
-async fn cmd_get_http_authentication_config<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetHttpAuthenticationConfigReq) -> Result<GetHttpAuthenticationConfigResponse> {
+async fn cmd_get_http_authentication_config<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGetHttpAuthenticationConfigReq,
+) -> Result<GetHttpAuthenticationConfigResponse> {
     Ok(yaak_commands::auth::cmd_get_http_authentication_config(ctx, req).await?)
 }
 
-async fn cmd_call_http_request_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallHttpRequestActionReq) -> Result<()> {
+async fn cmd_call_http_request_action<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCallHttpRequestActionReq,
+) -> Result<()> {
     Ok(yaak_commands::actions::cmd_call_http_request_action(ctx, req).await?)
 }
 
-async fn cmd_call_grpc_request_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallGrpcRequestActionReq) -> Result<()> {
+async fn cmd_call_grpc_request_action<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCallGrpcRequestActionReq,
+) -> Result<()> {
     Ok(yaak_commands::actions::cmd_call_grpc_request_action(ctx, req).await?)
 }
 
-async fn cmd_call_http_authentication_action<R: Runtime>(ctx: ClientCtx<R>, req: CmdCallHttpAuthenticationActionReq) -> Result<()> {
+async fn cmd_call_http_authentication_action<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCallHttpAuthenticationActionReq,
+) -> Result<()> {
     Ok(yaak_commands::auth::cmd_call_http_authentication_action(ctx, req).await?)
 }
 
-async fn cmd_curl_to_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdCurlToRequestReq) -> Result<HttpRequest> {
+async fn cmd_curl_to_request<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdCurlToRequestReq,
+) -> Result<HttpRequest> {
     Ok(yaak_commands::actions::cmd_curl_to_request(ctx, req).await?)
 }
 
@@ -551,83 +671,159 @@ async fn cmd_export_data<R: Runtime>(ctx: ClientCtx<R>, req: CmdExportDataReq) -
     Ok(yaak_commands::data::cmd_export_data(ctx, req).await?)
 }
 
-async fn cmd_save_base64_to_binary<R: Runtime>(ctx: ClientCtx<R>, req: CmdSaveBase64ToBinaryReq) -> Result<()> {
-    Ok(crate::cmd_save_base64_to_binary(ctx.window.app_handle().clone(), &req.filepath, &req.data).await?)
+async fn cmd_save_base64_to_binary<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdSaveBase64ToBinaryReq,
+) -> Result<()> {
+    Ok(crate::cmd_save_base64_to_binary(ctx.window.app_handle().clone(), &req.filepath, &req.data)
+        .await?)
 }
 
 async fn cmd_save_response<R: Runtime>(ctx: ClientCtx<R>, req: CmdSaveResponseReq) -> Result<()> {
     Ok(yaak_commands::responses::cmd_save_response(ctx, req).await?)
 }
 
-async fn cmd_send_http_request<R: Runtime>(ctx: ClientCtx<R>, req: CmdSendHttpRequestReq) -> Result<HttpResponse> {
-    Ok(crate::cmd_send_http_request(ctx.window.app_handle().clone(), ctx.window.clone(), req.environment_id.as_deref(), req.cookie_jar_id.as_deref(), req.request_id).await?)
+async fn cmd_send_http_request<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdSendHttpRequestReq,
+) -> Result<HttpResponse> {
+    Ok(crate::cmd_send_http_request(
+        ctx.window.app_handle().clone(),
+        ctx.window.clone(),
+        req.environment_id.as_deref(),
+        req.cookie_jar_id.as_deref(),
+        req.request_id,
+    )
+    .await?)
 }
 
-async fn cmd_reload_plugins<R: Runtime>(ctx: ClientCtx<R>, req: CmdReloadPluginsReq) -> Result<Vec<(String, String)>> {
+async fn cmd_reload_plugins<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdReloadPluginsReq,
+) -> Result<Vec<(String, String)>> {
     Ok(yaak_commands::actions::cmd_reload_plugins(ctx, req).await?)
 }
 
-async fn cmd_plugin_info<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginInfoReq) -> Result<PluginMetadata> {
+async fn cmd_plugin_info<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPluginInfoReq,
+) -> Result<PluginMetadata> {
     Ok(yaak_commands::plugins::cmd_plugin_info(ctx, req).await?)
 }
 
-async fn cmd_delete_all_grpc_connections<R: Runtime>(ctx: ClientCtx<R>, req: CmdDeleteAllGrpcConnectionsReq) -> Result<()> {
+async fn cmd_delete_all_grpc_connections<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDeleteAllGrpcConnectionsReq,
+) -> Result<()> {
     Ok(yaak_commands::models::cmd_delete_all_grpc_connections(ctx, req).await?)
 }
 
-async fn cmd_delete_send_history<R: Runtime>(ctx: ClientCtx<R>, req: CmdDeleteSendHistoryReq) -> Result<()> {
+async fn cmd_delete_send_history<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDeleteSendHistoryReq,
+) -> Result<()> {
     Ok(yaak_commands::models::cmd_delete_send_history(ctx, req).await?)
 }
 
-async fn cmd_delete_all_http_responses<R: Runtime>(ctx: ClientCtx<R>, req: CmdDeleteAllHttpResponsesReq) -> Result<()> {
+async fn cmd_delete_all_http_responses<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDeleteAllHttpResponsesReq,
+) -> Result<()> {
     Ok(yaak_commands::models::cmd_delete_all_http_responses(ctx, req).await?)
 }
 
-async fn cmd_get_workspace_meta<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetWorkspaceMetaReq) -> Result<WorkspaceMeta> {
+async fn cmd_get_workspace_meta<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGetWorkspaceMetaReq,
+) -> Result<WorkspaceMeta> {
     Ok(yaak_commands::models::cmd_get_workspace_meta(ctx, req).await?)
 }
 
-async fn cmd_new_child_window<R: Runtime>(ctx: ClientCtx<R>, req: CmdNewChildWindowReq) -> Result<()> {
-    Ok(crate::cmd_new_child_window(ctx.window.clone(), &req.url, &req.label, &req.title, req.inner_size).await?)
+async fn cmd_new_child_window<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdNewChildWindowReq,
+) -> Result<()> {
+    Ok(crate::cmd_new_child_window(
+        ctx.window.clone(),
+        &req.url,
+        &req.label,
+        &req.title,
+        req.inner_size,
+    )
+    .await?)
 }
 
-async fn cmd_new_main_window<R: Runtime>(ctx: ClientCtx<R>, req: CmdNewMainWindowReq) -> Result<()> {
+async fn cmd_new_main_window<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdNewMainWindowReq,
+) -> Result<()> {
     Ok(crate::cmd_new_main_window(ctx.window.app_handle().clone(), &req.url).await?)
 }
 
-async fn cmd_check_for_updates<R: Runtime>(ctx: ClientCtx<R>, _req: CmdCheckForUpdatesReq) -> Result<bool> {
-    Ok(crate::cmd_check_for_updates(ctx.window.clone(), ctx.window.app_handle().state::<Mutex<YaakUpdater>>()).await?)
+async fn cmd_check_for_updates<R: Runtime>(
+    ctx: ClientCtx<R>,
+    _req: CmdCheckForUpdatesReq,
+) -> Result<bool> {
+    Ok(crate::cmd_check_for_updates(
+        ctx.window.clone(),
+        ctx.window.app_handle().state::<Mutex<YaakUpdater>>(),
+    )
+    .await?)
 }
 
-async fn cmd_decrypt_template<R: Runtime>(ctx: ClientCtx<R>, req: CmdDecryptTemplateReq) -> Result<String> {
+async fn cmd_decrypt_template<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDecryptTemplateReq,
+) -> Result<String> {
     Ok(yaak_commands::encryption::cmd_decrypt_template(ctx, req).await?)
 }
 
-async fn cmd_secure_template<R: Runtime>(ctx: ClientCtx<R>, req: CmdSecureTemplateReq) -> Result<String> {
+async fn cmd_secure_template<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdSecureTemplateReq,
+) -> Result<String> {
     Ok(yaak_commands::encryption::cmd_secure_template(ctx, req).await?)
 }
 
-async fn cmd_get_themes<R: Runtime>(ctx: ClientCtx<R>, req: CmdGetThemesReq) -> Result<Vec<GetThemesResponse>> {
+async fn cmd_get_themes<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdGetThemesReq,
+) -> Result<Vec<GetThemesResponse>> {
     Ok(yaak_commands::templates::cmd_get_themes(ctx, req).await?)
 }
 
-async fn cmd_enable_encryption<R: Runtime>(ctx: ClientCtx<R>, req: CmdEnableEncryptionReq) -> Result<()> {
+async fn cmd_enable_encryption<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdEnableEncryptionReq,
+) -> Result<()> {
     Ok(yaak_commands::encryption::cmd_enable_encryption(ctx, req).await?)
 }
 
-async fn cmd_reveal_workspace_key<R: Runtime>(ctx: ClientCtx<R>, req: CmdRevealWorkspaceKeyReq) -> Result<String> {
+async fn cmd_reveal_workspace_key<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdRevealWorkspaceKeyReq,
+) -> Result<String> {
     Ok(yaak_commands::encryption::cmd_reveal_workspace_key(ctx, req).await?)
 }
 
-async fn cmd_set_workspace_key<R: Runtime>(ctx: ClientCtx<R>, req: CmdSetWorkspaceKeyReq) -> Result<()> {
+async fn cmd_set_workspace_key<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdSetWorkspaceKeyReq,
+) -> Result<()> {
     Ok(yaak_commands::encryption::cmd_set_workspace_key(ctx, req).await?)
 }
 
-async fn cmd_disable_encryption<R: Runtime>(ctx: ClientCtx<R>, req: CmdDisableEncryptionReq) -> Result<()> {
+async fn cmd_disable_encryption<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDisableEncryptionReq,
+) -> Result<()> {
     Ok(yaak_commands::encryption::cmd_disable_encryption(ctx, req).await?)
 }
 
-async fn cmd_default_headers<R: Runtime>(ctx: ClientCtx<R>, req: CmdDefaultHeadersReq) -> Result<Vec<HttpRequestHeader>> {
+async fn cmd_default_headers<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDefaultHeadersReq,
+) -> Result<Vec<HttpRequestHeader>> {
     Ok(yaak_commands::models::cmd_default_headers(ctx, req).await?)
 }
 
@@ -649,27 +845,45 @@ async fn models_delete<R: Runtime>(ctx: ClientCtx<R>, req: ModelsDeleteReq) -> R
     Ok(deleted?)
 }
 
-async fn models_duplicate<R: Runtime>(ctx: ClientCtx<R>, req: ModelsDuplicateReq) -> Result<String> {
+async fn models_duplicate<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsDuplicateReq,
+) -> Result<String> {
     Ok(yaak_commands::models::models_duplicate(ctx, req).await?)
 }
 
-async fn models_websocket_events<R: Runtime>(ctx: ClientCtx<R>, req: ModelsWebsocketEventsReq) -> Result<Vec<WebsocketEvent>> {
+async fn models_websocket_events<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsWebsocketEventsReq,
+) -> Result<Vec<WebsocketEvent>> {
     Ok(yaak_commands::models::models_websocket_events(ctx, req).await?)
 }
 
-async fn models_grpc_events<R: Runtime>(ctx: ClientCtx<R>, req: ModelsGrpcEventsReq) -> Result<Vec<GrpcEvent>> {
+async fn models_grpc_events<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsGrpcEventsReq,
+) -> Result<Vec<GrpcEvent>> {
     Ok(yaak_commands::models::models_grpc_events(ctx, req).await?)
 }
 
-async fn models_get_settings<R: Runtime>(ctx: ClientCtx<R>, req: ModelsGetSettingsReq) -> Result<Settings> {
+async fn models_get_settings<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsGetSettingsReq,
+) -> Result<Settings> {
     Ok(yaak_commands::models::models_get_settings(ctx, req).await?)
 }
 
-async fn models_get_graphql_introspection<R: Runtime>(ctx: ClientCtx<R>, req: ModelsGetGraphqlIntrospectionReq) -> Result<Option<GraphQlIntrospection>> {
+async fn models_get_graphql_introspection<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsGetGraphqlIntrospectionReq,
+) -> Result<Option<GraphQlIntrospection>> {
     Ok(yaak_commands::models::models_get_graphql_introspection(ctx, req).await?)
 }
 
-async fn models_upsert_graphql_introspection<R: Runtime>(ctx: ClientCtx<R>, req: ModelsUpsertGraphqlIntrospectionReq) -> Result<GraphQlIntrospection> {
+async fn models_upsert_graphql_introspection<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsUpsertGraphqlIntrospectionReq,
+) -> Result<GraphQlIntrospection> {
     Ok(yaak_commands::models::models_upsert_graphql_introspection(ctx, req).await?)
 }
 
@@ -680,7 +894,10 @@ async fn models_upsert_graphql_introspection<R: Runtime>(ctx: ClientCtx<R>, req:
 /// freezes the app"). Escape sequences sidestep it. This is a quirk of the
 /// webview transport, not of the data, so it lives in the adapter rather than
 /// the shared handler.
-async fn models_workspace_models<R: Runtime>(ctx: ClientCtx<R>, req: ModelsWorkspaceModelsReq) -> Result<String> {
+async fn models_workspace_models<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: ModelsWorkspaceModelsReq,
+) -> Result<String> {
     let json = yaak_commands::models::models_workspace_models(ctx, req).await?;
     Ok(escape_str_for_webview(&json))
 }
@@ -706,7 +923,10 @@ fn escape_str_for_webview(input: &str) -> String {
         .collect()
 }
 
-async fn cmd_git_checkout<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitCheckoutReq) -> Result<String> {
+async fn cmd_git_checkout<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitCheckoutReq,
+) -> Result<String> {
     Ok(crate::git_ext::cmd_git_checkout(&req.dir, &req.branch, req.force).await?)
 }
 
@@ -714,31 +934,52 @@ async fn cmd_git_branch<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitBranchReq) ->
     Ok(crate::git_ext::cmd_git_branch(&req.dir, &req.branch, req.base.as_deref()).await?)
 }
 
-async fn cmd_git_delete_branch<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitDeleteBranchReq) -> Result<BranchDeleteResult> {
+async fn cmd_git_delete_branch<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitDeleteBranchReq,
+) -> Result<BranchDeleteResult> {
     Ok(crate::git_ext::cmd_git_delete_branch(&req.dir, &req.branch, req.force).await?)
 }
 
-async fn cmd_git_delete_remote_branch<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitDeleteRemoteBranchReq) -> Result<()> {
+async fn cmd_git_delete_remote_branch<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitDeleteRemoteBranchReq,
+) -> Result<()> {
     Ok(crate::git_ext::cmd_git_delete_remote_branch(&req.dir, &req.branch).await?)
 }
 
-async fn cmd_git_merge_branch<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitMergeBranchReq) -> Result<()> {
+async fn cmd_git_merge_branch<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitMergeBranchReq,
+) -> Result<()> {
     Ok(crate::git_ext::cmd_git_merge_branch(&req.dir, &req.branch).await?)
 }
 
-async fn cmd_git_rename_branch<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitRenameBranchReq) -> Result<()> {
+async fn cmd_git_rename_branch<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitRenameBranchReq,
+) -> Result<()> {
     Ok(crate::git_ext::cmd_git_rename_branch(&req.dir, &req.old_name, &req.new_name).await?)
 }
 
-async fn cmd_git_status<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitStatusReq) -> Result<GitStatusSummary> {
+async fn cmd_git_status<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitStatusReq,
+) -> Result<GitStatusSummary> {
     Ok(crate::git_ext::cmd_git_status(&req.dir).await?)
 }
 
-async fn cmd_git_branch_info<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitBranchInfoReq) -> Result<GitBranchInfo> {
+async fn cmd_git_branch_info<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitBranchInfoReq,
+) -> Result<GitBranchInfo> {
     Ok(crate::git_ext::cmd_git_branch_info(&req.dir).await?)
 }
 
-async fn cmd_git_worktree_status<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitWorktreeStatusReq) -> Result<GitWorktreeStatus> {
+async fn cmd_git_worktree_status<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitWorktreeStatusReq,
+) -> Result<GitWorktreeStatus> {
     Ok(crate::git_ext::cmd_git_worktree_status(&req.dir).await?)
 }
 
@@ -746,15 +987,25 @@ async fn cmd_git_log<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitLogReq) -> Resul
     Ok(crate::git_ext::cmd_git_log(&req.dir).await?)
 }
 
-async fn cmd_git_log_for_file<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitLogForFileReq) -> Result<Vec<GitCommit>> {
+async fn cmd_git_log_for_file<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitLogForFileReq,
+) -> Result<Vec<GitCommit>> {
     Ok(crate::git_ext::cmd_git_log_for_file(&req.dir, req.rela_path).await?)
 }
 
-async fn cmd_git_file_diff_for_commit<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitFileDiffForCommitReq) -> Result<GitFileDiff> {
-    Ok(crate::git_ext::cmd_git_file_diff_for_commit(&req.dir, &req.commit_oid, req.rela_path).await?)
+async fn cmd_git_file_diff_for_commit<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitFileDiffForCommitReq,
+) -> Result<GitFileDiff> {
+    Ok(crate::git_ext::cmd_git_file_diff_for_commit(&req.dir, &req.commit_oid, req.rela_path)
+        .await?)
 }
 
-async fn cmd_git_initialize<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitInitializeReq) -> Result<()> {
+async fn cmd_git_initialize<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitInitializeReq,
+) -> Result<()> {
     Ok(crate::git_ext::cmd_git_initialize(&req.dir).await?)
 }
 
@@ -778,11 +1029,17 @@ async fn cmd_git_pull<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitPullReq) -> Res
     Ok(crate::git_ext::cmd_git_pull(&req.dir).await?)
 }
 
-async fn cmd_git_pull_force_reset<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitPullForceResetReq) -> Result<PullResult> {
+async fn cmd_git_pull_force_reset<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitPullForceResetReq,
+) -> Result<PullResult> {
     Ok(crate::git_ext::cmd_git_pull_force_reset(&req.dir, &req.remote, &req.branch).await?)
 }
 
-async fn cmd_git_pull_merge<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitPullMergeReq) -> Result<PullResult> {
+async fn cmd_git_pull_merge<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitPullMergeReq,
+) -> Result<PullResult> {
     Ok(crate::git_ext::cmd_git_pull_merge(&req.dir, &req.remote, &req.branch).await?)
 }
 
@@ -794,27 +1051,47 @@ async fn cmd_git_unstage<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitUnstageReq) 
     Ok(crate::git_ext::cmd_git_unstage(&req.dir, req.rela_paths).await?)
 }
 
-async fn cmd_git_reset_changes<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitResetChangesReq) -> Result<()> {
+async fn cmd_git_reset_changes<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitResetChangesReq,
+) -> Result<()> {
     Ok(crate::git_ext::cmd_git_reset_changes(&req.dir).await?)
 }
 
-async fn cmd_git_restore_files<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitRestoreFilesReq) -> Result<()> {
+async fn cmd_git_restore_files<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitRestoreFilesReq,
+) -> Result<()> {
     Ok(crate::git_ext::cmd_git_restore_files(&req.dir, req.rela_paths).await?)
 }
 
-async fn cmd_git_restore_file_from_commit<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitRestoreFileFromCommitReq) -> Result<()> {
-    Ok(crate::git_ext::cmd_git_restore_file_from_commit(&req.dir, &req.commit_oid, req.rela_path).await?)
+async fn cmd_git_restore_file_from_commit<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitRestoreFileFromCommitReq,
+) -> Result<()> {
+    Ok(crate::git_ext::cmd_git_restore_file_from_commit(&req.dir, &req.commit_oid, req.rela_path)
+        .await?)
 }
 
-async fn cmd_git_add_credential<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitAddCredentialReq) -> Result<()> {
-    Ok(crate::git_ext::cmd_git_add_credential(&req.remote_url, &req.username, &req.password).await?)
+async fn cmd_git_add_credential<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitAddCredentialReq,
+) -> Result<()> {
+    Ok(crate::git_ext::cmd_git_add_credential(&req.remote_url, &req.username, &req.password)
+        .await?)
 }
 
-async fn cmd_git_remotes<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitRemotesReq) -> Result<Vec<GitRemote>> {
+async fn cmd_git_remotes<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitRemotesReq,
+) -> Result<Vec<GitRemote>> {
     Ok(crate::git_ext::cmd_git_remotes(&req.dir).await?)
 }
 
-async fn cmd_git_add_remote<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitAddRemoteReq) -> Result<GitRemote> {
+async fn cmd_git_add_remote<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdGitAddRemoteReq,
+) -> Result<GitRemote> {
     Ok(crate::git_ext::cmd_git_add_remote(&req.dir, &req.name, &req.url).await?)
 }
 
@@ -822,58 +1099,130 @@ async fn cmd_git_rm_remote<R: Runtime>(_ctx: ClientCtx<R>, req: CmdGitRmRemoteRe
     Ok(crate::git_ext::cmd_git_rm_remote(&req.dir, &req.name).await?)
 }
 
-async fn cmd_sync_calculate<R: Runtime>(ctx: ClientCtx<R>, req: CmdSyncCalculateReq) -> Result<Vec<SyncOp>> {
-    Ok(crate::sync_ext::cmd_sync_calculate(ctx.window.app_handle().clone(), &req.workspace_id, &req.sync_dir).await?)
+async fn cmd_sync_calculate<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdSyncCalculateReq,
+) -> Result<Vec<SyncOp>> {
+    Ok(crate::sync_ext::cmd_sync_calculate(
+        ctx.window.app_handle().clone(),
+        &req.workspace_id,
+        &req.sync_dir,
+    )
+    .await?)
 }
 
-async fn cmd_sync_calculate_fs<R: Runtime>(_ctx: ClientCtx<R>, req: CmdSyncCalculateFsReq) -> Result<Vec<SyncOp>> {
+async fn cmd_sync_calculate_fs<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdSyncCalculateFsReq,
+) -> Result<Vec<SyncOp>> {
     Ok(crate::sync_ext::cmd_sync_calculate_fs(&req.dir).await?)
 }
 
 async fn cmd_sync_apply<R: Runtime>(ctx: ClientCtx<R>, req: CmdSyncApplyReq) -> Result<()> {
-    Ok(crate::sync_ext::cmd_sync_apply(ctx.window.app_handle().clone(), req.sync_ops, &req.sync_dir, &req.workspace_id).await?)
+    Ok(crate::sync_ext::cmd_sync_apply(
+        ctx.window.app_handle().clone(),
+        req.sync_ops,
+        &req.sync_dir,
+        &req.workspace_id,
+    )
+    .await?)
 }
 
-async fn cmd_ws_delete_connections<R: Runtime>(ctx: ClientCtx<R>, req: CmdWsDeleteConnectionsReq) -> Result<()> {
+async fn cmd_ws_delete_connections<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdWsDeleteConnectionsReq,
+) -> Result<()> {
     Ok(yaak_commands::models::cmd_ws_delete_connections(ctx, req).await?)
 }
 
-async fn cmd_ws_send<R: Runtime>(ctx: ClientCtx<R>, req: CmdWsSendReq) -> Result<WebsocketConnection> {
-    Ok(crate::ws_ext::cmd_ws_send(&req.connection_id, req.environment_id.as_deref(), ctx.window.app_handle().clone(), ctx.window.clone(), ctx.window.app_handle().state::<Mutex<WebsocketManager>>()).await?)
+async fn cmd_ws_send<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdWsSendReq,
+) -> Result<WebsocketConnection> {
+    Ok(crate::ws_ext::cmd_ws_send(
+        &req.connection_id,
+        req.environment_id.as_deref(),
+        ctx.window.app_handle().clone(),
+        ctx.window.clone(),
+        ctx.window.app_handle().state::<Mutex<WebsocketManager>>(),
+    )
+    .await?)
 }
 
-async fn cmd_ws_close<R: Runtime>(ctx: ClientCtx<R>, req: CmdWsCloseReq) -> Result<WebsocketConnection> {
-    Ok(crate::ws_ext::cmd_ws_close(&req.connection_id, ctx.window.app_handle().clone(), ctx.window.clone(), ctx.window.app_handle().state::<Mutex<WebsocketManager>>()).await?)
+async fn cmd_ws_close<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdWsCloseReq,
+) -> Result<WebsocketConnection> {
+    Ok(crate::ws_ext::cmd_ws_close(
+        &req.connection_id,
+        ctx.window.app_handle().clone(),
+        ctx.window.clone(),
+        ctx.window.app_handle().state::<Mutex<WebsocketManager>>(),
+    )
+    .await?)
 }
 
-async fn cmd_ws_connect<R: Runtime>(ctx: ClientCtx<R>, req: CmdWsConnectReq) -> Result<WebsocketConnection> {
-    Ok(crate::ws_ext::cmd_ws_connect(&req.request_id, req.environment_id.as_deref(), req.cookie_jar_id.as_deref(), ctx.window.app_handle().clone(), ctx.window.clone(), ctx.window.app_handle().state::<Mutex<WebsocketManager>>()).await?)
+async fn cmd_ws_connect<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdWsConnectReq,
+) -> Result<WebsocketConnection> {
+    Ok(crate::ws_ext::cmd_ws_connect(
+        &req.request_id,
+        req.environment_id.as_deref(),
+        req.cookie_jar_id.as_deref(),
+        ctx.window.app_handle().clone(),
+        ctx.window.clone(),
+        ctx.window.app_handle().state::<Mutex<WebsocketManager>>(),
+    )
+    .await?)
 }
 
-async fn cmd_plugins_search<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginsSearchReq) -> Result<PluginSearchResponse> {
+async fn cmd_plugins_search<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPluginsSearchReq,
+) -> Result<PluginSearchResponse> {
     Ok(crate::plugins_ext::cmd_plugins_search(ctx.window.app_handle().clone(), &req.query).await?)
 }
 
-async fn cmd_plugins_install<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginsInstallReq) -> Result<()> {
+async fn cmd_plugins_install<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPluginsInstallReq,
+) -> Result<()> {
     Ok(crate::plugins_ext::cmd_plugins_install(ctx.window.clone(), &req.name, req.version).await?)
 }
 
-async fn cmd_plugins_install_from_directory<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginsInstallFromDirectoryReq) -> Result<Plugin> {
-    Ok(crate::plugins_ext::cmd_plugins_install_from_directory(ctx.window.clone(), &req.directory).await?)
+async fn cmd_plugins_install_from_directory<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPluginsInstallFromDirectoryReq,
+) -> Result<Plugin> {
+    Ok(crate::plugins_ext::cmd_plugins_install_from_directory(ctx.window.clone(), &req.directory)
+        .await?)
 }
 
-async fn cmd_plugins_uninstall<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginsUninstallReq) -> Result<Plugin> {
+async fn cmd_plugins_uninstall<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPluginsUninstallReq,
+) -> Result<Plugin> {
     Ok(crate::plugins_ext::cmd_plugins_uninstall(&req.plugin_id, ctx.window.clone()).await?)
 }
 
-async fn cmd_plugin_init_errors<R: Runtime>(ctx: ClientCtx<R>, req: CmdPluginInitErrorsReq) -> Result<Vec<(String, String)>> {
+async fn cmd_plugin_init_errors<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPluginInitErrorsReq,
+) -> Result<Vec<(String, String)>> {
     Ok(yaak_commands::plugins::cmd_plugin_init_errors(ctx, req).await?)
 }
 
-async fn cmd_plugins_updates<R: Runtime>(ctx: ClientCtx<R>, _req: CmdPluginsUpdatesReq) -> Result<PluginUpdatesResponse> {
+async fn cmd_plugins_updates<R: Runtime>(
+    ctx: ClientCtx<R>,
+    _req: CmdPluginsUpdatesReq,
+) -> Result<PluginUpdatesResponse> {
     Ok(crate::plugins_ext::cmd_plugins_updates(ctx.window.app_handle().clone()).await?)
 }
 
-async fn cmd_plugins_update_all<R: Runtime>(ctx: ClientCtx<R>, _req: CmdPluginsUpdateAllReq) -> Result<Vec<PluginNameVersion>> {
+async fn cmd_plugins_update_all<R: Runtime>(
+    ctx: ClientCtx<R>,
+    _req: CmdPluginsUpdateAllReq,
+) -> Result<Vec<PluginNameVersion>> {
     Ok(crate::plugins_ext::cmd_plugins_update_all(ctx.window.clone()).await?)
 }

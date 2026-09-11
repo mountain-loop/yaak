@@ -19,7 +19,6 @@ pub(crate) fn metadata_to_map(metadata: MetadataMap) -> BTreeMap<String, String>
     entries
 }
 
-
 pub(crate) async fn build_metadata<R: Runtime>(
     window: &WebviewWindow<R>,
     request: &GrpcRequest,

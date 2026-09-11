@@ -125,19 +125,11 @@ pub enum ImportPlanWarningLevel {
 
 impl ImportPlanWarning {
     pub fn info(title: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self {
-            title: title.into(),
-            detail: detail.into(),
-            level: ImportPlanWarningLevel::Info,
-        }
+        Self { title: title.into(), detail: detail.into(), level: ImportPlanWarningLevel::Info }
     }
 
     pub fn warning(title: impl Into<String>, detail: impl Into<String>) -> Self {
-        Self {
-            title: title.into(),
-            detail: detail.into(),
-            level: ImportPlanWarningLevel::Warning,
-        }
+        Self { title: title.into(), detail: detail.into(), level: ImportPlanWarningLevel::Warning }
     }
 }
 
