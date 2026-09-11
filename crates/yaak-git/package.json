@@ -2,5 +2,8 @@
   "name": "@yaakapp-internal/git",
   "version": "1.0.0",
   "private": true,
-  "main": "index.ts"
+  "main": "index.ts",
+  "scripts": {
+    "test": "vitest run"
+  }
 }

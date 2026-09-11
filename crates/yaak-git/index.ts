@@ -16,6 +16,7 @@ import {
   PushResult,
 } from "./bindings/gen_git";
 import { showToast } from "@yaakapp/yaak-client/lib/toast";
+import { shouldRetryAfterFailure } from "./polling";
 
 export * from "./bindings/gen_git";
 export * from "./bindings/gen_models";
@@ -85,26 +86,56 @@ export function watchGitWorktreeStatus(dir: string, callback: (status: GitWorktr
       .catch(console.error);
 }
 
-function useGitFetchAll(dir: string, refreshKey?: string) {
-  return useQuery<void, string>({
+function refetchAfterBackoff(query: {
+  state: { fetchFailureCount: number; errorUpdatedAt: number };
+}) {
+  return shouldRetryAfterFailure(
+    query.state.fetchFailureCount,
+    query.state.errorUpdatedAt,
+    Date.now(),
+  );
+}
+
+/**
+ * `git fetch` shells out — twice, counting the availability probe — so it only runs once
+ * something cheaper has established that `dir` is a repository at all. Callers pass that
+ * verdict in: a sync directory pointed at a plain folder then costs one libgit2 lookup
+ * instead of a pair of subprocesses on every window focus.
+ */
+function useGitFetchAll(dir: string, refreshKey: string | undefined, enabled: boolean) {
+  return useQuery<null, string>({
+    enabled,
     queryKey: ["git", "fetch_all", dir, refreshKey],
-    queryFn: () => platform.rpc("cmd_git_fetch_all", { dir }),
+    async queryFn() {
+      await platform.rpc<null>("cmd_git_fetch_all", { dir });
+      // Fetching moves the remote refs, so anything counted against them is now stale
+      await queryClient.invalidateQueries({ queryKey: ["git", "branch_info", dir] });
+      await queryClient.invalidateQueries({ queryKey: ["git", "status", dir] });
+      return null;
+    },
     refetchInterval: 10 * 60_000,
+    refetchOnWindowFocus: refetchAfterBackoff,
+    retryOnMount: refetchAfterBackoff,
   });
 }
 
-function useGitBranchInfoQuery(dir: string, refreshKey?: string, fetchAllUpdatedAt?: number) {
+function useGitBranchInfoQuery(dir: string, refreshKey?: string) {
   return useQuery<GitBranchInfo, string>({
     refetchOnMount: true,
-    queryKey: ["git", "branch_info", dir, refreshKey, fetchAllUpdatedAt],
+    refetchOnWindowFocus: refetchAfterBackoff,
+    // A probe that has only ever failed has no data, so `refetchOnMount` never gets a
+    // say; `retryOnMount` is the knob that paces re-opening a dialog on a broken repo
+    retryOnMount: refetchAfterBackoff,
+    queryKey: ["git", "branch_info", dir, refreshKey],
     queryFn: () => platform.rpc("cmd_git_branch_info", { dir }),
     placeholderData: (prev) => prev,
   });
 }
 
 export function useGitBranchInfo(dir: string, refreshKey?: string) {
-  const fetchAll = useGitFetchAll(dir, refreshKey);
-  return useGitBranchInfoQuery(dir, refreshKey, fetchAll.dataUpdatedAt);
+  const branchInfo = useGitBranchInfoQuery(dir, refreshKey);
+  useGitFetchAll(dir, refreshKey, branchInfo.isSuccess);
+  return branchInfo;
 }
 
 export function useGitLog(dir: string, refreshKey?: string, relaPath?: string) {
@@ -135,25 +166,26 @@ export function useGitFileDiffForCommit(
 
 export function useGit(dir: string, callbacks: GitCallbacks, refreshKey?: string) {
   const mutations = useGitMutations(dir, callbacks);
-  const fetchAll = useGitFetchAll(dir, refreshKey);
+  const remotes = useQuery<GitRemote[], string>({
+    queryKey: ["git", "remotes", dir, refreshKey],
+    queryFn: () => getRemotes(dir),
+    placeholderData: (prev) => prev,
+  });
+  const log = useGitLog(dir, refreshKey);
+  const status = useQuery<GitStatusSummary, string>({
+    refetchOnMount: true,
+    refetchOnWindowFocus: refetchAfterBackoff,
+    retryOnMount: refetchAfterBackoff,
+    queryKey: ["git", "status", dir, refreshKey],
+    queryFn: () => platform.rpc("cmd_git_status", { dir }),
+    placeholderData: (prev) => prev,
+  });
 
-  return [
-    {
-      remotes: useQuery<GitRemote[], string>({
-        queryKey: ["git", "remotes", dir, refreshKey],
-        queryFn: () => getRemotes(dir),
-        placeholderData: (prev) => prev,
-      }),
-      log: useGitLog(dir, refreshKey),
-      status: useQuery<GitStatusSummary, string>({
-        refetchOnMount: true,
-        queryKey: ["git", "status", dir, refreshKey, fetchAll.dataUpdatedAt],
-        queryFn: () => platform.rpc("cmd_git_status", { dir }),
-        placeholderData: (prev) => prev,
-      }),
-    },
-    mutations,
-  ] as const;
+  // Status doubles as the repository probe here, so nothing shells out to `git fetch`
+  // until there is a repository to fetch into
+  useGitFetchAll(dir, refreshKey, status.isSuccess);
+
+  return [{ remotes, log, status }, mutations] as const;
 }
 
 export function useGitMutations(dir: string, callbacks: GitCallbacks) {
