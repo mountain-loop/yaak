@@ -24,7 +24,7 @@ log = { workspace = true }
 rand = "0.8"
 reqwest = { workspace = true }
 rolldown = "0.1.0"
-oxc_resolver = "=11.10.0"
+oxc_resolver = "=11.11.0"
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
