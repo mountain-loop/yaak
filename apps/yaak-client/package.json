@@ -99,6 +99,6 @@
     "vite-plugin-static-copy": "^3.3.0",
     "vite-plugin-svgr": "^4.5.0",
     "vite-plugin-wasm": "^3.5.0",
-    "vite-plus": "^0.2.9"
+    "vite-plus": "^0.3.0"
   }
 }
