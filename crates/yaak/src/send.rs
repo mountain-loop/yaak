@@ -708,8 +708,7 @@ pub async fn send_http_request<T: TemplateCallback>(
                 );
                 if let Err(err) = query_manager
                     .connect()
-                    .unwrap()
-                    .upsert_http_response_event(&db_event, update_source)
+                    .and_then(|db| db.upsert_http_response_event(&db_event, update_source))
                 {
                     warn!("Failed to persist HTTP response event: {}", err);
                 }
