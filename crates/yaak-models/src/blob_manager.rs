@@ -55,9 +55,9 @@ impl BlobManager {
     where
         E: From<crate::error::Error>,
     {
-        let conn = self.writer.get().expect("Failed to get the blob writer DB connection");
+        let conn = self.writer.get().map_err(crate::error::Error::SqlPoolError)?;
         let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)
-            .expect("Failed to start blob DB transaction");
+            .map_err(crate::error::Error::SqlError)?;
         let writer = BlobWriter { ctx: BlobContext { conn: ConnectionOrTx::Transaction(&tx) } };
         match func(&writer) {
             Ok(val) => {

@@ -43,9 +43,12 @@ impl QueryManager {
 
     /// Run `func` in a transaction on the writer connection.
     ///
-    /// Waits for any write in progress to commit first. Do not call this from
-    /// inside another `with_tx` closure: the inner call would wait for the
-    /// outer transaction, which is waiting on it.
+    /// Waits for any write in progress to commit first, and fails with a pool
+    /// error if that takes longer than the pool's timeout. Do not call this
+    /// from inside another `with_tx` closure: the inner call would wait for
+    /// the outer transaction, which is waiting on it.
+    ///
+    /// Model events for the writes are sent once the transaction commits.
     pub fn with_tx<T, E>(
         &self,
         func: impl FnOnce(&WriteDb) -> std::result::Result<T, E>,
@@ -53,22 +56,27 @@ impl QueryManager {
     where
         E: From<crate::error::Error>,
     {
-        let conn = self.writer.get().expect("Failed to get the writer DB connection");
+        let conn = self.writer.get().map_err(crate::error::Error::SqlPoolError)?;
         // `new_unchecked` takes `&Connection`; see yaak_database::pool for why
         // the pool never hands out `&mut`.
         let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)
-            .expect("Failed to start DB transaction");
+            .map_err(crate::error::Error::SqlError)?;
 
         let db =
             WriteDb::new(DbContext::new(ConnectionOrTx::Transaction(&tx)), self.events_tx.clone());
 
         match func(&db) {
             Ok(val) => {
+                let events = db.into_events();
                 tx.commit()
                     .map_err(|e| GenericError(format!("Failed to commit transaction {e:?}")))?;
+                for payload in events {
+                    let _ = self.events_tx.send(payload);
+                }
                 Ok(val)
             }
             Err(e) => {
+                drop(db);
                 tx.rollback()
                     .map_err(|e| GenericError(format!("Failed to rollback transaction {e:?}")))?;
                 Err(e)

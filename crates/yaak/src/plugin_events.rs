@@ -1,6 +1,7 @@
 use crate::response_body::ResponseBodyStore;
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
+use log::warn;
 use yaak_models::models::AnyModel;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
@@ -226,7 +227,12 @@ fn build_shared_reply(
             InternalEventPayload::GetKeyValueResponse(GetKeyValueResponse { value })
         }
         SharedRequest::SetKeyValue(req) => {
-            query_manager.connect().set_plugin_key_value(context.plugin_name, &req.key, &req.value);
+            if let Err(e) = query_manager.with_tx(|tx| {
+                tx.set_plugin_key_value(context.plugin_name, &req.key, &req.value);
+                Ok::<(), yaak_models::error::Error>(())
+            }) {
+                warn!("Failed to set plugin key value: {e}");
+            }
             InternalEventPayload::SetKeyValueResponse(yaak_plugins::events::SetKeyValueResponse {})
         }
         SharedRequest::DeleteKeyValue(req) => {

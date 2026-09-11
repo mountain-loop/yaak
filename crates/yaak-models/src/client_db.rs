@@ -3,6 +3,7 @@ use crate::models::{AnyModel, UpsertModelInfo};
 use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::params;
 use sea_query::{IntoColumnRef, IntoIden, SimpleExpr};
+use std::cell::RefCell;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::mpsc;
@@ -74,9 +75,13 @@ impl<'a> ClientDb<'a> {
 /// transaction, that can also change rows. Derefs to [`ClientDb`] so every
 /// query is available while writing, and reads inside the transaction see
 /// its own uncommitted writes.
+///
+/// Model events are held back until the transaction commits; a rollback
+/// discards them along with the rows.
 pub struct WriteDb<'a> {
     db: ClientDb<'a>,
     events_tx: mpsc::Sender<ModelPayload>,
+    pending_events: RefCell<Vec<ModelPayload>>,
 }
 
 impl<'a> Deref for WriteDb<'a> {
@@ -89,7 +94,13 @@ impl<'a> Deref for WriteDb<'a> {
 
 impl<'a> WriteDb<'a> {
     pub fn new(ctx: DbContext<'a>, events_tx: mpsc::Sender<ModelPayload>) -> Self {
-        Self { db: ClientDb::new(ctx), events_tx }
+        Self { db: ClientDb::new(ctx), events_tx, pending_events: RefCell::new(Vec::new()) }
+    }
+
+    /// The events for everything written so far, to send once the
+    /// transaction has committed.
+    pub(crate) fn into_events(self) -> Vec<ModelPayload> {
+        self.pending_events.into_inner()
     }
 
     /// Bulk-delete all rows matching a column value WITHOUT recording model
@@ -120,7 +131,7 @@ impl<'a> WriteDb<'a> {
         };
 
         self.record_model_change(&payload)?;
-        let _ = self.events_tx.send(payload);
+        self.pending_events.borrow_mut().push(payload);
 
         Ok(m)
     }
@@ -138,7 +149,7 @@ impl<'a> WriteDb<'a> {
         };
 
         self.record_model_change(&payload)?;
-        let _ = self.events_tx.send(payload);
+        self.pending_events.borrow_mut().push(payload);
 
         Ok(m.clone())
     }

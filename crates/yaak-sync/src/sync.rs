@@ -12,7 +12,10 @@ use std::path::{Path, PathBuf};
 use ts_rs::TS;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::{ClientDb, WriteDb};
-use yaak_models::models::{SyncState, WorkspaceMeta};
+use yaak_models::models::{
+    Environment, Folder, GrpcRequest, HttpRequest, SyncState, WebsocketRequest, Workspace,
+    WorkspaceMeta,
+};
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -336,17 +339,40 @@ fn workspace_models(db: &ClientDb, version: &str, workspace_id: &str) -> Result<
     Ok(sync_models)
 }
 
-/// Apply sync operations to the filesystem and database.
-/// Returns a list of SyncStateOps that should be applied afterward.
-pub fn apply_sync_ops(
-    db: &WriteDb,
-    blobs: &BlobManager,
+/// The database half of a sync apply, ready to run once the files are on disk.
+pub struct PendingDbSyncOps {
+    sync_state_ops: Vec<SyncStateOp>,
+    deletes: Vec<SyncModel>,
+    workspaces: Vec<Workspace>,
+    environments: Vec<Environment>,
+    folders: Vec<Folder>,
+    http_requests: Vec<HttpRequest>,
+    grpc_requests: Vec<GrpcRequest>,
+    websocket_requests: Vec<WebsocketRequest>,
+}
+
+/// Apply the filesystem half of the sync operations: create, rewrite and
+/// delete files. Returns the database half, for [`apply_db_sync_ops`].
+///
+/// Split this way so the file work, which can be slow, happens before the
+/// write transaction is opened rather than inside it.
+pub fn apply_fs_sync_ops(
     workspace_id: &str,
     sync_dir: &Path,
     sync_ops: Vec<SyncOp>,
-) -> Result<Vec<SyncStateOp>> {
+) -> Result<PendingDbSyncOps> {
+    let mut pending = PendingDbSyncOps {
+        sync_state_ops: Vec::new(),
+        deletes: Vec::new(),
+        workspaces: Vec::new(),
+        environments: Vec::new(),
+        folders: Vec::new(),
+        http_requests: Vec::new(),
+        grpc_requests: Vec::new(),
+        websocket_requests: Vec::new(),
+    };
     if sync_ops.is_empty() {
-        return Ok(Vec::new());
+        return Ok(pending);
     }
 
     info!(
@@ -354,21 +380,13 @@ pub fn apply_sync_ops(
         sync_ops.iter().map(|op| op.to_string()).collect::<Vec<String>>().join(", ")
     );
 
-    let mut sync_state_ops = Vec::new();
-    let mut workspaces_to_upsert = Vec::new();
-    let mut environments_to_upsert = Vec::new();
-    let mut folders_to_upsert = Vec::new();
-    let mut http_requests_to_upsert = Vec::new();
-    let mut grpc_requests_to_upsert = Vec::new();
-    let mut websocket_requests_to_upsert = Vec::new();
-
     for op in sync_ops {
         // Only apply things if workspace ID matches
         if op.workspace_id() != workspace_id {
             continue;
         }
 
-        sync_state_ops.push(match op {
+        let state_op = match op {
             SyncOp::FsCreate { model } => {
                 let rel_path = derive_model_filename(&model);
                 let abs_path = sync_dir.join(rel_path.clone());
@@ -402,17 +420,7 @@ pub fn apply_sync_ops(
             },
             SyncOp::DbCreate { fs } => {
                 let model_id = fs.model.id();
-
-                // Push updates to arrays so we can do them all in a single
-                // batch upsert to make foreign keys happy
-                match fs.model {
-                    SyncModel::Environment(m) => environments_to_upsert.push(m),
-                    SyncModel::Folder(m) => folders_to_upsert.push(m),
-                    SyncModel::GrpcRequest(m) => grpc_requests_to_upsert.push(m),
-                    SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
-                    SyncModel::WebsocketRequest(m) => websocket_requests_to_upsert.push(m),
-                    SyncModel::Workspace(m) => workspaces_to_upsert.push(m),
-                };
+                pending.push_upsert(fs.model);
                 SyncStateOp::Create {
                     model_id,
                     checksum: fs.checksum.to_owned(),
@@ -420,16 +428,7 @@ pub fn apply_sync_ops(
                 }
             }
             SyncOp::DbUpdate { state, fs } => {
-                // Push updates to arrays so we can do them all in a single
-                // batch upsert to make foreign keys happy
-                match fs.model {
-                    SyncModel::Environment(m) => environments_to_upsert.push(m),
-                    SyncModel::Folder(m) => folders_to_upsert.push(m),
-                    SyncModel::GrpcRequest(m) => grpc_requests_to_upsert.push(m),
-                    SyncModel::HttpRequest(m) => http_requests_to_upsert.push(m),
-                    SyncModel::WebsocketRequest(m) => websocket_requests_to_upsert.push(m),
-                    SyncModel::Workspace(m) => workspaces_to_upsert.push(m),
-                }
+                pending.push_upsert(fs.model);
                 SyncStateOp::Update {
                     state: state.to_owned(),
                     checksum: fs.checksum.to_owned(),
@@ -437,20 +436,52 @@ pub fn apply_sync_ops(
                 }
             }
             SyncOp::DbDelete { model, state } => {
-                delete_model(db, blobs, &model)?;
+                pending.deletes.push(model);
                 SyncStateOp::Delete { state: state.to_owned() }
             }
             SyncOp::IgnorePrivate { .. } => SyncStateOp::NoOp,
-        });
+        };
+        pending.sync_state_ops.push(state_op);
+    }
+
+    Ok(pending)
+}
+
+impl PendingDbSyncOps {
+    /// Upserts are collected per model type and written in one batch so
+    /// foreign keys are satisfied.
+    fn push_upsert(&mut self, model: SyncModel) {
+        match model {
+            SyncModel::Environment(m) => self.environments.push(m),
+            SyncModel::Folder(m) => self.folders.push(m),
+            SyncModel::GrpcRequest(m) => self.grpc_requests.push(m),
+            SyncModel::HttpRequest(m) => self.http_requests.push(m),
+            SyncModel::WebsocketRequest(m) => self.websocket_requests.push(m),
+            SyncModel::Workspace(m) => self.workspaces.push(m),
+        }
+    }
+}
+
+/// Apply the database half of the sync operations.
+/// Returns a list of SyncStateOps that should be applied afterward.
+pub fn apply_db_sync_ops(
+    db: &WriteDb,
+    blobs: &BlobManager,
+    workspace_id: &str,
+    sync_dir: &Path,
+    pending: PendingDbSyncOps,
+) -> Result<Vec<SyncStateOp>> {
+    for model in &pending.deletes {
+        delete_model(db, blobs, model)?;
     }
 
     let upserted_models = db.batch_upsert(
-        workspaces_to_upsert,
-        environments_to_upsert,
-        folders_to_upsert,
-        http_requests_to_upsert,
-        grpc_requests_to_upsert,
-        websocket_requests_to_upsert,
+        pending.workspaces,
+        pending.environments,
+        pending.folders,
+        pending.http_requests,
+        pending.grpc_requests,
+        pending.websocket_requests,
         &UpdateSource::Sync,
     )?;
 
@@ -482,7 +513,7 @@ pub fn apply_sync_ops(
         }?;
     }
 
-    Ok(sync_state_ops)
+    Ok(pending.sync_state_ops)
 }
 
 #[derive(Debug)]
