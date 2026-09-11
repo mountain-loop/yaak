@@ -12,7 +12,7 @@ pub use connection_or_tx::ConnectionOrTx;
 pub use db_context::DbContext;
 pub use error::{Error, Result};
 pub use migrate::run_migrations;
-pub use pool::{PoolError, SqliteConn, SqlitePool};
+pub use pool::{PoolError, PoolStatus, SqliteConn, SqlitePool, status as pool_status};
 pub use traits::{UpsertModelInfo, upsert_date};
 pub use update_source::{ModelChangeEvent, UpdateSource};
 pub use util::{generate_id, generate_id_of_length, generate_prefixed_id};

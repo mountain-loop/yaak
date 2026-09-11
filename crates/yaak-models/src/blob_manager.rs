@@ -37,7 +37,7 @@ impl BlobManager {
     }
 
     pub fn connect(&self) -> Result<BlobContext> {
-        let conn = self.pool.get()?;
+        let conn = crate::pool::acquire(&self.pool, "blob")?;
         Ok(BlobContext { conn })
     }
 }

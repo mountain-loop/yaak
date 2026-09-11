@@ -9,6 +9,18 @@ pub enum Error {
     #[error("SQL Pool error: {0}")]
     SqlPoolError(#[from] yaak_database::PoolError),
 
+    #[error(
+        "Timed out after {waited_ms}ms waiting for a {what} database connection ({connections} open, {idle} idle)"
+    )]
+    PoolTimeout {
+        what: &'static str,
+        waited_ms: u128,
+        connections: u32,
+        idle: u32,
+        #[source]
+        source: yaak_database::PoolError,
+    },
+
     #[error("Database error: {0}")]
     Database(String),
 

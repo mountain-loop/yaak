@@ -20,7 +20,7 @@ impl QueryManager {
     }
 
     pub fn connect(&self) -> crate::error::Result<ClientDb<'_>> {
-        let conn = self.pool.get()?;
+        let conn = crate::pool::acquire(&self.pool, "model")?;
         let ctx = DbContext::new(ConnectionOrTx::Connection(conn));
         Ok(ClientDb::new(ctx, self.events_tx.clone()))
     }
@@ -32,7 +32,7 @@ impl QueryManager {
     where
         E: From<crate::error::Error>,
     {
-        let conn = self.pool.get().map_err(crate::error::Error::from)?;
+        let conn = crate::pool::acquire(&self.pool, "model")?;
         // `new_unchecked` takes `&Connection`; see yaak_database::pool for why
         // the pool never hands out `&mut`.
         let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)
@@ -95,7 +95,13 @@ mod tests {
 
         match qm.connect() {
             Ok(_) => panic!("pool should be exhausted"),
-            Err(e) => assert!(matches!(e, Error::SqlPoolError(_)), "got {e:?}"),
+            Err(e) => {
+                // The state of the pool rides along, so a report says which failure it was
+                assert!(
+                    matches!(e, Error::PoolTimeout { connections: 1, idle: 0, .. }),
+                    "got {e:?}"
+                );
+            }
         }
 
         let err = qm
@@ -104,7 +110,7 @@ mod tests {
                 Ok(())
             })
             .expect_err("pool is exhausted");
-        assert!(matches!(err, Error::SqlPoolError(_)), "got {err:?}");
+        assert!(matches!(err, Error::PoolTimeout { .. }), "got {err:?}");
 
         drop(held);
         qm.connect().expect("pool recovers once the connection is back");

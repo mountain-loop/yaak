@@ -17,6 +17,7 @@ pub mod migrate;
 pub mod models;
 pub mod models_ops;
 pub mod path_placeholders;
+mod pool;
 pub mod queries;
 pub mod query_manager;
 pub mod render;
@@ -108,12 +109,14 @@ pub fn init_standalone(
     let db_path = db_path.as_ref();
     let blob_path = blob_path.as_ref();
 
-    // Main database pool. Sized for concurrent in-flight queries, not concurrent app
-    // features — connections are held per-statement, so even heavy fan-out (e.g. many
-    // gRPC streams) only needs a handful at once. Keep max_size modest: WAL connections
-    // hold ~3 file descriptors each, and macOS GUI apps get a 256 fd soft limit.
+    // Main database pool. Sized for concurrent in-flight commands, not concurrent app
+    // features: connections are held per-statement, but one command can nest a couple of
+    // them, and since every frontend command dispatches as its own task they all land at
+    // once. Only `min_idle` is paid up front — r2d2 opens the rest on demand — and the
+    // app raises its open-file limit to 10240 at startup, so the old 256 fd ceiling that
+    // kept this small no longer applies.
     info!("Initializing app database {db_path:?}");
-    let pool = open::file_pool(db_path, 20, 2)?;
+    let pool = open::file_pool(db_path, 50, 2)?;
     migrate_db(&pool)?;
 
     info!("Initializing blobs database {blob_path:?}");

@@ -23,17 +23,39 @@
 //! differently (here SQLite refuses the inner `BEGIN`; natively the inner
 //! connection blocks on `busy_timeout` and then fails).
 
+/// What a pool looks like from outside at one moment. Enough to tell "everything is
+/// checked out" apart from "nothing could be opened", which are unrelated problems that
+/// both surface as an acquire timeout.
+#[derive(Debug, Clone, Copy)]
+pub struct PoolStatus {
+    pub connections: u32,
+    pub idle: u32,
+}
+
+impl std::fmt::Display for PoolStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} open, {} idle", self.connections, self.idle)
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod imp {
+    use super::PoolStatus;
     use r2d2_sqlite::SqliteConnectionManager;
 
     pub type SqlitePool = r2d2::Pool<SqliteConnectionManager>;
     pub type SqliteConn = r2d2::PooledConnection<SqliteConnectionManager>;
     pub type PoolError = r2d2::Error;
+
+    pub fn status(pool: &SqlitePool) -> PoolStatus {
+        let state = pool.state();
+        PoolStatus { connections: state.connections, idle: state.idle_connections }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 mod imp {
+    use super::PoolStatus;
     use rusqlite::Connection;
     use std::ops::Deref;
     use std::rc::Rc;
@@ -65,6 +87,11 @@ mod imp {
     /// targets.
     #[derive(Debug, thiserror::Error)]
     pub enum PoolError {}
+
+    /// The one connection, which is never checked out and never unavailable.
+    pub fn status(_pool: &SqlitePool) -> PoolStatus {
+        PoolStatus { connections: 1, idle: 1 }
+    }
 
     #[derive(Debug)]
     pub struct SqliteConn(Rc<Connection>);
