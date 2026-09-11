@@ -24,11 +24,7 @@ pub async fn delete_and_uninstall(
         Some(label) => UpdateSource::from_window_label(label),
         None => UpdateSource::Background,
     };
-    // Scope the db connection so it doesn't live across await
-    let plugin = {
-        let db = query_manager.connect();
-        db.delete_plugin_by_id(plugin_id, &update_source)?
-    };
+    let plugin = query_manager.with_tx(|db| db.delete_plugin_by_id(plugin_id, &update_source))?;
     if let Err(err) = plugin_manager.uninstall(plugin_context, plugin.directory.as_str()).await {
         if !matches!(err, PluginNotFoundErr(_)) {
             return Err(err);
@@ -72,9 +68,7 @@ pub async fn download_and_install(
     zip_extract::extract(Cursor::new(&bytes), &plugin_dir, true)?;
     info!("Extracted plugin {} to {}", plugin_version.id, plugin_dir_str);
 
-    // Scope the db connection so it doesn't live across await
-    let plugin = {
-        let db = query_manager.connect();
+    let plugin = query_manager.with_tx(|db| {
         db.upsert_plugin(
             &Plugin {
                 id: plugin_version.id.clone(),
@@ -86,8 +80,8 @@ pub async fn download_and_install(
                 ..Default::default()
             },
             &UpdateSource::Background,
-        )?
-    };
+        )
+    })?;
 
     plugin_manager.add_plugin(plugin_context, &plugin).await?;
 

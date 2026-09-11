@@ -104,7 +104,7 @@ pub async fn boot() -> Result<()> {
     let (queries, blobs, events) =
         yaak_models::init_standalone(DB_NAME, BLOB_DB_NAME).map_err(js_error)?;
 
-    if let Err(e) = yaak_lifecycle::on_launch(&lifecycle_host(), &queries.connect(), &blobs) {
+    if let Err(e) = queries.with_tx(|tx| yaak_lifecycle::on_launch(&lifecycle_host(), tx, &blobs)) {
         web_sys::console::warn_2(&"on_launch hook failed".into(), &js_error(e));
     }
 
@@ -266,10 +266,17 @@ fn dispatch(
 
             if let Some(wid) = req.workspace_id.as_deref() {
                 let e = js_error;
+                // Opening a workspace is where the rows it is assumed to have get created
+                host.queries
+                    .with_tx(|tx| {
+                        tx.ensure_base_environment(wid)?;
+                        tx.ensure_default_cookie_jar(wid)?;
+                        tx.ensure_workspace_meta(wid)?;
+                        Ok::<(), yaak_models::error::Error>(())
+                    })
+                    .map_err(e)?;
                 list.extend(db.list_cookie_jars(wid).map_err(e)?.into_iter().map(Into::into));
-                list.extend(
-                    db.list_environments_ensure_base(wid).map_err(e)?.into_iter().map(Into::into),
-                );
+                list.extend(db.list_environments(wid).map_err(e)?.into_iter().map(Into::into));
                 list.extend(db.list_folders(wid).map_err(e)?.into_iter().map(Into::into));
                 list.extend(db.list_grpc_connections(wid).map_err(e)?.into_iter().map(Into::into));
                 list.extend(db.list_grpc_requests(wid).map_err(e)?.into_iter().map(Into::into));
@@ -291,9 +298,10 @@ fn dispatch(
 
         "models_upsert" => {
             let req: ModelReq = from_js(payload)?;
-            let db = host.queries.connect();
-            let id =
-                models_ops::upsert_model(&db, &host.blobs, req.model, source).map_err(js_error)?;
+            let id = host
+                .queries
+                .with_tx(|tx| models_ops::upsert_model(tx, &host.blobs, req.model, source))
+                .map_err(js_error)?;
             to_json(id)
         }
 
@@ -330,13 +338,14 @@ fn dispatch(
             let req: UpsertIntrospectionReq = from_js(payload)?;
             let saved = host
                 .queries
-                .connect()
-                .upsert_graphql_introspection(
-                    &req.workspace_id,
-                    &req.request_id,
-                    req.content,
-                    source,
-                )
+                .with_tx(|tx| {
+                    tx.upsert_graphql_introspection(
+                        &req.workspace_id,
+                        &req.request_id,
+                        req.content,
+                        source,
+                    )
+                })
                 .map_err(js_error)?;
             to_json(saved)
         }
@@ -366,10 +375,14 @@ fn dispatch(
             if req.before == req.after {
                 return to_json(());
             }
-            let db = host.queries.connect();
-            let jar = db.get_cookie_jar(&req.cookie_jar_id).map_err(js_error)?;
-            let cookies = apply_cookie_changes(jar.cookies.clone(), &req.before, &req.after);
-            db.upsert_cookie_jar(&CookieJar { cookies, ..jar }, source).map_err(js_error)?;
+            host.queries
+                .with_tx(|tx| {
+                    let jar = tx.get_cookie_jar(&req.cookie_jar_id)?;
+                    let cookies =
+                        apply_cookie_changes(jar.cookies.clone(), &req.before, &req.after);
+                    tx.upsert_cookie_jar(&CookieJar { cookies, ..jar }, source)
+                })
+                .map_err(js_error)?;
             to_json(())
         }
 
@@ -378,26 +391,34 @@ fn dispatch(
         // writes fan out to every tab as `model_writes` like any other.
         "web_insert_http_response_events" => {
             let req: InsertResponseEventsReq = from_js(payload)?;
-            let db = host.queries.connect();
-            for event in req.events {
-                let model = HttpResponseEvent::new(&req.response_id, &req.workspace_id, event);
-                db.upsert_http_response_event(&model, source).map_err(js_error)?;
-            }
+            host.queries
+                .with_tx(|tx| {
+                    for event in req.events {
+                        let model =
+                            HttpResponseEvent::new(&req.response_id, &req.workspace_id, event);
+                        tx.upsert_http_response_event(&model, source)?;
+                    }
+                    Ok::<(), yaak_models::error::Error>(())
+                })
+                .map_err(js_error)?;
             to_json(())
         }
 
         "cmd_get_workspace_meta" => {
             let req: WorkspaceIdReq = from_js(payload)?;
-            let db = host.queries.connect();
-            let workspace = db.get_workspace(&req.workspace_id).map_err(js_error)?;
-            to_json(db.get_or_create_workspace_meta(&workspace.id).map_err(js_error)?)
+            let workspace =
+                host.queries.connect().get_workspace(&req.workspace_id).map_err(js_error)?;
+            to_json(
+                host.queries
+                    .with_tx(|tx| tx.ensure_workspace_meta(&workspace.id))
+                    .map_err(js_error)?,
+            )
         }
 
         "cmd_delete_all_http_responses" => {
             let req: RequestIdReq = from_js(payload)?;
             host.queries
-                .connect()
-                .delete_all_http_responses_for_request(&req.request_id, source)
+                .with_tx(|tx| tx.delete_all_http_responses_for_request(&req.request_id, source))
                 .map_err(js_error)?;
             to_json(())
         }
@@ -569,16 +590,19 @@ pub fn blob_get(id: &str) -> Result<Option<Vec<u8>>> {
 pub fn blob_put(id: &str, bytes: &[u8]) -> Result<()> {
     const CHUNK: usize = 512 * 1024;
     with_host(|host| {
-        let ctx = host.blobs.connect();
-        ctx.delete_chunks(id).map_err(js_error)?;
-        for (i, part) in bytes.chunks(CHUNK).enumerate() {
-            ctx.insert_chunk(&BodyChunk::new(id, i as i32, part.to_vec())).map_err(js_error)?;
-        }
-        Ok(())
+        host.blobs
+            .with_tx(|b| {
+                b.delete_chunks(id)?;
+                for (i, part) in bytes.chunks(CHUNK).enumerate() {
+                    b.insert_chunk(&BodyChunk::new(id, i as i32, part.to_vec()))?;
+                }
+                Ok::<(), yaak_models::error::Error>(())
+            })
+            .map_err(js_error)
     })
 }
 
 #[wasm_bindgen]
 pub fn blob_delete(id: &str) -> Result<()> {
-    with_host(|host| host.blobs.connect().delete_chunks(id).map_err(js_error))
+    with_host(|host| host.blobs.with_tx(|b| b.delete_chunks(id)).map_err(js_error))
 }

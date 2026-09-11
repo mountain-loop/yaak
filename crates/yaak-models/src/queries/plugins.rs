@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{Plugin, PluginIden};
 use crate::util::UpdateSource;
@@ -15,7 +15,9 @@ impl<'a> ClientDb<'a> {
     pub fn list_plugins(&self) -> Result<Vec<Plugin>> {
         self.find_all()
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn delete_plugin(&self, plugin: &Plugin, source: &UpdateSource) -> Result<Plugin> {
         self.delete(plugin, source)
     }

@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{ImportSource, ImportSourceIden};
 use crate::util::UpdateSource;
@@ -25,7 +25,9 @@ impl<'a> ClientDb<'a> {
         let sources = self.list_import_sources(workspace_id)?;
         Ok(sources.into_iter().find(|s| s.importer == importer && s.origin == origin))
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn upsert_import_source(
         &self,
         import_source: &ImportSource,

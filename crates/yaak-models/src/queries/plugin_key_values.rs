@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{PluginKeyValue, PluginKeyValueIden};
 use sea_query::ExprTrait;
@@ -63,7 +63,9 @@ impl<'a> ClientDb<'a> {
 
         (m, existing.is_none())
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn delete_plugin_key_value(&self, namespace: &str, key: &str) -> Result<bool> {
         if let None = self.get_plugin_key_value(namespace, key) {
             return Ok(false);

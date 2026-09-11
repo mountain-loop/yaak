@@ -126,23 +126,25 @@ mod tests {
         .unwrap();
 
         query_manager
-            .connect()
-            .upsert_workspace(
-                &Workspace { id: "wk_test".to_string(), ..Default::default() },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_workspace(
+                    &Workspace { id: "wk_test".to_string(), ..Default::default() },
+                    &UpdateSource::Sync,
+                )
+            })
             .unwrap();
 
         query_manager
-            .connect()
-            .upsert_http_request(
-                &HttpRequest {
-                    id: "rq_test".to_string(),
-                    workspace_id: "wk_test".to_string(),
-                    ..Default::default()
-                },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_http_request(
+                    &HttpRequest {
+                        id: "rq_test".to_string(),
+                        workspace_id: "wk_test".to_string(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Sync,
+                )
+            })
             .unwrap();
 
         let body_path = body.map(|bytes| {
@@ -153,21 +155,22 @@ mod tests {
         });
 
         let response = query_manager
-            .connect()
-            .upsert_http_response(
-                &HttpResponse {
-                    workspace_id: "wk_test".to_string(),
-                    request_id: "rq_test".to_string(),
-                    body_path,
-                    headers: vec![HttpResponseHeader {
-                        name: "Content-Type".to_string(),
-                        value: "application/json; charset=utf-8".to_string(),
-                    }],
-                    ..Default::default()
-                },
-                &UpdateSource::Sync,
-                &blob_manager,
-            )
+            .with_tx(|tx| {
+                tx.upsert_http_response(
+                    &HttpResponse {
+                        workspace_id: "wk_test".to_string(),
+                        request_id: "rq_test".to_string(),
+                        body_path,
+                        headers: vec![HttpResponseHeader {
+                            name: "Content-Type".to_string(),
+                            value: "application/json; charset=utf-8".to_string(),
+                        }],
+                        ..Default::default()
+                    },
+                    &UpdateSource::Sync,
+                    &blob_manager,
+                )
+            })
             .unwrap();
 
         let id = response.id.clone();
@@ -209,7 +212,7 @@ mod tests {
 
         let mut response = qm.connect().get_http_response(&id).unwrap();
         response.state = HttpResponseState::Closed;
-        qm.connect().update_http_response_if_id(&response, &UpdateSource::Sync).unwrap();
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
 
         assert!(FileResponseBodyStore::new(&qm).info(&id).unwrap().complete);
     }

@@ -4,25 +4,29 @@ use crate::util::{ModelChangeEvent, ModelPayload, UpdateSource};
 use rusqlite::params;
 use sea_query::{IntoColumnRef, IntoIden, SimpleExpr};
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::sync::mpsc;
 use yaak_database::DbContext;
 
+/// A read handle. Comes from the reader pool and can only query.
+///
+/// Anything that changes a row lives on [`WriteDb`], which is only ever handed
+/// out inside a transaction on the single writer connection. That split is
+/// what keeps the pool from filling with writers waiting on each other: there
+/// is one writer, so there is never a second one to wait for.
 pub struct ClientDb<'a> {
     pub(crate) ctx: DbContext<'a>,
-    pub(crate) events_tx: mpsc::Sender<ModelPayload>,
 }
 
 impl<'a> ClientDb<'a> {
-    pub fn new(ctx: DbContext<'a>, events_tx: mpsc::Sender<ModelPayload>) -> Self {
-        Self { ctx, events_tx }
+    pub fn new(ctx: DbContext<'a>) -> Self {
+        Self { ctx }
     }
 
     /// Access the underlying connection for custom queries.
     pub(crate) fn conn(&self) -> &yaak_database::ConnectionOrTx<'a> {
         self.ctx.conn()
     }
-
-    // --- Read delegates (thin wrappers over DbContext) ---
 
     pub(crate) fn find_one<M>(
         &self,
@@ -64,6 +68,29 @@ impl<'a> ClientDb<'a> {
     {
         Ok(self.ctx.find_many(col, value, limit)?)
     }
+}
+
+/// A write handle: a [`ClientDb`] on the writer connection, inside a
+/// transaction, that can also change rows. Derefs to [`ClientDb`] so every
+/// query is available while writing, and reads inside the transaction see
+/// its own uncommitted writes.
+pub struct WriteDb<'a> {
+    db: ClientDb<'a>,
+    events_tx: mpsc::Sender<ModelPayload>,
+}
+
+impl<'a> Deref for WriteDb<'a> {
+    type Target = ClientDb<'a>;
+
+    fn deref(&self) -> &ClientDb<'a> {
+        &self.db
+    }
+}
+
+impl<'a> WriteDb<'a> {
+    pub fn new(ctx: DbContext<'a>, events_tx: mpsc::Sender<ModelPayload>) -> Self {
+        Self { db: ClientDb::new(ctx), events_tx }
+    }
 
     /// Bulk-delete all rows matching a column value WITHOUT recording model
     /// changes or emitting events. Only use for cascades whose deletion is
@@ -79,8 +106,6 @@ impl<'a> ClientDb<'a> {
     {
         Ok(self.ctx.delete_many::<M>(col, value)?)
     }
-
-    // --- Write operations (with event recording) ---
 
     pub(crate) fn upsert<M>(&self, model: &M, source: &UpdateSource) -> Result<M>
     where

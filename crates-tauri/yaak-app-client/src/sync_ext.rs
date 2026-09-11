@@ -49,11 +49,12 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
     sync_dir: &Path,
     workspace_id: &str,
 ) -> Result<()> {
-    let db = app_handle.db();
     let blobs = app_handle.blob_manager();
-    let sync_state_ops = apply_sync_ops(&db, &blobs, workspace_id, sync_dir, sync_ops)?;
-    apply_sync_state_ops(&db, workspace_id, sync_dir, sync_state_ops)?;
-    Ok(())
+    app_handle.db_manager().with_tx(|tx| {
+        let sync_state_ops = apply_sync_ops(tx, &blobs, workspace_id, sync_dir, sync_ops)?;
+        apply_sync_state_ops(tx, workspace_id, sync_dir, sync_state_ops)?;
+        Ok(())
+    })
 }
 
 pub(crate) async fn sync_watch<R, F>(

@@ -4,7 +4,7 @@ use log::info;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use yaak_models::client_db::ClientDb;
+use yaak_models::client_db::{ClientDb, WriteDb};
 use yaak_models::models::{
     AnyModel, DEFAULT_REQUEST_MESSAGE_SIZE, Environment, Folder, GrpcRequest, HttpRequest,
     ImportSource, ImportSourceResource, UpsertModelInfo, WebsocketRequest, Workspace,
@@ -351,7 +351,7 @@ pub fn commit_import_plan(
     })
 }
 
-fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResult> {
+fn commit_plan_in_tx(db: &WriteDb, plan: ImportPlan) -> Result<BatchUpsertResult> {
     let items: BTreeMap<String, ImportPlanItem> =
         plan.items.iter().map(|item| (item.model_id.clone(), item.clone())).collect();
 
@@ -460,7 +460,7 @@ fn commit_plan_in_tx(db: &ClientDb, plan: ImportPlan) -> Result<BatchUpsertResul
 }
 
 /// A folder deletion may have already cascaded over the model, so absent models are skipped.
-fn delete_existing_model(db: &ClientDb, resource: ImportResourceType, id: &str) -> Result<()> {
+fn delete_existing_model(db: &WriteDb, resource: ImportResourceType, id: &str) -> Result<()> {
     use ImportResourceType::*;
     let source = &UpdateSource::Import;
     match resource {
@@ -503,7 +503,7 @@ fn delete_existing_model(db: &ClientDb, resource: ImportResourceType, id: &str) 
 /// offered again next time. A resource the user turned down is remembered as a row without a
 /// model, so it is neither re-offered nor resurrected.
 fn record_import_source(
-    db: &ClientDb,
+    db: &WriteDb,
     plan: &ImportPlan,
     items: &BTreeMap<String, ImportPlanItem>,
     upserted: &BatchUpsertResult,
@@ -1619,32 +1619,30 @@ mod tests {
             name: "Selected Folder".to_string(),
             ..Default::default()
         };
-        {
-            let db = query_manager.connect();
-            destination = db
-                .upsert_workspace(&destination, &UpdateSource::Import)
-                .expect("create destination");
-            db.upsert_folder(&selected_folder, &UpdateSource::Import)
-                .expect("create selected folder");
-            db.upsert_environment(
-                &Environment {
-                    id: "ev_destination_base".to_string(),
-                    model: "environment".to_string(),
-                    workspace_id: destination.id.clone(),
-                    name: "Destination Variables".to_string(),
-                    parent_model: "workspace".to_string(),
-                    variables: vec![EnvironmentVariable {
-                        enabled: true,
-                        name: "destination".to_string(),
-                        value: "keep".to_string(),
-                        id: None,
-                    }],
-                    ..Default::default()
-                },
-                &UpdateSource::Import,
-            )
-            .expect("create base environment");
-        }
+        query_manager
+            .with_tx(|db| {
+                destination = db.upsert_workspace(&destination, &UpdateSource::Import)?;
+                db.upsert_folder(&selected_folder, &UpdateSource::Import)?;
+                db.upsert_environment(
+                    &Environment {
+                        id: "ev_destination_base".to_string(),
+                        model: "environment".to_string(),
+                        workspace_id: destination.id.clone(),
+                        name: "Destination Variables".to_string(),
+                        parent_model: "workspace".to_string(),
+                        variables: vec![EnvironmentVariable {
+                            enabled: true,
+                            name: "destination".to_string(),
+                            value: "keep".to_string(),
+                            id: None,
+                        }],
+                        ..Default::default()
+                    },
+                    &UpdateSource::Import,
+                )
+            })
+            .expect("seed destination");
+        let workspace_count = query_manager.connect().list_workspaces().expect("list").len();
 
         let plan = plan_import_resources(
             &query_manager,
@@ -1662,13 +1660,10 @@ mod tests {
         // Planning performed only reads.
         {
             let db = query_manager.connect();
-            assert_eq!(db.list_workspaces().expect("list workspaces").len(), 1);
+            assert_eq!(db.list_workspaces().expect("list workspaces").len(), workspace_count);
             assert_eq!(db.list_folders(&destination.id).expect("list folders").len(), 1);
             assert!(db.list_http_requests(&destination.id).expect("list requests").is_empty());
-            assert_eq!(
-                db.list_environments_ensure_base(&destination.id).expect("list environments").len(),
-                1
-            );
+            assert_eq!(db.list_environments(&destination.id).expect("list environments").len(), 1);
             assert_eq!(db.get_workspace(&destination.id).expect("get destination"), destination);
         }
 
@@ -1861,8 +1856,7 @@ mod tests {
             yaak_models::init_in_memory().expect("initialize database");
         let destination = destination_workspace();
         query_manager
-            .connect()
-            .upsert_workspace(&destination, &UpdateSource::Import)
+            .with_tx(|tx| tx.upsert_workspace(&destination, &UpdateSource::Import))
             .expect("create destination");
         let resources = ImportResources {
             workspaces: vec![
@@ -2247,10 +2241,7 @@ mod tests {
         let db = query_manager.connect();
         assert_eq!(db.list_http_requests(&workspace_id).expect("list requests").len(), 2);
         assert_eq!(db.list_folders(&workspace_id).expect("list folders").len(), 1);
-        assert_eq!(
-            db.list_environments_ensure_base(&workspace_id).expect("list environments").len(),
-            1
-        );
+        assert_eq!(db.list_environments(&workspace_id).expect("list environments").len(), 1);
         let rows = db.list_import_source_resources(&source.id).expect("list resource rows");
         assert_eq!(rows.len(), 4, "re-commit replaces rows instead of accumulating");
     }
@@ -2269,23 +2260,22 @@ mod tests {
             .id
             .clone();
 
-        {
-            let db = query_manager.connect();
-            let nested = db
-                .list_http_requests(&workspace_id)
-                .expect("list requests")
-                .into_iter()
-                .find(|r| r.name == "Nested Request")
-                .expect("nested request");
-            db.upsert_http_request(
-                &HttpRequest {
-                    url: "https://example.com/nested-local".to_string(),
-                    ..nested.clone()
-                },
-                &UpdateSource::Background,
-            )
+        query_manager
+            .with_tx(|db| {
+                let nested = db
+                    .list_http_requests(&workspace_id)?
+                    .into_iter()
+                    .find(|r| r.name == "Nested Request")
+                    .expect("nested request");
+                db.upsert_http_request(
+                    &HttpRequest {
+                        url: "https://example.com/nested-local".to_string(),
+                        ..nested.clone()
+                    },
+                    &UpdateSource::Background,
+                )
+            })
             .expect("edit nested request locally");
-        }
 
         let mut resources = imported_resources();
         resources.http_requests[0].url = "https://example.com/root-v2".to_string();
@@ -2370,15 +2360,15 @@ mod tests {
             .id
             .clone();
 
-        {
-            let db = query_manager.connect();
-            let root = db.get_http_request(&root_id).expect("get root");
-            db.upsert_http_request(
-                &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
-                &UpdateSource::Background,
-            )
+        query_manager
+            .with_tx(|db| {
+                let root = db.get_http_request(&root_id)?;
+                db.upsert_http_request(
+                    &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
+                    &UpdateSource::Background,
+                )
+            })
             .expect("edit root locally");
-        }
 
         let mut resources = imported_resources();
         resources.http_requests[0].url = "https://example.com/root-v2".to_string();
@@ -2507,8 +2497,7 @@ mod tests {
             .clone();
 
         query_manager
-            .connect()
-            .delete_http_request_by_id(&root_id, &UpdateSource::Background)
+            .with_tx(|tx| tx.delete_http_request_by_id(&root_id, &UpdateSource::Background))
             .expect("delete root locally");
 
         let plan = replan(&query_manager, &workspace_id, imported_resources());
@@ -2703,10 +2692,9 @@ mod tests {
         let workspace_id = committed.workspaces[0].id.clone();
 
         // A second source claiming the same keys leaves nothing to merge into safely.
-        {
-            let db = query_manager.connect();
-            let other = db
-                .upsert_import_source(
+        query_manager
+            .with_tx(|db| {
+                let other = db.upsert_import_source(
                     &ImportSource {
                         workspace_id: workspace_id.clone(),
                         importer: "OpenAPI".to_string(),
@@ -2715,18 +2703,18 @@ mod tests {
                         ..Default::default()
                     },
                     &UpdateSource::Import,
-                )
-                .expect("create second source");
-            for key in ["env:base", "folder:src", "op:root", "op:nested"] {
-                db.upsert_import_source_resource(&ImportSourceResource {
-                    import_source_id: other.id.clone(),
-                    source_key: key.to_string(),
-                    model_type: "http_request".to_string(),
-                    ..Default::default()
-                })
-                .expect("claim the same keys");
-            }
-        }
+                )?;
+                for key in ["env:base", "folder:src", "op:root", "op:nested"] {
+                    db.upsert_import_source_resource(&ImportSourceResource {
+                        import_source_id: other.id.clone(),
+                        source_key: key.to_string(),
+                        model_type: "http_request".to_string(),
+                        ..Default::default()
+                    })?;
+                }
+                Ok::<_, yaak_models::error::Error>(())
+            })
+            .expect("claim the same keys");
 
         let third =
             ImportOrigin { origin: "/tmp/third.yaml".to_string(), label: "third.yaml".to_string() };
@@ -2821,21 +2809,20 @@ mod tests {
         let committed = first_import(&query_manager);
         let workspace_id = committed.workspaces[0].id.clone();
 
-        {
-            let db = query_manager.connect();
-            let sources = db.list_import_sources(&workspace_id).expect("list import sources");
-            let row = db
-                .list_import_source_resources(&sources[0].id)
-                .expect("list rows")
-                .into_iter()
-                .find(|r| r.source_key == "op:root")
-                .expect("row for the root request");
-            db.upsert_import_source_resource(&ImportSourceResource {
-                content_hash: Some("v99:from-the-future".to_string()),
-                ..row
+        query_manager
+            .with_tx(|db| {
+                let sources = db.list_import_sources(&workspace_id)?;
+                let row = db
+                    .list_import_source_resources(&sources[0].id)?
+                    .into_iter()
+                    .find(|r| r.source_key == "op:root")
+                    .expect("row for the root request");
+                db.upsert_import_source_resource(&ImportSourceResource {
+                    content_hash: Some("v99:from-the-future".to_string()),
+                    ..row
+                })
             })
             .expect("write an unreadable hash");
-        }
 
         let plan = replan(&query_manager, &workspace_id, imported_resources());
         assert_eq!(
@@ -2874,17 +2861,20 @@ mod tests {
             .clone();
 
         // Opening the request in the editor stamps a row ID onto every header it renders.
-        {
-            let db = query_manager.connect();
-            let root = db.get_http_request(&root_id).expect("get root");
-            let headers = root
-                .headers
-                .iter()
-                .map(|h| HttpRequestHeader { id: Some("hd_generated".to_string()), ..h.clone() })
-                .collect();
-            db.upsert_http_request(&HttpRequest { headers, ..root }, &UpdateSource::Background)
-                .expect("stamp row ids");
-        }
+        query_manager
+            .with_tx(|db| {
+                let root = db.get_http_request(&root_id)?;
+                let headers = root
+                    .headers
+                    .iter()
+                    .map(|h| HttpRequestHeader {
+                        id: Some("hd_generated".to_string()),
+                        ..h.clone()
+                    })
+                    .collect();
+                db.upsert_http_request(&HttpRequest { headers, ..root }, &UpdateSource::Background)
+            })
+            .expect("stamp row ids");
 
         let plan = replan(&query_manager, &workspace_id, resources);
         assert_eq!(
@@ -2997,15 +2987,15 @@ mod tests {
             .id
             .clone();
 
-        {
-            let db = query_manager.connect();
-            let root = db.get_http_request(&root_id).expect("get root");
-            db.upsert_http_request(
-                &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
-                &UpdateSource::Background,
-            )
+        query_manager
+            .with_tx(|db| {
+                let root = db.get_http_request(&root_id)?;
+                db.upsert_http_request(
+                    &HttpRequest { url: "https://example.com/root-local".to_string(), ..root },
+                    &UpdateSource::Background,
+                )
+            })
             .expect("edit root locally");
-        }
 
         let mut plan = replan(&query_manager, &workspace_id, imported_resources());
         let root = item_by_name(&plan, "Root Request");

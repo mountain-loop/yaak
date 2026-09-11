@@ -10,7 +10,7 @@ use tauri::plugin::TauriPlugin;
 use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::client_db::ClientDb;
+use yaak_models::client_db::{ClientDb, WriteDb};
 use yaak_models::error::Result;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
@@ -95,7 +95,7 @@ pub trait QueryManagerExt<'a, R> {
     fn db(&'a self) -> ClientDb<'a>;
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
-        F: FnOnce(&ClientDb) -> Result<T>;
+        F: FnOnce(&WriteDb) -> Result<T>;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
@@ -110,7 +110,7 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
 
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
-        F: FnOnce(&ClientDb) -> Result<T>,
+        F: FnOnce(&WriteDb) -> Result<T>,
     {
         let qm = self.state::<QueryManager>();
         qm.inner().with_tx(func)

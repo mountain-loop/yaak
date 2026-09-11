@@ -84,8 +84,8 @@ fn create(
             .map_err(|e| format!("Failed to parse workspace create JSON: {e}"))?;
 
         let created = ctx
-            .db()
-            .upsert_workspace(&workspace, &UpdateSource::Sync)
+            .query_manager()
+            .with_tx(|tx| tx.upsert_workspace(&workspace, &UpdateSource::Sync))
             .map_err(|e| format!("Failed to create workspace: {e}"))?;
         println!("Created workspace: {}", created.id);
         return Ok(());
@@ -97,8 +97,8 @@ fn create(
 
     let workspace = Workspace { name, ..Default::default() };
     let created = ctx
-        .db()
-        .upsert_workspace(&workspace, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_workspace(&workspace, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to create workspace: {e}"))?;
     println!("Created workspace: {}", created.id);
     Ok(())
@@ -115,8 +115,8 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
     let updated = apply_merge_patch(&existing, &patch, &id, "workspace update")?;
 
     let saved = ctx
-        .db()
-        .upsert_workspace(&updated, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_workspace(&updated, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to update workspace: {e}"))?;
 
     println!("Updated workspace: {}", saved.id);
@@ -130,8 +130,10 @@ fn delete(ctx: &CliContext, workspace_id: &str, yes: bool) -> CommandResult {
     }
 
     let deleted = ctx
-        .db()
-        .delete_workspace_by_id(workspace_id, &UpdateSource::Sync, ctx.blob_manager())
+        .query_manager()
+        .with_tx(|tx| {
+            tx.delete_workspace_by_id(workspace_id, &UpdateSource::Sync, ctx.blob_manager())
+        })
         .map_err(|e| format!("Failed to delete workspace: {e}"))?;
     println!("Deleted workspace: {}", deleted.id);
     Ok(())

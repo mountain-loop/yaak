@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::client_db::ClientDb;
+use yaak_models::client_db::{ClientDb, WriteDb};
 use yaak_models::models::{SyncState, WorkspaceMeta};
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
 
@@ -339,7 +339,7 @@ fn workspace_models(db: &ClientDb, version: &str, workspace_id: &str) -> Result<
 /// Apply sync operations to the filesystem and database.
 /// Returns a list of SyncStateOps that should be applied afterward.
 pub fn apply_sync_ops(
-    db: &ClientDb,
+    db: &WriteDb,
     blobs: &BlobManager,
     workspace_id: &str,
     sync_dir: &Path,
@@ -504,7 +504,7 @@ pub enum SyncStateOp {
 }
 
 pub fn apply_sync_state_ops(
-    db: &ClientDb,
+    db: &WriteDb,
     workspace_id: &str,
     sync_dir: &Path,
     ops: Vec<SyncStateOp>,
@@ -549,7 +549,7 @@ fn derive_model_filename(m: &SyncModel) -> PathBuf {
     Path::new(&rel).to_path_buf()
 }
 
-fn delete_model(db: &ClientDb, blobs: &BlobManager, model: &SyncModel) -> Result<()> {
+fn delete_model(db: &WriteDb, blobs: &BlobManager, model: &SyncModel) -> Result<()> {
     match model {
         SyncModel::Workspace(m) => {
             db.delete_workspace(&m, &UpdateSource::Sync, blobs)?;

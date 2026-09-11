@@ -1,5 +1,5 @@
 use super::{conflict_free_name, merge_headers};
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{
     AnyModel, Folder, FolderIden, HttpRequestHeader, ResolvedHttpRequestSettings, ResolvedSetting,
@@ -32,50 +32,6 @@ impl<'a> ClientDb<'a> {
             children.push(request);
         }
         Ok(children)
-    }
-
-    pub fn delete_websocket_request(
-        &self,
-        websocket_request: &WebsocketRequest,
-        source: &UpdateSource,
-    ) -> Result<WebsocketRequest> {
-        self.delete_all_websocket_connections_for_request(websocket_request.id.as_str(), source)?;
-        self.delete(websocket_request, source)
-    }
-
-    pub fn delete_websocket_request_by_id(
-        &self,
-        id: &str,
-        source: &UpdateSource,
-    ) -> Result<WebsocketRequest> {
-        let request = self.get_websocket_request(id)?;
-        self.delete_websocket_request(&request, source)
-    }
-
-    pub fn duplicate_websocket_request(
-        &self,
-        websocket_request: &WebsocketRequest,
-        source: &UpdateSource,
-    ) -> Result<WebsocketRequest> {
-        let mut websocket_request = websocket_request.clone();
-        websocket_request.id = "".to_string();
-        websocket_request.sort_priority = websocket_request.sort_priority + 0.001;
-        let sibling_names = self
-            .list_websocket_requests(&websocket_request.workspace_id)?
-            .into_iter()
-            .filter(|m| m.folder_id == websocket_request.folder_id)
-            .map(|m| m.name)
-            .collect::<Vec<_>>();
-        websocket_request.name = conflict_free_name(&websocket_request.name, &sibling_names);
-        self.upsert(&websocket_request, source)
-    }
-
-    pub fn upsert_websocket_request(
-        &self,
-        websocket_request: &WebsocketRequest,
-        source: &UpdateSource,
-    ) -> Result<WebsocketRequest> {
-        self.upsert(websocket_request, source)
     }
 
     pub fn resolve_auth_for_websocket_request(
@@ -166,5 +122,51 @@ impl<'a> ClientDb<'a> {
             },
             ..parent
         })
+    }
+}
+
+impl<'a> WriteDb<'a> {
+    pub fn delete_websocket_request(
+        &self,
+        websocket_request: &WebsocketRequest,
+        source: &UpdateSource,
+    ) -> Result<WebsocketRequest> {
+        self.delete_all_websocket_connections_for_request(websocket_request.id.as_str(), source)?;
+        self.delete(websocket_request, source)
+    }
+
+    pub fn delete_websocket_request_by_id(
+        &self,
+        id: &str,
+        source: &UpdateSource,
+    ) -> Result<WebsocketRequest> {
+        let request = self.get_websocket_request(id)?;
+        self.delete_websocket_request(&request, source)
+    }
+
+    pub fn duplicate_websocket_request(
+        &self,
+        websocket_request: &WebsocketRequest,
+        source: &UpdateSource,
+    ) -> Result<WebsocketRequest> {
+        let mut websocket_request = websocket_request.clone();
+        websocket_request.id = "".to_string();
+        websocket_request.sort_priority = websocket_request.sort_priority + 0.001;
+        let sibling_names = self
+            .list_websocket_requests(&websocket_request.workspace_id)?
+            .into_iter()
+            .filter(|m| m.folder_id == websocket_request.folder_id)
+            .map(|m| m.name)
+            .collect::<Vec<_>>();
+        websocket_request.name = conflict_free_name(&websocket_request.name, &sibling_names);
+        self.upsert(&websocket_request, source)
+    }
+
+    pub fn upsert_websocket_request(
+        &self,
+        websocket_request: &WebsocketRequest,
+        source: &UpdateSource,
+    ) -> Result<WebsocketRequest> {
+        self.upsert(websocket_request, source)
     }
 }

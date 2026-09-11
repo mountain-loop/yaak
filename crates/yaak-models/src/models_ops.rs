@@ -8,14 +8,14 @@
 //! caller is a desktop window or an HTTP request.
 
 use crate::blob_manager::BlobManager;
-use crate::client_db::ClientDb;
+use crate::client_db::WriteDb;
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::models::AnyModel;
 use crate::util::UpdateSource;
 
 pub fn upsert_model(
-    db: &ClientDb,
+    db: &WriteDb,
     blobs: &BlobManager,
     model: AnyModel,
     source: &UpdateSource,
@@ -41,7 +41,7 @@ pub fn upsert_model(
 
 /// Deletes cascade, so callers run this inside a transaction.
 pub fn delete_model(
-    tx: &ClientDb,
+    tx: &WriteDb,
     blobs: &BlobManager,
     model: AnyModel,
     source: &UpdateSource,
@@ -69,7 +69,7 @@ pub fn delete_model(
 /// The model is re-read from the database rather than taken from the caller, so
 /// a duplicate never comes from a stale frontend snapshot.
 pub fn duplicate_model(
-    tx: &ClientDb,
+    tx: &WriteDb,
     model_type: &str,
     model_id: &str,
     source: &UpdateSource,

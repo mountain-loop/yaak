@@ -1,5 +1,5 @@
 use crate::blob_manager::BlobManager;
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{HttpResponse, HttpResponseIden, HttpResponseState};
 use crate::queries::MAX_HISTORY_ITEMS;
@@ -31,20 +31,6 @@ impl<'a> ClientDb<'a> {
         self.find_many(HttpResponseIden::WorkspaceId, workspace_id, limit)
     }
 
-    /// Returns the number of responses deleted.
-    pub fn delete_all_http_responses_for_request(
-        &self,
-        request_id: &str,
-        source: &UpdateSource,
-    ) -> Result<usize> {
-        let responses = self.list_http_responses_for_request(request_id, None)?;
-        let count = responses.len();
-        for m in responses {
-            self.delete(&m, source)?;
-        }
-        Ok(count)
-    }
-
     /// Delete blob-stored response bodies whose owning HTTP response row no
     /// longer exists. Blob ids are keyed by the response that owns them —
     /// "{response_id}" for a response body, "{response_id}.request" for the
@@ -55,19 +41,24 @@ impl<'a> ClientDb<'a> {
     ///
     /// Returns the number of orphaned bodies deleted.
     pub fn delete_orphaned_response_body_blobs(&self, blobs: &BlobManager) -> Result<usize> {
-        let mut deleted = 0;
+        let orphaned = blobs
+            .connect()
+            .list_body_ids()?
+            .into_iter()
+            .filter(|body_id| {
+                let response_id = body_id.split('.').next().unwrap_or_default();
+                self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_none()
+            })
+            .collect::<Vec<_>>();
 
-        let blob_ctx = blobs.connect();
-        for body_id in blob_ctx.list_body_ids()? {
-            let response_id = body_id.split('.').next().unwrap_or_default();
-            if self.find_optional::<HttpResponse>(HttpResponseIden::Id, response_id).is_some() {
-                continue;
+        blobs.with_tx(|b| {
+            for body_id in &orphaned {
+                b.delete_chunks(body_id)?;
             }
-            blob_ctx.delete_chunks(&body_id)?;
-            deleted += 1;
-        }
+            Ok::<_, crate::error::Error>(())
+        })?;
 
-        Ok(deleted)
+        Ok(orphaned.len())
     }
 
     /// Delete response body data (blob chunks and body files) whose owning HTTP
@@ -107,6 +98,22 @@ impl<'a> ClientDb<'a> {
 
         Ok(deleted)
     }
+}
+
+impl<'a> WriteDb<'a> {
+    /// Returns the number of responses deleted.
+    pub fn delete_all_http_responses_for_request(
+        &self,
+        request_id: &str,
+        source: &UpdateSource,
+    ) -> Result<usize> {
+        let responses = self.list_http_responses_for_request(request_id, None)?;
+        let count = responses.len();
+        for m in responses {
+            self.delete(&m, source)?;
+        }
+        Ok(count)
+    }
 
     /// Returns the number of responses deleted.
     pub fn delete_all_http_responses_for_workspace(
@@ -137,9 +144,8 @@ impl<'a> ClientDb<'a> {
         }
 
         // Delete request body blobs (pattern: {response_id}.request)
-        let blob_ctx = blob_manager.connect();
         let body_id = format!("{}.request", http_response.id);
-        if let Err(e) = blob_ctx.delete_chunks(&body_id) {
+        if let Err(e) = blob_manager.with_tx(|b| b.delete_chunks(&body_id)) {
             error!("Failed to delete request body blobs: {}", e);
         }
 
@@ -186,36 +192,50 @@ impl<'a> ClientDb<'a> {
 #[cfg(test)]
 mod tests {
     use crate::blob_manager::{BlobManager, BodyChunk};
-    use crate::client_db::ClientDb;
+    use crate::error::Error;
     use crate::init_in_memory;
     use crate::models::{HttpRequest, HttpResponse, Workspace};
+    use crate::query_manager::QueryManager;
     use crate::util::UpdateSource;
 
     /// A workspace, a request, and one response that still exists.
-    fn seed_live_response(db: &ClientDb, blob_manager: &BlobManager) -> HttpResponse {
+    fn seed_live_response(
+        query_manager: &QueryManager,
+        blob_manager: &BlobManager,
+    ) -> HttpResponse {
         let source = &UpdateSource::Background;
-        let workspace = db
-            .upsert_workspace(
-                &Workspace { name: "GC Test".to_string(), ..Default::default() },
-                source,
-            )
-            .expect("Failed to upsert workspace");
-        let request = db
-            .upsert_http_request(
-                &HttpRequest { workspace_id: workspace.id.clone(), ..Default::default() },
-                source,
-            )
-            .expect("Failed to upsert request");
-        db.upsert_http_response(
-            &HttpResponse {
-                request_id: request.id.clone(),
-                workspace_id: workspace.id.clone(),
-                ..Default::default()
-            },
-            source,
-            blob_manager,
-        )
-        .expect("Failed to upsert response")
+        query_manager
+            .with_tx(|db| {
+                let workspace = db.upsert_workspace(
+                    &Workspace { name: "GC Test".to_string(), ..Default::default() },
+                    source,
+                )?;
+                let request = db.upsert_http_request(
+                    &HttpRequest { workspace_id: workspace.id.clone(), ..Default::default() },
+                    source,
+                )?;
+                db.upsert_http_response(
+                    &HttpResponse {
+                        request_id: request.id.clone(),
+                        workspace_id: workspace.id.clone(),
+                        ..Default::default()
+                    },
+                    source,
+                    blob_manager,
+                )
+            })
+            .expect("Failed to seed response")
+    }
+
+    fn insert_bodies(blob_manager: &BlobManager, body_ids: &[&str]) {
+        blob_manager
+            .with_tx(|b| {
+                for id in body_ids {
+                    b.insert_chunk(&BodyChunk::new(*id, 0, b"data".to_vec()))?;
+                }
+                Ok::<_, Error>(())
+            })
+            .expect("Failed to insert chunks");
     }
 
     /// What a browser host runs: no filesystem, so bodies exist only as blob
@@ -223,23 +243,21 @@ mod tests {
     #[test]
     fn deletes_orphaned_response_body_blobs() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
 
-        let live = seed_live_response(&db, &blob_manager);
+        let live = seed_live_response(&query_manager, &blob_manager);
         let live_request_body_id = format!("{}.request", live.id);
-        {
-            // Scope the connection: the in-memory pool only has one, and the GC
-            // needs to take it
-            let blob_ctx = blob_manager.connect();
-            blob_ctx.insert_chunk(&BodyChunk::new(&live.id, 0, b"live".to_vec())).unwrap();
-            blob_ctx
-                .insert_chunk(&BodyChunk::new(&live_request_body_id, 0, b"live".to_vec()))
-                .unwrap();
-            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())).unwrap();
-            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone.request", 0, b"dead".to_vec())).unwrap();
-        }
+        insert_bodies(
+            &blob_manager,
+            &[
+                &live.id,
+                &live_request_body_id,
+                "rs_gone",
+                "rs_gone.request",
+            ],
+        );
 
-        let deleted = db
+        let deleted = query_manager
+            .connect()
             .delete_orphaned_response_body_blobs(&blob_manager)
             .expect("Failed to GC response body blobs");
         assert_eq!(deleted, 2);
@@ -254,24 +272,18 @@ mod tests {
     #[test]
     fn deletes_orphaned_response_bodies() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
 
-        let live = seed_live_response(&db, &blob_manager);
+        let live = seed_live_response(&query_manager, &blob_manager);
         let live_body_id = format!("{}.request", live.id);
-        {
-            // Scope the connection: the in-memory pool only has one, and the GC
-            // needs to take it
-            let blob_ctx = blob_manager.connect();
-            blob_ctx.insert_chunk(&BodyChunk::new(&live_body_id, 0, b"live".to_vec())).unwrap();
-            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone.request", 0, b"dead".to_vec())).unwrap();
-        }
+        insert_bodies(&blob_manager, &[&live_body_id, "rs_gone.request"]);
 
         let dir = std::env::temp_dir().join(format!("yaak-blob-gc-test-{}", live.id));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join(&live.id), b"live").unwrap();
         std::fs::write(dir.join("rs_gone"), b"dead").unwrap();
 
-        let deleted = db
+        let deleted = query_manager
+            .connect()
             .delete_orphaned_response_bodies(&blob_manager, &dir)
             .expect("Failed to GC response bodies");
         assert_eq!(deleted, 2);

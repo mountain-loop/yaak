@@ -21,7 +21,8 @@
 //! the second ask. Sharing the handle instead makes nested *reads* work the way
 //! they do on the desktop; nested *write transactions* fail on both, only
 //! differently (here SQLite refuses the inner `BEGIN`; natively the inner
-//! connection blocks on `busy_timeout` and then fails).
+//! call waits for the one writer connection, which the outer call holds, and
+//! times out).
 
 #[cfg(not(target_arch = "wasm32"))]
 mod imp {

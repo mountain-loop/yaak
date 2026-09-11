@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{HttpResponseEvent, HttpResponseEventIden};
 use crate::util::UpdateSource;
@@ -7,7 +7,9 @@ impl<'a> ClientDb<'a> {
     pub fn list_http_response_events(&self, response_id: &str) -> Result<Vec<HttpResponseEvent>> {
         self.find_many(HttpResponseEventIden::ResponseId, response_id, None)
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn upsert_http_response_event(
         &self,
         http_response_event: &HttpResponseEvent,
