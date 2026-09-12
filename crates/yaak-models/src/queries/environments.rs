@@ -1,5 +1,5 @@
 use super::conflict_free_name;
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Error::{MissingBaseEnvironment, MultipleBaseEnvironments};
 use crate::error::Result;
 use crate::models::{Environment, EnvironmentIden, EnvironmentVariable};
@@ -20,7 +20,7 @@ impl<'a> ClientDb<'a> {
     }
 
     pub fn get_base_environment(&self, workspace_id: &str) -> Result<Environment> {
-        let environments = self.list_environments_ensure_base(workspace_id)?;
+        let environments = self.list_environments(workspace_id)?;
         let base_environments = environments
             .into_iter()
             .filter(|e| e.parent_model == "workspace")
@@ -30,38 +30,96 @@ impl<'a> ClientDb<'a> {
             return Err(MultipleBaseEnvironments(workspace_id.to_string()));
         }
 
-        Ok(base_environments.first().cloned().ok_or(
-            // Should never happen because one should be created above if it does not exist
-            MissingBaseEnvironment(workspace_id.to_string()),
-        )?)
+        Ok(base_environments
+            .first()
+            .cloned()
+            .ok_or(MissingBaseEnvironment(workspace_id.to_string()))?)
     }
 
-    /// Lists environments and will create a base environment if one doesn't exist
-    pub fn list_environments_ensure_base(&self, workspace_id: &str) -> Result<Vec<Environment>> {
-        let mut environments = self.list_environments_dangerous(workspace_id)?;
+    pub fn list_environments(&self, workspace_id: &str) -> Result<Vec<Environment>> {
+        Ok(self.find_many::<Environment>(EnvironmentIden::WorkspaceId, workspace_id, None)?)
+    }
 
-        let base_environment = environments.iter().find(|e| e.parent_model == "workspace");
+    /// Find other environments with the same parent folder
+    fn list_duplicate_folder_environments(&self, environment: &Environment) -> Vec<Environment> {
+        if environment.parent_model != "folder" {
+            return Vec::new();
+        }
 
-        if let None = base_environment {
-            let e = self.upsert_environment(
-                &Environment {
-                    workspace_id: workspace_id.to_string(),
-                    name: "Global Variables".to_string(),
-                    parent_model: "workspace".to_string(),
-                    ..Default::default()
-                },
-                &UpdateSource::Background,
+        self.list_environments(&environment.workspace_id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|e| {
+                e.id != environment.id
+                    && e.parent_model == "folder"
+                    && e.parent_id == environment.parent_id
+            })
+            .collect()
+    }
+
+    pub fn resolve_environments(
+        &self,
+        workspace_id: &str,
+        folder_id: Option<&str>,
+        active_environment_id: Option<&str>,
+    ) -> Result<Vec<Environment>> {
+        let mut environments = Vec::new();
+
+        if let Some(folder_id) = folder_id {
+            let folder = self.get_folder(folder_id)?;
+
+            // Add current folder's environment
+            if let Some(e) = self.get_environment_by_folder_id(folder_id)? {
+                environments.push(e);
+            };
+
+            // Recurse up
+            let ancestors = self.resolve_environments(
+                workspace_id,
+                folder.folder_id.as_deref(),
+                active_environment_id,
             )?;
-            info!("Created base environment {} for {workspace_id}", e.id);
-            environments.push(e);
+            environments.extend(ancestors);
+        } else {
+            // Add active and base environments
+            if let Some(id) = active_environment_id {
+                if let Ok(e) = self.get_environment(&id) {
+                    // Add active sub environment
+                    environments.push(e);
+                };
+            };
+
+            // Add the base environment. A workspace that has never been
+            // opened has none yet; it simply contributes no variables.
+            match self.get_base_environment(workspace_id) {
+                Ok(e) => environments.push(e),
+                Err(MissingBaseEnvironment(_)) => {}
+                Err(e) => return Err(e),
+            }
         }
 
         Ok(environments)
     }
+}
 
-    /// List environments for a workspace. Prefer list_environments_ensure_base()
-    fn list_environments_dangerous(&self, workspace_id: &str) -> Result<Vec<Environment>> {
-        Ok(self.find_many::<Environment>(EnvironmentIden::WorkspaceId, workspace_id, None)?)
+impl<'a> WriteDb<'a> {
+    /// The workspace's base environment, created if it does not exist.
+    pub fn ensure_base_environment(&self, workspace_id: &str) -> Result<Environment> {
+        match self.get_base_environment(workspace_id) {
+            Err(MissingBaseEnvironment(_)) => {}
+            other => return other,
+        }
+        let e = self.upsert_environment(
+            &Environment {
+                workspace_id: workspace_id.to_string(),
+                name: "Global Variables".to_string(),
+                parent_model: "workspace".to_string(),
+                ..Default::default()
+            },
+            &UpdateSource::Background,
+        )?;
+        info!("Created base environment {} for {workspace_id}", e.id);
+        Ok(e)
     }
 
     pub fn delete_environment(
@@ -72,7 +130,7 @@ impl<'a> ClientDb<'a> {
         let deleted_environment = self.delete(environment, source)?;
 
         // Recreate the base environment if we happened to delete it
-        self.list_environments_ensure_base(&environment.workspace_id)?;
+        self.ensure_base_environment(&environment.workspace_id)?;
 
         Ok(deleted_environment)
     }
@@ -90,29 +148,12 @@ impl<'a> ClientDb<'a> {
         let mut environment = environment.clone();
         environment.id = "".to_string();
         let sibling_names = self
-            .list_environments_dangerous(&environment.workspace_id)?
+            .list_environments(&environment.workspace_id)?
             .into_iter()
             .map(|e| e.name)
             .collect::<Vec<_>>();
         environment.name = conflict_free_name(&environment.name, &sibling_names);
         self.upsert_environment(&environment, source)
-    }
-
-    /// Find other environments with the same parent folder
-    fn list_duplicate_folder_environments(&self, environment: &Environment) -> Vec<Environment> {
-        if environment.parent_model != "folder" {
-            return Vec::new();
-        }
-
-        self.list_environments_dangerous(&environment.workspace_id)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|e| {
-                e.id != environment.id
-                    && e.parent_model == "folder"
-                    && e.parent_id == environment.parent_id
-            })
-            .collect()
     }
 
     pub fn upsert_environment(
@@ -153,44 +194,5 @@ impl<'a> ClientDb<'a> {
             &Environment { name, variables: cleaned_variables, ..environment.clone() },
             source,
         )
-    }
-
-    pub fn resolve_environments(
-        &self,
-        workspace_id: &str,
-        folder_id: Option<&str>,
-        active_environment_id: Option<&str>,
-    ) -> Result<Vec<Environment>> {
-        let mut environments = Vec::new();
-
-        if let Some(folder_id) = folder_id {
-            let folder = self.get_folder(folder_id)?;
-
-            // Add current folder's environment
-            if let Some(e) = self.get_environment_by_folder_id(folder_id)? {
-                environments.push(e);
-            };
-
-            // Recurse up
-            let ancestors = self.resolve_environments(
-                workspace_id,
-                folder.folder_id.as_deref(),
-                active_environment_id,
-            )?;
-            environments.extend(ancestors);
-        } else {
-            // Add active and base environments
-            if let Some(id) = active_environment_id {
-                if let Ok(e) = self.get_environment(&id) {
-                    // Add active sub environment
-                    environments.push(e);
-                };
-            };
-
-            // Add the base environment
-            environments.push(self.get_base_environment(workspace_id)?);
-        }
-
-        Ok(environments)
     }
 }

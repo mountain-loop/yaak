@@ -40,8 +40,7 @@ pub fn seed_workspace(data_dir: &Path, workspace_id: &str) {
     };
 
     query_manager(data_dir)
-        .connect()
-        .upsert_workspace(&workspace, &UpdateSource::Sync)
+        .with_tx(|tx| tx.upsert_workspace(&workspace, &UpdateSource::Sync))
         .expect("Failed to seed workspace");
 }
 
@@ -56,8 +55,7 @@ pub fn seed_request(data_dir: &Path, workspace_id: &str, request_id: &str) {
     };
 
     query_manager(data_dir)
-        .connect()
-        .upsert_http_request(&request, &UpdateSource::Sync)
+        .with_tx(|tx| tx.upsert_http_request(&request, &UpdateSource::Sync))
         .expect("Failed to seed request");
 }
 
@@ -70,8 +68,7 @@ pub fn seed_folder(data_dir: &Path, workspace_id: &str, folder_id: &str) {
     };
 
     query_manager(data_dir)
-        .connect()
-        .upsert_folder(&folder, &UpdateSource::Sync)
+        .with_tx(|tx| tx.upsert_folder(&folder, &UpdateSource::Sync))
         .expect("Failed to seed folder");
 }
 
@@ -85,8 +82,7 @@ pub fn seed_grpc_request(data_dir: &Path, workspace_id: &str, request_id: &str) 
     };
 
     query_manager(data_dir)
-        .connect()
-        .upsert_grpc_request(&request, &UpdateSource::Sync)
+        .with_tx(|tx| tx.upsert_grpc_request(&request, &UpdateSource::Sync))
         .expect("Failed to seed gRPC request");
 }
 
@@ -100,7 +96,6 @@ pub fn seed_websocket_request(data_dir: &Path, workspace_id: &str, request_id: &
     };
 
     query_manager(data_dir)
-        .connect()
-        .upsert_websocket_request(&request, &UpdateSource::Sync)
+        .with_tx(|tx| tx.upsert_websocket_request(&request, &UpdateSource::Sync))
         .expect("Failed to seed WebSocket request");
 }

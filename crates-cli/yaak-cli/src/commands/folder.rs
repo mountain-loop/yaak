@@ -102,8 +102,8 @@ fn create(
         )?;
 
         let created = ctx
-            .db()
-            .upsert_folder(&folder, &UpdateSource::Sync)
+            .query_manager()
+            .with_tx(|tx| tx.upsert_folder(&folder, &UpdateSource::Sync))
             .map_err(|e| format!("Failed to create folder: {e}"))?;
 
         println!("Created folder: {}", created.id);
@@ -118,8 +118,8 @@ fn create(
     let folder = Folder { workspace_id, name, ..Default::default() };
 
     let created = ctx
-        .db()
-        .upsert_folder(&folder, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_folder(&folder, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to create folder: {e}"))?;
 
     println!("Created folder: {}", created.id);
@@ -135,8 +135,8 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
     let updated = apply_merge_patch(&existing, &patch, &id, "folder update")?;
 
     let saved = ctx
-        .db()
-        .upsert_folder(&updated, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_folder(&updated, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to update folder: {e}"))?;
 
     println!("Updated folder: {}", saved.id);
@@ -150,8 +150,8 @@ fn delete(ctx: &CliContext, folder_id: &str, yes: bool) -> CommandResult {
     }
 
     let deleted = ctx
-        .db()
-        .delete_folder_by_id(folder_id, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.delete_folder_by_id(folder_id, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to delete folder: {e}"))?;
 
     println!("Deleted folder: {}", deleted.id);

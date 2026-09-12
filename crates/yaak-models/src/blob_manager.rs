@@ -1,9 +1,11 @@
+use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::util::generate_prefixed_id;
 use include_dir::{Dir, include_dir};
 use log::{debug, info};
-use rusqlite::{OptionalExtension, params};
-use yaak_database::{SqliteConn, SqlitePool};
+use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params};
+use std::ops::Deref;
+use yaak_database::{ConnectionOrTx, SqlitePool};
 
 static BLOB_MIGRATIONS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/blob_migrations");
 
@@ -22,41 +24,64 @@ impl BodyChunk {
     }
 }
 
-/// Manages the blob database connection pool.
-// Pool is internally synchronized — don't wrap it in a Mutex. A Mutex held across the
+/// Manages the blob database: a reader pool and a single writer, for the
+/// same reason as [`crate::query_manager::QueryManager`].
+// Pools are internally synchronized — don't wrap them in a Mutex. A Mutex held across the
 // blocking `get()` serializes every blob access behind the slowest waiter, freezing the
 // whole app whenever the pool is exhausted.
 #[derive(Debug, Clone)]
 pub struct BlobManager {
-    pool: SqlitePool,
+    readers: SqlitePool,
+    writer: SqlitePool,
 }
 
 impl BlobManager {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    /// `writer` must be a pool with a single connection.
+    pub fn new(readers: SqlitePool, writer: SqlitePool) -> Self {
+        Self { readers, writer }
     }
 
-    pub fn connect(&self) -> BlobContext {
-        let conn = self.pool.get().expect("Failed to get blob DB connection from pool");
-        BlobContext { conn }
+    /// A read handle from the reader pool.
+    pub fn connect(&self) -> BlobContext<'_> {
+        let conn = self.readers.get().expect("Failed to get blob DB connection from pool");
+        BlobContext { conn: ConnectionOrTx::Connection(conn) }
+    }
+
+    /// Run `func` in a transaction on the writer connection.
+    pub fn with_tx<T, E>(
+        &self,
+        func: impl FnOnce(&BlobWriter) -> std::result::Result<T, E>,
+    ) -> std::result::Result<T, E>
+    where
+        E: From<crate::error::Error>,
+    {
+        let conn = self.writer.get().map_err(crate::error::Error::SqlPoolError)?;
+        let tx = Transaction::new_unchecked(&conn, TransactionBehavior::Immediate)
+            .map_err(crate::error::Error::SqlError)?;
+        let writer = BlobWriter { ctx: BlobContext { conn: ConnectionOrTx::Transaction(&tx) } };
+        match func(&writer) {
+            Ok(val) => {
+                tx.commit().map_err(|e| {
+                    GenericError(format!("Failed to commit blob transaction {e:?}"))
+                })?;
+                Ok(val)
+            }
+            Err(e) => {
+                tx.rollback().map_err(|e| {
+                    GenericError(format!("Failed to rollback blob transaction {e:?}"))
+                })?;
+                Err(e)
+            }
+        }
     }
 }
 
-/// Context for blob database operations.
-pub struct BlobContext {
-    conn: SqliteConn,
+/// Read handle for the blob database.
+pub struct BlobContext<'a> {
+    conn: ConnectionOrTx<'a>,
 }
 
-impl BlobContext {
-    /// Insert a single chunk.
-    pub fn insert_chunk(&self, chunk: &BodyChunk) -> Result<()> {
-        self.conn.execute(
-            "INSERT INTO body_chunks (id, body_id, chunk_index, data) VALUES (?1, ?2, ?3, ?4)",
-            params![chunk.id, chunk.body_id, chunk.chunk_index, chunk.data],
-        )?;
-        Ok(())
-    }
-
+impl<'a> BlobContext<'a> {
     /// Get all chunks for a body, ordered by chunk_index.
     pub fn get_chunks(&self, body_id: &str) -> Result<Vec<BodyChunk>> {
         let mut stmt = self.conn.prepare(
@@ -87,25 +112,11 @@ impl BlobContext {
         Ok(ids)
     }
 
-    /// Delete all chunks for a body.
-    pub fn delete_chunks(&self, body_id: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM body_chunks WHERE body_id = ?1", params![body_id])?;
-        Ok(())
-    }
-
-    /// Delete all chunks matching a body_id prefix (e.g., "rs_abc123.%" to delete all bodies for a response).
-    pub fn delete_chunks_like(&self, body_id_prefix: &str) -> Result<()> {
-        self.conn
-            .execute("DELETE FROM body_chunks WHERE body_id LIKE ?1", params![body_id_prefix])?;
-        Ok(())
-    }
-}
-
-/// Get total size of a body without loading data.
-impl BlobContext {
+    /// Get total size of a body without loading data.
     pub fn get_body_size(&self, body_id: &str) -> Result<usize> {
         let size: i64 = self
             .conn
+            .resolve()
             .query_row(
                 "SELECT COALESCE(SUM(LENGTH(data)), 0) FROM body_chunks WHERE body_id = ?1",
                 params![body_id],
@@ -119,6 +130,7 @@ impl BlobContext {
     pub fn body_exists(&self, body_id: &str) -> Result<bool> {
         let count: i64 = self
             .conn
+            .resolve()
             .query_row(
                 "SELECT COUNT(*) FROM body_chunks WHERE body_id = ?1",
                 params![body_id],
@@ -126,6 +138,44 @@ impl BlobContext {
             )
             .unwrap_or(0);
         Ok(count > 0)
+    }
+}
+
+/// Write handle for the blob database. Derefs to [`BlobContext`] for reads.
+pub struct BlobWriter<'a> {
+    ctx: BlobContext<'a>,
+}
+
+impl<'a> Deref for BlobWriter<'a> {
+    type Target = BlobContext<'a>;
+
+    fn deref(&self) -> &BlobContext<'a> {
+        &self.ctx
+    }
+}
+
+impl<'a> BlobWriter<'a> {
+    /// Insert a single chunk.
+    pub fn insert_chunk(&self, chunk: &BodyChunk) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO body_chunks (id, body_id, chunk_index, data) VALUES (?1, ?2, ?3, ?4)",
+            params![chunk.id, chunk.body_id, chunk.chunk_index, chunk.data],
+        )?;
+        Ok(())
+    }
+
+    /// Delete all chunks for a body.
+    pub fn delete_chunks(&self, body_id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM body_chunks WHERE body_id = ?1", params![body_id])?;
+        Ok(())
+    }
+
+    /// Delete all chunks matching a body_id prefix (e.g., "rs_abc123.%" to delete all
+    /// bodies for a response).
+    pub fn delete_chunks_like(&self, body_id_prefix: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM body_chunks WHERE body_id LIKE ?1", params![body_id_prefix])?;
+        Ok(())
     }
 }
 
@@ -196,28 +246,39 @@ pub fn migrate_blob_db(pool: &SqlitePool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Error;
 
-    fn create_test_pool() -> SqlitePool {
+    fn create_test_manager() -> BlobManager {
         let manager = r2d2_sqlite::SqliteConnectionManager::memory();
         let pool = r2d2::Pool::builder().max_size(1).build(manager).unwrap();
         migrate_blob_db(&pool).unwrap();
-        pool
+        BlobManager::new(pool.clone(), pool)
+    }
+
+    fn insert(manager: &BlobManager, chunks: &[BodyChunk]) {
+        manager
+            .with_tx(|b| {
+                for c in chunks {
+                    b.insert_chunk(c)?;
+                }
+                Ok::<_, Error>(())
+            })
+            .unwrap();
     }
 
     #[test]
     fn test_insert_and_get_chunks() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
+        let manager = create_test_manager();
         let body_id = "rs_test123.request";
-        let chunk1 = BodyChunk::new(body_id, 0, b"Hello, ".to_vec());
-        let chunk2 = BodyChunk::new(body_id, 1, b"World!".to_vec());
+        insert(
+            &manager,
+            &[
+                BodyChunk::new(body_id, 0, b"Hello, ".to_vec()),
+                BodyChunk::new(body_id, 1, b"World!".to_vec()),
+            ],
+        );
 
-        ctx.insert_chunk(&chunk1).unwrap();
-        ctx.insert_chunk(&chunk2).unwrap();
-
-        let chunks = ctx.get_chunks(body_id).unwrap();
+        let chunks = manager.connect().get_chunks(body_id).unwrap();
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0].chunk_index, 0);
         assert_eq!(chunks[0].data, b"Hello, ");
@@ -227,18 +288,19 @@ mod tests {
 
     #[test]
     fn test_get_chunks_ordered_by_index() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
+        let manager = create_test_manager();
         let body_id = "rs_test123.request";
-
         // Insert out of order
-        ctx.insert_chunk(&BodyChunk::new(body_id, 2, b"C".to_vec())).unwrap();
-        ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"A".to_vec())).unwrap();
-        ctx.insert_chunk(&BodyChunk::new(body_id, 1, b"B".to_vec())).unwrap();
+        insert(
+            &manager,
+            &[
+                BodyChunk::new(body_id, 2, b"C".to_vec()),
+                BodyChunk::new(body_id, 0, b"A".to_vec()),
+                BodyChunk::new(body_id, 1, b"B".to_vec()),
+            ],
+        );
 
-        let chunks = ctx.get_chunks(body_id).unwrap();
+        let chunks = manager.connect().get_chunks(body_id).unwrap();
         assert_eq!(chunks.len(), 3);
         assert_eq!(chunks[0].data, b"A");
         assert_eq!(chunks[1].data, b"B");
@@ -247,89 +309,85 @@ mod tests {
 
     #[test]
     fn test_delete_chunks() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
+        let manager = create_test_manager();
         let body_id = "rs_test123.request";
-        ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"data".to_vec())).unwrap();
+        insert(&manager, &[BodyChunk::new(body_id, 0, b"data".to_vec())]);
+        assert!(manager.connect().body_exists(body_id).unwrap());
 
-        assert!(ctx.body_exists(body_id).unwrap());
+        manager.with_tx(|b| b.delete_chunks(body_id)).unwrap();
 
-        ctx.delete_chunks(body_id).unwrap();
-
+        let ctx = manager.connect();
         assert!(!ctx.body_exists(body_id).unwrap());
         assert_eq!(ctx.get_chunks(body_id).unwrap().len(), 0);
     }
 
     #[test]
     fn test_delete_chunks_like() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
+        let manager = create_test_manager();
         // Insert chunks for same response but different body types
-        ctx.insert_chunk(&BodyChunk::new("rs_abc.request", 0, b"req".to_vec())).unwrap();
-        ctx.insert_chunk(&BodyChunk::new("rs_abc.response", 0, b"resp".to_vec())).unwrap();
-        ctx.insert_chunk(&BodyChunk::new("rs_other.request", 0, b"other".to_vec())).unwrap();
+        insert(
+            &manager,
+            &[
+                BodyChunk::new("rs_abc.request", 0, b"req".to_vec()),
+                BodyChunk::new("rs_abc.response", 0, b"resp".to_vec()),
+                BodyChunk::new("rs_other.request", 0, b"other".to_vec()),
+            ],
+        );
 
         // Delete all bodies for rs_abc
-        ctx.delete_chunks_like("rs_abc.%").unwrap();
+        manager.with_tx(|b| b.delete_chunks_like("rs_abc.%")).unwrap();
 
-        // rs_abc bodies should be gone
+        let ctx = manager.connect();
         assert!(!ctx.body_exists("rs_abc.request").unwrap());
         assert!(!ctx.body_exists("rs_abc.response").unwrap());
-
-        // rs_other should still exist
         assert!(ctx.body_exists("rs_other.request").unwrap());
     }
 
     #[test]
     fn test_get_body_size() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
+        let manager = create_test_manager();
         let body_id = "rs_test123.request";
-        ctx.insert_chunk(&BodyChunk::new(body_id, 0, b"Hello".to_vec())).unwrap();
-        ctx.insert_chunk(&BodyChunk::new(body_id, 1, b"World".to_vec())).unwrap();
+        insert(
+            &manager,
+            &[
+                BodyChunk::new(body_id, 0, b"Hello".to_vec()),
+                BodyChunk::new(body_id, 1, b"World".to_vec()),
+            ],
+        );
 
-        let size = ctx.get_body_size(body_id).unwrap();
+        let size = manager.connect().get_body_size(body_id).unwrap();
         assert_eq!(size, 10); // "Hello" + "World" = 10 bytes
     }
 
     #[test]
     fn test_get_body_size_empty() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
-        let size = ctx.get_body_size("nonexistent").unwrap();
+        let manager = create_test_manager();
+        let size = manager.connect().get_body_size("nonexistent").unwrap();
         assert_eq!(size, 0);
     }
 
     #[test]
     fn test_body_exists() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
+        let manager = create_test_manager();
+        assert!(!manager.connect().body_exists("rs_test.request").unwrap());
 
-        assert!(!ctx.body_exists("rs_test.request").unwrap());
+        insert(&manager, &[BodyChunk::new("rs_test.request", 0, b"data".to_vec())]);
 
-        ctx.insert_chunk(&BodyChunk::new("rs_test.request", 0, b"data".to_vec())).unwrap();
-
-        assert!(ctx.body_exists("rs_test.request").unwrap());
+        assert!(manager.connect().body_exists("rs_test.request").unwrap());
     }
 
     #[test]
     fn test_multiple_bodies_isolated() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
+        let manager = create_test_manager();
+        insert(
+            &manager,
+            &[
+                BodyChunk::new("body1", 0, b"data1".to_vec()),
+                BodyChunk::new("body2", 0, b"data2".to_vec()),
+            ],
+        );
+
         let ctx = manager.connect();
-
-        ctx.insert_chunk(&BodyChunk::new("body1", 0, b"data1".to_vec())).unwrap();
-        ctx.insert_chunk(&BodyChunk::new("body2", 0, b"data2".to_vec())).unwrap();
-
         let chunks1 = ctx.get_chunks("body1").unwrap();
         let chunks2 = ctx.get_chunks("body2").unwrap();
 
@@ -341,16 +399,13 @@ mod tests {
 
     #[test]
     fn test_large_chunk() {
-        let pool = create_test_pool();
-        let manager = BlobManager::new(pool);
-        let ctx = manager.connect();
-
+        let manager = create_test_manager();
         // 1MB chunk
         let large_data: Vec<u8> = (0..1024 * 1024).map(|i| (i % 256) as u8).collect();
         let body_id = "rs_large.request";
+        insert(&manager, &[BodyChunk::new(body_id, 0, large_data.clone())]);
 
-        ctx.insert_chunk(&BodyChunk::new(body_id, 0, large_data.clone())).unwrap();
-
+        let ctx = manager.connect();
         let chunks = ctx.get_chunks(body_id).unwrap();
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].data, large_data);

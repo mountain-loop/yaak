@@ -202,16 +202,18 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     // Resolve the manager before writing the row so startup's plugin snapshot
     // can't include it and boot it a second time
     let plugin_manager = Arc::new(plugin_manager(&window).await?);
-    let plugin = window.db().upsert_plugin(
-        &Plugin {
-            directory: directory.into(),
-            url: None,
-            enabled: true,
-            source: PluginSource::Filesystem,
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-    )?;
+    let plugin = window.with_tx(|tx| {
+        tx.upsert_plugin(
+            &Plugin {
+                directory: directory.into(),
+                url: None,
+                enabled: true,
+                source: PluginSource::Filesystem,
+                ..Default::default()
+            },
+            &UpdateSource::from_window_label(window.label()),
+        )
+    })?;
 
     plugin_manager.add_plugin(&window.plugin_context(), &plugin).await?;
 

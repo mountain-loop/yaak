@@ -72,7 +72,7 @@ pub trait Host: Clone {
         self.query_manager().connect()
     }
 
-    fn blobs(&self) -> BlobContext {
+    fn blobs(&self) -> BlobContext<'_> {
         self.blob_manager().connect()
     }
 }

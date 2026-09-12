@@ -1,5 +1,5 @@
 use super::{conflict_free_name, merge_headers};
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{
     AnyModel, Folder, FolderIden, GrpcRequest, GrpcRequestIden, HttpRequestHeader,
@@ -30,50 +30,6 @@ impl<'a> ClientDb<'a> {
             children.push(request);
         }
         Ok(children)
-    }
-
-    pub fn delete_grpc_request(
-        &self,
-        m: &GrpcRequest,
-        source: &UpdateSource,
-    ) -> Result<GrpcRequest> {
-        self.delete_all_grpc_connections_for_request(m.id.as_str(), source)?;
-        self.delete(m, source)
-    }
-
-    pub fn delete_grpc_request_by_id(
-        &self,
-        id: &str,
-        source: &UpdateSource,
-    ) -> Result<GrpcRequest> {
-        let request = self.get_grpc_request(id)?;
-        self.delete_grpc_request(&request, source)
-    }
-
-    pub fn duplicate_grpc_request(
-        &self,
-        grpc_request: &GrpcRequest,
-        source: &UpdateSource,
-    ) -> Result<GrpcRequest> {
-        let mut request = grpc_request.clone();
-        request.id = "".to_string();
-        request.sort_priority = request.sort_priority + 0.001;
-        let sibling_names = self
-            .list_grpc_requests(&request.workspace_id)?
-            .into_iter()
-            .filter(|m| m.folder_id == request.folder_id)
-            .map(|m| m.name)
-            .collect::<Vec<_>>();
-        request.name = conflict_free_name(&request.name, &sibling_names);
-        self.upsert(&request, source)
-    }
-
-    pub fn upsert_grpc_request(
-        &self,
-        grpc_request: &GrpcRequest,
-        source: &UpdateSource,
-    ) -> Result<GrpcRequest> {
-        self.upsert(grpc_request, source)
     }
 
     pub fn resolve_auth_for_grpc_request(
@@ -144,5 +100,51 @@ impl<'a> ClientDb<'a> {
             },
             ..parent
         })
+    }
+}
+
+impl<'a> WriteDb<'a> {
+    pub fn delete_grpc_request(
+        &self,
+        m: &GrpcRequest,
+        source: &UpdateSource,
+    ) -> Result<GrpcRequest> {
+        self.delete_all_grpc_connections_for_request(m.id.as_str(), source)?;
+        self.delete(m, source)
+    }
+
+    pub fn delete_grpc_request_by_id(
+        &self,
+        id: &str,
+        source: &UpdateSource,
+    ) -> Result<GrpcRequest> {
+        let request = self.get_grpc_request(id)?;
+        self.delete_grpc_request(&request, source)
+    }
+
+    pub fn duplicate_grpc_request(
+        &self,
+        grpc_request: &GrpcRequest,
+        source: &UpdateSource,
+    ) -> Result<GrpcRequest> {
+        let mut request = grpc_request.clone();
+        request.id = "".to_string();
+        request.sort_priority = request.sort_priority + 0.001;
+        let sibling_names = self
+            .list_grpc_requests(&request.workspace_id)?
+            .into_iter()
+            .filter(|m| m.folder_id == request.folder_id)
+            .map(|m| m.name)
+            .collect::<Vec<_>>();
+        request.name = conflict_free_name(&request.name, &sibling_names);
+        self.upsert(&request, source)
+    }
+
+    pub fn upsert_grpc_request(
+        &self,
+        grpc_request: &GrpcRequest,
+        source: &UpdateSource,
+    ) -> Result<GrpcRequest> {
+        self.upsert(grpc_request, source)
     }
 }

@@ -83,7 +83,7 @@ impl EncryptionManager {
 
         let workspace_meta = self.query_manager.with_tx::<WorkspaceMeta, Error>(|tx| {
             let workspace = tx.get_workspace(workspace_id)?;
-            let workspace_meta = tx.get_or_create_workspace_meta(workspace_id)?;
+            let workspace_meta = tx.ensure_workspace_meta(workspace_id)?;
             tx.upsert_workspace(
                 &Workspace { encryption_key_challenge, ..workspace },
                 &UpdateSource::Background,
@@ -103,7 +103,7 @@ impl EncryptionManager {
 
     pub fn ensure_workspace_key(&self, workspace_id: &str) -> Result<WorkspaceMeta> {
         let workspace_meta =
-            self.query_manager.connect().get_or_create_workspace_meta(workspace_id)?;
+            self.query_manager.with_tx(|tx| tx.ensure_workspace_meta(workspace_id))?;
 
         // Already exists
         if let Some(_) = workspace_meta.encryption_key {
@@ -120,7 +120,7 @@ impl EncryptionManager {
 
         self.query_manager.with_tx::<(), Error>(|tx| {
             let workspace = tx.get_workspace(workspace_id)?;
-            let workspace_meta = tx.get_or_create_workspace_meta(workspace_id)?;
+            let workspace_meta = tx.ensure_workspace_meta(workspace_id)?;
 
             // Clear encryption challenge on workspace
             tx.upsert_workspace(
@@ -152,10 +152,12 @@ impl EncryptionManager {
             }
         };
 
-        let db = self.query_manager.connect();
-        let workspace_meta = db.get_or_create_workspace_meta(workspace_id)?;
-
-        let key = match workspace_meta.encryption_key {
+        let key = match self
+            .query_manager
+            .connect()
+            .get_workspace_meta(workspace_id)
+            .and_then(|m| m.encryption_key)
+        {
             None => return Err(MissingWorkspaceKey),
             Some(k) => k,
         };

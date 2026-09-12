@@ -7,7 +7,7 @@
 use log::info;
 use std::path::PathBuf;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::client_db::ClientDb;
+use yaak_models::client_db::WriteDb;
 use yaak_models::error::Result;
 
 const MODEL_CHANGES_RETENTION_HOURS: i64 = 1;
@@ -44,7 +44,8 @@ impl Host {
 }
 
 /// Run once after the database is open, before the host answers anything.
-pub fn on_launch(host: &Host, db: &ClientDb, blobs: &BlobManager) -> Result<()> {
+/// Takes the write handle: a launch closes what the last session left open.
+pub fn on_launch(host: &Host, db: &WriteDb, blobs: &BlobManager) -> Result<()> {
     db.prune_model_changes_older_than_hours(MODEL_CHANGES_RETENTION_HOURS)?;
 
     if host.role == Role::Owner {
@@ -77,53 +78,48 @@ mod tests {
     #[test]
     fn only_the_owner_closes_what_the_last_session_left_open() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
         let source = &UpdateSource::Background;
 
-        let workspace = db
-            .upsert_workspace(
-                &Workspace { name: "Hooks".to_string(), ..Default::default() },
-                source,
-            )
-            .unwrap();
-        let request = db
-            .upsert_http_request(
-                &HttpRequest { workspace_id: workspace.id.clone(), ..Default::default() },
-                source,
-            )
-            .unwrap();
-        let pending = db
-            .upsert_http_response(
-                &HttpResponse {
-                    request_id: request.id.clone(),
-                    workspace_id: workspace.id.clone(),
-                    state: HttpResponseState::Connected,
-                    ..Default::default()
-                },
-                source,
-                &blob_manager,
-            )
+        let pending = query_manager
+            .with_tx(|db| {
+                let workspace = db.upsert_workspace(
+                    &Workspace { name: "Hooks".to_string(), ..Default::default() },
+                    source,
+                )?;
+                let request = db.upsert_http_request(
+                    &HttpRequest { workspace_id: workspace.id.clone(), ..Default::default() },
+                    source,
+                )?;
+                db.upsert_http_response(
+                    &HttpResponse {
+                        request_id: request.id.clone(),
+                        workspace_id: workspace.id.clone(),
+                        state: HttpResponseState::Connected,
+                        ..Default::default()
+                    },
+                    source,
+                    &blob_manager,
+                )
+            })
             .unwrap();
 
-        on_launch(&Host::guest(), &db, &blob_manager).unwrap();
-        let response = db.get_http_response(&pending.id).unwrap();
+        query_manager.with_tx(|db| on_launch(&Host::guest(), db, &blob_manager)).unwrap();
+        let response = query_manager.connect().get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Connected));
 
-        on_launch(&Host::owner(), &db, &blob_manager).unwrap();
-        let response = db.get_http_response(&pending.id).unwrap();
+        query_manager.with_tx(|db| on_launch(&Host::owner(), db, &blob_manager)).unwrap();
+        let response = query_manager.connect().get_http_response(&pending.id).unwrap();
         assert!(matches!(response.state, HttpResponseState::Closed));
     }
 
     #[test]
     fn owner_without_a_filesystem_still_sweeps_blobs() {
         let (query_manager, blob_manager, _rx) = init_in_memory().expect("Failed to init DB");
-        let db = query_manager.connect();
-        {
-            let blob_ctx = blob_manager.connect();
-            blob_ctx.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())).unwrap();
-        }
+        blob_manager
+            .with_tx(|b| b.insert_chunk(&BodyChunk::new("rs_gone", 0, b"dead".to_vec())))
+            .unwrap();
 
-        on_launch(&Host::owner(), &db, &blob_manager).unwrap();
+        query_manager.with_tx(|db| on_launch(&Host::owner(), db, &blob_manager)).unwrap();
 
         assert!(!blob_manager.connect().body_exists("rs_gone").unwrap());
     }

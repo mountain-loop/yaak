@@ -277,7 +277,7 @@ pub fn get_workspace_export_resources(
         data.resources.workspaces.push(db.find_one(WorkspaceIden::Id, workspace_id)?);
         data.resources.environments.append(
             &mut db
-                .list_environments_ensure_base(workspace_id)?
+                .list_environments(workspace_id)?
                 .into_iter()
                 .filter(|e| include_private_environments || e.public)
                 .collect(),

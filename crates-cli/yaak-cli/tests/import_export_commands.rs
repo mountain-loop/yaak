@@ -161,8 +161,7 @@ fn import_postman_environment_uses_workspace_id() {
 
     let query_manager = query_manager(data_dir);
     let db = query_manager.connect();
-    let environments =
-        db.list_environments_ensure_base(&workspace_id).expect("list imported environments");
+    let environments = db.list_environments(&workspace_id).expect("list imported environments");
 
     let imported_environment =
         environments.iter().find(|e| e.name == "Local").expect("postman environment imported");
@@ -299,7 +298,10 @@ fn re_import_leaves_deleted_resources_alone() {
             .into_iter()
             .find(|r| r.name == "Request B")
             .expect("request B imported");
-        db.delete_http_request_by_id(&request_b.id, &UpdateSource::Sync).expect("delete request B");
+        drop(db);
+        query_manager
+            .with_tx(|tx| tx.delete_http_request_by_id(&request_b.id, &UpdateSource::Sync))
+            .expect("delete request B");
         workspace_id
     };
 

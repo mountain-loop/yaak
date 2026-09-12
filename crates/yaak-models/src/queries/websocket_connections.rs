@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{WebsocketConnection, WebsocketConnectionIden, WebsocketConnectionState};
 use crate::queries::MAX_HISTORY_ITEMS;
@@ -13,6 +13,22 @@ impl<'a> ClientDb<'a> {
         self.find_one(WebsocketConnectionIden::Id, id)
     }
 
+    pub fn list_websocket_connections(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<WebsocketConnection>> {
+        self.find_many(WebsocketConnectionIden::WorkspaceId, workspace_id, None)
+    }
+
+    pub fn list_websocket_connections_for_request(
+        &self,
+        request_id: &str,
+    ) -> Result<Vec<WebsocketConnection>> {
+        self.find_many(WebsocketConnectionIden::RequestId, request_id, None)
+    }
+}
+
+impl<'a> WriteDb<'a> {
     pub fn delete_all_websocket_connections_for_request(
         &self,
         request_id: &str,
@@ -35,20 +51,6 @@ impl<'a> ClientDb<'a> {
             self.delete(&m, source)?;
         }
         Ok(())
-    }
-
-    pub fn list_websocket_connections(
-        &self,
-        workspace_id: &str,
-    ) -> Result<Vec<WebsocketConnection>> {
-        self.find_many(WebsocketConnectionIden::WorkspaceId, workspace_id, None)
-    }
-
-    pub fn list_websocket_connections_for_request(
-        &self,
-        request_id: &str,
-    ) -> Result<Vec<WebsocketConnection>> {
-        self.find_many(WebsocketConnectionIden::RequestId, request_id, None)
     }
 
     pub fn delete_websocket_connection(

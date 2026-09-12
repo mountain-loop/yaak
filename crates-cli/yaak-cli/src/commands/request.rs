@@ -424,8 +424,8 @@ fn create(
         )?;
 
         let created = ctx
-            .db()
-            .upsert_http_request(&request, &UpdateSource::Sync)
+            .query_manager()
+            .with_tx(|tx| tx.upsert_http_request(&request, &UpdateSource::Sync))
             .map_err(|e| format!("Failed to create request: {e}"))?;
 
         println!("Created request: {}", created.id);
@@ -443,8 +443,8 @@ fn create(
     }
 
     let created = ctx
-        .db()
-        .upsert_http_request(&request, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_http_request(&request, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to create request: {e}"))?;
 
     println!("Created request: {}", created.id);
@@ -463,8 +463,8 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
     let updated = apply_merge_patch(&existing, &patch, &id, "request update")?;
 
     let saved = ctx
-        .db()
-        .upsert_http_request(&updated, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_http_request(&updated, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to update request: {e}"))?;
 
     println!("Updated request: {}", saved.id);
@@ -487,8 +487,8 @@ fn delete(ctx: &CliContext, request_id: &str, yes: bool) -> CommandResult {
     }
 
     let deleted = ctx
-        .db()
-        .delete_http_request_by_id(request_id, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.delete_http_request_by_id(request_id, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to delete request: {e}"))?;
     println!("Deleted request: {}", deleted.id);
     Ok(())

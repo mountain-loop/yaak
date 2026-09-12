@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow, is_dev};
 use ts_rs::TS;
 use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_common::platform::get_os_str;
-use yaak_models::client_db::ClientDb;
+use yaak_models::client_db::{ClientDb, WriteDb};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 
@@ -17,12 +17,24 @@ use yaak_models::util::UpdateSource;
 /// This is needed temporarily until all crates are refactored to not use Tauri.
 trait QueryManagerExt<'a, R> {
     fn db(&'a self) -> ClientDb<'a>;
+    fn with_tx<T>(
+        &'a self,
+        func: impl FnOnce(&WriteDb) -> yaak_models::error::Result<T>,
+    ) -> yaak_models::error::Result<T>;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
     fn db(&'a self) -> ClientDb<'a> {
         let qm = self.state::<QueryManager>();
         qm.inner().connect()
+    }
+
+    fn with_tx<T>(
+        &'a self,
+        func: impl FnOnce(&WriteDb) -> yaak_models::error::Result<T>,
+    ) -> yaak_models::error::Result<T> {
+        let qm = self.state::<QueryManager>();
+        qm.inner().with_tx(func)
     }
 }
 
@@ -137,12 +149,17 @@ pub async fn activate_license<R: Runtime>(
     }
 
     let body: ActivateLicenseResponsePayload = response.json().await?;
-    window.app_handle().db().set_key_value_str(
-        KV_ACTIVATION_ID_KEY,
-        KV_NAMESPACE,
-        body.activation_id.as_str(),
-        &UpdateSource::from_window_label(window.label()),
-    );
+    if let Err(e) = window.app_handle().with_tx(|tx| {
+        tx.set_key_value_str(
+            KV_ACTIVATION_ID_KEY,
+            KV_NAMESPACE,
+            body.activation_id.as_str(),
+            &UpdateSource::from_window_label(window.label()),
+        );
+        Ok(())
+    }) {
+        warn!("Failed to store license activation: {e}");
+    }
 
     if let Err(e) = window.emit("license-activated", true) {
         warn!("Failed to emit check-license event: {}", e);
@@ -172,11 +189,13 @@ pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result
         return Err(ServerError);
     }
 
-    app_handle.db().delete_key_value(
-        KV_ACTIVATION_ID_KEY,
-        KV_NAMESPACE,
-        &UpdateSource::from_window_label(window.label()),
-    )?;
+    app_handle.with_tx(|tx| {
+        tx.delete_key_value(
+            KV_ACTIVATION_ID_KEY,
+            KV_NAMESPACE,
+            &UpdateSource::from_window_label(window.label()),
+        )
+    })?;
 
     if let Err(e) = app_handle.emit("license-deactivated", true) {
         warn!("Failed to emit deactivate-license event: {}", e);

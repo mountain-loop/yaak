@@ -187,9 +187,7 @@ impl PluginManager {
         }
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
-        // Scope the db connection so the future stays Send across the await below
-        let plugins = {
-            let db = query_manager.connect();
+        let plugins = query_manager.with_tx(|db| {
             for dir in &bundled_dirs {
                 if db.get_plugin_by_directory(dir).is_none() {
                     db.upsert_plugin(
@@ -204,8 +202,8 @@ impl PluginManager {
                     )?;
                 }
             }
-            db.list_plugins()?
-        };
+            db.list_plugins()
+        })?;
 
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {

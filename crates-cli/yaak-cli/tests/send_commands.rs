@@ -25,8 +25,7 @@ fn top_level_send_folder_sends_http_requests_and_prints_summary() {
         ..Default::default()
     };
     query_manager(data_dir)
-        .connect()
-        .upsert_http_request(&request, &UpdateSource::Sync)
+        .with_tx(|tx| tx.upsert_http_request(&request, &UpdateSource::Sync))
         .expect("Failed to seed folder request");
 
     cli_cmd(data_dir)

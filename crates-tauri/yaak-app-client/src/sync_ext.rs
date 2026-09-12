@@ -12,8 +12,8 @@ use tokio::sync::watch;
 use yaak_rpc_schema::WatchResult;
 use yaak_sync::error::Error::InvalidSyncDirectory;
 use yaak_sync::sync::{
-    FsCandidate, SyncOp, apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates,
-    get_fs_candidates,
+    FsCandidate, SyncOp, apply_db_sync_ops, apply_fs_sync_ops, apply_sync_state_ops,
+    compute_sync_ops, get_db_candidates, get_fs_candidates,
 };
 use yaak_sync::watch::{WatchEvent, watch_directory};
 
@@ -49,11 +49,14 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
     sync_dir: &Path,
     workspace_id: &str,
 ) -> Result<()> {
-    let db = app_handle.db();
+    // Files first, so the write transaction never waits on the filesystem
+    let pending = apply_fs_sync_ops(workspace_id, sync_dir, sync_ops)?;
     let blobs = app_handle.blob_manager();
-    let sync_state_ops = apply_sync_ops(&db, &blobs, workspace_id, sync_dir, sync_ops)?;
-    apply_sync_state_ops(&db, workspace_id, sync_dir, sync_state_ops)?;
-    Ok(())
+    app_handle.db_manager().with_tx(|tx| {
+        let sync_state_ops = apply_db_sync_ops(tx, &blobs, workspace_id, sync_dir, pending)?;
+        apply_sync_state_ops(tx, workspace_id, sync_dir, sync_state_ops)?;
+        Ok(())
+    })
 }
 
 pub(crate) async fn sync_watch<R, F>(

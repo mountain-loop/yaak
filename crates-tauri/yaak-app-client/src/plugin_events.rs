@@ -111,7 +111,7 @@ async fn handle_host_plugin_request<R: Runtime>(
                 }
 
                 let new_plugin = Plugin { updated_at: Utc::now().naive_utc(), ..plugin };
-                app_handle.db().upsert_plugin(&new_plugin, &UpdateSource::Plugin)?;
+                app_handle.with_tx(|tx| tx.upsert_plugin(&new_plugin, &UpdateSource::Plugin))?;
             }
 
             if !req.silent {
@@ -294,15 +294,17 @@ async fn handle_host_plugin_request<R: Runtime>(
                 HttpResponse::default()
             } else {
                 let blobs = window.blob_manager();
-                window.db().upsert_http_response(
-                    &HttpResponse {
-                        request_id: http_request.id.clone(),
-                        workspace_id: http_request.workspace_id.clone(),
-                        ..Default::default()
-                    },
-                    &UpdateSource::from_window_label(window.label()),
-                    &blobs,
-                )?
+                window.with_tx(|tx| {
+                    tx.upsert_http_response(
+                        &HttpResponse {
+                            request_id: http_request.id.clone(),
+                            workspace_id: http_request.workspace_id.clone(),
+                            ..Default::default()
+                        },
+                        &UpdateSource::from_window_label(window.label()),
+                        &blobs,
+                    )
+                })?
             };
 
             let http_response = send_http_request_with_context(
