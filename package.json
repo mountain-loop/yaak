@@ -25,6 +25,7 @@
     "plugins/auth-aws",
     "plugins/auth-basic",
     "plugins/auth-bearer",
+    "plugins/auth-digest",
     "plugins/auth-jwt",
     "plugins/auth-ntlm",
     "plugins/auth-oauth2",
