@@ -294,8 +294,10 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, "authentication" | "aut
       authenticationType: "apikey",
       authentication: {
         location: a.in === "query" ? "query" : "header",
-        key: a.value != null ? String(a.value) : undefined,
-        value: a.key != null ? String(a.key) : undefined,
+        // Postman's "key" is the header/parameter name and its "value" is the
+        // secret, matching Yaak's own apikey auth.
+        key: a.key != null ? String(a.key) : undefined,
+        value: a.value != null ? String(a.value) : undefined,
       },
     };
   }

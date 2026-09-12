@@ -271,8 +271,8 @@
         "authenticationType": "apikey",
         "authentication": {
           "location": "query",
-          "key": "value",
-          "value": "key"
+          "key": "X-API-Key",
+          "value": "secret-123"
         }
       },
       {

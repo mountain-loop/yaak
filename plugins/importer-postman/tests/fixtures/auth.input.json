@@ -659,12 +659,12 @@
             },
             {
               "key": "value",
-              "value": "value",
+              "value": "secret-123",
               "type": "string"
             },
             {
               "key": "key",
-              "value": "key",
+              "value": "X-API-Key",
               "type": "string"
             }
           ]
