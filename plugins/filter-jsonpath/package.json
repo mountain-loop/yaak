@@ -11,9 +11,11 @@
   },
   "scripts": {
     "build": "yaakcli build",
-    "dev": "yaakcli dev"
+    "dev": "yaakcli dev",
+    "test": "vp test --run tests"
   },
   "dependencies": {
+    "@yaakapp-internal/lib": "^1.0.0",
     "jsonpath-plus": "^10.3.0"
   },
   "devDependencies": {
