@@ -42,7 +42,11 @@ export function TextViewer({
   // works even in this read-only editor, so it updates as the user clicks around.
   const [breadcrumbSegments, setBreadcrumbSegments] = useState<JsonPathSegment[]>([]);
   const handleBreadcrumbUpdate = useCallback(
-    ({ segments }: { segments: JsonPathSegment[] | null }) => setBreadcrumbSegments(segments ?? []),
+    ({ segments }: { segments: JsonPathSegment[] | null }) =>
+      setBreadcrumbSegments((prev) => {
+        const next = segments ?? [];
+        return segmentsToJsonPath(prev) === segmentsToJsonPath(next) ? prev : next;
+      }),
     [],
   );
   const extraExtensions = useMemo(
