@@ -2,7 +2,7 @@ import { EditorState } from "@codemirror/state";
 import { jsonc } from "@shopify/lang-jsonc";
 import { forceParsing } from "@codemirror/language";
 import { describe, expect, test } from "vite-plus/test";
-import { jsonPathSegmentsAt, segmentsToJsonPath } from "./jsonPath";
+import { jsonPathSegmentsAt, jsonPathToSegments, segmentsToJsonPath } from "./jsonPath";
 
 function stateFor(doc: string): EditorState {
   const state = EditorState.create({ doc, extensions: [jsonc()] });
@@ -103,5 +103,21 @@ describe("segmentsToJsonPath", () => {
       { kind: "key", key: "b" },
     ] as const;
     expect(segmentsToJsonPath([...segs], 2)).toBe(`$.a[2]`);
+  });
+});
+
+describe("jsonPathToSegments", () => {
+  test("round-trips paths built by segmentsToJsonPath", () => {
+    for (const path of ["$", "$[0]", "$[0].id", '$.data["user.name"][12]', '$["say \\"hi\\""]']) {
+      const segments = jsonPathToSegments(path);
+      expect(segments).not.toBeNull();
+      expect(segmentsToJsonPath(segments ?? [])).toBe(path);
+    }
+  });
+
+  test("returns null for paths that don't name a single location", () => {
+    for (const path of ["$..id", "$[*]", "$.items[?(@.id)]", "$[0:2]", "items[0]", "$.a b"]) {
+      expect(jsonPathToSegments(path)).toBeNull();
+    }
   });
 });

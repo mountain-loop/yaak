@@ -104,3 +104,31 @@ function segmentToJsonPath(segment: JsonPathSegment): string {
 export function segmentsToJsonPath(segments: JsonPathSegment[], count = segments.length): string {
   return "$" + segments.slice(0, count).map(segmentToJsonPath).join("");
 }
+
+const PATH_SEGMENT = /^(?:\.([A-Za-z_$][A-Za-z0-9_$]*)|\[(\d+)\]|\[("(?:[^"\\]|\\.)*")\])/;
+
+/**
+ * Parse a JSONPath that names a single location (`$.a[0]["b.c"]`) back into
+ * segments. Returns `null` for anything else, like wildcards or recursive descent.
+ */
+export function jsonPathToSegments(path: string): JsonPathSegment[] | null {
+  let rest = path.trim();
+  if (!rest.startsWith("$")) return null;
+  rest = rest.slice(1);
+
+  const segments: JsonPathSegment[] = [];
+  while (rest.length > 0) {
+    const match = PATH_SEGMENT.exec(rest);
+    if (match == null) return null;
+    const [whole, bareKey, index, quotedKey] = match;
+    if (bareKey != null) {
+      segments.push({ kind: "key", key: bareKey });
+    } else if (index != null) {
+      segments.push({ kind: "index", index: Number(index) });
+    } else if (quotedKey != null) {
+      segments.push({ kind: "key", key: JSON.parse(quotedKey) as string });
+    }
+    rest = rest.slice(whole.length);
+  }
+  return segments;
+}
