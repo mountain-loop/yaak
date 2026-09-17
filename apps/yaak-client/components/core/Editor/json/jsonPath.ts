@@ -1,15 +1,10 @@
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
 import type { SyntaxNode } from "@lezer/common";
+import type { JsonPathSegment } from "@yaakapp-internal/lib/jsonPath";
 
-/**
- * One step of a path into a JSON document. A `key` names an object member; an
- * `index` names a position within an array. They are kept separate so the UI
- * can show `items > 2` rather than folding the index into the key name.
- */
-export type JsonPathSegment =
-  | { readonly kind: "key"; readonly key: string }
-  | { readonly kind: "index"; readonly index: number };
+export { jsonPathToSegments } from "@yaakapp-internal/lib/jsonPath";
+export type { JsonPathSegment } from "@yaakapp-internal/lib/jsonPath";
 
 // Lezer node names from the JSONC grammar (@shopify/lang-jsonc). A JSON value is
 // exactly one of these; everything else in the tree is punctuation or a comment.
@@ -90,7 +85,8 @@ const BARE_KEY = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 /** A single segment as JSONPath, choosing dot vs. bracket form for a key. */
 function segmentToJsonPath(segment: JsonPathSegment): string {
   if (segment.kind === "index") return `[${segment.index}]`;
-  if (BARE_KEY.test(segment.key)) return `.${segment.key}`;
+  // jsonpath-plus interprets a bare `$` as its root operator.
+  if (BARE_KEY.test(segment.key) && segment.key !== "$") return `.${segment.key}`;
   // Anything with a dot, space, quote, etc. must be a quoted bracket accessor.
   // JSON.stringify gives correct double-quoting and escaping, matching the
   // convention the JSONPath filter box already displays.
@@ -103,32 +99,4 @@ function segmentToJsonPath(segment: JsonPathSegment): string {
  */
 export function segmentsToJsonPath(segments: JsonPathSegment[], count = segments.length): string {
   return "$" + segments.slice(0, count).map(segmentToJsonPath).join("");
-}
-
-const PATH_SEGMENT = /^(?:\.([A-Za-z_$][A-Za-z0-9_$]*)|\[(\d+)\]|\[("(?:[^"\\]|\\.)*")\])/;
-
-/**
- * Parse a JSONPath that names a single location (`$.a[0]["b.c"]`) back into
- * segments. Returns `null` for anything else, like wildcards or recursive descent.
- */
-export function jsonPathToSegments(path: string): JsonPathSegment[] | null {
-  let rest = path.trim();
-  if (!rest.startsWith("$")) return null;
-  rest = rest.slice(1);
-
-  const segments: JsonPathSegment[] = [];
-  while (rest.length > 0) {
-    const match = PATH_SEGMENT.exec(rest);
-    if (match == null) return null;
-    const [whole, bareKey, index, quotedKey] = match;
-    if (bareKey != null) {
-      segments.push({ kind: "key", key: bareKey });
-    } else if (index != null) {
-      segments.push({ kind: "index", index: Number(index) });
-    } else if (quotedKey != null) {
-      segments.push({ kind: "key", key: JSON.parse(quotedKey) as string });
-    }
-    rest = rest.slice(whole.length);
-  }
-  return segments;
 }

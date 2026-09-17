@@ -116,7 +116,20 @@ describe("jsonPathToSegments", () => {
   });
 
   test("returns null for paths that don't name a single location", () => {
-    for (const path of ["$..id", "$[*]", "$.items[?(@.id)]", "$[0:2]", "items[0]", "$.a b"]) {
+    for (const path of [
+      "$..id",
+      "$[*]",
+      "$.items[?(@.id)]",
+      "$[0:2]",
+      "items[0]",
+      "$.a b",
+      '$["\\q"]',
+      '$["unterminated]',
+      '$["line\nbreak"]',
+      "$[01]",
+      "$[9007199254740993]",
+      "$.$",
+    ]) {
       expect(jsonPathToSegments(path)).toBeNull();
     }
   });
