@@ -172,7 +172,8 @@ jobs:
           codesign --force --options runtime --entitlements crates-tauri/yaak-app-client/macos/entitlements.yaakprotoc.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app-client/vendored/protoc/yaakprotoc || true
           codesign --force --options runtime --entitlements crates-tauri/yaak-app-client/macos/entitlements.yaaknode.plist --sign "$APPLE_SIGNING_IDENTITY" crates-tauri/yaak-app-client/vendored/node/yaaknode || true
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build and upload Tauri bundles
+        uses: tauri-apps/tauri-action@v0
         env:
           YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
 
@@ -194,6 +195,8 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ matrix.os == 'windows' && secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ matrix.os == 'windows' && secrets.AZURE_TENANT_ID }}
         with:
+          # Also retries builds; upload retries alone cannot clean up starter assets.
+          retryAttempts: 3
           tauriScript: "node ../../node_modules/@tauri-apps/cli/tauri.js"
           tagName: "v__VERSION__"
           releaseName: "Release __VERSION__"
@@ -202,6 +205,17 @@ jobs:
           prerelease: true
           projectPath: ./crates-tauri/yaak-app-client
           args: "${{ matrix.args }}"
+
+      # Snapshot before the per-machine build overwrites the regular NSIS bundle/signature.
+      - name: Snapshot Tauri bundles
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/preserve-release-artifacts.mjs
+        env:
+          RELEASE_TARGET: ${{ matrix.targets }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_RUNTIME: ${{ matrix.runtime }}
+          RELEASE_ARCH: ${{ matrix.yaak_arch }}
+          RELEASE_ARGS: ${{ matrix.args }}
 
       - name: Build and upload CEF tarball from deb (Linux only)
         if: matrix.os == 'ubuntu' && matrix.runtime == 'cef'
@@ -217,7 +231,13 @@ jobs:
           mkdir -p "$extract_dir"
           dpkg-deb -x "$deb" "$extract_dir"
           tar -C "$extract_dir" -czf "$tarball" .
-          gh release upload "${{ github.ref_name }}" "$tarball" --clobber
+          for attempt in 1 2 3 4; do
+            if gh release upload "$GITHUB_REF_NAME" "$tarball" --clobber; then
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then exit 1; fi
+            sleep 10
+          done
 
       # Build a per-machine NSIS installer for enterprise deployment (PDQ, SCCM, Intune)
       - name: Build and upload machine-wide installer (Windows only)
@@ -235,6 +255,7 @@ jobs:
           Get-ChildItem -Recurse -Path target -File -Filter "*.exe.sig" | Remove-Item -Force
           Push-Location crates-tauri/yaak-app-client
           npx tauri bundle ${{ matrix.args }} --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":true,"windows":{"nsis":{"installMode":"perMachine"}}}}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
           $setup = Get-ChildItem -Recurse -Path target -Filter "*setup*.exe" | Select-Object -First 1
           $setupSig = "$($setup.FullName).sig"
@@ -242,5 +263,30 @@ jobs:
           $destSig = "$dest.sig"
           Copy-Item $setup.FullName $dest
           Copy-Item $setupSig $destSig
-          gh release upload "${{ github.ref_name }}" "$dest" --clobber
-          gh release upload "${{ github.ref_name }}" "$destSig" --clobber
+          foreach ($asset in @($dest, $destSig)) {
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              gh release upload "$env:GITHUB_REF_NAME" "$asset" --clobber
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 4) { exit $LASTEXITCODE }
+              Start-Sleep -Seconds 10
+            }
+          }
+
+      - name: Snapshot additional release bundles
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/preserve-release-artifacts.mjs
+        env:
+          RELEASE_TARGET: ${{ matrix.targets }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_RUNTIME: ${{ matrix.runtime }}
+          RELEASE_ARCH: ${{ matrix.yaak_arch }}
+          RELEASE_ARGS: ${{ matrix.args }}
+
+      - name: Retain release bundles for recovery
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.runtime }}-${{ matrix.yaak_arch }}-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/yaak-release-artifacts/
+          retention-days: 7
+          if-no-files-found: warn
