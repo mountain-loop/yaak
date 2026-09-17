@@ -56,7 +56,7 @@
     "jsonc-parser": "^3.3.1",
     "lucide-react": "^1.45.0",
     "mime": "^4.0.4",
-    "motion": "^12.4.7",
+    "motion": "^13.2.0",
     "nanoid": "^6.0.1",
     "papaparse": "^5.4.1",
     "parse-color": "^1.0.0",
