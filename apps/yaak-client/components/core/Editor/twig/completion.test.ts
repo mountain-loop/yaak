@@ -17,8 +17,9 @@ const source = twigCompletion({ options });
 // Both keyboard acceptance and clicking a suggestion invoke Completion.apply.
 function complete(input: string, label: string, extensions: Extension = []) {
   const cursor = input.indexOf("|");
+  if (cursor < 0) throw new Error("Missing cursor marker");
   let state = EditorState.create({
-    doc: input.replace("|", ""),
+    doc: input.slice(0, cursor) + input.slice(cursor + 1),
     selection: { anchor: cursor },
     extensions,
   });
@@ -51,6 +52,31 @@ function expectValidTag(state: EditorState, expected: string) {
 }
 
 describe("twig completion", () => {
+  test.each(["${[\nsome|", "${[ \n\n\tsome|", "${[\nsome|\n ]}", "${[\n |"])(
+    "completes across multiline whitespace: %s",
+    (input) => expectValidTag(complete(input, "someVar"), "${[ someVar ]}"),
+  );
+
+  test.each(["${[\nuuid.v|", "${[\n uuid.v|()\n ]}"])(
+    "completes a function across multiline whitespace: %s",
+    (input) => expectValidTag(complete(input, "uuid.v4"), "${[ uuid.v4() ]}"),
+  );
+
+  test("preserves surrounding lines and literal pipes", () => {
+    expect(complete("before\n${[\nsome|\n]}\na | b", "someVar").doc.toString()).toBe(
+      "before\n${[ someVar ]}\na | b",
+    );
+  });
+
+  test("does not search past non-whitespace for an opener or closer", () => {
+    expect(complete("prefix\nsome|\nother ]}", "someVar").doc.toString()).toBe(
+      "prefix\n${[ someVar ]}\nother ]}",
+    );
+    expect(complete("${[some|\nother ]}", "someVar").doc.toString()).toBe(
+      "${[ someVar ]}\nother ]}",
+    );
+  });
+
   test.each(["${[|", "${[ |", "${[  |"])(
     "offers completion immediately after a template opener: %s",
     (input) => {
