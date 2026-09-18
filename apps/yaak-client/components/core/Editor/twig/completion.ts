@@ -44,7 +44,9 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
     if (toMatch === null) return null;
 
     const matchLen = toMatch.to - toMatch.from;
-    if (!context.explicit && toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
+    const line = context.state.doc.lineAt(toMatch.from);
+    const hasOpenTag = /\$\{\[[ \t]*$/.test(context.state.sliceDoc(line.from, toMatch.from));
+    if (!context.explicit && !hasOpenTag && toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
       return null;
     }
 
@@ -83,6 +85,18 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
             detail: o.type,
             type: o.type === "variable" ? "variable" : "function",
             apply: (view, _completion, from, to) => {
+              // Keep the completion range name-only for filtering, but replace a manually
+              // typed opener when accepting (through either the keyboard or the menu).
+              const line = view.state.doc.lineAt(from);
+              const opener = view.state.sliceDoc(line.from, from).match(/\$\{\[[ \t]*$/);
+              if (opener) {
+                from -= opener[0].length;
+                const after = view.state.sliceDoc(to, view.state.doc.lineAt(to).to);
+                const closer = after.match(
+                  o.type === "function" ? /^(?:\(\))?[ \t]*\]}/ : /^[ \t]*\]}/,
+                );
+                to += closer?.[0].length ?? 0;
+              }
               const insert = openTag + inner + closeTag;
               view.dispatch({
                 changes: { from, to, insert: insert },
@@ -103,7 +117,8 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
 
     return {
       matchLen,
-      validFor: () => true, // Not really sure why this is all it needs
+      // Delimiters change the replacement range; dots change namespace options.
+      validFor: /^\w*$/,
       from: toMatch.from,
       options: sortedCompletions,
     };
