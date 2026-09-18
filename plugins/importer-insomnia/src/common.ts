@@ -34,13 +34,15 @@ export function importHttpBodyAndHeaders(obj: any) {
   const { headers } = importHeaders(obj);
   const { body, bodyType } = importHttpBody(obj.body);
   const mimeType = typeof obj.body?.mimeType === "string" ? obj.body.mimeType.trim() : "";
+  // Insomnia uses application/graphql as an editor marker, but sends a JSON envelope.
+  const contentType = bodyType === "graphql" ? "application/json" : mimeType;
 
   if (
     bodyType != null &&
     mimeType !== "" &&
     !headers.some((header: { name: string }) => header.name.toLowerCase() === "content-type")
   ) {
-    headers.push({ enabled: true, name: "Content-Type", value: mimeType });
+    headers.push({ enabled: true, name: "Content-Type", value: contentType });
   }
 
   return { body, bodyType, headers };
@@ -93,7 +95,30 @@ function importHttpBody(rawBody: any) {
   }
 
   if (normalizedMimeType === "application/graphql") {
-    return { bodyType: "graphql", body: { text: rawBody.text ?? "" } };
+    const text = typeof rawBody.text === "string" ? rawBody.text : "";
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.query === "string") {
+        return {
+          bodyType: "graphql",
+          body: {
+            query: parsed.query,
+            variables:
+              typeof parsed.variables === "string"
+                ? parsed.variables
+                : parsed.variables == null
+                  ? ""
+                  : JSON.stringify(parsed.variables, null, 2),
+            ...(typeof parsed.operationName === "string"
+              ? { operationName: parsed.operationName }
+              : {}),
+          },
+        };
+      }
+    } catch {
+      // A raw GraphQL document is also valid; preserve it verbatim.
+    }
+    return { bodyType: "graphql", body: { query: text, variables: "" } };
   }
 
   if (normalizedMimeType === "application/json" || normalizedMimeType.endsWith("+json")) {
@@ -124,23 +149,6 @@ export function deleteUndefinedAttrs<T>(obj: T): T {
       Object.entries(obj)
         .filter(([, v]) => v !== undefined)
         .map(([k, v]) => [k, deleteUndefinedAttrs(v)]),
-    ) as T;
-  }
-  return obj;
-}
-
-/** Recursively render all nested object properties */
-export function convertTemplateSyntax<T>(obj: T): T {
-  if (typeof obj === "string") {
-    // oxlint-disable-next-line no-template-curly-in-string -- Yaak template syntax
-    return obj.replaceAll(/{{\s*(_\.)?([^}]+)\s*}}/g, "${[$2]}") as T;
-  }
-  if (Array.isArray(obj) && obj != null) {
-    return obj.map(convertTemplateSyntax) as T;
-  }
-  if (typeof obj === "object" && obj != null) {
-    return Object.fromEntries(
-      Object.entries(obj).map(([k, v]) => [k, convertTemplateSyntax(v)]),
     ) as T;
   }
   return obj;
