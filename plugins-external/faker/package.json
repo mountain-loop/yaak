@@ -18,7 +18,7 @@
     "@faker-js/faker": "^10.5.0"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
+    "@types/node": "^22.20.3",
     "typescript": "^5.9.3"
   }
 }

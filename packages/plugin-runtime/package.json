@@ -9,7 +9,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.13",
+    "@types/node": "^22.20.3",
     "@types/ws": "^8.5.13",
     "esbuild": "^0.28.0"
   }
