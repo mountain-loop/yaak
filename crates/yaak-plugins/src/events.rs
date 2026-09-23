@@ -240,7 +240,20 @@ pub struct ReloadResponse {
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_events.ts")]
 pub struct ImportRequest {
+    /// Kept for text-only importers and older runtimes.
     pub content: String,
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<ImportFileSource>,
+}
+
+/// Transport descriptor; plugins see a scoped ImportFiles API, not this representation.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case", tag = "type")]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum ImportFileSource {
+    File { name: String, base64: String },
+    Directory { path: String },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

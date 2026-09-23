@@ -21,11 +21,44 @@ export type ImportPluginResponse =
       resources: PartialImportResources;
     });
 
+/** A read-only view of a selected file, ZIP archive, or directory. Paths are relative,
+ * use forward slashes, and cannot escape the source. Valid only during onImportFiles. */
+export interface ImportFiles {
+  readonly name: string;
+  readonly kind: "file" | "zip" | "directory";
+  /** List immediate children. The root directory is "" (the default). */
+  readDir(path?: string): Promise<ImportFileEntry[]>;
+  readFile(path: string): Promise<Uint8Array>;
+  /** Decode UTF-8 strictly; binary or invalid UTF-8 content throws. */
+  readTextFile(path: string): Promise<string>;
+}
+
+export interface ImportFileEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+}
+
+type ImportTextHandler = (
+  ctx: Context,
+  args: { text: string },
+) => MaybePromise<ImportPluginResponse | undefined>;
+
+export type ImportFilesHandler = (
+  ctx: Context,
+  args: { files: ImportFiles },
+) => MaybePromise<ImportPluginResponse | undefined>;
+
+type ImporterHandlers = {
+  /** Recommended import hook for files, ZIPs, directories, and pasted text. */
+  onImportFiles: ImportFilesHandler;
+  /** @deprecated Use onImportFiles. Only receives text; ignored when onImportFiles is defined. */
+  onImport: ImportTextHandler;
+};
+
+/** Define at least one import hook. onImportFiles always takes precedence over onImport. */
 export type ImporterPlugin = {
   name: string;
   description?: string;
-  onImport(
-    ctx: Context,
-    args: { text: string },
-  ): MaybePromise<ImportPluginResponse | null | undefined>;
-};
+} & Partial<ImporterHandlers> &
+  (Pick<ImporterHandlers, "onImportFiles"> | Pick<ImporterHandlers, "onImport">);

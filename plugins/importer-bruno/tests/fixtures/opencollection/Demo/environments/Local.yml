@@ -1,0 +1,4 @@
+name: Local
+variables:
+  - name: token
+    value: sample

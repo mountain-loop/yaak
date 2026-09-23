@@ -209,8 +209,12 @@ function LoadedImportDataDialog({
     };
   }, [destinationWorkspaceId, listSources]);
 
-  const handleSelectFile = async () => {
-    const selected = await platform.dialog.open({ title: "Select File", multiple: false });
+  const handleSelectFile = async (directory = false) => {
+    const selected = await platform.dialog.open({
+      title: directory ? "Select Import Folder" : "Select File",
+      multiple: false,
+      directory,
+    });
     if (selected == null) return;
     selectSource(selected);
   };
@@ -424,7 +428,7 @@ function LoadedImportDataDialog({
 
       <button
         type="button"
-        onClick={handleSelectFile}
+        onClick={() => handleSelectFile()}
         className={classNames(
           "w-full rounded-lg border border-dashed px-4 py-6",
           "flex flex-col items-center gap-1 text-center",
@@ -438,7 +442,8 @@ function LoadedImportDataDialog({
         <div className="h-6 w-full flex items-center justify-center">
           {filePath == null ? (
             <div className="text-text">
-              <strong className="font-semibold">Choose a file</strong> or drag it here
+              <strong className="font-semibold">Choose a file or ZIP</strong> or drag a file or
+              folder here
             </div>
           ) : (
             <div className="text-text font-mono text-xs max-w-full truncate" title={filePath}>
@@ -447,12 +452,15 @@ function LoadedImportDataDialog({
           )}
         </div>
         <div className="text-xs text-text-subtlest">
-          Supports OpenAPI, Swagger, Postman, Insomnia, curl, and Yaak exports
+          Supports OpenAPI, Swagger, Postman, Insomnia, Bruno, curl, and Yaak exports
         </div>
       </button>
+      <Button size="sm" variant="border" onClick={() => handleSelectFile(true)}>
+        Choose folder
+      </Button>
 
       <PlainInput
-        label="Or enter a file path or URL"
+        label="Or enter a file/folder path or URL"
         size="sm"
         placeholder="https://example.com/openapi.json"
         defaultValue={source ?? ""}

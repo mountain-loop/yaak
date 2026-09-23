@@ -15,7 +15,7 @@ use yaak_models::util::{
     ImportPlanAction, ImportPlanItem, ImportPlanReason, ImportPlanWarning, ImportResourceType,
     UpdateSource,
 };
-use yaak_plugins::events::{ImportResources, PluginContext};
+use yaak_plugins::events::{ImportRequest, ImportResources, PluginContext};
 use yaak_plugins::manager::PluginManager;
 
 pub struct PlanImportDataParams<'a> {
@@ -23,14 +23,14 @@ pub struct PlanImportDataParams<'a> {
     pub plugin_manager: &'a PluginManager,
     pub plugin_context: &'a PluginContext,
     pub destination: ImportDestination,
-    pub contents: &'a str,
+    pub input: &'a ImportRequest,
     pub origin: Option<ImportOrigin>,
 }
 
 /// Parse importer output and turn it into a commit-ready plan without mutating the database.
 pub async fn plan_import_data(params: PlanImportDataParams<'_>) -> Result<ImportPlan> {
     let import_result =
-        params.plugin_manager.import_data(params.plugin_context, params.contents).await?;
+        params.plugin_manager.import_input(params.plugin_context, params.input).await?;
 
     plan_import_resources(
         params.query_manager,

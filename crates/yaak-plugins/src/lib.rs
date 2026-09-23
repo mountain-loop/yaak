@@ -11,6 +11,7 @@ mod checksum;
 pub mod error;
 pub mod events;
 pub mod install;
+mod import_input;
 pub mod manager;
 pub mod native_template_functions;
 mod nodejs;

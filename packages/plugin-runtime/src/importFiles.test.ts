@@ -1,0 +1,194 @@
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import type { Context, ImportRequest } from "@yaakapp/api";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { createImportFiles, runImporter } from "./importFiles";
+
+const dirs: string[] = [];
+beforeEach(() => {
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+});
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+const input = (name: string, data: Uint8Array): ImportRequest => ({
+  content: "",
+  source: { type: "file", name, base64: Buffer.from(data).toString("base64") },
+});
+async function zip(name = "import-files.zip") {
+  return input(name, await readFile(new URL(`./fixtures/${name}`, import.meta.url)));
+}
+const ctx = {} as Context;
+
+describe("import file tree", () => {
+  test("exposes legacy text and single binary files through the same read API", async () => {
+    const session = await createImportFiles({ content: "café" });
+    expect(session.text).toBe("café");
+    expect(await session.files.readDir()).toEqual([{ name: "input", path: "input", type: "file" }]);
+    expect(await session.files.readTextFile("input")).toBe("café");
+    session.close();
+    await expect(session.files.readFile("input")).rejects.toThrow("closed");
+    const binary = await createImportFiles(input("body.bin", Uint8Array.from([255, 0, 128])));
+    expect(binary.isText).toBe(false);
+    expect([...(await binary.files.readFile("body.bin"))]).toEqual([255, 0, 128]);
+    await expect(binary.files.readTextFile("body.bin")).rejects.toThrow();
+    binary.close();
+  });
+
+  test("lists immediate ZIP children, including implicit/empty directories, and reads binary/UTF-8", async () => {
+    const session = await createImportFiles(await zip());
+    expect(session.files.kind).toBe("zip");
+    expect(session.text).toBe("");
+    expect(await session.files.readDir()).toEqual([
+      { name: "binary.bin", path: "binary.bin", type: "file" },
+      { name: "collection", path: "collection", type: "directory" },
+    ]);
+    expect((await session.files.readDir("collection")).map((e) => e.name)).toEqual([
+      "café.yml",
+      "empty",
+      "nested",
+    ]);
+    expect(await session.files.readDir("collection/empty")).toEqual([]);
+    expect(await session.files.readTextFile("collection/café.yml")).toBe("name: café\n");
+    expect([...(await session.files.readFile("binary.bin"))]).toEqual([0, 255, 128]);
+    await expect(session.files.readFile("collection")).rejects.toThrow("not found");
+    await expect(session.files.readDir("missing")).rejects.toThrow("not found");
+    session.close();
+  });
+
+  test("directory view reads lazily and blocks links and escaping paths", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "yaak-import-"));
+    dirs.push(root);
+    await mkdir(path.join(root, "nested"));
+    await writeFile(path.join(root, "nested", "file"), "first");
+    await symlink(tmpdir(), path.join(root, "escape"));
+    const session = await createImportFiles({
+      content: "",
+      source: { type: "directory", path: root },
+    });
+    expect(await session.files.readDir()).toEqual([
+      { name: "nested", path: "nested", type: "directory" },
+    ]);
+    await writeFile(path.join(root, "nested", "file"), "updated");
+    expect(await session.files.readTextFile("nested/file")).toBe("updated");
+    await expect(session.files.readDir("escape")).rejects.toThrow("symbolic");
+    for (const p of [
+      "../outside",
+      "/absolute",
+      "C:/outside",
+      "nested/../../outside",
+      "nested\\file",
+    ]) {
+      await expect(session.files.readFile(p)).rejects.toThrow();
+    }
+    session.close();
+  });
+
+  test.each(["import-traversal.zip", "import-duplicate.zip", "import-symlink.zip"])(
+    "rejects unsafe ZIP %s",
+    async (name) => {
+      await expect(createImportFiles(await zip(name))).rejects.toThrow();
+    },
+  );
+
+  test("ZIP entries are decompressed only on read, with a read-size limit", async () => {
+    const session = await createImportFiles(await zip("import-large.zip"));
+    expect((await session.files.readDir())[0]?.name).toBe("large.txt");
+    await expect(session.files.readFile("large.txt")).rejects.toThrow("32 MiB");
+    session.close();
+  });
+
+  test("the deprecated text hook preserves its arguments, skips other input, and warns only once", async () => {
+    const onImport = vi.fn().mockResolvedValue(null);
+    const importer = { name: "Legacy", onImport };
+    await runImporter(importer, ctx, { content: "original" });
+    expect(onImport).toHaveBeenCalledExactlyOnceWith(ctx, { text: "original" });
+    onImport.mockClear();
+    await runImporter(importer, ctx, input("empty.txt", new Uint8Array()));
+    expect(onImport).toHaveBeenCalledExactlyOnceWith(ctx, { text: "" });
+    onImport.mockClear();
+    for (const source of [
+      await zip(),
+      input("binary", Uint8Array.from([255])),
+      {
+        content: "",
+        source: { type: "directory", path: "/does-not-exist" },
+      } satisfies ImportRequest,
+    ]) {
+      expect(await runImporter(importer, ctx, source)).toBeNull();
+    }
+    expect(onImport).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('Importer "Legacy" uses deprecated onImport'),
+    );
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("onImportFiles"));
+  });
+
+  test("prefers the file hook for every input and does not fall through on null or undefined", async () => {
+    const onImport = vi.fn().mockResolvedValue(null);
+    const onImportFiles = vi.fn().mockResolvedValue(null);
+    const importer = { name: "Both", onImport, onImportFiles };
+    const root = await mkdtemp(path.join(tmpdir(), "yaak-import-hooks-"));
+    dirs.push(root);
+    for (const source of [
+      { content: "pasted" },
+      input("text.txt", Buffer.from("text")),
+      input("empty.txt", new Uint8Array()),
+      input("binary", Uint8Array.from([255])),
+      await zip(),
+      { content: "", source: { type: "directory", path: root } } satisfies ImportRequest,
+    ]) {
+      onImportFiles.mockClear();
+      await runImporter(importer, ctx, source);
+      expect(onImportFiles).toHaveBeenCalledExactlyOnceWith(ctx, {
+        files: expect.objectContaining({ readDir: expect.any(Function) }),
+      });
+      const args = onImportFiles.mock.calls[0]![1];
+      await expect(args.files.readDir()).rejects.toThrow("closed");
+    }
+    onImportFiles.mockResolvedValue(undefined);
+    await runImporter(importer, ctx, { content: "pasted" });
+    expect(onImport).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  test("file-only importers receive single text files and pasted text as readable trees", async () => {
+    const seen: string[] = [];
+    for (const source of [{ content: "pasted" }, input("api.yml", Buffer.from("file"))]) {
+      await runImporter(
+        {
+          name: "Files",
+          async onImportFiles(_ctx, args) {
+            expect(Object.keys(args)).toEqual(["files"]);
+            const [entry] = await args.files.readDir();
+            seen.push(await args.files.readTextFile(entry!.path));
+            return null;
+          },
+        },
+        ctx,
+        source,
+      );
+    }
+    expect(seen).toEqual(["pasted", "file"]);
+  });
+
+  test("closes file access even if the importer throws", async () => {
+    let saved: import("@yaakapp/api").ImportFiles | undefined;
+    await expect(
+      runImporter(
+        {
+          name: "Fails",
+          onImportFiles(_ctx, { files }) {
+            saved = files;
+            throw new Error("failure");
+          },
+        },
+        ctx,
+        { content: "hi" },
+      ),
+    ).rejects.toThrow("failure");
+    await expect(saved!.readDir()).rejects.toThrow("closed");
+  });
+});

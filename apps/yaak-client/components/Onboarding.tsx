@@ -70,7 +70,7 @@ export function Onboarding() {
                 color="primary"
                 icon="folder_input"
                 title="Migrate from another tool"
-                description="Postman, Insomnia, OpenAPI, or curl"
+                description="Postman, Insomnia, Bruno, OpenAPI, or curl"
                 busy={busy === "import"}
                 disabled={busy != null}
                 onClick={choose("import", () => importData.mutateAsync())}
