@@ -20,7 +20,7 @@ import {
 export const plugin: PluginDefinition = {
   importer: {
     name: "Bruno",
-    description: "Import Bruno YAML exports, ZIPs, and collection directories",
+    description: "Import Bruno collections",
     async onImportFiles(_ctx, { files }) {
       if (files.kind === "file") {
         const [entry] = await files.readDir();
@@ -51,10 +51,10 @@ export function convertBruno(contents: string): ImportPluginResponse {
   }
   if (typeof root.opencollection !== "string") return null;
   if (root.opencollection !== "1.0.0")
-    throw new Error(`Unsupported OpenCollection version: ${root.opencollection}`);
+    throw new Error(`Unsupported Bruno collection format version: ${root.opencollection}`);
   if (root.bundled === false || (!Array.isArray(root.items) && root.bundled !== true)) {
     throw new Error(
-      "Select the collection using Choose folder, or export a bundled OpenCollection YAML file from Bruno's Share menu. An opencollection.yml configuration file alone does not contain the requests.",
+      "Select the collection using Choose folder, or export a single YAML file from Bruno's Share menu. A collection configuration file alone does not contain the requests.",
     );
   }
   const resources: PartialImportResources = {
@@ -110,7 +110,7 @@ export function convertBruno(contents: string): ImportPluginResponse {
     depth = 0,
     inheritedHeaders: HttpRequestHeader[] = headers(defaults.headers),
   ) => {
-    if (depth > 100) throw new Error("OpenCollection folders are nested too deeply");
+    if (depth > 100) throw new Error("Bruno folders are nested too deeply");
     for (const [index, item] of rows(items).entries()) {
       const info = object(item.info);
       const type = text(info.type);

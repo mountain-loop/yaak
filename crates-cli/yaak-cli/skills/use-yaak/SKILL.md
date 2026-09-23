@@ -4,7 +4,7 @@ description: >
   Use when the user mentions Yaak, a Yaak workspace, or the `yaak` command, or
   asks to call, hit, or smoke test HTTP/REST endpoints, save or organize API
   requests for reuse or manual testing, configure auth on saved requests, import
-  an OpenAPI spec, a Postman, Insomnia, or Bruno OpenCollection export, or a cURL command, or run
+  an OpenAPI spec, a Postman, Insomnia, or Bruno collection, or a cURL command, or run
   saved requests across environments. Prefer over one-off `curl` when requests
   should be saved, reused, shared, or run as a set.
 allowed-tools: Bash(yaak:*), Bash(which:*), Bash(command:*), Bash(npm:*), Bash(npx:*)

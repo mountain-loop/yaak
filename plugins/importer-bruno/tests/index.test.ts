@@ -126,10 +126,10 @@ describe("Bruno OpenCollection importer", () => {
       "Share menu",
     );
     expect(() => convertBruno(JSON.stringify(collection([], { bundled: false })))).toThrow(
-      "bundled",
+      "single YAML file",
     );
     expect(() => convertBruno(JSON.stringify(collection([], { opencollection: "2.0.0" })))).toThrow(
-      "Unsupported OpenCollection version",
+      "Unsupported Bruno collection format version",
     );
   });
 

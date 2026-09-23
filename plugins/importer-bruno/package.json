@@ -3,7 +3,7 @@
   "displayName": "Bruno Importer",
   "version": "0.1.0",
   "private": true,
-  "description": "Import Bruno OpenCollection exports",
+  "description": "Import Bruno collections",
   "scripts": {
     "build": "yaakcli build",
     "dev": "yaakcli dev",

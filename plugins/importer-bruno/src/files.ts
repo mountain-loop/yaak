@@ -73,7 +73,7 @@ export async function readBrunoCollection(files: ImportFiles): Promise<Obj | nul
     ? yaml(await files.readTextFile(yamlMarker))
     : object(JSON.parse(await files.readTextFile(at("bruno.json"))));
   if (isYaml && root.opencollection !== "1.0.0")
-    throw new Error(`Unsupported OpenCollection version: ${text(root.opencollection)}`);
+    throw new Error(`Unsupported Bruno collection format version: ${text(root.opencollection)}`);
   const load = async (p: string, parse: (s: string) => Obj) => {
     try {
       return parse(await files.readTextFile(p));
