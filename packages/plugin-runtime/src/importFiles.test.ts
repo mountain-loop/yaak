@@ -58,6 +58,51 @@ describe("import file tree", () => {
     session.close();
   });
 
+  test("a misleading ZIP suffix preserves text dispatch and single-file access", async () => {
+    const content = '{"openapi":"3.0.0","info":{"title":"Example","version":"1"},"paths":{}}';
+    const source = input("api.zip", Buffer.from(content));
+    const onImport = vi.fn().mockResolvedValue(null);
+    await runImporter({ name: "Text", onImport }, ctx, source);
+    expect(onImport).toHaveBeenCalledExactlyOnceWith(ctx, { text: content });
+    await runImporter(
+      {
+        name: "Files",
+        async onImportFiles(_ctx, { files }) {
+          expect(files.kind).toBe("file");
+          expect(await files.readTextFile("api.zip")).toBe(content);
+          return null;
+        },
+      },
+      ctx,
+      source,
+    );
+  });
+
+  test("ZIP signatures take precedence over names, including empty archives", async () => {
+    const bytes = await readFile(new URL("./fixtures/import-files.zip", import.meta.url));
+    const empty = Buffer.alloc(22);
+    empty.writeUInt32LE(0x06054b50);
+    for (const data of [bytes, empty]) {
+      const source = input("collection.yaml", data);
+      const session = await createImportFiles(source);
+      try {
+        expect(session.files.kind).toBe("zip");
+        if (data === empty) expect(await session.files.readDir()).toEqual([]);
+        else expect(await session.files.readTextFile("collection/café.yml")).toBe("name: café\n");
+      } finally {
+        session.close();
+      }
+      const onImport = vi.fn().mockResolvedValue(null);
+      expect(await runImporter({ name: "Text", onImport }, ctx, source)).toBeNull();
+      expect(onImport).not.toHaveBeenCalled();
+    }
+  });
+
+  test("malformed input with a ZIP signature still fails archive validation", async () => {
+    const source = input("broken.zip", Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    await expect(createImportFiles(source)).rejects.toThrow();
+  });
+
   test("directory view reads lazily and blocks links and escaping paths", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "yaak-import-"));
     dirs.push(root);

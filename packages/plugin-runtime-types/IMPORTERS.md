@@ -41,10 +41,11 @@ export const plugin: PluginDefinition = {
 - `readDir(path = '')` lists immediate children in path order. The root is `''`.
 - `readFile(path)` returns a `Uint8Array`, preserving arbitrary binary data.
 - `readTextFile(path)` decodes UTF-8 and throws for invalid text.
-- Paths use `/` and are relative to the source. Absolute paths, `..`, backslashes, and symbolic links are rejected. No archive files are extracted to disk.
+- Paths use `/` and are relative to the source. Absolute paths, `..`, and backslashes are rejected. ZIP symbolic links are rejected; directory listings omit symbolic links and reads reject links observed during path validation. No archive files are extracted to disk.
+- ZIP detection uses file signatures, not the filename extension. Text files named `.zip` remain available to legacy text importers; ZIPs without that extension still expose a file tree.
 - A single file is a one-entry tree. Pasted text is exposed as a file named `input`.
 - The API is read-only and valid only until `onImportFiles` resolves or rejects. Do not retain it for later use. Import errors include the plugin's error message when no importer succeeds.
-- Directory contents are read on demand. ZIP metadata is indexed once per invocation; entries are decompressed only when read. Reads are not an atomic filesystem snapshot: changing a directory during import can change its results.
+- Directory contents are read on demand. ZIP metadata is indexed once per invocation; entries are decompressed only when read. Directory reads are not an atomic snapshot or race-free confinement: replacing a directory with a symbolic link between validation and opening can redirect a read or listing outside the selected root. Use directory imports with trusted filesystem contents; do not rely on this API to constrain hostile concurrent changes.
 - Limits: 64 MiB source file/download, 32 MiB per file read, 10,000 entries per directory listing/ZIP, and 256 MiB total declared ZIP expansion. Encrypted ZIPs are unsupported. Large or invalid inputs fail explicitly.
 
 The desktop picker accepts one file or folder, including a dropped path. Multiple-file selection is not yet supported. The CLI accepts a file, ZIP, or directory with `yaak import <path>`. URL imports support text and ZIP downloads. The same preview, destination, and linked-reimport logic runs after conversion.

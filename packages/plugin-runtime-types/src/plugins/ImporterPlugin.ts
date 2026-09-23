@@ -21,8 +21,9 @@ export type ImportPluginResponse =
       resources: PartialImportResources;
     });
 
-/** A read-only view of a selected file, ZIP archive, or directory. Paths are relative,
- * use forward slashes, and cannot escape the source. Valid only during onImportFiles. */
+/** A read-only view of a selected file, ZIP archive, or directory. Paths are relative
+ * and use forward slashes. Directory path checks are best-effort under concurrent
+ * filesystem changes, not a security boundary. Valid only during onImportFiles. */
 export interface ImportFiles {
   readonly name: string;
   readonly kind: "file" | "zip" | "directory";

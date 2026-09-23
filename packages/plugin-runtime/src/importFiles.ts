@@ -25,14 +25,14 @@ function relativePath(value: string): string {
   return parts.filter((p) => p !== "" && p !== ".").join("/");
 }
 
-function isZip(bytes: Buffer, name: string): boolean {
+function isZip(bytes: Buffer): boolean {
+  // Names are hints only: a text specification can legitimately be named *.zip.
   return (
-    /\.zip$/i.test(name) ||
-    (bytes[0] === 0x50 &&
-      bytes[1] === 0x4b &&
-      ((bytes[2] === 3 && bytes[3] === 4) ||
-        (bytes[2] === 5 && bytes[3] === 6) ||
-        (bytes[2] === 7 && bytes[3] === 8)))
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    ((bytes[2] === 3 && bytes[3] === 4) ||
+      (bytes[2] === 5 && bytes[3] === 6) ||
+      (bytes[2] === 7 && bytes[3] === 8))
   );
 }
 
@@ -70,7 +70,9 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
       assertOpen();
       const rel = relativePath(value);
       let candidate = root;
-      // Do not follow directory or file symlinks, including an intermediate component.
+      // Reject links visible during validation, including intermediate components.
+      // These path checks are not atomic with open/opendir: concurrent filesystem
+      // changes can redirect a later operation. This is not a confinement boundary.
       for (const component of rel.split("/").filter(Boolean)) {
         candidate = path.join(candidate, component);
         if ((await lstat(candidate)).isSymbolicLink())
@@ -132,7 +134,7 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
     const entries = new Map<string, { type: "file" | "directory"; entry?: Entry; data?: Buffer }>([
       ["", { type: "directory" }],
     ]);
-    if (source && isZip(bytes, name)) {
+    if (source && isZip(bytes)) {
       kind = "zip";
       text = "";
       isText = false;
@@ -270,7 +272,7 @@ export async function runImporter(importer: ImporterPlugin, ctx: Context, input:
   // Avoid opening archives once for every legacy importer.
   if (!importer.onImportFiles && input.source?.type === "file") {
     const bytes = Buffer.from(input.source.base64, "base64");
-    if (isZip(bytes, input.source.name)) return null;
+    if (isZip(bytes)) return null;
   }
   const session = await createImportFiles(input);
   try {
