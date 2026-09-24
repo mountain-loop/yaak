@@ -300,26 +300,24 @@ pub fn plan_import_resources(
     Ok(plan)
 }
 
-/// A document that already produced a workspace can be merged back into it. Importing it anywhere
-/// else copies it instead, which is worth saying before the user finds two of everything.
+/// Warn only when this importer has already read the exact same origin elsewhere. Similar
+/// resource names are not evidence of a previous import; overlap matching belongs to merging
+/// into an explicitly selected workspace.
 fn warn_if_imported_elsewhere(db: &ClientDb, plan: &mut ImportPlan) -> Result<()> {
+    let Some(origin) = &plan.origin else {
+        return Ok(());
+    };
     let destination_id = match &plan.destination {
         ImportDestination::ExistingWorkspace { workspace_id, .. } => Some(workspace_id.as_str()),
         ImportDestination::NewWorkspace => None,
     };
-    let incoming = plan.source_keys.values().collect::<BTreeSet<_>>();
-
     let mut names = BTreeSet::new();
     for workspace in db.list_workspaces()? {
         if Some(workspace.id.as_str()) == destination_id {
             continue;
         }
         for source in db.list_import_sources(&workspace.id)? {
-            let overlaps = db
-                .list_import_source_resources(&source.id)?
-                .iter()
-                .any(|row| incoming.contains(&row.source_key));
-            if overlaps {
+            if source.importer == plan.importer && source.origin == origin.origin {
                 names.insert(workspace.name.clone());
                 break;
             }
@@ -1803,6 +1801,66 @@ mod tests {
             "{:?}",
             merging.warnings
         );
+    }
+
+    #[test]
+    fn duplicate_import_warning_requires_the_same_importer_and_origin() {
+        for origin in [
+            "/tmp/api.yaml",
+            "/tmp/bruno-collection",
+            "https://example.com/api.yaml",
+        ] {
+            let (query_manager, _blob_manager, _rx) =
+                yaak_models::init_in_memory().expect("initialize database");
+            let original =
+                ImportOrigin { origin: origin.to_string(), label: "Original".to_string() };
+            let first = plan_import_resources(
+                &query_manager,
+                "Bruno".to_string(),
+                ImportDestination::NewWorkspace,
+                imported_resources(),
+                Some(importer_keys()),
+                Some(original.clone()),
+            )
+            .expect("plan first import");
+            commit_import_plan(&query_manager, first).expect("commit first import");
+
+            // Every case has the same resource keys, but only an exact origin/importer match
+            // proves this source was imported before. Display labels do not establish identity.
+            for (importer, incoming_origin, should_warn) in [
+                (
+                    "Bruno",
+                    Some(ImportOrigin { label: "Different label".to_string(), ..original.clone() }),
+                    true,
+                ),
+                (
+                    "Bruno",
+                    Some(ImportOrigin { origin: format!("{origin}-other"), ..original.clone() }),
+                    false,
+                ),
+                ("OpenAPI", Some(original.clone()), false),
+                ("Bruno", None, false),
+            ] {
+                let plan = plan_import_resources(
+                    &query_manager,
+                    importer.to_string(),
+                    ImportDestination::NewWorkspace,
+                    imported_resources(),
+                    Some(importer_keys()),
+                    incoming_origin.clone(),
+                )
+                .expect("plan another workspace");
+                assert_eq!(
+                    plan.warnings.iter().any(|w| w.title.starts_with("Already imported")),
+                    should_warn,
+                    "importer {importer}, origin {incoming_origin:?}",
+                );
+                assert!(
+                    plan.items.iter().all(|i| i.action == ImportPlanAction::Create),
+                    "a new workspace never merges into an older import"
+                );
+            }
+        }
     }
 
     #[test]
