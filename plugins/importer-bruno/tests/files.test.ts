@@ -10,7 +10,7 @@ const ctx = {} as Context;
 
 describe.each(["opencollection", "legacy"])("Bruno %s file tree", (name) => {
   test("imports the same resources from a ZIP or directory, including nested folders and environments", async () => {
-    const directory = fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+    const directory = fileURLToPath(new URL(`./fixtures/${name}/Demo`, import.meta.url));
     const bytes = await readFile(new URL(`./fixtures/${name}.zip`, import.meta.url));
     const zipped = await runImporter(plugin.importer!, ctx, {
       content: "",
@@ -82,7 +82,7 @@ test("does not claim an unrelated binary file", async () => {
   ).toBeNull();
 });
 
-test("rejects multiple collection roots before reading their contents", async () => {
+test("rejects a folder of collections before reading their contents", async () => {
   const files: ImportFiles = {
     name: "collections",
     kind: "directory",
@@ -98,7 +98,7 @@ test("rejects multiple collection roots before reading their contents", async ()
       throw new Error("should not read");
     },
   };
-  await expect(readBrunoCollection(files)).rejects.toThrow("multiple Bruno collections");
+  await expect(readBrunoCollection(files)).rejects.toThrow("Select the collection directory");
 });
 
 test("reports parse errors with the relative file path", async () => {

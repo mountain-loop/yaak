@@ -9,7 +9,7 @@ import {
   stringifyFolder,
   stringifyRequest,
 } from "@usebruno/filestore";
-import type { ImportFiles } from "@yaakapp/api";
+import type { ImportFileEntry, ImportFiles } from "@yaakapp/api";
 import YAML from "yaml";
 import { object, rows, text, type Obj } from "./common";
 
@@ -31,42 +31,51 @@ export function singleBruRequest(contents: string, fileName: string): Obj {
   };
 }
 
+const markerNames = ["bruno.json", "opencollection.yml", "opencollection.yaml"];
+
 export async function readBrunoCollection(files: ImportFiles): Promise<Obj | null> {
-  const paths: string[] = [];
-  let entryCount = 0;
-  const walk = async (dir = "", depth = 0) => {
-    if (depth > 100) throw new Error("Bruno collection is nested too deeply");
-    for (const entry of await files.readDir(dir)) {
-      if (ignored.has(entry.name) || entry.name.startsWith(".")) continue;
-      if (++entryCount > 10_000) throw new Error("Bruno collection contains too many files");
-      if (entry.type === "directory") await walk(entry.path, depth + 1);
-      else paths.push(entry.path);
+  const listings = new Map<string, ImportFileEntry[]>();
+  const list = async (dir: string) => {
+    let entries = listings.get(dir);
+    if (entries == null) {
+      entries = (await files.readDir(dir)).filter(
+        (e) => !ignored.has(e.name) && !e.name.startsWith("."),
+      );
+      listings.set(dir, entries);
     }
+    return entries;
   };
-  await walk();
-  const markers = paths.filter((p) =>
-    ["bruno.json", "opencollection.yml", "opencollection.yaml"].includes(path.posix.basename(p)),
-  );
-  const roots = [...new Set(markers.map((p) => path.posix.dirname(p)))];
-  if (!roots.length) {
-    // A ZIP may also hold just one .bru request
-    if (paths.length === 1) {
-      const p = paths[0]!;
-      if (isBruRequestFile(path.posix.basename(p))) {
-        return singleBruRequest(await files.readTextFile(p), path.posix.basename(p));
+  const has = async (dir: string, name: string) =>
+    (await list(dir)).some((e) => e.type === "file" && e.name === name);
+  const hasMarker = async (dir: string) => {
+    for (const name of markerNames) if (await has(dir, name)) return true;
+    return false;
+  };
+
+  // The selected directory must be the collection itself. Subfolders are only checked to give a
+  // better error than "not supported" when the user picked the folder above it.
+  const rootPath = "";
+  if (!(await hasMarker(rootPath))) {
+    const top = await list(rootPath);
+    const [only] = top;
+    if (top.length === 1 && only?.type === "file" && isBruRequestFile(only.name)) {
+      return singleBruRequest(await files.readTextFile(only.path), only.name);
+    }
+    for (const entry of top) {
+      if (entry.type === "directory" && (await hasMarker(entry.path))) {
+        throw new Error(
+          "This folder contains Bruno collections. Select the collection directory itself.",
+        );
       }
     }
     return null;
   }
-  if (roots.length > 1)
-    throw new Error(
-      "This source contains multiple Bruno collections. Select a single collection directory or ZIP.",
-    );
-  const rootPath = roots[0]! === "." ? "" : roots[0]!;
-  const at = (name: string) => (rootPath ? `${rootPath}/${name}` : name);
-  const yamlMarker = [at("opencollection.yml"), at("opencollection.yaml")].find((p) =>
-    paths.includes(p),
-  );
+  const at = (name: string) => name;
+  const yamlMarker = (await has(rootPath, "opencollection.yml"))
+    ? at("opencollection.yml")
+    : (await has(rootPath, "opencollection.yaml"))
+      ? at("opencollection.yaml")
+      : undefined;
   const isYaml = yamlMarker != null;
   const root = isYaml
     ? yaml(await files.readTextFile(yamlMarker))
@@ -84,21 +93,16 @@ export async function readBrunoCollection(files: ImportFiles): Promise<Obj | nul
   };
   const assemble = async (dir: string): Promise<Obj[]> => {
     const items: Obj[] = [];
-    for (const entry of await files.readDir(dir)) {
-      if (
-        ignored.has(entry.name) ||
-        entry.name.startsWith(".") ||
-        (dir === rootPath && entry.name === "environments")
-      )
-        continue;
+    for (const entry of await list(dir)) {
+      if (dir === rootPath && entry.name === "environments") continue;
       if (entry.type === "directory") {
-        const configPath = isYaml
-          ? ["folder.yml", "folder.yaml"]
-              .map((name) => `${entry.path}/${name}`)
-              .find((p) => paths.includes(p))
-          : paths.includes(`${entry.path}/folder.bru`)
-            ? `${entry.path}/folder.bru`
-            : undefined;
+        let configPath: string | undefined;
+        for (const name of isYaml ? ["folder.yml", "folder.yaml"] : ["folder.bru"]) {
+          if (await has(entry.path, name)) {
+            configPath = `${entry.path}/${name}`;
+            break;
+          }
+        }
         const folder = configPath
           ? await load(configPath, (s) =>
               isYaml
@@ -137,13 +141,15 @@ export async function readBrunoCollection(files: ImportFiles): Promise<Obj | nul
     return items;
   };
   const environments: Obj[] = [];
-  const envPrefix = `${at("environments")}/`;
-  for (const p of paths.filter(
-    (p) =>
-      p.startsWith(envPrefix) &&
-      !p.slice(envPrefix.length).includes("/") &&
-      (isYaml ? /\.ya?ml$/i.test(p) : /\.bru$/i.test(p)),
-  )) {
+  const hasEnvDir = (await list(rootPath)).some(
+    (e) => e.type === "directory" && e.name === "environments",
+  );
+  const envFiles = hasEnvDir
+    ? (await list(at("environments"))).filter(
+        (e) => e.type === "file" && (isYaml ? /\.ya?ml$/i.test(e.name) : /\.bru$/i.test(e.name)),
+      )
+    : [];
+  for (const p of envFiles.map((e) => e.path)) {
     const env = await load(p, (s) =>
       isYaml
         ? yaml(s)
@@ -162,9 +168,8 @@ export async function readBrunoCollection(files: ImportFiles): Promise<Obj | nul
         environments: [...rows(object(root.config).environments), ...environments],
       },
     };
-  const collectionPath = at("collection.bru");
-  const collectionRoot = paths.includes(collectionPath)
-    ? parseCollection(await files.readTextFile(collectionPath), { format: "bru" })
+  const collectionRoot = (await has(rootPath, "collection.bru"))
+    ? parseCollection(await files.readTextFile(at("collection.bru")), { format: "bru" })
     : undefined;
   const normalized = yaml(
     stringifyCollection(

@@ -33,7 +33,7 @@ The older `onImport(ctx, { text })` hook still works but is deprecated. It only 
 - `files.kind` is `"directory"` or `"zip"`; `files.name` is the selected basename.
 - `readDir(path = "")` lists immediate children. `readFile(path)` returns bytes. `readTextFile(path)` decodes UTF-8 strictly.
 - Paths use `/` and are relative to the root. Absolute paths, `..`, and backslashes are rejected. Symbolic links are skipped in listings and rejected on read. Nothing is extracted to disk.
-- ZIPs are detected by signature, not extension. Directory reads are not a snapshot: a symlink swapped in under a validated path can redirect a read outside the root, so treat directory imports as trusted input.
+- ZIPs are detected by signature, not extension. A ZIP made by compressing a folder is rooted at that folder, so plugins see the same tree as for the directory. Directory reads are not a snapshot: a symlink swapped in under a validated path can redirect a read outside the root, so treat directory imports as trusted input.
 - Limits: 64 MiB per source file or download, 32 MiB per file read, 10,000 entries, 256 MiB declared ZIP expansion. Encrypted ZIPs are unsupported.
 - The tree is read-only and only valid until the hook settles.
 

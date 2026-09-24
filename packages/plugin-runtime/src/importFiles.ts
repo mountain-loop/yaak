@@ -194,6 +194,7 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
         archive.close();
         throw err;
       }
+      unwrapSingleRoot(entries);
     } else {
       const entryPath = relativePath(name);
       if (!entryPath || entryPath.includes("/"))
@@ -268,6 +269,31 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
       zip?.close();
     },
   };
+}
+
+/**
+ * Compressing a folder puts everything under that folder inside the archive. Present the
+ * folder's contents as the root so plugins see the same tree they would for the directory.
+ */
+function unwrapSingleRoot<T extends { type: "file" | "directory" }>(entries: Map<string, T>) {
+  const tops = new Set<string>();
+  for (const entryPath of entries.keys()) {
+    if (entryPath === "") continue;
+    const top = entryPath.split("/")[0]!;
+    if (top === "__MACOSX" || top.startsWith(".")) continue;
+    tops.add(top);
+  }
+  if (tops.size !== 1) return;
+  const [root] = tops;
+  if (entries.get(root!)?.type !== "directory") return;
+  const prefix = `${root}/`;
+  const snapshot = Array.from(entries);
+  for (const [entryPath, value] of snapshot) {
+    if (entryPath === "") continue;
+    entries.delete(entryPath);
+    if (entryPath === root) continue;
+    if (entryPath.startsWith(prefix)) entries.set(entryPath.slice(prefix.length), value);
+  }
 }
 
 /** Keep legacy text plugins out of directories, archives, and arbitrary binary inputs. */

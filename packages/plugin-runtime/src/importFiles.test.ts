@@ -91,6 +91,17 @@ describe("import file tree", () => {
     }
   });
 
+  test("a ZIP made by compressing a folder is rooted at that folder", async () => {
+    const session = await createImportFiles(await zip("wrapped.zip"));
+    try {
+      expect((await session.files.readDir()).map((e) => e.name)).toEqual(["nested", "root.txt"]);
+      expect(await session.files.readTextFile("nested/file.txt")).toBe("inner\n");
+      await expect(session.files.readDir("Demo")).rejects.toThrow("not found");
+    } finally {
+      session.close();
+    }
+  });
+
   test("malformed input with a ZIP signature still fails archive validation", async () => {
     const source = input("broken.zip", Buffer.from([0x50, 0x4b, 0x03, 0x04]));
     await expect(createImportFiles(source)).rejects.toThrow();
