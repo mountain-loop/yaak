@@ -239,6 +239,7 @@ export function GrpcEditor({
                 showDialog({
                   title: "Configure Schema",
                   size: "md",
+                  className: "h-[30rem]",
                   id: "grpc-configure-schema",
                   render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
                 });

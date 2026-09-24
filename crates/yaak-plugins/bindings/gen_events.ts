@@ -470,7 +470,16 @@ export type HttpRequestAction = { label: string, icon?: Icon, };
 
 export type Icon = "alert_triangle" | "check" | "check_circle" | "chevron_down" | "copy" | "info" | "pin" | "search" | "trash" | "_unknown";
 
-export type ImportRequest = { content: string, };
+/**
+ * Transport descriptor; plugins see a scoped ImportFiles API, not this representation.
+ */
+export type ImportFileSource = { "type": "file", name: string, base64: string, } | { "type": "directory", path: string, };
+
+export type ImportRequest = {
+/**
+ * Kept for text-only importers and older runtimes.
+ */
+content: string, source?: ImportFileSource, };
 
 export type ImportResources = { workspaces: Array<Workspace>, environments: Array<Environment>, folders: Array<Folder>, httpRequests: Array<HttpRequest>, grpcRequests: Array<GrpcRequest>, websocketRequests: Array<WebsocketRequest>, };
 

@@ -1,0 +1,7 @@
+info:
+  name: Query
+  type: graphql
+graphql:
+  url: "{{host}}/graphql"
+  body:
+    query: "query { users { id } }"

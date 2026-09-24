@@ -45,7 +45,7 @@ pub enum Commands {
     /// Authentication commands
     Auth(AuthArgs),
 
-    /// Import API data from Yaak, OpenAPI, Postman, Insomnia, Swagger, or cURL
+    /// Import API data from Yaak, OpenAPI, Postman, Insomnia, Bruno, Swagger, or cURL
     Import(ImportArgs),
 
     /// Export Yaak workspace data
@@ -202,7 +202,7 @@ pub struct SendArgs {
 
 #[derive(Args)]
 pub struct ImportArgs {
-    /// Path to the file to import
+    /// Path to the file, ZIP archive, or directory to import
     pub file: PathBuf,
 
     /// Existing workspace ID to import into when supported by the importer

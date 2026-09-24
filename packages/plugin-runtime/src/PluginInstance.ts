@@ -51,6 +51,7 @@ import type {
 } from "@yaakapp-internal/plugins";
 import { applyDynamicFormInput } from "./common";
 import { EventChannel } from "./EventChannel";
+import { runImporter } from "./importFiles";
 import { migrateTemplateFunctionSelectOptions } from "./migrations";
 import { createResponseBody, decodeBase64Chunk } from "./responseBody";
 
@@ -157,19 +158,14 @@ export class PluginInstance {
         return;
       }
 
-      if (
-        payload.type === "import_request" &&
-        typeof this.#mod?.importer?.onImport === "function"
-      ) {
-        const reply = await this.#mod.importer.onImport(ctx, {
-          text: payload.content,
-        });
+      if (payload.type === "import_request" && this.#mod?.importer != null) {
+        const reply = await runImporter(this.#mod.importer, ctx, payload);
         if (reply != null) {
           const replyPayload: InternalEventPayload = {
             type: "import_response",
             importer: this.#mod.importer.name,
             resources: reply.resources as ImportResources,
-            sourceKeys: reply.sourceKeys ?? null,
+            sourceKeys: reply.sourceKeys,
           };
           this.#sendPayload(context, replyPayload, replyId);
           return;
@@ -649,10 +645,12 @@ export class PluginInstance {
           complete: info.complete,
         },
         async (offset, length) => {
-          const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(
-            context,
-            { type: "read_http_response_body_chunk_request", responseId, offset, length },
-          );
+          const chunk = await this.#sendForReply<ReadHttpResponseBodyChunkResponse>(context, {
+            type: "read_http_response_body_chunk_request",
+            responseId,
+            offset,
+            length,
+          });
           return decodeBase64Chunk(chunk.data);
         },
         { refresh: bodyInfo },
@@ -853,7 +851,10 @@ export class PluginInstance {
           // carries the only copy of its body. A saved one is read back from
           // the host like any other. Callers get the same thing either way.
           if (body == null) {
-            return { httpResponse: forPlugin(httpResponse), body: await storedBody(httpResponse.id) };
+            return {
+              httpResponse: forPlugin(httpResponse),
+              body: await storedBody(httpResponse.id),
+            };
           }
 
           const bytes = decodeBase64Chunk(body);

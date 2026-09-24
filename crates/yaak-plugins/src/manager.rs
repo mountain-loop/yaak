@@ -1092,17 +1092,31 @@ impl PluginManager {
         plugin_context: &PluginContext,
         content: &str,
     ) -> Result<ImportResponse> {
+        self.import_input(plugin_context, &ImportRequest::from_text(content)).await
+    }
+
+    pub async fn import_input(
+        &self,
+        plugin_context: &PluginContext,
+        input: &ImportRequest,
+    ) -> Result<ImportResponse> {
         let reply_events = self
             .send_and_wait(
                 plugin_context,
-                &InternalEventPayload::ImportRequest(ImportRequest {
-                    content: content.to_string(),
-                }),
+                &InternalEventPayload::ImportRequest(input.clone()),
                 Duration::from_secs(60),
             )
             .await?;
 
         // TODO: Don't just return the first valid response
+        let errors = reply_events
+            .iter()
+            .filter_map(|e| match &e.payload {
+                InternalEventPayload::ErrorResponse(error) => Some(error.error.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
         let result = reply_events.into_iter().find_map(|e| match e {
             InternalEvent {
                 plugin_name,
@@ -1120,7 +1134,8 @@ impl PluginManager {
         });
 
         match result {
-            None => Err(PluginErr("No importers found for file contents".to_string())),
+            None if !errors.is_empty() => Err(PluginErr(errors)),
+            None => Err(PluginErr("No importers found for this input".to_string())),
             Some(resp) => Ok(resp),
         }
     }
