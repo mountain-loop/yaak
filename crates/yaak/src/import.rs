@@ -1507,11 +1507,12 @@ fn unique_name(name: &str, taken: &[String]) -> String {
     if name.is_empty() || !taken.iter().any(|t| t == name) {
         return name.to_string();
     }
-    // A name that was already suffixed continues the sequence instead of nesting suffixes
+    // A suffix this function generated continues the sequence instead of nesting. A name that
+    // merely ends in a number, like "Release (2024)", has no taken base and keeps its name.
     let (name, mut n) = match name.rsplit_once(" (") {
         Some((base, rest)) => match rest.strip_suffix(')').and_then(|n| n.parse::<u32>().ok()) {
-            Some(n) => (base, n + 1),
-            None => (name, 2),
+            Some(n) if taken.iter().any(|t| t == base) => (base, n + 1),
+            _ => (name, 2),
         },
         None => (name, 2),
     };
@@ -1996,6 +1997,8 @@ mod tests {
         assert_eq!(unique_name("Imported", &taken), "Imported (3)");
         assert_eq!(unique_name("Imported (2)", &taken), "Imported (3)");
         assert_eq!(unique_name("Other (2)", &taken), "Other (2)");
+        let taken = vec!["Release (2024)".to_string()];
+        assert_eq!(unique_name("Release (2024)", &taken), "Release (2024) (2)");
     }
 
     #[test]
