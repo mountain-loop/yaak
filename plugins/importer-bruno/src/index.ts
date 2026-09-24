@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { auth, manualAuth } from "./auth";
 import { body, urlAndParams } from "./body";
 import { environments } from "./environments";
-import { readBrunoCollection } from "./files";
+import { isBruRequestFile, readBrunoCollection, singleBruRequest } from "./files";
 import {
   description,
   headers,
@@ -21,21 +21,13 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "Bruno",
     description: "Import Bruno collections",
-    async onImportFiles(_ctx, { files }) {
-      if (files.kind === "file") {
-        const [entry] = await files.readDir();
-        if (!entry) return null;
-        const bytes = await files.readFile(entry.path);
-        let contents: string;
-        try {
-          contents = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-        } catch {
-          return null;
-        }
-        const imported = convertBruno(contents);
-        if (imported) return imported;
+    async onImportSource(_ctx, { source }) {
+      if (source.type === "text") {
+        return isBruRequestFile(source.name)
+          ? convertBruno(YAML.stringify(singleBruRequest(source.text, source.name)))
+          : convertBruno(source.text);
       }
-      const root = await readBrunoCollection(files);
+      const root = await readBrunoCollection(source.files);
       return root ? convertBruno(YAML.stringify(root)) : null;
     },
   },

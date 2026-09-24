@@ -17,6 +17,20 @@ const ignored = new Set([".git", "node_modules", "__MACOSX"]);
 const yaml = (value: string) => object(YAML.parse(value, { maxAliasCount: 0 }));
 
 /** Assemble a collection from the virtual file tree. No direct filesystem access in the plugin. */
+export function isBruRequestFile(fileName: string): boolean {
+  return /\.bru$/i.test(fileName) && !["collection.bru", "folder.bru"].includes(fileName);
+}
+
+/** A lone .bru request, wrapped as a one-request bundled collection */
+export function singleBruRequest(contents: string, fileName: string): Obj {
+  return {
+    opencollection: "1.0.0",
+    bundled: true,
+    info: { name: fileName.replace(/\.bru$/i, "") },
+    items: [yaml(stringifyRequest(parseRequest(contents, { format: "bru" }), { format: "yml" }))],
+  };
+}
+
 export async function readBrunoCollection(files: ImportFiles): Promise<Obj | null> {
   const paths: string[] = [];
   let entryCount = 0;
@@ -35,26 +49,11 @@ export async function readBrunoCollection(files: ImportFiles): Promise<Obj | nul
   );
   const roots = [...new Set(markers.map((p) => path.posix.dirname(p)))];
   if (!roots.length) {
-    // ZIPs may also contain just a bundled OpenCollection export or an individual .bru request.
+    // A ZIP may also hold just one .bru request
     if (paths.length === 1) {
       const p = paths[0]!;
-      if (/\.ya?ml$/i.test(p) || /\.json$/i.test(p)) {
-        const root = yaml(await files.readTextFile(p));
-        return root.opencollection ? root : null;
-      }
-      if (/\.bru$/i.test(p) && !["collection.bru", "folder.bru"].includes(path.posix.basename(p))) {
-        return {
-          opencollection: "1.0.0",
-          bundled: true,
-          info: { name: path.posix.basename(p, ".bru") },
-          items: [
-            yaml(
-              stringifyRequest(parseRequest(await files.readTextFile(p), { format: "bru" }), {
-                format: "yml",
-              }),
-            ),
-          ],
-        };
+      if (isBruRequestFile(path.posix.basename(p))) {
+        return singleBruRequest(await files.readTextFile(p), path.posix.basename(p));
       }
     }
     return null;

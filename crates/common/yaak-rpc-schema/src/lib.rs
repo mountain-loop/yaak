@@ -236,14 +236,6 @@ pub struct CmdImportDataReq {
 #[derive(Debug, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
-pub struct CmdImportUrlReq {
-    pub url: String,
-    pub destination: ImportDestination,
-}
-
-#[derive(Debug, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_rpc.ts")]
 pub struct CmdCommitImportReq {
     pub plan: ImportPlan,
 }
@@ -950,7 +942,6 @@ macro_rules! with_commands {
     cmd_get_sse_events(CmdGetSseEventsReq) -> Vec<ServerSentEvent>,
     cmd_get_http_response_events(CmdGetHttpResponseEventsReq) -> Vec<HttpResponseEvent>,
     cmd_import_data(CmdImportDataReq) -> ImportPlan,
-    cmd_import_url(CmdImportUrlReq) -> ImportPlan,
     cmd_commit_import(CmdCommitImportReq) -> BatchUpsertResult,
     cmd_list_import_sources(CmdListImportSourcesReq) -> Vec<ImportSource>,
     cmd_import_sources_for_origin(CmdImportSourcesForOriginReq) -> Vec<ImportSource>,

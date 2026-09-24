@@ -2,14 +2,13 @@ import { constants } from "node:fs";
 import { lstat, open, opendir, realpath } from "node:fs/promises";
 import path from "node:path";
 import type { Context, ImportFileEntry, ImportFiles, ImportRequest } from "@yaakapp/api";
-import type { ImporterPlugin } from "@yaakapp/api/lib/plugins/ImporterPlugin";
+import type { ImporterPlugin, ImportSource } from "@yaakapp/api/lib/plugins/ImporterPlugin";
 import { type Entry, fromBuffer, type ZipFile } from "yauzl";
 
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_SOURCE_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 10_000;
 const MAX_EXPANDED_BYTES = 256 * 1024 * 1024;
-const warnedLegacyImporters = new WeakSet<ImporterPlugin>();
 
 function relativePath(value: string): string {
   if (
@@ -38,6 +37,8 @@ function isZip(bytes: Buffer): boolean {
 
 export interface ImportFileSession {
   files: ImportFiles;
+  kind: "file" | ImportFiles["kind"];
+  name: string;
   text: string;
   /** Whether text-only plugins can handle this input, including an empty text file. */
   isText: boolean;
@@ -53,7 +54,7 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
     if (closed) throw new Error("Import source is closed");
     if (zipError) throw zipError;
   };
-  let kind: ImportFiles["kind"] = "file";
+  let kind: ImportFileSession["kind"] = "file";
   let name = "input";
   let text = input.content;
   let isText = true;
@@ -141,7 +142,7 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
       zip = await new Promise<ZipFile>((resolve, reject) => {
         fromBuffer(
           bytes,
-          { lazyEntries: true, autoClose: false, strictFileNames: true, validateEntrySizes: true },
+          { lazyEntries: true, autoClose: false, strictFileNames: false, validateEntrySizes: true },
           (err, result) => (err ? reject(err) : resolve(result)),
         );
       });
@@ -250,8 +251,11 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
   return {
     text,
     isText,
+    kind,
+    name,
     files: {
-      kind,
+      // A lone file is only ever handed to plugins as text, never as a tree
+      kind: kind === "file" ? "directory" : kind,
       name,
       readDir,
       readFile,
@@ -268,24 +272,25 @@ export async function createImportFiles(input: ImportRequest): Promise<ImportFil
 
 /** Keep legacy text plugins out of directories, archives, and arbitrary binary inputs. */
 export async function runImporter(importer: ImporterPlugin, ctx: Context, input: ImportRequest) {
-  if (!importer.onImportFiles && input.source?.type === "directory") return null;
+  if (!importer.onImportSource && input.source?.type === "directory") return null;
   // Avoid opening archives once for every legacy importer.
-  if (!importer.onImportFiles && input.source?.type === "file") {
+  if (!importer.onImportSource && input.source?.type === "file") {
     const bytes = Buffer.from(input.source.base64, "base64");
     if (isZip(bytes)) return null;
   }
   const session = await createImportFiles(input);
   try {
-    if (importer.onImportFiles) {
-      return await importer.onImportFiles(ctx, { files: session.files });
+    if (importer.onImportSource) {
+      const source: ImportSource | null =
+        session.kind === "file"
+          ? session.isText
+            ? { type: "text", name: session.name, text: session.text }
+            : null
+          : { type: "directory", files: session.files };
+      if (source == null) return null;
+      return await importer.onImportSource(ctx, { source });
     }
     if (session.isText && importer.onImport) {
-      if (!warnedLegacyImporters.has(importer)) {
-        warnedLegacyImporters.add(importer);
-        console.warn(
-          `[plugin-runtime] Importer "${importer.name}" uses deprecated onImport. Migrate to onImportFiles(ctx, { files }) to support files, ZIPs, and directories.`,
-        );
-      }
       return await importer.onImport(ctx, { text: session.text });
     }
     return null;

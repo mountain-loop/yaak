@@ -1,9 +1,8 @@
 import { gitClone } from "@yaakapp-internal/git";
 import { Banner, VStack } from "@yaakapp-internal/ui";
-import { useRef, useState } from "react";
+import { useId, useState } from "react";
 import { openWorkspaceFromSyncDir } from "../commands/openWorkspaceFromSyncDir";
 import { appInfo } from "../lib/appInfo";
-import { generateId } from "../lib/generateId";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import { showErrorToast } from "../lib/toast";
 import { Checkbox } from "./core/Checkbox";
@@ -30,7 +29,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
   const [subdirectory, setSubdirectory] = useState<string>("");
   const [isCloning, setIsCloning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const formId = useRef(`clone-git-repository.form.${generateId()}`).current;
+  const formId = useId();
 
   const repoName = extractRepoName(url);
   const sep = getPathSeparator(baseDirectory);

@@ -42,17 +42,6 @@ function GrpcProtoSelectionDialogWithRequest({
 
   return (
     <>
-      <DialogFooter
-        actions={[
-          {
-            label: "Refresh Schema",
-            isLoading: grpc.reflect.isFetching,
-            disabled: grpc.reflect.isFetching,
-            onClick: () => grpc.reflect.refetch(),
-          },
-          { label: "Done", color: "primary", onClick: onDone },
-        ]}
-      />
       <VStack space={5} className="pb-4">
         {reflectError && (
           <Banner color="warning">
@@ -147,6 +136,17 @@ function GrpcProtoSelectionDialogWithRequest({
           </Banner>
         )}
       </VStack>
+      <DialogFooter
+        actions={[
+          {
+            label: "Refresh Schema",
+            isLoading: grpc.reflect.isFetching,
+            disabled: grpc.reflect.isFetching,
+            onClick: () => grpc.reflect.refetch(),
+          },
+          { label: "Done", color: "primary", onClick: onDone },
+        ]}
+      />
     </>
   );
 }

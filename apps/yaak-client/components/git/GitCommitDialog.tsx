@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from "@yaakapp-internal/git";
+import type { GitStatus, GitStatusEntry } from "@yaakapp-internal/git";
 import { useGit } from "@yaakapp-internal/git";
 import type {
   Environment,
@@ -464,7 +464,7 @@ function DiffPanel({
   );
 }
 
-function statusColor(status: string): ComponentProps<typeof Chip>["color"] {
+function statusColor(status: GitStatus): ComponentProps<typeof Chip>["color"] {
   switch (status) {
     case "modified":
       return "info";
@@ -472,7 +472,11 @@ function statusColor(status: string): ComponentProps<typeof Chip>["color"] {
       return "success";
     case "removed":
       return "danger";
-    default:
+    case "conflict":
+      return "warning";
+    case "current":
+    case "renamed":
+    case "type_change":
       return "default";
   }
 }

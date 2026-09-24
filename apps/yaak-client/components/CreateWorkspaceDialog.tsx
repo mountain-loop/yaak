@@ -2,8 +2,7 @@ import { gitMutations } from "@yaakapp-internal/git";
 import type { WorkspaceMeta } from "@yaakapp-internal/models";
 import { createGlobalModel, updateModel } from "@yaakapp-internal/models";
 import { VStack } from "@yaakapp-internal/ui";
-import { useRef, useState } from "react";
-import { generateId } from "../lib/generateId";
+import { useId, useState } from "react";
 import { router } from "../lib/router";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
 import { rpc } from "../lib/rpc";
@@ -27,7 +26,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
   const [setupEncryption, setSetupEncryption] = useState<boolean>(false);
-  const formId = useRef(`create-workspace.form.${generateId()}`).current;
+  const formId = useId();
   return (
     <VStack
       as="form"

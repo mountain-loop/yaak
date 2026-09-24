@@ -166,8 +166,7 @@ export function DialogFooter({
   inline?: boolean;
 }) {
   const slot = useContext(DialogFooterSlot);
-  if (slot == null) return null;
-  return createPortal(
+  const footer = (
     <footer
       className={classNames(
         "px-6 flex items-center gap-3",
@@ -176,13 +175,14 @@ export function DialogFooter({
     >
       {leftSlot != null && <div className="mr-auto min-w-0">{leftSlot}</div>}
       <HStack space={2} justifyContent="end" className="ml-auto shrink-0">
-        {actions.map((action) => (
+        {actions.map((action, i) => (
           <Button
-            key={action.label}
+            // Labels change with state ("Cloning...", "Apply 3 Changes"), so they can't be keys
+            key={i}
             type={action.form != null ? "submit" : "button"}
             form={action.form}
             color={action.color ?? "secondary"}
-            variant={action.variant ?? (action.color === "primary" ? "solid" : "border")}
+            variant={action.variant ?? (action.color == null ? "border" : "solid")}
             disabled={action.disabled}
             isLoading={action.isLoading}
             autoFocus={action.autoFocus}
@@ -194,7 +194,7 @@ export function DialogFooter({
           </Button>
         ))}
       </HStack>
-    </footer>,
-    slot,
+    </footer>
   );
+  return slot == null ? footer : createPortal(footer, slot);
 }

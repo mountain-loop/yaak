@@ -38,6 +38,11 @@ export function isImportFilePath(value: string): boolean {
   );
 }
 
+/** A typed or prefilled path is a URL unless it looks like a local path; kind is left for the host */
+export function toSourcePath(path: string): ImportSourcePath {
+  return { path, kind: isImportFilePath(path) ? undefined : "url" };
+}
+
 export function ImportSourceList({
   sources,
   detections,
@@ -49,19 +54,17 @@ export function ImportSourceList({
   const ref = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [pathInput, setPathInput] = useState("");
-  const [pathInputKey, setPathInputKey] = useState(0);
   const [showPathInput, setShowPathInput] = useState(false);
   const trimmedPath = pathInput.trim();
 
   const closePathInput = () => {
     setPathInput("");
-    setPathInputKey((k) => k + 1);
     setShowPathInput(false);
   };
 
   const addPath = () => {
     if (!trimmedPath || disabled) return;
-    onAdd([{ path: trimmedPath, kind: isImportFilePath(trimmedPath) ? undefined : "url" }]);
+    onAdd([toSourcePath(trimmedPath)]);
     closePathInput();
   };
 
@@ -117,7 +120,6 @@ export function ImportSourceList({
       autoFocus
       disabled={disabled}
       placeholder="Paste a URL or a file path"
-      forceUpdateKey={String(pathInputKey)}
       onChange={setPathInput}
       onKeyDownCapture={handlePathKeyDown}
       rightSlot={
@@ -247,7 +249,7 @@ function sourceIcon({ kind }: ImportSourcePath) {
   }
 }
 
-function InlineButton({
+export function InlineButton({
   children,
   disabled,
   onClick,

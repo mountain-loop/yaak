@@ -521,10 +521,6 @@ async fn cmd_import_data<R: Runtime>(
         .await?)
 }
 
-async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> Result<ImportPlan> {
-    Ok(crate::cmd_import_url(ctx.window.clone(), &req.url, req.destination).await?)
-}
-
 async fn cmd_commit_import<R: Runtime>(
     ctx: ClientCtx<R>,
     req: CmdCommitImportReq,

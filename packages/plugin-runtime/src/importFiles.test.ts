@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Context, ImportRequest } from "@yaakapp/api";
+import type { Context, ImportRequest, ImportSource } from "@yaakapp/api";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 import { createImportFiles, runImporter } from "./importFiles";
 
@@ -58,24 +58,17 @@ describe("import file tree", () => {
     session.close();
   });
 
-  test("a misleading ZIP suffix preserves text dispatch and single-file access", async () => {
+  test("a misleading ZIP suffix still dispatches as text", async () => {
     const content = '{"openapi":"3.0.0","info":{"title":"Example","version":"1"},"paths":{}}';
     const source = input("api.zip", Buffer.from(content));
     const onImport = vi.fn().mockResolvedValue(null);
     await runImporter({ name: "Text", onImport }, ctx, source);
     expect(onImport).toHaveBeenCalledExactlyOnceWith(ctx, { text: content });
-    await runImporter(
-      {
-        name: "Files",
-        async onImportFiles(_ctx, { files }) {
-          expect(files.kind).toBe("file");
-          expect(await files.readTextFile("api.zip")).toBe(content);
-          return null;
-        },
-      },
-      ctx,
-      source,
-    );
+    const onImportSource = vi.fn().mockResolvedValue(null);
+    await runImporter({ name: "Source", onImportSource }, ctx, source);
+    expect(onImportSource).toHaveBeenCalledExactlyOnceWith(ctx, {
+      source: { type: "text", name: "api.zip", text: content },
+    });
   });
 
   test("ZIP signatures take precedence over names, including empty archives", async () => {
@@ -145,7 +138,7 @@ describe("import file tree", () => {
     session.close();
   });
 
-  test("the deprecated text hook preserves its arguments, skips other input, and warns only once", async () => {
+  test("the deprecated text hook preserves its arguments and skips other input", async () => {
     const onImport = vi.fn().mockResolvedValue(null);
     const importer = { name: "Legacy", onImport };
     await runImporter(importer, ctx, { content: "original" });
@@ -165,58 +158,39 @@ describe("import file tree", () => {
       expect(await runImporter(importer, ctx, source)).toBeNull();
     }
     expect(onImport).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('Importer "Legacy" uses deprecated onImport'),
-    );
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("onImportFiles"));
   });
 
-  test("prefers the file hook for every input and does not fall through on null or undefined", async () => {
+  test("the source hook gets text for documents and a tree for directories and ZIPs", async () => {
     const onImport = vi.fn().mockResolvedValue(null);
-    const onImportFiles = vi.fn().mockResolvedValue(null);
-    const importer = { name: "Both", onImport, onImportFiles };
+    const onImportSource = vi.fn().mockResolvedValue(null);
+    const importer = { name: "Both", onImport, onImportSource };
     const root = await mkdtemp(path.join(tmpdir(), "yaak-import-hooks-"));
     dirs.push(root);
-    for (const source of [
-      { content: "pasted" },
-      input("text.txt", Buffer.from("text")),
-      input("empty.txt", new Uint8Array()),
-      input("binary", Uint8Array.from([255])),
-      await zip(),
-      { content: "", source: { type: "directory", path: root } } satisfies ImportRequest,
-    ]) {
-      onImportFiles.mockClear();
-      await runImporter(importer, ctx, source);
-      expect(onImportFiles).toHaveBeenCalledExactlyOnceWith(ctx, {
-        files: expect.objectContaining({ readDir: expect.any(Function) }),
-      });
-      const args = onImportFiles.mock.calls[0]![1];
-      await expect(args.files.readDir()).rejects.toThrow("closed");
+    const cases: [ImportRequest, ImportSource["type"] | null, string?][] = [
+      [{ content: "pasted" }, "text", "pasted"],
+      [input("text.txt", Buffer.from("text")), "text", "text"],
+      [input("empty.txt", new Uint8Array()), "text", ""],
+      [input("binary", Uint8Array.from([255])), null],
+      [await zip(), "directory"],
+      [{ content: "", source: { type: "directory", path: root } }, "directory"],
+    ];
+    for (const [request, type, text] of cases) {
+      onImportSource.mockClear();
+      expect(await runImporter(importer, ctx, request)).toBeNull();
+      if (type == null) {
+        expect(onImportSource).not.toHaveBeenCalled();
+        continue;
+      }
+      expect(onImportSource).toHaveBeenCalledOnce();
+      const { source } = onImportSource.mock.calls[0]![1] as { source: ImportSource };
+      expect(source.type).toBe(type);
+      if (source.type === "text") expect(source.text).toBe(text);
+      else await expect(source.files.readDir()).rejects.toThrow("closed");
     }
-    onImportFiles.mockResolvedValue(undefined);
+    onImportSource.mockResolvedValue(undefined);
     await runImporter(importer, ctx, { content: "pasted" });
     expect(onImport).not.toHaveBeenCalled();
     expect(console.warn).not.toHaveBeenCalled();
-  });
-
-  test("file-only importers receive single text files and pasted text as readable trees", async () => {
-    const seen: string[] = [];
-    for (const source of [{ content: "pasted" }, input("api.yml", Buffer.from("file"))]) {
-      await runImporter(
-        {
-          name: "Files",
-          async onImportFiles(_ctx, args) {
-            expect(Object.keys(args)).toEqual(["files"]);
-            const [entry] = await args.files.readDir();
-            seen.push(await args.files.readTextFile(entry!.path));
-            return null;
-          },
-        },
-        ctx,
-        source,
-      );
-    }
-    expect(seen).toEqual(["pasted", "file"]);
   });
 
   test("closes file access even if the importer throws", async () => {
@@ -225,13 +199,13 @@ describe("import file tree", () => {
       runImporter(
         {
           name: "Fails",
-          onImportFiles(_ctx, { files }) {
-            saved = files;
+          onImportSource(_ctx, { source }) {
+            if (source.type === "directory") saved = source.files;
             throw new Error("failure");
           },
         },
         ctx,
-        { content: "hi" },
+        await zip(),
       ),
     ).rejects.toThrow("failure");
     await expect(saved!.readDir()).rejects.toThrow("closed");

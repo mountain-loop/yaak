@@ -10,5 +10,6 @@ export type {
   PartialImportResources,
   ImportFiles,
   ImportFileEntry,
-  ImportFilesHandler,
+  ImportSource,
+  ImportSourceHandler,
 } from "./plugins/ImporterPlugin";

@@ -103,7 +103,7 @@ pub enum ImportDestination {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
 pub struct ImportPlanWarning {

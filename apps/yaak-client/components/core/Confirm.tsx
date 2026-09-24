@@ -1,7 +1,6 @@
 import type { Color } from "@yaakapp-internal/plugins";
 import type { FormEvent } from "react";
-import { useRef, useState } from "react";
-import { generateId } from "../../lib/generateId";
+import { useId, useState } from "react";
 import { CopyIconButton } from "../CopyIconButton";
 import { DialogFooter } from "./Dialog";
 import { PlainInput } from "./PlainInput";
@@ -22,7 +21,7 @@ export function Confirm({
   color = "primary",
 }: ConfirmProps) {
   const [confirm, setConfirm] = useState<string>("");
-  const formId = useRef(`confirm.form.${generateId()}`).current;
+  const formId = useId();
   const handleHide = () => {
     onResult(false);
     onHide();

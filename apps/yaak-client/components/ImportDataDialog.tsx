@@ -7,14 +7,16 @@ import {
 } from "@yaakapp-internal/models";
 import { Banner, FormattedError, HStack, Icon, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { type ComponentProps, useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { errorMessage } from "../lib/errorMessage";
 import { pluralize } from "../lib/pluralize";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import {
   ImportSourceList,
   type ImportSourceDetection,
   type ImportSourcePath,
-  isImportFilePath,
+  InlineButton,
+  toSourcePath,
 } from "./ImportSourceList";
 import type { CheckboxTreeNode } from "./core/CheckboxTree";
 import { CheckboxTree } from "./core/CheckboxTree";
@@ -85,12 +87,12 @@ function LoadedImportDataDialog({
   );
   const [otherWorkspaceId, setOtherWorkspaceId] = useState<string | null>(null);
   const [originSources, setOriginSources] = useState<ImportSource[]>(initialSources);
-  const [sources, setSources] = useState<ImportSourcePath[]>(() =>
-    [...new Set(initialSources.map((source) => source.origin))].map((path) => ({
-      path,
-      kind: isImportFilePath(path) ? undefined : "url",
-    })),
+  const initialPaths = useMemo(
+    () => [...new Set(initialSources.map((source) => source.origin))].map(toSourcePath),
+    [initialSources],
   );
+  const [sources, setSources] = useState<ImportSourcePath[]>(initialPaths);
+  const knownPaths = useRef(new Set(initialPaths.map((source) => source.path)));
   const [detections, setDetections] = useState<Record<string, ImportSourceDetection>>({});
   const detect = useCallback(
     (added: ImportSourcePath[]) => {
@@ -112,33 +114,27 @@ function LoadedImportDataDialog({
     [detectSource],
   );
   const allDetected = sources.every((source) => detections[source.path]?.status === "ok");
-  const initialPaths = useMemo(
-    () => [...new Set(initialSources.map((source) => source.origin))],
-    [initialSources],
-  );
   useEffect(() => {
-    detect(
-      initialPaths.map((path) => ({ path, kind: isImportFilePath(path) ? undefined : "url" })),
-    );
+    detect(initialPaths);
   }, [detect, initialPaths]);
 
   const addSources = useCallback(
     (added: ImportSourcePath[]) => {
       setSourceError(null);
-      const paths = new Set(sources.map((source) => source.path));
       const fresh = added.filter(({ path }) => {
-        if (paths.has(path)) return false;
-        paths.add(path);
+        if (knownPaths.current.has(path)) return false;
+        knownPaths.current.add(path);
         return true;
       });
       if (fresh.length === 0) return;
       setSources((existing) => [...existing, ...fresh]);
       detect(fresh);
     },
-    [detect, sources],
+    [detect],
   );
   const removeSource = (path: string) => {
     setSourceError(null);
+    knownPaths.current.delete(path);
     setSources((current) => current.filter((source) => source.path !== path));
     setDetections(({ [path]: _removed, ...rest }) => rest);
   };
@@ -295,6 +291,20 @@ function LoadedImportDataDialog({
           ? workspaces.find((w) => w.id === planDestination.workspaceId)
           : null;
       const destinations = existing ? [existing] : plan.resources.workspaces;
+      if (destinations.length === 1) {
+        const workspace = destinations[0]!;
+        return [
+          {
+            key: workspace.id,
+            data: {
+              kind: "destination",
+              label: workspace.name,
+              isNew: planDestination.type === "new_workspace",
+            },
+            children: buildItemTree(items),
+          },
+        ];
+      }
       const workspaceById = new Map(
         [
           ...plan.resources.environments,
@@ -304,7 +314,7 @@ function LoadedImportDataDialog({
           ...plan.resources.websocketRequests,
         ].map((resource) => [resource.id, resource.workspaceId]),
       );
-      const roots: CheckboxTreeNode<TreeRow>[] = destinations.map((workspace) => ({
+      return destinations.map((workspace) => ({
         key: workspace.id,
         data: {
           kind: "destination",
@@ -312,12 +322,9 @@ function LoadedImportDataDialog({
           isNew: planDestination.type === "new_workspace",
         },
         children: buildItemTree(
-          destinations.length === 1
-            ? items
-            : items.filter((item) => workspaceById.get(item.modelId) === workspace.id),
+          items.filter((item) => workspaceById.get(item.modelId) === workspace.id),
         ),
       }));
-      return roots;
     })();
 
     return (
@@ -473,9 +480,7 @@ function LoadedImportDataDialog({
         {linkedWorkspace != null && linkedWorkspace.id !== destinationWorkspaceId && (
           <div className="text-xs text-text-subtle">
             {sources.length === 1 ? "This source was" : "These sources were"} last imported into{" "}
-            <button
-              type="button"
-              className="underline hocus:text-text"
+            <InlineButton
               onClick={() => {
                 if (linkedWorkspace.id === currentWorkspace?.id) {
                   setDestinationChoice("current");
@@ -486,7 +491,7 @@ function LoadedImportDataDialog({
               }}
             >
               {linkedWorkspace.name}
-            </button>
+            </InlineButton>
           </div>
         )}
       </VStack>
@@ -509,12 +514,6 @@ function LoadedImportDataDialog({
       />
     </>
   );
-}
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  return JSON.stringify(err);
 }
 
 function ImportTreeRow({
@@ -595,7 +594,9 @@ function actionColor(item: ImportPlanItem): ComponentProps<typeof Chip>["color"]
       return "danger";
     case "keep_local":
       return item.selected ? "warning" : "default";
-    default:
+    case "unchanged":
+    case "conflict":
+    case "ignored":
       return "default";
   }
 }

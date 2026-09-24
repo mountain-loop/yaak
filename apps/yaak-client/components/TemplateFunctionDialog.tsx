@@ -11,7 +11,7 @@ import type { FnArg, Tokens } from "@yaakapp-internal/templates";
 import { parseTemplate } from "@yaakapp-internal/templates";
 import { HStack, InlineCode, LoadingIcon, useDebouncedValue } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { useRenderTemplate } from "../hooks/useRenderTemplate";
 import { useTemplateFunctionConfig } from "../hooks/useTemplateFunctionConfig";
@@ -22,7 +22,6 @@ import {
 import { useToggle } from "../hooks/useToggle";
 import { showDialog } from "../lib/dialog";
 import { convertTemplateToInsecure } from "../lib/encryption";
-import { generateId } from "../lib/generateId";
 import { jotaiStore } from "../lib/jotai";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
 import { DialogFooter } from "./core/Dialog";
@@ -92,7 +91,7 @@ function InitializedTemplateFunctionDialog({
   const previewType = ogPreviewType == null ? "live" : ogPreviewType;
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(initialArgValues);
-  const formId = useRef(`template-function.form.${generateId()}`).current;
+  const formId = useId();
 
   const tokens: Tokens = useMemo(() => {
     const argTokens: FnArg[] = Object.keys(argValues).map((name) => ({

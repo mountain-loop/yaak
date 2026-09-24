@@ -5,6 +5,7 @@ import type {
   HttpRequest,
   HttpRequestHeader,
   HttpUrlParameter,
+  ImportSource,
   PartialImportResources,
   PluginDefinition,
   Workspace,
@@ -46,8 +47,9 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "OpenAPI",
     description: "Import OpenAPI collections",
-    onImport(_ctx: Context, args: { text: string }) {
-      return convertOpenApi(args.text);
+    onImportSource(_ctx: Context, { source }: { source: ImportSource }) {
+      if (source.type !== "text") return null;
+      return convertOpenApi(source.text);
     },
   },
 };

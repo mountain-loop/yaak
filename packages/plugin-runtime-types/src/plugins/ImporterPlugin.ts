@@ -21,12 +21,12 @@ export type ImportPluginResponse =
       resources: PartialImportResources;
     });
 
-/** A read-only view of a selected file, ZIP archive, or directory. Paths are relative
- * and use forward slashes. Directory path checks are best-effort under concurrent
- * filesystem changes, not a security boundary. Valid only during onImportFiles. */
+/** A read-only view of a selected directory or ZIP archive. Paths are relative and use
+ * forward slashes. Directory path checks are best-effort under concurrent filesystem
+ * changes, not a security boundary. Valid only while onImportSource runs. */
 export interface ImportFiles {
   readonly name: string;
-  readonly kind: "file" | "zip" | "directory";
+  readonly kind: "zip" | "directory";
   /** List immediate children. The root directory is "" (the default). */
   readDir(path?: string): Promise<ImportFileEntry[]>;
   readFile(path: string): Promise<Uint8Array>;
@@ -40,26 +40,26 @@ export interface ImportFileEntry {
   type: "file" | "directory";
 }
 
+/** What the user chose to import: one text document, or a directory or ZIP read as a tree. */
+export type ImportSource =
+  | { type: "text"; name: string; text: string }
+  | { type: "directory"; files: ImportFiles };
+
 type ImportTextHandler = (
   ctx: Context,
   args: { text: string },
 ) => MaybePromise<ImportPluginResponse | undefined>;
 
-export type ImportFilesHandler = (
+export type ImportSourceHandler = (
   ctx: Context,
-  args: { files: ImportFiles },
+  args: { source: ImportSource },
 ) => MaybePromise<ImportPluginResponse | undefined>;
 
-type ImporterHandlers = {
-  /** Recommended import hook for files, ZIPs, directories, and pasted text. */
-  onImportFiles: ImportFilesHandler;
-  /** @deprecated Use onImportFiles. Only receives text; ignored when onImportFiles is defined. */
-  onImport: ImportTextHandler;
-};
-
-/** Define at least one import hook. onImportFiles always takes precedence over onImport. */
 export type ImporterPlugin = {
   name: string;
   description?: string;
-} & Partial<ImporterHandlers> &
-  (Pick<ImporterHandlers, "onImportFiles"> | Pick<ImporterHandlers, "onImport">);
+  /** Return null when the source isn't this importer's format. Takes precedence over onImport. */
+  onImportSource?: ImportSourceHandler;
+  /** @deprecated Use onImportSource. Only receives single text documents. */
+  onImport?: ImportTextHandler;
+};

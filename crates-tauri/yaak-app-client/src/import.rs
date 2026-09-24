@@ -6,6 +6,7 @@ use tauri::{Manager, Runtime, WebviewWindow};
 use yaak::import::{self, PlanImportDataParams};
 use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportOrigin, ImportPlan};
+use yaak_plugins::MAX_IMPORT_BYTES;
 use yaak_plugins::events::ImportRequest;
 
 pub(crate) async fn import_data<R: Runtime>(
@@ -78,16 +79,6 @@ pub(crate) async fn detect_import_source<R: Runtime>(
         },
     )?;
     Ok(response.importer)
-}
-
-pub(crate) async fn plan_import_url<R: Runtime>(
-    window: &WebviewWindow<R>,
-    url: &str,
-    destination: ImportDestination,
-) -> Result<ImportPlan> {
-    let url = normalize_import_url(url)?;
-    let input = fetch_import_url(window, &url).await?;
-    plan_import_contents(window, &input, destination, Some(url_origin(&url))).await
 }
 
 async fn plan_import_contents<R: Runtime>(
@@ -167,7 +158,7 @@ async fn fetch_import_url<R: Runtime>(
         .await
         .map_err(|err| Error::GenericError(format!("Failed to read response from {url}: {err}")))?
     {
-        if bytes.len() + chunk.len() > 64 * 1024 * 1024 {
+        if (bytes.len() + chunk.len()) as u64 > MAX_IMPORT_BYTES {
             return Err(Error::GenericError("Import file exceeds the 64 MiB limit".into()));
         }
         bytes.extend_from_slice(&chunk);

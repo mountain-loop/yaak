@@ -5,7 +5,7 @@ use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::Path;
 
-const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_IMPORT_BYTES: u64 = 64 * 1024 * 1024;
 
 impl ImportRequest {
     pub fn from_text(content: &str) -> Self {

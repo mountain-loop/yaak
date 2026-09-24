@@ -156,7 +156,7 @@ pub fn plan_import_batch_resources(
                     &plan.source_keys.values().cloned().collect(),
                 )? {
                     LinkedSource::Linked(source) => Some(source.id),
-                    _ => None,
+                    LinkedSource::Ambiguous(_) | LinkedSource::Unlinked => None,
                 },
             };
             if let Some(id) = &linked_source_id
@@ -182,7 +182,11 @@ pub fn plan_import_batch_resources(
         combined.resources.websocket_requests.extend(plan.resources.websocket_requests);
         combined.items.extend(plan.items);
         combined.source_keys.extend(plan.source_keys);
-        combined.warnings.extend(plan.warnings);
+        for warning in plan.warnings {
+            if !combined.warnings.contains(&warning) {
+                combined.warnings.push(warning);
+            }
+        }
     }
     combined.importer = importers.join(", ");
     validate_plan(&combined)?;
@@ -1503,7 +1507,14 @@ fn unique_name(name: &str, taken: &[String]) -> String {
     if name.is_empty() || !taken.iter().any(|t| t == name) {
         return name.to_string();
     }
-    let mut n = 2;
+    // A name that was already suffixed continues the sequence instead of nesting suffixes
+    let (name, mut n) = match name.rsplit_once(" (") {
+        Some((base, rest)) => match rest.strip_suffix(')').and_then(|n| n.parse::<u32>().ok()) {
+            Some(n) => (base, n + 1),
+            None => (name, 2),
+        },
+        None => (name, 2),
+    };
     loop {
         let candidate = format!("{name} ({n})");
         if !taken.iter().any(|t| *t == candidate) {
@@ -1977,6 +1988,14 @@ mod tests {
             assert_eq!(manager.connect().list_http_requests(&workspace.id).unwrap().len(), 2);
             assert_eq!(manager.connect().list_import_sources(&workspace.id).unwrap().len(), 1);
         }
+    }
+
+    #[test]
+    fn unique_name_continues_an_existing_suffix() {
+        let taken = vec!["Imported".to_string(), "Imported (2)".to_string()];
+        assert_eq!(unique_name("Imported", &taken), "Imported (3)");
+        assert_eq!(unique_name("Imported (2)", &taken), "Imported (3)");
+        assert_eq!(unique_name("Other (2)", &taken), "Other (2)");
     }
 
     #[test]
