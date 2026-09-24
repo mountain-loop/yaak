@@ -65,7 +65,8 @@ export const PathList = forwardRef<HTMLDivElement, Props>(function PathList(
             </div>
             <IconButton
               size="xs"
-              icon="x"
+              icon="trash"
+              iconColor="secondary"
               title={`Remove ${name}`}
               disabled={disabled}
               className="shrink-0"

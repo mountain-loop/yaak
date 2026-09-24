@@ -55,7 +55,14 @@ export function ImportSourceList({
   const [isHovering, setIsHovering] = useState(false);
   const [pathInput, setPathInput] = useState("");
   const [showPathInput, setShowPathInput] = useState(false);
+  const pathInputRef = useRef<{ focus: () => void }>(null);
   const trimmedPath = pathInput.trim();
+
+  const openPathInput = () => {
+    setShowPathInput(true);
+    // The add-row menu hands focus back to its trigger as it closes, on a timer, so focus after it
+    setTimeout(() => pathInputRef.current?.focus(), 50);
+  };
 
   const closePathInput = () => {
     setPathInput("");
@@ -114,6 +121,7 @@ export function ImportSourceList({
 
   const pathInputEl = (
     <PlainInput
+      ref={pathInputRef}
       label="URL or file path"
       hideLabel
       size="sm"
@@ -145,7 +153,7 @@ export function ImportSourceList({
             isHovering ? "border-notice bg-surface-highlight" : "border-dashed border-border",
           )}
         >
-          <Icon icon="folder_input" className="text-text-subtlest w-8! h-8!" />
+          <Icon icon="folder_input" className="text-text-subtlest w-10! h-10! mb-1" />
           {isHovering ? (
             <span>Drop to add</span>
           ) : (
@@ -159,10 +167,7 @@ export function ImportSourceList({
                 folder
               </InlineButton>
               , or a{" "}
-              <InlineButton
-                disabled={disabled || showPathInput}
-                onClick={() => setShowPathInput(true)}
-              >
+              <InlineButton disabled={disabled} onClick={openPathInput}>
                 URL
               </InlineButton>
               , or drag them here
@@ -188,12 +193,7 @@ export function ImportSourceList({
       addItems={[
         { label: "Files", icon: "file", onSelect: () => pick(false) },
         { label: "Folder", icon: "folder", onSelect: () => pick(true) },
-        {
-          label: "URL or file path",
-          icon: "globe",
-          disabled: showPathInput,
-          onSelect: () => setShowPathInput(true),
-        },
+        { label: "URL or file path", icon: "globe", onSelect: openPathInput },
       ]}
       items={sources.map((source) => {
         const detection = detections[source.path];
@@ -262,7 +262,7 @@ export function InlineButton({
     <button
       type="button"
       disabled={disabled}
-      className="text-text underline underline-offset-2 hocus:text-primary disabled:opacity-disabled"
+      className="underline decoration-current/40 underline-offset-3 hocus:decoration-current disabled:opacity-disabled"
       onClick={onClick}
     >
       {children}
