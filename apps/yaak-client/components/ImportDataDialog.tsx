@@ -6,7 +6,7 @@ import {
   type ImportSource,
   type Workspace,
 } from "@yaakapp-internal/models";
-import { Banner, HStack, Icon, type IconProps, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -564,7 +564,6 @@ function ImportTreeRow({
   if (row.kind !== "item") {
     return (
       <>
-        <Icon color="secondary" icon={row.kind === "destination" ? "house" : row.icon} />
         <div className="truncate flex-1">{row.label}</div>
         {row.kind === "destination" && row.isNew && (
           <ActionChip label="new" help="Created by this import" className="text-success" />
@@ -577,11 +576,6 @@ function ImportTreeRow({
   const label = actionLabel(item);
   return (
     <>
-      {item.model === "folder" || item.model === "environment" ? (
-        <Icon color="secondary" icon={item.model === "folder" ? "folder" : "variable"} />
-      ) : (
-        <span aria-hidden className="w-4" />
-      )}
       <div className="truncate flex-1">{item.name}</div>
       {item.action === "conflict" ? (
         <div className="shrink-0">
@@ -709,7 +703,7 @@ function ancestorsOf(item: ImportPlanItem, byId: Map<string, ImportPlanItem>): I
  */
 type TreeRow =
   | { kind: "destination"; label: string; isNew: boolean }
-  | { kind: "group"; label: string; icon: IconProps["icon"] }
+  | { kind: "group"; label: string }
   | { kind: "item"; item: ImportPlanItem };
 
 function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<TreeRow>[] {
@@ -751,7 +745,7 @@ function buildItemTree(items: ImportPlanItem[]): CheckboxTreeNode<TreeRow>[] {
   return [
     {
       key: "group:environments",
-      data: { kind: "group", label: "Variables", icon: "variable" },
+      data: { kind: "group", label: "Variables" },
       children: environments.map((e) => toNode(e, new Set())),
     },
     ...nodes,

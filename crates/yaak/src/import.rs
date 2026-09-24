@@ -919,7 +919,7 @@ fn merge_with_linked_source(
 
             let incoming = comparable(serde_json::to_value(&any)?);
             let current = comparable(current_models.get(&planned_id).cloned().unwrap_or_default());
-            let (source_changed, local_changed) = match recorded_hash(row) {
+            let (source_changed, local_changed) = match recorded_hash(row, &incoming) {
                 Some(hash) => {
                     (hash_comparable(&incoming) != hash, hash_comparable(&current) != hash)
                 }
@@ -1087,6 +1087,12 @@ enum KeyStatus<'a> {
 fn comparable(value: Value) -> Value {
     let mut value = strip_ids(value);
     if let Some(object) = value.as_object_mut() {
+        // Folder environment names are derived by upsert_environment, not source content.
+        if object.get("model").and_then(Value::as_str) == Some("environment")
+            && object.get("parentModel").and_then(Value::as_str) == Some("folder")
+        {
+            object.remove("name");
+        }
         for field in [
             "model",
             "workspaceId",
@@ -1118,7 +1124,11 @@ fn strip_ids(value: Value) -> Value {
     }
 }
 
-const CONTENT_HASH_VERSION: &str = "v1:";
+fn content_hash_version(value: &Value) -> &'static str {
+    // Only folder environments changed comparison semantics. Older hashes for these fall back
+    // to comparing the two sides until the next import records a hash without the derived name.
+    if value.get("parentModel").and_then(Value::as_str) == Some("folder") { "v2:" } else { "v1:" }
+}
 
 /// Identifies a resource's content well enough to tell "changed since the last import" from
 /// "unchanged", without keeping a copy of every imported resource around.
@@ -1128,7 +1138,7 @@ fn content_hash(value: Value) -> String {
 
 fn hash_comparable(value: &Value) -> String {
     let canonical = serde_json::to_string(&sorted_keys(value.clone())).unwrap_or_default();
-    format!("{CONTENT_HASH_VERSION}{:x}", Sha256::digest(canonical.as_bytes()))
+    format!("{}{:x}", content_hash_version(value), Sha256::digest(canonical.as_bytes()))
 }
 
 /// The fields two comparable forms disagree on, so a preview row can explain itself.
@@ -1147,9 +1157,9 @@ fn changed_fields(incoming: &Value, current: &Value) -> Vec<String> {
 }
 
 /// A hash written by a version this build doesn't understand says nothing about the resource.
-fn recorded_hash(row: &ImportSourceResource) -> Option<&str> {
+fn recorded_hash<'a>(row: &'a ImportSourceResource, incoming: &Value) -> Option<&'a str> {
     let hash = row.content_hash.as_deref()?;
-    hash.starts_with(CONTENT_HASH_VERSION).then_some(hash)
+    hash.starts_with(content_hash_version(incoming)).then_some(hash)
 }
 
 fn sorted_keys(value: Value) -> Value {
@@ -2837,6 +2847,108 @@ mod tests {
         let root = item_by_name(&plan, "Root Request");
         assert_eq!(root.action, ImportPlanAction::Conflict, "a difference can't be attributed");
         assert_eq!(root.resolution, Some(ImportConflictResolution::KeepMine));
+    }
+
+    #[test]
+    fn folder_environment_names_do_not_cause_reimport_updates() {
+        for legacy_hash in [false, true] {
+            let (query_manager, _blob_manager, _rx) =
+                yaak_models::init_in_memory().expect("initialize database");
+            let mut resources = imported_resources();
+            resources.environments.push(Environment {
+                id: "ev_source_folder".to_string(),
+                name: "Folder Environment".to_string(),
+                parent_model: "folder".to_string(),
+                parent_id: Some("fl_source".to_string()),
+                ..resources.environments[0].clone()
+            });
+            let committed = first_import_with(&query_manager, resources.clone());
+            let workspace_id = &committed.workspaces[0].id;
+            let environment = committed
+                .environments
+                .iter()
+                .find(|e| e.parent_model == "folder")
+                .expect("folder environment");
+            assert_eq!(environment.name, "Imported Folder Environment");
+
+            if legacy_hash {
+                // Reproduce the pre-fix hash, which included the name generated on save.
+                let mut value = comparable(serde_json::to_value(environment).unwrap());
+                value["name"] = json!(environment.name);
+                let canonical = serde_json::to_string(&sorted_keys(value)).unwrap();
+                let hash = format!("v1:{:x}", Sha256::digest(canonical.as_bytes()));
+                let row = source_rows(&query_manager, workspace_id)
+                    .into_iter()
+                    .find(|r| r.model_id.as_deref() == Some(environment.id.as_str()))
+                    .unwrap();
+                query_manager
+                    .with_tx(|db| {
+                        db.upsert_import_source_resource(&ImportSourceResource {
+                            content_hash: Some(hash),
+                            ..row
+                        })
+                    })
+                    .expect("write legacy hash");
+
+                let mut changed = resources.clone();
+                changed.environments[1].variables[0].value = "changed".to_string();
+                let plan = replan(&query_manager, workspace_id, changed);
+                assert_eq!(
+                    item_by_name(&plan, "Folder Environment").action,
+                    ImportPlanAction::Conflict,
+                    "an old hash cannot attribute a real difference"
+                );
+            }
+
+            let plan = replan(&query_manager, workspace_id, resources.clone());
+            let item = item_by_name(&plan, "Folder Environment");
+            assert_eq!(item.action, ImportPlanAction::Unchanged);
+            assert!(item.changed_fields.is_empty());
+            commit_import_plan(&query_manager, plan).expect("record name-independent hash");
+
+            let mut changed = resources.clone();
+            changed.environments[1].variables[0].value = "changed".to_string();
+            let plan = replan(&query_manager, workspace_id, changed.clone());
+            let item = item_by_name(&plan, "Folder Environment");
+            assert_eq!(item.action, ImportPlanAction::Update);
+            assert_eq!(item.changed_fields, vec!["variables"]);
+
+            query_manager
+                .with_tx(|db| {
+                    let mut local = db.get_environment(&environment.id)?;
+                    local.variables[0].value = "local".to_string();
+                    db.upsert_environment(&local, &UpdateSource::Background)
+                })
+                .expect("edit folder variables locally");
+            let plan = replan(&query_manager, workspace_id, resources);
+            assert_eq!(
+                item_by_name(&plan, "Folder Environment").action,
+                ImportPlanAction::KeepLocal
+            );
+            let plan = replan(&query_manager, workspace_id, changed);
+            assert_eq!(
+                item_by_name(&plan, "Folder Environment").action,
+                ImportPlanAction::Conflict
+            );
+        }
+    }
+
+    #[test]
+    fn base_and_named_environment_names_remain_import_content() {
+        for parent_model in ["workspace", "environment"] {
+            let original = Environment {
+                model: "environment".to_string(),
+                parent_model: parent_model.to_string(),
+                name: "Original".to_string(),
+                ..Default::default()
+            };
+            let renamed = Environment { name: "Renamed".to_string(), ..original.clone() };
+            let original = comparable(serde_json::to_value(original).unwrap());
+            let renamed = comparable(serde_json::to_value(renamed).unwrap());
+            assert_eq!(changed_fields(&renamed, &original), vec!["name"]);
+            assert_ne!(hash_comparable(&original), hash_comparable(&renamed));
+            assert!(hash_comparable(&original).starts_with("v1:"));
+        }
     }
 
     #[test]
