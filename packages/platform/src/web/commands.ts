@@ -292,6 +292,7 @@ const DECLINED: Partial<Record<AppCmd, [reason: string, capability: CapabilityNa
   cmd_commit_import: ["Importing needs a plugin, which this host doesn't run", null],
   cmd_list_import_sources: ["Importing isn't available in the browser yet", null],
   cmd_import_sources_for_origin: ["Importing isn't available in the browser yet", null],
+  cmd_detect_import_source: ["Importing isn't available in the browser yet", null],
   cmd_save_response: ["Saving a response to disk isn't available in the browser", "localFiles"],
   cmd_save_base64_to_binary: ["Saving to disk isn't available in the browser", "localFiles"],
   cmd_format_graphql: ["Formatting GraphQL needs a plugin, which this host doesn't run", null],

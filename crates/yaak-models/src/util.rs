@@ -235,6 +235,19 @@ pub struct ImportPlanItem {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlanSource {
+    pub importer: String,
+    pub origin: ImportOrigin,
+    pub workspace_id: String,
+    pub source_keys: BTreeMap<String, String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub linked_source_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
 pub struct ImportPlan {
     pub importer: String,
     pub destination: ImportDestination,
@@ -251,6 +264,10 @@ pub struct ImportPlan {
     #[serde(default)]
     #[ts(optional)]
     pub origin: Option<ImportOrigin>,
+
+    /// Individual origins in a combined import, each retaining its own reimport history.
+    #[serde(default)]
+    pub sources: Vec<ImportPlanSource>,
 }
 
 pub fn get_workspace_export_resources(

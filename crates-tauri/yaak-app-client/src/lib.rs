@@ -1040,10 +1040,11 @@ async fn cmd_get_sse_events<R: Runtime>(
 
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
-    file_path: &str,
+    file_paths: &[String],
+    urls: &[String],
     destination: ImportDestination,
 ) -> YaakResult<ImportPlan> {
-    plan_import_data(&window, file_path, destination).await
+    plan_import_data(&window, file_paths, urls, destination).await
 }
 
 async fn cmd_import_url<R: Runtime>(

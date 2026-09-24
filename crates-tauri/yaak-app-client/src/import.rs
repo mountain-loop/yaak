@@ -21,11 +21,63 @@ pub(crate) async fn import_data<R: Runtime>(
 
 pub(crate) async fn plan_import_data<R: Runtime>(
     window: &WebviewWindow<R>,
-    file_path: &str,
+    file_paths: &[String],
+    urls: &[String],
     destination: ImportDestination,
 ) -> Result<ImportPlan> {
-    let input = read_import_file(file_path)?;
-    plan_import_contents(window, &input, destination, Some(file_origin(file_path))).await
+    let plugin_manager = crate::plugins_ext::plugin_manager(window).await?;
+    let plugin_context = window.plugin_context();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut inputs = Vec::new();
+    for path in file_paths {
+        let origin = file_origin(path);
+        if !seen.insert(origin.origin.clone()) {
+            continue;
+        }
+        let input = read_import_file(path)?;
+        let response = plugin_manager
+            .import_input(&plugin_context, &input)
+            .await
+            .map_err(|err| Error::GenericError(format!("Unable to import {path}: {err}")))?;
+        inputs.push((response, origin));
+    }
+    for url in urls {
+        let url = normalize_import_url(url)?;
+        if !seen.insert(url.clone()) {
+            continue;
+        }
+        let input = fetch_import_url(window, &url).await?;
+        let response = plugin_manager
+            .import_input(&plugin_context, &input)
+            .await
+            .map_err(|err| Error::GenericError(format!("Unable to import {url}: {err}")))?;
+        inputs.push((response, url_origin(&url)));
+    }
+    Ok(import::plan_import_batch_resources(&window.db_manager(), destination, inputs)?)
+}
+
+/// Which importer claims a source, without planning it. Backs the per-source status in the
+/// import dialog so unsupported files are flagged before preview.
+pub(crate) async fn detect_import_source<R: Runtime>(
+    window: &WebviewWindow<R>,
+    file_path: Option<String>,
+    url: Option<String>,
+) -> Result<String> {
+    let input = match (file_path, url) {
+        (Some(path), _) => read_import_file(&path)?,
+        (None, Some(url)) => fetch_import_url(window, &normalize_import_url(&url)?).await?,
+        (None, None) => return Err(Error::GenericError("Nothing to detect".into())),
+    };
+    let plugin_manager = crate::plugins_ext::plugin_manager(window).await?;
+    let response = plugin_manager.import_input(&window.plugin_context(), &input).await.map_err(
+        |err| match err {
+            yaak_plugins::error::Error::PluginErr(msg) if msg.starts_with("No importers found") => {
+                Error::GenericError("Not a supported format".into())
+            }
+            err => Error::GenericError(err.to_string()),
+        },
+    )?;
+    Ok(response.importer)
 }
 
 pub(crate) async fn plan_import_url<R: Runtime>(

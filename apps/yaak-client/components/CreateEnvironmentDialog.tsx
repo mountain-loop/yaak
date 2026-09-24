@@ -1,10 +1,11 @@
 import { createWorkspaceModel } from "@yaakapp-internal/models";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useToggle } from "../hooks/useToggle";
+import { generateId } from "../lib/generateId";
 import { ColorIndicator } from "./ColorIndicator";
-import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
 import { ColorPickerWithThemeColors } from "./core/ColorPicker";
+import { DialogFooter } from "./core/Dialog";
 import { Label } from "./core/Label";
 import { PlainInput } from "./core/PlainInput";
 
@@ -18,9 +19,11 @@ export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) 
   const [name, setName] = useState<string>("");
   const [color, setColor] = useState<string | null>(null);
   const [sharable, toggleSharable] = useToggle(false);
+  const formId = useRef(`create-environment.form.${generateId()}`).current;
   return (
     <form
-      className="pb-3 flex flex-col gap-3"
+      id={formId}
+      className="flex flex-col gap-3"
       onSubmit={async (e) => {
         e.preventDefault();
         const id = await createWorkspaceModel({
@@ -59,10 +62,18 @@ export function CreateEnvironmentDialog({ workspaceId, hide, onCreate }: Props) 
         </Label>
         <ColorPickerWithThemeColors onChange={setColor} color={color} />
       </div>
-      <Button type="submit" color="secondary" className="mt-3">
-        {color != null && <ColorIndicator color={color} />}
-        Create Environment
-      </Button>
+      <DialogFooter
+        inline
+        actions={[
+          {
+            label: "Create Environment",
+            color: "secondary",
+            variant: "solid",
+            form: formId,
+            leftSlot: color != null ? <ColorIndicator color={color} /> : undefined,
+          },
+        ]}
+      />
     </form>
   );
 }

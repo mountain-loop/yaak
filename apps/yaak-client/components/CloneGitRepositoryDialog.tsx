@@ -1,12 +1,13 @@
 import { gitClone } from "@yaakapp-internal/git";
 import { Banner, VStack } from "@yaakapp-internal/ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { openWorkspaceFromSyncDir } from "../commands/openWorkspaceFromSyncDir";
 import { appInfo } from "../lib/appInfo";
+import { generateId } from "../lib/generateId";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import { showErrorToast } from "../lib/toast";
-import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
+import { DialogFooter } from "./core/Dialog";
 import { IconButton } from "./core/IconButton";
 import { PlainInput } from "./core/PlainInput";
 import { promptCredentials } from "./git/credentials";
@@ -29,6 +30,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
   const [subdirectory, setSubdirectory] = useState<string>("");
   const [isCloning, setIsCloning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formId = useRef(`clone-git-repository.form.${generateId()}`).current;
 
   const repoName = extractRepoName(url);
   const sep = getPathSeparator(baseDirectory);
@@ -83,7 +85,7 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
   };
 
   return (
-    <VStack as="form" space={3} alignItems="start" className="pb-3" onSubmit={handleClone}>
+    <VStack as="form" id={formId} space={3} alignItems="start" onSubmit={handleClone}>
       {error && (
         <Banner color="danger" className="w-full">
           {error}
@@ -132,15 +134,17 @@ export function CloneGitRepositoryDialog({ hide }: Props) {
         />
       )}
 
-      <Button
-        type="submit"
-        color="primary"
-        className="w-full mt-3"
-        disabled={!url || !directory || isCloning}
-        isLoading={isCloning}
-      >
-        {isCloning ? "Cloning..." : "Clone Repository"}
-      </Button>
+      <DialogFooter
+        actions={[
+          {
+            label: isCloning ? "Cloning..." : "Clone Repository",
+            color: "primary",
+            form: formId,
+            disabled: !url || !directory || isCloning,
+            isLoading: isCloning,
+          },
+        ]}
+      />
     </VStack>
   );
 }

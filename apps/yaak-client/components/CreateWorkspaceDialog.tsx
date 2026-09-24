@@ -2,13 +2,14 @@ import { gitMutations } from "@yaakapp-internal/git";
 import type { WorkspaceMeta } from "@yaakapp-internal/models";
 import { createGlobalModel, updateModel } from "@yaakapp-internal/models";
 import { VStack } from "@yaakapp-internal/ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { generateId } from "../lib/generateId";
 import { router } from "../lib/router";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
 import { rpc } from "../lib/rpc";
 import { showErrorToast } from "../lib/toast";
-import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
+import { DialogFooter } from "./core/Dialog";
 import { Label } from "./core/Label";
 import { PlainInput } from "./core/PlainInput";
 import { EncryptionHelp } from "./EncryptionHelp";
@@ -26,12 +27,13 @@ export function CreateWorkspaceDialog({ hide }: Props) {
     initGit?: boolean;
   }>({ filePath: null, initGit: false });
   const [setupEncryption, setSetupEncryption] = useState<boolean>(false);
+  const formId = useRef(`create-workspace.form.${generateId()}`).current;
   return (
     <VStack
       as="form"
+      id={formId}
       space={3}
       alignItems="start"
-      className="pb-3"
       onSubmit={async (e) => {
         e.preventDefault();
         const workspaceId = await createGlobalModel({ model: "workspace", name });
@@ -89,9 +91,7 @@ export function CreateWorkspaceDialog({ hide }: Props) {
           title="Enable Encryption"
         />
       </div>
-      <Button type="submit" color="primary" className="w-full mt-3">
-        Create Workspace
-      </Button>
+      <DialogFooter actions={[{ label: "Create Workspace", color: "primary", form: formId }]} />
     </VStack>
   );
 }

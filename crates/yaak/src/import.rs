@@ -12,10 +12,10 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{
     BatchUpsertResult, ImportConflictResolution, ImportDestination, ImportOrigin, ImportPlan,
-    ImportPlanAction, ImportPlanItem, ImportPlanReason, ImportPlanWarning, ImportResourceType,
-    UpdateSource,
+    ImportPlanAction, ImportPlanItem, ImportPlanReason, ImportPlanSource, ImportPlanWarning,
+    ImportResourceType, UpdateSource,
 };
-use yaak_plugins::events::{ImportRequest, ImportResources, PluginContext};
+use yaak_plugins::events::{ImportRequest, ImportResources, ImportResponse, PluginContext};
 use yaak_plugins::manager::PluginManager;
 
 pub struct PlanImportDataParams<'a> {
@@ -40,6 +40,153 @@ pub async fn plan_import_data(params: PlanImportDataParams<'_>) -> Result<Import
         import_result.source_keys,
         params.origin,
     )
+}
+
+/// Plan each input independently so importer keys and linked-source matching remain scoped to
+/// that input, then combine the results for one preview and one atomic commit.
+pub fn plan_import_batch_resources(
+    query_manager: &QueryManager,
+    destination: ImportDestination,
+    inputs: Vec<(ImportResponse, ImportOrigin)>,
+) -> Result<ImportPlan> {
+    let mut plans = Vec::new();
+    for (response, origin) in inputs {
+        let has_workspace = !response.resources.workspaces.is_empty();
+        let plan = plan_import_resources(
+            query_manager,
+            response.importer,
+            destination.clone(),
+            response.resources,
+            response.source_keys,
+            Some(origin),
+        )?;
+        plans.push((plan, has_workspace));
+    }
+    if plans.len() == 1 {
+        return Ok(plans.remove(0).0);
+    }
+    if plans.is_empty() {
+        return Err(yaak_models::error::Error::GenericError(
+            "Choose at least one import source".into(),
+        )
+        .into());
+    }
+
+    // Standalone environments/requests accompany the first actual collection, regardless of
+    // picker order. If every input is standalone, they share the first generated workspace.
+    let primary = plans.iter().position(|(_, has_workspace)| *has_workspace).unwrap_or(0);
+    let shared_workspace = plans[primary].0.resources.workspaces.first().cloned();
+    let mut taken_names =
+        query_manager.connect().list_workspaces()?.into_iter().map(|w| w.name).collect::<Vec<_>>();
+    let mut seen_items = BTreeSet::new();
+    let mut seen_linked_sources = BTreeSet::new();
+    let mut importers = Vec::new();
+    let mut combined = ImportPlan {
+        importer: String::new(),
+        destination,
+        resources: BatchUpsertResult::default(),
+        warnings: Vec::new(),
+        source_keys: BTreeMap::new(),
+        items: Vec::new(),
+        origin: None,
+        sources: Vec::new(),
+    };
+    for (index, (mut plan, has_workspace)) in plans.into_iter().enumerate() {
+        if let Some(workspace) = &shared_workspace
+            && !has_workspace
+            && index != primary
+        {
+            for old in plan.resources.workspaces.drain(..) {
+                plan.source_keys.remove(&old.id);
+            }
+            for v in &mut plan.resources.environments {
+                v.workspace_id = workspace.id.clone();
+                if v.parent_model == "workspace" {
+                    v.parent_model = "environment".into();
+                    v.name = format!("{} (Imported)", v.name);
+                }
+            }
+            for v in &mut plan.resources.folders {
+                v.workspace_id = workspace.id.clone();
+            }
+            for v in &mut plan.resources.http_requests {
+                v.workspace_id = workspace.id.clone();
+            }
+            for v in &mut plan.resources.grpc_requests {
+                v.workspace_id = workspace.id.clone();
+            }
+            for v in &mut plan.resources.websocket_requests {
+                v.workspace_id = workspace.id.clone();
+            }
+            plan.items = create_only_items(&plan);
+        }
+        for workspace in &mut plan.resources.workspaces {
+            workspace.name = unique_name(&workspace.name, &taken_names);
+            taken_names.push(workspace.name.clone());
+        }
+        for item in &plan.items {
+            if !seen_items.insert(item.model_id.clone()) {
+                return Err(yaak_models::error::Error::GenericError(
+                    format!("More than one import source changes {}. Import these sources separately to resolve the overlap.", item.name)
+                ).into());
+            }
+        }
+        if !importers.contains(&plan.importer) {
+            importers.push(plan.importer.clone());
+        }
+        let workspace_id = match &plan.destination {
+            ImportDestination::ExistingWorkspace { workspace_id, .. } => workspace_id.clone(),
+            ImportDestination::NewWorkspace => plan
+                .resources
+                .workspaces
+                .first()
+                .or(shared_workspace.as_ref())
+                .expect("planned workspace")
+                .id
+                .clone(),
+        };
+        if let Some(origin) = plan.origin {
+            let linked_source_id = match &plan.destination {
+                ImportDestination::NewWorkspace => None,
+                ImportDestination::ExistingWorkspace { .. } => match resolve_linked_source(
+                    &query_manager.connect(),
+                    &workspace_id,
+                    &plan.importer,
+                    &origin,
+                    &plan.source_keys.values().cloned().collect(),
+                )? {
+                    LinkedSource::Linked(source) => Some(source.id),
+                    _ => None,
+                },
+            };
+            if let Some(id) = &linked_source_id
+                && !seen_linked_sources.insert(id.clone())
+            {
+                return Err(yaak_models::error::Error::GenericError(
+                    "More than one input matches the same linked import. Keep only one version of that source.".into()
+                ).into());
+            }
+            combined.sources.push(ImportPlanSource {
+                importer: plan.importer,
+                origin,
+                workspace_id,
+                source_keys: plan.source_keys.clone(),
+                linked_source_id,
+            });
+        }
+        combined.resources.workspaces.extend(plan.resources.workspaces);
+        combined.resources.environments.extend(plan.resources.environments);
+        combined.resources.folders.extend(plan.resources.folders);
+        combined.resources.http_requests.extend(plan.resources.http_requests);
+        combined.resources.grpc_requests.extend(plan.resources.grpc_requests);
+        combined.resources.websocket_requests.extend(plan.resources.websocket_requests);
+        combined.items.extend(plan.items);
+        combined.source_keys.extend(plan.source_keys);
+        combined.warnings.extend(plan.warnings);
+    }
+    combined.importer = importers.join(", ");
+    validate_plan(&combined)?;
+    Ok(combined)
 }
 
 /// Remap parsed importer resources into their selected destination.
@@ -294,6 +441,7 @@ pub fn plan_import_resources(
         warnings,
         items: Vec::new(),
         origin,
+        sources: Vec::new(),
     };
     merge_with_linked_source(query_manager, &mut plan, &original)?;
     warn_if_imported_elsewhere(&query_manager.connect(), &mut plan)?;
@@ -506,10 +654,15 @@ fn record_import_source(
     items: &BTreeMap<String, ImportPlanItem>,
     upserted: &BatchUpsertResult,
 ) -> Result<()> {
+    if !plan.sources.is_empty() {
+        for source in &plan.sources {
+            record_import_plan_source(db, plan, source, items, upserted)?;
+        }
+        return Ok(());
+    }
     let Some(origin) = &plan.origin else {
         return Ok(());
     };
-
     let workspace_id = match &plan.destination {
         ImportDestination::ExistingWorkspace { workspace_id, .. } => workspace_id.clone(),
         ImportDestination::NewWorkspace => match upserted.workspaces.first() {
@@ -517,20 +670,50 @@ fn record_import_source(
             None => return Ok(()),
         },
     };
+    record_import_plan_source(
+        db,
+        plan,
+        &ImportPlanSource {
+            importer: plan.importer.clone(),
+            origin: origin.clone(),
+            workspace_id,
+            source_keys: plan.source_keys.clone(),
+            linked_source_id: None,
+        },
+        items,
+        upserted,
+    )
+}
 
-    let incoming_keys: BTreeSet<String> = plan.source_keys.values().cloned().collect();
-    let existing =
-        match resolve_linked_source(db, &workspace_id, &plan.importer, origin, &incoming_keys)? {
-            LinkedSource::Linked(source) => Some(source),
+fn record_import_plan_source(
+    db: &WriteDb,
+    plan: &ImportPlan,
+    source: &ImportPlanSource,
+    items: &BTreeMap<String, ImportPlanItem>,
+    upserted: &BatchUpsertResult,
+) -> Result<()> {
+    let incoming_keys: BTreeSet<String> = source.source_keys.values().cloned().collect();
+    let source_id = if plan.sources.is_empty() {
+        match resolve_linked_source(
+            db,
+            &source.workspace_id,
+            &source.importer,
+            &source.origin,
+            &incoming_keys,
+        )? {
+            LinkedSource::Linked(source) => Some(source.id),
             LinkedSource::Ambiguous(_) | LinkedSource::Unlinked => None,
-        };
+        }
+    } else {
+        source.linked_source_id.clone()
+    };
     let import_source = db.upsert_import_source(
         &ImportSource {
-            id: existing.map(|s| s.id).unwrap_or_default(),
-            workspace_id,
-            importer: plan.importer.clone(),
-            origin: origin.origin.clone(),
-            origin_label: origin.label.clone(),
+            id: source_id.unwrap_or_default(),
+            workspace_id: source.workspace_id.clone(),
+            importer: source.importer.clone(),
+            origin: source.origin.origin.clone(),
+            origin_label: source.origin.label.clone(),
             last_imported_at: Utc::now().naive_utc(),
             ..Default::default()
         },
@@ -558,7 +741,7 @@ fn record_import_source(
                      resource: ImportResourceType,
                      incoming: &dyn Fn() -> Result<Value>|
      -> Result<()> {
-        let Some(source_key) = plan.source_keys.get(model_id) else {
+        let Some(source_key) = source.source_keys.get(model_id) else {
             return Ok(());
         };
         let item = items.get(model_id);
@@ -1613,6 +1796,225 @@ mod tests {
             ],
             ..Default::default()
         }
+    }
+
+    fn batch_input(
+        importer: &str,
+        path: &str,
+        resources: ImportResources,
+    ) -> (ImportResponse, ImportOrigin) {
+        (
+            ImportResponse { importer: importer.into(), resources, source_keys: None },
+            ImportOrigin { origin: path.into(), label: path.into() },
+        )
+    }
+
+    fn standalone_environment(name: &str) -> ImportResources {
+        ImportResources {
+            environments: vec![Environment {
+                id: "ev_export".into(),
+                model: "environment".into(),
+                workspace_id: "CURRENT_WORKSPACE".into(),
+                name: name.into(),
+                parent_model: "environment".into(),
+                variables: vec![EnvironmentVariable {
+                    enabled: true,
+                    name: "host".into(),
+                    value: "example.com".into(),
+                    id: None,
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn collection_and_environments() -> Vec<(ImportResponse, ImportOrigin)> {
+        vec![
+            batch_input("Postman Environment", "/local.json", standalone_environment("Local")),
+            batch_input("Postman", "/collection.json", imported_resources()),
+            batch_input(
+                "Postman Environment",
+                "/production.json",
+                standalone_environment("Production"),
+            ),
+        ]
+    }
+
+    #[test]
+    fn batch_collection_and_environments_share_one_workspace_in_either_order() {
+        for reverse in [false, true] {
+            let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+            let mut inputs = collection_and_environments();
+            if reverse {
+                inputs.reverse();
+            }
+            let plan =
+                plan_import_batch_resources(&manager, ImportDestination::NewWorkspace, inputs)
+                    .unwrap();
+            assert!(manager.connect().list_workspaces().unwrap().is_empty());
+            assert_eq!(plan.resources.workspaces.len(), 1);
+            let workspace_id = plan.resources.workspaces[0].id.clone();
+            assert_eq!(plan.resources.workspaces[0].name, "Imported");
+            assert_eq!(plan.resources.environments.len(), 3);
+            assert!(plan.resources.environments.iter().all(|e| e.workspace_id == workspace_id));
+            assert_eq!(plan.sources.len(), 3);
+            // The plan crosses IPC and is returned with the user's item selections.
+            let plan = serde_json::from_value(serde_json::to_value(plan).unwrap()).unwrap();
+            let committed = commit_import_plan(&manager, plan).unwrap();
+            assert_eq!(committed.workspaces.len(), 1);
+            assert_eq!(committed.environments.len(), 3);
+            assert_eq!(manager.connect().list_import_sources(&workspace_id).unwrap().len(), 3);
+        }
+    }
+
+    #[test]
+    fn batch_reimport_preserves_ids_and_scopes_deletions_to_each_source() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let first = plan_import_batch_resources(
+            &manager,
+            ImportDestination::NewWorkspace,
+            collection_and_environments(),
+        )
+        .unwrap();
+        let workspace_id = first.resources.workspaces[0].id.clone();
+        let ids =
+            first.resources.environments.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>();
+        commit_import_plan(&manager, first).unwrap();
+        let destination = ImportDestination::ExistingWorkspace {
+            workspace_id: workspace_id.clone(),
+            folder_id: None,
+        };
+        let unchanged = plan_import_batch_resources(
+            &manager,
+            destination.clone(),
+            collection_and_environments(),
+        )
+        .unwrap();
+        assert!(unchanged.items.iter().all(|i| i.action == ImportPlanAction::Unchanged));
+        assert_eq!(
+            unchanged.resources.environments.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>(),
+            ids
+        );
+        commit_import_plan(&manager, unchanged).unwrap();
+        let mut inputs = collection_and_environments();
+        inputs[1].0.resources.http_requests.remove(0);
+        let changed = plan_import_batch_resources(&manager, destination.clone(), inputs).unwrap();
+        let deletes = changed
+            .items
+            .iter()
+            .filter(|i| i.action == ImportPlanAction::Delete)
+            .collect::<Vec<_>>();
+        assert_eq!(deletes.len(), 1);
+        assert_eq!(deletes[0].name, "Root Request");
+        commit_import_plan(&manager, changed).unwrap();
+        assert_eq!(
+            manager
+                .connect()
+                .list_environments(&workspace_id)
+                .unwrap()
+                .iter()
+                .map(|v| v.id.clone())
+                .collect::<BTreeSet<_>>(),
+            ids
+        );
+        assert_eq!(manager.connect().list_import_sources(&workspace_id).unwrap().len(), 3);
+        // A companion file can still be reimported on its own after the batch.
+        let single = plan_import_batch_resources(
+            &manager,
+            destination,
+            vec![collection_and_environments().remove(0)],
+        )
+        .unwrap();
+        assert_eq!(single.items.len(), 1);
+        assert_eq!(single.items[0].action, ImportPlanAction::Unchanged);
+    }
+
+    #[test]
+    fn batch_same_named_environments_keep_distinct_source_links() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let inputs = || {
+            vec![
+                batch_input("Postman Environment", "/one.json", standalone_environment("Local")),
+                batch_input("Postman Environment", "/two.json", standalone_environment("Local")),
+            ]
+        };
+        let first =
+            plan_import_batch_resources(&manager, ImportDestination::NewWorkspace, inputs())
+                .unwrap();
+        assert_eq!(first.resources.workspaces.len(), 1);
+        let workspace_id = first.resources.workspaces[0].id.clone();
+        commit_import_plan(&manager, first).unwrap();
+        assert_eq!(manager.connect().list_import_sources(&workspace_id).unwrap().len(), 2);
+        let next = plan_import_batch_resources(
+            &manager,
+            ImportDestination::ExistingWorkspace { workspace_id, folder_id: None },
+            inputs(),
+        )
+        .unwrap();
+        assert_eq!(next.items.len(), 2);
+        assert!(next.items.iter().all(|i| i.action == ImportPlanAction::Unchanged));
+    }
+
+    #[test]
+    fn batch_separate_collections_keep_their_workspaces_and_unique_names() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let plan = plan_import_batch_resources(
+            &manager,
+            ImportDestination::NewWorkspace,
+            vec![
+                batch_input("Bruno", "/one", imported_resources()),
+                batch_input("Bruno", "/two", imported_resources()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            plan.resources.workspaces.iter().map(|w| w.name.as_str()).collect::<Vec<_>>(),
+            vec!["Imported", "Imported (2)"]
+        );
+        let committed = commit_import_plan(&manager, plan).unwrap();
+        for workspace in committed.workspaces {
+            assert_eq!(manager.connect().list_http_requests(&workspace.id).unwrap().len(), 2);
+            assert_eq!(manager.connect().list_import_sources(&workspace.id).unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn batch_rejects_two_versions_of_the_same_linked_collection() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let input = || batch_input("Postman", "/collection.json", imported_resources());
+        let first =
+            plan_import_batch_resources(&manager, ImportDestination::NewWorkspace, vec![input()])
+                .unwrap();
+        let workspace_id = first.resources.workspaces[0].id.clone();
+        commit_import_plan(&manager, first).unwrap();
+        let result = plan_import_batch_resources(
+            &manager,
+            ImportDestination::ExistingWorkspace { workspace_id, folder_id: None },
+            vec![input(), input()],
+        );
+        assert!(result.unwrap_err().to_string().contains("More than one import source"));
+    }
+
+    #[test]
+    fn batch_commit_rolls_back_all_sources_if_linking_a_later_source_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("models.sqlite");
+        let (manager, _blobs, _rx) =
+            yaak_models::init_standalone(&db_path, &dir.path().join("blobs.sqlite")).unwrap();
+        let plan = plan_import_batch_resources(
+            &manager,
+            ImportDestination::NewWorkspace,
+            collection_and_environments(),
+        )
+        .unwrap();
+        let workspace_id = plan.resources.workspaces[0].id.clone();
+        let connection = rusqlite::Connection::open(&db_path).unwrap();
+        connection.execute_batch("CREATE TRIGGER fail_source BEFORE INSERT ON import_sources WHEN NEW.origin = '/production.json' BEGIN SELECT RAISE(FAIL, 'forced failure'); END;").unwrap();
+        drop(connection);
+        assert!(commit_import_plan(&manager, plan).is_err());
+        assert!(manager.connect().list_workspaces().unwrap().is_empty());
+        assert!(manager.connect().list_import_sources(&workspace_id).unwrap().is_empty());
     }
 
     #[test]

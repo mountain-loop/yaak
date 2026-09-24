@@ -1,8 +1,8 @@
 import type { DivergedStrategy } from "@yaakapp-internal/git";
-import { HStack, InlineCode } from "@yaakapp-internal/ui";
+import { InlineCode } from "@yaakapp-internal/ui";
 import { useState } from "react";
 import { showDialog } from "../../lib/dialog";
-import { Button } from "../core/Button";
+import { DialogFooter } from "../core/Dialog";
 import { RadioCards } from "../core/RadioCards";
 
 type Resolution = "force_reset" | "merge";
@@ -34,7 +34,7 @@ function DivergedDialog({ remote, branch, onResult, onHide }: DivergedDialogProp
   };
 
   return (
-    <div className="flex flex-col gap-4 mb-4">
+    <div className="flex flex-col gap-4">
       <p className="text-text-subtle">
         Your local branch has diverged from{" "}
         <InlineCode>
@@ -59,18 +59,18 @@ function DivergedDialog({ remote, branch, onResult, onHide }: DivergedDialogProp
           },
         ]}
       />
-      <HStack space={2} justifyContent="start" className="flex-row-reverse">
-        <Button
-          color={selected === "force_reset" ? "danger" : "primary"}
-          disabled={selected == null}
-          onClick={handleSubmit}
-        >
-          {selected != null ? resolutionLabel[selected] : "Select an option"}
-        </Button>
-        <Button variant="border" onClick={handleCancel}>
-          Cancel
-        </Button>
-      </HStack>
+      <DialogFooter
+        inline
+        actions={[
+          { label: "Cancel", onClick: handleCancel },
+          {
+            label: selected != null ? resolutionLabel[selected] : "Select an option",
+            color: selected === "force_reset" ? "danger" : "primary",
+            disabled: selected == null,
+            onClick: handleSubmit,
+          },
+        ]}
+      />
     </div>
   );
 }

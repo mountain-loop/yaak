@@ -228,7 +228,8 @@ pub struct CmdGetHttpResponseEventsReq {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct CmdImportDataReq {
-    pub file_path: String,
+    pub file_paths: Vec<String>,
+    pub urls: Vec<String>,
     pub destination: ImportDestination,
 }
 
@@ -258,6 +259,16 @@ pub struct CmdListImportSourcesReq {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct CmdImportSourcesForOriginReq {
+    #[ts(optional)]
+    pub file_path: Option<String>,
+    #[ts(optional)]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdDetectImportSourceReq {
     #[ts(optional)]
     pub file_path: Option<String>,
     #[ts(optional)]
@@ -943,6 +954,7 @@ macro_rules! with_commands {
     cmd_commit_import(CmdCommitImportReq) -> BatchUpsertResult,
     cmd_list_import_sources(CmdListImportSourcesReq) -> Vec<ImportSource>,
     cmd_import_sources_for_origin(CmdImportSourcesForOriginReq) -> Vec<ImportSource>,
+    cmd_detect_import_source(CmdDetectImportSourceReq) -> String,
     cmd_http_request_actions(CmdHttpRequestActionsReq) -> Vec<GetHttpRequestActionsResponse>,
     cmd_websocket_request_actions(CmdWebsocketRequestActionsReq) -> Vec<GetWebsocketRequestActionsResponse>,
     cmd_call_websocket_request_action(CmdCallWebsocketRequestActionReq) -> (),

@@ -11,7 +11,7 @@ import type { FnArg, Tokens } from "@yaakapp-internal/templates";
 import { parseTemplate } from "@yaakapp-internal/templates";
 import { HStack, InlineCode, LoadingIcon, useDebouncedValue } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { useRenderTemplate } from "../hooks/useRenderTemplate";
 import { useTemplateFunctionConfig } from "../hooks/useTemplateFunctionConfig";
@@ -22,9 +22,10 @@ import {
 import { useToggle } from "../hooks/useToggle";
 import { showDialog } from "../lib/dialog";
 import { convertTemplateToInsecure } from "../lib/encryption";
+import { generateId } from "../lib/generateId";
 import { jotaiStore } from "../lib/jotai";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
-import { Button } from "./core/Button";
+import { DialogFooter } from "./core/Dialog";
 import { collectArgumentValues } from "./core/Editor/twig/util";
 import { IconButton } from "./core/IconButton";
 import { PlainInput } from "./core/PlainInput";
@@ -91,6 +92,7 @@ function InitializedTemplateFunctionDialog({
   const previewType = ogPreviewType == null ? "live" : ogPreviewType;
   const [showSecretsInPreview, toggleShowSecretsInPreview] = useToggle(false);
   const [argValues, setArgValues] = useState<Record<string, string | boolean>>(initialArgValues);
+  const formId = useRef(`template-function.form.${generateId()}`).current;
 
   const tokens: Tokens = useMemo(() => {
     const argTokens: FnArg[] = Object.keys(argValues).map((name) => ({
@@ -160,13 +162,14 @@ function InitializedTemplateFunctionDialog({
 
   return (
     <form
-      className="grid grid-rows-[minmax(0,1fr)_auto_auto] h-full max-h-[90vh]"
+      id={formId}
+      className="grid grid-rows-[minmax(0,1fr)_auto] h-full"
       onSubmit={(e) => {
         e.preventDefault();
         handleDone();
       }}
     >
-      <div className="overflow-y-auto h-full px-6">
+      <div className="overflow-y-auto h-full">
         {name === "secure" ? (
           <PlainInput
             required
@@ -188,75 +191,71 @@ function InitializedTemplateFunctionDialog({
           />
         )}
       </div>
-      <div className="px-6 border-t border-t-border pt-3 pb-6 bg-surface-highlight w-full flex flex-col gap-4">
-        {previewType !== "none" ? (
-          <div className="w-full grid grid-cols-1 grid-rows-[auto_auto]">
-            <HStack space={0.5}>
-              <HStack className="text-sm text-text-subtle" space={1.5}>
-                Rendered Preview
-                {rendered.isLoading && <LoadingIcon size="xs" />}
-              </HStack>
+      {previewType !== "none" ? (
+        <div className="w-full grid grid-cols-1 grid-rows-[auto_auto] border-t border-t-border pt-3">
+          <HStack space={0.5}>
+            <HStack className="text-sm text-text-subtle" space={1.5}>
+              Rendered Preview
+              {rendered.isLoading && <LoadingIcon size="xs" />}
+            </HStack>
+            <IconButton
+              size="xs"
+              iconSize="sm"
+              icon={showSecretsInPreview ? "lock" : "lock_open"}
+              title={showSecretsInPreview ? "Show preview" : "Hide preview"}
+              onClick={toggleShowSecretsInPreview}
+              className={classNames(
+                "ml-auto text-text-subtlest",
+                !dataContainsSecrets && "invisible",
+              )}
+            />
+          </HStack>
+          <div className="relative w-full max-h-40">
+            <InlineCode
+              className={classNames(
+                "block whitespace-pre-wrap select-text! cursor-text max-h-40 overflow-auto hide-scrollbars border-text-subtlest!",
+                tooLarge && "italic text-danger",
+              )}
+            >
+              {rendered.error || tagText.error ? (
+                <em className="text-danger">
+                  {`${rendered.error || tagText.error}`.replace(/^Render Error: /, "")}
+                </em>
+              ) : dataContainsSecrets && !showSecretsInPreview ? (
+                <span className="italic text-text-subtle">
+                  ------ sensitive values hidden ------
+                </span>
+              ) : tooLarge ? (
+                "too large to preview"
+              ) : (
+                rendered.data || <>&nbsp;</>
+              )}
+            </InlineCode>
+            <div className="absolute right-0.5 top-0 bottom-0 flex items-center">
               <IconButton
                 size="xs"
-                iconSize="sm"
-                icon={showSecretsInPreview ? "lock" : "lock_open"}
-                title={showSecretsInPreview ? "Show preview" : "Hide preview"}
-                onClick={toggleShowSecretsInPreview}
-                className={classNames(
-                  "ml-auto text-text-subtlest",
-                  !dataContainsSecrets && "invisible",
-                )}
+                icon="refresh"
+                className="text-text-subtle"
+                title="Refresh preview"
+                spin={rendered.isPending}
+                onClick={() => {
+                  setRenderKey(new Date().toISOString());
+                }}
               />
-            </HStack>
-            <div className="relative w-full max-h-40">
-              <InlineCode
-                className={classNames(
-                  "block whitespace-pre-wrap select-text! cursor-text max-h-40 overflow-auto hide-scrollbars border-text-subtlest!",
-                  tooLarge && "italic text-danger",
-                )}
-              >
-                {rendered.error || tagText.error ? (
-                  <em className="text-danger">
-                    {`${rendered.error || tagText.error}`.replace(/^Render Error: /, "")}
-                  </em>
-                ) : dataContainsSecrets && !showSecretsInPreview ? (
-                  <span className="italic text-text-subtle">
-                    ------ sensitive values hidden ------
-                  </span>
-                ) : tooLarge ? (
-                  "too large to preview"
-                ) : (
-                  rendered.data || <>&nbsp;</>
-                )}
-              </InlineCode>
-              <div className="absolute right-0.5 top-0 bottom-0 flex items-center">
-                <IconButton
-                  size="xs"
-                  icon="refresh"
-                  className="text-text-subtle"
-                  title="Refresh preview"
-                  spin={rendered.isPending}
-                  onClick={() => {
-                    setRenderKey(new Date().toISOString());
-                  }}
-                />
-              </div>
             </div>
           </div>
-        ) : (
-          <span />
-        )}
-        <div className="flex justify-stretch w-full grow gap-2 *:flex-1">
-          {templateFunction.data.name === "secure" && (
-            <Button variant="border" color="secondary" onClick={setupOrConfigureEncryption}>
-              Reveal Encryption Key
-            </Button>
-          )}
-          <Button type="submit" color="primary">
-            Save
-          </Button>
         </div>
-      </div>
+      ) : (
+        <span />
+      )}
+      <DialogFooter
+        actions={[
+          ...(templateFunction.data.name === "secure"
+            ? [{ label: "Reveal Encryption Key", onClick: setupOrConfigureEncryption }]
+            : []),
+          { label: "Save", color: "primary", form: formId },
+        ]}
+      />
     </form>
   );
 }
@@ -272,7 +271,6 @@ TemplateFunctionDialog.show = (
     id: `template-function-${Math.random()}`, // Allow multiple at once
     size: "md",
     className: "h-240",
-    noPadding: true,
     title: <InlineCode>{fn.name}(…)</InlineCode>,
     description: fn.description,
     render: ({ hide }) => {

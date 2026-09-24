@@ -1,6 +1,6 @@
 import type { Workspace } from "@yaakapp-internal/models";
 import { workspacesAtom } from "@yaakapp-internal/models";
-import { HStack, VStack } from "@yaakapp-internal/ui";
+import { VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useCallback, useMemo, useState } from "react";
 import slugify from "slugify";
@@ -8,9 +8,9 @@ import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { pluralizeCount } from "../lib/pluralize";
 import { rpc } from "../lib/rpc";
 import { CommercialUseBanner } from "./CommercialUseBanner";
-import { Button } from "./core/Button";
 import { Checkbox } from "./core/Checkbox";
 import { DetailsBanner } from "./core/DetailsBanner";
+import { DialogFooter } from "./core/Dialog";
 import { Link } from "./core/Link";
 import { platform } from "@yaakapp-internal/platform";
 
@@ -87,8 +87,8 @@ function ExportDataDialogContent({
   const numSelected = Object.values(selectedWorkspaces).filter(Boolean).length;
   const noneSelected = numSelected === 0;
   return (
-    <div className="h-full w-full grid grid-rows-[minmax(0,1fr)_auto] overflow-hidden rounded-b-lg">
-      <VStack space={3} className="overflow-auto px-5 pb-6">
+    <>
+      <VStack space={3} className="pb-4">
         <CommercialUseBanner source="data-export" title="Exporting work data?" />
 
         <table className="w-full mb-auto min-w-full max-w-full divide-y divide-surface-highlight">
@@ -141,29 +141,22 @@ function ExportDataDialogContent({
           />
         </DetailsBanner>
       </VStack>
-      <footer className="px-5 grid grid-cols-[1fr_auto] items-center bg-surface py-3 border-t border-border-subtle">
-        <div>
+      <DialogFooter
+        leftSlot={
           <Link href="https://yaak.app/button/new" noUnderline className="text-text-subtlest">
             Create Run Button
           </Link>
-        </div>
-        <HStack space={2} justifyContent="end">
-          <Button size="sm" className="focus" variant="border" onClick={onHide}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            type="submit"
-            className="focus"
-            color="primary"
-            disabled={noneSelected}
-            onClick={() => handleExport()}
-          >
-            Export{" "}
-            {pluralizeCount("Workspace", numSelected, { omitSingle: true, noneWord: "Nothing" })}
-          </Button>
-        </HStack>
-      </footer>
-    </div>
+        }
+        actions={[
+          { label: "Cancel", onClick: onHide },
+          {
+            label: `Export ${pluralizeCount("Workspace", numSelected, { omitSingle: true, noneWord: "Nothing" })}`,
+            color: "primary",
+            disabled: noneSelected,
+            onClick: () => handleExport(),
+          },
+        ]}
+      />
+    </>
   );
 }
