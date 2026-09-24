@@ -124,6 +124,7 @@ function LoadedImportDataDialog({
   const [source, setSource] = useState<string | null>(prefill?.origin ?? null);
   const [forceUpdateKey, setForceUpdateKey] = useState<number>(0);
   const [isHovering, setIsHovering] = useState<boolean>(false);
+  const [pickerKind, setPickerKind] = useState<"file" | "folder">("file");
   const ref = useRef<HTMLDivElement>(null);
   const trimmedSource = source?.trim() ?? "";
   const filePath = isFilePath(trimmedSource) ? trimmedSource : null;
@@ -209,7 +210,8 @@ function LoadedImportDataDialog({
     };
   }, [destinationWorkspaceId, listSources]);
 
-  const handleSelectFile = async (directory = false) => {
+  const handleSelectFile = async () => {
+    const directory = pickerKind === "folder";
     const selected = await platform.dialog.open({
       title: directory ? "Select Import Folder" : "Select File",
       multiple: false,
@@ -426,38 +428,56 @@ function LoadedImportDataDialog({
     <VStack ref={ref} space={4} className="pb-4">
       <CommercialUseBanner source="data-import" title="Importing work data?" />
 
-      <button
-        type="button"
-        onClick={() => handleSelectFile()}
+      <div
         className={classNames(
-          "w-full rounded-lg border border-dashed px-4 py-6",
-          "flex flex-col items-center gap-1 text-center",
+          "w-full rounded-lg border border-dashed",
           isHovering
             ? "border-notice bg-surface-highlight"
             : "border-border hover:border-text-subtle",
         )}
       >
-        <Icon icon="folder_input" className="text-text-subtlest w-8! h-8! mb-2" />
-        {/* Fixed height so the region doesn't resize between the empty and selected states */}
-        <div className="h-6 w-full flex items-center justify-center">
-          {filePath == null ? (
-            <div className="text-text">
-              <strong className="font-semibold">Choose a file or ZIP</strong> or drag a file or
-              folder here
-            </div>
-          ) : (
-            <div className="text-text font-mono text-xs max-w-full truncate" title={filePath}>
-              {fileName(filePath)}
-            </div>
-          )}
+        <div className="flex justify-center px-4 pt-3">
+          <div>
+            <SegmentedControl
+              name="import-picker-kind"
+              label="Choose import source type"
+              hideLabel
+              value={pickerKind}
+              onChange={setPickerKind}
+              options={[
+                { value: "file", label: "File" },
+                { value: "folder", label: "Folder" },
+              ]}
+            />
+          </div>
         </div>
-        <div className="text-xs text-text-subtlest">
-          Supports OpenAPI, Swagger, Postman, Insomnia, Bruno, curl, and Yaak exports
-        </div>
-      </button>
-      <Button size="sm" variant="border" onClick={() => handleSelectFile(true)}>
-        Choose folder
-      </Button>
+        <button
+          type="button"
+          onClick={() => handleSelectFile()}
+          aria-label={pickerKind === "folder" ? "Choose a folder" : "Choose a file or ZIP"}
+          className="w-full rounded-lg px-4 pt-4 pb-6 flex flex-col items-center gap-1 text-center focus-visible:outline focus-visible:outline-border-focus"
+        >
+          <Icon icon="folder_input" className="text-text-subtlest w-8! h-8! mb-2" />
+          {/* Fixed height so the region doesn't resize between the empty and selected states */}
+          <div className="h-6 w-full flex items-center justify-center">
+            {filePath == null ? (
+              <div className="text-text">
+                <strong className="font-semibold">
+                  {pickerKind === "folder" ? "Choose a folder" : "Choose a file or ZIP"}
+                </strong>{" "}
+                or drag a file or folder here
+              </div>
+            ) : (
+              <div className="text-text font-mono text-xs max-w-full truncate" title={filePath}>
+                {fileName(filePath)}
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-text-subtlest">
+            Supports OpenAPI, Swagger, Postman, Insomnia, Bruno, curl, and Yaak exports
+          </div>
+        </button>
+      </div>
 
       <PlainInput
         label="Or enter a file/folder path or URL"
