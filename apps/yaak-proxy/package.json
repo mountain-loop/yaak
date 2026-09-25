@@ -31,7 +31,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "^5.8.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@^0.3.2",
-    "vite-plus": "^0.3.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.3.3",
+    "vite-plus": "^0.3.3"
   }
 }
