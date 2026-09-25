@@ -32,6 +32,17 @@ describe("Insomnia templates", () => {
     "{% response 'body', 'req_login', '/root/token', 'always', 60 %}",
     "{% response 'body', 'req_login', '', 'never', 0 %}",
     "{% response 'body', 'req_login', '$.token', 'when-expired', 0 %}",
+    "{% response 'url', 'req_login', '', 'never', 0 %}",
+    "{% os 'arch' %}",
+    "{% file '/tmp/token.txt' %}",
+    "{% jsonpath '{}', '$.a' %}",
+    "{% request 'url' %}",
+    "{% now 'quarter' %}",
+    "{% uuid 'v4', 'extra' %}",
+    "{% base64 'encode' %}",
+    "{% cookie 'https://example.com' %}",
+    "{% prompt %}",
+    "{% timestamp 'ms' %}",
   ])("preserves unsupported or malformed syntax: %s", (input) => {
     expect(convert(input)).toBe(input);
   });
@@ -72,6 +83,125 @@ describe("Insomnia templates", () => {
     expect(
       convert("{% response 'header', 'req_login', 'x-\\'quoted,header', 'never', 0 %}"),
     ).toContain(`header=${encoded("x-'quoted,header")}`);
+  });
+
+  test("converts a bare UUID tag to v4, the version Insomnia lists first", () => {
+    expect(convert("{% uuid %}")).toBe("${[ uuid.v4() ]}");
+  });
+
+  test.each([
+    ["{% now %}", "timestamp.iso8601()"],
+    ["{% now 'iso-8601' %}", "timestamp.iso8601()"],
+    ["{% now 'ISO-8601' %}", "timestamp.iso8601()"],
+    ["{% now 'unix' %}", "timestamp.unix()"],
+    ["{% now 'seconds' %}", "timestamp.unix()"],
+    ["{% now 's' %}", "timestamp.unix()"],
+    ["{% now 'millis' %}", "timestamp.unixMillis()"],
+    ["{% now 'ms' %}", "timestamp.unixMillis()"],
+    ["{% timestamp %}", "timestamp.unixMillis()"],
+  ])("converts %s", (input, output) => {
+    expect(convert(input)).toBe(`\${[ ${output} ]}`);
+  });
+
+  test("passes custom date formats through without translating tokens", () => {
+    const format = "YYYY-MM-DD HH:mm:ss";
+    expect(convert(`{% now 'custom', '${format}' %}`)).toBe(
+      `\${[ timestamp.format(format=${encoded(format)}) ]}`,
+    );
+    expect(convert("{% now 'custom' %}")).toBe(`\${[ timestamp.format(format=${encoded("")}) ]}`);
+  });
+
+  test.each([
+    ["{% base64 'encode', 'normal', 'hello' %}", "base64.encode(encoding='base64', value="],
+    ["{% base64 'encode', 'url', 'hello' %}", "base64.encode(encoding='base64url', value="],
+    // Yaak has no hex mode, so it imports as the plain alphabet.
+    ["{% base64 'encode', 'hex', 'hello' %}", "base64.encode(encoding='base64', value="],
+    ["{% base64 'encode', 'hello' %}", "base64.encode(encoding='base64', value="],
+    ["{% base64 'decode', 'normal', 'hello' %}", "base64.decode(value="],
+    ["{% base64 'decode', 'hello' %}", "base64.decode(value="],
+  ])("converts %s", (input, prefix) => {
+    expect(convert(input)).toBe(`\${[ ${prefix}${encoded("hello")}) ]}`);
+  });
+
+  test("defaults an omitted base64 value to the empty string", () => {
+    expect(convert("{% base64 'encode', 'normal' %}")).toBe(
+      `\${[ base64.encode(encoding='base64', value=${encoded("")}) ]}`,
+    );
+  });
+
+  test("converts variables nested inside tag arguments", () => {
+    expect(convert("{% base64 'encode', 'normal', '{{ _.secret }}' %}")).toBe(
+      `\${[ base64.encode(encoding='base64', value=${encoded("${[ secret ]}")}) ]}`,
+    );
+  });
+
+  test.each(["md5", "sha1", "sha256", "sha512"])("converts the %s hash", (algorithm) => {
+    expect(convert(`{% hash '${algorithm}', 'hex', 'text' %}`)).toBe(
+      `\${[ hash.${algorithm}(input=${encoded("text")}, encoding='hex') ]}`,
+    );
+  });
+
+  test("keeps the base64 digest encoding", () => {
+    expect(convert("{% hash 'sha256', 'base64', 'text' %}")).toBe(
+      `\${[ hash.sha256(input=${encoded("text")}, encoding='base64') ]}`,
+    );
+  });
+
+  test("defaults omitted hash arguments to MD5 and hex, like Insomnia's dropdowns", () => {
+    expect(convert("{% hash %}")).toBe(`\${[ hash.md5(input=${encoded("")}, encoding='hex') ]}`);
+    expect(convert("{% hash 'sha1' %}")).toBe(
+      `\${[ hash.sha1(input=${encoded("")}, encoding='hex') ]}`,
+    );
+  });
+
+  test("falls back to SHA-256 for algorithms outside Insomnia's list, as Insomnia does", () => {
+    expect(convert("{% hash 'sha384', 'hex', 'text' %}")).toBe(
+      `\${[ hash.sha256(input=${encoded("text")}, encoding='hex') ]}`,
+    );
+  });
+
+  test("converts a cookie URL to the domain Yaak filters by", () => {
+    expect(convert("{% cookie 'https://api.example.com/login', 'session' %}")).toBe(
+      `\${[ cookie.value(name=${encoded("session")}, domain=${encoded("api.example.com")}) ]}`,
+    );
+  });
+
+  test("keeps an unreadable cookie URL so it stays visible in the tag", () => {
+    expect(convert("{% cookie '{{ _.base_url }}', 'session' %}")).toBe(
+      `\${[ cookie.value(name=${encoded("session")}, domain=${encoded("${[ base_url ]}")}) ]}`,
+    );
+  });
+
+  test("searches the whole jar when the cookie URL is empty", () => {
+    expect(convert("{% cookie '', 'session' %}")).toBe(
+      `\${[ cookie.value(name=${encoded("session")}) ]}`,
+    );
+  });
+
+  test("converts a prompt with only a title", () => {
+    expect(convert("{% prompt 'Password' %}")).toBe(
+      `\${[ prompt.text(label=${encoded("Password")}, title=${encoded("Password")}) ]}`,
+    );
+  });
+
+  test("converts every prompt argument with a Yaak counterpart", () => {
+    expect(convert("{% prompt 'Login', 'Password', 'hunter2', 'pw-key', true, true %}")).toBe(
+      `\${[ prompt.text(label=${encoded("Password")}, store='forever', ` +
+        `namespace=${encoded("${[ctx.workspace()]}")}, key=${encoded("pw-key")}, ` +
+        `title=${encoded("Login")}, defaultValue=${encoded("hunter2")}, password=true) ]}`,
+    );
+  });
+
+  test("leaves the prompt unmasked and unstored by default", () => {
+    expect(convert("{% prompt 'Login', 'Password', '', '', false, true %}")).toBe(
+      `\${[ prompt.text(label=${encoded("Password")}, title=${encoded("Login")}) ]}`,
+    );
+  });
+
+  test("converts the two-argument response form", () => {
+    expect(convert("{% response 'raw', 'req_login' %}")).toBe(
+      `\${[ response.body.raw(request=${encoded("GENERATE_ID::req_login")}, behavior='never', ttl='0') ]}`,
+    );
   });
 
   test("converts nested resource fields without changing the input", () => {
