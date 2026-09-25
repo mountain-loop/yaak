@@ -41,6 +41,29 @@ use yaak_templates::Tokens;
 
 // -- Response types that belong to the schema rather than to an engine crate --
 
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdValidateHttpAssertionsReq {
+    pub assertions: yaak_models::models::HttpAssertions,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdPreviewHttpAssertionsReq {
+    pub response_id: String,
+    pub assertions: yaak_models::models::HttpAssertions,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CmdHttpResponseJsonChildrenReq {
+    pub response_id: String,
+    pub parent: String,
+}
+
 /// What the frontend learns about the host it is talking to.
 #[derive(Debug, Default, Serialize, TS)]
 #[serde(default, rename_all = "camelCase")]
@@ -923,6 +946,9 @@ macro_rules! with_commands {
     ($callback:ident) => {
         $callback! {
     cmd_metadata(CmdMetadataReq) -> AppMetaData,
+    cmd_validate_http_assertions(CmdValidateHttpAssertionsReq) -> HashMap<String, String>,
+    cmd_preview_http_assertions(CmdPreviewHttpAssertionsReq) -> yaak_models::models::AssertionReport,
+    cmd_http_response_json_children(CmdHttpResponseJsonChildrenReq) -> yaak_jsonpath::JsonPathChildren,
     cmd_template_tokens_to_string(CmdTemplateTokensToStringReq) -> String,
     cmd_render_template(CmdRenderTemplateReq) -> String,
     cmd_send_feedback(CmdSendFeedbackReq) -> (),

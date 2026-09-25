@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+yaak-jsonpath = { workspace = true }
+yaak-assertions = { workspace = true }
 async-trait = "0.1"
 base64 = "0.22.1" # For carrying body chunks over a text-only plugin transport
 log = { workspace = true }

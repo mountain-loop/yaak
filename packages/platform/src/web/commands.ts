@@ -68,6 +68,10 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
   cmd_get_workspace_meta: (payload, db) => db.rpc("cmd_get_workspace_meta", payload),
   cmd_delete_all_http_responses: (payload, db) => db.rpc("cmd_delete_all_http_responses", payload),
   cmd_delete_send_history: (payload, db) => db.rpc("cmd_delete_send_history", payload),
+  cmd_validate_http_assertions: (payload, db) => db.rpc("cmd_validate_http_assertions", payload),
+  cmd_preview_http_assertions: (payload, db) => db.rpc("cmd_preview_http_assertions", payload),
+  cmd_http_response_json_children: (payload, db) =>
+    db.rpc("cmd_http_response_json_children", payload),
 
   /* ------------------------------- sending ------------------------------- */
 

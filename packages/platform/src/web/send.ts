@@ -24,6 +24,8 @@
 // Types only: the models package imports this one at runtime, and a type import
 // is erased, so there is no cycle.
 import type {
+  AssertionReport,
+  HttpAssertions,
   Cookie,
   CookieJar,
   HttpRequest,
@@ -70,8 +72,16 @@ export async function sendHttpRequest(
   // The response row exists before anything can go wrong, as on the desktop, so
   // a failure to render or to reach the server lands in the response pane as
   // that response's error rather than as a toast that names no request.
-  const workspaceId = await workspaceIdOfRequest(db, requestId);
-  const response = new ResponseWriter(db, { model: "http_response", requestId, workspaceId });
+  const request = await db.rpc<HttpRequest>("web_get_http_request", { requestId });
+  const response = new ResponseWriter(
+    db,
+    {
+      model: "http_response",
+      requestId,
+      workspaceId: request.workspaceId,
+    },
+    request.assertions ?? { version: 1, checks: [] },
+  );
   await response.create();
 
   const cancel = new AbortController();
@@ -81,7 +91,7 @@ export async function sendHttpRequest(
     await runSend(db, response, requestId, environmentId, cookieJarId, cancel.signal);
   } catch (err) {
     const message = cancel.signal.aborted ? "Request canceled" : errorMessage(err);
-    await response.finish({ error: message });
+    await response.finish({ error: message }, cancel.signal.aborted);
   } finally {
     unlistenCancel();
   }
@@ -111,7 +121,8 @@ async function runSend(
   timeline.push(prepared.settingEvents);
 
   const body: SendRequest = {
-    request: prepared.request,
+    // Assertions run locally against the completed response.
+    request: { ...prepared.request, assertions: { version: 1, checks: [] } },
     settings: prepared.settings,
     cookies: prepared.cookieJar?.cookies ?? null,
   };
@@ -234,6 +245,7 @@ class ResponseWriter {
   constructor(
     private readonly db: WorkerConnection,
     initial: ResponseRow,
+    private readonly assertions: HttpAssertions,
   ) {
     this.state = initial;
   }
@@ -266,8 +278,17 @@ class ResponseWriter {
     await this.db.rpc("models_upsert", { model: this.state });
   }
 
-  async finish(patch: ResponsePatch): Promise<void> {
-    await this.patch({ ...patch, state: "closed" });
+  async finish(patch: ResponsePatch, canceled = false): Promise<void> {
+    const response = { ...this.state, ...patch, state: "closed" as const };
+    const assertionResults =
+      this.assertions.version !== 1 || this.assertions.checks.length > 0
+        ? await this.db.rpc<AssertionReport>("evaluate_http_assertions", {
+            definition: this.assertions,
+            response,
+            canceled,
+          })
+        : null;
+    await this.patch({ ...patch, state: "closed", assertionResults });
   }
 }
 
@@ -315,17 +336,16 @@ class TimelineWriter {
  * yaak-models), so an edit made while the send was in flight survives rather
  * than being written over by the send's stale snapshot.
  */
-async function persistCookies(db: WorkerConnection, jar: CookieJar, cookies: Cookie[]): Promise<void> {
-  await db.rpc("web_persist_send_cookies", { cookieJarId: jar.id, before: jar.cookies, after: cookies });
-}
-
-/**
- * The request's workspace, needed to create the response row before the worker
- * has resolved the request (which is where a render refusal would land).
- */
-async function workspaceIdOfRequest(db: WorkerConnection, requestId: string): Promise<string> {
-  const req = await db.rpc<{ workspaceId: string }>("web_get_http_request", { requestId });
-  return req.workspaceId;
+async function persistCookies(
+  db: WorkerConnection,
+  jar: CookieJar,
+  cookies: Cookie[],
+): Promise<void> {
+  await db.rpc("web_persist_send_cookies", {
+    cookieJarId: jar.id,
+    before: jar.cookies,
+    after: cookies,
+  });
 }
 
 function errorMessage(err: unknown): string {

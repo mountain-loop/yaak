@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
   "crates/yaak",
+  "crates/yaak-assertions",
+  "crates/yaak-jsonpath",
   "crates/yaak-commands",
   # Common/foundation crates
   "crates/common/yaak-database",
@@ -82,6 +84,8 @@ yaak-rpc-schema = { path = "crates/common/yaak-rpc-schema" }
 # Internal crates - shared
 yaak-core = { path = "crates/yaak-core" }
 yaak = { path = "crates/yaak" }
+yaak-assertions = { path = "crates/yaak-assertions" }
+yaak-jsonpath = { path = "crates/yaak-jsonpath" }
 yaak-commands = { path = "crates/yaak-commands" }
 yaak-common = { path = "crates/yaak-common" }
 yaak-crypto = { path = "crates/yaak-crypto" }
