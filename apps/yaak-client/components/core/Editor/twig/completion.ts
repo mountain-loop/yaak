@@ -1,5 +1,6 @@
 import type { Completion, CompletionContext } from "@codemirror/autocomplete";
 import { startCompletion } from "@codemirror/autocomplete";
+import type { EditorState } from "@codemirror/state";
 import type { TemplateFunction } from "@yaakapp-internal/plugins";
 
 const openTag = "${[ ";
@@ -36,6 +37,22 @@ export interface TwigCompletionConfig {
 
 const MIN_MATCH_NAME = 1;
 
+// Only inspect adjacent whitespace, including newlines, rather than copying the
+// entire document to look for a delimiter in large request bodies.
+function skipWhitespace(state: EditorState, pos: number, direction: -1 | 1) {
+  while (direction === -1 ? pos > 0 : pos < state.doc.length) {
+    const from = direction === -1 ? pos - 1 : pos;
+    if (!/\s/.test(state.sliceDoc(from, from + 1))) break;
+    pos += direction;
+  }
+  return pos;
+}
+
+function findOpenTag(state: EditorState, from: number) {
+  const end = skipWhitespace(state, from, -1);
+  return end >= 3 && state.sliceDoc(end - 3, end) === "${[" ? end - 3 : null;
+}
+
 export function twigCompletion({ options }: TwigCompletionConfig) {
   return function completions(context: CompletionContext) {
     const toStartOfName = context.matchBefore(/[\w_.]*/);
@@ -44,7 +61,8 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
     if (toMatch === null) return null;
 
     const matchLen = toMatch.to - toMatch.from;
-    if (!context.explicit && toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
+    const hasOpenTag = findOpenTag(context.state, toMatch.from) !== null;
+    if (!context.explicit && !hasOpenTag && toMatch.from > 0 && matchLen < MIN_MATCH_NAME) {
       return null;
     }
 
@@ -83,6 +101,16 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
             detail: o.type,
             type: o.type === "variable" ? "variable" : "function",
             apply: (view, _completion, from, to) => {
+              // Keep the completion range name-only for filtering, but replace a manually
+              // typed opener when accepting (through either the keyboard or the menu).
+              const opener = findOpenTag(view.state, from);
+              if (opener !== null) {
+                from = opener;
+                const hasParentheses =
+                  o.type === "function" && view.state.sliceDoc(to, to + 2) === "()";
+                const closer = skipWhitespace(view.state, to + (hasParentheses ? 2 : 0), 1);
+                if (view.state.sliceDoc(closer, closer + 2) === "]}") to = closer + 2;
+              }
               const insert = openTag + inner + closeTag;
               view.dispatch({
                 changes: { from, to, insert: insert },
@@ -103,7 +131,8 @@ export function twigCompletion({ options }: TwigCompletionConfig) {
 
     return {
       matchLen,
-      validFor: () => true, // Not really sure why this is all it needs
+      // Delimiters change the replacement range; dots change namespace options.
+      validFor: /^\w*$/,
       from: toMatch.from,
       options: sortedCompletions,
     };

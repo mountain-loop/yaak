@@ -4,7 +4,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::grpc::{build_metadata, metadata_to_map};
 use crate::http_request::send_http_request;
-use crate::import::{commit_import, plan_import_data, plan_import_url};
+use crate::import::{commit_import, plan_import_data};
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
@@ -1040,18 +1040,11 @@ async fn cmd_get_sse_events<R: Runtime>(
 
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
-    file_path: &str,
+    file_paths: &[String],
+    urls: &[String],
     destination: ImportDestination,
 ) -> YaakResult<ImportPlan> {
-    plan_import_data(&window, file_path, destination).await
-}
-
-async fn cmd_import_url<R: Runtime>(
-    window: WebviewWindow<R>,
-    url: &str,
-    destination: ImportDestination,
-) -> YaakResult<ImportPlan> {
-    plan_import_url(&window, url, destination).await
+    plan_import_data(&window, file_paths, urls, destination).await
 }
 
 async fn cmd_commit_import<R: Runtime>(

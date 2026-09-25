@@ -3,18 +3,15 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "./PdfViewer.css";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useMemo, useRef, useState } from "react";
-import { Document, Page } from "react-pdf";
+import { Document, Page, pdfjs } from "react-pdf";
 import { useContainerSize } from "@yaakapp-internal/ui";
-import { fireAndForget } from "../../lib/fireAndForget";
 
-fireAndForget(
-  import("react-pdf").then(({ pdfjs }) => {
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString();
-  }),
-);
+// Document can start loading during render, so configure its worker synchronously.
+// Vite bundles the installed PDF.js worker as a local asset, including offline builds.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 interface Props {
   /** A URL for the body the host already stored. */
@@ -59,6 +56,8 @@ export function PdfViewer({ bodyUrl, data }: Props) {
   return (
     <div ref={containerRef} className="w-full h-full overflow-y-auto">
       <Document
+        // Keep the copied data stable: suspending the initial mount discards useMemo.
+        suspense={false}
         file={src}
         options={options}
         onLoadSuccess={onDocumentLoadSuccess}

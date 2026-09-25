@@ -8,7 +8,7 @@ import {
 import { FormattedError, VStack } from "@yaakapp-internal/ui";
 import { Button } from "../components/core/Button";
 import { ImportDataDialog } from "../components/ImportDataDialog";
-import { activeFolderAtom } from "../hooks/useActiveFolder";
+import type { ImportSourcePath } from "../components/ImportSourceList";
 import { activeWorkspaceAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
 import { showAlert } from "./alert";
@@ -20,10 +20,17 @@ import { rpc } from "./rpc";
 
 // Stable identities so the dialog's effects don't re-run (and cancel in-flight
 // fetches) every time the dialog container re-renders.
-const planFile = (filePath: string, destination: ImportDestination) =>
-  rpc<ImportPlan>("cmd_import_data", { filePath, destination });
-const planUrl = (url: string, destination: ImportDestination) =>
-  rpc<ImportPlan>("cmd_import_url", { url, destination });
+const planSources = (sources: ImportSourcePath[], destination: ImportDestination) =>
+  rpc<ImportPlan>("cmd_import_data", {
+    filePaths: sources.filter((source) => source.kind !== "url").map((source) => source.path),
+    urls: sources.filter((source) => source.kind === "url").map((source) => source.path),
+    destination,
+  });
+const detectSource = (source: ImportSourcePath) =>
+  rpc<string>(
+    "cmd_detect_import_source",
+    source.kind === "url" ? { url: source.path } : { filePath: source.path },
+  );
 const listSources = (workspaceId: string) =>
   rpc<ImportSource[]>("cmd_list_import_sources", { workspaceId });
 const findSourcesForOrigin = (args: { filePath?: string; url?: string }) =>
@@ -43,11 +50,11 @@ export const importData = createFastMutation({
     return new Promise<void>((resolve, reject) => {
       const currentWorkspace = jotaiStore.get(activeWorkspaceAtom);
       const workspaces = jotaiStore.get(workspacesAtom);
-      const selectedFolder = jotaiStore.get(activeFolderAtom);
       showDialog({
         id: "import",
         title: "Import Data",
         size: "lg",
+        className: "h-[36rem]",
         disableClose: true,
         render: ({ hide }) => {
           const cancel = () => {
@@ -68,9 +75,8 @@ export const importData = createFastMutation({
             <ImportDataDialog
               currentWorkspace={currentWorkspace}
               workspaces={workspaces}
-              selectedFolder={selectedFolder}
-              planFile={planFile}
-              planUrl={planUrl}
+              planSources={planSources}
+              detectSource={detectSource}
               listSources={listSources}
               findSourcesForOrigin={findSourcesForOrigin}
               commit={commit}

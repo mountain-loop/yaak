@@ -1,4 +1,4 @@
-import MimeType from "whatwg-mimetype";
+import { MIMEType } from "whatwg-mimetype";
 import type { EditorProps } from "../components/core/Editor/Editor";
 
 export function languageFromContentType(
@@ -90,10 +90,10 @@ export function isProbablyTextContentType(contentType: string | null): boolean {
   ].some((textType) => normalized === textType || normalized.endsWith(textType));
 }
 
-export function getMimeTypeFromContentType(contentType: string): MimeType {
+export function getMimeTypeFromContentType(contentType: string): MIMEType {
   try {
-    return new MimeType(contentType);
+    return new MIMEType(contentType);
   } catch {
-    return new MimeType("text/plain");
+    return new MIMEType("text/plain");
   }
 }
