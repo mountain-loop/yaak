@@ -73,7 +73,7 @@
     "slugify": "^1.6.6",
     "uuid": "^14.0.0",
     "vkbeautify": "^0.99.3",
-    "whatwg-mimetype": "^4.0.0",
+    "whatwg-mimetype": "^5.0.0",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
@@ -88,7 +88,7 @@
     "@types/react-dom": "^19.2.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid": "^10.0.0",
-    "@types/whatwg-mimetype": "^3.0.2",
+    "@types/whatwg-mimetype": "^5.0.0",
     "@vitejs/plugin-react": "^6.0.1",
     "@yaakapp-internal/theme": "^1.0.0",
     "@yaakapp-internal/ui": "^1.0.0",
