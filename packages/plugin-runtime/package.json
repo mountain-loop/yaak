@@ -10,7 +10,7 @@
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.13",
+    "@types/node": "^22.20.4",
     "@types/ws": "^8.5.13",
     "@types/yauzl": "^3.4.0",
     "esbuild": "^0.28.0"
