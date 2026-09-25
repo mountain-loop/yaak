@@ -12,10 +12,10 @@ use yaak_models::models::{
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{
     BatchUpsertResult, ImportConflictResolution, ImportDestination, ImportOrigin, ImportPlan,
-    ImportPlanAction, ImportPlanItem, ImportPlanReason, ImportPlanWarning, ImportResourceType,
-    UpdateSource,
+    ImportPlanAction, ImportPlanItem, ImportPlanReason, ImportPlanSource, ImportPlanWarning,
+    ImportResourceType, UpdateSource,
 };
-use yaak_plugins::events::{ImportResources, PluginContext};
+use yaak_plugins::events::{ImportRequest, ImportResources, ImportResponse, PluginContext};
 use yaak_plugins::manager::PluginManager;
 
 pub struct PlanImportDataParams<'a> {
@@ -23,14 +23,14 @@ pub struct PlanImportDataParams<'a> {
     pub plugin_manager: &'a PluginManager,
     pub plugin_context: &'a PluginContext,
     pub destination: ImportDestination,
-    pub contents: &'a str,
+    pub input: &'a ImportRequest,
     pub origin: Option<ImportOrigin>,
 }
 
 /// Parse importer output and turn it into a commit-ready plan without mutating the database.
 pub async fn plan_import_data(params: PlanImportDataParams<'_>) -> Result<ImportPlan> {
     let import_result =
-        params.plugin_manager.import_data(params.plugin_context, params.contents).await?;
+        params.plugin_manager.import_input(params.plugin_context, params.input).await?;
 
     plan_import_resources(
         params.query_manager,
@@ -40,6 +40,157 @@ pub async fn plan_import_data(params: PlanImportDataParams<'_>) -> Result<Import
         import_result.source_keys,
         params.origin,
     )
+}
+
+/// Plan each input independently so importer keys and linked-source matching remain scoped to
+/// that input, then combine the results for one preview and one atomic commit.
+pub fn plan_import_batch_resources(
+    query_manager: &QueryManager,
+    destination: ImportDestination,
+    inputs: Vec<(ImportResponse, ImportOrigin)>,
+) -> Result<ImportPlan> {
+    let mut plans = Vec::new();
+    for (response, origin) in inputs {
+        let has_workspace = !response.resources.workspaces.is_empty();
+        let plan = plan_import_resources(
+            query_manager,
+            response.importer,
+            destination.clone(),
+            response.resources,
+            response.source_keys,
+            Some(origin),
+        )?;
+        plans.push((plan, has_workspace));
+    }
+    if plans.len() == 1 {
+        return Ok(plans.remove(0).0);
+    }
+    if plans.is_empty() {
+        return Err(yaak_models::error::Error::GenericError(
+            "Choose at least one import source".into(),
+        )
+        .into());
+    }
+
+    // Standalone environments/requests accompany the first actual collection, regardless of
+    // picker order. If every input is standalone, they share the first generated workspace.
+    let primary = plans.iter().position(|(_, has_workspace)| *has_workspace).unwrap_or(0);
+    let shared_workspace = plans[primary].0.resources.workspaces.first().cloned();
+    let mut taken_names =
+        query_manager.connect().list_workspaces()?.into_iter().map(|w| w.name).collect::<Vec<_>>();
+    let mut seen_items = BTreeSet::new();
+    let mut seen_linked_sources = BTreeSet::new();
+    let mut importers = Vec::new();
+    let mut combined = ImportPlan {
+        importer: String::new(),
+        destination,
+        resources: BatchUpsertResult::default(),
+        warnings: Vec::new(),
+        source_keys: BTreeMap::new(),
+        items: Vec::new(),
+        origin: None,
+        sources: Vec::new(),
+    };
+    for (index, (mut plan, has_workspace)) in plans.into_iter().enumerate() {
+        if let Some(workspace) = &shared_workspace
+            && !has_workspace
+            && index != primary
+        {
+            for old in plan.resources.workspaces.drain(..) {
+                plan.source_keys.remove(&old.id);
+            }
+            for v in &mut plan.resources.environments {
+                v.workspace_id = workspace.id.clone();
+                if v.parent_model == "workspace" {
+                    v.parent_model = "environment".into();
+                    v.name = format!("{} (Imported)", v.name);
+                }
+            }
+            for v in &mut plan.resources.folders {
+                v.workspace_id = workspace.id.clone();
+            }
+            for v in &mut plan.resources.http_requests {
+                v.workspace_id = workspace.id.clone();
+            }
+            for v in &mut plan.resources.grpc_requests {
+                v.workspace_id = workspace.id.clone();
+            }
+            for v in &mut plan.resources.websocket_requests {
+                v.workspace_id = workspace.id.clone();
+            }
+            plan.items = create_only_items(&plan);
+        }
+        for workspace in &mut plan.resources.workspaces {
+            workspace.name = unique_name(&workspace.name, &taken_names);
+            taken_names.push(workspace.name.clone());
+        }
+        for item in &plan.items {
+            if !seen_items.insert(item.model_id.clone()) {
+                return Err(yaak_models::error::Error::GenericError(
+                    format!("More than one import source changes {}. Import these sources separately to resolve the overlap.", item.name)
+                ).into());
+            }
+        }
+        if !importers.contains(&plan.importer) {
+            importers.push(plan.importer.clone());
+        }
+        let workspace_id = match &plan.destination {
+            ImportDestination::ExistingWorkspace { workspace_id, .. } => workspace_id.clone(),
+            ImportDestination::NewWorkspace => plan
+                .resources
+                .workspaces
+                .first()
+                .or(shared_workspace.as_ref())
+                .expect("planned workspace")
+                .id
+                .clone(),
+        };
+        if let Some(origin) = plan.origin {
+            let linked_source_id = match &plan.destination {
+                ImportDestination::NewWorkspace => None,
+                ImportDestination::ExistingWorkspace { .. } => match resolve_linked_source(
+                    &query_manager.connect(),
+                    &workspace_id,
+                    &plan.importer,
+                    &origin,
+                    &plan.source_keys.values().cloned().collect(),
+                )? {
+                    LinkedSource::Linked(source) => Some(source.id),
+                    LinkedSource::Ambiguous(_) | LinkedSource::Unlinked => None,
+                },
+            };
+            if let Some(id) = &linked_source_id
+                && !seen_linked_sources.insert(id.clone())
+            {
+                return Err(yaak_models::error::Error::GenericError(
+                    "More than one input matches the same linked import. Keep only one version of that source.".into()
+                ).into());
+            }
+            combined.sources.push(ImportPlanSource {
+                importer: plan.importer,
+                origin,
+                workspace_id,
+                source_keys: plan.source_keys.clone(),
+                linked_source_id,
+            });
+        }
+        combined.resources.workspaces.extend(plan.resources.workspaces);
+        combined.resources.environments.extend(plan.resources.environments);
+        combined.resources.folders.extend(plan.resources.folders);
+        combined.resources.http_requests.extend(plan.resources.http_requests);
+        combined.resources.grpc_requests.extend(plan.resources.grpc_requests);
+        combined.resources.websocket_requests.extend(plan.resources.websocket_requests);
+        combined.items.extend(plan.items);
+        combined.source_keys.extend(plan.source_keys);
+        for warning in plan.warnings {
+            if !combined.warnings.contains(&warning) {
+                combined.warnings.push(warning);
+            }
+        }
+    }
+    combined.importer = importers.join(", ");
+    validate_plan(&combined)?;
+    Ok(combined)
 }
 
 /// Remap parsed importer resources into their selected destination.
@@ -294,32 +445,31 @@ pub fn plan_import_resources(
         warnings,
         items: Vec::new(),
         origin,
+        sources: Vec::new(),
     };
     merge_with_linked_source(query_manager, &mut plan, &original)?;
     warn_if_imported_elsewhere(&query_manager.connect(), &mut plan)?;
     Ok(plan)
 }
 
-/// A document that already produced a workspace can be merged back into it. Importing it anywhere
-/// else copies it instead, which is worth saying before the user finds two of everything.
+/// Warn only when this importer has already read the exact same origin elsewhere. Similar
+/// resource names are not evidence of a previous import; overlap matching belongs to merging
+/// into an explicitly selected workspace.
 fn warn_if_imported_elsewhere(db: &ClientDb, plan: &mut ImportPlan) -> Result<()> {
+    let Some(origin) = &plan.origin else {
+        return Ok(());
+    };
     let destination_id = match &plan.destination {
         ImportDestination::ExistingWorkspace { workspace_id, .. } => Some(workspace_id.as_str()),
         ImportDestination::NewWorkspace => None,
     };
-    let incoming = plan.source_keys.values().collect::<BTreeSet<_>>();
-
     let mut names = BTreeSet::new();
     for workspace in db.list_workspaces()? {
         if Some(workspace.id.as_str()) == destination_id {
             continue;
         }
         for source in db.list_import_sources(&workspace.id)? {
-            let overlaps = db
-                .list_import_source_resources(&source.id)?
-                .iter()
-                .any(|row| incoming.contains(&row.source_key));
-            if overlaps {
+            if source.importer == plan.importer && source.origin == origin.origin {
                 names.insert(workspace.name.clone());
                 break;
             }
@@ -508,10 +658,15 @@ fn record_import_source(
     items: &BTreeMap<String, ImportPlanItem>,
     upserted: &BatchUpsertResult,
 ) -> Result<()> {
+    if !plan.sources.is_empty() {
+        for source in &plan.sources {
+            record_import_plan_source(db, plan, source, items, upserted)?;
+        }
+        return Ok(());
+    }
     let Some(origin) = &plan.origin else {
         return Ok(());
     };
-
     let workspace_id = match &plan.destination {
         ImportDestination::ExistingWorkspace { workspace_id, .. } => workspace_id.clone(),
         ImportDestination::NewWorkspace => match upserted.workspaces.first() {
@@ -519,20 +674,50 @@ fn record_import_source(
             None => return Ok(()),
         },
     };
+    record_import_plan_source(
+        db,
+        plan,
+        &ImportPlanSource {
+            importer: plan.importer.clone(),
+            origin: origin.clone(),
+            workspace_id,
+            source_keys: plan.source_keys.clone(),
+            linked_source_id: None,
+        },
+        items,
+        upserted,
+    )
+}
 
-    let incoming_keys: BTreeSet<String> = plan.source_keys.values().cloned().collect();
-    let existing =
-        match resolve_linked_source(db, &workspace_id, &plan.importer, origin, &incoming_keys)? {
-            LinkedSource::Linked(source) => Some(source),
+fn record_import_plan_source(
+    db: &WriteDb,
+    plan: &ImportPlan,
+    source: &ImportPlanSource,
+    items: &BTreeMap<String, ImportPlanItem>,
+    upserted: &BatchUpsertResult,
+) -> Result<()> {
+    let incoming_keys: BTreeSet<String> = source.source_keys.values().cloned().collect();
+    let source_id = if plan.sources.is_empty() {
+        match resolve_linked_source(
+            db,
+            &source.workspace_id,
+            &source.importer,
+            &source.origin,
+            &incoming_keys,
+        )? {
+            LinkedSource::Linked(source) => Some(source.id),
             LinkedSource::Ambiguous(_) | LinkedSource::Unlinked => None,
-        };
+        }
+    } else {
+        source.linked_source_id.clone()
+    };
     let import_source = db.upsert_import_source(
         &ImportSource {
-            id: existing.map(|s| s.id).unwrap_or_default(),
-            workspace_id,
-            importer: plan.importer.clone(),
-            origin: origin.origin.clone(),
-            origin_label: origin.label.clone(),
+            id: source_id.unwrap_or_default(),
+            workspace_id: source.workspace_id.clone(),
+            importer: source.importer.clone(),
+            origin: source.origin.origin.clone(),
+            origin_label: source.origin.label.clone(),
             last_imported_at: Utc::now().naive_utc(),
             ..Default::default()
         },
@@ -560,7 +745,7 @@ fn record_import_source(
                      resource: ImportResourceType,
                      incoming: &dyn Fn() -> Result<Value>|
      -> Result<()> {
-        let Some(source_key) = plan.source_keys.get(model_id) else {
+        let Some(source_key) = source.source_keys.get(model_id) else {
             return Ok(());
         };
         let item = items.get(model_id);
@@ -919,7 +1104,7 @@ fn merge_with_linked_source(
 
             let incoming = comparable(serde_json::to_value(&any)?);
             let current = comparable(current_models.get(&planned_id).cloned().unwrap_or_default());
-            let (source_changed, local_changed) = match recorded_hash(row) {
+            let (source_changed, local_changed) = match recorded_hash(row, &incoming) {
                 Some(hash) => {
                     (hash_comparable(&incoming) != hash, hash_comparable(&current) != hash)
                 }
@@ -1087,6 +1272,12 @@ enum KeyStatus<'a> {
 fn comparable(value: Value) -> Value {
     let mut value = strip_ids(value);
     if let Some(object) = value.as_object_mut() {
+        // Folder environment names are derived by upsert_environment, not source content.
+        if object.get("model").and_then(Value::as_str) == Some("environment")
+            && object.get("parentModel").and_then(Value::as_str) == Some("folder")
+        {
+            object.remove("name");
+        }
         for field in [
             "model",
             "workspaceId",
@@ -1118,7 +1309,11 @@ fn strip_ids(value: Value) -> Value {
     }
 }
 
-const CONTENT_HASH_VERSION: &str = "v1:";
+fn content_hash_version(value: &Value) -> &'static str {
+    // Only folder environments changed comparison semantics. Older hashes for these fall back
+    // to comparing the two sides until the next import records a hash without the derived name.
+    if value.get("parentModel").and_then(Value::as_str) == Some("folder") { "v2:" } else { "v1:" }
+}
 
 /// Identifies a resource's content well enough to tell "changed since the last import" from
 /// "unchanged", without keeping a copy of every imported resource around.
@@ -1128,7 +1323,7 @@ fn content_hash(value: Value) -> String {
 
 fn hash_comparable(value: &Value) -> String {
     let canonical = serde_json::to_string(&sorted_keys(value.clone())).unwrap_or_default();
-    format!("{CONTENT_HASH_VERSION}{:x}", Sha256::digest(canonical.as_bytes()))
+    format!("{}{:x}", content_hash_version(value), Sha256::digest(canonical.as_bytes()))
 }
 
 /// The fields two comparable forms disagree on, so a preview row can explain itself.
@@ -1147,9 +1342,9 @@ fn changed_fields(incoming: &Value, current: &Value) -> Vec<String> {
 }
 
 /// A hash written by a version this build doesn't understand says nothing about the resource.
-fn recorded_hash(row: &ImportSourceResource) -> Option<&str> {
+fn recorded_hash<'a>(row: &'a ImportSourceResource, incoming: &Value) -> Option<&'a str> {
     let hash = row.content_hash.as_deref()?;
-    hash.starts_with(CONTENT_HASH_VERSION).then_some(hash)
+    hash.starts_with(content_hash_version(incoming)).then_some(hash)
 }
 
 fn sorted_keys(value: Value) -> Value {
@@ -1312,7 +1507,15 @@ fn unique_name(name: &str, taken: &[String]) -> String {
     if name.is_empty() || !taken.iter().any(|t| t == name) {
         return name.to_string();
     }
-    let mut n = 2;
+    // A suffix this function generated continues the sequence instead of nesting. A name that
+    // merely ends in a number, like "Release (2024)", has no taken base and keeps its name.
+    let (name, mut n) = match name.rsplit_once(" (") {
+        Some((base, rest)) => match rest.strip_suffix(')').and_then(|n| n.parse::<u32>().ok()) {
+            Some(n) if taken.iter().any(|t| t == base) => (base, n + 1),
+            _ => (name, 2),
+        },
+        None => (name, 2),
+    };
     loop {
         let candidate = format!("{name} ({n})");
         if !taken.iter().any(|t| *t == candidate) {
@@ -1607,6 +1810,235 @@ mod tests {
         }
     }
 
+    fn batch_input(
+        importer: &str,
+        path: &str,
+        resources: ImportResources,
+    ) -> (ImportResponse, ImportOrigin) {
+        (
+            ImportResponse { importer: importer.into(), resources, source_keys: None },
+            ImportOrigin { origin: path.into(), label: path.into() },
+        )
+    }
+
+    fn standalone_environment(name: &str) -> ImportResources {
+        ImportResources {
+            environments: vec![Environment {
+                id: "ev_export".into(),
+                model: "environment".into(),
+                workspace_id: "CURRENT_WORKSPACE".into(),
+                name: name.into(),
+                parent_model: "environment".into(),
+                variables: vec![EnvironmentVariable {
+                    enabled: true,
+                    name: "host".into(),
+                    value: "example.com".into(),
+                    id: None,
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn collection_and_environments() -> Vec<(ImportResponse, ImportOrigin)> {
+        vec![
+            batch_input("Postman Environment", "/local.json", standalone_environment("Local")),
+            batch_input("Postman", "/collection.json", imported_resources()),
+            batch_input(
+                "Postman Environment",
+                "/production.json",
+                standalone_environment("Production"),
+            ),
+        ]
+    }
+
+    #[test]
+    fn batch_collection_and_environments_share_one_workspace_in_either_order() {
+        for reverse in [false, true] {
+            let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+            let mut inputs = collection_and_environments();
+            if reverse {
+                inputs.reverse();
+            }
+            let plan =
+                plan_import_batch_resources(&manager, ImportDestination::NewWorkspace, inputs)
+                    .unwrap();
+            assert!(manager.connect().list_workspaces().unwrap().is_empty());
+            assert_eq!(plan.resources.workspaces.len(), 1);
+            let workspace_id = plan.resources.workspaces[0].id.clone();
+            assert_eq!(plan.resources.workspaces[0].name, "Imported");
+            assert_eq!(plan.resources.environments.len(), 3);
+            assert!(plan.resources.environments.iter().all(|e| e.workspace_id == workspace_id));
+            assert_eq!(plan.sources.len(), 3);
+            // The plan crosses IPC and is returned with the user's item selections.
+            let plan = serde_json::from_value(serde_json::to_value(plan).unwrap()).unwrap();
+            let committed = commit_import_plan(&manager, plan).unwrap();
+            assert_eq!(committed.workspaces.len(), 1);
+            assert_eq!(committed.environments.len(), 3);
+            assert_eq!(manager.connect().list_import_sources(&workspace_id).unwrap().len(), 3);
+        }
+    }
+
+    #[test]
+    fn batch_reimport_preserves_ids_and_scopes_deletions_to_each_source() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let first = plan_import_batch_resources(
+            &manager,
+            ImportDestination::NewWorkspace,
+            collection_and_environments(),
+        )
+        .unwrap();
+        let workspace_id = first.resources.workspaces[0].id.clone();
+        let ids =
+            first.resources.environments.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>();
+        commit_import_plan(&manager, first).unwrap();
+        let destination = ImportDestination::ExistingWorkspace {
+            workspace_id: workspace_id.clone(),
+            folder_id: None,
+        };
+        let unchanged = plan_import_batch_resources(
+            &manager,
+            destination.clone(),
+            collection_and_environments(),
+        )
+        .unwrap();
+        assert!(unchanged.items.iter().all(|i| i.action == ImportPlanAction::Unchanged));
+        assert_eq!(
+            unchanged.resources.environments.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>(),
+            ids
+        );
+        commit_import_plan(&manager, unchanged).unwrap();
+        let mut inputs = collection_and_environments();
+        inputs[1].0.resources.http_requests.remove(0);
+        let changed = plan_import_batch_resources(&manager, destination.clone(), inputs).unwrap();
+        let deletes = changed
+            .items
+            .iter()
+            .filter(|i| i.action == ImportPlanAction::Delete)
+            .collect::<Vec<_>>();
+        assert_eq!(deletes.len(), 1);
+        assert_eq!(deletes[0].name, "Root Request");
+        commit_import_plan(&manager, changed).unwrap();
+        assert_eq!(
+            manager
+                .connect()
+                .list_environments(&workspace_id)
+                .unwrap()
+                .iter()
+                .map(|v| v.id.clone())
+                .collect::<BTreeSet<_>>(),
+            ids
+        );
+        assert_eq!(manager.connect().list_import_sources(&workspace_id).unwrap().len(), 3);
+        // A companion file can still be reimported on its own after the batch.
+        let single = plan_import_batch_resources(
+            &manager,
+            destination,
+            vec![collection_and_environments().remove(0)],
+        )
+        .unwrap();
+        assert_eq!(single.items.len(), 1);
+        assert_eq!(single.items[0].action, ImportPlanAction::Unchanged);
+    }
+
+    #[test]
+    fn batch_same_named_environments_keep_distinct_source_links() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let inputs = || {
+            vec![
+                batch_input("Postman Environment", "/one.json", standalone_environment("Local")),
+                batch_input("Postman Environment", "/two.json", standalone_environment("Local")),
+            ]
+        };
+        let first =
+            plan_import_batch_resources(&manager, ImportDestination::NewWorkspace, inputs())
+                .unwrap();
+        assert_eq!(first.resources.workspaces.len(), 1);
+        let workspace_id = first.resources.workspaces[0].id.clone();
+        commit_import_plan(&manager, first).unwrap();
+        assert_eq!(manager.connect().list_import_sources(&workspace_id).unwrap().len(), 2);
+        let next = plan_import_batch_resources(
+            &manager,
+            ImportDestination::ExistingWorkspace { workspace_id, folder_id: None },
+            inputs(),
+        )
+        .unwrap();
+        assert_eq!(next.items.len(), 2);
+        assert!(next.items.iter().all(|i| i.action == ImportPlanAction::Unchanged));
+    }
+
+    #[test]
+    fn batch_separate_collections_keep_their_workspaces_and_unique_names() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let plan = plan_import_batch_resources(
+            &manager,
+            ImportDestination::NewWorkspace,
+            vec![
+                batch_input("Bruno", "/one", imported_resources()),
+                batch_input("Bruno", "/two", imported_resources()),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            plan.resources.workspaces.iter().map(|w| w.name.as_str()).collect::<Vec<_>>(),
+            vec!["Imported", "Imported (2)"]
+        );
+        let committed = commit_import_plan(&manager, plan).unwrap();
+        for workspace in committed.workspaces {
+            assert_eq!(manager.connect().list_http_requests(&workspace.id).unwrap().len(), 2);
+            assert_eq!(manager.connect().list_import_sources(&workspace.id).unwrap().len(), 1);
+        }
+    }
+
+    #[test]
+    fn unique_name_continues_an_existing_suffix() {
+        let taken = vec!["Imported".to_string(), "Imported (2)".to_string()];
+        assert_eq!(unique_name("Imported", &taken), "Imported (3)");
+        assert_eq!(unique_name("Imported (2)", &taken), "Imported (3)");
+        assert_eq!(unique_name("Other (2)", &taken), "Other (2)");
+        let taken = vec!["Release (2024)".to_string()];
+        assert_eq!(unique_name("Release (2024)", &taken), "Release (2024) (2)");
+    }
+
+    #[test]
+    fn batch_rejects_two_versions_of_the_same_linked_collection() {
+        let (manager, _blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let input = || batch_input("Postman", "/collection.json", imported_resources());
+        let first =
+            plan_import_batch_resources(&manager, ImportDestination::NewWorkspace, vec![input()])
+                .unwrap();
+        let workspace_id = first.resources.workspaces[0].id.clone();
+        commit_import_plan(&manager, first).unwrap();
+        let result = plan_import_batch_resources(
+            &manager,
+            ImportDestination::ExistingWorkspace { workspace_id, folder_id: None },
+            vec![input(), input()],
+        );
+        assert!(result.unwrap_err().to_string().contains("More than one import source"));
+    }
+
+    #[test]
+    fn batch_commit_rolls_back_all_sources_if_linking_a_later_source_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("models.sqlite");
+        let (manager, _blobs, _rx) =
+            yaak_models::init_standalone(&db_path, &dir.path().join("blobs.sqlite")).unwrap();
+        let plan = plan_import_batch_resources(
+            &manager,
+            ImportDestination::NewWorkspace,
+            collection_and_environments(),
+        )
+        .unwrap();
+        let workspace_id = plan.resources.workspaces[0].id.clone();
+        let connection = rusqlite::Connection::open(&db_path).unwrap();
+        connection.execute_batch("CREATE TRIGGER fail_source BEFORE INSERT ON import_sources WHEN NEW.origin = '/production.json' BEGIN SELECT RAISE(FAIL, 'forced failure'); END;").unwrap();
+        drop(connection);
+        assert!(commit_import_plan(&manager, plan).is_err());
+        assert!(manager.connect().list_workspaces().unwrap().is_empty());
+        assert!(manager.connect().list_import_sources(&workspace_id).unwrap().is_empty());
+    }
+
     #[test]
     fn existing_workspace_plan_does_not_mutate_and_preserves_workspace_settings() {
         let (query_manager, _blob_manager, _rx) =
@@ -1793,6 +2225,66 @@ mod tests {
             "{:?}",
             merging.warnings
         );
+    }
+
+    #[test]
+    fn duplicate_import_warning_requires_the_same_importer_and_origin() {
+        for origin in [
+            "/tmp/api.yaml",
+            "/tmp/bruno-collection",
+            "https://example.com/api.yaml",
+        ] {
+            let (query_manager, _blob_manager, _rx) =
+                yaak_models::init_in_memory().expect("initialize database");
+            let original =
+                ImportOrigin { origin: origin.to_string(), label: "Original".to_string() };
+            let first = plan_import_resources(
+                &query_manager,
+                "Bruno".to_string(),
+                ImportDestination::NewWorkspace,
+                imported_resources(),
+                Some(importer_keys()),
+                Some(original.clone()),
+            )
+            .expect("plan first import");
+            commit_import_plan(&query_manager, first).expect("commit first import");
+
+            // Every case has the same resource keys, but only an exact origin/importer match
+            // proves this source was imported before. Display labels do not establish identity.
+            for (importer, incoming_origin, should_warn) in [
+                (
+                    "Bruno",
+                    Some(ImportOrigin { label: "Different label".to_string(), ..original.clone() }),
+                    true,
+                ),
+                (
+                    "Bruno",
+                    Some(ImportOrigin { origin: format!("{origin}-other"), ..original.clone() }),
+                    false,
+                ),
+                ("OpenAPI", Some(original.clone()), false),
+                ("Bruno", None, false),
+            ] {
+                let plan = plan_import_resources(
+                    &query_manager,
+                    importer.to_string(),
+                    ImportDestination::NewWorkspace,
+                    imported_resources(),
+                    Some(importer_keys()),
+                    incoming_origin.clone(),
+                )
+                .expect("plan another workspace");
+                assert_eq!(
+                    plan.warnings.iter().any(|w| w.title.starts_with("Already imported")),
+                    should_warn,
+                    "importer {importer}, origin {incoming_origin:?}",
+                );
+                assert!(
+                    plan.items.iter().all(|i| i.action == ImportPlanAction::Create),
+                    "a new workspace never merges into an older import"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2837,6 +3329,108 @@ mod tests {
         let root = item_by_name(&plan, "Root Request");
         assert_eq!(root.action, ImportPlanAction::Conflict, "a difference can't be attributed");
         assert_eq!(root.resolution, Some(ImportConflictResolution::KeepMine));
+    }
+
+    #[test]
+    fn folder_environment_names_do_not_cause_reimport_updates() {
+        for legacy_hash in [false, true] {
+            let (query_manager, _blob_manager, _rx) =
+                yaak_models::init_in_memory().expect("initialize database");
+            let mut resources = imported_resources();
+            resources.environments.push(Environment {
+                id: "ev_source_folder".to_string(),
+                name: "Folder Environment".to_string(),
+                parent_model: "folder".to_string(),
+                parent_id: Some("fl_source".to_string()),
+                ..resources.environments[0].clone()
+            });
+            let committed = first_import_with(&query_manager, resources.clone());
+            let workspace_id = &committed.workspaces[0].id;
+            let environment = committed
+                .environments
+                .iter()
+                .find(|e| e.parent_model == "folder")
+                .expect("folder environment");
+            assert_eq!(environment.name, "Imported Folder Environment");
+
+            if legacy_hash {
+                // Reproduce the pre-fix hash, which included the name generated on save.
+                let mut value = comparable(serde_json::to_value(environment).unwrap());
+                value["name"] = json!(environment.name);
+                let canonical = serde_json::to_string(&sorted_keys(value)).unwrap();
+                let hash = format!("v1:{:x}", Sha256::digest(canonical.as_bytes()));
+                let row = source_rows(&query_manager, workspace_id)
+                    .into_iter()
+                    .find(|r| r.model_id.as_deref() == Some(environment.id.as_str()))
+                    .unwrap();
+                query_manager
+                    .with_tx(|db| {
+                        db.upsert_import_source_resource(&ImportSourceResource {
+                            content_hash: Some(hash),
+                            ..row
+                        })
+                    })
+                    .expect("write legacy hash");
+
+                let mut changed = resources.clone();
+                changed.environments[1].variables[0].value = "changed".to_string();
+                let plan = replan(&query_manager, workspace_id, changed);
+                assert_eq!(
+                    item_by_name(&plan, "Folder Environment").action,
+                    ImportPlanAction::Conflict,
+                    "an old hash cannot attribute a real difference"
+                );
+            }
+
+            let plan = replan(&query_manager, workspace_id, resources.clone());
+            let item = item_by_name(&plan, "Folder Environment");
+            assert_eq!(item.action, ImportPlanAction::Unchanged);
+            assert!(item.changed_fields.is_empty());
+            commit_import_plan(&query_manager, plan).expect("record name-independent hash");
+
+            let mut changed = resources.clone();
+            changed.environments[1].variables[0].value = "changed".to_string();
+            let plan = replan(&query_manager, workspace_id, changed.clone());
+            let item = item_by_name(&plan, "Folder Environment");
+            assert_eq!(item.action, ImportPlanAction::Update);
+            assert_eq!(item.changed_fields, vec!["variables"]);
+
+            query_manager
+                .with_tx(|db| {
+                    let mut local = db.get_environment(&environment.id)?;
+                    local.variables[0].value = "local".to_string();
+                    db.upsert_environment(&local, &UpdateSource::Background)
+                })
+                .expect("edit folder variables locally");
+            let plan = replan(&query_manager, workspace_id, resources);
+            assert_eq!(
+                item_by_name(&plan, "Folder Environment").action,
+                ImportPlanAction::KeepLocal
+            );
+            let plan = replan(&query_manager, workspace_id, changed);
+            assert_eq!(
+                item_by_name(&plan, "Folder Environment").action,
+                ImportPlanAction::Conflict
+            );
+        }
+    }
+
+    #[test]
+    fn base_and_named_environment_names_remain_import_content() {
+        for parent_model in ["workspace", "environment"] {
+            let original = Environment {
+                model: "environment".to_string(),
+                parent_model: parent_model.to_string(),
+                name: "Original".to_string(),
+                ..Default::default()
+            };
+            let renamed = Environment { name: "Renamed".to_string(), ..original.clone() };
+            let original = comparable(serde_json::to_value(original).unwrap());
+            let renamed = comparable(serde_json::to_value(renamed).unwrap());
+            assert_eq!(changed_fields(&renamed, &original), vec!["name"]);
+            assert_ne!(hash_comparable(&original), hash_comparable(&renamed));
+            assert!(hash_comparable(&original).starts_with("v1:"));
+        }
     }
 
     #[test]

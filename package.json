@@ -32,6 +32,7 @@
     "plugins/auth-oauth1",
     "plugins/filter-jsonpath",
     "plugins/filter-xpath",
+    "plugins/importer-bruno",
     "plugins/importer-curl",
     "plugins/importer-insomnia",
     "plugins/importer-openapi",

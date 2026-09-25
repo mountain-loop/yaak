@@ -4,6 +4,7 @@ import type {
   Folder,
   HttpRequest,
   HttpUrlParameter,
+  ImportSource,
   PluginDefinition,
   Workspace,
 } from "@yaakapp/api";
@@ -86,9 +87,10 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "cURL",
     description: "Import cURL commands",
-    onImport(_ctx: Context, args: { text: string }) {
+    onImportSource(_ctx: Context, { source }: { source: ImportSource }) {
+      if (source.type !== "text") return null;
       // oxlint-disable-next-line no-explicit-any
-      return convertCurl(args.text) as any;
+      return convertCurl(source.text) as any;
     },
   },
 };

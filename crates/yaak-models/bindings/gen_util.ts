@@ -54,6 +54,10 @@ export type ImportPlan = {
    */
   items: Array<ImportPlanItem>;
   origin?: ImportOrigin;
+  /**
+   * Individual origins in a combined import, each retaining its own reimport history.
+   */
+  sources: Array<ImportPlanSource>;
 };
 
 export type ImportPlanAction =
@@ -87,6 +91,14 @@ export type ImportPlanItem = {
  * Extra context for an action that would otherwise be indistinguishable from its plain form.
  */
 export type ImportPlanReason = "moved_into_ignored_folder";
+
+export type ImportPlanSource = {
+  importer: string;
+  origin: ImportOrigin;
+  workspaceId: string;
+  sourceKeys: { [key in string]?: string };
+  linkedSourceId?: string;
+};
 
 export type ImportPlanWarning = { title: string; detail: string; level: ImportPlanWarningLevel };
 

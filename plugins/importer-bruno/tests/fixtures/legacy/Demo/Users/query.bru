@@ -1,0 +1,13 @@
+meta {
+  name: Query
+  type: graphql
+  seq: 2
+}
+post {
+  url: {{host}}/graphql
+  body: graphql
+  auth: none
+}
+body:graphql {
+  query { users { id } }
+}

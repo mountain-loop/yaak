@@ -17,6 +17,8 @@ export type ButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, "color" | "onC
   size?: ButtonSize;
   justify?: "start" | "center";
   type?: "button" | "submit";
+  /** Submit a form the button is not inside, by that form's id */
+  form?: string;
   forDropdown?: boolean;
   disabled?: boolean;
   title?: string;

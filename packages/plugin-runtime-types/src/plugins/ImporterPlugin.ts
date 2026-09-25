@@ -21,11 +21,45 @@ export type ImportPluginResponse =
       resources: PartialImportResources;
     });
 
+/** A read-only view of a selected directory or ZIP archive. Paths are relative and use
+ * forward slashes. Directory path checks are best-effort under concurrent filesystem
+ * changes, not a security boundary. Valid only while onImportSource runs. */
+export interface ImportFiles {
+  readonly name: string;
+  readonly kind: "zip" | "directory";
+  /** List immediate children. The root directory is "" (the default). */
+  readDir(path?: string): Promise<ImportFileEntry[]>;
+  readFile(path: string): Promise<Uint8Array>;
+  /** Decode UTF-8 strictly; binary or invalid UTF-8 content throws. */
+  readTextFile(path: string): Promise<string>;
+}
+
+export interface ImportFileEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+}
+
+/** What the user chose to import: one text document, or a directory or ZIP read as a tree. */
+export type ImportSource =
+  | { type: "text"; name: string; text: string }
+  | { type: "directory"; files: ImportFiles };
+
+type ImportTextHandler = (
+  ctx: Context,
+  args: { text: string },
+) => MaybePromise<ImportPluginResponse | undefined>;
+
+export type ImportSourceHandler = (
+  ctx: Context,
+  args: { source: ImportSource },
+) => MaybePromise<ImportPluginResponse | undefined>;
+
 export type ImporterPlugin = {
   name: string;
   description?: string;
-  onImport(
-    ctx: Context,
-    args: { text: string },
-  ): MaybePromise<ImportPluginResponse | null | undefined>;
+  /** Return null when the source isn't this importer's format. Takes precedence over onImport. */
+  onImportSource?: ImportSourceHandler;
+  /** @deprecated Use onImportSource. Only receives single text documents. */
+  onImport?: ImportTextHandler;
 };
