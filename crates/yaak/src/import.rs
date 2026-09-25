@@ -1,4 +1,5 @@
 use crate::Result;
+use crate::import_templates::remap_request_references;
 use chrono::Utc;
 use log::info;
 use serde_json::Value;
@@ -312,11 +313,14 @@ pub fn plan_import_resources(
         })
         .collect();
 
+    let mut request_ids = BTreeMap::new();
     let http_requests = resources
         .http_requests
         .into_iter()
         .map(|mut request| {
-            request.id = HttpRequest::generate_id();
+            let new_id = HttpRequest::generate_id();
+            request_ids.insert(request.id.clone(), new_id.clone());
+            request.id = new_id;
             request.workspace_id = resolve_workspace_id(&request.workspace_id);
             request.folder_id = resolve_folder_id(request.folder_id);
             request
@@ -428,7 +432,7 @@ pub fn plan_import_resources(
         ));
     }
 
-    let resources = BatchUpsertResult {
+    let mut resources = BatchUpsertResult {
         workspaces,
         environments,
         folders,
@@ -436,6 +440,7 @@ pub fn plan_import_resources(
         grpc_requests,
         websocket_requests,
     };
+    remap_request_references(&mut resources, &request_ids)?;
 
     let mut plan = ImportPlan {
         importer,
@@ -961,6 +966,13 @@ fn merge_with_linked_source(
         }
     }
 
+    let request_remap = plan
+        .resources
+        .http_requests
+        .iter()
+        .filter_map(|v| remap.get(&v.id).map(|id| (v.id.clone(), id.clone())))
+        .collect();
+    remap_request_references(&mut plan.resources, &request_remap)?;
     let remap_ref = |id: Option<String>| id.map(|v| remap.get(&v).cloned().unwrap_or(v));
     for v in &mut plan.resources.folders {
         if let Some(existing_id) = remap.get(&v.id) {
@@ -2598,6 +2610,99 @@ mod tests {
             ("rq_extra".to_string(), "op:extra".to_string()),
             ("fl_extra".to_string(), "folder:extra".to_string()),
         ])
+    }
+
+    #[tokio::test]
+    async fn insomnia_plugin_output_produces_sendable_graphql_and_linked_requests() {
+        // The JS fixture suite asserts this exact payload against the real importer.
+        let imported: yaak_plugins::events::ImportResponse = serde_json::from_str(include_str!(
+            "../../../plugins/importer-insomnia/tests/fixtures/chained.output.json"
+        ))
+        .expect("parse plugin output");
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let plan = plan_import_resources(
+            &query_manager,
+            "Insomnia".into(),
+            ImportDestination::NewWorkspace,
+            imported.resources,
+            imported.source_keys,
+            None,
+        )
+        .expect("plan Insomnia import");
+        let committed = commit_import_plan(&query_manager, plan).expect("commit Insomnia import");
+        let query = &committed.http_requests[0];
+        let login = &committed.http_requests[1];
+        assert!(query.authentication["token"].as_str().unwrap().contains(&login.id));
+        assert!(!query.authentication["token"].as_str().unwrap().contains("GENERATE_ID"));
+        let sendable =
+            yaak_http::types::SendableHttpRequest::from_http_request(query, Default::default())
+                .await
+                .unwrap();
+        let Some(yaak_http::types::SendableBody::Bytes(body)) = sendable.body else {
+            panic!("expected GraphQL JSON body");
+        };
+        assert_eq!(
+            serde_json::from_slice::<Value>(&body).unwrap(),
+            json!({
+                "query": "query Get($id: ID!) { node(id: $id) { id } }",
+                "variables": { "id": "123" },
+                "operationName": "Get",
+            })
+        );
+        assert!(
+            sendable.headers.iter().any(|(name, value)| name.eq_ignore_ascii_case("content-type")
+                && value == "application/json")
+        );
+    }
+
+    #[test]
+    fn request_references_follow_import_and_reimport_ids_without_touching_literals() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let mut resources = imported_resources();
+        let template =
+            "${[ response.body.path(request='rq_root', path='$.token', result='first') ]}";
+        resources.http_requests[1].authentication =
+            BTreeMap::from([("token".into(), json!(template))]);
+        resources.http_requests[1].body =
+            BTreeMap::from([("text".into(), json!("rq_root is literal text"))]);
+        resources.environments[0].variables[0].value = template.into();
+        resources.folders[0].authentication = BTreeMap::from([("token".into(), json!(template))]);
+        resources.workspaces[0].authentication =
+            BTreeMap::from([("token".into(), json!(template))]);
+
+        let first = first_import_with(&query_manager, resources.clone());
+        let workspace_id = &first.workspaces[0].id;
+        let first_id = &first.http_requests[0].id;
+        let expected = format!(
+            "${{[ response.body.path(request='{first_id}', path='$.token', result='first') ]}}"
+        );
+        assert_eq!(first.http_requests[1].authentication["token"], json!(expected));
+        assert_eq!(first.environments[0].variables[0].value, expected);
+        assert_eq!(first.folders[0].authentication["token"], json!(expected));
+        assert_eq!(first.workspaces[0].authentication["token"], json!(expected));
+        assert_eq!(first.http_requests[1].body["text"], json!("rq_root is literal text"));
+
+        // Reimport allocates temporary IDs, then reuses the previously linked IDs. Neither
+        // phase may leave a reference behind, or spuriously flag a source/local conflict.
+        let plan = replan(&query_manager, workspace_id, resources.clone());
+        assert_eq!(&plan.resources.http_requests[0].id, first_id);
+        assert_eq!(plan.resources.http_requests[1].authentication["token"], json!(expected));
+        assert!(plan.items.iter().all(|item| item.action == ImportPlanAction::Unchanged));
+        commit_import_plan(&query_manager, plan).expect("commit reimport");
+        assert_eq!(query_manager.connect().list_http_requests(workspace_id).unwrap().len(), 2);
+
+        // A separate import must point at its own new request, not at the first workspace.
+        let second = first_import_with(&query_manager, resources);
+        let second_id = &second.http_requests[0].id;
+        assert_ne!(first_id, second_id);
+        assert!(
+            second.http_requests[1].authentication["token"].as_str().unwrap().contains(second_id)
+        );
+        assert!(
+            !second.http_requests[1].authentication["token"].as_str().unwrap().contains(first_id)
+        );
     }
 
     fn first_import(query_manager: &QueryManager) -> BatchUpsertResult {

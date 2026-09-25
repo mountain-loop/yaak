@@ -16,6 +16,7 @@ import { filterXPath } from "../../template-function-xml";
 const BEHAVIOR_TTL = "ttl";
 const BEHAVIOR_ALWAYS = "always";
 const BEHAVIOR_SMART = "smart";
+const BEHAVIOR_NEVER = "never";
 
 const RETURN_FIRST = "first";
 const RETURN_ALL = "all";
@@ -33,6 +34,7 @@ const behaviorArgs: DynamicTemplateFunctionArg = {
         { label: "When no responses", value: BEHAVIOR_SMART },
         { label: "Always", value: BEHAVIOR_ALWAYS },
         { label: "When expired", value: BEHAVIOR_TTL },
+        { label: "Never", value: BEHAVIOR_NEVER },
       ],
     },
     {
@@ -300,7 +302,7 @@ async function getResponse(
 
   const responses = await ctx.httpResponse.find({ requestId: httpRequest.id, limit: 1 });
 
-  if (behavior === "never" && responses.length === 0) {
+  if (behavior === BEHAVIOR_NEVER && responses.length === 0) {
     return null;
   }
 
@@ -308,12 +310,13 @@ async function getResponse(
 
   // Previews happen a ton, and we don't want to send too many times on "always," so treat
   // it as "smart" during preview.
-  const finalBehavior = behavior === "always" && purpose === "preview" ? "smart" : behavior;
+  const finalBehavior =
+    behavior === BEHAVIOR_ALWAYS && purpose === "preview" ? BEHAVIOR_SMART : behavior;
 
   // Send if no responses and "smart," or "always"
   if (
-    (finalBehavior === "smart" && response == null) ||
-    finalBehavior === "always" ||
+    (finalBehavior === BEHAVIOR_SMART && response == null) ||
+    finalBehavior === BEHAVIOR_ALWAYS ||
     (finalBehavior === BEHAVIOR_TTL && shouldSendExpired(response, ttl))
   ) {
     // Explicitly render the request before send (instead of relying on send() to render) so that we can
