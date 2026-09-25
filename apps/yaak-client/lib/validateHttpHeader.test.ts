@@ -26,6 +26,18 @@ describe("validateHttpHeader", () => {
     expect(validateHttpHeader("${[ fn(arg='my key') ]}-${[ other(b='x y') ]}")).toEqual(true);
   });
 
+  test("allows a tag whose quoted argument contains `]}`", () => {
+    expect(validateHttpHeader("${[ fn(arg='x]}y') ]}")).toEqual(true);
+  });
+
+  test("allows a tag whose quoted argument contains an escaped quote", () => {
+    expect(validateHttpHeader("${[ fn(arg='it\\'s ]}') ]}")).toEqual(true);
+  });
+
+  test("rejects a tag with a quoted `]}` followed by an invalid character", () => {
+    expect(validateHttpHeader("${[ fn(arg='x]}y') ]} oops")).toEqual(false);
+  });
+
   test("rejects a tag followed by an invalid character", () => {
     expect(validateHttpHeader("${[ my_var ]} oops")).toEqual(false);
   });

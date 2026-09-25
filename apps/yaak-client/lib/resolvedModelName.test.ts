@@ -35,6 +35,24 @@ describe("resolvedModelName", () => {
     ).toEqual("fn(arg='my key')/a/other(b='x y')/b");
   });
 
+  test("keeps a quoted `]}` inside the tag", () => {
+    expect(resolvedModelName(httpRequest("${[ fn(arg='x]}y') ]}/users"))).toEqual(
+      "fn(arg='x]}y')/users",
+    );
+  });
+
+  test("keeps an escaped quote inside the tag", () => {
+    expect(resolvedModelName(httpRequest("${[ fn(arg='it\\'s ]}') ]}/users"))).toEqual(
+      "fn(arg='it\\'s ]}')/users",
+    );
+  });
+
+  test("closes at the first `]}` when a quote is left unterminated", () => {
+    expect(resolvedModelName(httpRequest("${[ fn(arg='oops ]}/users"))).toEqual(
+      "fn(arg='oops/users",
+    );
+  });
+
   test("stops each tag at its first closing bracket", () => {
     expect(resolvedModelName(httpRequest("${[ a ]}${[ b ]}"))).toEqual("ab");
   });

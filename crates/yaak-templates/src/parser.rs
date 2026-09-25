@@ -46,12 +46,11 @@ pub enum Val {
 }
 
 /// Strings are printed as plain single-quoted values whenever they can survive a round-trip
-/// through both the parser and the client's editor. The editor can't handle `]}` inside a tag
-/// (the Lezer grammar and the JSON linter both close a tag at the first one, regardless of
-/// quoting), and newlines or other control characters don't belong in a single-line tag, so
-/// those cases fall back to base64.
+/// through both the parser and the client's editor. A quoted `]}` is fine — the editor's
+/// grammar and regexes skip over quoted strings — but newlines and other control characters
+/// don't belong in a single-line tag, so those fall back to base64.
 fn requires_b64(text: &str) -> bool {
-    text.contains("]}") || text.chars().any(char::is_control)
+    text.chars().any(char::is_control)
 }
 
 /// Escape the only two characters the parser treats specially inside a single-quoted string.
@@ -872,14 +871,14 @@ mod tests {
         assert_eq!(Val::Str { text: r#"{"a":1}"#.to_string() }.to_string(), r#"'{"a":1}'"#);
         assert_eq!(Val::Str { text: "héllo".to_string() }.to_string(), "'héllo'");
 
+        // Quoting is enough to keep `]}` from closing the tag early in the client editor
+        assert_eq!(Val::Str { text: "a]}b".to_string() }.to_string(), "'a]}b'");
+
         Ok(())
     }
 
     #[test]
     fn token_display_str_b64_fallback() -> Result<()> {
-        // `]}` would close the tag early in the client editor
-        assert_eq!(Val::Str { text: "a]}b".to_string() }.to_string(), "b64'YV19Yg'");
-
         // Control characters don't belong in a single-line tag
         assert_eq!(Val::Str { text: "line\nbreak".to_string() }.to_string(), "b64'bGluZQpicmVhaw'");
         assert_eq!(Val::Str { text: "line\rbreak".to_string() }.to_string(), "b64'bGluZQ1icmVhaw'");

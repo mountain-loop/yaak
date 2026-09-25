@@ -1,13 +1,7 @@
 import type { AnyModel } from "@yaakapp-internal/models";
 import { foldersAtom } from "@yaakapp-internal/models";
 import { jotaiStore } from "./jotai";
-
-/**
- * Matches a template tag up to the first `]}`, the same way the Lezer grammar and the JSON
- * linter close a tag. Quoted arguments may contain spaces, so this can't stop at whitespace.
- * The capture group holds the tag's inner content, trimmed of the padding spaces.
- */
-const TEMPLATE_TAG_REGEX = /\$\{\[\s*([\s\S]*?)\s*]}/g;
+import { replaceTemplateTags } from "./templateTags";
 
 export function resolvedModelName(r: AnyModel | null): string {
   if (r == null) return "";
@@ -22,7 +16,7 @@ export function resolvedModelName(r: AnyModel | null): string {
   }
 
   // Replace variable syntax with variable name
-  const withoutVariables = r.url.replace(TEMPLATE_TAG_REGEX, "$1");
+  const withoutVariables = replaceTemplateTags(r.url, (m) => m.inner.trim());
   if (withoutVariables.trim() === "") {
     return r.model === "http_request"
       ? r.bodyType && r.bodyType === "graphql"

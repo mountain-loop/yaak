@@ -4,6 +4,7 @@ pub mod format_json;
 pub mod parser;
 pub mod renderer;
 pub mod strip_json_comments;
+mod tag_scan;
 #[cfg(feature = "wasm")]
 pub mod wasm;
 
