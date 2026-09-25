@@ -1,8 +1,4 @@
-/**
- * Matches a template tag up to the first `]}`, the same way the Lezer grammar and the JSON
- * linter close a tag. Quoted arguments may contain spaces, so this can't stop at whitespace.
- */
-const TEMPLATE_TAG_REGEX = /\$\{\[[\s\S]*?]}/g;
+import { TEMPLATE_TAG_REGEX } from "./templateTagRegex";
 
 export function validateHttpHeader(v: string): boolean {
   if (v === "") {

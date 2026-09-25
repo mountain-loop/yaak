@@ -1,8 +1,7 @@
 import type { Diagnostic } from "@codemirror/lint";
 import type { EditorView } from "@codemirror/view";
 import { type ParseError, parse, printParseErrorCode } from "jsonc-parser";
-
-const TEMPLATE_SYNTAX_REGEX = /\$\{\[[\s\S]*?]}/g;
+import { TEMPLATE_TAG_REGEX } from "../../../lib/templateTagRegex";
 
 // jsonc-parser reports error codes, so these are the words the editor shows for them
 const MESSAGES: Record<string, string> = {
@@ -36,7 +35,7 @@ export function jsonParseLinter(options?: JsonLintOptions) {
 
     // We need lint to not break on stuff like {"foo:" ${[ ... ]}} so we'll replace all template
     // syntax with repeating `1` characters, so it's valid JSON and the position is still correct.
-    const escapedDoc = doc.replace(TEMPLATE_SYNTAX_REGEX, (m) => "1".repeat(m.length));
+    const escapedDoc = doc.replace(TEMPLATE_TAG_REGEX, (m) => "1".repeat(m.length));
 
     const errors: ParseError[] = [];
     parse(escapedDoc, errors, {
