@@ -1,46 +1,89 @@
 use crate::PluginContextExt;
 use crate::error::{Error, Result};
 use crate::models_ext::QueryManagerExt;
-use std::fs::read_to_string;
-use std::io::ErrorKind;
+use std::path::Path;
 use tauri::{Manager, Runtime, WebviewWindow};
 use yaak::import::{self, PlanImportDataParams};
 use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportOrigin, ImportPlan};
+use yaak_plugins::MAX_IMPORT_BYTES;
+use yaak_plugins::events::ImportRequest;
 
 pub(crate) async fn import_data<R: Runtime>(
     window: &WebviewWindow<R>,
     file_path: &str,
     origin: Option<ImportOrigin>,
 ) -> Result<BatchUpsertResult> {
-    let contents = read_import_file(file_path)?;
+    let input = read_import_file(file_path)?;
     let plan =
-        plan_import_contents(window, &contents, ImportDestination::NewWorkspace, origin).await?;
+        plan_import_contents(window, &input, ImportDestination::NewWorkspace, origin).await?;
     commit_import(window, plan)
 }
 
 pub(crate) async fn plan_import_data<R: Runtime>(
     window: &WebviewWindow<R>,
-    file_path: &str,
+    file_paths: &[String],
+    urls: &[String],
     destination: ImportDestination,
 ) -> Result<ImportPlan> {
-    let contents = read_import_file(file_path)?;
-    plan_import_contents(window, &contents, destination, Some(file_origin(file_path))).await
+    let plugin_manager = crate::plugins_ext::plugin_manager(window).await?;
+    let plugin_context = window.plugin_context();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut inputs = Vec::new();
+    for path in file_paths {
+        let origin = file_origin(path);
+        if !seen.insert(origin.origin.clone()) {
+            continue;
+        }
+        let input = read_import_file(path)?;
+        let response = plugin_manager
+            .import_input(&plugin_context, &input)
+            .await
+            .map_err(|err| Error::GenericError(format!("Unable to import {path}: {err}")))?;
+        inputs.push((response, origin));
+    }
+    for url in urls {
+        let url = normalize_import_url(url)?;
+        if !seen.insert(url.clone()) {
+            continue;
+        }
+        let input = fetch_import_url(window, &url).await?;
+        let response = plugin_manager
+            .import_input(&plugin_context, &input)
+            .await
+            .map_err(|err| Error::GenericError(format!("Unable to import {url}: {err}")))?;
+        inputs.push((response, url_origin(&url)));
+    }
+    Ok(import::plan_import_batch_resources(&window.db_manager(), destination, inputs)?)
 }
 
-pub(crate) async fn plan_import_url<R: Runtime>(
+/// Which importer claims a source, without planning it. Backs the per-source status in the
+/// import dialog so unsupported files are flagged before preview.
+pub(crate) async fn detect_import_source<R: Runtime>(
     window: &WebviewWindow<R>,
-    url: &str,
-    destination: ImportDestination,
-) -> Result<ImportPlan> {
-    let url = normalize_import_url(url)?;
-    let contents = fetch_import_url(window, &url).await?;
-    plan_import_contents(window, &contents, destination, Some(url_origin(&url))).await
+    file_path: Option<String>,
+    url: Option<String>,
+) -> Result<String> {
+    let input = match (file_path, url) {
+        (Some(path), _) => read_import_file(&path)?,
+        (None, Some(url)) => fetch_import_url(window, &normalize_import_url(&url)?).await?,
+        (None, None) => return Err(Error::GenericError("Nothing to detect".into())),
+    };
+    let plugin_manager = crate::plugins_ext::plugin_manager(window).await?;
+    let response = plugin_manager.import_input(&window.plugin_context(), &input).await.map_err(
+        |err| match err {
+            yaak_plugins::error::Error::PluginErr(msg) if msg.starts_with("No importers found") => {
+                Error::GenericError("Not a supported format".into())
+            }
+            err => Error::GenericError(err.to_string()),
+        },
+    )?;
+    Ok(response.importer)
 }
 
 async fn plan_import_contents<R: Runtime>(
     window: &WebviewWindow<R>,
-    contents: &str,
+    input: &ImportRequest,
     destination: ImportDestination,
     origin: Option<ImportOrigin>,
 ) -> Result<ImportPlan> {
@@ -53,7 +96,7 @@ async fn plan_import_contents<R: Runtime>(
         plugin_manager: &plugin_manager,
         plugin_context: &plugin_context,
         destination,
-        contents,
+        input,
         origin,
     })
     .await?)
@@ -88,7 +131,10 @@ pub(crate) fn commit_import<R: Runtime>(
 /// This uses Yaak's own API client, which follows the OS proxy but not the workspace's proxy,
 /// client certificate, or certificate-validation settings. Requests are unauthenticated, so
 /// specs behind auth must still be downloaded manually and imported as a file.
-async fn fetch_import_url<R: Runtime>(window: &WebviewWindow<R>, url: &str) -> Result<String> {
+async fn fetch_import_url<R: Runtime>(
+    window: &WebviewWindow<R>,
+    url: &str,
+) -> Result<ImportRequest> {
     let url = normalize_import_url(url)?;
     let app_version = window.app_handle().package_info().version.to_string();
     let response = yaak_api_client(ApiClientKind::App, &app_version)?
@@ -104,10 +150,27 @@ async fn fetch_import_url<R: Runtime>(window: &WebviewWindow<R>, url: &str) -> R
         return Err(Error::GenericError(format!("Failed to fetch {url}: responded with {status}")));
     }
 
-    response
-        .text()
+    // Apply the same input-size limit to downloads before allocating the whole body.
+    let mut response = response;
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
         .await
-        .map_err(|err| Error::GenericError(format!("Failed to read response from {url}: {err}")))
+        .map_err(|err| Error::GenericError(format!("Failed to read response from {url}: {err}")))?
+    {
+        if (bytes.len() + chunk.len()) as u64 > MAX_IMPORT_BYTES {
+            return Err(Error::GenericError("Import file exceeds the 64 MiB limit".into()));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let name = reqwest::Url::parse(&url)
+        .ok()
+        .and_then(|url| {
+            url.path_segments().and_then(|mut segments| segments.next_back().map(str::to_owned))
+        })
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "download".into());
+    ImportRequest::from_bytes(&name, &bytes).map_err(|err| Error::GenericError(err.to_string()))
 }
 
 pub(crate) fn normalize_import_url(url: &str) -> Result<String> {
@@ -128,15 +191,9 @@ pub(crate) fn normalize_import_url(url: &str) -> Result<String> {
     }
 }
 
-fn read_import_file(file_path: &str) -> Result<String> {
-    read_to_string(file_path).map_err(|err| {
-        if err.kind() == ErrorKind::InvalidData {
-            Error::GenericError(format!(
-                "Import file must be UTF-8 text; binary files are not supported: {file_path}"
-            ))
-        } else {
-            Error::GenericError(format!("Unable to read import file {file_path}: {err}"))
-        }
+fn read_import_file(file_path: &str) -> Result<ImportRequest> {
+    ImportRequest::from_path(Path::new(file_path)).map_err(|err| {
+        Error::GenericError(format!("Unable to read import source {file_path}: {err}"))
     })
 }
 
@@ -147,7 +204,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn read_import_file_returns_error_for_binary_file() {
+    fn read_import_file_accepts_binary_file() {
         let path = std::env::temp_dir().join(format!(
             "yaak-import-binary-{}.pftrace",
             SystemTime::now()
@@ -157,10 +214,11 @@ mod tests {
         ));
         write(&path, [0xff, 0xfe, 0xfd]).expect("write binary fixture");
 
-        let err = read_import_file(path.to_str().expect("temp path is utf-8"))
-            .expect_err("binary import should return an error");
+        let input = read_import_file(path.to_str().expect("temp path is utf-8"))
+            .expect("binary import should preserve bytes");
 
-        assert!(err.to_string().contains("binary files are not supported"));
+        assert!(input.source.is_some());
+        assert!(input.content.is_empty());
 
         remove_file(path).expect("remove binary fixture");
     }

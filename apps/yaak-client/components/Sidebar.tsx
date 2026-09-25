@@ -941,10 +941,14 @@ const sidebarTreeAtom = atom<
 
     if (node.children != null) {
       childItems.sort((a, b) => {
-        if (a.sortPriority === b.sortPriority) {
-          return a.updatedAt > b.updatedAt ? 1 : -1;
+        if (a.sortPriority !== b.sortPriority) {
+          return a.sortPriority - b.sortPriority;
         }
-        return a.sortPriority - b.sortPriority;
+        // Keep equal-priority items in a stable order when they are edited.
+        if (a.createdAt !== b.createdAt) {
+          return a.createdAt > b.createdAt ? 1 : -1;
+        }
+        return a.id === b.id ? 0 : a.id > b.id ? 1 : -1;
       });
 
       for (const item of childItems) {

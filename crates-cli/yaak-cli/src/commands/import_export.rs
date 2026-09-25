@@ -2,13 +2,12 @@ use crate::cli::{ExportArgs, ImportArgs};
 use crate::context::CliContext;
 use crate::utils::workspace::resolve_workspace_id;
 use std::fs;
-use std::io::ErrorKind;
-use yaak_models::export::{self, ExportDataParams};
 use yaak::import;
+use yaak_models::export::{self, ExportDataParams};
 use yaak_models::util::{
     BatchUpsertResult, ImportDestination, ImportOrigin, ImportPlanAction, ImportPlanItem,
 };
-use yaak_plugins::events::{ImportResources, PluginContext};
+use yaak_plugins::events::{ImportRequest, ImportResources, PluginContext};
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
 
@@ -51,11 +50,12 @@ async fn import(
             .map_err(|e| format!("Failed to get workspace '{workspace_id}': {e}"))?;
     }
 
-    let file_contents = read_import_file(&args.file)?;
+    let input = ImportRequest::from_path(&args.file)
+        .map_err(|err| format!("Unable to read import source {}: {err}", args.file.display()))?;
     let plugin_context = PluginContext::new(None, args.workspace_id.clone());
     let plugin_manager = ctx.plugin_manager();
     let import_result = plugin_manager
-        .import_data(&plugin_context, &file_contents)
+        .import_input(&plugin_context, &input)
         .await
         .map_err(|e| format!("Failed to import data: {e}"))?;
     let importer = import_result.importer;
@@ -210,19 +210,6 @@ fn resolve_export_workspace_ids(
             .map_err(|e| format!("Failed to get workspace '{workspace_id}': {e}"))?;
     }
     Ok(workspace_ids)
-}
-
-fn read_import_file(path: &std::path::Path) -> CommandResult<String> {
-    fs::read_to_string(path).map_err(|err| {
-        if err.kind() == ErrorKind::InvalidData {
-            format!(
-                "Import file must be UTF-8 text; binary files are not supported: {}",
-                path.display()
-            )
-        } else {
-            format!("Unable to read import file {}: {err}", path.display())
-        }
-    })
 }
 
 fn resources_need_current_workspace(resources: &ImportResources) -> bool {

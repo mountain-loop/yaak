@@ -21,7 +21,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process", "fs"] }
-tokio-tungstenite = "0.26.1"
+tokio-tungstenite = "0.30.0"
 ts-rs = { workspace = true }
 yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }

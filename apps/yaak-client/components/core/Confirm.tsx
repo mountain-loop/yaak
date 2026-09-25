@@ -1,9 +1,8 @@
 import type { Color } from "@yaakapp-internal/plugins";
-import { HStack } from "@yaakapp-internal/ui";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CopyIconButton } from "../CopyIconButton";
-import { Button } from "./Button";
+import { DialogFooter } from "./Dialog";
 import { PlainInput } from "./PlainInput";
 
 export interface ConfirmProps {
@@ -22,6 +21,7 @@ export function Confirm({
   color = "primary",
 }: ConfirmProps) {
   const [confirm, setConfirm] = useState<string>("");
+  const formId = useId();
   const handleHide = () => {
     onResult(false);
     onHide();
@@ -38,7 +38,7 @@ export function Confirm({
   };
 
   return (
-    <form className="flex flex-col" onSubmit={handleSuccess}>
+    <form id={formId} className="flex flex-col" onSubmit={handleSuccess}>
       {requireTyping && (
         <PlainInput
           autoFocus
@@ -61,14 +61,19 @@ export function Confirm({
           }
         />
       )}
-      <HStack space={2} justifyContent="start" className="mt-2 mb-4 flex-row-reverse">
-        <Button autoFocus={!requireTyping} type="submit" color={color} disabled={!didConfirm}>
-          {confirmText ?? "Confirm"}
-        </Button>
-        <Button onClick={handleHide} variant="border">
-          Cancel
-        </Button>
-      </HStack>
+      <DialogFooter
+        inline
+        actions={[
+          { label: "Cancel", onClick: handleHide },
+          {
+            label: confirmText ?? "Confirm",
+            color,
+            form: formId,
+            disabled: !didConfirm,
+            autoFocus: !requireTyping,
+          },
+        ]}
+      />
     </form>
   );
 }

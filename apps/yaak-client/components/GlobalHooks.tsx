@@ -1,3 +1,4 @@
+import type { NavigateWorkspace } from "@yaakapp-internal/tauri-client";
 import { activeRequestAtom } from "../hooks/useActiveRequest";
 import { useSubscribeActiveWorkspaceId } from "../hooks/useActiveWorkspace";
 import { useActiveWorkspaceChangedToast } from "../hooks/useActiveWorkspaceChangedToast";
@@ -29,6 +30,16 @@ export function GlobalHooks() {
 
   usePlatformEvent("show_home", () => {
     fireAndForget(router.navigate({ to: "/", search: { home: true } }));
+  });
+
+  usePlatformEvent<NavigateWorkspace>("navigate_workspace", ({ workspaceId, environmentId }) => {
+    fireAndForget(
+      router.navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId },
+        search: { environment_id: environmentId },
+      }),
+    );
   });
 
   useHotKey(
