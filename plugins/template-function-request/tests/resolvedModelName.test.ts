@@ -1,77 +1,42 @@
-/* oxlint-disable no-template-curly-in-string */
-
 /*
  * This plugin carries its own copy of the template-tag scanner, because importing the client's
- * copy fails to build on Windows in CI. These cases are the same inputs and expected outputs as
- * `apps/yaak-client/lib/resolvedModelName.test.ts`, so the two copies drifting apart fails here.
+ * copy into the plugin bundle fails to build on Windows in CI.
+ *
+ * Rather than copying the expectations too — copied expectations can't detect drift — this
+ * imports the client's `resolvedModelName.cases.ts` and runs the plugin's copy against it, then
+ * asserts the plugin's output matches the client's own `resolvedModelName` for every case. A
+ * change to the client scanner or its cases therefore fails here until the copy is updated. The
+ * import is test-only and never reaches the plugin bundle, so the Windows problem doesn't apply.
  */
 
 import type { HttpRequest } from "@yaakapp-internal/models";
 import { describe, expect, test, vi } from "vite-plus/test";
+import { resolvedModelNameCases } from "../../../apps/yaak-client/lib/resolvedModelName.cases";
 
-// `resolvedModelName` reads plain model fields, but its module pulls in two sibling plugins
-// that only resolve once they're built. Stub them out to keep this a pure unit test.
+// `resolvedModelName` reads plain model fields, but the two modules under test pull in sibling
+// plugins that only resolve once they're built, plus the client's platform singleton, which
+// needs a browser. Stub them all out to keep this a pure unit test.
 vi.mock("../../template-function-json", () => ({ filterJSONPath: () => null }));
 vi.mock("../../template-function-xml", () => ({ filterXPath: () => null }));
+vi.mock("@yaakapp-internal/models", () => ({ foldersAtom: {} }));
+vi.mock("../../../apps/yaak-client/lib/jotai", () => ({ jotaiStore: { get: () => [] } }));
 
 const { resolvedModelName } = await import("../src");
+const { resolvedModelName: clientResolvedModelName } = await import(
+  "../../../apps/yaak-client/lib/resolvedModelName"
+);
 
-function httpRequest(url: string): HttpRequest {
-  return { id: "rq_test", model: "http_request", name: "", url } as HttpRequest;
+function httpRequest(url: string, name = ""): HttpRequest {
+  return { id: "rq_test", model: "http_request", name, url } as HttpRequest;
 }
 
 describe("resolvedModelName", () => {
-  test("replaces a simple tag with its contents", () => {
-    expect(resolvedModelName(httpRequest("${[ base_url ]}/users"))).toEqual("base_url/users");
+  test.each(resolvedModelNameCases)("$name", ({ url, requestName, expected }) => {
+    expect(resolvedModelName(httpRequest(url, requestName))).toEqual(expected);
   });
 
-  test("replaces a tag containing a quoted argument with a space", () => {
-    expect(resolvedModelName(httpRequest("${[ fn(arg='my key') ]}/users"))).toEqual(
-      "fn(arg='my key')/users",
-    );
-  });
-
-  test("replaces each tag in a multi-tag string", () => {
-    expect(
-      resolvedModelName(httpRequest("${[ fn(arg='my key') ]}/a/${[ other(b='x y') ]}/b")),
-    ).toEqual("fn(arg='my key')/a/other(b='x y')/b");
-  });
-
-  test("keeps a quoted `]}` inside the tag", () => {
-    expect(resolvedModelName(httpRequest("${[ fn(arg='x]}y') ]}/users"))).toEqual(
-      "fn(arg='x]}y')/users",
-    );
-  });
-
-  test("keeps an escaped quote inside the tag", () => {
-    expect(resolvedModelName(httpRequest("${[ fn(arg='it\\'s ]}') ]}/users"))).toEqual(
-      "fn(arg='it\\'s ]}')/users",
-    );
-  });
-
-  test("closes at the first `]}` when a quote is left unterminated", () => {
-    expect(resolvedModelName(httpRequest("${[ fn(arg='oops ]}/users"))).toEqual(
-      "fn(arg='oops/users",
-    );
-  });
-
-  test("stops each tag at its first closing bracket", () => {
-    expect(resolvedModelName(httpRequest("${[ a ]}${[ b ]}"))).toEqual("ab");
-  });
-
-  test("strips the protocol", () => {
-    expect(resolvedModelName(httpRequest("https://example.com/${[ path ]}"))).toEqual(
-      "example.com/path",
-    );
-  });
-
-  test("returns the name when there is one", () => {
-    expect(
-      resolvedModelName({ ...httpRequest("https://example.com"), name: "My Request" }),
-    ).toEqual("My Request");
-  });
-
-  test("falls back to a generic name when the url is empty", () => {
-    expect(resolvedModelName(httpRequest(""))).toEqual("HTTP Request");
+  test.each(resolvedModelNameCases)("matches the client for: $name", ({ url, requestName }) => {
+    const request = httpRequest(url, requestName);
+    expect(resolvedModelName(request)).toEqual(clientResolvedModelName(request));
   });
 });
