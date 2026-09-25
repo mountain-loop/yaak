@@ -87,7 +87,7 @@ pub fn git_worktree_status(dir: &Path) -> crate::error::Result<GitWorktreeStatus
 
     let mut entries = Vec::new();
     for entry in repo.statuses(Some(&mut opts))?.into_iter() {
-        let Some(rela_path) = entry.path() else {
+        let Ok(rela_path) = entry.path() else {
             continue;
         };
         let Some((status, staged)) = git_status_from_raw(entry.status()) else {
@@ -174,7 +174,7 @@ fn git_branch_info_for_repo(
     dir: &Path,
 ) -> crate::error::Result<GitBranchInfo> {
     let (head_ref, head_ref_shorthand) = git_head_refs(repo);
-    let origins = repo.remotes()?.into_iter().filter_map(|o| Some(o?.to_string())).collect();
+    let origins = repo.remotes()?.into_iter().filter_map(|o| Some(o.ok()??.to_string())).collect();
     let local_branches = local_branch_names(repo)?;
     let remote_branches = remote_branch_names(repo)?;
 
@@ -182,7 +182,7 @@ fn git_branch_info_for_repo(
     let (ahead, behind) = (|| -> Option<(usize, usize)> {
         let head = repo.head().ok()?;
         let local_oid = head.target()?;
-        let branch_name = head.shorthand()?;
+        let branch_name = head.shorthand().ok()?;
         let upstream_ref =
             repo.find_branch(&format!("origin/{branch_name}"), git2::BranchType::Remote).ok()?;
         let upstream_oid = upstream_ref.get().target()?;
@@ -205,8 +205,8 @@ fn git_branch_info_for_repo(
 fn git_head_refs(repo: &git2::Repository) -> (Option<String>, Option<String>) {
     match repo.head() {
         Ok(head) => {
-            let head_ref = head.name().map(|s| s.to_string());
-            let head_ref_shorthand = head.shorthand().map(|s| s.to_string());
+            let head_ref = head.name().ok().map(|s| s.to_string());
+            let head_ref_shorthand = head.shorthand().ok().map(|s| s.to_string());
             (head_ref, head_ref_shorthand)
         }
         Err(_) => {
