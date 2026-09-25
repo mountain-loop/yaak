@@ -135,4 +135,38 @@ mod tests {
         let text = "${[ response.header(request='req_old', header=']}' ) ]}";
         assert!(remap_text(text, &ids()).contains("request='rq_new'"));
     }
+
+    /// Only the request ID may change. Every other argument keeps its name, order, spacing and
+    /// plain single-quoted form, so a printer that falls back to base64 for values like
+    /// `X-Api-Key` or `$.token` fails here.
+    #[test]
+    fn remapping_a_request_keeps_the_other_arguments_verbatim() {
+        assert_eq!(
+            remap_text("${[ response.header(request='req_old', header='X-Api-Key') ]}", &ids()),
+            "${[ response.header(request='rq_new', header='X-Api-Key') ]}"
+        );
+        assert_eq!(
+            remap_text(
+                "${[ response.body.path(request='req_old', path='$.token', behavior='never') ]}",
+                &ids()
+            ),
+            "${[ response.body.path(request='rq_new', path='$.token', behavior='never') ]}"
+        );
+    }
+
+    /// An Insomnia tag that never got converted is plain text, even though it names a request
+    /// that is being remapped. It must survive byte-for-byte, including alongside a real tag.
+    #[test]
+    fn unconverted_nunjucks_text_containing_a_request_id_is_untouched() {
+        let text = "{% response 'raw', 'req_old', '', 'never', 60 %}";
+        assert_eq!(remap_text(text, &ids()), text);
+
+        assert_eq!(
+            remap_text(
+                "${[ response.body.path(request='req_old', path='$.a') ]} and {% response 'raw', 'req_old' %}",
+                &ids()
+            ),
+            "${[ response.body.path(request='rq_new', path='$.a') ]} and {% response 'raw', 'req_old' %}"
+        );
+    }
 }

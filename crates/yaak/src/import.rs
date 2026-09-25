@@ -2676,7 +2676,7 @@ mod tests {
         let workspace_id = &first.workspaces[0].id;
         let first_id = &first.http_requests[0].id;
         let expected = format!(
-            "${{[ response.body.path(request='{first_id}', path=b64'JC50b2tlbg', result='first') ]}}"
+            "${{[ response.body.path(request='{first_id}', path='$.token', result='first') ]}}"
         );
         assert_eq!(first.http_requests[1].authentication["token"], json!(expected));
         assert_eq!(first.environments[0].variables[0].value, expected);
