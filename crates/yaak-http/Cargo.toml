@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "brotli", "zstd"] }
 async-trait = "0.1"
-brotli = "7"
+brotli = "8"
 bytes = "1.11.1"
 cookie = "0.18.1"
 flate2 = "1"

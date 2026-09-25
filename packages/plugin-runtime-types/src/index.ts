@@ -6,4 +6,10 @@ export * from "./bindings/gen_events";
 
 // Some extras for utility
 
-export type { PartialImportResources } from "./plugins/ImporterPlugin";
+export type {
+  PartialImportResources,
+  ImportFiles,
+  ImportFileEntry,
+  ImportSource,
+  ImportSourceHandler,
+} from "./plugins/ImporterPlugin";

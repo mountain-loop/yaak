@@ -10,6 +10,8 @@ pub mod api;
 mod checksum;
 pub mod error;
 pub mod events;
+mod import_input;
+pub use import_input::MAX_IMPORT_BYTES;
 pub mod install;
 pub mod manager;
 pub mod native_template_functions;
