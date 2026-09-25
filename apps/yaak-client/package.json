@@ -45,7 +45,7 @@
     "date-fns": "^4.1.0",
     "deep-equal": "^2.2.3",
     "eventemitter3": "^5.0.1",
-    "focus-trap-react": "^11.0.4",
+    "focus-trap-react": "^12.0.3",
     "fuzzbunny": "^1.0.1",
     "graphql": "^17.0.2",
     "hexy": "^0.4.0",
