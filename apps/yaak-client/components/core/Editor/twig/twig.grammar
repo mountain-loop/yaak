@@ -1,13 +1,17 @@
 @top Template { (Tag | Text)* }
 
+// `TagString` keeps a quoted argument from closing the tag, so `${[ fn(a='x]}y') ]}` stays a
+// single Tag. Only a terminated string matches, so a half-typed `'` degrades to TagContent and
+// the tag still closes at the next `]}`.
 @local tokens {
   TagClose { "]}" }
+  TagString { "'" (![\\'] | "\\" _)* "'" }
   @else TagContent
 }
 
 @skip { } {
   TagOpen { "${[" }
-  Tag { TagOpen (TagContent)+ TagClose }
+  Tag { TagOpen (TagContent | TagString)+ TagClose }
 }
 
 @tokens {
