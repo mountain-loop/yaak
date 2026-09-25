@@ -185,10 +185,23 @@ describe("Insomnia templates", () => {
   });
 
   test("converts every prompt argument with a Yaak counterpart", () => {
+    expect(convert("{% prompt 'Login', 'Username', 'admin', 'user-key', false, true %}")).toBe(
+      `\${[ prompt.text(label=${encoded("Username")}, store='forever', ` +
+        `namespace=${encoded("${[ctx.workspace()]}")}, key=${encoded("user-key")}, ` +
+        `title=${encoded("Login")}, defaultValue=${encoded("admin")}) ]}`,
+    );
+  });
+
+  test("never stores a masked prompt, even with a storage key", () => {
     expect(convert("{% prompt 'Login', 'Password', 'hunter2', 'pw-key', true, true %}")).toBe(
-      `\${[ prompt.text(label=${encoded("Password")}, store='forever', ` +
-        `namespace=${encoded("${[ctx.workspace()]}")}, key=${encoded("pw-key")}, ` +
-        `title=${encoded("Login")}, defaultValue=${encoded("hunter2")}, password=true) ]}`,
+      `\${[ prompt.text(label=${encoded("Password")}, title=${encoded("Login")}, ` +
+        `defaultValue=${encoded("hunter2")}, password=true) ]}`,
+    );
+  });
+
+  test("masks a prompt without a storage key", () => {
+    expect(convert("{% prompt 'Login', 'Password', '', '', true %}")).toBe(
+      `\${[ prompt.text(label=${encoded("Password")}, title=${encoded("Login")}, password=true) ]}`,
     );
   });
 

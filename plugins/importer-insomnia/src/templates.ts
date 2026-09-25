@@ -151,16 +151,19 @@ function convertPrompt(args: string[]): string | null {
   // Insomnia requires a title and shows the label above the input, falling back to the title.
   if (title === "" && label === "") return null;
   const parts = [`label=${argument(label === "" ? title : label)}`];
-  if (storageKey !== "") {
-    // Insomnia keeps a stored value until the app closes. Yaak's closest option keeps it
-    // forever. Storing needs a namespace, and the workspace is what Yaak's editor defaults to.
+  const masked = mask === "true";
+  if (storageKey !== "" && !masked) {
+    // Insomnia keeps a stored value only until the app closes. Yaak's nearest option is to
+    // store it forever, which is close enough for plain values. Masked values are left
+    // unstored, which is Yaak's default, so a password never outlives the session it was
+    // typed in. Storing needs a namespace, and the workspace is what Yaak's editor defaults to.
     // oxlint-disable-next-line no-template-curly-in-string -- Yaak template syntax
     const namespace = argument("${[ctx.workspace()]}");
     parts.push("store='forever'", `namespace=${namespace}`, `key=${argument(storageKey)}`);
   }
   if (title !== "") parts.push(`title=${argument(title)}`);
   if (defaultValue !== "") parts.push(`defaultValue=${argument(defaultValue)}`);
-  if (mask === "true") parts.push("password=true");
+  if (masked) parts.push("password=true");
   return `prompt.text(${parts.join(", ")})`;
 }
 
