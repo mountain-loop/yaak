@@ -116,7 +116,13 @@ function importHttpBody(rawBody: any) {
         };
       }
     } catch {
-      // A raw GraphQL document is also valid; preserve it verbatim.
+      // A raw GraphQL document is also valid; preserve it verbatim. An envelope that
+      // failed to parse is usually one with template tags in it, so recover its parts
+      // rather than dropping the whole envelope into the query editor.
+      const recovered = recoverGraphQLEnvelope(text);
+      if (recovered != null) {
+        return { bodyType: "graphql", body: recovered };
+      }
     }
     return { bodyType: "graphql", body: { query: text, variables: "" } };
   }
@@ -138,6 +144,109 @@ function importHttpBody(rawBody: any) {
   }
 
   return { bodyType: null, body: {} };
+}
+
+/**
+ * Pull the parts out of a GraphQL envelope that isn't valid JSON.
+ *
+ * Insomnia lets template tags be written straight into the envelope
+ * ({"query":"{me{id}}","variables":{"id":{{ _.id }}}}), which makes the text
+ * unparseable. Members are read as raw text so the tags survive the trip.
+ */
+function recoverGraphQLEnvelope(
+  text: string,
+): { query: string; variables: string; operationName?: string } | null {
+  const members = readTopLevelMembers(text);
+  if (members == null) return null;
+
+  const query = parseJSONString(members.get("query"));
+  if (query == null) return null;
+
+  const variables = members.get("variables") ?? "";
+  const operationName = parseJSONString(members.get("operationName"));
+  return {
+    query,
+    variables: variables === "null" ? "" : variables,
+    ...(operationName == null ? {} : { operationName }),
+  };
+}
+
+function parseJSONString(raw: string | undefined): string | null {
+  if (raw == null || !raw.startsWith('"')) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The raw text of each member of the outermost object, without parsing the values.
+ * Returns null unless the whole object is well-formed enough to walk.
+ */
+function readTopLevelMembers(text: string): Map<string, string> | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) return null;
+
+  const members = new Map<string, string>();
+  let offset = 1;
+  while (offset < trimmed.length) {
+    while (/[\s,]/.test(trimmed[offset] ?? "")) offset++;
+    if (trimmed[offset] === "}") return members;
+
+    const keyEnd = scanJSONString(trimmed, offset);
+    if (keyEnd == null) return null;
+    const key = parseJSONString(trimmed.slice(offset, keyEnd));
+    if (key == null) return null;
+
+    offset = keyEnd;
+    while (/\s/.test(trimmed[offset] ?? "")) offset++;
+    if (trimmed[offset] !== ":") return null;
+    offset++;
+    while (/\s/.test(trimmed[offset] ?? "")) offset++;
+
+    const valueEnd = scanJSONValue(trimmed, offset);
+    if (valueEnd == null) return null;
+    members.set(key, trimmed.slice(offset, valueEnd).trim());
+    offset = valueEnd;
+  }
+  return null;
+}
+
+/** Offset just past the string starting at `start`, or null if it never closes. */
+function scanJSONString(text: string, start: number): number | null {
+  if (text[start] !== '"') return null;
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === "\\") i++;
+    else if (text[i] === '"') return i + 1;
+  }
+  return null;
+}
+
+/**
+ * Offset just past the value starting at `start`. Nesting is tracked so template
+ * tags come back whole, but the value itself is not validated.
+ */
+function scanJSONValue(text: string, start: number): number | null {
+  let depth = 0;
+  for (let i = start; i < text.length; i++) {
+    const char = text[i]!;
+    if (char === '"') {
+      const end = scanJSONString(text, i);
+      if (end == null) return null;
+      i = end - 1;
+    } else if (char === "{" || char === "[") {
+      depth++;
+    } else if (char === "}" || char === "]") {
+      if (depth === 0) return i; // The member ended with the enclosing object
+      depth--;
+      if (depth === 0) return i + 1;
+    } else if (depth === 0 && char === ",") {
+      return i;
+    }
+  }
+  return null;
 }
 
 export function deleteUndefinedAttrs<T>(obj: T): T {

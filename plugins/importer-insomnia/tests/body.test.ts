@@ -43,6 +43,37 @@ describe("importHttpBodyAndHeaders", () => {
       }).body,
     ).toEqual({ query: "{ me { id } }", variables: "" });
   });
+
+  test("recovers a GraphQL envelope holding template tags that break JSON parsing", () => {
+    expect(
+      importHttpBodyAndHeaders({
+        body: {
+          mimeType: "application/graphql",
+          text: '{"query":"{me{id}}","operationName":"Get","variables":{"id":{{ _.id }}}}',
+        },
+      }).body,
+    ).toEqual({
+      query: "{me{id}}",
+      variables: '{"id":{{ _.id }}}',
+      operationName: "Get",
+    });
+  });
+
+  test("defaults variables to empty when an unparseable envelope has none", () => {
+    expect(
+      importHttpBodyAndHeaders({
+        body: { mimeType: "application/graphql", text: '{"query":"{me{id}}","meta":{{ _.meta }}}' },
+      }).body,
+    ).toEqual({ query: "{me{id}}", variables: "" });
+  });
+
+  test("keeps an envelope-looking document in the query when no query member is readable", () => {
+    const text = "{ query { me { id } } }";
+    expect(
+      importHttpBodyAndHeaders({ body: { mimeType: "application/graphql", text } }).body,
+    ).toEqual({ query: text, variables: "" });
+  });
+
   test("imports XML text using the native XML body type", () => {
     const result = importHttpBodyAndHeaders({
       body: {
