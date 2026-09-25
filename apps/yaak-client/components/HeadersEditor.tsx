@@ -9,6 +9,7 @@ import type { HeaderValuePreset } from "../lib/data/headerValuePresets";
 import { headerNames } from "../lib/data/headerNames";
 import { mimeTypes } from "../lib/data/mimetypes";
 import { userAgents } from "../lib/data/userAgents";
+import { validateHttpHeader } from "../lib/validateHttpHeader";
 import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
 import type { GenericCompletion, GenericCompletionConfig } from "./core/Editor/genericCompletion";
@@ -177,14 +178,4 @@ const nameAutocomplete: PairEditorProps["nameAutocomplete"] = {
           boost: 1, // Put above other completions
         },
   ),
-};
-
-const validateHttpHeader = (v: string) => {
-  if (v === "") {
-    return true;
-  }
-
-  // Template strings are not allowed so we replace them with a valid example string
-  const withoutTemplateStrings = v.replace(/\$\{\[\s*[^\]\s]+\s*]}/gi, "123");
-  return withoutTemplateStrings.match(/^[a-zA-Z0-9-_]+$/) !== null;
 };
