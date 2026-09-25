@@ -5,15 +5,15 @@
   "private": true,
   "description": "Template function for accessing 1Password secrets",
   "scripts": {
-    "build": "run-s build:*",
-    "build:1-build": "yaakcli build",
-    "build:2-cpywasm": "cpx \"../../node_modules/@1password/sdk-core/nodejs/core_bg.wasm\" build/",
+    "build": "yaakcli build",
     "dev": "yaakcli dev"
+  },
+  "yaak": {
+    "buildAssets": [
+      "../../node_modules/@1password/sdk-core/nodejs/core_bg.wasm"
+    ]
   },
   "dependencies": {
     "@1password/sdk": "^0.5.0"
-  },
-  "devDependencies": {
-    "cpx2": "^9.0.0"
   }
 }
