@@ -1,0 +1,7 @@
+opencollection: 1.0.0
+info:
+  name: Directory YAML
+request:
+  variables:
+    - name: host
+      value: https://example.com

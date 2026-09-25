@@ -6,6 +6,7 @@ import type {
   HttpRequest,
   HttpRequestHeader,
   HttpUrlParameter,
+  ImportSource,
   PartialImportResources,
   PluginDefinition,
   Workspace,
@@ -56,8 +57,9 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "Postman",
     description: "Import postman collections",
-    onImport(_ctx: Context, args: { text: string }) {
-      return convertPostman(args.text);
+    onImportSource(_ctx: Context, { source }: { source: ImportSource }) {
+      if (source.type !== "text") return null;
+      return convertPostman(source.text);
     },
   },
 };

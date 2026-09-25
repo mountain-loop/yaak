@@ -30,7 +30,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@types/node": "^24.0.13"
+    "@types/node": "^22.20.4"
   },
   "devDependencies": {
     "cpy-cli": "^7.0.0"

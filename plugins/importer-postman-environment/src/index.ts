@@ -2,6 +2,7 @@
 import type {
   Context,
   Environment,
+  ImportSource,
   PartialImportResources,
   PluginDefinition,
   Workspace,
@@ -19,8 +20,9 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "Postman Environment",
     description: "Import postman environment exports",
-    onImport(_ctx: Context, args: { text: string }) {
-      return convertPostmanEnvironment(args.text);
+    onImportSource(_ctx: Context, { source }: { source: ImportSource }) {
+      if (source.type !== "text") return null;
+      return convertPostmanEnvironment(source.text);
     },
   },
 };

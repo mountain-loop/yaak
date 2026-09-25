@@ -4,14 +4,15 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  // Generated output, reformatted only to be undone by the next regen. Read by every formatter
-  // entry point, including the `staged` task above.
+  // Preserve generated output and upstream fixtures. Read by every formatter entry point,
+  // including the `staged` task above.
   fmt: {
     ignorePatterns: [
       "**/bindings/**",
       "**/routeTree.gen.ts",
       "crates/yaak-templates/pkg/**",
       "crates/yaak-wasm/pkg/**",
+      "plugins/importer-bruno/tests/fixtures/upstream/**",
     ],
   },
   lint: {

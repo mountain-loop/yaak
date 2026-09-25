@@ -1,10 +1,9 @@
 import type { FormInput, JsonPrimitive } from "@yaakapp-internal/plugins";
-import { HStack } from "@yaakapp-internal/ui";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { generateId } from "../../lib/generateId";
 import { DynamicForm } from "../DynamicForm";
-import { Button } from "./Button";
+import { DialogFooter } from "./Dialog";
 
 export interface PromptProps {
   inputs: FormInput[];
@@ -48,19 +47,15 @@ export function Prompt({
   const id = `prompt.form.${useRef(generateId()).current}`;
 
   return (
-    <form
-      className="grid grid-rows-[auto_auto] grid-cols-[minmax(0,1fr)] gap-4 mb-4"
-      onSubmit={handleSubmit}
-    >
+    <form id={id} className="grid grid-cols-[minmax(0,1fr)] mb-2" onSubmit={handleSubmit}>
       <DynamicForm inputs={inputs} onChange={setValue} data={value} stateKey={id} />
-      <HStack space={2} justifyContent="end">
-        <Button onClick={onCancel} variant="border" color="secondary">
-          {cancelText || "Cancel"}
-        </Button>
-        <Button type="submit" color="primary">
-          {confirmText || "Done"}
-        </Button>
-      </HStack>
+      <DialogFooter
+        inline
+        actions={[
+          { label: cancelText || "Cancel", onClick: onCancel },
+          { label: confirmText || "Done", color: "primary", form: id },
+        ]}
+      />
     </form>
   );
 }

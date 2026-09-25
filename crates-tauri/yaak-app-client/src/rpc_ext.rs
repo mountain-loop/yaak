@@ -517,11 +517,8 @@ async fn cmd_import_data<R: Runtime>(
     ctx: ClientCtx<R>,
     req: CmdImportDataReq,
 ) -> Result<ImportPlan> {
-    Ok(crate::cmd_import_data(ctx.window.clone(), &req.file_path, req.destination).await?)
-}
-
-async fn cmd_import_url<R: Runtime>(ctx: ClientCtx<R>, req: CmdImportUrlReq) -> Result<ImportPlan> {
-    Ok(crate::cmd_import_url(ctx.window.clone(), &req.url, req.destination).await?)
+    Ok(crate::cmd_import_data(ctx.window.clone(), &req.file_paths, &req.urls, req.destination)
+        .await?)
 }
 
 async fn cmd_commit_import<R: Runtime>(
@@ -537,6 +534,13 @@ async fn cmd_list_import_sources<R: Runtime>(
 ) -> Result<Vec<ImportSource>> {
     use crate::models_ext::QueryManagerExt;
     Ok(ctx.window.db().list_import_sources(&req.workspace_id)?)
+}
+
+async fn cmd_detect_import_source<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdDetectImportSourceReq,
+) -> Result<String> {
+    Ok(crate::import::detect_import_source(&ctx.window, req.file_path, req.url).await?)
 }
 
 async fn cmd_import_sources_for_origin<R: Runtime>(

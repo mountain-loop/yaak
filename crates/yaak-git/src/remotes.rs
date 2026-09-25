@@ -18,8 +18,8 @@ pub fn git_remotes(dir: &Path) -> Result<Vec<GitRemote>> {
 
     for remote in repo.remotes()?.into_iter() {
         let name = match remote {
-            None => continue,
-            Some(name) => name,
+            Ok(Some(name)) => name,
+            _ => continue,
         };
         let r = match repo.find_remote(name) {
             Ok(r) => r,
@@ -28,7 +28,8 @@ pub fn git_remotes(dir: &Path) -> Result<Vec<GitRemote>> {
                 continue;
             }
         };
-        remotes.push(GitRemote { name: name.to_string(), url: r.url().map(|u| u.to_string()) });
+        remotes
+            .push(GitRemote { name: name.to_string(), url: r.url().ok().map(|u| u.to_string()) });
     }
 
     Ok(remotes)
