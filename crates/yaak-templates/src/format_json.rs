@@ -1,4 +1,4 @@
-use crate::tag_scan::take_quoted_string;
+use crate::tag_scan::TagStrings;
 
 enum FormatState {
     TemplateTag,
@@ -9,6 +9,7 @@ enum FormatState {
 /// Formats JSON that might contain template tags (skipped entirely)
 pub fn format_json(text: &str, tab: &str) -> String {
     let mut chars = text.chars().peekable();
+    let mut tag_strings = TagStrings::default();
 
     let mut new_json = "".to_string();
     let mut depth = 0;
@@ -48,7 +49,7 @@ pub fn format_json(text: &str, tab: &str) -> String {
             // A quoted argument is allowed to contain `]}`, so skip over strings whole
             if current_char == '\'' {
                 new_json.push(current_char);
-                if let Some(rest) = take_quoted_string(&mut chars) {
+                if let Some(rest) = tag_strings.take(&mut chars) {
                     new_json.push_str(&rest);
                 }
                 continue;

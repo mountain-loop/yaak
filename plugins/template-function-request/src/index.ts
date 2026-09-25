@@ -252,10 +252,84 @@ export const plugin: PluginDefinition = {
   ],
 };
 
-// A quoted argument may contain `]}`, so the scan skips over strings instead of stopping at
-// the first one. Kept in sync by hand with `apps/yaak-client/lib/templateTagRegex.ts`.
-const TEMPLATE_TAG_REGEX =
-  /\$\{\[((?:'(?:[^\\']|\\[\s\S])*'|'(?!(?:[^\\']|\\[\s\S])*')|](?!})|[^'\]])*)]}/g;
+const QUOTE = 0x27; // '
+const BACKSLASH = 0x5c; // \
+const CLOSE_BRACKET = 0x5d; // ]
+const CLOSE_BRACE = 0x7d; // }
+
+/**
+ * For every index `i`, the index of the `'` that closes a string whose body starts at `i`, or
+ * `-1` when nothing does. One right-to-left pass, so skipping a string costs one lookup.
+ */
+function closingQuoteTable(text: string): Int32Array {
+  // Two extra slots so a `\` in the last position can read past the end and find `-1`
+  const table = new Int32Array(text.length + 2).fill(-1);
+  for (let i = text.length - 1; i >= 0; i--) {
+    const c = text.charCodeAt(i);
+    // A backslash escapes whatever follows it, including a quote
+    const next = c === BACKSLASH ? table[i + 2] : table[i + 1];
+    table[i] = c === QUOTE ? i : (next ?? -1);
+  }
+  return table;
+}
+
+/**
+ * Rewrites every template tag in `text` with whatever `replace` returns for its inner content.
+ *
+ * A quoted argument may contain `]}`, so the scan steps over strings instead of stopping at the
+ * first one, and an unterminated quote stays an ordinary character. Kept in sync by hand with
+ * `apps/yaak-client/lib/templateTags.ts`, which carries the full explanation — including why
+ * this is a linear hand-written scan rather than a regex.
+ */
+function replaceTemplateTags(text: string, replace: (inner: string) => string): string {
+  let closingQuotes: Int32Array | null = null;
+  let deadEnds: Set<number> | null = null;
+
+  let result = "";
+  let copiedTo = 0;
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const start = text.indexOf("${[", searchFrom);
+    if (start < 0) break;
+
+    const visited: number[] = [];
+    let end = -1;
+    let i = start + 3;
+    while (i < text.length) {
+      if (deadEnds?.has(i)) break;
+      visited.push(i);
+
+      const c = text.charCodeAt(i);
+      if (c === QUOTE) {
+        closingQuotes ??= closingQuoteTable(text);
+        const close = closingQuotes[i + 1] ?? -1;
+        i = close < 0 ? i + 1 : close + 1;
+        continue;
+      }
+
+      if (c === CLOSE_BRACKET && text.charCodeAt(i + 1) === CLOSE_BRACE) {
+        end = i + 2;
+        break;
+      }
+
+      i += 1;
+    }
+
+    if (end < 0) {
+      // Not a tag, but a real one may start inside a string this scan stepped over
+      deadEnds ??= new Set();
+      for (const position of visited) deadEnds.add(position);
+      searchFrom = start + 3;
+      continue;
+    }
+
+    result += text.slice(copiedTo, start) + replace(text.slice(start + 3, end - 2));
+    copiedTo = end;
+    searchFrom = end;
+  }
+
+  return result + text.slice(copiedTo);
+}
 
 // TODO: Use a common function for this, but it fails to build on windows during CI if I try importing it here
 export function resolvedModelName(r: AnyModel | null): string {
@@ -271,7 +345,7 @@ export function resolvedModelName(r: AnyModel | null): string {
   }
 
   // Replace variable syntax with variable name
-  const withoutVariables = r.url.replace(TEMPLATE_TAG_REGEX, (_m, inner: string) => inner.trim());
+  const withoutVariables = replaceTemplateTags(r.url, (inner) => inner.trim());
   if (withoutVariables.trim() === "") {
     return r.model === "http_request"
       ? r.bodyType && r.bodyType === "graphql"

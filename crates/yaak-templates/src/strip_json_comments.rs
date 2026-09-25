@@ -1,4 +1,4 @@
-use crate::tag_scan::take_quoted_string;
+use crate::tag_scan::TagStrings;
 
 /// Strips JSON comments only if the result is valid JSON. If stripping comments
 /// produces invalid JSON, the original text is returned unchanged.
@@ -19,6 +19,7 @@ pub fn maybe_strip_json_comments(text: &str) -> String {
 /// - Comments inside strings and template tags are left alone
 pub fn strip_json_comments(text: &str) -> String {
     let mut chars = text.chars().peekable();
+    let mut tag_strings = TagStrings::default();
     let mut result = String::with_capacity(text.len());
     let mut in_string = false;
     let mut in_template_tag = false;
@@ -49,7 +50,7 @@ pub fn strip_json_comments(text: &str) -> String {
             result.push(current_char);
             // A quoted argument is allowed to contain `]}`, so skip over strings whole
             if current_char == '\'' {
-                if let Some(rest) = take_quoted_string(&mut chars) {
+                if let Some(rest) = tag_strings.take(&mut chars) {
                     result.push_str(&rest);
                 }
                 continue;

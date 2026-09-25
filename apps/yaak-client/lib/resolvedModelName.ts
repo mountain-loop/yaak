@@ -1,7 +1,7 @@
 import type { AnyModel } from "@yaakapp-internal/models";
 import { foldersAtom } from "@yaakapp-internal/models";
 import { jotaiStore } from "./jotai";
-import { TEMPLATE_TAG_REGEX } from "./templateTagRegex";
+import { replaceTemplateTags } from "./templateTags";
 
 export function resolvedModelName(r: AnyModel | null): string {
   if (r == null) return "";
@@ -16,7 +16,7 @@ export function resolvedModelName(r: AnyModel | null): string {
   }
 
   // Replace variable syntax with variable name
-  const withoutVariables = r.url.replace(TEMPLATE_TAG_REGEX, (_m, inner: string) => inner.trim());
+  const withoutVariables = replaceTemplateTags(r.url, (m) => m.inner.trim());
   if (withoutVariables.trim() === "") {
     return r.model === "http_request"
       ? r.bodyType && r.bodyType === "graphql"
