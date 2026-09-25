@@ -252,6 +252,11 @@ export const plugin: PluginDefinition = {
   ],
 };
 
+// A quoted argument may contain `]}`, so the scan skips over strings instead of stopping at
+// the first one. Kept in sync by hand with `apps/yaak-client/lib/templateTagRegex.ts`.
+const TEMPLATE_TAG_REGEX =
+  /\$\{\[((?:'(?:[^\\']|\\[\s\S])*'|'(?!(?:[^\\']|\\[\s\S])*')|](?!})|[^'\]])*)]}/g;
+
 // TODO: Use a common function for this, but it fails to build on windows during CI if I try importing it here
 export function resolvedModelName(r: AnyModel | null): string {
   if (r == null) return "";
@@ -266,7 +271,7 @@ export function resolvedModelName(r: AnyModel | null): string {
   }
 
   // Replace variable syntax with variable name
-  const withoutVariables = r.url.replace(/\$\{\[\s*([^\]\s]+)\s*]}/g, "$1");
+  const withoutVariables = r.url.replace(TEMPLATE_TAG_REGEX, (_m, inner: string) => inner.trim());
   if (withoutVariables.trim() === "") {
     return r.model === "http_request"
       ? r.bodyType && r.bodyType === "graphql"

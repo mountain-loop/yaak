@@ -1,3 +1,5 @@
+use crate::tag_scan::take_quoted_string;
+
 /// Strips JSON comments only if the result is valid JSON. If stripping comments
 /// produces invalid JSON, the original text is returned unchanged.
 pub fn maybe_strip_json_comments(text: &str) -> String {
@@ -45,6 +47,13 @@ pub fn strip_json_comments(text: &str) -> String {
         // Handle template tags
         if in_template_tag {
             result.push(current_char);
+            // A quoted argument is allowed to contain `]}`, so skip over strings whole
+            if current_char == '\'' {
+                if let Some(rest) = take_quoted_string(&mut chars) {
+                    result.push_str(&rest);
+                }
+                continue;
+            }
             if current_char == ']' && chars.peek() == Some(&'}') {
                 result.push(chars.next().unwrap());
                 in_template_tag = false;
@@ -278,6 +287,34 @@ mod tests {
   "foo": ${[ fn("// hi", "/* hey */") ]}
 }"#;
         assert_eq!(strip_json_comments(input), input);
+    }
+
+    #[test]
+    fn test_quoted_tag_close_inside_template_tag() {
+        // The `]}` is quoted, so the tag runs to the real close and the `//` stays put
+        let input = r#"{
+  "foo": ${[ fn(a='x]}y // not a comment') ]}
+}"#;
+        assert_eq!(strip_json_comments(input), input);
+    }
+
+    #[test]
+    fn test_escaped_quote_inside_template_tag() {
+        let input = r#"{
+  "foo": ${[ fn(a='it\'s ]} // still fine') ]}
+}"#;
+        assert_eq!(strip_json_comments(input), input);
+    }
+
+    #[test]
+    fn test_unterminated_quote_closes_tag_at_first_bracket() {
+        // A half-typed string must not swallow the rest of the document
+        assert_eq!(
+            strip_json_comments(r#"{"foo": ${[ fn(a='oops ]}, "bar": 1 // gone
+}"#),
+            r#"{"foo": ${[ fn(a='oops ]}, "bar": 1
+}"#
+        );
     }
 
     #[test]
