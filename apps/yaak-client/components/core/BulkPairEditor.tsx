@@ -64,6 +64,8 @@ export function formatBulkPairLine(pair: Pair) {
 }
 
 const PAIR_REGEX = /^([^:]+):\s+(.*)$/;
+// Commented-out pairs may also end at the colon, so a hand-typed `# name:` isn't dropped
+const COMMENTED_PAIR_REGEX = /^([^:]+):(?:\s+(.*))?$/;
 // A # only marks a comment when followed by whitespace (or nothing), so `#foo: bar` stays an
 // enabled pair named `#foo`
 const COMMENT_PREFIX_REGEX = /^\s*#(?:\s+|$)/;
@@ -77,15 +79,16 @@ export function parseBulkPairLine(line: string): PairWithId | null {
   const commentPrefix = line.match(COMMENT_PREFIX_REGEX);
   if (commentPrefix != null) {
     const uncommented = line.slice(commentPrefix[0].length);
-    if (!PAIR_REGEX.test(uncommented)) return null;
-    return { ...parsePairLine(uncommented), enabled: false };
+    const match = uncommented.match(COMMENTED_PAIR_REGEX);
+    if (match == null) return null;
+    return { ...pairFromMatch(uncommented, match), enabled: false };
   }
 
-  return parsePairLine(line);
+  return pairFromMatch(line, line.match(PAIR_REGEX));
 }
 
-function parsePairLine(line: string): PairWithId {
-  const [, name, value] = line.match(PAIR_REGEX) ?? [];
+function pairFromMatch(line: string, match: RegExpMatchArray | null): PairWithId {
+  const [, name, value] = match ?? [];
   return {
     enabled: true,
     name: (name ?? line).trim(),

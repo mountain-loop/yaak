@@ -68,8 +68,22 @@ describe("parseBulkPairLine", () => {
     });
   });
 
+  test("parses commented-out pairs with an empty value as disabled", () => {
+    expect(parseBulkPairLine("# token:")).toMatchObject({
+      enabled: false,
+      name: "token",
+      value: "",
+    });
+    expect(parseBulkPairLine("# token: ")).toMatchObject({
+      enabled: false,
+      name: "token",
+      value: "",
+    });
+  });
+
   test("drops comments that are not pairs", () => {
     expect(parseBulkPairLine("# just a comment")).toBeNull();
+    expect(parseBulkPairLine("# see http://example.com")).toBeNull();
     expect(parseBulkPairLine("#")).toBeNull();
   });
 
@@ -134,6 +148,12 @@ describe("bulk pair round trip", () => {
     const text = formatBulkPairs(pairs);
     expect(text).toBe("# #foo: bar");
     const parsed = parseBulkPairs(text);
+    expect(parsed.map(({ enabled, name, value }) => ({ enabled, name, value }))).toEqual(pairs);
+  });
+
+  test("preserves disabled pairs with empty values", () => {
+    const pairs = [{ enabled: false, name: "token", value: "" }];
+    const parsed = parseBulkPairs(formatBulkPairs(pairs));
     expect(parsed.map(({ enabled, name, value }) => ({ enabled, name, value }))).toEqual(pairs);
   });
 
