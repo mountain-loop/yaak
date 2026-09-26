@@ -64,10 +64,12 @@ export function formatBulkPairLine(pair: Pair) {
 }
 
 const PAIR_REGEX = /^([^:]+):\s+(.*)$/;
-const COMMENT_PREFIX_REGEX = /^\s*#\s*/;
+// A # only marks a comment when followed by whitespace (or nothing), so `#foo: bar` stays an
+// enabled pair named `#foo`
+const COMMENT_PREFIX_REGEX = /^\s*#(?:\s+|$)/;
 
 /**
- * Parse a `name: value` line into an enabled pair. A line starting with `#` is a disabled pair
+ * Parse a `name: value` line into an enabled pair. A line starting with `# ` is a disabled pair
  * if the rest of it parses as `name: value`, otherwise it's a free-text comment and `null` is
  * returned so it can be dropped.
  */

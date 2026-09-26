@@ -53,9 +53,17 @@ describe("parseBulkPairLine", () => {
       name: "foo",
       value: "bar",
     });
-    expect(parseBulkPairLine("#foo: bar")).toMatchObject({
+    expect(parseBulkPairLine("#\tfoo: bar")).toMatchObject({
       enabled: false,
       name: "foo",
+      value: "bar",
+    });
+  });
+
+  test("treats a # without whitespace after it as part of the name", () => {
+    expect(parseBulkPairLine("#foo: bar")).toMatchObject({
+      enabled: true,
+      name: "#foo",
       value: "bar",
     });
   });
@@ -109,6 +117,22 @@ describe("bulk pair round trip", () => {
       ),
     );
 
+    const parsed = parseBulkPairs(text);
+    expect(parsed.map(({ enabled, name, value }) => ({ enabled, name, value }))).toEqual(pairs);
+  });
+
+  test("preserves enabled pairs whose name starts with #", () => {
+    const pairs = [{ enabled: true, name: "#foo", value: "bar" }];
+    const text = formatBulkPairs(pairs);
+    expect(text).toBe("#foo: bar");
+    const parsed = parseBulkPairs(text);
+    expect(parsed.map(({ enabled, name, value }) => ({ enabled, name, value }))).toEqual(pairs);
+  });
+
+  test("preserves disabled pairs whose name starts with #", () => {
+    const pairs = [{ enabled: false, name: "#foo", value: "bar" }];
+    const text = formatBulkPairs(pairs);
+    expect(text).toBe("# #foo: bar");
     const parsed = parseBulkPairs(text);
     expect(parsed.map(({ enabled, name, value }) => ({ enabled, name, value }))).toEqual(pairs);
   });
