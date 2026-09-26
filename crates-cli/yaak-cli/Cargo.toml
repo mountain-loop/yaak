@@ -9,6 +9,7 @@ name = "yaak"
 path = "src/main.rs"
 
 [dependencies]
+yaak-assertions = { workspace = true }
 arboard = "3"
 base64 = "0.22"
 clap = { version = "4", features = ["derive"] }

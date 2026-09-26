@@ -2,7 +2,7 @@ import type { HttpResponse, HttpResponseEvent } from "@yaakapp-internal/models";
 import { Banner, HStack, Icon, LoadingIcon, VStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { ComponentType, CSSProperties } from "react";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo, useRef } from "react";
 import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
 import { useCopyHttpResponse } from "../hooks/useCopyHttpResponse";
 import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
@@ -23,11 +23,12 @@ import { HttpResponseDurationTag } from "./core/HttpResponseDurationTag";
 import { HttpStatusTag } from "./core/HttpStatusTag";
 import { PillButton } from "./core/PillButton";
 import { SizeTag } from "./core/SizeTag";
-import type { TabItem } from "./core/Tabs/Tabs";
+import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
 import { TabContent, Tabs } from "./core/Tabs/Tabs";
 import { Tooltip } from "./core/Tooltip";
 import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { HttpAssertionResults } from "./HttpAssertionResults";
 import { HttpResponseTimeline } from "./HttpResponseTimeline";
 import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";
 import { RequestBodyViewer } from "./RequestBodyViewer";
@@ -56,6 +57,7 @@ const TAB_BODY = "body";
 const TAB_REQUEST = "request";
 const TAB_HEADERS = "headers";
 const TAB_COOKIES = "cookies";
+const TAB_ASSERTIONS = "assertions";
 const TAB_TIMELINE = "timeline";
 
 export type TimelineViewMode = "timeline" | "text";
@@ -67,6 +69,7 @@ interface RedirectDropWarning {
 
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
+  const tabsRef = useRef<TabsRef>(null);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
   const [timelineViewMode, setTimelineViewMode] = useTimelineViewMode();
   const contentType = getContentTypeFromHeaders(activeResponse?.headers ?? null);
@@ -83,9 +86,53 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const cookieCounts = useMemo(() => getCookieCounts(responseEvents.data), [responseEvents.data]);
   const saveResponse = useSaveResponse(activeResponse ?? null);
   const copyResponse = useCopyHttpResponse(activeResponse ?? null);
+  const assertionReport = activeResponse?.assertionResults;
+  // Native sends save the definition before evaluation. Wait for actual outcomes,
+  // and leave the tab hidden when every check was disabled.
+  const hasAssertionResults =
+    activeResponse?.state === "closed" &&
+    assertionReport != null &&
+    (assertionReport.error != null ||
+      assertionReport.results.some((result) => result.outcome !== "skipped"));
+  const failedAssertions =
+    assertionReport?.results.filter((result) => result.outcome === "failed").length ?? 0;
+  const assertionErrors =
+    assertionReport?.results.filter(
+      (result) => result.outcome === "error" || result.outcome === "invalid",
+    ).length ?? 0;
+  const assertionFailures = failedAssertions + assertionErrors;
+  const assertionFailureLabel = [
+    failedAssertions > 0
+      ? `${failedAssertions} assertion${failedAssertions === 1 ? "" : "s"} failed`
+      : null,
+    assertionErrors > 0
+      ? `${assertionErrors} assertion error${assertionErrors === 1 ? "" : "s"}`
+      : assertionReport?.error != null
+        ? "Assertion error"
+        : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const assertionPasses =
+    assertionReport?.results.filter((result) => result.outcome === "passed").length ?? 0;
+  const assertionsHaveErrors = assertionFailures > 0 || assertionReport?.error != null;
 
   const tabs = useMemo<TabItem[]>(
     () => [
+      ...(hasAssertionResults
+        ? [
+            {
+              value: TAB_ASSERTIONS,
+              label: "Assertions",
+              rightSlot: (
+                <CountBadge
+                  count={assertionsHaveErrors ? assertionFailures || true : assertionPasses}
+                  color={assertionsHaveErrors ? "danger" : "success"}
+                />
+              ),
+            },
+          ]
+        : []),
       {
         value: TAB_BODY,
         label: "Response",
@@ -162,6 +209,10 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
       activeResponse?.requestHeaders.length,
       activeResponse?.state,
       activeResponse?.status,
+      hasAssertionResults,
+      assertionFailures,
+      assertionPasses,
+      assertionsHaveErrors,
       cookieCounts.sent,
       cookieCounts.received,
       copyResponse.mutate,
@@ -210,6 +261,17 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
                 <HStack space={2} className="w-full shrink-0">
                   {activeResponse.state !== "closed" && <LoadingIcon size="sm" />}
                   <HttpStatusTag showReason response={activeResponse} />
+                  {hasAssertionResults && assertionsHaveErrors && (
+                    <PillButton
+                      color="danger"
+                      className="font-sans"
+                      title="View assertion results"
+                      leftSlot={<Icon icon="alert_triangle" size="xs" />}
+                      onClick={() => tabsRef.current?.setActiveTab(TAB_ASSERTIONS)}
+                    >
+                      {assertionFailureLabel}
+                    </PillButton>
+                  )}
                   <span>&bull;</span>
                   <HttpResponseDurationTag response={activeResponse} />
                   <span>&bull;</span>
@@ -282,13 +344,18 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
             )}
             {/* Show tabs if we have any data (headers, body, etc.) even if there's an error */}
             <Tabs
+              ref={tabsRef}
               tabs={tabs}
+              defaultValue={TAB_BODY}
               label="Response"
               className="ml-3 mr-3 mb-3 min-h-0 flex-1"
               tabListClassName="mt-0.5 -mb-1.5"
               storageKey="http_response_tabs"
               activeTabKey={activeRequestId}
             >
+              <TabContent value={TAB_ASSERTIONS}>
+                <HttpAssertionResults response={activeResponse} />
+              </TabContent>
               <TabContent value={TAB_BODY}>
                 <ErrorBoundary name="Http Response Viewer">
                   <Suspense>

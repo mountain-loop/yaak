@@ -45,6 +45,8 @@ const MAX_AUTH_BODY_BYTES: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum SendHttpRequestError {
+    #[error("Request canceled")]
+    Canceled,
     #[error("Failed to load request: {0}")]
     LoadRequest(#[source] yaak_models::error::Error),
 
@@ -628,6 +630,12 @@ pub async fn send_http_request<T: TemplateCallback>(
     response.url = sendable_request.url.clone();
     response.state = HttpResponseState::Initialized;
     response.error = None;
+    response.assertion_results =
+        (!request.assertions.is_empty()).then(|| yaak_assertions::AssertionReport {
+            definition: request.assertions.clone(),
+            results: Vec::new(),
+            error: None,
+        });
     response.content_length = None;
     response.content_length_compressed = None;
     response.body_path = None;
@@ -835,6 +843,8 @@ pub async fn send_http_request<T: TemplateCallback>(
         ResponseBody::Returned(Vec::new())
     };
     let mut body_read_error = None;
+    let mut assertion_body = request.assertions.needs_body().then(Vec::new);
+    let mut assertion_body_too_large = false;
     let mut written_bytes: usize = 0;
     let mut last_progress_update = started_at;
     let mut cancelled_rx = params.cancelled_rx.clone();
@@ -842,6 +852,7 @@ pub async fn send_http_request<T: TemplateCallback>(
     loop {
         let read_result = if let Some(cancelled_rx) = cancelled_rx.as_mut() {
             if *cancelled_rx.borrow() {
+                body_read_error = Some(SendHttpRequestError::Canceled);
                 break;
             }
 
@@ -859,7 +870,12 @@ pub async fn send_http_request<T: TemplateCallback>(
         };
 
         let Some(read_result) = read_result else {
-            break;
+            if cancelled_rx.as_ref().is_some_and(|rx| *rx.borrow()) {
+                body_read_error = Some(SendHttpRequestError::Canceled);
+                break;
+            }
+            cancelled_rx = None;
+            continue;
         };
 
         match read_result {
@@ -871,6 +887,14 @@ pub async fn send_http_request<T: TemplateCallback>(
                     file.write_all(chunk).await.map_err(|source| {
                         SendHttpRequestError::WriteResponseBody { path: path.clone(), source }
                     })?;
+                }
+                if let Some(body) = assertion_body.as_mut() {
+                    if body.len() + chunk.len() > yaak_assertions::MAX_BODY_BYTES {
+                        assertion_body = None;
+                        assertion_body_too_large = true;
+                    } else {
+                        body.extend_from_slice(chunk);
+                    }
                 }
                 if let Some(tx) = params.emit_response_body_chunks_to.as_ref() {
                     let _ = tx.send(chunk.to_vec());
@@ -1017,6 +1041,36 @@ pub async fn send_http_request<T: TemplateCallback>(
     // after the network/response-body work has completed.
     if let Err(join_err) = event_handle.await {
         warn!("Failed to join response event task: {}", join_err);
+    }
+
+    if !request.assertions.is_empty() {
+        let headers =
+            response.headers.iter().map(|h| (h.name.clone(), h.value.clone())).collect::<Vec<_>>();
+        response.assertion_results = Some(yaak_assertions::evaluate(
+            &request.assertions,
+            yaak_assertions::Response {
+                status: response.status,
+                headers: &headers,
+                body: if assertion_body_too_large {
+                    yaak_assertions::Body::TooLarge
+                } else {
+                    yaak_assertions::Body::Bytes(assertion_body.as_deref().unwrap_or_default())
+                },
+                completion: if response.error.is_some() {
+                    yaak_assertions::Completion::Error
+                } else {
+                    yaak_assertions::Completion::Complete
+                },
+            },
+        ));
+        if let Some(store) = store {
+            response = store
+                .query_manager
+                .with_tx(|tx| {
+                    tx.upsert_http_response(&response, &store.update_source, store.blob_manager)
+                })
+                .map_err(SendHttpRequestError::PersistResponse)?;
+        }
     }
 
     Ok(SendHttpRequestResult {
@@ -1212,11 +1266,23 @@ fn persist_response_error(
     fallback_url: String,
 ) -> Result<HttpResponse> {
     let elapsed = duration_to_i32(started_at.elapsed());
+    let assertion_results = response.assertion_results.as_ref().map(|report| {
+        yaak_assertions::evaluate(
+            &report.definition,
+            yaak_assertions::Response {
+                status: response.status,
+                headers: &[],
+                body: yaak_assertions::Body::Unavailable,
+                completion: yaak_assertions::Completion::Error,
+            },
+        )
+    });
     store
         .query_manager
         .with_tx(|tx| {
             tx.upsert_http_response(
                 &HttpResponse {
+                    assertion_results,
                     state: HttpResponseState::Closed,
                     elapsed,
                     elapsed_headers: if response.elapsed_headers == 0 {
@@ -1323,6 +1389,151 @@ mod tests {
                 ContentEncoding::Identity,
             ))
         }
+    }
+
+    fn assertion_inputs() -> HttpSendInputs {
+        HttpSendInputs {
+            request: ResolvedHttpRequest::assume_resolved(
+                HttpRequest {
+                    id: "rq_assertions".into(),
+                    workspace_id: "wk_assertions".into(),
+                    url: "http://localhost/test".into(),
+                    assertions: yaak_assertions::HttpAssertions {
+                        version: 1,
+                        checks: vec![yaak_assertions::HttpAssertion {
+                            id: "check".into(),
+                            selector: "$.id".into(),
+                            expected: "123".into(),
+                            expected_type: "number".into(),
+                            ..Default::default()
+                        }],
+                    },
+                    ..Default::default()
+                },
+                String::new(),
+            ),
+            environment_chain: Vec::new(),
+            runtime_config: HttpSendRuntimeConfig {
+                settings: ResolvedHttpRequestSettings::default(),
+                proxy: HttpConnectionProxySetting::System,
+                dns_overrides: Vec::new(),
+                client_certificates: Vec::new(),
+            },
+            cookie_store: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn assertions_use_the_same_body_for_stored_and_streamed_responses() {
+        for stream in [false, true] {
+            let dir = TempDir::new().unwrap();
+            let (queries, blobs, _rx) =
+                yaak_models::init_standalone(&dir.path().join("db"), &dir.path().join("blobs"))
+                    .unwrap();
+            let inputs = assertion_inputs();
+            queries
+                .with_tx(|tx| {
+                    tx.upsert_workspace(
+                        &Workspace { id: "wk_assertions".into(), ..Default::default() },
+                        &UpdateSource::Sync,
+                    )?;
+                    tx.upsert_http_request(inputs.request.request(), &UpdateSource::Sync)
+                })
+                .unwrap();
+            let (chunk_tx, mut chunk_rx) = mpsc::unbounded_channel();
+            // A closed, false cancellation channel must not truncate the body.
+            let (cancel_tx, cancel_rx) = watch::channel(false);
+            drop(cancel_tx);
+            let result = send_http_request(SendHttpRequestParams {
+                inputs,
+                template_callback: &NoopTemplateCallback,
+                storage: Some(ResponseStorage {
+                    query_manager: &queries,
+                    blob_manager: &blobs,
+                    update_source: UpdateSource::Sync,
+                    response_dir: dir.path(),
+                }),
+                emit_events_to: None,
+                emit_response_body_chunks_to: stream.then_some(chunk_tx),
+                cancelled_rx: Some(cancel_rx),
+                existing_response: None,
+                prepare_sendable_request: None,
+                executor: &StubExecutor { body: br#"{"id":123}"# },
+            })
+            .await
+            .unwrap();
+            let report = result.response.assertion_results.as_ref().unwrap();
+            assert_eq!(report.results[0].outcome, "passed");
+            assert_eq!(
+                queries
+                    .connect()
+                    .get_http_response(&result.response.id)
+                    .unwrap()
+                    .assertion_results
+                    .unwrap()
+                    .results[0]
+                    .outcome,
+                "passed"
+            );
+            if stream {
+                assert_eq!(chunk_rx.recv().await.unwrap(), br#"{"id":123}"#);
+            }
+        }
+    }
+
+    struct CancelAfterHeaders(watch::Sender<bool>);
+    #[async_trait]
+    impl SendRequestExecutor for CancelAfterHeaders {
+        async fn send(
+            &self,
+            request: SendableHttpRequest,
+            events: mpsc::Sender<SenderHttpResponseEvent>,
+            cookies: CookieBehavior,
+        ) -> yaak_http::error::Result<yaak_http::sender::HttpResponse> {
+            let response =
+                StubExecutor { body: br#"{"id":123}"# }.send(request, events, cookies).await?;
+            self.0.send(true).unwrap();
+            Ok(response)
+        }
+    }
+    #[tokio::test]
+    async fn canceled_body_never_leaves_passing_assertions_in_history() {
+        let dir = TempDir::new().unwrap();
+        let (queries, blobs, _rx) =
+            yaak_models::init_standalone(&dir.path().join("db"), &dir.path().join("blobs"))
+                .unwrap();
+        let inputs = assertion_inputs();
+        queries
+            .with_tx(|tx| {
+                tx.upsert_workspace(
+                    &Workspace { id: "wk_assertions".into(), ..Default::default() },
+                    &UpdateSource::Sync,
+                )?;
+                tx.upsert_http_request(inputs.request.request(), &UpdateSource::Sync)
+            })
+            .unwrap();
+        let (cancel_tx, cancel_rx) = watch::channel(false);
+        let result = send_http_request(SendHttpRequestParams {
+            inputs,
+            template_callback: &NoopTemplateCallback,
+            storage: Some(ResponseStorage {
+                query_manager: &queries,
+                blob_manager: &blobs,
+                update_source: UpdateSource::Sync,
+                response_dir: dir.path(),
+            }),
+            emit_events_to: None,
+            emit_response_body_chunks_to: None,
+            cancelled_rx: Some(cancel_rx),
+            existing_response: None,
+            prepare_sendable_request: None,
+            executor: &CancelAfterHeaders(cancel_tx),
+        })
+        .await;
+        assert!(matches!(result, Err(SendHttpRequestError::Canceled)));
+        let responses = queries.connect().list_http_responses("wk_assertions", None).unwrap();
+        assert!(responses[0].error.is_some());
+        assert_eq!(responses[0].assertion_results.as_ref().unwrap().results[0].outcome, "error");
     }
 
     /// The hosted sender runs with no query manager, blob manager, or response directory. Nothing

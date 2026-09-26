@@ -838,6 +838,40 @@ async fn cmd_default_headers<R: Runtime>(
     Ok(yaak_commands::models::cmd_default_headers(ctx, req).await?)
 }
 
+async fn cmd_validate_http_assertions<R: Runtime>(
+    _ctx: ClientCtx<R>,
+    req: CmdValidateHttpAssertionsReq,
+) -> Result<HashMap<String, String>> {
+    Ok(yaak::assertions::validation_errors(&req.assertions))
+}
+
+async fn cmd_http_response_json_children<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdHttpResponseJsonChildrenReq,
+) -> Result<yaak::jsonpath::JsonPathChildren> {
+    let queries = ctx.query_manager().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let store = yaak::response_body::FileResponseBodyStore::new(&queries);
+        yaak::response_body::json_path_children(&store, &req.response_id, &req.parent)
+            .map_err(crate::error::Error::GenericError)
+    })
+    .await
+    .map_err(|e| crate::error::Error::GenericError(e.to_string()))?
+}
+
+async fn cmd_preview_http_assertions<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdPreviewHttpAssertionsReq,
+) -> Result<yaak::assertions::AssertionReport> {
+    let queries = ctx.query_manager().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        yaak::response_body::preview_assertions(&queries, &req.response_id, &req.assertions)
+            .map_err(crate::error::Error::GenericError)
+    })
+    .await
+    .map_err(|e| crate::error::Error::GenericError(e.to_string()))?
+}
+
 async fn models_upsert<R: Runtime>(ctx: ClientCtx<R>, req: ModelsUpsertReq) -> Result<String> {
     Ok(yaak_commands::models::models_upsert(ctx, req).await?)
 }

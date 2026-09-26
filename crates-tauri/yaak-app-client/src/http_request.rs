@@ -127,6 +127,21 @@ pub async fn send_http_request_with_context<R: Runtime>(
                     r.elapsed_headers = elapsed;
                 }
                 r.error = Some(error);
+                r.assertion_results = (!unrendered_request.assertions.is_empty()).then(|| {
+                    yaak::assertions::evaluate(
+                        &unrendered_request.assertions,
+                        yaak::assertions::Response {
+                            status: r.status,
+                            headers: &[],
+                            body: yaak::assertions::Body::Unavailable,
+                            completion: if *cancelled_rx.borrow() {
+                                yaak::assertions::Completion::Canceled
+                            } else {
+                                yaak::assertions::Completion::Error
+                            },
+                        },
+                    )
+                });
             });
             // The send failed, so whatever body exists is the partial one
             // already on disk under the response's id.

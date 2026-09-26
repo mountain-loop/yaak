@@ -309,3 +309,54 @@ color: null
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod assertion_tests {
+    use super::*;
+    use yaak_models::models::{HttpAssertion, HttpAssertions};
+
+    #[test]
+    fn assertions_round_trip_through_yaml_and_old_requests_default_to_no_checks() {
+        let path = Path::new("request.yaml");
+        let request = HttpRequest {
+            id: "rq_test".into(),
+            workspace_id: "wk_test".into(),
+            assertions: HttpAssertions {
+                version: 1,
+                checks: vec![HttpAssertion {
+                    id: "check".into(),
+                    selector: "$.id".into(),
+                    expected: "123".into(),
+                    expected_type: "number".into(),
+                    ..Default::default()
+                }],
+            },
+            ..Default::default()
+        };
+        let (bytes, _) = SyncModel::HttpRequest(request.clone()).to_file_contents(path).unwrap();
+        let (roundtrip, _) = SyncModel::from_bytes(bytes, path).unwrap().unwrap();
+        let SyncModel::HttpRequest(roundtrip) = roundtrip else {
+            panic!("wrong model")
+        };
+        assert_eq!(roundtrip.assertions, request.assertions);
+        let old =
+            b"model: http_request\nid: rq_old\nworkspaceId: wk_test\nurl: https://example.com\n"
+                .to_vec();
+        let (old, _) = SyncModel::from_bytes(old, path).unwrap().unwrap();
+        let SyncModel::HttpRequest(old) = old else {
+            panic!("wrong model")
+        };
+        assert!(old.assertions.is_empty());
+        let (bytes, _) = SyncModel::HttpRequest(old).to_file_contents(path).unwrap();
+        assert!(!String::from_utf8(bytes).unwrap().contains("assertions:"));
+        // Unknown versions survive sync so the runner can reject them instead of silently passing.
+        let mut future = request;
+        future.assertions.version = 99;
+        let (bytes, _) = SyncModel::HttpRequest(future).to_file_contents(path).unwrap();
+        let (future, _) = SyncModel::from_bytes(bytes, path).unwrap().unwrap();
+        let SyncModel::HttpRequest(future) = future else {
+            panic!("wrong model")
+        };
+        assert_eq!(future.assertions.version, 99);
+    }
+}

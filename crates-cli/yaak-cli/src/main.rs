@@ -129,6 +129,32 @@ async fn main() {
                 }
             }
         }
+        Commands::Test(args) => {
+            let mut context = CliContext::new(data_dir.clone(), app_id);
+            match resolve_send_execution_context(
+                &context,
+                &args.id,
+                environment.as_deref(),
+                cookie_jar.as_deref(),
+            ) {
+                Ok(execution_context) => {
+                    context.init_plugins(execution_context).await;
+                    let exit_code = commands::test::run(
+                        &context,
+                        args,
+                        environment.as_deref(),
+                        cookie_jar.as_deref(),
+                    )
+                    .await;
+                    context.shutdown().await;
+                    exit_code
+                }
+                Err(error) => {
+                    eprintln!("Error: {error}");
+                    2
+                }
+            }
+        }
         Commands::CookieJar(args) => {
             let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::cookie_jar::run(&context, args);
