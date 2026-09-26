@@ -241,9 +241,12 @@ function EnvironmentEditDialogSidebar({
         leftSlot: <Icon icon="plus" />,
         onSelect: handleCreateSubEnvironment,
       };
+      // Sub-environments aren't shown while there are multiple base environments, same as the
+      // plus button on the base environment row
+      const canCreateSubEnvironment = baseEnvironments.length <= 1;
 
       if (environment == null || environment.model !== "environment") {
-        return [addEnvironmentItem];
+        return canCreateSubEnvironment ? [addEnvironmentItem] : [];
       }
 
       const singleEnvironment = items.length === 1;
@@ -299,7 +302,7 @@ function EnvironmentEditDialogSidebar({
       ];
 
       // Add sub environment to base environment
-      if (isBaseEnvironment(environment) && singleEnvironment) {
+      if (isBaseEnvironment(environment) && singleEnvironment && canCreateSubEnvironment) {
         menuItems.push({ type: "separator" });
         menuItems.push(addEnvironmentItem);
       }
@@ -360,9 +363,11 @@ function EnvironmentEditDialogSidebar({
   );
 
   const renderContextMenuFn = useCallback<NonNullable<TreeProps<TreeModel>["renderContextMenu"]>>(
-    ({ items, position, onClose }) => (
-      <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
-    ),
+    ({ items, position, onClose }) =>
+      // Right-clicking empty space has nothing to offer while there are multiple base environments
+      items.length === 0 ? null : (
+        <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
+      ),
     [],
   );
 
