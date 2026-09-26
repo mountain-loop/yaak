@@ -442,7 +442,21 @@ function EditorInner({
           ? EditorState.fromJSON(cachedJsonState, config, stateFields)
           : EditorState.create(config);
 
-        const view = new EditorView({ state, parent: container });
+        // PERF: Built detached and attached in a microtask, rather than passing `parent` and
+        // letting the constructor attach it first.
+        //
+        // The constructor sets `contenteditable` on the content element and then reads
+        // `document.fonts.ready`. Both force the browser to flush style and layout when the
+        // element is already in the document, and whatever the previous editor attached has
+        // just dirtied it again — so mounting n editors in one commit costs n forced layouts.
+        // The environment editor mounts two per variable row (~60 of them), which is where its
+        // half-second open went.
+        //
+        // Building detached moves that work off the live document, and deferring the attach to
+        // a microtask means every editor in the commit is built before any of them is inserted:
+        // one forced layout for the batch instead of one each. The microtask still runs before
+        // paint, so nothing is visible in the meantime.
+        const view = new EditorView({ state });
 
         // For large documents, the parser may parse the max number of lines and fail to add
         // things like fold markers because of it.
@@ -450,12 +464,26 @@ function EditorInner({
         forceParsing(view, 9e6, 100);
 
         cm.current = { view, languageCompartment };
-        if (autoFocus) {
-          view.focus();
-        }
-        if (autoSelect) {
-          view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
-        }
+        queueMicrotask(() => {
+          // The editor was torn down (or replaced) before we got here
+          if (cm.current?.view !== view) return;
+
+          // Runs after the surrounding try/catch has returned, so it needs its own
+          try {
+            container.appendChild(view.dom);
+            // Everything the constructor measured, it measured detached
+            view.requestMeasure();
+
+            if (autoFocus) {
+              view.focus();
+            }
+            if (autoSelect) {
+              view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+            }
+          } catch (e) {
+            console.log("Failed to attach Codemirror", e);
+          }
+        });
         setRef?.(view);
       } catch (e) {
         console.log("Failed to initialize Codemirror", e);
