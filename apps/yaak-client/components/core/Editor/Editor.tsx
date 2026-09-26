@@ -468,15 +468,20 @@ function EditorInner({
           // The editor was torn down (or replaced) before we got here
           if (cm.current?.view !== view) return;
 
-          container.appendChild(view.dom);
-          // Everything the constructor measured, it measured detached
-          view.requestMeasure();
+          // Runs after the surrounding try/catch has returned, so it needs its own
+          try {
+            container.appendChild(view.dom);
+            // Everything the constructor measured, it measured detached
+            view.requestMeasure();
 
-          if (autoFocus) {
-            view.focus();
-          }
-          if (autoSelect) {
-            view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+            if (autoFocus) {
+              view.focus();
+            }
+            if (autoSelect) {
+              view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+            }
+          } catch (e) {
+            console.log("Failed to attach Codemirror", e);
           }
         });
         setRef?.(view);
