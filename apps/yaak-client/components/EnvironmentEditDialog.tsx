@@ -4,8 +4,16 @@ import type { TreeHandle, TreeNode, TreeProps } from "@yaakapp-internal/ui";
 import { Banner, Icon, InlineCode, SplitLayout, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
 import { atomFamily } from "jotai-family";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { createSubEnvironmentAndActivate } from "../commands/createEnvironment";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createSubEnvironment } from "../commands/createEnvironment";
 import { activeWorkspaceAtom, activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import {
   environmentsBreakdownAtom,
@@ -39,6 +47,9 @@ interface Props {
 }
 
 type TreeModel = Environment | Workspace;
+
+/** Lets tree row slots create a sub-environment and select it in the editor. */
+const CreateSubEnvironmentContext = createContext<() => Promise<void>>(async () => {});
 
 export function EnvironmentEditDialog({ initialEnvironmentId, setRef }: Props) {
   const { allEnvironments, baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
@@ -115,7 +126,7 @@ function EnvironmentEditDialogSidebar({
   const activeWorkspaceId = useAtomValue(activeWorkspaceIdAtom) ?? "";
   const treeId = `environment.${activeWorkspaceId}.sidebar`;
   const treeRef = useRef<TreeHandle>(null);
-  const { baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
+  const { allEnvironments, baseEnvironment, baseEnvironments } = useEnvironmentsBreakdown();
 
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- none
   useLayoutEffect(() => {
@@ -123,6 +134,31 @@ function EnvironmentEditDialogSidebar({
     treeRef.current?.selectItem(selectedEnvironmentId);
     treeRef.current?.focus();
   }, []);
+
+  // A just-created environment to select once it reaches the model store. Selecting it before
+  // then would show a "failed to find" error in the editor, and the tree would drop the
+  // selection of an item it doesn't have yet.
+  const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
+  const tree = useAtomValue(treeAtom);
+  useEffect(() => {
+    if (pendingSelectionId == null) return;
+    if (!allEnvironments.some((e) => e.id === pendingSelectionId)) return;
+
+    setPendingSelectionId(null);
+    setSelectedEnvironmentId(pendingSelectionId);
+
+    // The tree leaves out sub-environments while there are multiple base environments
+    const node = tree == null ? null : findTreeNode(tree, pendingSelectionId);
+    if (node == null) return;
+    if (node.parent != null) {
+      // Expand the parent so the new item is visible to be selected
+      const parentId = node.parent.item.id;
+      jotaiStore.set(collapsedFamily(treeId), (prev) => ({ ...prev, [parentId]: false }));
+    }
+    // Wait a frame so the tree's own pending selection fixups, which may have been scheduled
+    // before the new item arrived, don't reset this selection
+    requestAnimationFrame(() => treeRef.current?.selectItem(pendingSelectionId));
+  }, [allEnvironments, pendingSelectionId, setSelectedEnvironmentId, tree, treeId]);
 
   const handleDeleteEnvironment = useCallback(
     async (environment: Environment) => {
@@ -133,6 +169,14 @@ function EnvironmentEditDialogSidebar({
     },
     [baseEnvironment?.id, selectedEnvironmentId, setSelectedEnvironmentId],
   );
+
+  const handleCreateSubEnvironment = useCallback(async () => {
+    const { baseEnvironment } = jotaiStore.get(environmentsBreakdownAtom);
+    if (baseEnvironment == null) return;
+    const id = await createSubEnvironment.mutateAsync(baseEnvironment);
+    // Show the new environment in the editor without changing the workspace's active environment
+    if (id != null) setPendingSelectionId(id);
+  }, []);
 
   const treeHasFocus = useCallback(() => treeRef.current?.hasFocus() ?? false, []);
 
@@ -195,13 +239,14 @@ function EnvironmentEditDialogSidebar({
       const addEnvironmentItem: DropdownItem = {
         label: "Create Sub Environment",
         leftSlot: <Icon icon="plus" />,
-        onSelect: async () => {
-          await createSubEnvironment();
-        },
+        onSelect: handleCreateSubEnvironment,
       };
+      // Sub-environments aren't shown while there are multiple base environments, same as the
+      // plus button on the base environment row
+      const canCreateSubEnvironment = baseEnvironments.length <= 1;
 
       if (environment == null || environment.model !== "environment") {
-        return [addEnvironmentItem];
+        return canCreateSubEnvironment ? [addEnvironmentItem] : [];
       }
 
       const singleEnvironment = items.length === 1;
@@ -257,7 +302,7 @@ function EnvironmentEditDialogSidebar({
       ];
 
       // Add sub environment to base environment
-      if (isBaseEnvironment(environment) && singleEnvironment) {
+      if (isBaseEnvironment(environment) && singleEnvironment && canCreateSubEnvironment) {
         menuItems.push({ type: "separator" });
         menuItems.push(addEnvironmentItem);
       }
@@ -266,6 +311,7 @@ function EnvironmentEditDialogSidebar({
     },
     [
       baseEnvironments.length,
+      handleCreateSubEnvironment,
       handleDeleteEnvironment,
       handleDuplicateSelected,
       handleRenameSelected,
@@ -317,34 +363,37 @@ function EnvironmentEditDialogSidebar({
   );
 
   const renderContextMenuFn = useCallback<NonNullable<TreeProps<TreeModel>["renderContextMenu"]>>(
-    ({ items, position, onClose }) => (
-      <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
-    ),
+    ({ items, position, onClose }) =>
+      // Right-clicking empty space has nothing to offer while there are multiple base environments
+      items.length === 0 ? null : (
+        <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
+      ),
     [],
   );
 
-  const tree = useAtomValue(treeAtom);
   return (
     <aside className="x-theme-sidebar h-full w-full min-w-0 grid overflow-y-auto border-r border-border-subtle ">
       {tree != null && (
-        <div className="pt-2">
-          <Tree
-            ref={treeRef}
-            treeId={treeId}
-            collapsedAtom={collapsedFamily(treeId)}
-            className="px-2 pb-10"
-            root={tree}
-            getContextMenu={getContextMenu}
-            renderContextMenu={renderContextMenuFn}
-            onDragEnd={handleDragEnd}
-            getItemKey={(i) => `${i.id}::${i.name}`}
-            ItemLeftSlotInner={ItemLeftSlotInner}
-            ItemRightSlot={ItemRightSlot}
-            ItemInner={ItemInner}
-            onActivate={handleActivate}
-            getEditOptions={getEditOptions}
-          />
-        </div>
+        <CreateSubEnvironmentContext.Provider value={handleCreateSubEnvironment}>
+          <div className="pt-2">
+            <Tree
+              ref={treeRef}
+              treeId={treeId}
+              collapsedAtom={collapsedFamily(treeId)}
+              className="px-2 pb-10"
+              root={tree}
+              getContextMenu={getContextMenu}
+              renderContextMenu={renderContextMenuFn}
+              onDragEnd={handleDragEnd}
+              getItemKey={(i) => `${i.id}::${i.name}`}
+              ItemLeftSlotInner={ItemLeftSlotInner}
+              ItemRightSlot={ItemRightSlot}
+              ItemInner={ItemInner}
+              onActivate={handleActivate}
+              getEditOptions={getEditOptions}
+            />
+          </div>
+        </CreateSubEnvironmentContext.Provider>
       )}
     </aside>
   );
@@ -384,6 +433,15 @@ const treeAtom = atom<TreeNode<TreeModel> | null>((get) => {
   return root;
 });
 
+function findTreeNode(node: TreeNode<TreeModel>, id: string): TreeNode<TreeModel> | null {
+  if (node.item.id === id) return node;
+  for (const child of node.children ?? []) {
+    const found = findTreeNode(child, id);
+    if (found != null) return found;
+  }
+  return null;
+}
+
 function ItemLeftSlotInner({ item }: { item: TreeModel }) {
   const { baseEnvironments } = useEnvironmentsBreakdown();
   return baseEnvironments.length > 1 ? (
@@ -395,6 +453,7 @@ function ItemLeftSlotInner({ item }: { item: TreeModel }) {
 
 function ItemRightSlot({ item }: { item: TreeModel }) {
   const { baseEnvironments } = useEnvironmentsBreakdown();
+  const handleCreateSubEnvironment = useContext(CreateSubEnvironmentContext);
   return (
     <>
       {item.model === "environment" && baseEnvironments.length <= 1 && isBaseEnvironment(item) && (
@@ -405,7 +464,7 @@ function ItemRightSlot({ item }: { item: TreeModel }) {
           icon="plus_circle"
           className="opacity-50 hover:opacity-100"
           title="Add Sub-Environment"
-          onClick={createSubEnvironment}
+          onClick={handleCreateSubEnvironment}
         />
       )}
     </>
@@ -423,13 +482,6 @@ function ItemInner({ item }: { item: TreeModel }) {
       <div className="truncate min-w-0 text-left">{resolvedModelName(item)}</div>
     </div>
   );
-}
-
-async function createSubEnvironment() {
-  const { baseEnvironment } = jotaiStore.get(environmentsBreakdownAtom);
-  if (baseEnvironment == null) return;
-  const id = await createSubEnvironmentAndActivate.mutateAsync(baseEnvironment);
-  return id;
 }
 
 function getEditOptions(item: TreeModel) {
