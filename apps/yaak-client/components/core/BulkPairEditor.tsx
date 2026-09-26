@@ -14,20 +14,11 @@ export function BulkPairEditor({
   forcedEnvironmentId,
   stateKey,
 }: Props) {
-  const pairsText = useMemo(() => {
-    return pairs
-      .filter((p) => !(p.name.trim() === "" && p.value.trim() === ""))
-      .map(formatBulkPairLine)
-      .join("\n");
-  }, [pairs]);
+  const pairsText = useMemo(() => formatBulkPairs(pairs), [pairs]);
 
   const handleChange = useCallback(
     (text: string) => {
-      const pairs = text
-        .split("\n")
-        .filter((l: string) => l.trim())
-        .map(parseBulkPairLine);
-      onChange(pairs);
+      onChange(parseBulkPairs(text));
     },
     [onChange],
   );
@@ -47,13 +38,52 @@ export function BulkPairEditor({
   );
 }
 
-export function formatBulkPairLine(pair: Pair) {
-  const value = pair.value.replaceAll("\n", "\\n");
-  return `${pair.name}: ${value}`;
+export function formatBulkPairs(pairs: Pair[]): string {
+  return pairs
+    .filter((p) => !(p.name.trim() === "" && p.value.trim() === ""))
+    .map(formatBulkPairLine)
+    .join("\n");
 }
 
-export function parseBulkPairLine(line: string): PairWithId {
-  const [, name, value] = line.match(/^([^:]+):\s+(.*)$/) ?? [];
+export function parseBulkPairs(text: string): PairWithId[] {
+  return text
+    .split("\n")
+    .filter((l: string) => l.trim())
+    .map(parseBulkPairLine)
+    .filter((p) => p != null);
+}
+
+/**
+ * Format a pair as a `name: value` line. Disabled pairs are commented out dotenv-style, as
+ * `# name: value`, so the enabled state survives a round trip through {@link parseBulkPairLine}.
+ */
+export function formatBulkPairLine(pair: Pair) {
+  const value = pair.value.replaceAll("\n", "\\n");
+  const line = `${pair.name}: ${value}`;
+  return pair.enabled === false ? `# ${line}` : line;
+}
+
+const PAIR_REGEX = /^([^:]+):\s+(.*)$/;
+const COMMENT_PREFIX_REGEX = /^\s*#\s*/;
+
+/**
+ * Parse a `name: value` line into an enabled pair. A line starting with `#` is a disabled pair
+ * if the rest of it parses as `name: value`, otherwise it's a free-text comment and `null` is
+ * returned so it can be dropped.
+ */
+export function parseBulkPairLine(line: string): PairWithId | null {
+  const commentPrefix = line.match(COMMENT_PREFIX_REGEX);
+  if (commentPrefix != null) {
+    const uncommented = line.slice(commentPrefix[0].length);
+    if (!PAIR_REGEX.test(uncommented)) return null;
+    return { ...parsePairLine(uncommented), enabled: false };
+  }
+
+  return parsePairLine(line);
+}
+
+function parsePairLine(line: string): PairWithId {
+  const [, name, value] = line.match(PAIR_REGEX) ?? [];
   return {
     enabled: true,
     name: (name ?? line).trim(),
