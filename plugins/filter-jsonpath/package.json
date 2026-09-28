@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@yaakapp-internal/lib": "^1.0.0",
-    "jsonpath-plus": "^10.3.0"
+    "jsonpath-plus": "^11.0.0"
   },
   "devDependencies": {
     "@types/jsonpath": "^0.2.4"
