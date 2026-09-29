@@ -77,11 +77,19 @@ export function filterXPath(
     return String(items);
   }
   if (!Array.isArray(items) || result === "first") {
-    return items[0] != null ? String(items[0].firstChild ?? "") : "";
+    return items[0] != null ? nodeText(items[0]) : "";
   }
   if (result === "join") {
-    return items.map((item) => String(item.firstChild ?? "")).join(join ?? "");
+    return items.map(nodeText).join(join ?? "");
   }
   // Not sure what cases this happens in (?)
   return String(items);
+}
+
+function nodeText(node: Node): string {
+  // Attribute, text and CDATA nodes have no children, so their value is on the node itself
+  if (xpath.isAttribute(node) || xpath.isTextNode(node) || xpath.isCDATASection(node)) {
+    return node.nodeValue ?? "";
+  }
+  return String(node.firstChild ?? "");
 }
