@@ -18,3 +18,10 @@ tokio = { workspace = true, features = ["fs", "sync", "macros", "rt"] }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 yaak-models = { workspace = true }
 serde_path_to_error = "0.1.20"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Authorization", "Win32_Storage_FileSystem"] }

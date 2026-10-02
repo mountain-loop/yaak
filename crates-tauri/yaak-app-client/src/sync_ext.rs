@@ -29,7 +29,7 @@ pub(crate) async fn cmd_sync_calculate<R: Runtime>(
     let db = app_handle.db();
     let version = app_handle.package_info().version.to_string();
     let db_candidates = get_db_candidates(&db, &version, workspace_id, sync_dir)?;
-    let fs_candidates = get_fs_candidates(sync_dir)?
+    let fs_candidates = get_fs_candidates(sync_dir, &db_candidates)?
         .into_iter()
         // Only keep items in the same workspace
         .filter(|fs| fs.model.workspace_id() == workspace_id)
@@ -39,7 +39,7 @@ pub(crate) async fn cmd_sync_calculate<R: Runtime>(
 
 pub(crate) async fn cmd_sync_calculate_fs(dir: &Path) -> Result<Vec<SyncOp>> {
     let db_candidates = Vec::new();
-    let fs_candidates = get_fs_candidates(dir)?;
+    let fs_candidates = get_fs_candidates(dir, &db_candidates)?;
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 

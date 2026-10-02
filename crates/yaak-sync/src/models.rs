@@ -102,7 +102,7 @@ impl SyncModel {
         let mut hasher = Sha1::new();
         hasher.update(&content);
         let checksum = hex::encode(hasher.finalize());
-        let content_str = String::from_utf8(content.clone()).unwrap_or_default();
+        let content_str = String::from_utf8(content).unwrap_or_default();
 
         // Check for some strings that will be in a model file for sure. If these strings
         // don't exist, then it's probably not a Yaak file.
@@ -139,6 +139,32 @@ impl SyncModel {
         };
 
         Self::from_bytes(content, file_path)
+    }
+
+    /// Missing fields must not silently default away an existing model's data.
+    /// Explicit empty/null values still allow users to clear fields. Comparing
+    /// values also lets older files omit fields whose defaults have not changed.
+    pub(crate) fn validate_tracked_fields(
+        &self,
+        content: &[u8],
+        previous: &Self,
+        file_path: &Path,
+    ) -> Result<()> {
+        let raw: Value = serde_yaml::from_slice(content)?;
+        let previous = serde_yaml::to_value(previous)?;
+        let current = serde_yaml::to_value(self)?;
+        let invalid = |reason: String| {
+            crate::error::Error::InvalidSyncFile(format!("{}: {reason}", file_path.display()))
+        };
+        if previous.get("model") != current.get("model") {
+            return Err(invalid("tracked model type changed".into()));
+        }
+        if let Some(field) = missing_changed_field(&raw, &previous, &current, "") {
+            return Err(invalid(format!(
+                "missing field {field} would erase existing data; use an explicit value to clear it"
+            )));
+        }
+        Ok(())
     }
 
     pub fn to_file_contents(&self, rel_path: &Path) -> Result<(Vec<u8>, String)> {
@@ -188,6 +214,64 @@ impl SyncModel {
             SyncModel::WebsocketRequest(m) => m.updated_at,
         }
     }
+}
+
+fn missing_changed_field(
+    raw: &Value,
+    previous: &Value,
+    current: &Value,
+    path: &str,
+) -> Option<String> {
+    if let (Some(raw), Some(previous), Some(current)) =
+        (raw.as_mapping(), previous.as_mapping(), current.as_mapping())
+    {
+        // Only keys in the deserialized value can have been injected by defaults.
+        // Free-form authentication/body map keys removed explicitly stay removed.
+        for (key, value) in current {
+            let Some(previous) = previous.get(key) else {
+                continue;
+            };
+            let field = if path.is_empty() {
+                key.as_str().unwrap_or_default().to_owned()
+            } else {
+                format!("{path}.{}", key.as_str().unwrap_or_default())
+            };
+            match raw.get(key) {
+                None if value != previous => return Some(field),
+                Some(raw) => {
+                    if let Some(field) = missing_changed_field(raw, previous, value, &field) {
+                        return Some(field);
+                    }
+                }
+                _ => {}
+            }
+        }
+    } else if let (Some(raw), Some(previous), Some(current)) =
+        (raw.as_sequence(), previous.as_sequence(), current.as_sequence())
+    {
+        let same_length = previous.len() == current.len();
+        for (index, (raw, current)) in raw.iter().zip(current).enumerate() {
+            // Match named/identified records across reordering and deletion.
+            let identity = ["id", "name"].into_iter().find_map(|key| {
+                current.get(key).and_then(Value::as_str).filter(|v| !v.is_empty()).map(|v| (key, v))
+            });
+            let previous = match identity {
+                Some((key, value)) => previous
+                    .iter()
+                    .find(|item| item.get(key).and_then(Value::as_str) == Some(value)),
+                None if same_length => previous.get(index),
+                None => None,
+            };
+            if let Some(previous) = previous {
+                if let Some(field) =
+                    missing_changed_field(raw, previous, current, &format!("{path}[{index}]"))
+                {
+                    return Some(field);
+                }
+            }
+        }
+    }
+    None
 }
 
 impl TryFrom<AnyModel> for SyncModel {
@@ -252,6 +336,7 @@ color: null
 "#;
 
         let m: SyncModel = serde_yaml::from_str(raw)?;
+        m.validate_tracked_fields(raw.as_bytes(), &m, std::path::Path::new("environment.yaml"))?;
         match m {
             SyncModel::Environment(env) => {
                 assert_eq!(env.parent_model, "workspace".to_string());
@@ -274,6 +359,7 @@ variables: []
 color: null
 "#;
         let m: SyncModel = serde_yaml::from_str(raw)?;
+        m.validate_tracked_fields(raw.as_bytes(), &m, std::path::Path::new("environment.yaml"))?;
         match m {
             SyncModel::Environment(env) => {
                 assert_eq!(env.parent_model, "environment".to_string());
