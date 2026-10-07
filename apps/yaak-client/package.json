@@ -77,9 +77,9 @@
     "yaml": "^2.8.3"
   },
   "devDependencies": {
-    "@lezer/generator": "^1.8.0",
+    "@lezer/generator": "^1.8.1",
     "@rolldown/plugin-babel": "^0.2.3",
-    "@tanstack/router-plugin": "^1.168.40",
+    "@tanstack/router-plugin": "^1.168.42",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^22.20.4",
     "@types/papaparse": "^5.3.16",
@@ -93,7 +93,7 @@
     "@yaakapp-internal/theme": "^1.0.0",
     "@yaakapp-internal/ui": "^1.0.0",
     "babel-plugin-react-compiler": "^1.0.0",
-    "rollup": "^4.63.4",
+    "rollup": "^4.63.6",
     "vite": "npm:@voidzero-dev/vite-plus-core@^0.3.3",
     "vite-plugin-static-copy": "^4.1.1",
     "vite-plugin-wasm": "^3.5.0",
