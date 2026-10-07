@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+yaak-assertions = { workspace = true }
 chrono = { version = "0.4.38", features = ["serde"] }
 yaak-database = { workspace = true }
 hex = { workspace = true }

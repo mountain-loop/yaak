@@ -22,6 +22,8 @@ crate-type = ["cdylib", "rlib"]
 # only exists for wasm is a target-scoped dependency for the same reason.
 
 [dependencies]
+yaak-jsonpath = { workspace = true }
+yaak-assertions = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

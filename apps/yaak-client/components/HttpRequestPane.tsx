@@ -42,11 +42,12 @@ import { Editor } from "./core/Editor/LazyEditor";
 import { InlineCode } from "@yaakapp-internal/ui";
 import { PlainInput } from "./core/PlainInput";
 import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
-import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
+import { TabContent, Tabs } from "./core/Tabs/Tabs";
 import { EmptyStateText } from "./EmptyStateText";
 import { FormMultipartEditor } from "./FormMultipartEditor";
 import { FormUrlencodedEditor } from "./FormUrlencodedEditor";
 import { HeadersEditor } from "./HeadersEditor";
+import { HttpAssertionsEditor } from "./HttpAssertionsEditor";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
 import { JsonBodyEditor } from "./JsonBodyEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
@@ -72,6 +73,7 @@ const TAB_HEADERS = "headers";
 const TAB_AUTH = "auth";
 const TAB_SETTINGS = "settings";
 const TAB_DESCRIPTION = "description";
+const TAB_ASSERTIONS = "assertions";
 const TABS_STORAGE_KEY = "http_request_tabs";
 
 // Derived from the identity-stable URL list so this only recomputes when a URL
@@ -171,6 +173,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     () => [
       {
         value: TAB_BODY,
+        menuLabel: "Body",
         rightSlot: numParams > 0 ? <CountBadge count={numParams} /> : null,
         options: {
           value: activeRequest.bodyType,
@@ -264,6 +267,16 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
         label: "Info",
         rightSlot: hasDescription && <CountBadge count={true} />,
       },
+      {
+        value: TAB_ASSERTIONS,
+        label: "Assertions",
+        rightSlot: (
+          <CountBadge
+            count={activeRequest.assertions?.checks.filter((c) => c.enabled).length ?? 0}
+          />
+        ),
+        hiddenByDefault: !activeRequest.assertions?.checks.length,
+      },
     ],
     [
       activeRequest,
@@ -310,11 +323,7 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
           e.preventDefault(); // Prevent input onChange
 
           await patchModel(activeRequest, patch);
-          await setActiveTab({
-            storageKey: TABS_STORAGE_KEY,
-            activeTabKey: activeRequestId,
-            value: TAB_PARAMS,
-          });
+          tabsRef.current?.setActiveTab(TAB_PARAMS);
 
           // Wait for request to update, then refresh the UI
           // TODO: Somehow make this deterministic
@@ -368,8 +377,12 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             tabs={tabs}
             tabListClassName="mt-1 -mb-1.5"
             storageKey={TABS_STORAGE_KEY}
+            visibilityStorageKey={[TABS_STORAGE_KEY, "visibility", activeRequest.workspaceId]}
             activeTabKey={activeRequestId}
           >
+            <TabContent value={TAB_ASSERTIONS}>
+              <HttpAssertionsEditor key={activeRequest.id} request={activeRequest} />
+            </TabContent>
             <TabContent value={TAB_AUTH}>
               <HttpAuthenticationEditor model={activeRequest} />
             </TabContent>

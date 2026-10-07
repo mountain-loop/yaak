@@ -109,6 +109,109 @@ impl ResponseBodyStore for FileResponseBodyStore<'_> {
     }
 }
 
+/// Discover the next JSONPath level without sending body contents to the UI.
+/// Hosts can expose this as RPC/plugin APIs while sharing selection with assertions.
+pub fn json_path_children(
+    store: &dyn ResponseBodyStore,
+    response_id: &str,
+    parent: &str,
+) -> std::result::Result<yaak_jsonpath::JsonPathChildren, String> {
+    yaak_jsonpath::parse(parent)?;
+    let info = store.info(response_id).map_err(|e| e.to_string())?;
+    if !info.complete {
+        return Err("Wait for the response to finish".into());
+    }
+    if info.content_length > yaak_jsonpath::MAX_BODY_BYTES as u64 {
+        return Err("Suggestions are limited to JSON responses up to 10 MiB".into());
+    }
+    let mut bytes = Vec::new();
+    loop {
+        let chunk = store
+            .read_chunk(
+                response_id,
+                bytes.len() as u64,
+                (yaak_jsonpath::MAX_BODY_BYTES + 1 - bytes.len()) as u64,
+            )
+            .map_err(|e| e.to_string())?;
+        if chunk.is_empty() {
+            break;
+        }
+        bytes.extend_from_slice(&chunk);
+        if bytes.len() > yaak_jsonpath::MAX_BODY_BYTES {
+            return Err("Suggestions are limited to JSON responses up to 10 MiB".into());
+        }
+    }
+    let document = yaak_jsonpath::parse_body(&bytes)?;
+    Ok(yaak_jsonpath::children(&document, parent)?)
+}
+
+/// Evaluate the caller's draft against a saved response, without rendering,
+/// sending, or writing either the request or its historical assertion results.
+pub fn preview_assertions(
+    queries: &QueryManager,
+    response_id: &str,
+    definition: &yaak_assertions::HttpAssertions,
+) -> std::result::Result<yaak_assertions::AssertionReport, String> {
+    use yaak_assertions::{Body, Completion, MAX_BODY_BYTES, Response};
+
+    let response = queries.connect().get_http_response(response_id).map_err(|e| e.to_string())?;
+    if !matches!(response.state, HttpResponseState::Closed) {
+        return Err("Wait for the response to finish".into());
+    }
+    let store = FileResponseBodyStore::new(queries);
+    let bytes;
+    let mut body = Body::Unavailable;
+    if definition.needs_body() && response.error.is_none() {
+        // File sizes are only a hint: also cap actual reads, including the
+        // overflow byte. A missing/removed body must not prevent status checks.
+        let read = || -> Result<Option<Vec<u8>>> {
+            if store.info(response_id)?.content_length > MAX_BODY_BYTES as u64 {
+                return Ok(None);
+            }
+            let mut bytes = Vec::new();
+            loop {
+                let chunk = store.read_chunk(
+                    response_id,
+                    bytes.len() as u64,
+                    (MAX_BODY_BYTES + 1 - bytes.len()) as u64,
+                )?;
+                if chunk.is_empty() {
+                    return Ok(Some(bytes));
+                }
+                bytes.extend_from_slice(&chunk);
+                if bytes.len() > MAX_BODY_BYTES {
+                    return Ok(None);
+                }
+            }
+        };
+        match read() {
+            Ok(None) => body = Body::TooLarge,
+            Ok(Some(value)) => {
+                bytes = value;
+                if !bytes.is_empty() || response.content_length.unwrap_or(0) == 0 {
+                    body = Body::Bytes(&bytes);
+                }
+            }
+            Err(_) => {} // The evaluator reports unavailable body checks individually.
+        }
+    }
+    let headers =
+        response.headers.iter().map(|h| (h.name.clone(), h.value.clone())).collect::<Vec<_>>();
+    Ok(yaak_assertions::evaluate(
+        definition,
+        Response {
+            status: response.status,
+            headers: &headers,
+            body,
+            completion: if response.error.is_some() {
+                Completion::Error
+            } else {
+                Completion::Complete
+            },
+        },
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,6 +278,143 @@ mod tests {
 
         let id = response.id.clone();
         (query_manager, temp_dir, id)
+    }
+
+    #[test]
+    fn json_discovery_waits_for_completion_and_only_returns_structure() {
+        let (qm, _tmp, id) = seed(Some(br#"{"user":{"name":"SECRET","active":true}}"#));
+        let store = FileResponseBodyStore::new(&qm);
+        assert!(json_path_children(&store, &id, "$").unwrap_err().contains("finish"));
+        let mut response = qm.connect().get_http_response(&id).unwrap();
+        response.state = HttpResponseState::Closed;
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
+        let children = json_path_children(&store, &id, "$.user").unwrap();
+        assert_eq!(children.children.len(), 2);
+        assert!(!serde_json::to_string(&children).unwrap().contains("SECRET"));
+        assert!(json_path_children(&store, "rs_missing", "$").is_err());
+        let path = response.body_path.unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_len((yaak_jsonpath::MAX_BODY_BYTES + 1) as u64)
+            .unwrap();
+        assert!(json_path_children(&store, &id, "$").unwrap_err().contains("10 MiB"));
+    }
+
+    #[test]
+    fn json_discovery_reads_beyond_the_single_chunk_limit() {
+        let bytes = serde_json::to_vec(&serde_json::json!({"padding": "a".repeat(MAX_CHUNK_BYTES as usize), "user": {"id": 123}})).unwrap();
+        let (qm, _tmp, id) = seed(Some(&bytes));
+        let mut response = qm.connect().get_http_response(&id).unwrap();
+        response.state = HttpResponseState::Closed;
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
+        let result = json_path_children(&FileResponseBodyStore::new(&qm), &id, "$.user").unwrap();
+        assert_eq!(result.children[0].label, "id");
+        assert_eq!(result.children[0].kind, "number");
+        let mut definition = preview_definition();
+        definition.checks.remove(0);
+        definition.checks[0].expected = "123".into();
+        assert_eq!(preview_assertions(&qm, &id, &definition).unwrap().results[0].outcome, "passed");
+    }
+
+    fn preview_definition() -> yaak_assertions::HttpAssertions {
+        use yaak_assertions::HttpAssertion;
+        yaak_assertions::HttpAssertions {
+            checks: vec![
+                HttpAssertion {
+                    id: "status".into(),
+                    target: "status".into(),
+                    expected: "200".into(),
+                    expected_type: "number".into(),
+                    ..Default::default()
+                },
+                HttpAssertion {
+                    id: "body".into(),
+                    selector: "$.user.id".into(),
+                    expected: "7".into(),
+                    expected_type: "number".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn preview_uses_draft_checks_without_changing_saved_models_or_results() {
+        let (qm, _tmp, id) = seed(Some(br#"{"user":{"id":7}}"#));
+        let mut response = qm.connect().get_http_response(&id).unwrap();
+        response.state = HttpResponseState::Closed;
+        response.status = 200;
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
+        let mut original = preview_definition();
+        original.checks[1].expected = "99".into();
+        response.assertion_results = Some(preview_assertions(&qm, &id, &original).unwrap());
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
+        let before_response =
+            serde_json::to_value(qm.connect().get_http_response(&id).unwrap()).unwrap();
+        let before_request =
+            serde_json::to_value(qm.connect().get_http_request("rq_test").unwrap()).unwrap();
+
+        let preview = preview_assertions(&qm, &id, &preview_definition()).unwrap();
+        assert!(preview.results.iter().all(|r| r.outcome == "passed"));
+        assert_eq!(preview.definition, preview_definition());
+        assert_eq!(before_response["assertionResults"]["results"][1]["outcome"], "failed");
+        assert_eq!(
+            serde_json::to_value(qm.connect().get_http_response(&id).unwrap()).unwrap(),
+            before_response
+        );
+        assert_eq!(
+            serde_json::to_value(qm.connect().get_http_request("rq_test").unwrap()).unwrap(),
+            before_request
+        );
+        assert_eq!(std::fs::read(response.body_path.unwrap()).unwrap(), br#"{"user":{"id":7}}"#);
+    }
+
+    #[test]
+    fn preview_rejects_pending_or_missing_responses_and_never_passes_failed_sends() {
+        let (qm, _tmp, id) = seed(Some(br#"{"user":{"id":7}}"#));
+        let definition = preview_definition();
+        assert!(preview_assertions(&qm, &id, &definition).unwrap_err().contains("finish"));
+        assert!(preview_assertions(&qm, "rs_missing", &definition).is_err());
+        let mut response = qm.connect().get_http_response(&id).unwrap();
+        response.state = HttpResponseState::Closed;
+        response.status = 200;
+        response.error = Some("Request canceled".into());
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
+        assert!(
+            preview_assertions(&qm, &id, &definition)
+                .unwrap()
+                .results
+                .iter()
+                .all(|r| r.outcome == "error")
+        );
+    }
+
+    #[test]
+    fn preview_evaluates_status_when_the_saved_body_is_too_large_or_missing() {
+        let (qm, _tmp, id) = seed(Some(b""));
+        let mut response = qm.connect().get_http_response(&id).unwrap();
+        response.state = HttpResponseState::Closed;
+        response.status = 200;
+        qm.with_tx(|tx| tx.update_http_response_if_id(&response, &UpdateSource::Sync)).unwrap();
+        let path = response.body_path.unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len((yaak_assertions::MAX_BODY_BYTES + 1) as u64)
+            .unwrap();
+        let preview = preview_assertions(&qm, &id, &preview_definition()).unwrap();
+        assert_eq!(preview.results[0].outcome, "passed");
+        assert_eq!(preview.results[1].outcome, "error");
+        assert!(preview.results[1].reason.contains("10 MiB"));
+        std::fs::remove_file(path).unwrap();
+        let preview = preview_assertions(&qm, &id, &preview_definition()).unwrap();
+        assert_eq!(preview.results[0].outcome, "passed");
+        assert_eq!(preview.results[1].outcome, "error");
+        assert!(preview.results[1].reason.contains("unavailable"));
     }
 
     #[test]

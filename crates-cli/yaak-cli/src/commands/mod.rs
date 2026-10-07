@@ -10,3 +10,5 @@ pub mod response;
 pub mod send;
 pub mod template_function;
 pub mod workspace;
+
+pub mod test;

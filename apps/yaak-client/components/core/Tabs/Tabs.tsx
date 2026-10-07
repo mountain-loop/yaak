@@ -10,7 +10,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import classNames from "classnames";
-import type { ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import {
   forwardRef,
   memo,
@@ -27,11 +27,19 @@ import { fireAndForget } from "../../../lib/fireAndForget";
 import { ErrorBoundary } from "../../ErrorBoundary";
 import type { ButtonProps } from "../Button";
 import { Button } from "../Button";
+import { Dropdown } from "../Dropdown";
+import { IconButton } from "../IconButton";
 import { Icon } from "@yaakapp-internal/ui";
 import type { RadioDropdownProps } from "../RadioDropdown";
 import { RadioDropdown } from "../RadioDropdown";
+import { useFittingTabs } from "./useFittingTabs";
+import { MIN_TAB_GAP_SCALE, MIN_TAB_PADDING_SCALE } from "./fitTabs";
 
-export type TabItem =
+export type TabItem = {
+  /** Stable label for the visibility menu, including tabs with dropdown labels. */
+  menuLabel?: string;
+  hiddenByDefault?: boolean;
+} & (
   | {
       value: string;
       label: string;
@@ -44,7 +52,8 @@ export type TabItem =
       options: Omit<RadioDropdownProps, "children">;
       leftSlot?: ReactNode;
       rightSlot?: ReactNode;
-    };
+    }
+);
 
 interface TabsStorage {
   order: string[];
@@ -72,6 +81,8 @@ interface Props {
   storageKey?: string | string[];
   /** Key to identify which context this tab belongs to (e.g., request ID). Used for per-context active tab persistence. */
   activeTabKey?: string;
+  /** Enables show/hide controls, scoped independently of tab order and selection. */
+  visibilityStorageKey?: string | string[];
 }
 
 export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
@@ -87,6 +98,7 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
     layout = "vertical",
     storageKey,
     activeTabKey,
+    visibilityStorageKey,
   }: Props,
   forwardedRef: Ref<TabsRef>,
 ) {
@@ -108,10 +120,33 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
 
   const savedOrder = storage.order;
 
+  const visibilityKey = visibilityStorageKey ?? ["tabs", "default_visibility"];
+  const { value: visibility, set: setVisibility } = useKeyValue<Record<string, boolean>>({
+    namespace: "no_sync",
+    key: visibilityKey,
+    fallback: {},
+  });
+  const { value: wrapPreference, set: setWrapPreference } = useKeyValue<boolean>({
+    namespace: "no_sync",
+    key: [...(Array.isArray(visibilityKey) ? visibilityKey : [visibilityKey]), "wrap"],
+    fallback: false,
+  });
+  const isVisible = useCallback(
+    (tab: TabItem) =>
+      !("hidden" in tab && tab.hidden) &&
+      (!visibilityStorageKey || (visibility?.[tab.value] ?? !tab.hiddenByDefault)),
+    [visibility, visibilityStorageKey],
+  );
+
   // Get the active tab value - prefer storage (if activeTabKey), then defaultValue, then first tab
   const storedActiveTab = activeTabKey ? storage?.activeTabs?.[activeTabKey] : undefined;
   const [internalValue, setInternalValue] = useState<string | undefined>(undefined);
-  const value = storedActiveTab ?? internalValue ?? defaultValue ?? originalTabs[0]?.value;
+  const requestedValue = storedActiveTab ?? internalValue ?? defaultValue ?? originalTabs[0]?.value;
+  // Dynamic tabs can disappear when switching responses or other contexts.
+  // Keep the saved preference, but display an available tab until it returns.
+  const value = originalTabs.some((t) => t.value === requestedValue && isVisible(t))
+    ? requestedValue
+    : originalTabs.find(isVisible)?.value;
 
   // Helper to normalize storage (handle migration from old format)
   const normalizeStorage = useCallback(
@@ -123,6 +158,9 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
   // Handle tab change - update internal state, storage if we have a key, and call prop callback
   const onChangeValue = useCallback(
     async (newValue: string) => {
+      if (visibilityStorageKey) {
+        await setVisibility((s) => ({ ...s, [newValue]: true }));
+      }
       setInternalValue(newValue);
       if (storageKey && activeTabKey) {
         await setStorage((s) => {
@@ -135,7 +173,15 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
       }
       onChangeValueProp?.(newValue);
     },
-    [storageKey, activeTabKey, setStorage, onChangeValueProp, normalizeStorage],
+    [
+      storageKey,
+      activeTabKey,
+      setStorage,
+      onChangeValueProp,
+      normalizeStorage,
+      visibilityStorageKey,
+      setVisibility,
+    ],
   );
 
   // Expose imperative methods via ref
@@ -199,6 +245,18 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
   }, [originalTabs, savedOrder, storageKey]);
 
   const tabs = storageKey ? orderedTabs : originalTabs;
+  const responsive = !!visibilityStorageKey && layout === "vertical";
+  const wrapTabs = responsive && !!wrapPreference;
+  const { viewportRef, measurementsRef, fittedTabs } = useFittingTabs(
+    responsive && !wrapTabs,
+    value,
+  );
+  const fitsInStrip = useCallback(
+    (tab: TabItem) =>
+      isVisible(tab) && (fittedTabs == null || fittedTabs.some((t) => t.value === tab.value)),
+    [isVisible, fittedTabs],
+  );
+  const overflowTabs = tabs.filter((tab) => isVisible(tab) && !fitsInStrip(tab));
 
   // Update tabs when value changes
   useEffect(() => {
@@ -290,69 +348,168 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
   const tabButtons = useMemo(() => {
     const items: ReactNode[] = [];
     tabs.forEach((t, i) => {
-      if ("hidden" in t && t.hidden) {
+      if (!fitsInStrip(t)) {
         return;
       }
 
-      const isActive = t.value === value;
-      const showDropMarkerBefore = hoveredIndex === i;
-
-      if (showDropMarkerBefore) {
-        items.push(
-          <div
-            key={`marker-${t.value}`}
-            className={classNames("relative", layout === "vertical" ? "w-0" : "h-0")}
-          >
-            <DropMarker orientation={layout === "vertical" ? "vertical" : "horizontal"} />
-          </div>,
-        );
-      }
-
+      const next = tabs[i + 1];
+      const fitted = fittedTabs?.find((tab) => tab.value === t.value);
       items.push(
         <TabButton
           key={t.value}
           tab={t}
-          isActive={isActive}
+          isActive={t.value === value}
           addBorders={addBorders}
           layout={layout}
           reorderable={reorderable}
           isDragging={isDragging?.value === t.value}
           onChangeValue={onChangeValue}
+          width={fitted?.width}
+          spacingCompression={fitted?.spacingCompression}
+          wrap={wrapTabs}
+          dropBefore={hoveredIndex === i}
+          // A drop after the last fitted tab still inserts into the full saved order.
+          dropAfter={hoveredIndex === i + 1 && (!next || !fitsInStrip(next))}
         />,
       );
     });
     return items;
-  }, [tabs, value, addBorders, layout, reorderable, isDragging, onChangeValue, hoveredIndex]);
+  }, [
+    tabs,
+    value,
+    addBorders,
+    layout,
+    reorderable,
+    isDragging,
+    onChangeValue,
+    hoveredIndex,
+    fitsInStrip,
+    fittedTabs,
+    wrapTabs,
+  ]);
 
-  const tabList = (
+  const tabStrip = (
     <div
+      ref={viewportRef}
       role="tablist"
       aria-label={label}
       className={classNames(
-        tabListClassName,
+        !visibilityStorageKey && tabListClassName,
         addBorders && layout === "horizontal" && "pl-3 -ml-1",
         addBorders && layout === "vertical" && "ml-0 mb-2",
         "flex items-center hide-scrollbars",
         layout === "horizontal" && "h-full overflow-auto p-2",
-        layout === "vertical" && "overflow-x-auto overflow-y-visible ",
+        layout === "vertical" &&
+          (responsive ? "relative overflow-hidden py-1" : "overflow-x-auto overflow-y-visible"),
         // Give space for button focus states within overflow boundary.
-        !addBorders && layout === "vertical" && "py-1 pl-3 -ml-5 pr-1",
+        !responsive && !addBorders && layout === "vertical" && "py-1 pl-3 -ml-5 pr-1",
       )}
     >
       <div
         className={classNames(
           layout === "horizontal" && "flex flex-col w-full pb-3 mb-auto",
           layout === "vertical" && "flex flex-row shrink-0 w-full",
+          wrapTabs && "flex-wrap gap-y-1",
         )}
       >
         {tabButtons}
-        {hoveredIndex === tabs.length && (
-          <div className={classNames("relative", layout === "vertical" ? "w-0" : "h-0")}>
-            <DropMarker orientation={layout === "vertical" ? "vertical" : "horizontal"} />
-          </div>
+      </div>
+      {responsive && !wrapTabs && (
+        <div
+          ref={measurementsRef}
+          aria-hidden
+          inert
+          className="absolute invisible pointer-events-none flex w-max"
+        >
+          {tabs.filter(isVisible).map((tab) => (
+            <div key={tab.value} data-measure-tab={tab.value} className="flex shrink-0">
+              <TabButton
+                tab={tab}
+                isActive={tab.value === value}
+                addBorders={addBorders}
+                layout={layout}
+                reorderable={false}
+                isDragging={false}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Keep the menu outside the scroll viewport so tabs cannot paint behind or past it.
+  const tabList = visibilityStorageKey ? (
+    <div
+      className={classNames(
+        tabListClassName,
+        "flex shrink-0 min-w-0 min-h-0",
+        layout === "vertical" ? "items-start" : "flex-col",
+      )}
+    >
+      <div className="min-w-0 min-h-0 flex-1">{tabStrip}</div>
+      <div
+        className={classNames(
+          "shrink-0 pl-1",
+          layout === "vertical" && "flex items-center h-md my-1",
         )}
+      >
+        <Dropdown
+          items={[
+            ...(overflowTabs.length > 0
+              ? [
+                  { type: "separator" as const, label: "More tabs" },
+                  ...overflowTabs.map((tab) => ({
+                    label: tab.menuLabel ?? ("label" in tab ? tab.label : tab.value),
+                    icon: tab.value === value ? ("check" as const) : ("empty" as const),
+                    rightSlot: tab.rightSlot,
+                    onSelect: () => onChangeValue(tab.value),
+                  })),
+                  { type: "separator" as const },
+                ]
+              : []),
+            {
+              label: "Show tabs",
+              submenu: [
+                { type: "separator", label: "In this workspace" },
+                ...tabs
+                  .filter((t) => !("hidden" in t && t.hidden))
+                  .map((tab) => ({
+                    label: tab.menuLabel ?? ("label" in tab ? tab.label : tab.value),
+                    icon: isVisible(tab)
+                      ? ("check_square_checked" as const)
+                      : ("check_square_unchecked" as const),
+                    disabled: isVisible(tab) && tabs.filter(isVisible).length <= 1,
+                    keepOpenOnSelect: true,
+                    onSelect: async () => {
+                      if (!isVisible(tab)) {
+                        await onChangeValue(tab.value);
+                      } else {
+                        if (tab.value === value) {
+                          const next = tabs.find((t) => t.value !== tab.value && isVisible(t));
+                          if (next) await onChangeValue(next.value);
+                        }
+                        await setVisibility((s) => ({ ...s, [tab.value]: false }));
+                      }
+                    },
+                  })),
+              ],
+            },
+            {
+              label: "Wrap tabs",
+              hidden: layout !== "vertical",
+              icon: wrapTabs ? "check_square_checked" : "check_square_unchecked",
+              keepOpenOnSelect: true,
+              onSelect: () => setWrapPreference((wrap) => !wrap),
+            },
+          ]}
+        >
+          <IconButton icon="ellipsis" title="More tabs and visibility" size="sm" />
+        </Dropdown>
       </div>
     </div>
+  ) : (
+    tabStrip
   );
 
   return (
@@ -361,9 +518,13 @@ export const Tabs = forwardRef<TabsRef, Props>(function Tabs(
       className={classNames(
         className,
         "tabs-container",
-        "h-full grid",
+        "h-full",
+        // Size wrapped rows at the resolved pane width instead of using an intrinsic grid track.
+        responsive
+          ? "flex flex-col min-h-0 [&>.tab-content]:flex-1 [&>.tab-content]:min-h-0"
+          : "grid",
         layout === "horizontal" && "grid-rows-1 grid-cols-[auto_minmax(0,1fr)]",
-        layout === "vertical" && "grid-rows-[auto_minmax(0,1fr)] grid-cols-1",
+        !responsive && layout === "vertical" && "grid-rows-[auto_minmax(0,1fr)] grid-cols-1",
       )}
     >
       {reorderable ? (
@@ -409,6 +570,11 @@ interface TabButtonProps {
   isDragging: boolean;
   onChangeValue?: (value: string) => void;
   overlay?: boolean;
+  width?: number;
+  spacingCompression?: number;
+  wrap?: boolean;
+  dropBefore?: boolean;
+  dropAfter?: boolean;
 }
 
 function TabButton({
@@ -420,35 +586,26 @@ function TabButton({
   isDragging,
   onChangeValue,
   overlay = false,
+  width,
+  spacingCompression = 0,
+  wrap = false,
+  dropBefore = false,
+  dropAfter = false,
 }: TabButtonProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setDraggableRef,
-  } = useDraggable({
-    id: tab.value,
-    disabled: !reorderable,
-    // The button inside handles focus
-    attributes: { tabIndex: -1 },
-  });
-  const { setNodeRef: setDroppableRef } = useDroppable({
-    id: tab.value,
-    disabled: !reorderable,
-  });
-
-  const handleSetWrapperRef = useCallback(
-    (n: HTMLDivElement | null) => {
-      if (reorderable) {
-        setDraggableRef(n);
-        setDroppableRef(n);
-      }
-    },
-    [reorderable, setDraggableRef, setDroppableRef],
-  );
-
+  const constrained = width !== undefined;
   const btnProps: Partial<ButtonProps> = {
     color: "custom",
     justify: layout === "horizontal" ? "start" : "center",
+    innerClassName: classNames(
+      "tab-button-label",
+      constrained && "w-auto! shrink-0 overflow-visible! text-clip!",
+      wrap && "whitespace-normal! overflow-visible! text-clip! [overflow-wrap:anywhere]",
+    ),
+    style: constrained
+      ? {
+          paddingInline: `calc(var(--spacing) * ${2 * (1 - spacingCompression * (1 - MIN_TAB_PADDING_SCALE))})`,
+        }
+      : undefined,
     onClick: isActive
       ? undefined
       : (e: React.MouseEvent) => {
@@ -457,7 +614,8 @@ function TabButton({
         },
     className: classNames(
       "flex items-center rounded-sm whitespace-nowrap",
-      "px-2! ml-px",
+      "ml-px",
+      !constrained && "px-2!",
       "outline-hidden",
       "ring-none",
       "focus-visible-or-class:outline-2",
@@ -471,6 +629,9 @@ function TabButton({
       layout === "horizontal" && "min-w-40",
       isDragging && "opacity-50",
       overlay && "opacity-80",
+      constrained && "w-[calc(100%_-_1px)]",
+      wrap && "max-w-[calc(100%_-_1px)]! h-auto! min-h-md",
+      (constrained || wrap) && "[&>div:not(.tab-button-label)]:shrink-0",
     ),
   };
 
@@ -487,6 +648,9 @@ function TabButton({
           onChange={tab.options.onChange}
         >
           <Button
+            title={
+              (constrained || wrap) && typeof option?.label === "string" ? option.label : undefined
+            }
             leftSlot={tab.leftSlot}
             rightSlot={
               <div className="flex items-center">
@@ -511,22 +675,91 @@ function TabButton({
       );
     }
     return (
-      <Button leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...btnProps}>
+      <Button
+        title={(constrained || wrap) && "label" in tab ? tab.label : undefined}
+        leftSlot={tab.leftSlot}
+        rightSlot={tab.rightSlot}
+        {...btnProps}
+      >
         {"label" in tab && tab.label ? tab.label : tab.value}
       </Button>
     );
   })();
 
-  // Apply drag handlers to wrapper, not button
-  const wrapperProps = reorderable && !overlay ? { ...attributes, ...listeners } : {};
+  const wrapperClassName = classNames(
+    "relative shrink-0",
+    layout === "vertical" && (constrained ? "min-w-0" : "mr-2"),
+    wrap && "min-w-0 max-w-[calc(100%_-_0.5rem)]",
+  );
+  const wrapperStyle: CSSProperties = {
+    width,
+    paddingRight: constrained
+      ? `calc(var(--spacing) * ${2 * (1 - spacingCompression * (1 - MIN_TAB_GAP_SCALE))})`
+      : undefined,
+  };
+  // Anchor markers to their tabs so they follow the tab when it wraps onto another row.
+  const content = (
+    <>
+      {dropBefore && (
+        <DropMarker
+          key="before"
+          orientation={layout === "vertical" ? "vertical" : "horizontal"}
+          className={layout === "vertical" ? "left-0" : "top-0"}
+        />
+      )}
+      {buttonContent}
+      {dropAfter && (
+        <DropMarker
+          key="after"
+          orientation={layout === "vertical" ? "vertical" : "horizontal"}
+          className={layout === "vertical" ? "right-0" : "bottom-0"}
+        />
+      )}
+    </>
+  );
+  return reorderable && !overlay ? (
+    <DraggableTab value={tab.value} className={wrapperClassName} style={wrapperStyle}>
+      {content}
+    </DraggableTab>
+  ) : (
+    <div className={wrapperClassName} style={wrapperStyle}>
+      {content}
+    </div>
+  );
+}
+
+// Measurement copies and drag overlays must not register duplicate draggable IDs.
+function DraggableTab({
+  value,
+  className,
+  style,
+  children,
+}: {
+  value: string;
+  className: string;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+  } = useDraggable({
+    id: value,
+    attributes: { tabIndex: -1 },
+  });
+  const { setNodeRef: setDroppableRef } = useDroppable({ id: value });
+  const setRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      setDraggableRef(node);
+      setDroppableRef(node);
+    },
+    [setDraggableRef, setDroppableRef],
+  );
 
   return (
-    <div
-      ref={handleSetWrapperRef}
-      className={classNames("relative", layout === "vertical" && "mr-2")}
-      {...wrapperProps}
-    >
-      {buttonContent}
+    <div ref={setRef} className={className} style={style} {...attributes} {...listeners}>
+      {children}
     </div>
   );
 }
