@@ -149,4 +149,19 @@ describe("readableStreamValues", () => {
     expect(onCancel).not.toHaveBeenCalled();
     expect(stream.locked).toBe(false);
   });
+
+  test("releases the lock and rethrows when cancelling rejects", async () => {
+    const stream = new ReadableStream<number>({
+      pull(controller) {
+        controller.enqueue(1);
+      },
+      cancel() {
+        throw new Error("cancel failed");
+      },
+    });
+    await expect(async () => {
+      for await (const _ of values.call(stream)) break;
+    }).rejects.toThrow("cancel failed");
+    expect(stream.locked).toBe(false);
+  });
 });

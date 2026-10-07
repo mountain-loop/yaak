@@ -127,9 +127,13 @@ export async function* readableStreamValues<R>(
     finished = true;
     throw err;
   } finally {
-    // Leaving the loop early (break, return, throw in the body) cancels the stream
-    if (!finished && !preventCancel) await reader.cancel();
-    reader.releaseLock();
+    // Leaving the loop early (break, return, throw in the body) cancels the stream. The
+    // lock is released even if cancelling rejects, which then propagates as in the spec.
+    try {
+      if (!finished && !preventCancel) await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
   }
 }
 
