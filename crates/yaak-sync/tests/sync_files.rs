@@ -2,13 +2,14 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::models::{HttpRequest, SyncState, Workspace};
+use yaak_models::models::{HttpRequest, HttpResponse, SyncState, Workspace};
 use yaak_models::query_manager::QueryManager;
+use yaak_models::util::UpdateSource;
 use yaak_sync::error::{Error, Result};
 use yaak_sync::models::SyncModel;
 use yaak_sync::sync::{
-    SyncOp, apply_db_sync_ops, apply_fs_sync_ops, apply_sync_state_ops, compute_sync_ops,
-    get_db_candidates, get_fs_candidates,
+    SyncOp, apply_db_sync_ops, apply_fs_sync_ops, apply_sync_ops, apply_sync_state_ops,
+    compute_sync_ops, get_db_candidates, get_fs_candidates,
 };
 
 struct Fixture {
@@ -22,8 +23,12 @@ struct Fixture {
 
 impl Fixture {
     fn new(request_filename: &str) -> Self {
-        let (db, blobs, _events) = yaak_models::init_in_memory().unwrap();
         let dir = tempfile::tempdir().unwrap();
+        let (db, blobs, _events) = yaak_models::init_standalone(
+            dir.path().join(".db/models.sqlite"),
+            dir.path().join(".db/blobs.sqlite"),
+        )
+        .unwrap();
         let workspace = Workspace { id: "wk_sync_test".into(), ..Default::default() };
         let request = HttpRequest {
             id: "rq_sync_test".into(),
@@ -73,6 +78,11 @@ impl Fixture {
                 apply_sync_state_ops(tx, workspace, dir, states)
             })
             .unwrap();
+    }
+
+    fn apply_reviewed(&self, ops: Vec<SyncOp>) -> bool {
+        apply_sync_ops(&self.db, &self.blobs, "test", &self.workspace_id, self.dir.path(), ops)
+            .unwrap()
     }
 
     fn states(&self) -> Vec<SyncState> {
@@ -214,4 +224,333 @@ fn unrelated_files_are_still_ignored() {
     }
     fs::create_dir(fixture.dir.path().join("other-files")).unwrap();
     assert!(fixture.calculate().unwrap().is_empty());
+}
+
+#[test]
+fn restored_file_invalidates_reviewed_deletion_and_preserves_history() {
+    let fixture = Fixture::new("request.yaml");
+    let response = fixture
+        .db
+        .with_tx::<_, Error>(|tx| {
+            Ok(tx.upsert_http_response(
+                &HttpResponse {
+                    id: "rs_sync_test".into(),
+                    request_id: fixture.request.id.clone(),
+                    workspace_id: fixture.workspace_id.clone(),
+                    status: 200,
+                    ..Default::default()
+                },
+                &UpdateSource::Background,
+                &fixture.blobs,
+            )?)
+        })
+        .unwrap();
+    let saved = fs::read(&fixture.request_path).unwrap();
+    fs::remove_file(&fixture.request_path).unwrap();
+    let ops = fixture.calculate().unwrap();
+    assert!(matches!(ops.as_slice(), [SyncOp::DbDelete { .. }]));
+    fs::write(&fixture.request_path, &saved).unwrap();
+    let before = fixture.states();
+
+    assert!(!fixture.apply_reviewed(ops));
+    assert_eq!(fixture.db_request().name, "Keep this request");
+    assert_eq!(
+        serde_json::to_value(fixture.db.connect().get_http_response(&response.id).unwrap())
+            .unwrap(),
+        serde_json::to_value(response).unwrap()
+    );
+    assert_eq!(fixture.states(), before);
+    assert_eq!(fs::read(&fixture.request_path).unwrap(), saved);
+    assert!(fixture.calculate().unwrap().is_empty());
+}
+
+#[test]
+fn newer_database_edit_invalidates_reviewed_update_even_when_file_timestamp_wins() {
+    for file_is_newer in [false, true] {
+        let fixture = Fixture::new("request.yaml");
+        fixture.edit(|value| {
+            value["name"] = "Previously reviewed file version".into();
+            if file_is_newer {
+                value["updatedAt"] = serde_json::to_value(
+                    (chrono::Utc::now() + chrono::Duration::days(1)).naive_utc(),
+                )
+                .unwrap();
+            }
+        });
+        let ops = fixture.calculate().unwrap();
+        assert!(matches!(ops.as_slice(), [SyncOp::DbUpdate { .. }]));
+        let before = fixture.states();
+        let mut request = fixture.db_request();
+        request.name = "New edit from another window".into();
+        fixture
+            .db
+            .with_tx::<_, Error>(|tx| {
+                tx.upsert_http_request(&request, &UpdateSource::from_window_label("test"))?;
+                Ok(())
+            })
+            .unwrap();
+        if file_is_newer {
+            assert!(matches!(fixture.calculate().unwrap().as_slice(), [SyncOp::DbUpdate { .. }]));
+        }
+
+        assert!(!fixture.apply_reviewed(ops));
+        assert_eq!(fixture.db_request().name, request.name);
+        assert_eq!(fixture.states(), before);
+    }
+}
+
+#[test]
+fn changed_file_invalidates_reviewed_update_until_reviewed_again() {
+    let fixture = Fixture::new("request.yaml");
+    fixture.edit(|value| value["name"] = "Reviewed version".into());
+    let ops = fixture.calculate().unwrap();
+    fixture.edit(|value| value["name"] = "New file version".into());
+    let before = fixture.states();
+
+    assert!(!fixture.apply_reviewed(ops));
+    assert_eq!(fixture.db_request().name, "Keep this request");
+    assert_eq!(fixture.states(), before);
+    assert!(fixture.apply_reviewed(fixture.calculate().unwrap()));
+    assert_eq!(fixture.db_request().name, "New file version");
+    assert!(fixture.calculate().unwrap().is_empty());
+}
+
+#[test]
+fn unchanged_reviewed_plan_applies_in_any_order_and_cannot_be_replayed() {
+    let fixture = Fixture::new("request.yaml");
+    fs::remove_file(&fixture.request_path).unwrap();
+    let path = fixture.dir.path().join("workspace.yaml");
+    let mut workspace = fixture.db.connect().get_workspace(&fixture.workspace_id).unwrap();
+    workspace.name = "Reviewed workspace".into();
+    let (contents, _) = SyncModel::Workspace(workspace).to_file_contents(&path).unwrap();
+    fs::write(path, contents).unwrap();
+    let mut ops = fixture.calculate().unwrap();
+    assert_eq!(ops.len(), 2);
+    ops.reverse();
+
+    assert!(fixture.apply_reviewed(ops.clone()));
+    assert!(fixture.db.connect().get_http_request(&fixture.request.id).is_err());
+    assert_eq!(
+        fixture.db.connect().get_workspace(&fixture.workspace_id).unwrap().name,
+        "Reviewed workspace"
+    );
+    assert!(fixture.calculate().unwrap().is_empty());
+    let before = fixture.states();
+    assert!(!fixture.apply_reviewed(ops));
+    assert_eq!(fixture.states(), before);
+}
+
+#[test]
+fn changes_while_waiting_for_database_writer_invalidate_reviewed_plan() {
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    for restore_file in [false, true] {
+        let fixture = Fixture::new("request.yaml");
+        let saved = fs::read(&fixture.request_path).unwrap();
+        if restore_file {
+            fs::remove_file(&fixture.request_path).unwrap();
+        } else {
+            fixture.edit(|value| value["name"] = "Incoming file version".into());
+        }
+        fixture
+            .db
+            .with_tx::<_, Error>(|tx| {
+                let mut workspace = tx.get_workspace(&fixture.workspace_id)?;
+                workspace.name = "Outbound workspace version".into();
+                tx.upsert_workspace(&workspace, &UpdateSource::from_window_label("test"))?;
+                Ok(())
+            })
+            .unwrap();
+        let ops = fixture.calculate().unwrap();
+        assert_eq!(ops.len(), 2);
+        let before = fixture.states();
+        let workspace_path = fixture.dir.path().join("workspace.yaml");
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let fixture = &fixture;
+            let writer = scope.spawn(move || {
+                fixture
+                    .db
+                    .with_tx::<_, Error>(|tx| {
+                        ready_tx.send(()).unwrap();
+                        resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                        if !restore_file {
+                            let mut request = tx.get_http_request(&fixture.request.id)?;
+                            request.name = "Concurrent database edit".into();
+                            tx.upsert_http_request(
+                                &request,
+                                &UpdateSource::from_window_label("test"),
+                            )?;
+                        }
+                        Ok(())
+                    })
+                    .unwrap();
+            });
+            ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            let applying = scope.spawn(move || fixture.apply_reviewed(ops));
+            let deadline = Instant::now() + Duration::from_secs(5);
+            let mut published = false;
+            while Instant::now() < deadline {
+                if fs::read_to_string(&workspace_path)
+                    .unwrap()
+                    .contains("Outbound workspace version")
+                {
+                    published = true;
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if restore_file {
+                // Restore at a different path to catch ID-based joins as well as the tracked path.
+                fs::write(fixture.dir.path().join("restored.yaml"), &saved).unwrap();
+            }
+            resume_tx.send(()).unwrap();
+            writer.join().unwrap();
+            assert!(!applying.join().unwrap());
+            assert!(published, "filesystem writes should proceed while the DB writer is held");
+        });
+        assert_eq!(
+            fixture.db_request().name,
+            if restore_file { "Keep this request" } else { "Concurrent database edit" }
+        );
+        assert_eq!(fixture.states(), before);
+    }
+}
+
+#[test]
+fn current_outbound_only_plan_still_syncs_automatically() {
+    let fixture = Fixture::new("request.yaml");
+    fixture
+        .db
+        .with_tx::<_, Error>(|tx| {
+            let mut request = tx.get_http_request(&fixture.request.id)?;
+            request.name = "New database version".into();
+            tx.upsert_http_request(&request, &UpdateSource::from_window_label("test"))?;
+            Ok(())
+        })
+        .unwrap();
+    let ops = fixture.calculate().unwrap();
+    assert!(matches!(ops.as_slice(), [SyncOp::FsUpdate { .. }]));
+    assert!(fixture.apply_reviewed(ops));
+    assert!(fs::read_to_string(&fixture.request_path).unwrap().contains("New database version"));
+    assert!(fixture.calculate().unwrap().is_empty());
+}
+
+#[test]
+fn reviewed_import_and_file_deletion_apply_together() {
+    let fixture = Fixture::new("request.yaml");
+    let mut added = fixture.request.clone();
+    added.id = "rq_sync_added".into();
+    let path = fixture.dir.path().join("added.yaml");
+    let (contents, _) = SyncModel::HttpRequest(added.clone()).to_file_contents(&path).unwrap();
+    fs::write(path, contents).unwrap();
+    fixture
+        .db
+        .with_tx::<_, Error>(|tx| {
+            let request = tx.get_http_request(&fixture.request.id)?;
+            tx.delete_http_request(&request, &UpdateSource::Sync)?;
+            Ok(())
+        })
+        .unwrap();
+    let ops = fixture.calculate().unwrap();
+    assert!(ops.iter().any(|op| matches!(op, SyncOp::DbCreate { .. })));
+    assert!(ops.iter().any(|op| matches!(op, SyncOp::FsDelete { fs: Some(_), .. })));
+
+    assert!(fixture.apply_reviewed(ops));
+    assert!(!fixture.request_path.exists());
+    assert_eq!(fixture.db.connect().get_http_request(&added.id).unwrap().id, added.id);
+    assert!(fixture.calculate().unwrap().is_empty());
+}
+
+#[test]
+fn reviewed_inbound_and_outbound_updates_apply_together() {
+    let fixture = Fixture::new("request.yaml");
+    fixture.edit(|value| value["name"] = "Incoming request".into());
+    fixture
+        .db
+        .with_tx::<_, Error>(|tx| {
+            let mut workspace = tx.get_workspace(&fixture.workspace_id)?;
+            workspace.name = "Outgoing workspace".into();
+            tx.upsert_workspace(&workspace, &UpdateSource::from_window_label("test"))?;
+            Ok(())
+        })
+        .unwrap();
+    let ops = fixture.calculate().unwrap();
+    assert!(ops.iter().any(|op| matches!(op, SyncOp::DbUpdate { .. })));
+    assert!(ops.iter().any(|op| matches!(op, SyncOp::FsUpdate { .. })));
+
+    assert!(fixture.apply_reviewed(ops));
+    assert_eq!(fixture.db_request().name, "Incoming request");
+    assert!(
+        fs::read_to_string(fixture.dir.path().join("workspace.yaml"))
+            .unwrap()
+            .contains("Outgoing workspace")
+    );
+    assert!(fixture.calculate().unwrap().is_empty());
+}
+
+#[test]
+fn later_file_edits_invalidate_reviewed_outbound_operations() {
+    for creating in [false, true] {
+        for file_present in [true, false] {
+            let fixture = Fixture::new("yaak.rq_sync_test.yaml");
+            let state = fixture
+                .states()
+                .into_iter()
+                .find(|state| state.model_id == fixture.request.id)
+                .unwrap();
+            fixture
+                .db
+                .with_tx::<_, Error>(|tx| {
+                    if creating {
+                        tx.delete_sync_state(&state)?;
+                    }
+                    let mut request = tx.get_http_request(&fixture.request.id)?;
+                    request.name = "Reviewed outgoing request".into();
+                    tx.upsert_http_request(&request, &UpdateSource::from_window_label("test"))?;
+                    Ok(())
+                })
+                .unwrap();
+            let workspace_path = fixture.dir.path().join("workspace.yaml");
+            let workspace = fixture.db.connect().get_workspace(&fixture.workspace_id).unwrap();
+            let mut incoming = workspace.clone();
+            incoming.name = "Reviewed incoming workspace".into();
+            let (content, _) =
+                SyncModel::Workspace(incoming).to_file_contents(&workspace_path).unwrap();
+            fs::write(&workspace_path, &content).unwrap();
+            if !file_present {
+                fs::remove_file(&fixture.request_path).unwrap();
+            }
+            let ops = fixture.calculate().unwrap();
+            assert!(ops.iter().any(|op| matches!(op, SyncOp::DbUpdate { .. })));
+            assert!(ops.iter().any(|op| if creating {
+                matches!(op, SyncOp::FsCreate { .. })
+            } else {
+                matches!(op, SyncOp::FsUpdate { .. })
+            }));
+            let request = fixture.db_request();
+            let states = fixture.states();
+
+            // Keep updatedAt older than the DB version, so conflict resolution still writes to FS.
+            fixture.edit(|value| value["name"] = "Later external file edit".into());
+            let edited = fs::read(&fixture.request_path).unwrap();
+
+            assert!(
+                !fixture.apply_reviewed(ops),
+                "creating={creating}, file_present={file_present}"
+            );
+            assert_eq!(fs::read(&fixture.request_path).unwrap(), edited);
+            assert_eq!(fs::read(&workspace_path).unwrap(), content);
+            assert_eq!(fixture.db_request(), request);
+            assert_eq!(
+                fixture.db.connect().get_workspace(&fixture.workspace_id).unwrap(),
+                workspace
+            );
+            assert_eq!(fixture.states(), states);
+            assert!(fixture.apply_reviewed(fixture.calculate().unwrap()));
+            assert!(fixture.calculate().unwrap().is_empty());
+        }
+    }
 }

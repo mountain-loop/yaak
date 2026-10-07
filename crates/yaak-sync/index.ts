@@ -16,11 +16,17 @@ export async function calculateSyncFsOnly(dir: string) {
   return platform.rpc<SyncOp[]>("cmd_sync_calculate_fs", { dir });
 }
 
-export async function applySync(workspaceId: string, syncDir: string, syncOps: SyncOp[]) {
-  return platform.rpc<void>("cmd_sync_apply", {
+export async function applySync(
+  workspaceId: string,
+  syncDir: string,
+  syncOps: SyncOp[],
+  options?: { fsOnly: boolean },
+) {
+  return platform.rpc<boolean>("cmd_sync_apply", {
     workspaceId,
     syncDir,
     syncOps: syncOps,
+    fsOnly: options?.fsOnly ?? false,
   });
 }
 

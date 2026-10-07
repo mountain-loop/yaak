@@ -17,18 +17,24 @@ use yaak_models::models::{
     Environment, Folder, GrpcRequest, HttpRequest, SyncState, WebsocketRequest, Workspace,
     WorkspaceMeta,
 };
+use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+/// Outbound operations record the file candidate checksum, or `None` if it was absent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export, export_to = "gen_sync.ts")]
 pub enum SyncOp {
     FsCreate {
         model: SyncModel,
+        #[serde(rename = "fsChecksum")]
+        fs_checksum: Option<String>,
     },
     FsUpdate {
         model: SyncModel,
         state: SyncState,
+        #[serde(rename = "fsChecksum")]
+        fs_checksum: Option<String>,
     },
     FsDelete {
         state: SyncState,
@@ -38,6 +44,8 @@ pub enum SyncOp {
         fs: FsCandidate,
     },
     DbUpdate {
+        // The DB version the user reviewed, so a subsequent edit invalidates the plan.
+        model: SyncModel,
         state: SyncState,
         fs: FsCandidate,
     },
@@ -56,7 +64,7 @@ impl SyncOp {
             SyncOp::DbCreate { fs } => fs.model.workspace_id(),
             SyncOp::DbDelete { model, .. } => model.workspace_id(),
             SyncOp::DbUpdate { state, .. } => state.workspace_id.clone(),
-            SyncOp::FsCreate { model } => model.workspace_id(),
+            SyncOp::FsCreate { model, .. } => model.workspace_id(),
             SyncOp::FsDelete { state, .. } => state.workspace_id.clone(),
             SyncOp::FsUpdate { state, .. } => state.workspace_id.clone(),
             SyncOp::IgnorePrivate { model } => model.workspace_id(),
@@ -68,7 +76,7 @@ impl Display for SyncOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             match self {
-                SyncOp::FsCreate { model } => format!("fs_create({})", model.id()),
+                SyncOp::FsCreate { model, .. } => format!("fs_create({})", model.id()),
                 SyncOp::FsUpdate { model, .. } => format!("fs_update({})", model.id()),
                 SyncOp::FsDelete { state, .. } => format!("fs_delete({})", state.model_id),
                 SyncOp::DbCreate { fs } => format!("db_create({})", fs.model.id()),
@@ -101,7 +109,7 @@ impl DbCandidate {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
 #[ts(export, export_to = "gen_sync.ts")]
 pub struct FsCandidate {
@@ -285,13 +293,15 @@ pub fn compute_sync_ops(
                 }
 
                 // DB modified <-> FS missing
-                (Some(DbCandidate::Modified(model, sync_state)), None) => {
-                    SyncOp::FsUpdate { model: model.to_owned(), state: sync_state.to_owned() }
-                }
+                (Some(DbCandidate::Modified(model, sync_state)), None) => SyncOp::FsUpdate {
+                    model: model.to_owned(),
+                    state: sync_state.to_owned(),
+                    fs_checksum: None,
+                },
 
                 // DB added <-> FS missing
                 (Some(DbCandidate::Added(model)), None) => {
-                    SyncOp::FsCreate { model: model.to_owned() }
+                    SyncOp::FsCreate { model: model.to_owned(), fs_checksum: None }
                 }
 
                 // DB deleted <-> FS missing
@@ -301,11 +311,12 @@ pub fn compute_sync_ops(
                 }
 
                 // DB unchanged <-> FS exists
-                (Some(DbCandidate::Unmodified(_, sync_state)), Some(fs_candidate)) => {
+                (Some(DbCandidate::Unmodified(model, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
                         return None;
                     } else {
                         SyncOp::DbUpdate {
+                            model: model.to_owned(),
                             state: sync_state.to_owned(),
                             fs: fs_candidate.to_owned(),
                         }
@@ -315,23 +326,35 @@ pub fn compute_sync_ops(
                 // DB modified <-> FS exists
                 (Some(DbCandidate::Modified(model, sync_state)), Some(fs_candidate)) => {
                     if sync_state.checksum == fs_candidate.checksum {
-                        SyncOp::FsUpdate { model: model.to_owned(), state: sync_state.to_owned() }
+                        SyncOp::FsUpdate {
+                            model: model.to_owned(),
+                            state: sync_state.to_owned(),
+                            fs_checksum: Some(fs_candidate.checksum.clone()),
+                        }
                     } else if model.updated_at() < fs_candidate.model.updated_at() {
                         // CONFLICT! Write to DB if the fs model is newer
                         SyncOp::DbUpdate {
+                            model: model.to_owned(),
                             state: sync_state.to_owned(),
                             fs: fs_candidate.to_owned(),
                         }
                     } else {
                         // CONFLICT! Write to FS if the db model is newer
-                        SyncOp::FsUpdate { model: model.to_owned(), state: sync_state.to_owned() }
+                        SyncOp::FsUpdate {
+                            model: model.to_owned(),
+                            state: sync_state.to_owned(),
+                            fs_checksum: Some(fs_candidate.checksum.clone()),
+                        }
                     }
                 }
 
                 // DB added <-> FS anything
-                (Some(DbCandidate::Added(model)), Some(_)) => {
+                (Some(DbCandidate::Added(model)), Some(fs_candidate)) => {
                     // This would be super rare (impossible?), so let's follow the user's intention
-                    SyncOp::FsCreate { model: model.to_owned() }
+                    SyncOp::FsCreate {
+                        model: model.to_owned(),
+                        fs_checksum: Some(fs_candidate.checksum.clone()),
+                    }
                 }
 
                 // DB deleted <-> FS exists
@@ -384,6 +407,83 @@ fn workspace_models(db: &ClientDb, version: &str, workspace_id: &str) -> Result<
     Ok(sync_models)
 }
 
+/// Apply a reviewed workspace plan only while its inputs still match.
+/// Returns `false` when the caller needs to calculate and review a new plan.
+pub fn apply_sync_ops(
+    db: &QueryManager,
+    blobs: &BlobManager,
+    version: &str,
+    workspace_id: &str,
+    sync_dir: &Path,
+    mut sync_ops: Vec<SyncOp>,
+) -> Result<bool> {
+    if !sync_dir.exists() {
+        return Err(Error::InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()));
+    }
+    let db_candidates = get_db_candidates(&db.connect(), version, workspace_id, sync_dir)?;
+    let fs_candidates: Vec<_> = get_fs_candidates(sync_dir, &db_candidates)?
+        .into_iter()
+        .filter(|fs| fs.model.workspace_id() == workspace_id)
+        .collect();
+    if !sync_ops_match(&sync_ops, compute_sync_ops(db_candidates, fs_candidates.clone()), false) {
+        return Ok(false);
+    }
+
+    let pending = apply_fs_sync_ops(workspace_id, sync_dir, sync_ops.clone())?;
+    let has_db_ops = sync_ops.iter().any(is_db_op);
+    // File deletions are complete; their remaining work only removes sync state.
+    sync_ops.retain(|op| !matches!(op, SyncOp::FsDelete { .. }));
+    db.with_tx(|tx| {
+        // Another writer may have changed the DB while files were being written or
+        // while we waited for the writer. Inbound changes also need a fresh file scan.
+        let db_candidates = get_db_candidates(tx, version, workspace_id, sync_dir)?;
+        let fs_candidates = if has_db_ops {
+            if !sync_dir.exists() {
+                return Err(Error::InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()));
+            }
+            get_fs_candidates(sync_dir, &db_candidates)?
+                .into_iter()
+                .filter(|fs| fs.model.workspace_id() == workspace_id)
+                .collect()
+        } else {
+            fs_candidates
+        };
+        let current = compute_sync_ops(db_candidates, fs_candidates)
+            .into_iter()
+            .filter(|op| !matches!(op, SyncOp::FsDelete { .. }))
+            .collect();
+        if !sync_ops_match(&sync_ops, current, true) {
+            return Ok(false);
+        }
+        let states = apply_db_sync_ops(tx, blobs, workspace_id, sync_dir, pending)?;
+        apply_sync_state_ops(tx, workspace_id, sync_dir, states)?;
+        Ok(true)
+    })
+}
+
+fn sync_ops_match(expected: &[SyncOp], current: Vec<SyncOp>, files_written: bool) -> bool {
+    // The join emits one operation per ID, in arbitrary order.
+    expected.len() == current.len()
+        && current.iter().all(|op| {
+            expected.iter().any(|reviewed| match (op, reviewed) {
+                // Once outbound files are written, only their DB/state inputs must still match.
+                (
+                    SyncOp::FsCreate { model, .. },
+                    SyncOp::FsCreate { model: reviewed_model, .. },
+                ) if files_written => model == reviewed_model,
+                (
+                    SyncOp::FsUpdate { model, state, .. },
+                    SyncOp::FsUpdate { model: reviewed_model, state: reviewed_state, .. },
+                ) if files_written => model == reviewed_model && state == reviewed_state,
+                _ => op == reviewed,
+            })
+        })
+}
+
+fn is_db_op(op: &SyncOp) -> bool {
+    matches!(op, SyncOp::DbCreate { .. } | SyncOp::DbUpdate { .. } | SyncOp::DbDelete { .. })
+}
+
 /// The database half of a sync apply, ready to run once the files are on disk.
 pub struct PendingDbSyncOps {
     sync_state_ops: Vec<SyncStateOp>,
@@ -399,7 +499,7 @@ pub struct PendingDbSyncOps {
 /// Apply the filesystem half of the sync operations: create, rewrite and
 /// delete files. Returns the database half, for [`apply_db_sync_ops`].
 ///
-/// Split this way so the file work, which can be slow, happens before the
+/// Split this way so filesystem writes, which can be slow, happen before the
 /// write transaction is opened rather than inside it.
 pub fn apply_fs_sync_ops(
     workspace_id: &str,
@@ -432,14 +532,14 @@ pub fn apply_fs_sync_ops(
         }
 
         let state_op = match op {
-            SyncOp::FsCreate { model } => {
+            SyncOp::FsCreate { model, .. } => {
                 let rel_path = derive_model_filename(&model);
                 let abs_path = sync_dir.join(rel_path.clone());
                 let (content, checksum) = model.to_file_contents(&rel_path)?;
                 write_sync_file(&abs_path, |file| file.write_all(&content))?;
                 SyncStateOp::Create { model_id: model.id(), checksum, rel_path }
             }
-            SyncOp::FsUpdate { model, state } => {
+            SyncOp::FsUpdate { model, state, .. } => {
                 // Always write the existing path
                 let rel_path = Path::new(&state.rel_path);
                 let abs_path = Path::new(&state.sync_dir).join(&rel_path);
@@ -470,7 +570,7 @@ pub fn apply_fs_sync_ops(
                     rel_path: fs.rel_path.to_owned(),
                 }
             }
-            SyncOp::DbUpdate { state, fs } => {
+            SyncOp::DbUpdate { state, fs, .. } => {
                 pending.push_upsert(fs.model);
                 SyncStateOp::Update {
                     state: state.to_owned(),
