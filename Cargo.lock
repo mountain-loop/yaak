@@ -11660,7 +11660,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hex",
- "libc",
  "log 0.4.34",
  "notify",
  "serde",
@@ -11672,7 +11671,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "ts-rs",
- "windows-sys 0.61.2",
  "yaak-models",
 ]
 

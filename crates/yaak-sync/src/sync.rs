@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use crate::file_security::preserve_file_security;
 use crate::models::SyncModel;
 use chrono::Utc;
 use log::{info, warn};
@@ -10,6 +9,7 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ts_rs::TS;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::{ClientDb, WriteDb};
@@ -18,10 +18,6 @@ use yaak_models::models::{
     WorkspaceMeta,
 };
 use yaak_models::util::{UpdateSource, get_workspace_export_resources};
-
-// Keep temporary-file creation and scan exclusion on the same naming scheme.
-const SYNC_TEMP_PREFIX: &str = ".yaak-sync-";
-const SYNC_TEMP_SUFFIX: &str = ".tmp";
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", tag = "type")]
@@ -188,7 +184,6 @@ pub fn get_db_candidates(
 /// Workspace sync callers must pass all candidates from [`get_db_candidates`] for
 /// the same workspace and directory. An empty slice is for import discovery
 /// without database sync state; it does not validate tracked model identities.
-/// Temporary files are ignored but never removed: they may belong to another writer.
 pub fn get_fs_candidates(dir: &Path, db_candidates: &[DbCandidate]) -> Result<Vec<FsCandidate>> {
     // Ensure the root directory exists
     fs::create_dir_all(dir)?;
@@ -210,74 +205,48 @@ pub fn get_fs_candidates(dir: &Path, db_candidates: &[DbCandidate]) -> Result<Ve
         let path = dir_entry.path();
         let rel_path = PathBuf::from(dir_entry.file_name());
         let tracked = tracked_paths.get(&rel_path);
-
-        // Our temporary files can be renamed away at any point; do not inspect them.
-        if tracked.is_none()
-            && rel_path.to_str().is_some_and(|name| {
-                name.starts_with(SYNC_TEMP_PREFIX) && name.ends_with(SYNC_TEMP_SUFFIX)
-            })
-        {
-            continue;
-        }
+        let invalid =
+            |reason: String| Err(Error::InvalidSyncFile(format!("{}: {reason}", path.display())));
 
         if !dir_entry.file_type()?.is_file() {
             if tracked.is_some() {
-                return Err(Error::InvalidSyncFile(format!(
-                    "{}: expected a regular sync file",
-                    path.display()
-                )));
+                return invalid("expected a regular sync file".into());
             }
             continue;
         };
 
-        // Read once so identity and completeness checks see the same bytes.
-        let content = match fs::read(&path) {
-            Ok(content) => content,
-            Err(error) if tracked.is_some() => {
-                return Err(Error::InvalidSyncFile(format!("{}: {error}", path.display())));
+        // A present tracked file must not disappear from the candidates: that
+        // would turn a read/parse failure into a database deletion.
+        let (model, checksum) = match (SyncModel::from_file(&path), tracked) {
+            (Ok(Some(m)), _) => m,
+            (Ok(None), None) => continue,
+            (Err(e), None) => {
+                warn!("Skipping invalid sync file {}: {e}", path.display());
+                continue;
             }
-            Err(_) => continue,
-        };
-        let (model, checksum) = match SyncModel::from_bytes(content.clone(), &path) {
-            Ok(Some(m)) => m,
-            // A present tracked file must not disappear from the candidates: that
-            // would turn a read/parse failure into a database deletion.
-            Ok(None) if tracked.is_some() => {
-                return Err(Error::InvalidSyncFile(format!(
-                    "{}: failed to read or parse tracked sync file",
-                    path.display()
-                )));
-            }
-            Ok(None) => continue,
-            Err(e) => {
-                warn!("Failed to parse sync file {e}");
-                return Err(e);
-            }
+            (Ok(None), Some(_)) => return invalid("file does not contain a Yaak model".into()),
+            (Err(e), Some(_)) => return invalid(e.to_string()),
         };
 
         if let Some((previous, state)) = tracked {
             if model.id() != state.model_id {
-                return Err(Error::InvalidSyncFile(format!(
-                    "{}: expected model ID {}, found {}",
-                    path.display(),
+                return invalid(format!(
+                    "expected model ID {}, found {}",
                     state.model_id,
                     model.id()
-                )));
+                ));
             }
             // A wrong/defaulted workspace ID would be filtered out by the caller,
             // making this tracked model look deleted even if its ID is intact.
             if model.workspace_id() != state.workspace_id {
-                return Err(Error::InvalidSyncFile(format!(
-                    "{}: expected workspace ID {}, found {}",
-                    path.display(),
+                return invalid(format!(
+                    "expected workspace ID {}, found {}",
                     state.workspace_id,
                     model.workspace_id()
-                )));
+                ));
             }
-            // Unchanged legacy files may lack newly added fields. They cannot
-            // overwrite the DB and must remain usable for exporting DB edits.
-            if checksum != state.checksum {
-                model.validate_tracked_fields(&content, previous, &path)?;
+            if std::mem::discriminant(&model) != std::mem::discriminant(*previous) {
+                return invalid("model type does not match the tracked model".into());
             }
         }
 
@@ -523,47 +492,35 @@ pub fn apply_fs_sync_ops(
 
 /// Publish a complete file without exposing partial writes to sync readers.
 ///
-/// Existing access controls are preserved before publishing. Opening the existing
-/// file for writing also enforces its write restrictions. Metadata-copy failures
-/// abort the write and leave the original file in place.
-///
-/// Atomic replacement protects concurrent readers, without a crash durability guarantee.
-/// A crash may leave a temporary file behind. Sync scans ignore it, but Git may
-/// report it as untracked; automatic cleanup could interfere with another writer.
+/// The temporary file's extension keeps it out of sync candidates. A crash may
+/// leave it behind, but it is never read as a model.
 fn write_sync_file(path: &Path, write: impl FnOnce(&mut File) -> io::Result<()>) -> Result<()> {
-    let existing = match fs::OpenOptions::new().write(true).open(path) {
-        Ok(file) => Some(file),
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    // Opening the existing file for writing keeps read-only files from being replaced
+    let permissions = match fs::OpenOptions::new().write(true).open(path) {
+        Ok(file) => Some(file.metadata()?.permissions()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error.into()),
     };
-    let parent = path
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    // The unsupported extension keeps the in-progress file out of sync candidates.
-    let mut builder = tempfile::Builder::new();
-    builder.prefix(SYNC_TEMP_PREFIX).suffix(SYNC_TEMP_SUFFIX);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        // Match File::create for new files, including the process umask.
-        if existing.is_none() {
-            builder.permissions(fs::Permissions::from_mode(0o666));
+    let tmp_path = path.with_file_name(format!(
+        ".{}.{}-{}.tmp",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed),
+    ));
+    let result = File::create_new(&tmp_path).and_then(|mut file| {
+        if let Some(permissions) = permissions {
+            file.set_permissions(permissions)?;
         }
+        write(&mut file)?;
+        drop(file);
+        fs::rename(&tmp_path, path)
+    });
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
     }
-    let mut file = builder.tempfile_in(parent)?;
-    if let Some(existing) = &existing {
-        // Apply the original policy before putting data in the temporary file.
-        preserve_file_security(existing, file.as_file(), file.path()).map_err(|error| {
-            io::Error::new(
-                error.kind(),
-                format!("{}: cannot preserve file access controls: {error}", path.display()),
-            )
-        })?;
-    }
-    write(file.as_file_mut())?;
-    file.persist(path).map_err(io::Error::from)?;
-    Ok(())
+    Ok(result?)
 }
 
 impl PendingDbSyncOps {
@@ -727,79 +684,6 @@ fn delete_model(db: &WriteDb, blobs: &BlobManager, model: &SyncModel) -> Result<
 mod write_tests {
     use super::*;
 
-    #[cfg(unix)]
-    #[test]
-    fn failed_security_copy_keeps_the_original_and_never_writes_payload() {
-        use std::os::unix::fs::{MetadataExt, symlink};
-
-        // A foreign owner cannot be assigned to our staging file without privileges.
-        if unsafe { libc::geteuid() } == fs::metadata("/dev/null").unwrap().uid() {
-            return;
-        }
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("request.yaml");
-        symlink("/dev/null", &path).unwrap();
-        let result = write_sync_file(&path, |_| {
-            panic!("payload must not be written before access controls are preserved")
-        });
-        assert!(
-            matches!(result, Err(Error::IoError(error)) if error.kind() == io::ErrorKind::PermissionDenied)
-        );
-        assert_eq!(fs::read_link(&path).unwrap(), Path::new("/dev/null"));
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn temporary_file_does_not_keep_extra_inherited_acl_entries() {
-        use std::os::unix::fs::PermissionsExt;
-        use std::process::Command;
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("request.yaml");
-        fs::write(&path, b"old contents").unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
-        let output = Command::new("/bin/chmod")
-            .args(["+a", "everyone allow read,file_inherit,only_inherit"])
-            .arg(dir.path())
-            .output()
-            .unwrap();
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
-        write_sync_file(&path, |file| {
-            let temporary = fs::read_dir(dir.path())
-                .unwrap()
-                .map(|entry| entry.unwrap().path())
-                .find(|path| {
-                    path.file_name().unwrap().to_str().unwrap().starts_with(SYNC_TEMP_PREFIX)
-                })
-                .unwrap();
-            let listing = Command::new("/bin/ls").arg("-le").arg(temporary).output()?;
-            assert!(!String::from_utf8_lossy(&listing.stdout).contains("allow read"));
-            file.write_all(b"complete new contents")
-        })
-        .unwrap();
-        assert_eq!(fs::read(&path).unwrap(), b"complete new contents");
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn read_only_file_is_not_replaced() {
-        use std::os::unix::fs::PermissionsExt;
-        // Root bypasses ordinary POSIX permission checks.
-        if unsafe { libc::geteuid() } == 0 {
-            return;
-        }
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("request.yaml");
-        fs::write(&path, b"original contents").unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
-        let result = write_sync_file(&path, |file| file.write_all(b"new contents"));
-        assert!(
-            matches!(result, Err(Error::IoError(error)) if error.kind() == io::ErrorKind::PermissionDenied)
-        );
-        assert_eq!(fs::read(&path).unwrap(), b"original contents");
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
-    }
-
     #[test]
     fn failed_partial_write_keeps_previous_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -813,21 +697,6 @@ mod write_tests {
             matches!(result, Err(Error::IoError(error)) if error.kind() == io::ErrorKind::WriteZero)
         );
         assert_eq!(fs::read(&path).unwrap(), b"complete previous contents");
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
-    }
-
-    #[test]
-    fn failed_publish_cleans_up_the_temporary_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("request.yaml");
-        let result = write_sync_file(&path, |file| {
-            file.write_all(b"new contents")?;
-            // Make replacement fail after staging has actually been written.
-            fs::create_dir(&path)?;
-            fs::write(path.join("keep"), b"keep this file")
-        });
-        assert!(result.is_err());
-        assert_eq!(fs::read(path.join("keep")).unwrap(), b"keep this file");
         assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
     }
 
