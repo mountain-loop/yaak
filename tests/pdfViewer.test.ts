@@ -93,9 +93,13 @@ test.each(["http://tauri.localhost", "tauri://localhost"])(
     const pdfjsDir = path.dirname(reactPdfRequire.resolve("pdfjs-dist/package.json"));
     const installed = JSON.parse(await readFile(path.join(pdfjsDir, "package.json"), "utf8"));
     expect(version).toBe(installed.version);
-    expect(Buffer.from(worker.source)).toEqual(
-      await readFile(path.join(pdfjsDir, "build/pdf.worker.min.mjs")),
-    );
+    // The worker is bundled with the polyfills older WebKit needs, ahead of PDF.js itself.
+    const source = Buffer.from(worker.source).toString("utf8");
+    const escapedVersion = installed.version.replaceAll(".", "\\.");
+    expect(source).toMatch(new RegExp(`["'\`]${escapedVersion}["'\`]`));
+    const polyfillAt = source.indexOf("getOrInsertComputed callback is not a function");
+    expect(polyfillAt).toBeGreaterThanOrEqual(0);
+    expect(polyfillAt).toBeLessThan(source.indexOf("pdfjs_internal_editor_"));
   },
   30_000,
 );
