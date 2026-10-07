@@ -5,13 +5,11 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useContainerSize } from "@yaakapp-internal/ui";
+import pdfWorkerUrl from "./pdfWorker?worker&url";
 
 // Document can start loading during render, so configure its worker synchronously.
 // Vite bundles the installed PDF.js worker as a local asset, including offline builds.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(pdfWorkerUrl, import.meta.url).toString();
 
 interface Props {
   /** A URL for the body the host already stored. */
