@@ -3,4 +3,4 @@ import type { SyncModel, SyncState } from "./gen_models";
 
 export type FsCandidate = { "type": "FsCandidate", model: SyncModel, relPath: string, checksum: string, };
 
-export type SyncOp = { "type": "fsCreate", model: SyncModel, } | { "type": "fsUpdate", model: SyncModel, state: SyncState, } | { "type": "fsDelete", state: SyncState, fs: FsCandidate | null, } | { "type": "dbCreate", fs: FsCandidate, } | { "type": "dbUpdate", state: SyncState, fs: FsCandidate, } | { "type": "dbDelete", model: SyncModel, state: SyncState, } | { "type": "ignorePrivate", model: SyncModel, };
+export type SyncOp = { "type": "fsCreate", model: SyncModel, } | { "type": "fsUpdate", model: SyncModel, state: SyncState, } | { "type": "fsDelete", state: SyncState, fs: FsCandidate | null, } | { "type": "dbCreate", fs: FsCandidate, } | { "type": "dbUpdate", model: SyncModel, state: SyncState, fs: FsCandidate, } | { "type": "dbDelete", model: SyncModel, state: SyncState, } | { "type": "ignorePrivate", model: SyncModel, };

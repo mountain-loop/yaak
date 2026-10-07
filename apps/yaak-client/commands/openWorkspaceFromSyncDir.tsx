@@ -17,7 +17,7 @@ export const openWorkspaceFromSyncDir = createFastMutation<void, void, string>({
       return;
     }
 
-    await applySync(workspace.id, dir, ops);
+    await applySync(workspace.id, dir, ops, { fsOnly: true });
 
     await router.navigate({
       to: "/workspaces/$workspaceId",

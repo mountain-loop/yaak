@@ -14,7 +14,7 @@ import {
 } from "@yaakapp-internal/ui";
 import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
-import { showDialog } from "../lib/dialog";
+import { hideDialog, showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
 import { pluralizeCount } from "../lib/pluralize";
 import { showPrompt } from "../lib/prompt";
@@ -62,14 +62,24 @@ export const syncWorkspace = createFastMutation<
     const ops = (await calculateSync(workspaceId, syncDir)) ?? [];
     if (ops.length === 0) {
       console.log("Nothing to sync", workspaceId, syncDir);
+      hideDialog("commit-sync");
       return;
     }
     console.log("Syncing workspace", workspaceId, syncDir, ops);
 
     const dbOps = ops.filter((o) => o.type.startsWith("db"));
 
-    if (dbOps.length === 0) {
-      await applySync(workspaceId, syncDir, ops);
+    const apply = async () => {
+      if (await applySync(workspaceId, syncDir, ops)) {
+        hideDialog("commit-sync");
+      } else {
+        await syncWorkspace.mutateAsync({ workspaceId, syncDir, force });
+      }
+    };
+
+    if (dbOps.length === 0 || force) {
+      hideDialog("commit-sync");
+      await apply();
       return;
     }
 
@@ -78,11 +88,6 @@ export const syncWorkspace = createFastMutation<
     );
 
     console.log("Directory changes detected", { dbOps, ops });
-
-    if (force) {
-      await applySync(workspaceId, syncDir, ops);
-      return;
-    }
 
     showDialog({
       id: "commit-sync",
@@ -93,8 +98,7 @@ export const syncWorkspace = createFastMutation<
           className="h-full grid grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3"
           onSubmit={async (e) => {
             e.preventDefault();
-            await applySync(workspaceId, syncDir, ops);
-            hide();
+            await apply();
           }}
         >
           {isDeletingWorkspace ? (

@@ -834,6 +834,8 @@ pub struct CmdSyncApplyReq {
     pub sync_ops: Vec<SyncOp>,
     pub sync_dir: PathBuf,
     pub workspace_id: String,
+    #[serde(default)]
+    pub fs_only: bool,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -1024,7 +1026,7 @@ macro_rules! with_commands {
     cmd_git_rm_remote(CmdGitRmRemoteReq) -> (),
     cmd_sync_calculate(CmdSyncCalculateReq) -> Vec<SyncOp>,
     cmd_sync_calculate_fs(CmdSyncCalculateFsReq) -> Vec<SyncOp>,
-    cmd_sync_apply(CmdSyncApplyReq) -> (),
+    cmd_sync_apply(CmdSyncApplyReq) -> bool,
     cmd_ws_delete_connections(CmdWsDeleteConnectionsReq) -> (),
     cmd_ws_send(CmdWsSendReq) -> WebsocketConnection,
     cmd_ws_close(CmdWsCloseReq) -> WebsocketConnection,
