@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::models::SyncModel;
 use chrono::Utc;
 use log::{info, warn};
@@ -7,8 +7,9 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::File;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ts_rs::TS;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::{ClientDb, WriteDb};
@@ -178,33 +179,77 @@ pub fn get_db_candidates(
     Ok(candidates)
 }
 
-pub fn get_fs_candidates(dir: &Path) -> Result<Vec<FsCandidate>> {
+/// Read sync files, validating paths tracked by existing database models.
+///
+/// Workspace sync callers must pass all candidates from [`get_db_candidates`] for
+/// the same workspace and directory. An empty slice is for import discovery
+/// without database sync state; it does not validate tracked model identities.
+pub fn get_fs_candidates(dir: &Path, db_candidates: &[DbCandidate]) -> Result<Vec<FsCandidate>> {
     // Ensure the root directory exists
     fs::create_dir_all(dir)?;
+
+    let tracked_paths: HashMap<PathBuf, (&SyncModel, &SyncState)> = db_candidates
+        .iter()
+        .filter_map(|candidate| match candidate {
+            DbCandidate::Added(_) | DbCandidate::Deleted(_) => None,
+            DbCandidate::Modified(model, state) | DbCandidate::Unmodified(model, state) => {
+                Some((PathBuf::from(&state.rel_path), (model, state)))
+            }
+        })
+        .collect();
 
     let mut candidates = Vec::new();
     let entries = fs::read_dir(dir)?;
     for dir_entry in entries {
-        let dir_entry = match dir_entry {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+        let dir_entry = dir_entry?;
+        let path = dir_entry.path();
+        let rel_path = PathBuf::from(dir_entry.file_name());
+        let tracked = tracked_paths.get(&rel_path);
+        let invalid =
+            |reason: String| Err(Error::InvalidSyncFile(format!("{}: {reason}", path.display())));
 
         if !dir_entry.file_type()?.is_file() {
+            if tracked.is_some() {
+                return invalid("expected a regular sync file".into());
+            }
             continue;
         };
 
-        let path = dir_entry.path();
-        let (model, checksum) = match SyncModel::from_file(&path) {
-            Ok(Some(m)) => m,
-            Ok(None) => continue,
-            Err(e) => {
-                warn!("Failed to parse sync file {e}");
-                return Err(e);
+        // A present tracked file must not disappear from the candidates: that
+        // would turn a read/parse failure into a database deletion.
+        let (model, checksum) = match (SyncModel::from_file(&path), tracked) {
+            (Ok(Some(m)), _) => m,
+            (Ok(None), None) => continue,
+            (Err(e), None) => {
+                warn!("Skipping invalid sync file {}: {e}", path.display());
+                continue;
             }
+            (Ok(None), Some(_)) => return invalid("file does not contain a Yaak model".into()),
+            (Err(e), Some(_)) => return invalid(e.to_string()),
         };
 
-        let rel_path = Path::new(&dir_entry.file_name()).to_path_buf();
+        if let Some((previous, state)) = tracked {
+            if model.id() != state.model_id {
+                return invalid(format!(
+                    "expected model ID {}, found {}",
+                    state.model_id,
+                    model.id()
+                ));
+            }
+            // A wrong/defaulted workspace ID would be filtered out by the caller,
+            // making this tracked model look deleted even if its ID is intact.
+            if model.workspace_id() != state.workspace_id {
+                return invalid(format!(
+                    "expected workspace ID {}, found {}",
+                    state.workspace_id,
+                    model.workspace_id()
+                ));
+            }
+            if std::mem::discriminant(&model) != std::mem::discriminant(*previous) {
+                return invalid("model type does not match the tracked model".into());
+            }
+        }
+
         candidates.push(FsCandidate { rel_path, model, checksum })
     }
 
@@ -391,8 +436,7 @@ pub fn apply_fs_sync_ops(
                 let rel_path = derive_model_filename(&model);
                 let abs_path = sync_dir.join(rel_path.clone());
                 let (content, checksum) = model.to_file_contents(&rel_path)?;
-                let mut f = File::create(&abs_path)?;
-                f.write_all(&content)?;
+                write_sync_file(&abs_path, |file| file.write_all(&content))?;
                 SyncStateOp::Create { model_id: model.id(), checksum, rel_path }
             }
             SyncOp::FsUpdate { model, state } => {
@@ -400,8 +444,7 @@ pub fn apply_fs_sync_ops(
                 let rel_path = Path::new(&state.rel_path);
                 let abs_path = Path::new(&state.sync_dir).join(&rel_path);
                 let (content, checksum) = model.to_file_contents(&rel_path)?;
-                let mut f = File::create(&abs_path)?;
-                f.write_all(&content)?;
+                write_sync_file(&abs_path, |file| file.write_all(&content))?;
                 SyncStateOp::Update {
                     state: state.to_owned(),
                     checksum,
@@ -445,6 +488,39 @@ pub fn apply_fs_sync_ops(
     }
 
     Ok(pending)
+}
+
+/// Publish a complete file without exposing partial writes to sync readers.
+///
+/// The temporary file's extension keeps it out of sync candidates. A crash may
+/// leave it behind, but it is never read as a model.
+fn write_sync_file(path: &Path, write: impl FnOnce(&mut File) -> io::Result<()>) -> Result<()> {
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    // Opening the existing file for writing keeps read-only files from being replaced
+    let permissions = match fs::OpenOptions::new().write(true).open(path) {
+        Ok(file) => Some(file.metadata()?.permissions()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    let tmp_path = path.with_file_name(format!(
+        ".{}.{}-{}.tmp",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed),
+    ));
+    let result = File::create_new(&tmp_path).and_then(|mut file| {
+        if let Some(permissions) = permissions {
+            file.set_permissions(permissions)?;
+        }
+        write(&mut file)?;
+        drop(file);
+        fs::rename(&tmp_path, path)
+    });
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+    Ok(result?)
 }
 
 impl PendingDbSyncOps {
@@ -602,4 +678,91 @@ fn delete_model(db: &WriteDb, blobs: &BlobManager, model: &SyncModel) -> Result<
         }
     };
     Ok(())
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+
+    #[test]
+    fn failed_partial_write_keeps_previous_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("request.yaml");
+        fs::write(&path, b"complete previous contents").unwrap();
+        let result = write_sync_file(&path, |file| {
+            file.write_all(b"partial new contents")?;
+            Err(io::Error::new(io::ErrorKind::WriteZero, "simulated write failure"))
+        });
+        assert!(
+            matches!(result, Err(Error::IoError(error)) if error.kind() == io::ErrorKind::WriteZero)
+        );
+        assert_eq!(fs::read(&path).unwrap(), b"complete previous contents");
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn readers_ignore_the_in_progress_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("request.yaml");
+        let request = HttpRequest {
+            id: "rq_write_test".into(),
+            workspace_id: "wk_write_test".into(),
+            name: "Previous request".into(),
+            ..Default::default()
+        };
+        let model = SyncModel::HttpRequest(request.clone());
+        let (old_contents, checksum) = model.to_file_contents(&path).unwrap();
+        fs::write(&path, &old_contents).unwrap();
+        let db_candidates = vec![DbCandidate::Unmodified(
+            model,
+            SyncState {
+                model_id: request.id.clone(),
+                workspace_id: request.workspace_id.clone(),
+                rel_path: "request.yaml".into(),
+                checksum,
+                ..Default::default()
+            },
+        )];
+        let model = SyncModel::HttpRequest(HttpRequest { name: "New request".into(), ..request });
+        let (new_contents, _) = model.to_file_contents(&path).unwrap();
+        let split = new_contents.len() / 2;
+        write_sync_file(&path, |file| {
+            file.write_all(&new_contents[..split])?;
+            assert_eq!(fs::read(&path).unwrap(), old_contents);
+            let fs_candidates = get_fs_candidates(dir.path(), &db_candidates).unwrap();
+            assert_eq!(fs_candidates.len(), 1);
+            assert!(compute_sync_ops(db_candidates.clone(), fs_candidates).is_empty());
+            file.write_all(&new_contents[split..])
+        })
+        .unwrap();
+        assert_eq!(fs::read(&path).unwrap(), new_contents);
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn writes_preserve_existing_permissions_and_new_file_defaults() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("request.yaml");
+        fs::write(&path, b"old contents").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+        write_sync_file(&path, |file| {
+            // Keep unpublished data at least as private as the original file.
+            assert_eq!(file.metadata()?.permissions().mode() & 0o777 & !0o640, 0);
+            file.write_all(b"new contents")
+        })
+        .unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o640);
+
+        let reference = dir.path().join("reference.yaml");
+        File::create(&reference).unwrap();
+        let new_path = dir.path().join("new.yaml");
+        write_sync_file(&new_path, |file| file.write_all(b"new contents")).unwrap();
+        assert_eq!(
+            fs::metadata(&new_path).unwrap().permissions().mode() & 0o777,
+            fs::metadata(&reference).unwrap().permissions().mode() & 0o777
+        );
+    }
 }

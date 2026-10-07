@@ -1,7 +1,7 @@
 use crate::error::Error::UnknownModel;
 use crate::error::Result;
 use chrono::NaiveDateTime;
-use log::{debug, warn};
+use log::debug;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_yaml::{Mapping, Value};
 use sha1::{Digest, Sha1};
@@ -98,11 +98,13 @@ fn migrate_environment(obj: &mut Mapping) {
 }
 
 impl SyncModel {
+    /// Returns `Ok(None)` for files that don't look like Yaak models, and an error for ones that
+    /// do but can't be parsed.
     pub fn from_bytes(content: Vec<u8>, file_path: &Path) -> Result<Option<(SyncModel, String)>> {
         let mut hasher = Sha1::new();
         hasher.update(&content);
         let checksum = hex::encode(hasher.finalize());
-        let content_str = String::from_utf8(content.clone()).unwrap_or_default();
+        let content_str = String::from_utf8(content).unwrap_or_default();
 
         // Check for some strings that will be in a model file for sure. If these strings
         // don't exist, then it's probably not a Yaak file.
@@ -111,34 +113,19 @@ impl SyncModel {
         }
 
         let ext = file_path.extension().unwrap_or_default();
-        if ext == "yml" || ext == "yaml" {
-            Ok(match serde_yaml::from_str::<SyncModel>(&content_str) {
-                Ok(m) => Some((m, checksum)),
-                Err(e) => {
-                    warn!("Error parsing {:?} {:?}", file_path.file_name(), e);
-                    None
-                }
-            })
+        let model = if ext == "yml" || ext == "yaml" {
+            serde_yaml::from_str::<SyncModel>(&content_str)?
         } else if ext == "json" {
-            Ok(match serde_json::from_str::<SyncModel>(&content_str) {
-                Ok(m) => Some((m, checksum)),
-                Err(e) => {
-                    warn!("Error parsing {:?} {:?}", file_path.file_name(), e);
-                    None
-                }
-            })
+            serde_json::from_str::<SyncModel>(&content_str)?
         } else {
-            Ok(None)
-        }
+            return Ok(None);
+        };
+
+        Ok(Some((model, checksum)))
     }
 
     pub fn from_file(file_path: &Path) -> Result<Option<(SyncModel, String)>> {
-        let content = match fs::read(file_path) {
-            Ok(c) => c,
-            Err(_) => return Ok(None),
-        };
-
-        Self::from_bytes(content, file_path)
+        Self::from_bytes(fs::read(file_path)?, file_path)
     }
 
     pub fn to_file_contents(&self, rel_path: &Path) -> Result<(Vec<u8>, String)> {

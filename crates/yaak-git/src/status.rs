@@ -135,7 +135,7 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
                     let obj = entry.to_object(&repo)?;
                     let content = obj.as_blob().unwrap().content();
                     let name = Path::new(entry.name().unwrap_or_default());
-                    SyncModel::from_bytes(content.into(), name)?.map(|m| m.0)
+                    SyncModel::from_bytes(content.into(), name).ok().flatten().map(|m| m.0)
                 }
                 Err(_) => None,
             },
@@ -143,7 +143,7 @@ pub fn git_status(dir: &Path) -> crate::error::Result<GitStatusSummary> {
 
         let next = {
             let full_path = repo.workdir().unwrap().join(rela_path.clone());
-            SyncModel::from_file(full_path.as_path())?.map(|m| m.0)
+            SyncModel::from_file(full_path.as_path()).ok().flatten().map(|m| m.0)
         };
 
         entries.push(GitStatusEntry {

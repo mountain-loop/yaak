@@ -11667,6 +11667,7 @@ dependencies = [
  "serde_path_to_error",
  "serde_yaml",
  "sha1 0.11.0",
+ "tempfile",
  "thiserror 2.0.20",
  "tokio",
  "ts-rs",
