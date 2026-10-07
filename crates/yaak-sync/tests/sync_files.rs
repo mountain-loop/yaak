@@ -490,3 +490,67 @@ fn reviewed_inbound_and_outbound_updates_apply_together() {
     );
     assert!(fixture.calculate().unwrap().is_empty());
 }
+
+#[test]
+fn later_file_edits_invalidate_reviewed_outbound_operations() {
+    for creating in [false, true] {
+        for file_present in [true, false] {
+            let fixture = Fixture::new("yaak.rq_sync_test.yaml");
+            let state = fixture
+                .states()
+                .into_iter()
+                .find(|state| state.model_id == fixture.request.id)
+                .unwrap();
+            fixture
+                .db
+                .with_tx::<_, Error>(|tx| {
+                    if creating {
+                        tx.delete_sync_state(&state)?;
+                    }
+                    let mut request = tx.get_http_request(&fixture.request.id)?;
+                    request.name = "Reviewed outgoing request".into();
+                    tx.upsert_http_request(&request, &UpdateSource::from_window_label("test"))?;
+                    Ok(())
+                })
+                .unwrap();
+            let workspace_path = fixture.dir.path().join("workspace.yaml");
+            let workspace = fixture.db.connect().get_workspace(&fixture.workspace_id).unwrap();
+            let mut incoming = workspace.clone();
+            incoming.name = "Reviewed incoming workspace".into();
+            let (content, _) =
+                SyncModel::Workspace(incoming).to_file_contents(&workspace_path).unwrap();
+            fs::write(&workspace_path, &content).unwrap();
+            if !file_present {
+                fs::remove_file(&fixture.request_path).unwrap();
+            }
+            let ops = fixture.calculate().unwrap();
+            assert!(ops.iter().any(|op| matches!(op, SyncOp::DbUpdate { .. })));
+            assert!(ops.iter().any(|op| if creating {
+                matches!(op, SyncOp::FsCreate { .. })
+            } else {
+                matches!(op, SyncOp::FsUpdate { .. })
+            }));
+            let request = fixture.db_request();
+            let states = fixture.states();
+
+            // Keep updatedAt older than the DB version, so conflict resolution still writes to FS.
+            fixture.edit(|value| value["name"] = "Later external file edit".into());
+            let edited = fs::read(&fixture.request_path).unwrap();
+
+            assert!(
+                !fixture.apply_reviewed(ops),
+                "creating={creating}, file_present={file_present}"
+            );
+            assert_eq!(fs::read(&fixture.request_path).unwrap(), edited);
+            assert_eq!(fs::read(&workspace_path).unwrap(), content);
+            assert_eq!(fixture.db_request(), request);
+            assert_eq!(
+                fixture.db.connect().get_workspace(&fixture.workspace_id).unwrap(),
+                workspace
+            );
+            assert_eq!(fixture.states(), states);
+            assert!(fixture.apply_reviewed(fixture.calculate().unwrap()));
+            assert!(fixture.calculate().unwrap().is_empty());
+        }
+    }
+}
