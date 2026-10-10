@@ -63,14 +63,11 @@ export async function getTemplateFunctionConfig(
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace,
   environmentId: string | undefined,
 ) {
-  const config = await rpc<GetTemplateFunctionConfigResponse>(
-    "cmd_template_function_config",
-    {
-      functionName,
-      values,
-      model,
-      environmentId,
-    },
-  );
+  const config = await rpc<GetTemplateFunctionConfigResponse>("cmd_template_function_config", {
+    functionName,
+    values,
+    model,
+    environmentId,
+  });
   return config.function;
 }

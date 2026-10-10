@@ -38,8 +38,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
   );
 
   const handleChange = useCallback(
-    async (authentication: Record<string, unknown>) =>
-      await patchModel(model, { authentication }),
+    async (authentication: Record<string, unknown>) => await patchModel(model, { authentication }),
     [model],
   );
 
@@ -51,8 +50,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
     return (
       <EmptyStateText>
         <p>
-          Auth plugin not found for{" "}
-          <InlineCode>{model.authenticationType}</InlineCode>
+          Auth plugin not found for <InlineCode>{model.authenticationType}</InlineCode>
         </p>
       </EmptyStateText>
     );
@@ -65,15 +63,11 @@ export function HttpAuthenticationEditor({ model }: Props) {
           <div className="not-italic flex flex-col items-center gap-3 text-center">
             <p className="max-w-md text-sm text-text-subtle">
               Choose an auth method to apply it to all requests in{" "}
-              <strong className="font-semibold text-text-subtle">
-                {resolvedModelName(model)}
-              </strong>
+              <strong className="font-semibold text-text-subtle">{resolvedModelName(model)}</strong>
               .
             </p>
             <AuthenticationTypeDropdown model={model} />
-            <Link href="https://yaak.app/docs/using-yaak/request-inheritance">
-              Documentation
-            </Link>
+            <Link href="https://yaak.app/docs/using-yaak/request-inheritance">Documentation</Link>
           </div>
         </EmptyStateText>
       );
@@ -97,8 +91,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
             type="submit"
             className="underline hover:text-text"
             onClick={() => {
-              if (inheritedAuth.model === "folder")
-                openFolderSettings(inheritedAuth.id, "auth");
+              if (inheritedAuth.model === "folder") openFolderSettings(inheritedAuth.id, "auth");
               else openWorkspaceSettings("auth");
             }}
           >
@@ -118,8 +111,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
             hideLabel
             name="enabled"
             value={
-              model.authentication.disabled === false ||
-              model.authentication.disabled == null
+              model.authentication.disabled === false || model.authentication.disabled == null
                 ? "__TRUE__"
                 : model.authentication.disabled === true
                   ? "__FALSE__"
@@ -144,13 +136,11 @@ export function HttpAuthenticationEditor({ model }: Props) {
           />
           {authConfig.data?.actions && authConfig.data.actions.length > 0 && (
             <Dropdown
-              items={authConfig.data.actions.map(
-                (a): DropdownItem => ({
-                  label: a.label,
-                  leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
-                  onSelect: () => a.call(model),
-                }),
-              )}
+              items={authConfig.data.actions.map((a): DropdownItem => ({
+                label: a.label,
+                leftSlot: a.icon ? <Icon icon={a.icon} /> : null,
+                onSelect: () => a.call(model),
+              }))}
             >
               <IconButton
                 title="Authentication Actions"
@@ -167,9 +157,7 @@ export function HttpAuthenticationEditor({ model }: Props) {
               className="w-full"
               stateKey={`auth.${model.id}.dynamic`}
               value={model.authentication.disabled}
-              onChange={(v) =>
-                handleChange({ ...model.authentication, disabled: v })
-              }
+              onChange={(v) => handleChange({ ...model.authentication, disabled: v })}
             />
           </div>
         )}
@@ -204,9 +192,7 @@ function AuthenticationTypeDropdown({ model }: Props) {
         color="secondary"
         variant="border"
         size="sm"
-        rightSlot={
-          <Icon icon="chevron_down" size="sm" className="text-text-subtle" />
-        }
+        rightSlot={<Icon icon="chevron_down" size="sm" className="text-text-subtle" />}
       >
         Select Auth
       </Button>
@@ -243,11 +229,7 @@ function AuthenticationDisabledInput({
       rightSlot={
         <div className="px-1 flex items-center">
           <div className="rounded-full bg-surface-highlight text-xs px-1.5 py-0.5 text-text-subtle whitespace-nowrap">
-            {rendered.isPending
-              ? "loading"
-              : rendered.data
-                ? "enabled"
-                : "disabled"}
+            {rendered.isPending ? "loading" : rendered.data ? "enabled" : "disabled"}
           </div>
         </div>
       }

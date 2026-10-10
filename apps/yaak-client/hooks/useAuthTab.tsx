@@ -15,10 +15,7 @@ import type { AuthenticatedModel } from "./useInheritedAuthentication";
 import { useInheritedAuthentication } from "./useInheritedAuthentication";
 import { useModelAncestors } from "./useModelAncestors";
 
-export function useAuthTab<T extends string>(
-  tabValue: T,
-  model: AuthenticatedModel | null,
-) {
+export function useAuthTab<T extends string>(tabValue: T, model: AuthenticatedModel | null) {
   const options = useAuthDropdownOptions(model);
 
   return useMemo<TabItem[]>(() => {
@@ -57,12 +54,10 @@ export function useAuthDropdownOptions(
         {
           label: "Inherit from Parent",
           shortLabel:
-            inheritedAuth != null &&
-            inheritedAuth.authenticationType !== "none" ? (
+            inheritedAuth != null && inheritedAuth.authenticationType !== "none" ? (
               <HStack space={1.5}>
-                {authentication.find(
-                  (a) => a.name === inheritedAuth.authenticationType,
-                )?.shortLabel ?? "UNKNOWN"}
+                {authentication.find((a) => a.name === inheritedAuth.authenticationType)
+                  ?.shortLabel ?? "UNKNOWN"}
                 <IconTooltip
                   icon="zap_off"
                   iconSize="xs"
@@ -91,21 +86,14 @@ export function useAuthDropdownOptions(
           parentModel &&
           model.authenticationType &&
           model.authenticationType !== "none" &&
-          (parentModel.authenticationType == null ||
-            parentModel.authenticationType === "none")
+          (parentModel.authenticationType == null || parentModel.authenticationType === "none")
         ) {
           actions.push(
             { type: "separator", label: "Actions" },
             {
               label: `Promote to ${capitalize(parentModel.model)}`,
               leftSlot: (
-                <Icon
-                  icon={
-                    parentModel.model === "workspace"
-                      ? "corner_right_up"
-                      : "folder_up"
-                  }
-                />
+                <Icon icon={parentModel.model === "workspace" ? "corner_right_up" : "folder_up"} />
               ),
               onSelect: async () => {
                 const confirmed = await showConfirm({
@@ -142,8 +130,7 @@ export function useAuthDropdownOptions(
 
         // Copy from ancestor: copy auth config down to current model
         const ancestorWithAuth = ancestors.find(
-          (a) =>
-            a.authenticationType != null && a.authenticationType !== "none",
+          (a) => a.authenticationType != null && a.authenticationType !== "none",
         );
         if (ancestorWithAuth) {
           if (actions.length === 0) {
@@ -153,11 +140,7 @@ export function useAuthDropdownOptions(
             label: `Copy from ${modelTypeLabel(ancestorWithAuth)}`,
             leftSlot: (
               <Icon
-                icon={
-                  ancestorWithAuth.model === "workspace"
-                    ? "corner_right_down"
-                    : "folder_down"
-                }
+                icon={ancestorWithAuth.model === "workspace" ? "corner_right_down" : "folder_down"}
               />
             ),
             onSelect: async () => {
@@ -168,15 +151,11 @@ export function useAuthDropdownOptions(
                 description: (
                   <>
                     Copy{" "}
-                    {authentication.find(
-                      (a) => a.name === ancestorWithAuth.authenticationType,
-                    )?.label ?? "authentication"}{" "}
-                    config from{" "}
-                    <InlineCode>
-                      {resolvedModelName(ancestorWithAuth)}
-                    </InlineCode>
-                    ? This will override the current authentication but will not
-                    affect the {modelTypeLabel(ancestorWithAuth).toLowerCase()}.
+                    {authentication.find((a) => a.name === ancestorWithAuth.authenticationType)
+                      ?.label ?? "authentication"}{" "}
+                    config from <InlineCode>{resolvedModelName(ancestorWithAuth)}</InlineCode>? This
+                    will override the current authentication but will not affect the{" "}
+                    {modelTypeLabel(ancestorWithAuth).toLowerCase()}.
                   </>
                 ),
               });

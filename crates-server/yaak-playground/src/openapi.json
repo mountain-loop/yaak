@@ -10,7 +10,10 @@
     { "name": "Users" },
     { "name": "Posts" },
     { "name": "Todos" },
-    { "name": "Auth", "description": "Two ways to stay logged in: a bearer token you send yourself, or a session cookie the cookie jar sends for you." }
+    {
+      "name": "Auth",
+      "description": "Two ways to stay logged in: a bearer token you send yourself, or a session cookie the cookie jar sends for you."
+    }
   ],
   "paths": {
     "/users": {
@@ -119,20 +122,27 @@
         "summary": "Create a post",
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } } }
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } }
+          }
         },
         "responses": {
           "201": {
             "description": "The new post",
             "headers": {
-              "Location": { "description": "Where to fetch the new post", "schema": { "type": "string" } }
+              "Location": {
+                "description": "Where to fetch the new post",
+                "schema": { "type": "string" }
+              }
             },
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } }
           },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "409": {
             "description": "You already have the most posts allowed",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
           }
         }
       }
@@ -158,7 +168,9 @@
         "parameters": [{ "$ref": "#/components/parameters/Id" }],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } } }
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } }
+          }
         },
         "responses": {
           "200": {
@@ -176,7 +188,9 @@
         "parameters": [{ "$ref": "#/components/parameters/Id" }],
         "requestBody": {
           "required": true,
-          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostPatch" } } }
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/PostPatch" } }
+          }
         },
         "responses": {
           "200": {
@@ -210,7 +224,9 @@
         "responses": {
           "200": {
             "description": "A token to send as `Authorization: Bearer <token>`",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Token" } } }
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Token" } }
+            }
           },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" }
@@ -245,7 +261,10 @@
           "200": {
             "description": "The logged-in user. The session cookie comes back in `Set-Cookie`.",
             "headers": {
-              "Set-Cookie": { "description": "The `session` cookie", "schema": { "type": "string" } }
+              "Set-Cookie": {
+                "description": "The `session` cookie",
+                "schema": { "type": "string" }
+              }
             },
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
           },
@@ -379,7 +398,11 @@
         "properties": {
           "accessToken": { "type": "string" },
           "tokenType": { "type": "string", "const": "Bearer" },
-          "expiresIn": { "type": "integer", "description": "Seconds until the token expires", "example": 3600 }
+          "expiresIn": {
+            "type": "integer",
+            "description": "Seconds until the token expires",
+            "example": 3600
+          }
         }
       },
       "Error": {

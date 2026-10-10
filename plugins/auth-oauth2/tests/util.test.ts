@@ -123,12 +123,12 @@ describe("isTokenExpired", () => {
   });
 
   test("falls back to JWT exp claim when expiresAt is null", () => {
-    expect(
-      isTokenExpired({ response: { access_token: jwtWithExp(-60) }, expiresAt: null }),
-    ).toBe(true);
-    expect(
-      isTokenExpired({ response: { access_token: jwtWithExp(60) }, expiresAt: null }),
-    ).toBe(false);
+    expect(isTokenExpired({ response: { access_token: jwtWithExp(-60) }, expiresAt: null })).toBe(
+      true,
+    );
+    expect(isTokenExpired({ response: { access_token: jwtWithExp(60) }, expiresAt: null })).toBe(
+      false,
+    );
   });
 
   test("treats opaque tokens without expiresAt as non-expiring", () => {

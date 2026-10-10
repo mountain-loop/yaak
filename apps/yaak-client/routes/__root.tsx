@@ -46,7 +46,10 @@ function RouteComponent() {
 function Layout() {
   return (
     <div
-      className={classNames("w-full h-full", platform.osType() === "linux" && "border border-border-subtle")}
+      className={classNames(
+        "w-full h-full",
+        platform.osType() === "linux" && "border border-border-subtle",
+      )}
     >
       <Outlet />
     </div>

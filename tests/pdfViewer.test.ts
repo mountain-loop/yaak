@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import vm from "node:vm";
 import { build } from "vite";
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 
 const root = path.resolve(import.meta.dirname, "..");
 const viewer = path.join(root, "apps/yaak-client/components/responseViewers/PdfViewer.tsx");

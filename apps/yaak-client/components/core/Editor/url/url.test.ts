@@ -44,9 +44,6 @@ describe("URL grammar Placeholder", () => {
   test("recognizes placeholders in a path fragment after a templated base URL", () => {
     // Mixed Twig parsing can feed the URL parser only the text after a template tag,
     // as in `${[ URL ]}/x/:foo/:hello`.
-    expect(placeholderValues("/x/hi:echo/:foo/:hello?bar=ss&:bar=baz")).toEqual([
-      ":foo",
-      ":hello",
-    ]);
+    expect(placeholderValues("/x/hi:echo/:foo/:hello?bar=ss&:bar=baz")).toEqual([":foo", ":hello"]);
   });
 });

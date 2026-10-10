@@ -26,32 +26,26 @@ const LABELS = {
   explicitPermission: {
     name: "contribution: explicit permission",
     color: "5319E7",
-    description:
-      "Community PR links feedback where @gschier explicitly allowed the work.",
+    description: "Community PR links feedback where @gschier explicitly allowed the work.",
   },
   missingTemplate: {
     name: "contribution: missing template",
     color: "D93F0B",
-    description:
-      "Community PR is missing enough of the pull request template to review.",
+    description: "Community PR is missing enough of the pull request template to review.",
   },
   policyUnmet: {
     name: "contribution: policy unmet",
     color: "B60205",
-    description:
-      "Community PR does not currently satisfy the contribution policy.",
+    description: "Community PR does not currently satisfy the contribution policy.",
   },
   needsScopeReview: {
     name: "contribution: needs scope review",
     color: "FBCA04",
-    description:
-      "Community PR may be broader than Yaak's bug-fix contribution policy.",
+    description: "Community PR may be broader than Yaak's bug-fix contribution policy.",
   },
 };
 
-const MANAGED_LABEL_NAMES = [
-  ...new Set(Object.values(LABELS).map((label) => label.name)),
-];
+const MANAGED_LABEL_NAMES = [...new Set(Object.values(LABELS).map((label) => label.name))];
 
 // Each checkbox lists its current label first, followed by legacy labels still
 // accepted from PRs opened against older versions of the template.
@@ -60,9 +54,7 @@ const CHECKBOXES = {
   explicitPermission: [
     "If this PR is not a bug fix, I linked the feedback item where @gschier explicitly gave me permission to work on it.",
   ],
-  readContributing: [
-    "I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md).",
-  ],
+  readContributing: ["I have read and followed [`CONTRIBUTING.md`](CONTRIBUTING.md)."],
   testedLocally: ["I tested this change locally."],
   testsUpdated: [
     "I added or updated tests, or tests are not reasonable for this change.",
@@ -145,25 +137,18 @@ function analyzePullRequest(pr) {
   const body = normalizeBody(pr.body);
   const labelNames = getLabelNames(pr);
   const states = Object.fromEntries(
-    Object.entries(CHECKBOXES).map(([key, label]) => [
-      key,
-      checkboxState(body, label),
-    ]),
+    Object.entries(CHECKBOXES).map(([key, label]) => [key, checkboxState(body, label)]),
   );
   const sectionCount = ["Summary", "Submission", "Related"].filter(
     (heading) => getSection(body, heading) != null,
   ).length;
-  const checkboxCount = Object.values(states).filter(
-    (state) => state != null,
-  ).length;
+  const checkboxCount = Object.values(states).filter((state) => state != null).length;
   const templateUsed = sectionCount >= 2 && checkboxCount >= 3;
   const blockers = [];
-  const totalChangedLines =
-    Number(pr.additions || 0) + Number(pr.deletions || 0);
+  const totalChangedLines = Number(pr.additions || 0) + Number(pr.deletions || 0);
   const changedFiles = Number(pr.changed_files || 0);
   const largeDiff =
-    changedFiles > LARGE_DIFF_CHANGED_FILES ||
-    totalChangedLines > LARGE_DIFF_CHANGED_LINES;
+    changedFiles > LARGE_DIFF_CHANGED_FILES || totalChangedLines > LARGE_DIFF_CHANGED_LINES;
 
   if (labelNames.has(LABELS.outOfScope.name)) {
     return {
@@ -209,8 +194,7 @@ function analyzePullRequest(pr) {
   if (!templateUsed) {
     blockers.push({
       label: LABELS.missingTemplate.name,
-      message:
-        "Update the PR description with the repository pull request template.",
+      message: "Update the PR description with the repository pull request template.",
     });
   } else {
     const summary = getSection(body, "Summary");
@@ -222,8 +206,7 @@ function analyzePullRequest(pr) {
     if (!hasSummary) {
       blockers.push({
         label: LABELS.policyUnmet.name,
-        message:
-          "Add a short summary describing the bug fix or permitted change.",
+        message: "Add a short summary describing the bug fix or permitted change.",
       });
     }
 
@@ -288,9 +271,7 @@ function analyzePullRequest(pr) {
           ? LABELS.explicitPermission.name
           : LABELS.inScope.name,
     );
-  } else if (
-    blockers.some((blocker) => blocker.label === LABELS.missingTemplate.name)
-  ) {
+  } else if (blockers.some((blocker) => blocker.label === LABELS.missingTemplate.name)) {
     desiredLabels.add(LABELS.missingTemplate.name);
   } else {
     desiredLabels.add(LABELS.policyUnmet.name);
@@ -402,17 +383,12 @@ function escapeTableText(value) {
 
 function summarizeResult({ pr, analysis, skipped, skipReason }) {
   const comment =
-    analysis == null
-      ? "None"
-      : buildPolicyComment(analysis).replace(COMMENT_MARKER, "").trim();
+    analysis == null ? "None" : buildPolicyComment(analysis).replace(COMMENT_MARKER, "").trim();
   const summary = {
     blocked: analysis?.blockers.length > 0,
     comment,
     details: "None",
-    labels:
-      analysis?.desiredLabels.length > 0
-        ? analysis.desiredLabels.join(", ")
-        : "None",
+    labels: analysis?.desiredLabels.length > 0 ? analysis.desiredLabels.join(", ") : "None",
     number: pr.number,
     prLink: `<a href="${escapeHtml(pr.html_url)}">#${pr.number}</a>`,
     status: "In scope",
@@ -434,9 +410,7 @@ function summarizeResult({ pr, analysis, skipped, skipReason }) {
     return {
       ...summary,
       comment: escapeTableText(summary.comment),
-      details: escapeHtml(
-        analysis.blockers.map((blocker) => blocker.message).join("; "),
-      ),
+      details: escapeHtml(analysis.blockers.map((blocker) => blocker.message).join("; ")),
       labels: escapeHtml(summary.labels),
       status: analysis.status === "out_of_scope" ? "Out of scope" : "Blocked",
     };
@@ -542,8 +516,7 @@ async function findPolicyComment({ github, owner, repo, issueNumber }) {
   });
 
   return comments.find(
-    (comment) =>
-      comment.user.type === "Bot" && comment.body?.includes(COMMENT_MARKER),
+    (comment) => comment.user.type === "Bot" && comment.body?.includes(COMMENT_MARKER),
   );
 }
 
@@ -631,9 +604,7 @@ async function checkPullRequest({
   const issueNumber = pr.number;
 
   if (pr.user.type === "Bot") {
-    core.notice(
-      `Skipping contribution policy for bot PR #${pr.number} from @${pr.user.login}.`,
-    );
+    core.notice(`Skipping contribution policy for bot PR #${pr.number} from @${pr.user.login}.`);
     return {
       blocked: false,
       number: pr.number,
@@ -646,10 +617,7 @@ async function checkPullRequest({
     };
   }
 
-  if (
-    minimumAutomaticPullNumber != null &&
-    pr.number < minimumAutomaticPullNumber
-  ) {
+  if (minimumAutomaticPullNumber != null && pr.number < minimumAutomaticPullNumber) {
     core.notice(
       `Skipping contribution policy for PR #${pr.number} because automatic checks start at PR #${minimumAutomaticPullNumber}.`,
     );
@@ -786,11 +754,8 @@ async function run({ github, context, core }) {
   const payloadPr = context.payload.pull_request;
   const dryRunInput = context.payload.inputs?.dry_run;
   const dryRun =
-    context.eventName === "workflow_dispatch" &&
-    dryRunInput !== false &&
-    dryRunInput !== "false";
-  const minimumAutomaticPullNumber =
-    payloadPr == null ? null : MIN_AUTOMATIC_PR_NUMBER;
+    context.eventName === "workflow_dispatch" && dryRunInput !== false && dryRunInput !== "false";
+  const minimumAutomaticPullNumber = payloadPr == null ? null : MIN_AUTOMATIC_PR_NUMBER;
   let pullNumbers;
 
   if (payloadPr != null) {
@@ -812,9 +777,7 @@ async function run({ github, context, core }) {
   if (dryRun) {
     core.notice(
       `Running contribution policy in dry-run mode for ${
-        pullNumbers == null
-          ? "all open PRs"
-          : pullNumbers.map((number) => `#${number}`).join(", ")
+        pullNumbers == null ? "all open PRs" : pullNumbers.map((number) => `#${number}`).join(", ")
       }.`,
     );
   }

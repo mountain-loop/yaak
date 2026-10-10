@@ -3,10 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import type { PluginDefinition } from "@yaakapp/api";
 
-type PluginFeatureKey = Exclude<
-  Extract<keyof PluginDefinition, string>,
-  "init" | "dispose"
->;
+type PluginFeatureKey = Exclude<Extract<keyof PluginDefinition, string>, "init" | "dispose">;
 type PluginAPIKey = PluginFeatureKey | "lifecycle";
 
 type MetadataDefinition = {
@@ -77,9 +74,7 @@ const definitions: MetadataDefinition[] = [
   },
 ];
 
-export function generatePluginMetadata(
-  plugin: PluginDefinition,
-): PluginMetadata {
+export function generatePluginMetadata(plugin: PluginDefinition): PluginMetadata {
   const metadata: PluginMetadata = {
     schemaVersion: 1,
     apiTypes: [],
@@ -104,9 +99,7 @@ export function generatePluginMetadata(
   }
 
   const lifecycleHooks = ["init", "dispose"].filter(
-    (key) =>
-      typeof plugin[key as keyof Pick<PluginDefinition, "init" | "dispose">] ===
-      "function",
+    (key) => typeof plugin[key as keyof Pick<PluginDefinition, "init" | "dispose">] === "function",
   );
   if (lifecycleHooks.length > 0) {
     metadata.apiTypes.push("lifecycle");
@@ -145,10 +138,7 @@ if (!plugin || typeof plugin !== "object") {
 const metadata = generatePluginMetadata(plugin);
 fs.writeFileSync(outputPath, `${JSON.stringify(metadata, null, 2)}\n`);
 
-function sanitize(
-  value: unknown,
-  seen = new WeakSet<object>(),
-): MetadataItem | undefined {
+function sanitize(value: unknown, seen = new WeakSet<object>()): MetadataItem | undefined {
   if (value === null) return null;
 
   switch (typeof value) {

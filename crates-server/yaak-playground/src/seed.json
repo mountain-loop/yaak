@@ -3,8 +3,18 @@
     { "id": 1, "name": "Ada Lovelace", "username": "ada", "email": "ada@example.com" },
     { "id": 2, "name": "Grace Hopper", "username": "grace", "email": "grace@example.com" },
     { "id": 3, "name": "Alan Turing", "username": "alan", "email": "alan@example.com" },
-    { "id": 4, "name": "Katherine Johnson", "username": "katherine", "email": "katherine@example.com" },
-    { "id": 5, "name": "Margaret Hamilton", "username": "margaret", "email": "margaret@example.com" }
+    {
+      "id": 4,
+      "name": "Katherine Johnson",
+      "username": "katherine",
+      "email": "katherine@example.com"
+    },
+    {
+      "id": 5,
+      "name": "Margaret Hamilton",
+      "username": "margaret",
+      "email": "margaret@example.com"
+    }
   ],
   "posts": [
     {

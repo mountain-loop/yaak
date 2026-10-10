@@ -18,7 +18,8 @@ export const plugin: PluginDefinition = {
           name: "domain",
           label: "Domain",
           placeholder: "example.com",
-          description: "Optionally filter by domain, useful if multiple cookies with the same name.",
+          description:
+            "Optionally filter by domain, useful if multiple cookies with the same name.",
           optional: true,
         },
       ],

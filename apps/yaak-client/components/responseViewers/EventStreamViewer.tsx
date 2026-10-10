@@ -106,10 +106,7 @@ function ActualEventStreamViewer({ response }: Props) {
         ),
       },
     ],
-    [
-      applyToDetailsSetting,
-      filterEventPreviewsSetting,
-    ],
+    [applyToDetailsSetting, filterEventPreviewsSetting],
   );
 
   return (

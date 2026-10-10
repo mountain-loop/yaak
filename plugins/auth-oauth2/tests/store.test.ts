@@ -51,6 +51,8 @@ describe("token store", () => {
     expect((await getToken(ctx, { ...args, username: null }))?.response.access_token).toBe(
       "cc-token",
     );
-    expect((await getToken(ctx, { ...args, username: "" }))?.response.access_token).toBe("cc-token");
+    expect((await getToken(ctx, { ...args, username: "" }))?.response.access_token).toBe(
+      "cc-token",
+    );
   });
 });

@@ -124,7 +124,10 @@ function CommitListItem({
     >
       <div className="truncate flex-1">{commit.message || "No message"}</div>
       <div className="text-text-subtle text-sm truncate">
-        {commit.author.name || "Unknown"} - {formatDistanceToNowStrict(commit.when)} ago - <span className="shrink-0 text-2xs text-text-subtle font-mono">{commit.oid.slice(0, 7)}</span>
+        {commit.author.name || "Unknown"} - {formatDistanceToNowStrict(commit.when)} ago -{" "}
+        <span className="shrink-0 text-2xs text-text-subtle font-mono">
+          {commit.oid.slice(0, 7)}
+        </span>
       </div>
     </button>
   );

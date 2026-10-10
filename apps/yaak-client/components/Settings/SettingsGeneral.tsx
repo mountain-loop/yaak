@@ -37,9 +37,7 @@ export function SettingsGeneral() {
     <VStack space={1.5} className="mb-4">
       <div>
         <Heading>General</Heading>
-        <p className="text-text-subtle">
-          Configure general settings for update behavior and more.
-        </p>
+        <p className="text-text-subtle">Configure general settings for update behavior and more.</p>
       </div>
       <div className="mt-3 mb-5">
         <CommercialUseBanner source="settings-general" title="Using Yaak for work?" />
@@ -78,9 +76,7 @@ export function SettingsGeneral() {
               description="Choose whether updates are installed automatically or manually."
               name="autoupdate"
               value={settings.autoupdate ? "auto" : "manual"}
-              onChange={(v) =>
-                patchModel(settings, { autoupdate: v === "auto" })
-              }
+              onChange={(v) => patchModel(settings, { autoupdate: v === "auto" })}
               options={[
                 { label: "Automatic", value: "auto" },
                 { label: "Manual", value: "manual" },
@@ -130,9 +126,8 @@ export function SettingsGeneral() {
             className="w-full p-4 max-w-xl mr-auto"
           >
             <p>
-              Workspace specific settings have moved to{" "}
-              <b>Workspace Settings</b>, accessible from the workspace switcher
-              menu.
+              Workspace specific settings have moved to <b>Workspace Settings</b>, accessible from
+              the workspace switcher menu.
             </p>
           </DismissibleBanner>
         )}

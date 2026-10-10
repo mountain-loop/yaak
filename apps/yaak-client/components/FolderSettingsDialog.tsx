@@ -88,9 +88,7 @@ export function FolderSettingsDialog({ folderId, tab }: Props) {
         <div className="flex items-center gap-1.5 font-semibold text-text min-w-0 overflow-hidden flex-1">
           {breadcrumbs.map((item, index) => (
             <Fragment key={item.id}>
-              {index > 0 && (
-                <Icon icon="chevron_right" size="lg" className="opacity-50 shrink-0" />
-              )}
+              {index > 0 && <Icon icon="chevron_right" size="lg" className="opacity-50 shrink-0" />}
               <span className="text-text-subtle truncate min-w-0" title={item.name}>
                 {item.name}
               </span>
