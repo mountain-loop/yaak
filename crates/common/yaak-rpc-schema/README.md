@@ -11,7 +11,7 @@ as `@yaakapp-internal/rpc-schema`) are generated from one place.
 
 Nothing here depends on Tauri or on any host. Request structs are plain data,
 and so are the few response types declared here rather than in an engine crate.
-Command *bodies* live with the host that runs them.
+Command _bodies_ live with the host that runs them.
 
 ## Adding a command
 
@@ -41,4 +41,4 @@ macro_rules! register_commands {
 yaak_rpc_schema::with_commands!(register_commands);
 ```
 
-The schema decides *what* commands exist; the host decides *how* each one runs.
+The schema decides _what_ commands exist; the host decides _how_ each one runs.

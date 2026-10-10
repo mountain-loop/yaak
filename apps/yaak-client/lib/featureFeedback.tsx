@@ -53,9 +53,7 @@ function showFeedbackToast(feature: FeedbackFeature) {
     timeout: FEEDBACK_PROMPT_TIMEOUT_MS,
     dynamicHeight: true,
     hideDismiss: true,
-    message: (
-      <FeedbackToast feature={feature} onDone={() => markFeatureFeedbackDone(feature)} />
-    ),
+    message: <FeedbackToast feature={feature} onDone={() => markFeatureFeedbackDone(feature)} />,
   });
 }
 

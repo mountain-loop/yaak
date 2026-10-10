@@ -59,11 +59,7 @@ export function DismissibleBanner({
 
   return (
     <Banner
-      className={classNames(
-        className,
-        "relative",
-        size === "xs" && "!px-2 !py-2 text-xs",
-      )}
+      className={classNames(className, "relative", size === "xs" && "!px-2 !py-2 text-xs")}
       {...props}
     >
       <div className="@container">

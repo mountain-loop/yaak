@@ -44,7 +44,10 @@ function wordBefore(
   return { from, to: pos, text: m[0] };
 }
 
-function fieldCompletionFrom(doc: string, pos: number): { from: number; includeAt: boolean } | null {
+function fieldCompletionFrom(
+  doc: string,
+  pos: number,
+): { from: number; includeAt: boolean } | null {
   const w = wordBefore(doc, pos, FIELD_IDENT);
   const from = w?.from ?? pos;
   const beforeToken = doc[from - 1];

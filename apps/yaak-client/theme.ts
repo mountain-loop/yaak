@@ -51,8 +51,7 @@ async function configureThemeAndShow() {
 platform.listen<ModelPayload[]>("model_writes", async (payloads) => {
   const relevant = payloads.some(
     (p) =>
-      p.change.type === "upsert" &&
-      (p.model.model === "settings" || p.model.model === "plugin"),
+      p.change.type === "upsert" && (p.model.model === "settings" || p.model.model === "plugin"),
   );
   if (!relevant) return;
   await configureThemeAndShow();

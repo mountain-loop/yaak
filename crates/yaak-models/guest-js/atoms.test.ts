@@ -1,5 +1,5 @@
 import { createStore } from "jotai";
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import type { HttpResponseEvent } from "../bindings/gen_models";
 import { httpResponseEventsAtom, modelStoreDataAtom } from "./atoms";
 import { newStoreData } from "./util";

@@ -315,8 +315,16 @@ class TimelineWriter {
  * yaak-models), so an edit made while the send was in flight survives rather
  * than being written over by the send's stale snapshot.
  */
-async function persistCookies(db: WorkerConnection, jar: CookieJar, cookies: Cookie[]): Promise<void> {
-  await db.rpc("web_persist_send_cookies", { cookieJarId: jar.id, before: jar.cookies, after: cookies });
+async function persistCookies(
+  db: WorkerConnection,
+  jar: CookieJar,
+  cookies: Cookie[],
+): Promise<void> {
+  await db.rpc("web_persist_send_cookies", {
+    cookieJarId: jar.id,
+    before: jar.cookies,
+    after: cookies,
+  });
 }
 
 /**

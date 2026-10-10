@@ -119,15 +119,7 @@ export function SplitLayout({
         setWidth(newWidthPx / containerWidth);
       }
     },
-    [
-      renderedWidth,
-      renderedHeight,
-      vertical,
-      minHeightPx,
-      setHeight,
-      minWidthPx,
-      setWidth,
-    ],
+    [renderedWidth, renderedHeight, vertical, minHeightPx, setHeight, minWidthPx, setWidth],
   );
 
   return (

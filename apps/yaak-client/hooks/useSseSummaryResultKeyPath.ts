@@ -52,7 +52,10 @@ export function useSseSummaryResultKeyPath({ response }: { response: HttpRespons
     key: ["sse_summary_result_key_path_enabled", response.requestId],
     fallback: null,
   });
-  const inferredResultKeyPath = useMemo(() => inferSseSummaryResultKeyPath(response), [response.url]);
+  const inferredResultKeyPath = useMemo(
+    () => inferSseSummaryResultKeyPath(response),
+    [response.url],
+  );
   const resultKeyPath = storedResultKeyPath.value ?? inferredResultKeyPath;
   const trimmedResultKeyPath = resultKeyPath?.trim() ?? "";
   const isEnabled = enabled.value ?? inferredResultKeyPath != null;

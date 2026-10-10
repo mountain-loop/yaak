@@ -22,9 +22,8 @@ vi.mock("@yaakapp-internal/models", () => ({ foldersAtom: {} }));
 vi.mock("../../../apps/yaak-client/lib/jotai", () => ({ jotaiStore: { get: () => [] } }));
 
 const { resolvedModelName } = await import("../src");
-const { resolvedModelName: clientResolvedModelName } = await import(
-  "../../../apps/yaak-client/lib/resolvedModelName"
-);
+const { resolvedModelName: clientResolvedModelName } =
+  await import("../../../apps/yaak-client/lib/resolvedModelName");
 
 function httpRequest(url: string, name = ""): HttpRequest {
   return { id: "rq_test", model: "http_request", name, url } as HttpRequest;

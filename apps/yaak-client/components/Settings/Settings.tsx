@@ -79,7 +79,9 @@ export default function Settings({ tab, hide }: Props) {
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(platform.osType() === "macos" ? "text-center" : "pl-2")}>Settings</div>
+            <div className={classNames(platform.osType() === "macos" ? "text-center" : "pl-2")}>
+              Settings
+            </div>
           </HStack>
         </HeaderSize>
       )}
@@ -89,41 +91,39 @@ export default function Settings({ tab, hide }: Props) {
         addBorders
         tabListClassName="min-w-40 bg-surface x-theme-sidebar border-r border-border pl-3"
         label="Settings"
-        tabs={tabs.map(
-          (value): TabItem => ({
-            value,
-            label: capitalize(value),
-            hidden: !appInfo.featureLicense && value === TAB_LICENSE,
-            leftSlot:
-              value === TAB_GENERAL ? (
-                <Icon icon="settings" className="text-secondary" />
-              ) : value === TAB_THEME ? (
-                <Icon icon="palette" className="text-secondary" />
-              ) : value === TAB_INTERFACE ? (
-                <Icon icon="columns_2" className="text-secondary" />
-              ) : value === TAB_SHORTCUTS ? (
-                <Icon icon="keyboard" className="text-secondary" />
-              ) : value === TAB_CERTIFICATES ? (
-                <Icon icon="shield_check" className="text-secondary" />
-              ) : value === TAB_PROXY ? (
-                <Icon icon="wifi" className="text-secondary" />
-              ) : value === TAB_PLUGINS ? (
-                <Icon icon="puzzle" className="text-secondary" />
-              ) : value === TAB_LICENSE ? (
-                <Icon icon="key_round" className="text-secondary" />
-              ) : null,
-            rightSlot:
-              value === TAB_CERTIFICATES ? (
-                <CountBadge count={settings.clientCertificates.length} />
-              ) : value === TAB_PLUGINS ? (
-                <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
-              ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
-                <CountBadge count />
-              ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (
-                <CountBadge count color="notice" />
-              ) : null,
-          }),
-        )}
+        tabs={tabs.map((value): TabItem => ({
+          value,
+          label: capitalize(value),
+          hidden: !appInfo.featureLicense && value === TAB_LICENSE,
+          leftSlot:
+            value === TAB_GENERAL ? (
+              <Icon icon="settings" className="text-secondary" />
+            ) : value === TAB_THEME ? (
+              <Icon icon="palette" className="text-secondary" />
+            ) : value === TAB_INTERFACE ? (
+              <Icon icon="columns_2" className="text-secondary" />
+            ) : value === TAB_SHORTCUTS ? (
+              <Icon icon="keyboard" className="text-secondary" />
+            ) : value === TAB_CERTIFICATES ? (
+              <Icon icon="shield_check" className="text-secondary" />
+            ) : value === TAB_PROXY ? (
+              <Icon icon="wifi" className="text-secondary" />
+            ) : value === TAB_PLUGINS ? (
+              <Icon icon="puzzle" className="text-secondary" />
+            ) : value === TAB_LICENSE ? (
+              <Icon icon="key_round" className="text-secondary" />
+            ) : null,
+          rightSlot:
+            value === TAB_CERTIFICATES ? (
+              <CountBadge count={settings.clientCertificates.length} />
+            ) : value === TAB_PLUGINS ? (
+              <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
+            ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
+              <CountBadge count />
+            ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (
+              <CountBadge count color="notice" />
+            ) : null,
+        }))}
       >
         <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-6 py-4!">
           <SettingsGeneral />

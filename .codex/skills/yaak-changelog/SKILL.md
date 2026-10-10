@@ -13,6 +13,7 @@ Use this skill to create Yaak changelogs in the correct place:
 ## Workflow
 
 1. Identify the target release.
+
 - If the target tag contains `-beta` or the GitHub release is a draft prerelease, update the GitHub release body only. Do not create or edit `src/content/changelog/` files for beta releases.
 - For a new stable changelog, gather all beta release notes for that version since the previous stable release, then create or edit website changelog files.
 - Prefer `gh api` or GitHub release pages. If network access is restricted, request permission before querying GitHub.
@@ -20,6 +21,7 @@ Use this skill to create Yaak changelogs in the correct place:
 - Fetch PR authors when generating or revising release notes. Include contributor attribution for non-`@gschier` PR authors.
 
 2. Parse release bullets.
+
 - Treat each release-note bullet as one changelog entry.
 - Skip dependency-only, generated, build-only, test-only, CI-only, and internal maintenance bullets unless they have a clear user-facing impact that can be described in user terms.
 - For stable website changelogs, skip bullets prefixed with `[beta-only]`.
@@ -28,6 +30,7 @@ Use this skill to create Yaak changelogs in the correct place:
 - Convert `#NNN` into `https://github.com/mountain-loop/yaak/pull/NNN`.
 
 3. For beta or draft prerelease changelogs, update the GitHub release.
+
 - Keep the changelog in the GitHub release body. Do not create a website changelog directory.
 - Do not add a changelog badge or link to `yaak.app/changelog/VERSION` for beta releases.
 - Prefer concise bullets with PR links and feedback links when available.
@@ -38,12 +41,14 @@ Use this skill to create Yaak changelogs in the correct place:
 - Stop after verifying the GitHub release body. The website checks below do not apply.
 
 4. For stable website changelogs, create or edit the release directory.
+
 - Path format: `src/content/changelog/YYYYMMDD_VERSION/`.
 - For a new release, use today's date for `YYYYMMDD`.
 - For an existing release, keep the original directory date.
 - Do not create changelog directories for beta releases.
 
 5. Write `_release.yaml`.
+
 - Include `draft`, optional `title`, `summary`, `image`, `youtube`, and `entries`.
 - Keep minor items as quick entries without `content`.
 - Use `content` only when an entry needs its own markdown section.
@@ -64,22 +69,26 @@ entries:
 ```
 
 6. Expand major entries.
+
 - Expand 3 to 6 major items when enough context exists.
 - Create slugified markdown files and reference them with `content`.
 - Read the related PR before writing expanded content.
 - Add emoji prefixes only for expanded entry titles if it helps distinguish major sections.
 
 7. Handle images.
+
 - Reuse screenshots from PRs when they exist.
 - Convert GitHub private attachment URLs to `https://github.com/user-attachments/assets/UUID` before upload.
 - Upload with `go run cmd/yaakadmin/main.go upload "URL"` when the environment permits it.
 - If no real image is available, use a placeholder with real alt text and a caption.
 
 8. Write `_intro.md`.
+
 - Add a short overview paragraph at the top of the release.
 - Focus on the major themes across the release instead of repeating every bullet.
 
 9. Follow Yaak writing style.
+
 - Be direct and factual. Avoid hype.
 - State what changed and how to use it.
 - Keep paragraphs short.

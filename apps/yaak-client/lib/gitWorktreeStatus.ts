@@ -17,6 +17,6 @@ export const gitWorktreeStatusFamily = atomFamily(
         a?.status === b?.status &&
         a?.staged === b?.staged &&
         a?.modelId === b?.modelId,
-  ),
+    ),
   Object.is,
 );

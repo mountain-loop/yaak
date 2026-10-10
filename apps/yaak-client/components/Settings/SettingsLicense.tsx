@@ -135,7 +135,9 @@ function SettingsLicenseCmp() {
           <Button
             color="secondary"
             size="sm"
-            onClick={() => platform.openUrl("https://yaak.app/dashboard?intent=app.license.support")}
+            onClick={() =>
+              platform.openUrl("https://yaak.app/dashboard?intent=app.license.support")
+            }
             rightSlot={<Icon icon="external_link" />}
           >
             Direct Support
@@ -151,7 +153,9 @@ function SettingsLicenseCmp() {
             color="primary"
             rightSlot={<Icon icon="external_link" />}
             onClick={() =>
-              platform.openUrl(pricingUrl(`app.license.purchase.${check.data?.status ?? "unknown"}`))
+              platform.openUrl(
+                pricingUrl(`app.license.purchase.${check.data?.status ?? "unknown"}`),
+              )
             }
           >
             Purchase License

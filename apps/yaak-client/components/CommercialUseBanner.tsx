@@ -10,13 +10,7 @@ const COMMERCIAL_USE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 const COMMERCIAL_USE_BANNER_MESSAGE =
   "Personal use of Yaak is free. If you’re using Yaak at work, please purchase a license.";
 
-export function CommercialUseBanner({
-  source,
-  title,
-}: {
-  source: string;
-  title: string;
-}) {
+export function CommercialUseBanner({ source, title }: { source: string; title: string }) {
   const [visible, setVisible] = useState(false);
   const snoozeStartedRef = useRef(false);
   const {
@@ -63,9 +57,7 @@ export function CommercialUseBanner({
         id={`commercial-use:${source}`}
         color="info"
         className="w-full"
-        onDismiss={() =>
-          setSnoozedAt(JSON.stringify({ source, at: new Date().toISOString() }))
-        }
+        onDismiss={() => setSnoozedAt(JSON.stringify({ source, at: new Date().toISOString() }))}
         onShow={handleShow}
         actions={[
           {

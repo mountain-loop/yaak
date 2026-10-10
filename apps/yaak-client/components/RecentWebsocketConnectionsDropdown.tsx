@@ -1,13 +1,7 @@
 import type { WebsocketConnection } from "@yaakapp-internal/models";
 import { deleteModel, getModel } from "@yaakapp-internal/models";
 import { HStack, Icon } from "@yaakapp-internal/ui";
-import {
-  differenceInHours,
-  differenceInMinutes,
-  format,
-  isToday,
-  isYesterday,
-} from "date-fns";
+import { differenceInHours, differenceInMinutes, format, isToday, isYesterday } from "date-fns";
 import { deleteWebsocketConnections } from "../commands/deleteWebsocketConnections";
 import { pluralizeCount } from "../lib/pluralize";
 import { Dropdown, type DropdownItem } from "./core/Dropdown";
@@ -45,7 +39,8 @@ export function RecentWebsocketConnectionsDropdown({
     else if (hoursAgo < 6) historyGroup = "3 hours ago";
     else if (isToday(createdAtDate)) historyGroup = "Today";
     else if (isYesterday(createdAtDate)) historyGroup = "Yesterday";
-    else if (createdAtDate.getFullYear() === now.getFullYear()) historyGroup = format(createdAtDate, "MMM d");
+    else if (createdAtDate.getFullYear() === now.getFullYear())
+      historyGroup = format(createdAtDate, "MMM d");
     const absoluteTime = format(createdAt, "MMM d, yyyy, h:mm:ss a O");
 
     if (historyGroup === "Just now") {
@@ -53,7 +48,9 @@ export function RecentWebsocketConnectionsDropdown({
     } else if (!hasRecentConnections && !hasShownRecentEmptyState) {
       connectionHistoryItems.push({
         type: "content",
-        label: <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>,
+        label: (
+          <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>
+        ),
       });
       hasShownRecentEmptyState = true;
     }
@@ -80,7 +77,9 @@ export function RecentWebsocketConnectionsDropdown({
   if (!hasRecentConnections && !hasShownRecentEmptyState) {
     connectionHistoryItems.push({
       type: "content",
-      label: <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>,
+      label: (
+        <span className="block px-4 py-1 text-sm text-text-subtle">No recent connections</span>
+      ),
     });
   }
 

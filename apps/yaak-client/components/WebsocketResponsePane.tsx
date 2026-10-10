@@ -117,10 +117,10 @@ function WebsocketEventRow({
     messageType === "error"
       ? "alert_triangle"
       : messageType === "close" || messageType === "open"
-      ? "info"
-      : isServer
-        ? "arrow_big_down_dash"
-        : "arrow_big_up_dash";
+        ? "info"
+        : isServer
+          ? "arrow_big_down_dash"
+          : "arrow_big_up_dash";
 
   const content =
     messageType === "close" ? (
