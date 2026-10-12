@@ -119,7 +119,7 @@
     "@codemirror/lang-java": "^6.0.2",
     "@codemirror/lang-php": "^6.0.2",
     "@codemirror/lang-python": "^6.2.1",
-    "@codemirror/legacy-modes": "^6.5.2"
+    "@codemirror/legacy-modes": "^6.5.5"
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.3",
