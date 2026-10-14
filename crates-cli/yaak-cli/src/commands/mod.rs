@@ -4,6 +4,7 @@ pub mod cookie_jar;
 pub mod environment;
 pub mod folder;
 pub mod import_export;
+pub mod mcp;
 pub mod plugin;
 pub mod request;
 pub mod response;

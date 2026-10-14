@@ -12,6 +12,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::client_db::{ClientDb, WriteDb};
 use yaak_models::error::Result;
+use yaak_models::models::AnyModel;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
 
@@ -172,14 +173,19 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             tauri::async_runtime::spawn(async move {
                 while let Ok(payload) = rx.recv() {
                     let mut batch: Vec<ModelPayload> = Vec::new();
+                    let mut settings_changed = matches!(payload.model, AnyModel::Settings(_));
                     if matches!(payload.update_source, UpdateSource::Window { .. }) {
                         batch.push(payload);
                     }
                     // Coalesce any writes already queued into the same emit
                     while let Ok(next) = rx.try_recv() {
+                        settings_changed |= matches!(next.model, AnyModel::Settings(_));
                         if matches!(next.update_source, UpdateSource::Window { .. }) {
                             batch.push(next);
                         }
+                    }
+                    if settings_changed {
+                        crate::mcp_ext::sync(&app_handle_local);
                     }
                     if batch.is_empty() {
                         continue;

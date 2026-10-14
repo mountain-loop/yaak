@@ -1,0 +1,28 @@
+[package]
+name = "yaak-mcp"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+bytes = { version = "1" }
+http-body-util = { version = "0.1" }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+log = { workspace = true }
+rmcp = { version = "3.5.1", default-features = false, features = [
+  "server",
+  "macros",
+  "transport-io",
+  "transport-streamable-http-server",
+] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["net", "rt", "macros"] }
+tokio-util = { version = "0.7" }
+yaak-models = { workspace = true }
+yaak-plugins = { workspace = true }
+
+[dev-dependencies]
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }

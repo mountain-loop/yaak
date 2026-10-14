@@ -130,7 +130,7 @@ impl CliContext {
         &self.blob_manager
     }
 
-    pub fn connection_manager(&self) -> &HttpConnectionManager {
+    pub fn connection_manager(&self) -> &Arc<HttpConnectionManager> {
         &self.connection_manager
     }
 

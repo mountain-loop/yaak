@@ -455,6 +455,7 @@ export type Settings = {
   updateChannel: string;
   hideLicenseBadge: boolean;
   promptFeedback: boolean;
+  mcpServerEnabled: boolean;
   autoupdate: boolean;
   autoDownloadUpdates: boolean;
   checkNotifications: boolean;

@@ -90,6 +90,7 @@ yaak-http = { workspace = true }
 yaak-license = { workspace = true, optional = true }
 yaak-mac-window = { workspace = true }
 yaak-lifecycle = { workspace = true }
+yaak-mcp = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }
