@@ -6,7 +6,6 @@ import { appInfo } from "../../lib/appInfo";
 import { revealInFinderText } from "../../lib/reveal";
 import { CargoFeature } from "../CargoFeature";
 import { CommercialUseBanner } from "../CommercialUseBanner";
-import { SettingsMcpServer } from "./SettingsMcpServer";
 import { DismissibleBanner } from "../core/DismissibleBanner";
 import { IconButton } from "../core/IconButton";
 import { platform } from "@yaakapp-internal/platform";
@@ -123,8 +122,6 @@ export function SettingsGeneral() {
             />
           </SettingsSection>
         </CargoFeature>
-
-        <SettingsMcpServer settings={settings} />
 
         {showWorkspaceSettingsMovedBanner && (
           <DismissibleBanner
