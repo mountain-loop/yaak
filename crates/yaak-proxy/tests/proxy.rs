@@ -176,6 +176,33 @@ impl Harness {
         self.client_trusting(self.ca.pem())
     }
 
+    /// A raw connection tunneled through the proxy with CONNECT to `localhost:port`.
+    async fn connect_tunnel(&self, port: u16) -> TcpStream {
+        let mut tcp = TcpStream::connect(("127.0.0.1", self.proxy.port)).await.unwrap();
+        let connect =
+            format!("CONNECT localhost:{port} HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n");
+        tcp.write_all(connect.as_bytes()).await.unwrap();
+        let mut head = Vec::new();
+        while !head.ends_with(b"\r\n\r\n") {
+            head.push(tcp.read_u8().await.unwrap());
+        }
+        assert!(head.starts_with(b"HTTP/1.1 200"), "{}", String::from_utf8_lossy(&head));
+        tcp
+    }
+
+    fn tls_client_config(&self) -> Arc<ClientConfig> {
+        let mut roots = RootCertStore::empty();
+        roots
+            .add(CertificateDer::from(pem::parse(self.ca.pem()).unwrap().into_contents()))
+            .unwrap();
+        let config = ClientConfig::builder_with_provider(ring())
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        Arc::new(config)
+    }
+
     /// Events of the next flow, through its terminal event plus any stragglers.
     fn flow_events(&self) -> Vec<ProxyEvent> {
         let mut events = Vec::new();
@@ -231,6 +258,34 @@ fn ca_is_persisted_with_private_key() {
         use std::os::unix::fs::PermissionsExt;
         let mode = std::fs::metadata(first.key_path()).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+    }
+}
+
+#[test]
+fn concurrent_creators_agree_on_one_ca() {
+    for _ in 0..20 {
+        let dir = TempDir::new().unwrap();
+        let barrier = Arc::new(std::sync::Barrier::new(8));
+        let pems: Vec<String> = (0..8)
+            .map(|_| {
+                let (dir, barrier) = (dir.path().to_path_buf(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    CaStore::load_or_create(&dir).unwrap().pem().to_string()
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|t| t.join().unwrap())
+            .collect();
+
+        let on_disk = std::fs::read_to_string(dir.path().join("ca.pem")).unwrap();
+        assert!(pems.iter().all(|p| *p == on_disk), "creators returned different CAs");
+        let key = KeyPair::from_pem(&std::fs::read_to_string(dir.path().join("ca.key")).unwrap())
+            .unwrap();
+        let cert = pem::parse(&on_disk).unwrap().into_contents();
+        let spki = key.public_key_der();
+        assert!(cert.windows(spki.len()).any(|w| w == spki), "ca.key does not match ca.pem");
     }
 }
 
@@ -340,23 +395,8 @@ async fn websocket_upgrade_passes_through() {
     let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
     let port = upstream.port();
 
-    let mut tcp = TcpStream::connect(("127.0.0.1", h.proxy.port)).await.unwrap();
-    let connect = format!("CONNECT localhost:{port} HTTP/1.1\r\nHost: localhost:{port}\r\n\r\n");
-    tcp.write_all(connect.as_bytes()).await.unwrap();
-    let mut head = Vec::new();
-    while !head.ends_with(b"\r\n\r\n") {
-        head.push(tcp.read_u8().await.unwrap());
-    }
-    assert!(head.starts_with(b"HTTP/1.1 200"), "{}", String::from_utf8_lossy(&head));
-
-    let mut roots = RootCertStore::empty();
-    roots.add(CertificateDer::from(pem::parse(h.ca.pem()).unwrap().into_contents())).unwrap();
-    let config = ClientConfig::builder_with_provider(ring())
-        .with_safe_default_protocol_versions()
-        .unwrap()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    let tls = TlsConnector::from(Arc::new(config))
+    let tcp = h.connect_tunnel(port).await;
+    let tls = TlsConnector::from(h.tls_client_config())
         .connect(ServerName::try_from("localhost").unwrap(), tcp)
         .await
         .unwrap();
@@ -399,6 +439,82 @@ async fn pinned_client_falls_back_to_passthrough() {
     }
     assert_eq!(body.as_deref(), Some("hello"));
     assert!(h.events.try_recv().is_err(), "passthrough traffic must not produce flows");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn certificate_alert_passes_through_on_the_next_connection() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let port = upstream.port();
+    let mut roots = RootCertStore::empty();
+    roots.add(h.pki.ca_der.clone()).unwrap();
+    let config = ClientConfig::builder_with_provider(ring())
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    let pinned = TlsConnector::from(Arc::new(config));
+    let name = ServerName::try_from("localhost").unwrap();
+
+    assert!(pinned.connect(name.clone(), h.connect_tunnel(port).await).await.is_err());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    pinned
+        .connect(name, h.connect_tunnel(port).await)
+        .await
+        .expect("one certificate alert should be enough to pass the host through");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn abandoned_handshake_does_not_disable_capture() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let port = upstream.port();
+
+    let mut tcp = h.connect_tunnel(port).await;
+    let mut hello = Vec::new();
+    rustls::ClientConnection::new(
+        h.tls_client_config(),
+        ServerName::try_from("localhost").unwrap(),
+    )
+    .unwrap()
+    .write_tls(&mut hello)
+    .unwrap();
+    tcp.write_all(&hello).await.unwrap();
+    let mut server_hello = [0u8; 1];
+    tcp.read_exact(&mut server_hello).await.unwrap();
+    drop(tcp);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let url = format!("https://localhost:{port}/hello");
+    assert_eq!(h.client().get(&url).send().await.unwrap().text().await.unwrap(), "hello");
+    let events = h.flow_events();
+    assert_eq!(find!(events, ProxyEvent::ResponseStart { status, .. } => *status), 200);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn server_first_tunnel_does_not_wait_for_the_client() {
+    let h = Harness::start(1024);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"220 ready\r\n").await.unwrap();
+        let mut buf = [0u8; 64];
+        let n = socket.read(&mut buf).await.unwrap();
+        socket.write_all(&buf[..n]).await.unwrap();
+    });
+
+    let mut tcp = h.connect_tunnel(port).await;
+    let mut greeting = [0u8; 11];
+    tokio::time::timeout(Duration::from_secs(5), tcp.read_exact(&mut greeting))
+        .await
+        .expect("the server's greeting never arrived")
+        .unwrap();
+    assert_eq!(&greeting, b"220 ready\r\n");
+    tcp.write_all(b"EHLO yaak\r\n").await.unwrap();
+    let mut echo = [0u8; 11];
+    tcp.read_exact(&mut echo).await.unwrap();
+    assert_eq!(&echo, b"EHLO yaak\r\n");
 }
 
 #[tokio::test(flavor = "multi_thread")]

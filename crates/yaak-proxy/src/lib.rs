@@ -4,7 +4,7 @@ mod connection;
 mod request;
 mod tunnel;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc as std_mpsc;
@@ -22,6 +22,8 @@ use tokio::net::TcpListener;
 pub use cert::CaStore;
 use connection::handle_connection;
 use request::BoxBody;
+
+const PASSTHROUGH_AFTER_FAILURES: u32 = 2;
 
 /// Default for [`ProxyConfig::capture_body_limit`]: 10 MB.
 pub const DEFAULT_CAPTURE_BODY_LIMIT: usize = 10 * 1024 * 1024;
@@ -189,6 +191,7 @@ pub(crate) struct Engine {
     upstream_tls: Arc<ClientConfig>,
     upstream_tls_h1: Arc<ClientConfig>,
     passthrough: Mutex<HashSet<String>>,
+    handshake_failures: Mutex<HashMap<String, u32>>,
 }
 
 impl Engine {
@@ -204,8 +207,22 @@ impl Engine {
         self.passthrough.lock().unwrap().contains(addr)
     }
 
-    fn mark_passthrough(&self, addr: &str) {
+    /// Returns whether `addr` is now passed through. macOS clients reject the CA with a bare
+    /// reset, indistinguishable from an abandoned handshake, so those need two in a row.
+    fn record_handshake_failure(&self, addr: &str, certificate_rejected: bool) -> bool {
+        let mut failures = self.handshake_failures.lock().unwrap();
+        let count = failures.entry(addr.to_string()).or_default();
+        *count += 1;
+        if !certificate_rejected && *count < PASSTHROUGH_AFTER_FAILURES {
+            return false;
+        }
+        failures.remove(addr);
         self.passthrough.lock().unwrap().insert(addr.to_string());
+        true
+    }
+
+    fn record_handshake_success(&self, addr: &str) {
+        self.handshake_failures.lock().unwrap().remove(addr);
     }
 }
 
@@ -243,6 +260,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         upstream_tls: upstream_tls_config(&roots, &[b"h2", b"http/1.1"])?,
         upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
         passthrough: Mutex::new(HashSet::new()),
+        handshake_failures: Mutex::new(HashMap::new()),
     });
 
     let port = config.port;

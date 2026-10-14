@@ -220,11 +220,13 @@ fn run_event_loop(
                     r.response_body.get_or_insert_default().extend_from_slice(&data);
                 }
             }
-            ProxyEvent::ResponseBodyComplete { id, size, elapsed_ms, .. } => {
+            ProxyEvent::ResponseBodyComplete { id, size, elapsed_ms, error, .. } => {
                 if let Some(mut r) = in_flight.remove(&id) {
                     r.response_body_size = size;
                     r.elapsed_ms = r.elapsed_ms.or(Some(elapsed_ms));
-                    r.state = RequestState::Complete;
+                    r.state =
+                        if error.is_some() { RequestState::Error } else { RequestState::Complete };
+                    r.error = error;
                     write_entry(&db, &events, &r);
                 }
             }

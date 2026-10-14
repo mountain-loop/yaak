@@ -2,7 +2,7 @@ use std::convert::Infallible;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
@@ -27,6 +27,9 @@ pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Err
 type BoxError = Box<dyn Error + Send + Sync>;
 
 const TLS_HANDSHAKE_RECORD: u8 = 0x16;
+/// TLS clients send their ClientHello as soon as CONNECT succeeds; protocols where the server
+/// speaks first (SMTP, for one) send nothing, so after this they are tunneled blind.
+const CLIENT_FIRST_BYTES_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn text_body(text: impl Into<Bytes>) -> BoxBody {
     Full::new(text.into()).map_err(|never| match never {}).boxed()
@@ -193,7 +196,12 @@ where
     }
 
     let mut buf = vec![0u8; 4096];
-    let n = client.read(&mut buf).await?;
+    let Ok(n) = tokio::time::timeout(CLIENT_FIRST_BYTES_TIMEOUT, client.read(&mut buf)).await
+    else {
+        debug!("Client sent nothing, tunneling server-first traffic to {}", target.addr);
+        return Ok(tunnel(client, &target.addr, &[]).await?);
+    };
+    let n = n?;
     if n == 0 {
         return Ok(());
     }
@@ -214,18 +222,37 @@ where
     let tls = match start.into_stream(config).await {
         Ok(tls) => tls,
         Err(e) => {
-            info!(
-                "TLS handshake with client failed for {}, passing it through from now on: {e}",
-                target.addr
-            );
-            engine.mark_passthrough(&target.addr);
+            if engine.record_handshake_failure(&target.addr, is_certificate_rejection(&e)) {
+                info!("Client rejected the proxy for {}, passing it through: {e}", target.addr);
+            } else {
+                debug!("TLS handshake with client failed for {}: {e}", target.addr);
+            }
             return Ok(());
         }
     };
+    engine.record_handshake_success(&target.addr);
 
     let target = Arc::new(Target { server_name, ..target });
     serve_http1(tls, move |req| forward_https(req, target.clone(), engine.clone())).await?;
     Ok(())
+}
+
+fn is_certificate_rejection(e: &std::io::Error) -> bool {
+    use rustls::AlertDescription::{
+        BadCertificate, CertificateExpired, CertificateRevoked, CertificateUnknown, UnknownCA,
+        UnsupportedCertificate,
+    };
+    matches!(
+        e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>()),
+        Some(rustls::Error::AlertReceived(
+            BadCertificate
+                | UnsupportedCertificate
+                | CertificateRevoked
+                | CertificateExpired
+                | CertificateUnknown
+                | UnknownCA
+        ))
+    )
 }
 
 enum Upstream {

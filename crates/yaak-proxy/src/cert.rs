@@ -29,9 +29,18 @@ pub struct CaStore {
 
 impl CaStore {
     /// Loads the CA from `dir`, or creates one there (key mode 0600) if either file is missing.
+    /// Safe to call from several processes at once: `ca.lock` serializes them.
     pub fn load_or_create(dir: &Path) -> io::Result<Self> {
         let cert_path = dir.join("ca.pem");
         let key_path = dir.join("ca.key");
+
+        fs::create_dir_all(dir)?;
+        let lock = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.join("ca.lock"))?;
+        lock.lock()?;
 
         let (pem, key) = if cert_path.exists() && key_path.exists() {
             let key =
@@ -45,11 +54,12 @@ impl CaStore {
             params.not_before = now - Duration::days(1);
             params.not_after = now + Duration::days(CA_VALIDITY_DAYS);
             let pem = params.self_signed(&key).map_err(io::Error::other)?.pem();
-            fs::create_dir_all(dir)?;
-            write_private(&key_path, key.serialize_pem().as_bytes())?;
-            fs::write(&cert_path, &pem)?;
+            remove_if_exists(&cert_path)?;
+            write_atomic(&key_path, key.serialize_pem().as_bytes(), true)?;
+            write_atomic(&cert_path, pem.as_bytes(), false)?;
             (pem, key)
         };
+        drop(lock);
 
         let cert_der = pem::parse(&pem)
             .map_err(io::Error::other)
@@ -132,14 +142,34 @@ fn ca_params() -> CertificateParams {
     params
 }
 
-fn write_private(path: &Path, contents: &[u8]) -> io::Result<()> {
+fn remove_if_exists(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// Writes through a temporary file and a rename, so readers never see a partial file.
+fn write_atomic(path: &Path, contents: &[u8], private: bool) -> io::Result<()> {
     use std::io::Write;
+    let mut tmp_name = path.file_name().unwrap_or_default().to_os_string();
+    tmp_name.push(".tmp");
+    let tmp = path.with_file_name(tmp_name);
+
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(path)?;
+    if private {
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = private;
+    let mut file = options.open(&tmp)?;
     #[cfg(unix)]
-    file.set_permissions(std::os::unix::fs::PermissionsExt::from_mode(0o600))?;
-    file.write_all(contents)
+    if private {
+        file.set_permissions(std::os::unix::fs::PermissionsExt::from_mode(0o600))?;
+    }
+    file.write_all(contents)?;
+    file.sync_all()?;
+    fs::rename(&tmp, path)
 }
