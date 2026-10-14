@@ -6,10 +6,11 @@ publish = false
 
 [dependencies]
 hyper = { version = "1", features = ["http1", "http2", "server", "client"] }
-hyper-util = { version = "0.1", features = ["tokio", "server-auto", "client-legacy"] }
+hyper-util = { version = "0.1", features = ["tokio", "http1", "client-legacy"] }
 http-body-util = "0.1"
 http = "1"
 bytes = "1"
+log = { workspace = true }
 tokio = { workspace = true, features = [
   "rt-multi-thread",
   "net",
@@ -23,3 +24,11 @@ rustls = { workspace = true, features = ["ring"] }
 rustls-native-certs = "0.8"
 tokio-rustls = "0.26"
 pem = "3"
+time = "0.3"
+
+[dev-dependencies]
+futures-util = "0.3"
+hyper-util = { version = "0.1", features = ["server-auto"] }
+reqwest = { workspace = true }
+tempfile = "3"
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }

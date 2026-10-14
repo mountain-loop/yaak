@@ -8,11 +8,11 @@ use crate::models::{HttpExchange, ModelPayload, ProxyHeader};
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource};
-use yaak_proxy::{CapturedRequest, ProxyEvent, ProxyHandle, RequestState};
+use yaak_proxy::{CaStore, CapturedRequest, ProxyConfig, ProxyEvent, ProxyHandle, RequestState};
 use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
 
 // -- Context --
@@ -21,13 +21,20 @@ use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
 #[derive(Clone)]
 pub struct ProxyCtx {
     handle: Arc<Mutex<Option<ProxyHandle>>>,
+    ca_dir: PathBuf,
     pub db: ProxyQueryManager,
     pub events: RpcEventEmitter,
 }
 
 impl ProxyCtx {
     pub fn new(db_path: &Path, events: RpcEventEmitter) -> Self {
-        Self { handle: Arc::new(Mutex::new(None)), db: ProxyQueryManager::new(db_path), events }
+        let ca_dir = db_path.parent().unwrap_or(Path::new(".")).join("ca");
+        Self {
+            handle: Arc::new(Mutex::new(None)),
+            ca_dir,
+            db: ProxyQueryManager::new(db_path),
+            events,
+        }
     }
 }
 
@@ -93,8 +100,11 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
                     return Ok(true); // already running
                 }
 
+                let ca = CaStore::load_or_create(&ctx.ca_dir)
+                    .map_err(|e| RpcError { message: format!("Failed to load proxy CA: {e}") })?;
                 let mut proxy_handle =
-                    yaak_proxy::start_proxy(9090).map_err(|e| RpcError { message: e })?;
+                    yaak_proxy::start_proxy(ProxyConfig::new(9090, Arc::new(ca)))
+                        .map_err(|e| RpcError { message: e })?;
 
                 if let Some(event_rx) = proxy_handle.take_event_rx() {
                     let db = ctx.db.clone();
@@ -156,7 +166,7 @@ fn run_event_loop(
 
     while let Ok(event) = rx.recv() {
         match event {
-            ProxyEvent::RequestStart { id, method, url, http_version } => {
+            ProxyEvent::RequestStart { id, method, url, http_version, .. } => {
                 in_flight.insert(
                     id,
                     CapturedRequest {
@@ -182,12 +192,15 @@ fn run_event_loop(
                     r.request_headers.push((name, value));
                 }
             }
-            ProxyEvent::RequestBody { id, body } => {
-                if let Some(r) = in_flight.get_mut(&id) {
-                    r.request_body = Some(body);
+            ProxyEvent::RequestBodyChunk { id, data, .. } => {
+                if let Some(r) = in_flight.get_mut(&id)
+                    && !data.is_empty()
+                {
+                    r.request_body.get_or_insert_default().extend_from_slice(&data);
                 }
             }
-            ProxyEvent::ResponseStart { id, status, http_version, elapsed_ms } => {
+            ProxyEvent::RequestBodyComplete { .. } => {}
+            ProxyEvent::ResponseStart { id, status, http_version, elapsed_ms, .. } => {
                 if let Some(r) = in_flight.get_mut(&id) {
                     r.status = Some(status);
                     r.remote_http_version = Some(http_version);
@@ -200,19 +213,24 @@ fn run_event_loop(
                     r.response_headers.push((name, value));
                 }
             }
-            ProxyEvent::ResponseBodyChunk { .. } => {
-                // Progress only — no action needed
+            ProxyEvent::ResponseBodyChunk { id, data, .. } => {
+                if let Some(r) = in_flight.get_mut(&id)
+                    && !data.is_empty()
+                {
+                    r.response_body.get_or_insert_default().extend_from_slice(&data);
+                }
             }
-            ProxyEvent::ResponseBodyComplete { id, body, size, elapsed_ms } => {
+            ProxyEvent::ResponseBodyComplete { id, size, elapsed_ms, error, .. } => {
                 if let Some(mut r) = in_flight.remove(&id) {
-                    r.response_body = body;
                     r.response_body_size = size;
                     r.elapsed_ms = r.elapsed_ms.or(Some(elapsed_ms));
-                    r.state = RequestState::Complete;
+                    r.state =
+                        if error.is_some() { RequestState::Error } else { RequestState::Complete };
+                    r.error = error;
                     write_entry(&db, &events, &r);
                 }
             }
-            ProxyEvent::Error { id, error } => {
+            ProxyEvent::Error { id, error, .. } => {
                 if let Some(mut r) = in_flight.remove(&id) {
                     r.error = Some(error);
                     r.state = RequestState::Error;

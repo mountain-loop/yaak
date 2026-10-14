@@ -1,40 +1,38 @@
 use std::convert::Infallible;
+use std::error::Error;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc as std_mpsc;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-use hyper::header::HeaderMap;
-use hyper::service::service_fn;
+use hyper::header::{HOST, UPGRADE};
+use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
-use hyper_util::server::conn::auto;
-use rustls::ClientConfig;
+use hyper_util::client::legacy::connect::HttpInfo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use log::{debug, info, warn};
 use rustls::pki_types::ServerName;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio_rustls::TlsAcceptor;
+use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
-use crate::body::MeasuredBody;
-use crate::cert::CertificateAuthority;
-use crate::{ProxyEvent, REQUEST_ID};
+use crate::body::{CaptureBody, Direction};
+use crate::connection::serve_http1;
+use crate::tunnel::{Rewind, splice, tunnel};
+use crate::{Engine, ProxyEvent};
 
-type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
+pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
+type BoxError = Box<dyn Error + Send + Sync>;
 
-fn full_body(bytes: Bytes) -> BoxBody {
-    Full::new(bytes).map_err(|never| match never {}).boxed()
-}
+const TLS_HANDSHAKE_RECORD: u8 = 0x16;
+/// TLS clients send their ClientHello as soon as CONNECT succeeds; protocols where the server
+/// speaks first (SMTP, for one) send nothing, so after this they are tunneled blind.
+const CLIENT_FIRST_BYTES_TIMEOUT: Duration = Duration::from_secs(1);
 
-fn measured_incoming(
-    incoming: Incoming,
-    id: u64,
-    start: Instant,
-    tx: std_mpsc::Sender<ProxyEvent>,
-) -> BoxBody {
-    MeasuredBody::new(incoming, id, start, tx).boxed()
+fn text_body(text: impl Into<Bytes>) -> BoxBody {
+    Full::new(text.into()).map_err(|never| match never {}).boxed()
 }
 
 fn version_str(v: hyper::Version) -> String {
@@ -49,239 +47,241 @@ fn version_str(v: hyper::Version) -> String {
     .to_string()
 }
 
-fn emit_request_events(
-    tx: &std_mpsc::Sender<ProxyEvent>,
-    id: u64,
-    headers: &HeaderMap,
-    body: &Option<Vec<u8>>,
-) {
-    for (name, value) in headers.iter() {
-        let _ = tx.send(ProxyEvent::RequestHeader {
-            id,
-            name: name.to_string(),
-            value: value.to_str().unwrap_or("<binary>").to_string(),
-        });
+fn error_chain(e: &(dyn Error + 'static)) -> String {
+    let mut message = e.to_string();
+    let mut source = e.source();
+    while let Some(s) = source {
+        message.push_str(": ");
+        message.push_str(&s.to_string());
+        source = s.source();
     }
-    if let Some(body) = body {
-        let _ = tx.send(ProxyEvent::RequestBody { id, body: body.clone() });
+    message
+}
+
+/// Per-flow bookkeeping shared by the plain HTTP and the intercepted HTTPS paths.
+struct Flow {
+    id: u64,
+    start: Instant,
+    engine: Arc<Engine>,
+}
+
+impl Flow {
+    fn begin(engine: Arc<Engine>, req: &Request<Incoming>, url: String) -> Self {
+        let flow = Self { id: engine.next_flow_id(), start: Instant::now(), engine };
+        flow.engine.emit(ProxyEvent::RequestStart {
+            id: flow.id,
+            started_at: SystemTime::now(),
+            method: req.method().to_string(),
+            url,
+            http_version: version_str(req.version()),
+        });
+        for (name, value) in req.headers() {
+            flow.engine.emit(ProxyEvent::RequestHeader {
+                id: flow.id,
+                name: name.to_string(),
+                value: String::from_utf8_lossy(value.as_bytes()).into_owned(),
+            });
+        }
+        flow
+    }
+
+    fn capture_request(&self, body: Incoming) -> BoxBody {
+        CaptureBody::new(body, Direction::Request, self.id, self.start, self.engine.clone()).boxed()
+    }
+
+    fn respond(
+        self,
+        resp: Response<Incoming>,
+        remote_addr: Option<SocketAddr>,
+    ) -> Response<BoxBody> {
+        self.engine.emit(ProxyEvent::ResponseStart {
+            id: self.id,
+            status: resp.status().as_u16(),
+            http_version: version_str(resp.version()),
+            remote_addr,
+            elapsed_ms: self.start.elapsed().as_millis() as u64,
+        });
+        for (name, value) in resp.headers() {
+            self.engine.emit(ProxyEvent::ResponseHeader {
+                id: self.id,
+                name: name.to_string(),
+                value: String::from_utf8_lossy(value.as_bytes()).into_owned(),
+            });
+        }
+        let (parts, body) = resp.into_parts();
+        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, self.engine);
+        Response::from_parts(parts, body.boxed())
+    }
+
+    fn fail(self, error: String) -> Response<BoxBody> {
+        debug!("Flow {} failed: {error}", self.id);
+        let body = format!("Yaak Proxy could not reach the server: {error}");
+        self.engine.emit(ProxyEvent::Error {
+            id: self.id,
+            error,
+            elapsed_ms: self.start.elapsed().as_millis() as u64,
+        });
+        bad_gateway(body)
     }
 }
 
-fn emit_response_events(
-    tx: &std_mpsc::Sender<ProxyEvent>,
-    id: u64,
-    resp: &Response<Incoming>,
-    start: &Instant,
-) {
-    let _ = tx.send(ProxyEvent::ResponseStart {
-        id,
-        status: resp.status().as_u16(),
-        http_version: version_str(resp.version()),
-        elapsed_ms: start.elapsed().as_millis() as u64,
-    });
-    for (name, value) in resp.headers().iter() {
-        let _ = tx.send(ProxyEvent::ResponseHeader {
-            id,
-            name: name.to_string(),
-            value: value.to_str().unwrap_or("<binary>").to_string(),
-        });
-    }
+fn bad_gateway(body: String) -> Response<BoxBody> {
+    Response::builder().status(StatusCode::BAD_GATEWAY).body(text_body(body)).unwrap()
 }
 
 pub(crate) async fn handle_request(
     req: Request<Incoming>,
-    event_tx: std_mpsc::Sender<ProxyEvent>,
-    ca: Arc<CertificateAuthority>,
+    engine: Arc<Engine>,
 ) -> Result<Response<BoxBody>, Infallible> {
-    let result = if req.method() == Method::CONNECT {
-        handle_connect(req, event_tx, ca).await
-    } else {
-        handle_http(req, event_tx).await
-    };
-    match result {
-        Ok(resp) => Ok(resp),
-        Err(e) => {
-            eprintln!("Proxy error: {e}");
-            Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(full_body(Bytes::from(format!("Proxy error: {e}"))))
-                .unwrap())
-        }
+    if req.method() == Method::CONNECT {
+        return Ok(handle_connect(req, engine));
     }
-}
 
-async fn handle_http(
-    req: Request<Incoming>,
-    event_tx: std_mpsc::Sender<ProxyEvent>,
-) -> Result<Response<BoxBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-    let method = req.method().to_string();
-    let uri = req.uri().to_string();
-    let http_version = version_str(req.version());
-    let start = Instant::now();
-
-    let _ = event_tx.send(ProxyEvent::RequestStart { id, method, url: uri.clone(), http_version });
-
-    let client: Client<_, Full<Bytes>> = Client::builder(TokioExecutor::new()).build_http();
-
+    let flow = Flow::begin(engine.clone(), &req, req.uri().to_string());
     let (parts, body) = req.into_parts();
-    let body_bytes = body.collect().await?.to_bytes();
-    let request_body = if body_bytes.is_empty() { None } else { Some(body_bytes.to_vec()) };
-    emit_request_events(&event_tx, id, &parts.headers, &request_body);
-
-    let outgoing_req = Request::from_parts(parts, Full::new(body_bytes));
-
-    match client.request(outgoing_req).await {
+    let outgoing = Request::from_parts(parts, flow.capture_request(body));
+    Ok(match engine.http_client.request(outgoing).await {
         Ok(resp) => {
-            emit_response_events(&event_tx, id, &resp, &start);
-
-            let (parts, body) = resp.into_parts();
-            Ok(Response::from_parts(parts, measured_incoming(body, id, start, event_tx)))
+            let remote_addr = resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr());
+            flow.respond(resp, remote_addr)
         }
-        Err(e) => {
-            let _ = event_tx.send(ProxyEvent::Error { id, error: e.to_string() });
-            Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-        }
-    }
+        Err(e) => flow.fail(error_chain(&e)),
+    })
 }
 
-async fn handle_connect(
-    req: Request<Incoming>,
-    event_tx: std_mpsc::Sender<ProxyEvent>,
-    ca: Arc<CertificateAuthority>,
-) -> Result<Response<BoxBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let authority = req.uri().authority().map(|a| a.to_string()).unwrap_or_default();
-    let (host, port) = parse_host_port(&authority);
+/// Where an intercepted CONNECT tunnel leads.
+struct Target {
+    /// Host for the leaf certificate and upstream SNI.
+    server_name: String,
+    /// `host[:port]` as it appears in captured URLs.
+    authority: String,
+    /// `host:port` to dial.
+    addr: String,
+}
 
-    let server_config = ca.server_config(&host)?;
-    let acceptor = TlsAcceptor::from(server_config);
-
-    let target_addr = format!("{host}:{port}");
+fn handle_connect(req: Request<Incoming>, engine: Arc<Engine>) -> Response<BoxBody> {
+    let Some(authority) = req.uri().authority().cloned() else {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(text_body("CONNECT requires host:port"))
+            .unwrap();
+    };
+    let host = authority.host().to_string();
+    let port = authority.port_u16().unwrap_or(443);
 
     tokio::spawn(async move {
         let upgraded = match hyper::upgrade::on(req).await {
-            Ok(u) => u,
-            Err(e) => {
-                eprintln!("CONNECT upgrade failed: {e}");
-                return;
-            }
+            Ok(u) => TokioIo::new(u),
+            Err(e) => return warn!("CONNECT upgrade failed for {host}: {e}"),
         };
-
-        let tls_stream = match acceptor.accept(hyper_util::rt::TokioIo::new(upgraded)).await {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("TLS accept failed for {host}: {e}");
-                return;
-            }
+        let target = Target {
+            server_name: host.trim_start_matches('[').trim_end_matches(']').to_string(),
+            authority: if port == 443 { host.clone() } else { format!("{host}:{port}") },
+            addr: format!("{host}:{port}"),
         };
-
-        let tx = event_tx.clone();
-        let host_for_requests = host.clone();
-        let mut builder = auto::Builder::new(TokioExecutor::new());
-        builder.http1().preserve_header_case(true).title_case_headers(true);
-        if let Err(e) = builder
-            .serve_connection_with_upgrades(
-                hyper_util::rt::TokioIo::new(tls_stream),
-                service_fn(move |req| {
-                    let tx = tx.clone();
-                    let host = host_for_requests.clone();
-                    let target_addr = target_addr.clone();
-                    async move { handle_tunneled_request(req, tx, &host, &target_addr).await }
-                }),
-            )
-            .await
-        {
-            eprintln!("MITM connection error for {host}: {e}");
+        if let Err(e) = intercept(upgraded, target, engine).await {
+            debug!("Tunnel to {host}:{port} ended: {}", error_chain(e.as_ref()));
         }
     });
 
-    Ok(Response::new(full_body(Bytes::new())))
+    Response::new(text_body(Bytes::new()))
 }
 
-async fn handle_tunneled_request(
-    req: Request<Incoming>,
-    event_tx: std_mpsc::Sender<ProxyEvent>,
-    host: &str,
-    target_addr: &str,
-) -> Result<Response<BoxBody>, Infallible> {
-    let result = forward_https(req, event_tx, host, target_addr).await;
-    match result {
-        Ok(resp) => Ok(resp),
+async fn intercept<S>(mut client: S, target: Target, engine: Arc<Engine>) -> Result<(), BoxError>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    if engine.is_passthrough(&target.addr) {
+        return Ok(tunnel(client, &target.addr, &[]).await?);
+    }
+
+    let mut buf = vec![0u8; 4096];
+    let Ok(n) = tokio::time::timeout(CLIENT_FIRST_BYTES_TIMEOUT, client.read(&mut buf)).await
+    else {
+        debug!("Client sent nothing, tunneling server-first traffic to {}", target.addr);
+        return Ok(tunnel(client, &target.addr, &[]).await?);
+    };
+    let n = n?;
+    if n == 0 {
+        return Ok(());
+    }
+    buf.truncate(n);
+    if buf[0] != TLS_HANDSHAKE_RECORD {
+        debug!("Tunneling non-TLS traffic to {}", target.addr);
+        return Ok(tunnel(client, &target.addr, &buf).await?);
+    }
+
+    let acceptor = rustls::server::Acceptor::default();
+    let start = LazyConfigAcceptor::new(acceptor, Rewind::new(Bytes::from(buf), client)).await?;
+    let server_name = start
+        .client_hello()
+        .server_name()
+        .map(str::to_string)
+        .unwrap_or_else(|| target.server_name.clone());
+    let config = engine.ca.server_config(&server_name)?;
+    let tls = match start.into_stream(config).await {
+        Ok(tls) => tls,
         Err(e) => {
-            eprintln!("HTTPS forward error: {e:?}");
-            Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .body(full_body(Bytes::from(format!("Proxy error: {e}"))))
-                .unwrap())
+            if engine.record_handshake_failure(&target.addr, is_certificate_rejection(&e)) {
+                info!("Client rejected the proxy for {}, passing it through: {e}", target.addr);
+            } else {
+                debug!("TLS handshake with client failed for {}: {e}", target.addr);
+            }
+            return Ok(());
         }
-    }
+    };
+    engine.record_handshake_success(&target.addr);
+
+    let target = Arc::new(Target { server_name, ..target });
+    serve_http1(tls, move |req| forward_https(req, target.clone(), engine.clone())).await?;
+    Ok(())
 }
 
-enum HttpSender {
-    H1(hyper::client::conn::http1::SendRequest<Full<Bytes>>),
-    H2(hyper::client::conn::http2::SendRequest<Full<Bytes>>),
+fn is_certificate_rejection(e: &std::io::Error) -> bool {
+    use rustls::AlertDescription::{
+        BadCertificate, CertificateExpired, CertificateRevoked, CertificateUnknown, UnknownCA,
+        UnsupportedCertificate,
+    };
+    matches!(
+        e.get_ref().and_then(|inner| inner.downcast_ref::<rustls::Error>()),
+        Some(rustls::Error::AlertReceived(
+            BadCertificate
+                | UnsupportedCertificate
+                | CertificateRevoked
+                | CertificateExpired
+                | CertificateUnknown
+                | UnknownCA
+        ))
+    )
 }
 
-impl HttpSender {
-    async fn send_request(
-        &mut self,
-        req: Request<Full<Bytes>>,
-    ) -> Result<Response<Incoming>, hyper::Error> {
-        match self {
-            HttpSender::H1(s) => s.send_request(req).await,
-            HttpSender::H2(s) => s.send_request(req).await,
-        }
-    }
+enum Upstream {
+    H1(hyper::client::conn::http1::SendRequest<BoxBody>),
+    H2(hyper::client::conn::http2::SendRequest<BoxBody>),
 }
 
-async fn forward_https(
-    req: Request<Incoming>,
-    event_tx: std_mpsc::Sender<ProxyEvent>,
-    host: &str,
-    target_addr: &str,
-) -> Result<Response<BoxBody>, Box<dyn std::error::Error + Send + Sync>> {
-    let id = REQUEST_ID.fetch_add(1, Ordering::Relaxed);
-    let method = req.method().to_string();
-    let http_version = version_str(req.version());
-    let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
-    let uri_str = format!("https://{host}{path}");
-    let start = Instant::now();
+async fn connect_upstream(
+    engine: &Engine,
+    target: &Target,
+    h1_only: bool,
+) -> Result<(Upstream, Option<SocketAddr>), BoxError> {
+    let tcp = TcpStream::connect(&target.addr).await?;
+    let remote_addr = tcp.peer_addr().ok();
+    let config = if h1_only { &engine.upstream_tls_h1 } else { &engine.upstream_tls };
+    let server_name = ServerName::try_from(target.server_name.clone())?;
+    let tls = TlsConnector::from(config.clone()).connect(server_name, tcp).await?;
+    let is_h2 = tls.get_ref().1.alpn_protocol() == Some(b"h2");
+    let io = TokioIo::new(tls);
 
-    let _ =
-        event_tx.send(ProxyEvent::RequestStart { id, method, url: uri_str.clone(), http_version });
-
-    // Connect to upstream with TLS
-    let tcp_stream = TcpStream::connect(target_addr).await?;
-
-    let mut root_store = rustls::RootCertStore::empty();
-    for cert in rustls_native_certs::load_native_certs().certs {
-        let _ = root_store.add(cert);
-    }
-
-    let mut tls_config =
-        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
-            .with_safe_default_protocol_versions()?
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
-    tls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-
-    let connector = tokio_rustls::TlsConnector::from(Arc::new(tls_config));
-    let server_name = ServerName::try_from(host.to_string())?;
-    let tls_stream = connector.connect(server_name, tcp_stream).await?;
-
-    let negotiated_h2 = tls_stream.get_ref().1.alpn_protocol().map_or(false, |p| p == b"h2");
-
-    let io = hyper_util::rt::TokioIo::new(tls_stream);
-
-    let mut sender = if negotiated_h2 {
+    let upstream = if is_h2 {
         let (sender, conn) =
             hyper::client::conn::http2::Builder::new(TokioExecutor::new()).handshake(io).await?;
         tokio::spawn(async move {
             if let Err(e) = conn.await {
-                eprintln!("Upstream h2 connection error: {e}");
+                debug!("Upstream h2 connection error: {e}");
             }
         });
-        HttpSender::H2(sender)
+        Upstream::H2(sender)
     } else {
         let (sender, conn) = hyper::client::conn::http1::Builder::new()
             .preserve_header_case(true)
@@ -289,51 +289,69 @@ async fn forward_https(
             .handshake(io)
             .await?;
         tokio::spawn(async move {
-            if let Err(e) = conn.await {
-                eprintln!("Upstream h1 connection error: {e}");
+            if let Err(e) = conn.with_upgrades().await {
+                debug!("Upstream h1 connection error: {e}");
             }
         });
-        HttpSender::H1(sender)
+        Upstream::H1(sender)
     };
-
-    // Capture request metadata
-    let (mut parts, body) = req.into_parts();
-    let body_bytes = body.collect().await?.to_bytes();
-    let request_body = if body_bytes.is_empty() { None } else { Some(body_bytes.to_vec()) };
-    emit_request_events(&event_tx, id, &parts.headers, &request_body);
-
-    if negotiated_h2 {
-        // HTTP/2 requires absolute-form URI with scheme + authority
-        parts.uri = uri_str.parse::<Uri>()?;
-    } else {
-        parts.uri = path.parse::<Uri>()?;
-    }
-
-    if !parts.headers.contains_key(hyper::header::HOST) {
-        parts.headers.insert(hyper::header::HOST, host.parse()?);
-    }
-
-    let outgoing = Request::from_parts(parts, Full::new(body_bytes));
-
-    match sender.send_request(outgoing).await {
-        Ok(resp) => {
-            emit_response_events(&event_tx, id, &resp, &start);
-
-            let (parts, body) = resp.into_parts();
-            Ok(Response::from_parts(parts, measured_incoming(body, id, start, event_tx)))
-        }
-        Err(e) => {
-            let _ = event_tx.send(ProxyEvent::Error { id, error: e.to_string() });
-            Err(Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-        }
-    }
+    Ok((upstream, remote_addr))
 }
 
-fn parse_host_port(authority: &str) -> (String, u16) {
-    if let Some((host, port_str)) = authority.rsplit_once(':') {
-        if let Ok(port) = port_str.parse::<u16>() {
-            return (host.to_string(), port);
-        }
+async fn forward_https(
+    mut req: Request<Incoming>,
+    target: Arc<Target>,
+    engine: Arc<Engine>,
+) -> Result<Response<BoxBody>, Infallible> {
+    let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
+    let url = format!("https://{}{path}", target.authority);
+    let flow = Flow::begin(engine.clone(), &req, url.clone());
+
+    let client_upgrade: Option<OnUpgrade> =
+        req.headers().contains_key(UPGRADE).then(|| hyper::upgrade::on(&mut req));
+
+    let (mut upstream, remote_addr) =
+        match connect_upstream(&engine, &target, client_upgrade.is_some()).await {
+            Ok(u) => u,
+            Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
+        };
+
+    let (mut parts, body) = req.into_parts();
+    let uri = match &upstream {
+        Upstream::H2(_) => url.parse::<Uri>(),
+        Upstream::H1(_) => path.parse::<Uri>(),
+    };
+    parts.uri = match uri {
+        Ok(uri) => uri,
+        Err(e) => return Ok(flow.fail(e.to_string())),
+    };
+    if !parts.headers.contains_key(HOST)
+        && let Ok(host) = target.authority.parse()
+    {
+        parts.headers.insert(HOST, host);
     }
-    (authority.to_string(), 443)
+    let outgoing = Request::from_parts(parts, flow.capture_request(body));
+
+    let sent = match &mut upstream {
+        Upstream::H1(s) => s.send_request(outgoing).await,
+        Upstream::H2(s) => s.send_request(outgoing).await,
+    };
+    let mut resp = match sent {
+        Ok(resp) => resp,
+        Err(e) => return Ok(flow.fail(error_chain(&e))),
+    };
+
+    if resp.status() == StatusCode::SWITCHING_PROTOCOLS
+        && let Some(client_upgrade) = client_upgrade
+    {
+        let upstream_upgrade = hyper::upgrade::on(&mut resp);
+        let addr = target.addr.clone();
+        tokio::spawn(async move {
+            if let Err(e) = splice(client_upgrade, upstream_upgrade).await {
+                debug!("Upgraded tunnel to {addr} ended: {e}");
+            }
+        });
+    }
+
+    Ok(flow.respond(resp, remote_addr))
 }
