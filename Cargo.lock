@@ -11494,16 +11494,22 @@ name = "yaak-proxy"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "futures-util",
  "http",
  "http-body-util",
  "hyper",
  "hyper-util",
+ "log 0.4.34",
  "pem",
  "rcgen",
+ "reqwest",
  "rustls",
  "rustls-native-certs",
+ "tempfile",
+ "time",
  "tokio",
  "tokio-rustls",
+ "tokio-tungstenite",
 ]
 
 [[package]]
