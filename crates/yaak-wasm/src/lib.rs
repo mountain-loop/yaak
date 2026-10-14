@@ -252,6 +252,47 @@ struct InsertResponseEventsReq {
     events: Vec<HttpResponseEventData>,
 }
 
+fn evaluate_http_assertions(
+    host: &Host,
+    definition: &yaak_assertions::HttpAssertions,
+    response: &yaak_models::models::HttpResponse,
+    canceled: bool,
+) -> Result<serde_json::Value> {
+    let db = host.blobs.connect();
+    let read = || -> std::result::Result<Option<Vec<u8>>, yaak_models::error::Error> {
+        if db.get_body_size(&response.id)? > yaak_assertions::MAX_BODY_BYTES {
+            return Ok(None);
+        }
+        Ok(Some(db.get_chunks(&response.id)?.into_iter().flat_map(|c| c.data).collect()))
+    };
+    let bytes =
+        if definition.needs_body() && response.error.is_none() { read().ok() } else { None };
+    let body = match &bytes {
+        Some(None) => yaak_assertions::Body::TooLarge,
+        Some(Some(bytes)) if !bytes.is_empty() || response.content_length.unwrap_or(0) == 0 => {
+            yaak_assertions::Body::Bytes(bytes)
+        }
+        _ => yaak_assertions::Body::Unavailable,
+    };
+    let headers =
+        response.headers.iter().map(|h| (h.name.clone(), h.value.clone())).collect::<Vec<_>>();
+    to_json(yaak_assertions::evaluate(
+        definition,
+        yaak_assertions::Response {
+            status: response.status,
+            headers: &headers,
+            body,
+            completion: if canceled {
+                yaak_assertions::Completion::Canceled
+            } else if response.error.is_some() {
+                yaak_assertions::Completion::Error
+            } else {
+                yaak_assertions::Completion::Complete
+            },
+        },
+    ))
+}
+
 fn dispatch(
     host: &Host,
     cmd: &str,
@@ -306,6 +347,69 @@ fn dispatch(
             }
 
             to_json(serde_json::to_string(&list).map_err(js_error)?)
+        }
+
+        "cmd_validate_http_assertions" => {
+            #[derive(Deserialize)]
+            struct Req {
+                assertions: yaak_assertions::HttpAssertions,
+            }
+            let req: Req = from_js(payload)?;
+            to_json(yaak_assertions::validation_errors(&req.assertions))
+        }
+        "cmd_http_response_json_children" => {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Req {
+                response_id: String,
+                parent: String,
+            }
+            let req: Req = from_js(payload)?;
+            yaak_jsonpath::parse(&req.parent).map_err(js_error)?;
+            let response =
+                host.queries.connect().get_http_response(&req.response_id).map_err(js_error)?;
+            if !matches!(response.state, yaak_models::models::HttpResponseState::Closed) {
+                return Err(js_error("Wait for the response to finish"));
+            }
+            let db = host.blobs.connect();
+            if db.get_body_size(&req.response_id).map_err(js_error)? > yaak_jsonpath::MAX_BODY_BYTES
+            {
+                return Err(js_error("Suggestions are limited to JSON responses up to 10 MiB"));
+            }
+            let bytes: Vec<u8> = db
+                .get_chunks(&req.response_id)
+                .map_err(js_error)?
+                .into_iter()
+                .flat_map(|c| c.data)
+                .collect();
+            let document = yaak_jsonpath::parse_body(&bytes).map_err(js_error)?;
+            to_json(yaak_jsonpath::children(&document, &req.parent).map_err(js_error)?)
+        }
+        "cmd_preview_http_assertions" => {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Req {
+                response_id: String,
+                assertions: yaak_assertions::HttpAssertions,
+            }
+            let req: Req = from_js(payload)?;
+            let response =
+                host.queries.connect().get_http_response(&req.response_id).map_err(js_error)?;
+            if !matches!(response.state, yaak_models::models::HttpResponseState::Closed) {
+                return Err(js_error("Wait for the response to finish"));
+            }
+            // Return a preview only; never patch the saved response or send anything.
+            evaluate_http_assertions(host, &req.assertions, &response, false)
+        }
+        "evaluate_http_assertions" => {
+            #[derive(Deserialize)]
+            struct Req {
+                definition: yaak_assertions::HttpAssertions,
+                response: yaak_models::models::HttpResponse,
+                canceled: bool,
+            }
+            let req: Req = from_js(payload)?;
+            evaluate_http_assertions(host, &req.definition, &req.response, req.canceled)
         }
 
         "models_upsert" => {

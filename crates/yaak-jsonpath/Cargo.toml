@@ -1,0 +1,11 @@
+[package]
+name = "yaak-jsonpath"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_json_path = "0.7.2"
+ts-rs = { workspace = true }

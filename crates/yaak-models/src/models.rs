@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use ts_rs::TS;
+pub use yaak_assertions::{AssertionReport, AssertionResult, HttpAssertion, HttpAssertions};
 use yaak_database::{Result as DbResult, UpdateSource};
 pub use yaak_database::{UpsertModelInfo, upsert_date};
 
@@ -1334,6 +1335,7 @@ impl Default for HttpRequest {
             body_type: None,
             description: String::new(),
             headers: Vec::new(),
+            assertions: HttpAssertions::default(),
             method: "GET".to_string(),
             name: String::new(),
             sort_priority: 0.0,
@@ -1370,6 +1372,8 @@ pub struct HttpRequest {
     pub body_type: Option<String>,
     pub description: String,
     pub headers: Vec<HttpRequestHeader>,
+    #[serde(skip_serializing_if = "HttpAssertions::is_empty")]
+    pub assertions: HttpAssertions,
     pub method: String,
     pub name: String,
     pub sort_priority: f64,
@@ -1424,6 +1428,7 @@ impl UpsertModelInfo for HttpRequest {
             (Authentication, serde_json::to_string(&self.authentication)?.into()),
             (AuthenticationType, self.authentication_type.into()),
             (Headers, serde_json::to_string(&self.headers)?.into()),
+            (HttpRequestIden::Assertions, serde_json::to_string(&self.assertions)?.into()),
             (SortPriority, self.sort_priority.into()),
             (SettingSendCookies, serde_json::to_string(&self.setting_send_cookies)?.into()),
             (SettingStoreCookies, serde_json::to_string(&self.setting_store_cookies)?.into()),
@@ -1446,6 +1451,7 @@ impl UpsertModelInfo for HttpRequest {
             FolderId,
             Method,
             Headers,
+            HttpRequestIden::Assertions,
             Body,
             BodyType,
             Authentication,
@@ -1486,6 +1492,15 @@ impl UpsertModelInfo for HttpRequest {
             description: row.get("description")?,
             folder_id: row.get("folder_id")?,
             headers: serde_json::from_str(headers.as_str()).unwrap_or_default(),
+            assertions: serde_json::from_str(&row.get::<_, String>("assertions")?).map_err(
+                |e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                },
+            )?,
             method: row.get("method")?,
             name: row.get("name")?,
             sort_priority: row.get("sort_priority")?,
@@ -1956,6 +1971,7 @@ pub struct HttpResponse {
     pub elapsed_headers: i32,
     pub elapsed_dns: i32,
     pub error: Option<String>,
+    pub assertion_results: Option<AssertionReport>,
     pub headers: Vec<HttpResponseHeader>,
     pub remote_addr: Option<String>,
     pub request_content_length: Option<i32>,
@@ -2005,6 +2021,10 @@ impl UpsertModelInfo for HttpResponse {
             (ElapsedHeaders, self.elapsed_headers.into()),
             (ElapsedDns, self.elapsed_dns.into()),
             (Error, self.error.into()),
+            (
+                AssertionResults,
+                self.assertion_results.map(|r| serde_json::to_string(&r)).transpose()?.into(),
+            ),
             (Headers, serde_json::to_string(&self.headers)?.into()),
             (RemoteAddr, self.remote_addr.into()),
             (RequestHeaders, serde_json::to_string(&self.request_headers)?.into()),
@@ -2027,6 +2047,7 @@ impl UpsertModelInfo for HttpResponse {
             HttpResponseIden::ElapsedHeaders,
             HttpResponseIden::ElapsedDns,
             HttpResponseIden::Error,
+            HttpResponseIden::AssertionResults,
             HttpResponseIden::Headers,
             HttpResponseIden::RemoteAddr,
             HttpResponseIden::RequestContentLength,
@@ -2053,6 +2074,17 @@ impl UpsertModelInfo for HttpResponse {
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             error: r.get("error")?,
+            assertion_results: r
+                .get::<_, Option<String>>("assertion_results")?
+                .map(|v| serde_json::from_str(&v))
+                .transpose()
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?,
             url: r.get("url")?,
             content_length: r.get("content_length")?,
             content_length_compressed: r.get("content_length_compressed").unwrap_or_default(),

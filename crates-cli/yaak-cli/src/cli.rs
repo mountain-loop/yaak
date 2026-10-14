@@ -71,6 +71,9 @@ pub enum Commands {
     /// Send a request, folder, or workspace by ID
     Send(SendArgs),
 
+    /// Run HTTP assertions (exit 0: passed, 1: failed/error, 2: invalid configuration)
+    Test(TestArgs),
+
     /// Cookie jar commands
     CookieJar(CookieJarArgs),
 
@@ -184,6 +187,24 @@ pub enum AgentCommands {
         #[arg(long = "agent", value_name = "AGENT")]
         agent: Option<Vec<String>>,
     },
+}
+
+#[derive(Args)]
+pub struct TestArgs {
+    /// Request, folder, or workspace ID; sends HTTP requests sequentially in sidebar order
+    pub id: String,
+
+    /// Stop after the first failed check or request error
+    #[arg(long)]
+    pub fail_fast: bool,
+
+    /// Write a JSON report without URLs, headers, bodies, or assertion values
+    #[arg(long, value_name = "FILE")]
+    pub json: Option<PathBuf>,
+
+    /// Write a JUnit XML report without request or assertion values
+    #[arg(long, value_name = "FILE")]
+    pub junit: Option<PathBuf>,
 }
 
 #[derive(Args)]

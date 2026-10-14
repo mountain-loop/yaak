@@ -1,0 +1,12 @@
+[package]
+name = "yaak-assertions"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+yaak-jsonpath = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+ts-rs = { workspace = true, features = ["serde-json-impl"] }
