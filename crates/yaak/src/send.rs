@@ -21,7 +21,7 @@ use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{
     SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
 };
-use yaak_models::blob_manager::{BlobManager, BodyChunk};
+use yaak_models::blob_manager::{BODY_CHUNK_SIZE, BlobManager, BodyChunk, BodyChunkWriter};
 use yaak_models::models::{
     ClientCertificate, Cookie, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
     HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
@@ -39,7 +39,6 @@ use yaak_templates::{RenderOptions, TemplateCallback};
 use yaak_tls::find_client_certificate;
 
 const HTTP_EVENT_CHANNEL_CAPACITY: usize = 100;
-const REQUEST_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 const RESPONSE_PROGRESS_UPDATE_INTERVAL_MS: u128 = 100;
 const MAX_AUTH_BODY_BYTES: usize = 10 * 1024 * 1024;
 
@@ -1038,7 +1037,7 @@ fn persist_request_body_bytes(
 
     blob_manager
         .with_tx(|b| {
-            for (chunk_index, data) in bytes.chunks(REQUEST_BODY_CHUNK_SIZE).enumerate() {
+            for (chunk_index, data) in bytes.chunks(BODY_CHUNK_SIZE).enumerate() {
                 b.insert_chunk(&BodyChunk::new(body_id, chunk_index as i32, data.to_vec()))?;
             }
             Ok::<_, yaak_models::error::Error>(())
@@ -1051,29 +1050,11 @@ async fn persist_request_body_stream(
     body_id: String,
     mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
 ) -> std::result::Result<usize, String> {
-    let mut chunk_index: i32 = 0;
-    let mut total_bytes = 0usize;
-
-    // Stream reads arrive in small (eg. 8-16 KiB) pieces, so accumulate them into
-    // full-size chunks to avoid thousands of tiny inserts for large bodies
-    let mut buf: Vec<u8> = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
+    let mut writer = BodyChunkWriter::new(blob_manager, body_id);
     while let Some(data) = rx.recv().await {
-        total_bytes += data.len();
-        buf.extend_from_slice(&data);
-        while buf.len() >= REQUEST_BODY_CHUNK_SIZE {
-            let data = buf.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
-            let chunk = BodyChunk::new(&body_id, chunk_index, data);
-            blob_manager.with_tx(|b| b.insert_chunk(&chunk)).map_err(|e| e.to_string())?;
-            chunk_index += 1;
-        }
+        writer.write(&data).map_err(|e| e.to_string())?;
     }
-
-    if !buf.is_empty() {
-        let chunk = BodyChunk::new(&body_id, chunk_index, buf);
-        blob_manager.with_tx(|b| b.insert_chunk(&chunk)).map_err(|e| e.to_string())?;
-    }
-
-    Ok(total_bytes)
+    writer.finish().map_err(|e| e.to_string())
 }
 
 fn append_error_message(existing_error: Option<String>, message: String) -> String {

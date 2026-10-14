@@ -141,16 +141,23 @@ pub fn init_standalone(
     let (readers, writer) = open::file_pools(db_path, 20, 2)?;
     migrate_db(&writer)?;
 
-    info!("Initializing blobs database {blob_path:?}");
-    let (blob_readers, blob_writer) = open::file_pools(blob_path, 10, 1)?;
-    migrate_blob_db(&blob_writer)?;
+    let blob_manager = init_blob_store(blob_path)?;
 
     let (tx, rx) = mpsc::channel();
     let query_manager = QueryManager::new(readers, writer, tx);
-    let blob_manager = BlobManager::new(blob_readers, blob_writer);
     bootstrap(&query_manager)?;
 
     Ok((query_manager, blob_manager, rx))
+}
+
+/// Open (creating and migrating as needed) a blobs database on its own, for a process that
+/// stores bodies without the app database.
+pub fn init_blob_store(blob_path: impl AsRef<Path>) -> Result<BlobManager> {
+    let blob_path = blob_path.as_ref();
+    info!("Initializing blobs database {blob_path:?}");
+    let (blob_readers, blob_writer) = open::file_pools(blob_path, 10, 1)?;
+    migrate_blob_db(&blob_writer)?;
+    Ok(BlobManager::new(blob_readers, blob_writer))
 }
 
 /// Initialize the database managers with in-memory SQLite databases.

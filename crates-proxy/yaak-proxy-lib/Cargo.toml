@@ -15,7 +15,20 @@ rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
 sea-query = { version = "1.0", features = ["with-chrono", "attr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
 ts-rs = { workspace = true, features = ["chrono-impl"] }
 yaak-database = { workspace = true }
+yaak-http = { workspace = true }
+yaak-models = { workspace = true }
 yaak-proxy = { workspace = true }
 yaak-rpc = { workspace = true }
+
+[dev-dependencies]
+bytes = "1"
+flate2 = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+reqwest = { workspace = true }
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }

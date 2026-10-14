@@ -67,7 +67,7 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
 
             let (emitter, event_rx) = RpcEventEmitter::new();
-            app.manage(ProxyCtx::new(&data_dir.join("proxy.db"), emitter));
+            app.manage(ProxyCtx::new(&data_dir, emitter)?);
             app.manage(yaak_proxy_lib::build_router());
 
             // Drain RPC events and forward as Tauri events

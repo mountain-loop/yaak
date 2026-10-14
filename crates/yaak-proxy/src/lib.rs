@@ -128,33 +128,6 @@ pub enum ProxyEvent {
     },
 }
 
-/// Accumulated view of a proxied request, built from `ProxyEvent`s.
-#[derive(Debug, Clone)]
-pub struct CapturedRequest {
-    pub id: u64,
-    pub method: String,
-    pub url: String,
-    pub status: Option<u16>,
-    pub elapsed_ms: Option<u64>,
-    pub http_version: String,
-    pub remote_http_version: Option<String>,
-    pub request_headers: Vec<(String, String)>,
-    pub request_body: Option<Vec<u8>>,
-    pub response_headers: Vec<(String, String)>,
-    pub response_body: Option<Vec<u8>>,
-    pub response_body_size: u64,
-    pub state: RequestState,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum RequestState {
-    Sending,
-    Receiving,
-    Complete,
-    Error,
-}
-
 /// A running engine. Dropping it stops the listener and joins its thread.
 pub struct ProxyHandle {
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,

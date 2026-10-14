@@ -1,4 +1,4 @@
-import type { HttpExchange, ProxyHeader } from "@yaakapp-internal/proxy-lib";
+import type { Flow } from "@yaakapp-internal/proxy-lib";
 import {
   Table,
   TableBody,
@@ -11,7 +11,7 @@ import {
 import classNames from "classnames";
 
 interface Props {
-  exchanges: HttpExchange[];
+  exchanges: Flow[];
   style?: React.CSSProperties;
   className?: string;
 }
@@ -40,10 +40,10 @@ export function ExchangesTable({ exchanges, style, className }: Props) {
                 {ex.url}
               </TruncatedWideTableCell>
               <TableCell>
-                <StatusBadge status={ex.resStatus} error={ex.error} />
+                <StatusBadge status={ex.status} error={ex.error} />
               </TableCell>
               <TableCell className="text-text-subtle text-xs">
-                {getContentType(ex.resHeaders)}
+                {getContentType(ex.contentType)}
               </TableCell>
             </TableRow>
           ))}
@@ -69,8 +69,7 @@ function StatusBadge({ status, error }: { status: number | null; error: string |
   return <span className={classNames("text-xs font-mono", color)}>{status}</span>;
 }
 
-function getContentType(headers: ProxyHeader[]): string {
-  const ct = headers.find((h) => h.name.toLowerCase() === "content-type")?.value;
+function getContentType(ct: string | null): string {
   if (ct == null) return "—";
   // Strip parameters (e.g. "; charset=utf-8")
   return ct.split(";")[0]?.trim() ?? ct;
