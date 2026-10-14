@@ -35,8 +35,8 @@ pub(crate) fn sync<R: Runtime>(app_handle: &AppHandle<R>) {
         let Some(state) = app_handle.try_state::<McpServerState>() else {
             return;
         };
-        let enabled = app_handle.db().get_settings().mcp_server_enabled;
         let mut server = state.0.lock().await;
+        let enabled = app_handle.db().get_settings().mcp_server_enabled;
         match (enabled, server.is_some()) {
             (true, false) => match start(&app_handle).await {
                 Ok(s) => {

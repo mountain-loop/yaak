@@ -169,8 +169,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
             // Fast path for local app writes initiated by frontend windows. This keeps the
             // current sync-model UX snappy, while DB polling handles external writers (CLI).
+            // A thread of its own: `recv` blocks, and a runtime worker parked in it strands
+            // anything spawned from the loop in that worker's unstealable LIFO slot.
             let app_handle_local = app_handle.clone();
-            tauri::async_runtime::spawn(async move {
+            std::thread::spawn(move || {
                 while let Ok(payload) = rx.recv() {
                     let mut batch: Vec<ModelPayload> = Vec::new();
                     let mut settings_changed = matches!(payload.model, AnyModel::Settings(_));

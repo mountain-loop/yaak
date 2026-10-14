@@ -36,9 +36,14 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderOptions, TemplateCallback, render_json_value_raw};
 
+/// Execution contexts for sends in flight, by the id of the plugin context
+/// each send was given, so plugin calls made during a send see its settings.
+pub type SendContexts = Arc<std::sync::Mutex<HashMap<String, CliExecutionContext>>>;
+
 pub struct CliPluginEventBridge {
     rx_id: String,
     task: JoinHandle<()>,
+    send_contexts: SendContexts,
 }
 
 struct CliHostContext {
@@ -49,6 +54,14 @@ struct CliHostContext {
     connection_manager: Arc<HttpConnectionManager>,
     response_dir: PathBuf,
     execution_context: CliExecutionContext,
+    send_contexts: SendContexts,
+}
+
+impl CliHostContext {
+    fn execution_context(&self, context: &PluginContext) -> CliExecutionContext {
+        let send_contexts = self.send_contexts.lock().expect("send contexts lock");
+        send_contexts.get(&context.id).cloned().unwrap_or_else(|| self.execution_context.clone())
+    }
 }
 
 impl CliPluginEventBridge {
@@ -64,6 +77,7 @@ impl CliPluginEventBridge {
         let (rx_id, mut rx) = plugin_manager.subscribe("cli").await;
         let rx_id_for_task = rx_id.clone();
         let pm = plugin_manager.clone();
+        let send_contexts = SendContexts::default();
         let host_context = Arc::new(CliHostContext {
             query_manager,
             blob_manager,
@@ -72,6 +86,7 @@ impl CliPluginEventBridge {
             connection_manager,
             response_dir: data_dir.join("responses"),
             execution_context,
+            send_contexts: send_contexts.clone(),
         });
 
         let task = tokio::spawn(async move {
@@ -113,7 +128,11 @@ impl CliPluginEventBridge {
             pm.unsubscribe(&rx_id_for_task).await;
         });
 
-        Self { rx_id, task }
+        Self { rx_id, task, send_contexts }
+    }
+
+    pub fn send_contexts(&self) -> SendContexts {
+        self.send_contexts.clone()
     }
 
     pub async fn shutdown(self, plugin_manager: &PluginManager) {
@@ -128,7 +147,7 @@ async fn build_plugin_reply(
     event: &InternalEvent,
     plugin_name: &str,
 ) -> Option<InternalEventPayload> {
-    let execution_context = &host_context.execution_context;
+    let execution_context = &host_context.execution_context(&event.context);
     let shared_workspace_id =
         event.context.workspace_id.as_deref().or(execution_context.workspace_id.as_deref());
 
@@ -1161,6 +1180,7 @@ mod environment_tests {
                 environment_id: Some(a.id.clone()),
                 ..Default::default()
             },
+            send_contexts: SendContexts::default(),
         };
         std::fs::create_dir_all(&host.response_dir).unwrap();
         let event = |environment_id: Option<&str>| -> InternalEvent {

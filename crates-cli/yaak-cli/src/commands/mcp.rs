@@ -1,4 +1,5 @@
-use crate::context::CliContext;
+use crate::context::{CliContext, CliExecutionContext};
+use crate::plugin_events::SendContexts;
 use std::path::PathBuf;
 use std::sync::Arc;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
@@ -20,6 +21,7 @@ pub async fn run(ctx: &CliContext, environment: Option<&str>, cookie_jar_id: Opt
         encryption_manager: ctx.encryption_manager.clone(),
         connection_manager: ctx.connection_manager().clone(),
         response_dir: ctx.data_dir().join("responses"),
+        send_contexts: ctx.send_contexts().await,
         environment_id: environment.map(str::to_string),
         cookie_jar_id: cookie_jar_id.map(str::to_string),
     };
@@ -41,8 +43,28 @@ struct CliMcpHost {
     encryption_manager: Arc<EncryptionManager>,
     connection_manager: Arc<HttpConnectionManager>,
     response_dir: PathBuf,
+    send_contexts: SendContexts,
     environment_id: Option<String>,
     cookie_jar_id: Option<String>,
+}
+
+/// Registers a send's execution context for as long as the send runs.
+struct SendContextGuard<'a> {
+    send_contexts: &'a SendContexts,
+    id: String,
+}
+
+impl<'a> SendContextGuard<'a> {
+    fn new(send_contexts: &'a SendContexts, id: &str, context: CliExecutionContext) -> Self {
+        send_contexts.lock().expect("send contexts lock").insert(id.to_string(), context);
+        Self { send_contexts, id: id.to_string() }
+    }
+}
+
+impl Drop for SendContextGuard<'_> {
+    fn drop(&mut self) {
+        self.send_contexts.lock().expect("send contexts lock").remove(&self.id);
+    }
 }
 
 impl McpHost for CliMcpHost {
@@ -133,6 +155,16 @@ impl McpHost for CliMcpHost {
         };
         let plugin_context =
             PluginContext::new(Some("cli".to_string()), Some(request.workspace_id.clone()));
+        let _send_context = SendContextGuard::new(
+            &self.send_contexts,
+            &plugin_context.id,
+            CliExecutionContext {
+                request_id: Some(request.id.clone()),
+                workspace_id: Some(request.workspace_id.clone()),
+                environment_id: environment_id.clone(),
+                cookie_jar_id: cookie_jar_id.clone(),
+            },
+        );
 
         let result = send_http_request_with_plugins(SendHttpRequestWithPluginsParams {
             query_manager: &self.query_manager,
@@ -230,6 +262,7 @@ mod tests {
                 plugin_manager: plugin_manager.clone(),
                 connection_manager: Arc::new(HttpConnectionManager::new()),
                 response_dir: dir.path().join("responses"),
+                send_contexts: SendContexts::default(),
                 environment_id,
                 cookie_jar_id: None,
             };
