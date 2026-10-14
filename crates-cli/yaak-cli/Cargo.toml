@@ -45,6 +45,7 @@ webbrowser = "1"
 zip = "7"
 yaak = { workspace = true }
 yaak-api = { workspace = true }
+yaak-common = { workspace = true }
 yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }

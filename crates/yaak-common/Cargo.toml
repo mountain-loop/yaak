@@ -5,5 +5,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
+dirs = "7"
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["process"] }

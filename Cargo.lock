@@ -11209,6 +11209,7 @@ dependencies = [
  "webbrowser",
  "yaak",
  "yaak-api",
+ "yaak-common",
  "yaak-core",
  "yaak-crypto",
  "yaak-http",
@@ -11240,6 +11241,7 @@ dependencies = [
 name = "yaak-common"
 version = "0.1.0"
 dependencies = [
+ "dirs 7.0.0",
  "serde_json",
  "tokio",
 ]
@@ -11516,17 +11518,27 @@ dependencies = [
 name = "yaak-proxy-lib"
 version = "0.0.0"
 dependencies = [
+ "bytes",
  "chrono",
+ "flate2",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "include_dir",
  "log 0.4.34",
  "r2d2",
  "r2d2_sqlite",
+ "reqwest",
  "rusqlite",
  "sea-query",
  "serde",
  "serde_json",
+ "tempfile",
+ "tokio",
  "ts-rs",
  "yaak-database",
+ "yaak-http",
+ "yaak-models",
  "yaak-proxy",
  "yaak-rpc",
 ]

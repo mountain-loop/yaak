@@ -1,11 +1,11 @@
 import { createModelStore } from "@yaakapp-internal/model-store";
-import type { HttpExchange } from "@yaakapp-internal/proxy-lib";
+import type { Flow } from "@yaakapp-internal/proxy-lib";
 
 type ProxyModels = {
-  http_exchange: HttpExchange;
+  flow: Flow;
 };
 
 export const { dataAtom, applyChange, replaceAll, listAtom, orderedListAtom } =
-  createModelStore<ProxyModels>(["http_exchange"]);
+  createModelStore<ProxyModels>(["flow"]);
 
-export const httpExchangesAtom = orderedListAtom("http_exchange", "createdAt", "desc");
+export const flowsAtom = orderedListAtom("flow", "startedAt", "desc");
