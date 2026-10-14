@@ -38,6 +38,16 @@ async fn route(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallib
                 .body(Full::from(gzip(&body)))
                 .unwrap()
         }
+        // Answers at once and drains the upload afterwards, so the response ends first.
+        "/early" => {
+            let mut body = req.into_body();
+            tokio::spawn(async move {
+                while let Some(Ok(_)) = body.frame().await {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            });
+            Response::new(Full::from("ok"))
+        }
         _ => Response::new(Full::from(vec![b'x'; BIG_BODY])),
     })
 }
@@ -126,4 +136,33 @@ async fn flow_is_stored_with_its_bodies() {
 
     ctx.stop().unwrap();
     assert_eq!(ctx.port(), None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn early_response_keeps_request_totals() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings =
+        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+
+    let (events, _event_rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    ctx.start().unwrap();
+    let port = ctx.port().unwrap();
+
+    let upstream = spawn_upstream().await;
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}")).unwrap())
+        .build()
+        .unwrap();
+
+    let url = format!("http://{upstream}/early");
+    let _ = client.post(&url).body(vec![b'u'; 2 * 1024 * 1024]).send().await;
+
+    let flow = wait_for_flow(&ctx, &url).await;
+    assert_eq!(flow.status, Some(200));
+    let stored = read_raw_body(&ctx.blobs, &flow.id, FlowBody::Request).unwrap().len() as i64;
+    assert!(stored > 0);
+    assert!(flow.request_size >= stored, "{} < {stored}", flow.request_size);
+    assert_eq!(flow.request_truncated, flow.request_size > stored);
 }

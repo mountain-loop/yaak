@@ -222,8 +222,12 @@ fn run_event_loop(
                     f.flow.request_headers.push(ProxyHeader { name, value });
                 }
             }
-            ProxyEvent::RequestBodyChunk { id, data, .. } => {
+            // Counted per chunk too: the response can end, and the flow with it, before the
+            // upload does.
+            ProxyEvent::RequestBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
+                    f.flow.request_size += len as i64;
+                    f.flow.request_truncated |= data.len() < len;
                     write_body_chunk(&mut f.request_body, &data);
                 }
             }
