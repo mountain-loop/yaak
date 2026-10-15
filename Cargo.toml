@@ -11,6 +11,7 @@ members = [
   "crates/yaak-core",
   "crates/yaak-common",
   "crates/yaak-crypto",
+  "crates/yaak-filter",
   "crates/yaak-git",
   "crates/yaak-grpc",
   "crates/yaak-http",
@@ -86,6 +87,7 @@ yaak = { path = "crates/yaak" }
 yaak-commands = { path = "crates/yaak-commands" }
 yaak-common = { path = "crates/yaak-common" }
 yaak-crypto = { path = "crates/yaak-crypto" }
+yaak-filter = { path = "crates/yaak-filter" }
 yaak-git = { path = "crates/yaak-git" }
 yaak-grpc = { path = "crates/yaak-grpc" }
 yaak-http = { path = "crates/yaak-http" }

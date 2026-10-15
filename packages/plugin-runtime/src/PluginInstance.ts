@@ -15,6 +15,8 @@ import type {
   BootRequest,
   DeleteKeyValueResponse,
   DeleteModelResponse,
+  FilterLanguage,
+  FilterResponse,
   FindHttpResponsesResponse,
   Folder,
   FormInput,
@@ -657,6 +659,14 @@ export class PluginInstance {
       );
     };
 
+    const filterText = (language: FilterLanguage, text: string, query: string) =>
+      this.#sendForReply<FilterResponse>(context, {
+        type: "filter_text_request",
+        language,
+        text,
+        query,
+      });
+
     const _windowInfo = async () => {
       if (context.label == null) {
         throw new Error("Can't get window context without an active window");
@@ -1002,6 +1012,10 @@ export class PluginInstance {
           // oxlint-disable-next-line no-explicit-any -- That's okay
           return result.data as any;
         },
+      },
+      filter: {
+        jsonPath: (text: string, query: string) => filterText("jsonpath", text, query),
+        xPath: (text: string, query: string) => filterText("xpath", text, query),
       },
       store: {
         get: async <T>(key: string) => {

@@ -83,6 +83,7 @@ yaak-core = { workspace = true }
 yaak = { workspace = true }
 yaak-commands = { workspace = true }
 yaak-crypto = { workspace = true }
+yaak-filter = { workspace = true }
 yaak-fonts = { workspace = true }
 yaak-git = { workspace = true }
 yaak-grpc = { workspace = true }

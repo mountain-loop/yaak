@@ -17,6 +17,7 @@ tokio = { workspace = true, features = ["sync", "rt"] }
 yaak-http = { workspace = true }
 yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }
+yaak-filter = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }

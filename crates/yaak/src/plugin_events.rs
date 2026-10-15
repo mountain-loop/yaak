@@ -7,16 +7,16 @@ use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     CloseWindowRequest, CopyTextRequest, DeleteKeyValueRequest, DeleteKeyValueResponse,
-    DeleteModelRequest, DeleteModelResponse, ErrorResponse, FindHttpResponsesRequest,
-    FindHttpResponsesResponse, GetCookieValueRequest, GetHttpRequestByIdRequest,
-    GetHttpRequestByIdResponse, GetHttpResponseBodyInfoRequest, GetHttpResponseBodyInfoResponse,
-    GetKeyValueRequest, GetKeyValueResponse, InternalEventPayload, ListCookieNamesRequest,
-    ListFoldersRequest, ListFoldersResponse, ListHttpRequestsRequest, ListHttpRequestsResponse,
-    ListOpenWorkspacesRequest, OpenExternalUrlRequest, OpenWindowRequest, PromptFormRequest,
-    PromptTextRequest, ReadHttpResponseBodyChunkRequest, ReadHttpResponseBodyChunkResponse,
-    ReloadResponse, RenderGrpcRequestRequest, RenderHttpRequestRequest, SendHttpRequestRequest,
-    SetKeyValueRequest, ShowToastRequest, TemplateRenderRequest, UpsertModelRequest,
-    UpsertModelResponse, WindowInfoRequest,
+    DeleteModelRequest, DeleteModelResponse, ErrorResponse, FilterLanguage, FilterResponse,
+    FilterTextRequest, FindHttpResponsesRequest, FindHttpResponsesResponse, GetCookieValueRequest,
+    GetHttpRequestByIdRequest, GetHttpRequestByIdResponse, GetHttpResponseBodyInfoRequest,
+    GetHttpResponseBodyInfoResponse, GetKeyValueRequest, GetKeyValueResponse, InternalEventPayload,
+    ListCookieNamesRequest, ListFoldersRequest, ListFoldersResponse, ListHttpRequestsRequest,
+    ListHttpRequestsResponse, ListOpenWorkspacesRequest, OpenExternalUrlRequest, OpenWindowRequest,
+    PromptFormRequest, PromptTextRequest, ReadHttpResponseBodyChunkRequest,
+    ReadHttpResponseBodyChunkResponse, ReloadResponse, RenderGrpcRequestRequest,
+    RenderHttpRequestRequest, SendHttpRequestRequest, SetKeyValueRequest, ShowToastRequest,
+    TemplateRenderRequest, UpsertModelRequest, UpsertModelResponse, WindowInfoRequest,
 };
 
 pub struct SharedPluginEventContext<'a> {
@@ -50,6 +50,7 @@ pub enum SharedRequest<'a> {
     ReadHttpResponseBodyChunk(&'a ReadHttpResponseBodyChunkRequest),
     UpsertModel(&'a UpsertModelRequest),
     DeleteModel(&'a DeleteModelRequest),
+    FilterText(&'a FilterTextRequest),
 }
 
 #[derive(Debug)]
@@ -155,6 +156,9 @@ impl<'a> From<&'a InternalEventPayload> for GroupedPluginRequest<'a> {
             }
             InternalEventPayload::DeleteModelRequest(req) => {
                 GroupedPluginRequest::Shared(SharedRequest::DeleteModel(req))
+            }
+            InternalEventPayload::FilterTextRequest(req) => {
+                GroupedPluginRequest::Shared(SharedRequest::FilterText(req))
             }
             InternalEventPayload::RenderGrpcRequestRequest(req) => {
                 GroupedPluginRequest::Host(HostRequest::RenderGrpcRequest(req))
@@ -485,6 +489,17 @@ fn build_shared_reply(
 
             InternalEventPayload::DeleteModelResponse(DeleteModelResponse { model })
         }
+        SharedRequest::FilterText(req) => {
+            let language = match req.language {
+                FilterLanguage::JsonPath => yaak_filter::Language::JsonPath,
+                FilterLanguage::XPath => yaak_filter::Language::XPath,
+            };
+            let result = yaak_filter::filter(language, &req.text, &req.query);
+            InternalEventPayload::FilterTextResponse(FilterResponse {
+                content: result.content,
+                error: result.error,
+            })
+        }
     }
 }
 
@@ -635,6 +650,40 @@ mod tests {
                 assert!(resp.http_responses.is_empty());
             }
             other => panic!("unexpected find responses result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn filter_text_is_shared_handled() {
+        let (query_manager, _temp_dir) = seed_query_manager();
+        let cases = [
+            (FilterLanguage::JsonPath, r#"{"a":[1,2]}"#, "$.a[1]", "[\n  2\n]", None),
+            (FilterLanguage::XPath, "<a><b>x</b></a>", "//b", "<b>x</b>", None),
+            (FilterLanguage::JsonPath, "{}", "$[?(@ ==)]", "", Some("Invalid filter: ")),
+        ];
+        for (language, text, query, content, error) in cases {
+            let payload = InternalEventPayload::FilterTextRequest(FilterTextRequest {
+                language,
+                text: text.to_string(),
+                query: query.to_string(),
+            });
+            let result = dispatch(
+                &query_manager,
+                &payload,
+                SharedPluginEventContext { plugin_name: "@yaak/test", workspace_id: None },
+            );
+            match result {
+                GroupedPluginEvent::Handled(Some(InternalEventPayload::FilterTextResponse(
+                    resp,
+                ))) => {
+                    assert_eq!(resp.content, content, "{query}");
+                    assert_eq!(resp.error.is_some(), error.is_some(), "{query}");
+                    if let (Some(actual), Some(prefix)) = (resp.error, error) {
+                        assert!(actual.starts_with(prefix), "{actual}");
+                    }
+                }
+                other => panic!("unexpected filter result: {other:?}"),
+            }
         }
     }
 
