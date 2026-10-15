@@ -13,7 +13,7 @@ export const plugin: PluginDefinition = {
     setTimeout(async () => {
       void ctx.toast.show({
         message:
-          "The MCP Server plugin is deprecated. Yaak now has a built-in MCP server: uninstall this plugin, then turn it on in Settings > MCP.",
+          "The MCP Server plugin is deprecated. Yaak now has a built-in MCP server: uninstall this plugin, then turn it on in Settings > Agents.",
         icon: "alert_triangle",
         color: "notice",
         timeout: 30000,

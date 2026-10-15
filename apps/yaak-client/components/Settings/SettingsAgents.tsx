@@ -20,9 +20,10 @@ import {
 
 const MCP_URL = "http://127.0.0.1:64343/mcp";
 const CLI_INSTALL_COMMAND = "npm install -g @yaakapp/cli";
+const SKILL_INSTALL_COMMAND = "yaak agent install";
 const CLAUDE_CODE_COMMAND = "claude mcp add yaak -- yaak mcp";
 
-export function SettingsMcp() {
+export function SettingsAgents() {
   const settings = useAtomValue(settingsAtom);
   const { value: token } = useKeyValue<string | null>({
     namespace: "no_sync",
@@ -38,61 +39,16 @@ export function SettingsMcp() {
   return (
     <VStack space={1.5} className="mb-4">
       <div className="mb-3">
-        <Heading>MCP</Heading>
+        <Heading>Agents</Heading>
         <p className="text-text-subtle">
-          Let AI agents like Claude Code and Cursor read, edit, and send your requests over the
-          Model Context Protocol.
+          Connect AI coding agents like Claude Code and Cursor to Yaak, so they can read, edit, and
+          send your requests.
         </p>
       </div>
       <SettingsList className="space-y-8">
-        <SettingsSection title="Yaak app">
-          <ModelSettingRowBoolean
-            model={settings}
-            modelKey="mcpServerEnabled"
-            title="Enable MCP server"
-            description={
-              <>
-                Serve Yaak's tools at <InlineCode>{MCP_URL}</InlineCode> while Yaak is open.
-              </>
-            }
-          />
-          {settings.mcpServerEnabled && token != null && (
-            <>
-              <SettingRow
-                title="Token"
-                description="Clients send this as a bearer token."
-                controlClassName="min-w-0 max-w-[min(24rem,40vw)] gap-2"
-              >
-                <SettingValue value={token} />
-              </SettingRow>
-              <SnippetRow
-                title="Client config"
-                description={
-                  <>
-                    For clients that read an <InlineCode>mcpServers</InlineCode> config, like Claude
-                    Desktop and Cursor.
-                  </>
-                }
-                snippet={mcpServersConfig("npx", [
-                  "-y",
-                  "mcp-remote",
-                  MCP_URL,
-                  "--header",
-                  `Authorization: Bearer ${token}`,
-                ])}
-              />
-            </>
-          )}
-        </SettingsSection>
-
         <SettingsSection
           title="Yaak CLI"
-          description={
-            <>
-              Serve the same tools over stdio with <InlineCode>yaak mcp</InlineCode>, without the
-              app open.
-            </>
-          }
+          description="The recommended way to connect an agent. It works with the app closed."
         >
           <SettingRow
             title="Status"
@@ -128,17 +84,72 @@ export function SettingsMcp() {
             </SettingRow>
           ) : (
             <>
-              <SettingRow title="Claude Code" description="Add Yaak to Claude Code.">
+              <SettingRow
+                title="Agent skill"
+                description={
+                  <>
+                    Teach the agents you have installed to drive the <InlineCode>yaak</InlineCode>{" "}
+                    command.
+                  </>
+                }
+              >
+                <SettingValue value={SKILL_INSTALL_COMMAND} />
+              </SettingRow>
+              <SettingRow title="Claude Code" description="Add Yaak's MCP tools to Claude Code.">
                 <SettingValue value={CLAUDE_CODE_COMMAND} />
               </SettingRow>
               <SnippetRow
-                title="Client config"
+                title="MCP client config"
                 description={
                   <>
-                    For clients that read an <InlineCode>mcpServers</InlineCode> config.
+                    For other clients that read an <InlineCode>mcpServers</InlineCode> config, like
+                    Cursor.
                   </>
                 }
                 snippet={mcpServersConfig("yaak", ["mcp"])}
+              />
+            </>
+          )}
+        </SettingsSection>
+
+        <SettingsSection
+          title="MCP server in the app"
+          description="For clients that connect over HTTP, or to act on the workspaces open in Yaak."
+        >
+          <ModelSettingRowBoolean
+            model={settings}
+            modelKey="mcpServerEnabled"
+            title="Enable MCP server"
+            description={
+              <>
+                Serve Yaak's tools at <InlineCode>{MCP_URL}</InlineCode> while Yaak is open.
+              </>
+            }
+          />
+          {settings.mcpServerEnabled && token != null && (
+            <>
+              <SettingRow
+                title="Token"
+                description="Clients send this as a bearer token."
+                controlClassName="min-w-0 max-w-[min(24rem,40vw)] gap-2"
+              >
+                <SettingValue value={token} />
+              </SettingRow>
+              <SnippetRow
+                title="MCP client config"
+                description={
+                  <>
+                    For clients that read an <InlineCode>mcpServers</InlineCode> config, like Claude
+                    Desktop and Cursor.
+                  </>
+                }
+                snippet={mcpServersConfig("npx", [
+                  "-y",
+                  "mcp-remote",
+                  MCP_URL,
+                  "--header",
+                  `Authorization: Bearer ${token}`,
+                ])}
               />
             </>
           )}
