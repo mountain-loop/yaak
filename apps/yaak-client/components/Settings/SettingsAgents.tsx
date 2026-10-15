@@ -6,10 +6,19 @@ import type { AppMetaData } from "@yaakapp-internal/rpc-schema";
 import { useAtomValue } from "jotai";
 import { useKeyValue } from "../../hooks/useKeyValue";
 import { appInfo } from "../../lib/appInfo";
+import {
+  AGENT_CLIENTS,
+  type AgentClient,
+  type AgentSetup,
+  appSetup,
+  cliSetup,
+} from "../../lib/agentSetup";
 import { rpc } from "../../lib/rpc";
 import { CopyIconButton } from "../CopyIconButton";
 import { Button } from "../core/Button";
+import { Editor } from "../core/Editor/LazyEditor";
 import { IconButton } from "../core/IconButton";
+import { SegmentedControl } from "../core/SegmentedControl";
 import {
   ModelSettingRowBoolean,
   SettingRow,
@@ -21,7 +30,6 @@ import {
 const MCP_URL = "http://127.0.0.1:64343/mcp";
 const CLI_INSTALL_COMMAND = "npm install -g @yaakapp/cli";
 const SKILL_INSTALL_COMMAND = "yaak agent install";
-const CLAUDE_CODE_COMMAND = "claude mcp add yaak -- yaak mcp";
 
 export function SettingsAgents() {
   const settings = useAtomValue(settingsAtom);
@@ -30,6 +38,11 @@ export function SettingsAgents() {
     key: "mcp_server_token",
     fallback: null,
   });
+  const { value: storedClient, set: setClient } = useKeyValue<AgentClient>({
+    key: "agents_setup_client",
+    fallback: "claude_code",
+  });
+  const client = AGENT_CLIENTS.find((c) => c.value === storedClient)?.value ?? "claude_code";
   const cliVersion = useQuery({
     queryKey: ["cli_version"],
     queryFn: async () => (await rpc<AppMetaData>("cmd_metadata")).cliVersion,
@@ -48,7 +61,7 @@ export function SettingsAgents() {
       <SettingsList className="space-y-8">
         <SettingsSection
           title="Yaak CLI"
-          description="The recommended way to connect an agent. It works with the app closed."
+          description="Lets agents use Yaak from the command line, even with the app closed."
         >
           <SettingRow
             title="Status"
@@ -83,38 +96,23 @@ export function SettingsAgents() {
               <SettingValue value={CLI_INSTALL_COMMAND} />
             </SettingRow>
           ) : (
-            <>
-              <SettingRow
-                title="Agent skill"
-                description={
-                  <>
-                    Teach the agents you have installed to drive the <InlineCode>yaak</InlineCode>{" "}
-                    command.
-                  </>
-                }
-              >
-                <SettingValue value={SKILL_INSTALL_COMMAND} />
-              </SettingRow>
-              <SettingRow title="Claude Code" description="Add Yaak's MCP tools to Claude Code.">
-                <SettingValue value={CLAUDE_CODE_COMMAND} />
-              </SettingRow>
-              <SnippetRow
-                title="MCP client config"
-                description={
-                  <>
-                    For other clients that read an <InlineCode>mcpServers</InlineCode> config, like
-                    Cursor.
-                  </>
-                }
-                snippet={mcpServersConfig("yaak", ["mcp"])}
-              />
-            </>
+            <SettingRow
+              title="Agent skill"
+              description={
+                <>
+                  Teach Claude Code, Cursor, Codex, and opencode to drive the{" "}
+                  <InlineCode>yaak</InlineCode> command, wherever they're installed.
+                </>
+              }
+            >
+              <SettingValue value={SKILL_INSTALL_COMMAND} />
+            </SettingRow>
           )}
         </SettingsSection>
 
         <SettingsSection
           title="MCP server in the app"
-          description="For clients that connect over HTTP, or to act on the workspaces open in Yaak."
+          description="For agents that connect over HTTP, or to act on the workspaces open in Yaak."
         >
           <ModelSettingRowBoolean
             model={settings}
@@ -127,31 +125,52 @@ export function SettingsAgents() {
             }
           />
           {settings.mcpServerEnabled && token != null && (
-            <>
-              <SettingRow
-                title="Token"
-                description="Clients send this as a bearer token."
-                controlClassName="min-w-0 max-w-[min(24rem,40vw)] gap-2"
-              >
-                <SettingValue value={token} />
-              </SettingRow>
-              <SnippetRow
-                title="MCP client config"
-                description={
-                  <>
-                    For clients that read an <InlineCode>mcpServers</InlineCode> config, like Claude
-                    Desktop and Cursor.
-                  </>
-                }
-                snippet={mcpServersConfig("npx", [
-                  "-y",
-                  "mcp-remote",
-                  MCP_URL,
-                  "--header",
-                  `Authorization: Bearer ${token}`,
-                ])}
-              />
-            </>
+            <SettingRow
+              title="Token"
+              description="Agents send this as a bearer token."
+              controlClassName="min-w-0 max-w-[min(24rem,40vw)] gap-2"
+            >
+              <SettingValue value={token} />
+            </SettingRow>
+          )}
+        </SettingsSection>
+
+        <SettingsSection
+          title="Connect an agent"
+          description="Pick your agent or editor to see how to add Yaak's MCP tools to it."
+        >
+          <div className="py-4 border-b border-border-subtle">
+            <SegmentedControl
+              name="agents_setup_client"
+              label="Agent"
+              hideLabel
+              value={client}
+              onChange={setClient}
+              options={AGENT_CLIENTS}
+            />
+          </div>
+          <SetupRow
+            title="Through the Yaak CLI"
+            description={
+              cliVersion.data == null
+                ? "Recommended. Install the Yaak CLI above first."
+                : `Recommended. ${cliSetup(client).where}`
+            }
+            setup={cliSetup(client)}
+          />
+          {settings.mcpServerEnabled && token != null ? (
+            <SetupRow
+              title="Through the app"
+              description={appSetup(client, MCP_URL, token).where}
+              setup={appSetup(client, MCP_URL, token)}
+            />
+          ) : (
+            <SettingRow
+              title="Through the app"
+              description="Turn on the MCP server above to connect this way."
+            >
+              <span />
+            </SettingRow>
           )}
         </SettingsSection>
       </SettingsList>
@@ -159,40 +178,30 @@ export function SettingsAgents() {
   );
 }
 
-function SnippetRow({
+function SetupRow({
   title,
   description,
-  snippet,
+  setup,
 }: {
   title: string;
-  description: React.ReactNode;
-  snippet: string;
+  description: string;
+  setup: AgentSetup;
 }) {
   return (
     <div className="py-4 border-b border-border-subtle">
       <div className="text text-text">{title}</div>
       <div className="mt-1 text-sm text-text-subtle">{description}</div>
-      <div className="mt-3 relative rounded-md border border-border-subtle bg-surface-highlight">
-        <pre className="p-3 pr-10 font-mono text-editor text-text-subtle select-text whitespace-pre-wrap wrap-break-word">
-          {snippet}
-        </pre>
-        <div className="absolute top-1.5 right-1.5">
-          <CopyIconButton size="xs" text={snippet} title={`Copy ${title.toLowerCase()}`} />
-        </div>
-      </div>
+      <Editor
+        readOnly
+        hideGutter
+        wrapLines
+        heightMode="auto"
+        stateKey={null}
+        language={setup.language}
+        defaultValue={setup.snippet}
+        className="mt-3 border border-border-subtle rounded-md px-2"
+        actions={<CopyIconButton size="sm" variant="border" text={setup.snippet} title="Copy setup" />}
+      />
     </div>
   );
-}
-
-function mcpServersConfig(command: string, args: string[]) {
-  return [
-    "{",
-    '  "mcpServers": {',
-    '    "yaak": {',
-    `      "command": ${JSON.stringify(command)},`,
-    `      "args": [${args.map((a) => JSON.stringify(a)).join(", ")}]`,
-    "    }",
-    "  }",
-    "}",
-  ].join("\n");
 }
