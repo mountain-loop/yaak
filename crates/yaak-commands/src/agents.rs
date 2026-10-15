@@ -69,12 +69,24 @@ fn has_server(servers: Option<&Value>) -> bool {
 
 fn is_cli_server(entry: &Value) -> bool {
     let command = entry.get("command").and_then(Value::as_str);
-    let args = entry.get("args").and_then(Value::as_array);
-    is_yaak_command(command) && args.is_some_and(|a| a.iter().any(|v| v.as_str() == Some("mcp")))
+    let args: Vec<&str> = entry
+        .get("args")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    is_cli_launch(command, &args)
 }
 
-fn is_yaak_command(command: Option<&str>) -> bool {
-    command.is_some_and(|c| Path::new(c).file_stem().and_then(|s| s.to_str()) == Some("yaak"))
+/// `yaak mcp`, or `npx -y @yaakapp/cli mcp`, which runs the same binary.
+fn is_cli_launch(command: Option<&str>, args: &[&str]) -> bool {
+    let has_mcp = args.contains(&"mcp");
+    let via_npx = command_stem(command) == Some("npx")
+        && args.iter().any(|a| a.trim_start_matches("@yaakapp/cli").len() < a.len());
+    has_mcp && (command_stem(command) == Some("yaak") || via_npx)
+}
+
+fn command_stem(command: Option<&str>) -> Option<&str> {
+    command.and_then(|c| Path::new(c).file_stem().and_then(|s| s.to_str()))
 }
 
 fn json_has_server(path: &Path, key: &str) -> bool {
@@ -102,24 +114,45 @@ fn codex_has_server(path: &Path) -> bool {
         return false;
     };
     let mut in_table = false;
-    let mut command = false;
-    let mut args = false;
+    let mut command = None;
+    let mut args = Vec::new();
+    let mut in_args = false;
     for line in text.lines().map(str::trim) {
         if line.starts_with('[') {
             in_table = is_codex_server_header(line);
+            in_args = false;
         } else if in_table {
-            if let Some((key, value)) = line.split_once('=') {
-                let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
-                if key.trim() == "command" {
-                    command = is_yaak_command(Some(value));
-                } else if key.trim() == "args" {
-                    args = value.contains("\"mcp\"") || value.contains("'mcp'");
+            let rest = if in_args {
+                Some(line)
+            } else if let Some((key, value)) = line.split_once('=') {
+                match key.trim() {
+                    "command" => {
+                        command = Some(value.trim().trim_matches(QUOTES).to_string());
+                        None
+                    }
+                    "args" => Some(value),
+                    _other => None,
                 }
+            } else {
+                None
+            };
+            if let Some(rest) = rest {
+                args.extend(
+                    rest.split(',')
+                        .map(|a| a.trim().trim_matches(QUOTES_OR_BRACKETS))
+                        .filter(|a| !a.is_empty())
+                        .map(str::to_string),
+                );
+                in_args = !rest.contains(']');
             }
         }
     }
-    command && args
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    is_cli_launch(command.as_deref(), &args)
 }
+
+const QUOTES: [char; 2] = ['"', '\''];
+const QUOTES_OR_BRACKETS: [char; 4] = ['"', '\'', '[', ']'];
 
 fn is_codex_server_header(line: &str) -> bool {
     let Some(rest) = line.strip_prefix('[') else {
@@ -226,6 +259,9 @@ mod tests {
         write(&path, "[mcp_servers.yaak]\nurl = \"http://127.0.0.1:64343/mcp\"\n");
         assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(false));
 
+        write(&path, "[mcp_servers.yaak]\ncommand = \"yaak\"\nargs = [\n  \"mcp\",\n]\n");
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(true));
+
         write(&path, "[mcp_servers.yaak.env]\nFOO = \"bar\"\n");
         assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(false));
 
@@ -252,6 +288,18 @@ mod tests {
         write(
             &home.path().join(".cursor/mcp.json"),
             r#"{"mcpServers":{"yaak":{"url":"http://127.0.0.1:64343/mcp"}}}"#,
+        );
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Cursor).mcp_server, Some(false));
+
+        write(
+            &home.path().join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"yaak":{"command":"npx","args":["-y","@yaakapp/cli","mcp"]}}}"#,
+        );
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Cursor).mcp_server, Some(true));
+
+        write(
+            &home.path().join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"yaak":{"command":"npx","args":["-y","mcp-remote","http://127.0.0.1:64343/mcp"]}}}"#,
         );
         assert_eq!(agent_setup_status(home.path(), AgentClient::Cursor).mcp_server, Some(false));
 
