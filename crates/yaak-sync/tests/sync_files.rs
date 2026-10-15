@@ -341,82 +341,62 @@ fn unchanged_reviewed_plan_applies_in_any_order_and_cannot_be_replayed() {
 }
 
 #[test]
-fn changes_while_waiting_for_database_writer_invalidate_reviewed_plan() {
+fn database_changes_while_waiting_for_writer_invalidate_reviewed_plan() {
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
-    for restore_file in [false, true] {
-        let fixture = Fixture::new("request.yaml");
-        let saved = fs::read(&fixture.request_path).unwrap();
-        if restore_file {
-            fs::remove_file(&fixture.request_path).unwrap();
-        } else {
-            fixture.edit(|value| value["name"] = "Incoming file version".into());
-        }
-        fixture
-            .db
-            .with_tx::<_, Error>(|tx| {
-                let mut workspace = tx.get_workspace(&fixture.workspace_id)?;
-                workspace.name = "Outbound workspace version".into();
-                tx.upsert_workspace(&workspace, &UpdateSource::from_window_label("test"))?;
-                Ok(())
-            })
-            .unwrap();
-        let ops = fixture.calculate().unwrap();
-        assert_eq!(ops.len(), 2);
-        let before = fixture.states();
-        let workspace_path = fixture.dir.path().join("workspace.yaml");
-        let (ready_tx, ready_rx) = mpsc::channel();
-        let (resume_tx, resume_rx) = mpsc::channel();
-        std::thread::scope(|scope| {
-            let fixture = &fixture;
-            let writer = scope.spawn(move || {
-                fixture
-                    .db
-                    .with_tx::<_, Error>(|tx| {
-                        ready_tx.send(()).unwrap();
-                        resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
-                        if !restore_file {
-                            let mut request = tx.get_http_request(&fixture.request.id)?;
-                            request.name = "Concurrent database edit".into();
-                            tx.upsert_http_request(
-                                &request,
-                                &UpdateSource::from_window_label("test"),
-                            )?;
-                        }
-                        Ok(())
-                    })
-                    .unwrap();
-            });
-            ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-            let applying = scope.spawn(move || fixture.apply_reviewed(ops));
-            let deadline = Instant::now() + Duration::from_secs(5);
-            let mut published = false;
-            while Instant::now() < deadline {
-                if fs::read_to_string(&workspace_path)
-                    .unwrap()
-                    .contains("Outbound workspace version")
-                {
-                    published = true;
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            if restore_file {
-                // Restore at a different path to catch ID-based joins as well as the tracked path.
-                fs::write(fixture.dir.path().join("restored.yaml"), &saved).unwrap();
-            }
-            resume_tx.send(()).unwrap();
-            writer.join().unwrap();
-            assert!(!applying.join().unwrap());
-            assert!(published, "filesystem writes should proceed while the DB writer is held");
+    // Files are checked before the write transaction opens, so only database changes made
+    // while waiting for the writer are caught here.
+    let fixture = Fixture::new("request.yaml");
+    fixture.edit(|value| value["name"] = "Incoming file version".into());
+    fixture
+        .db
+        .with_tx::<_, Error>(|tx| {
+            let mut workspace = tx.get_workspace(&fixture.workspace_id)?;
+            workspace.name = "Outbound workspace version".into();
+            tx.upsert_workspace(&workspace, &UpdateSource::from_window_label("test"))?;
+            Ok(())
+        })
+        .unwrap();
+    let ops = fixture.calculate().unwrap();
+    assert_eq!(ops.len(), 2);
+    let before = fixture.states();
+    let workspace_path = fixture.dir.path().join("workspace.yaml");
+    let (ready_tx, ready_rx) = mpsc::channel();
+    let (resume_tx, resume_rx) = mpsc::channel();
+    std::thread::scope(|scope| {
+        let fixture = &fixture;
+        let writer = scope.spawn(move || {
+            fixture
+                .db
+                .with_tx::<_, Error>(|tx| {
+                    ready_tx.send(()).unwrap();
+                    resume_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                    let mut request = tx.get_http_request(&fixture.request.id)?;
+                    request.name = "Concurrent database edit".into();
+                    tx.upsert_http_request(&request, &UpdateSource::from_window_label("test"))?;
+                    Ok(())
+                })
+                .unwrap();
         });
-        assert_eq!(
-            fixture.db_request().name,
-            if restore_file { "Keep this request" } else { "Concurrent database edit" }
-        );
-        assert_eq!(fixture.states(), before);
-    }
+        ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        let applying = scope.spawn(move || fixture.apply_reviewed(ops));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut published = false;
+        while Instant::now() < deadline {
+            if fs::read_to_string(&workspace_path).unwrap().contains("Outbound workspace version") {
+                published = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        resume_tx.send(()).unwrap();
+        writer.join().unwrap();
+        assert!(!applying.join().unwrap());
+        assert!(published, "filesystem writes should proceed while the DB writer is held");
+    });
+    assert_eq!(fixture.db_request().name, "Concurrent database edit");
+    assert_eq!(fixture.states(), before);
 }
 
 #[test]

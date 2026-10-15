@@ -417,14 +417,8 @@ pub fn apply_sync_ops(
     sync_dir: &Path,
     mut sync_ops: Vec<SyncOp>,
 ) -> Result<bool> {
-    if !sync_dir.exists() {
-        return Err(Error::InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()));
-    }
     let db_candidates = get_db_candidates(&db.connect(), version, workspace_id, sync_dir)?;
-    let fs_candidates: Vec<_> = get_fs_candidates(sync_dir, &db_candidates)?
-        .into_iter()
-        .filter(|fs| fs.model.workspace_id() == workspace_id)
-        .collect();
+    let fs_candidates = workspace_fs_candidates(sync_dir, workspace_id, &db_candidates)?;
     if !sync_ops_match(&sync_ops, compute_sync_ops(db_candidates, fs_candidates.clone()), false) {
         return Ok(false);
     }
@@ -433,32 +427,59 @@ pub fn apply_sync_ops(
     let has_db_ops = sync_ops.iter().any(is_db_op);
     // File deletions are complete; their remaining work only removes sync state.
     sync_ops.retain(|op| !matches!(op, SyncOp::FsDelete { .. }));
+
+    // Inbound changes need a fresh file scan. It happens here, before the write
+    // transaction, so the transaction never waits on the filesystem.
+    let fs_candidates = if has_db_ops {
+        let db_candidates = get_db_candidates(&db.connect(), version, workspace_id, sync_dir)?;
+        let fs_candidates = workspace_fs_candidates(sync_dir, workspace_id, &db_candidates)?;
+        if !written_sync_ops_match(&sync_ops, db_candidates, fs_candidates.clone()) {
+            return Ok(false);
+        }
+        fs_candidates
+    } else {
+        fs_candidates
+    };
+
     db.with_tx(|tx| {
         // Another writer may have changed the DB while files were being written or
-        // while we waited for the writer. Inbound changes also need a fresh file scan.
+        // while waiting for the writer. Files were checked above; only the DB is reread.
         let db_candidates = get_db_candidates(tx, version, workspace_id, sync_dir)?;
-        let fs_candidates = if has_db_ops {
-            if !sync_dir.exists() {
-                return Err(Error::InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()));
-            }
-            get_fs_candidates(sync_dir, &db_candidates)?
-                .into_iter()
-                .filter(|fs| fs.model.workspace_id() == workspace_id)
-                .collect()
-        } else {
-            fs_candidates
-        };
-        let current = compute_sync_ops(db_candidates, fs_candidates)
-            .into_iter()
-            .filter(|op| !matches!(op, SyncOp::FsDelete { .. }))
-            .collect();
-        if !sync_ops_match(&sync_ops, current, true) {
+        if !written_sync_ops_match(&sync_ops, db_candidates, fs_candidates) {
             return Ok(false);
         }
         let states = apply_db_sync_ops(tx, blobs, workspace_id, sync_dir, pending)?;
         apply_sync_state_ops(tx, workspace_id, sync_dir, states)?;
         Ok(true)
     })
+}
+
+/// The sync directory's candidates for one workspace.
+fn workspace_fs_candidates(
+    sync_dir: &Path,
+    workspace_id: &str,
+    db_candidates: &[DbCandidate],
+) -> Result<Vec<FsCandidate>> {
+    if !sync_dir.exists() {
+        return Err(Error::InvalidSyncDirectory(sync_dir.to_string_lossy().to_string()));
+    }
+    Ok(get_fs_candidates(sync_dir, db_candidates)?
+        .into_iter()
+        .filter(|fs| fs.model.workspace_id() == workspace_id)
+        .collect())
+}
+
+/// Whether a plan, minus its completed file deletions, still matches once its files are written.
+fn written_sync_ops_match(
+    expected: &[SyncOp],
+    db_candidates: Vec<DbCandidate>,
+    fs_candidates: Vec<FsCandidate>,
+) -> bool {
+    let current = compute_sync_ops(db_candidates, fs_candidates)
+        .into_iter()
+        .filter(|op| !matches!(op, SyncOp::FsDelete { .. }))
+        .collect();
+    sync_ops_match(expected, current, true)
 }
 
 fn sync_ops_match(expected: &[SyncOp], current: Vec<SyncOp>, files_written: bool) -> bool {
