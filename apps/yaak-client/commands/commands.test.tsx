@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   applySync: vi.fn(),
   showDialog: vi.fn<(dialog: DialogInstance) => void>(),
   hideDialog: vi.fn(),
+  showToast: vi.fn(),
 }));
 
 vi.mock("@yaakapp-internal/sync", () => mocks);
@@ -33,7 +34,11 @@ vi.mock("../lib/dialog", () => mocks);
 vi.mock("../lib/jotai", () => ({ jotaiStore: { get: vi.fn() } }));
 vi.mock("../lib/prompt", () => ({ showPrompt: vi.fn() }));
 vi.mock("../lib/resolvedModelName", () => ({ resolvedModelNameWithFolders: () => "Request" }));
-vi.mock("../lib/toast", () => ({ showToast: vi.fn() }));
+vi.mock("../lib/toast", () => mocks);
+
+const staleToast = expect.objectContaining({
+  message: "Files changed while syncing. Review the changes again.",
+});
 
 const params = { workspaceId: "wk_test", syncDir: "/sync" };
 const deletion = {
@@ -90,6 +95,7 @@ test("requires another confirmation for a changed plan", async () => {
 
   expect(mocks.applySync).toHaveBeenCalledTimes(1);
   expect(mocks.showDialog).toHaveBeenCalledTimes(2);
+  expect(mocks.showToast).toHaveBeenCalledWith(staleToast);
   expect(mocks.hideDialog).not.toHaveBeenCalled();
   await submit(latestDialog());
   expect(mocks.applySync).toHaveBeenLastCalledWith(params.workspaceId, params.syncDir, [update]);
@@ -126,4 +132,17 @@ test("outbound-only changes clear the old dialog and sync automatically", async 
   expect(mocks.applySync).toHaveBeenCalledWith(params.workspaceId, params.syncDir, [outbound]);
   expect(mocks.hideDialog).toHaveBeenCalledWith("commit-sync");
   expect(mocks.showDialog).toHaveBeenCalledTimes(1);
+});
+
+test("stops retrying a plan that keeps going stale", async () => {
+  mocks.calculateSync.mockResolvedValue([update]);
+  mocks.applySync.mockResolvedValue(false);
+
+  await syncWorkspace.mutateAsync({ ...params, force: true });
+
+  expect(mocks.calculateSync).toHaveBeenCalledTimes(3);
+  expect(mocks.applySync).toHaveBeenCalledTimes(3);
+  expect(mocks.showToast).toHaveBeenCalledTimes(1);
+  expect(mocks.showToast).toHaveBeenCalledWith(staleToast);
+  expect(mocks.showDialog).not.toHaveBeenCalled();
 });

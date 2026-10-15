@@ -18,6 +18,7 @@ import { hideDialog, showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
 import { showPrompt } from "../lib/prompt";
 import { resolvedModelNameWithFolders } from "../lib/resolvedModelName";
+import { showToast } from "../lib/toast";
 import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 export const createFolder = createFastMutation<
@@ -52,13 +53,24 @@ export const createFolder = createFastMutation<
   },
 });
 
+// Files can keep changing under a plan, so stop recalculating after a few stale applies.
+const MAX_SYNC_ATTEMPTS = 3;
+
+function showStaleSyncToast() {
+  showToast({
+    id: "sync-stale",
+    color: "warning",
+    message: "Files changed while syncing. Review the changes again.",
+  });
+}
+
 export const syncWorkspace = createFastMutation<
   void,
   void,
-  { workspaceId: string; syncDir: string; force?: boolean }
+  { workspaceId: string; syncDir: string; force?: boolean; attempt?: number }
 >({
   mutationKey: [],
-  mutationFn: async ({ workspaceId, syncDir, force }) => {
+  mutationFn: async ({ workspaceId, syncDir, force, attempt = 1 }) => {
     const ops = (await calculateSync(workspaceId, syncDir)) ?? [];
     if (ops.length === 0) {
       console.log("Nothing to sync", workspaceId, syncDir);
@@ -72,8 +84,11 @@ export const syncWorkspace = createFastMutation<
     const apply = async () => {
       if (await applySync(workspaceId, syncDir, ops)) {
         hideDialog("commit-sync");
+      } else if (attempt < MAX_SYNC_ATTEMPTS) {
+        await syncWorkspace.mutateAsync({ workspaceId, syncDir, force, attempt: attempt + 1 });
       } else {
-        await syncWorkspace.mutateAsync({ workspaceId, syncDir, force });
+        hideDialog("commit-sync");
+        showStaleSyncToast();
       }
     };
 
@@ -88,6 +103,10 @@ export const syncWorkspace = createFastMutation<
     );
 
     console.log("Directory changes detected", { dbOps, ops });
+
+    if (attempt > 1) {
+      showStaleSyncToast();
+    }
 
     showDialog({
       id: "commit-sync",
