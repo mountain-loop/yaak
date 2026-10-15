@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "yaak",
+  "displayName": "Yaak",
+  "description": "Build, save, and send API requests with the yaak CLI, with its MCP server for agents",
+  "author": {
+    "name": "Yaak",
+    "url": "https://yaak.app"
+  },
+  "homepage": "https://yaak.app",
+  "repository": "https://github.com/mountain-loop/yaak",
+  "license": "MIT",
+  "keywords": ["api", "http", "rest", "graphql", "grpc", "openapi", "api-client"],
+  "mcpServers": {
+    "yaak": {
+      "command": "npx",
+      "args": ["-y", "@yaakapp/cli", "mcp"]
+    }
+  }
+}
