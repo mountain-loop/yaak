@@ -161,7 +161,7 @@ function formBodyToUrlEncodedText(form: unknown[]): string {
 }
 
 function formBodyToObject(form: unknown[]) {
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = Object.create(null);
 
   for (const pair of form) {
     if (!isRecord(pair)) continue;
