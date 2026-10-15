@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vite-plus/test";
 import { CsvViewerInner } from "./CsvViewer";
 
-vi.mock("@yaakapp-internal/ui", () => ({
+vi.mock("../Table", () => ({
   Table: ({ children }: { children: ReactNode }) => <table>{children}</table>,
   TableBody: ({ children }: { children: ReactNode }) => <tbody>{children}</tbody>,
   TableCell: ({ children }: { children: ReactNode }) => <td>{children}</td>,

@@ -1,5 +1,5 @@
 import classNames from "classnames";
-import { JsonAttributeTree } from "../core/JsonAttributeTree";
+import { JsonAttributeTree } from "./JsonAttributeTree";
 
 interface Props {
   text: string;

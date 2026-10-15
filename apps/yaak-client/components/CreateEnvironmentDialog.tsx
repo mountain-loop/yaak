@@ -5,8 +5,8 @@ import { ColorIndicator } from "./ColorIndicator";
 import { Checkbox } from "./core/Checkbox";
 import { ColorPickerWithThemeColors } from "./core/ColorPicker";
 import { DialogFooter } from "./core/Dialog";
-import { Label } from "./core/Label";
 import { PlainInput } from "./core/PlainInput";
+import { Label } from "@yaakapp-internal/ui";
 
 interface Props {
   onCreate: (id: string) => void;

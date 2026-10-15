@@ -1,5 +1,5 @@
-import { generateId } from "../../lib/generateId";
 import type { Pair, PairWithId } from "./PairEditor";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 // NOTE: Generic so callers keep whatever they passed in (eg. an EditablePair stays editable)
 export function ensurePairId<T extends Pair>(p: T): T & PairWithId {

@@ -1,31 +1,16 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
-import { format, formatDistanceToNowStrict } from "date-fns";
-import { useMemo } from "react";
-import { CountBadge } from "./core/CountBadge";
-import { DetailsBanner } from "./core/DetailsBanner";
-import { IconButton } from "./core/IconButton";
-import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
 import { platform } from "@yaakapp-internal/platform";
+import { HeadersTable, KeyValueRows } from "@yaakapp-internal/ui";
+import { format, formatDistanceToNowStrict } from "date-fns";
+import { DetailsBanner, useDetailsBannerStoredValue } from "./core/DetailsBanner";
+import { IconButton } from "./core/IconButton";
+import { KeyValueRow } from "./core/KeyValueRow";
 
 interface Props {
   response: HttpResponse;
 }
 
 export function ResponseHeaders({ response }: Props) {
-  const responseHeaders = useMemo(
-    () =>
-      [...response.headers].sort((a, b) =>
-        a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()),
-      ),
-    [response.headers],
-  );
-  const requestHeaders = useMemo(
-    () =>
-      [...response.requestHeaders].sort((a, b) =>
-        a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()),
-      ),
-    [response.requestHeaders],
-  );
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner storageKey={`${response.requestId}.general`} summary={<h2>Info</h2>}>
@@ -58,53 +43,21 @@ export function ResponseHeaders({ response }: Props) {
           </KeyValueRow>
         </KeyValueRows>
       </DetailsBanner>
-      <DetailsBanner
+      <HeadersTable
+        title="Request Headers"
+        headers={response.requestHeaders}
+        labelColor="primary"
         storageKey={`${response.requestId}.request_headers`}
-        summary={
-          <h2 className="flex items-center">
-            Request Headers <CountBadge showZero count={requestHeaders.length} />
-          </h2>
-        }
-      >
-        {requestHeaders.length === 0 ? (
-          <NoHeaders />
-        ) : (
-          <KeyValueRows>
-            {requestHeaders.map((h, i) => (
-              // oxlint-disable-next-line react/no-array-index-key
-              <KeyValueRow labelColor="primary" key={i} label={h.name}>
-                {h.value}
-              </KeyValueRow>
-            ))}
-          </KeyValueRows>
-        )}
-      </DetailsBanner>
-      <DetailsBanner
+        useStoredValue={useDetailsBannerStoredValue}
+      />
+      <HeadersTable
         defaultOpen
+        title="Response Headers"
+        headers={response.headers}
+        labelColor="info"
         storageKey={`${response.requestId}.response_headers`}
-        summary={
-          <h2 className="flex items-center">
-            Response Headers <CountBadge showZero count={responseHeaders.length} />
-          </h2>
-        }
-      >
-        {responseHeaders.length === 0 ? (
-          <NoHeaders />
-        ) : (
-          <KeyValueRows>
-            {responseHeaders.map((h, i) => (
-              // oxlint-disable-next-line react/no-array-index-key
-              <KeyValueRow labelColor="info" key={i} label={h.name}>
-                {h.value}
-              </KeyValueRow>
-            ))}
-          </KeyValueRows>
-        )}
-      </DetailsBanner>
+        useStoredValue={useDetailsBannerStoredValue}
+      />
     </div>
   );
-}
-
-function NoHeaders() {
-  return <span className="text-text-subtlest text-sm italic">No Headers</span>;
 }

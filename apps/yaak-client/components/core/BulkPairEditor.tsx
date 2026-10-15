@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
-import { generateId } from "../../lib/generateId";
 import { Editor } from "./Editor/LazyEditor";
 import type { Pair, PairEditorProps, PairWithId } from "./PairEditor";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 type Props = PairEditorProps;
 

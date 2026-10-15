@@ -1,10 +1,9 @@
 import type { Folder } from "@yaakapp-internal/models";
 import { modelTypeLabel, patchModel } from "@yaakapp-internal/models";
-import { HStack, Icon, InlineCode } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, IconTooltip } from "@yaakapp-internal/ui";
 import { useMemo } from "react";
 import { openFolderSettings } from "../commands/openFolderSettings";
 import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
-import { IconTooltip } from "../components/core/IconTooltip";
 import type { RadioDropdownProps } from "../components/core/RadioDropdown";
 import type { TabItem } from "../components/core/Tabs/Tabs";
 import { capitalize } from "../lib/capitalize";

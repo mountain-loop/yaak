@@ -69,7 +69,6 @@ import type { Ast } from "./core/Editor/filter/query";
 import { evaluate, parseQuery } from "./core/Editor/filter/query";
 import { formatFieldFilter } from "./core/Editor/filter/format";
 import { HttpMethodTag } from "./core/HttpMethodTag";
-import { HttpStatusTag } from "./core/HttpStatusTag";
 import {
   Icon,
   LoadingIcon,
@@ -77,6 +76,7 @@ import {
   isSelectedFamily,
   selectedIdsFamily,
   InlineCode,
+  HttpStatusTag,
 } from "@yaakapp-internal/ui";
 import type { TreeNode, TreeHandle, TreeProps, TreeItemProps } from "@yaakapp-internal/ui";
 import { IconButton } from "./core/IconButton";

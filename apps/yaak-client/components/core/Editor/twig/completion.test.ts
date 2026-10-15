@@ -4,9 +4,9 @@ import { json } from "@codemirror/lang-json";
 import { EditorState, type Extension, type TransactionSpec } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { describe, expect, test } from "vite-plus/test";
-import { singleLineExtensions } from "../singleLine";
 import { twigCompletion, type TwigCompletionOption } from "./completion";
 import { parser } from "./twig";
+import { singleLineExtensions } from "@yaakapp-internal/ui/editor";
 
 const options: TwigCompletionOption[] = [
   { name: "someVar", label: "someVar", type: "variable", value: "value", onClick: () => {} },

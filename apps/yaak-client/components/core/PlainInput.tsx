@@ -1,4 +1,4 @@
-import { HStack } from "@yaakapp-internal/ui";
+import { HStack, useStateWithDeps, Label } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { FocusEvent, InputHTMLAttributes, ReactNode } from "react";
 import {
@@ -10,11 +10,9 @@ import {
   useState,
 } from "react";
 import { useRandomKey } from "../../hooks/useRandomKey";
-import { useStateWithDeps } from "../../hooks/useStateWithDeps";
-import { generateId } from "../../lib/generateId";
 import { IconButton } from "./IconButton";
 import type { InputProps } from "./Input";
-import { Label } from "./Label";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 export type PlainInputProps = Omit<
   InputProps,

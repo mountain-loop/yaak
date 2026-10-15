@@ -22,11 +22,9 @@ import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
 import { activeWebsocketConnectionAtom } from "../hooks/usePinnedWebsocketConnection";
 import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
 import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
-import { languageFromContentType } from "../lib/contentType";
 import { derivePathPlaceholderPairs, renamePathPlaceholder } from "../lib/pathPlaceholders";
 import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
 import { resolvedModelName } from "../lib/resolvedModelName";
-import { CountBadge } from "./core/CountBadge";
 import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import { getUrlCompletionConfig } from "./core/Editor/url/completion";
 import { Editor } from "./core/Editor/LazyEditor";
@@ -40,6 +38,7 @@ import { MarkdownEditor } from "./MarkdownEditor";
 import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
 import { UrlBar } from "./UrlBar";
 import { UrlParametersEditor } from "./UrlParameterEditor";
+import { languageFromContentType, CountBadge } from "@yaakapp-internal/ui";
 
 interface Props {
   style: CSSProperties;

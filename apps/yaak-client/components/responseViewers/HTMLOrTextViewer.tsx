@@ -1,17 +1,17 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { useQueryClient } from "@tanstack/react-query";
+import { languageFromContentType, type TextFilterApi, WebPageViewer } from "@yaakapp-internal/ui";
+import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import { useCallback } from "react";
 import { useCopyHttpResponse } from "../../hooks/useCopyHttpResponse";
+import { useRecentFilters } from "../../hooks/useRecentFilters";
 import { responseBodyTextQuery, useResponseBodyText } from "../../hooks/useResponseBodyText";
-import { useResponseFilter } from "../../hooks/useResponseFilter";
 import { useSaveResponse } from "../../hooks/useSaveResponse";
-import { languageFromContentType } from "../../lib/contentType";
 import { getContentTypeFromHeaders } from "../../lib/model_util";
-import type { EditorProps } from "../core/Editor/Editor";
 import { IconButton } from "../core/IconButton";
 import { EmptyStateText } from "../EmptyStateText";
+import { RecentFiltersDropdown } from "./RecentFiltersDropdown";
 import { TextViewer } from "./TextViewer";
-import { WebPageViewer } from "./WebPageViewer";
 
 interface Props {
   response: HttpResponse;
@@ -48,22 +48,36 @@ export function HTMLOrTextViewer({ response, pretty, textViewerClassName }: Prop
 interface HttpTextViewerProps {
   response: HttpResponse;
   text: string;
-  language: EditorProps["language"];
+  language: CodeEditorProps["language"];
   pretty: boolean;
   className?: string;
 }
 
 function HttpTextViewer({ response, text, language, pretty, className }: HttpTextViewerProps) {
   const queryClient = useQueryClient();
-  const filter = useResponseFilter({
-    stateKey: `response.body.${response.requestId}`,
-    // Shares the display query's cache entry, so the verdict costs no extra RPC
-    runFilter: useCallback(
-      (f: string) => queryClient.fetchQuery(responseBodyTextQuery({ response, filter: f })),
-      [queryClient, response],
+  const filterStateKey = `response.body.${response.requestId}`;
+  // Shares the response body query's cache, so applying and showing a filter cost one RPC
+  const filterText = useCallback(
+    (f: string) => queryClient.fetchQuery(responseBodyTextQuery({ response, filter: f })),
+    [queryClient, response],
+  );
+  const { recentFilters, addFilter, removeFilter, togglePin, clearFilters } =
+    useRecentFilters(filterStateKey);
+  const filterLeftSlot = useCallback(
+    (filter: TextFilterApi) => (
+      <div className="py-0.5 flex">
+        <RecentFiltersDropdown
+          recentFilters={recentFilters}
+          activeFilter={filter.appliedFilter}
+          onSelect={filter.replaceFilter}
+          onRemove={removeFilter}
+          onTogglePin={togglePin}
+          onClear={clearFilters}
+        />
+      </div>
     ),
-  });
-  const filteredBody = useResponseBodyText({ response, filter: filter.appliedFilter });
+    [recentFilters, removeFilter, togglePin, clearFilters],
+  );
   const saveResponse = useSaveResponse(response);
   const copyResponse = useCopyHttpResponse(response);
   const actionsDisabled = response.state !== "closed" && response.status >= 100;
@@ -95,12 +109,10 @@ function HttpTextViewer({ response, text, language, pretty, className }: HttpTex
           className="border !border-border-subtle"
         />,
       ]}
-      filter={filter}
-      filterResult={{
-        data: filteredBody.data,
-        isPending: filteredBody.isPending,
-        error: !!filteredBody.error,
-      }}
+      filterText={filterText}
+      filterStateKey={filterStateKey}
+      onFilterApplied={addFilter}
+      filterLeftSlot={filterLeftSlot}
     />
   );
 }

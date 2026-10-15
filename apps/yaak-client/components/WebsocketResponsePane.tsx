@@ -1,5 +1,12 @@
 import type { WebsocketEvent, WebsocketRequest } from "@yaakapp-internal/models";
-import { HStack, Icon, LoadingIcon, VStack } from "@yaakapp-internal/ui";
+import {
+  HStack,
+  Icon,
+  LoadingIcon,
+  VStack,
+  useStateWithDeps,
+  languageFromContentType,
+} from "@yaakapp-internal/ui";
 import { hexy } from "hexy";
 import { useAtomValue } from "jotai";
 import { useMemo, useState } from "react";
@@ -10,8 +17,6 @@ import {
   setPinnedWebsocketConnectionId,
   useWebsocketEvents,
 } from "../hooks/usePinnedWebsocketConnection";
-import { useStateWithDeps } from "../hooks/useStateWithDeps";
-import { languageFromContentType } from "../lib/contentType";
 import { Button } from "./core/Button";
 import { Editor } from "./core/Editor/LazyEditor";
 import { type EventDetailAction, EventDetailHeader, EventViewer } from "./core/EventViewer";

@@ -1,8 +1,8 @@
 import { platform } from "@yaakapp-internal/platform";
 import type { ModelPayload } from "@yaakapp-internal/models";
 import { atom, useAtomValue } from "jotai";
-import { generateId } from "../lib/generateId";
 import { jotaiStore } from "../lib/jotai";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 const requestUpdateKeyAtom = atom<Record<string, string>>({});
 

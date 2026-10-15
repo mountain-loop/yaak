@@ -1,4 +1,5 @@
-@reference "../../../main.css";
+@reference "tailwindcss";
+@reference "../../../../tailwind-config/index.css";
 
 .cm-wrapper {
   @apply h-full overflow-hidden;

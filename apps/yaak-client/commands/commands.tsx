@@ -16,9 +16,9 @@ import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
 import { showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
-import { pluralizeCount } from "../lib/pluralize";
 import { showPrompt } from "../lib/prompt";
 import { resolvedModelNameWithFolders } from "../lib/resolvedModelName";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 export const createFolder = createFastMutation<
   string | null,

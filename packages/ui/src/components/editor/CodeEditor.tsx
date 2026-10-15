@@ -1,0 +1,696 @@
+import { defaultKeymap, historyField, indentWithTab } from "@codemirror/commands";
+import { foldState, forceParsing } from "@codemirror/language";
+import type { EditorStateConfig, Extension } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
+import { EditorView, keymap, placeholder as placeholderExt, tooltips } from "@codemirror/view";
+import { emacs } from "@replit/codemirror-emacs";
+import { vim } from "@replit/codemirror-vim";
+
+import { vscodeKeymap } from "@replit/codemirror-vscode-keymap";
+import { debounce } from "@yaakapp-internal/lib";
+import type { EditorKeymap } from "@yaakapp-internal/models";
+import type { EditorLanguage } from "@yaakapp-internal/plugins";
+import classNames from "classnames";
+import type { ReactNode, RefObject } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
+import { docFingerprint } from "../../lib/docFingerprint";
+import { IconButton } from "../IconButton";
+import { HStack } from "../Stacks";
+import "./CodeEditor.css";
+import {
+  baseExtensions,
+  editableExtensions,
+  getLanguageExtension,
+  multiLineExtensions,
+  readonlyExtensions,
+} from "./extensions";
+import { singleLineExtensions } from "./singleLine";
+
+// VSCode's Tab actions mess with the single-line editor tab actions, so remove it.
+const vsCodeWithoutTab = vscodeKeymap.filter((k) => k.key !== "Tab");
+
+const keymapExtensions: Record<EditorKeymap, Extension> = {
+  vim: vim(),
+  emacs: emacs(),
+  vscode: keymap.of(vsCodeWithoutTab),
+  default: [],
+};
+
+export interface CodeEditorProps {
+  actions?: ReactNode;
+  autoFocus?: boolean;
+  autoSelect?: boolean;
+  className?: string;
+  defaultValue?: string | null;
+  disableTabIndent?: boolean;
+  disabled?: boolean;
+  /** Added to the editable document's extensions, swapped out with read-only */
+  editableExtensions?: Extension;
+  extensions?: Extension[] | Extension;
+  forceUpdateKey?: string | number;
+  format?: (v: string) => Promise<string>;
+  heightMode?: "auto" | "full";
+  hideGutter?: boolean;
+  id?: string;
+  /** Runs before `onKeyDown`; returning true consumes the key */
+  keyDownHandler?: (e: KeyboardEvent, view: EditorView) => boolean;
+  keymap?: EditorKeymap;
+  language?: EditorLanguage | null;
+  /** Replaces the extension built from `language`, reconfigured whenever it changes */
+  languageExtension?: Extension;
+  lintExtension?: Extension;
+  /** Added to the read-only document's extensions, swapped out with editable */
+  readOnlyExtensions?: Extension;
+  onBlur?: () => void;
+  onChange?: (value: string) => void;
+  onFocus?: () => void;
+  onKeyDown?: (e: KeyboardEvent) => void;
+  onPaste?: (value: string) => void;
+  onPasteOverwrite?: (e: ClipboardEvent, value: string) => void;
+  placeholder?: string;
+  readOnly?: boolean;
+  singleLine?: boolean;
+  containerOnly?: boolean;
+  stateKey: string | null;
+  tooltipContainer?: HTMLElement;
+  type?: "text" | "password";
+  wrapLines?: boolean;
+  setRef?: (view: EditorView | null) => void;
+}
+
+const stateFields = { history: historyField, folds: foldState };
+
+const emptyExtension: Extension = [];
+
+export function CodeEditor(props: CodeEditorProps) {
+  return <CodeEditorInner key={props.stateKey} {...props} />;
+}
+
+function CodeEditorInner({
+  actions,
+  autoFocus,
+  autoSelect,
+  className,
+  defaultValue,
+  disableTabIndent,
+  disabled,
+  editableExtensions: extraEditableExtensions,
+  extensions: extraExtensions,
+  forceUpdateKey,
+  format,
+  heightMode,
+  hideGutter,
+  keyDownHandler,
+  keymap: editorKeymap = "default",
+  language,
+  languageExtension,
+  lintExtension,
+  onBlur,
+  onChange,
+  onFocus,
+  onKeyDown,
+  onPaste,
+  onPasteOverwrite,
+  placeholder,
+  readOnly,
+  readOnlyExtensions: extraReadOnlyExtensions,
+  singleLine,
+  containerOnly,
+  stateKey,
+  type,
+  wrapLines,
+  setRef,
+}: CodeEditorProps) {
+  if (disabled) {
+    readOnly = true;
+  }
+
+  if (singleLine || language == null || language === "text") {
+    disableTabIndent = true;
+  }
+
+  const cm = useRef<{ view: EditorView; languageCompartment: Compartment } | null>(null);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handleChange = useRef<CodeEditorProps["onChange"]>(onChange);
+  useEffect(() => {
+    handleChange.current = onChange;
+  }, [onChange]);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handlePaste = useRef<CodeEditorProps["onPaste"]>(onPaste);
+  useEffect(() => {
+    handlePaste.current = onPaste;
+  }, [onPaste]);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handlePasteOverwrite = useRef<CodeEditorProps["onPasteOverwrite"]>(onPasteOverwrite);
+  useEffect(() => {
+    handlePasteOverwrite.current = onPasteOverwrite;
+  }, [onPasteOverwrite]);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handleFocus = useRef<CodeEditorProps["onFocus"]>(onFocus);
+  useEffect(() => {
+    handleFocus.current = onFocus;
+  }, [onFocus]);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handleBlur = useRef<CodeEditorProps["onBlur"]>(onBlur);
+  useEffect(() => {
+    handleBlur.current = onBlur;
+  }, [onBlur]);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handleKeyDown = useRef<CodeEditorProps["onKeyDown"]>(onKeyDown);
+  useEffect(() => {
+    handleKeyDown.current = onKeyDown;
+  }, [onKeyDown]);
+
+  // Use ref so we can update the handler without re-initializing the editor
+  const handleKeyDownFirst = useRef<CodeEditorProps["keyDownHandler"]>(keyDownHandler);
+  useEffect(() => {
+    handleKeyDownFirst.current = keyDownHandler;
+  }, [keyDownHandler]);
+
+  // Update placeholder
+  const placeholderCompartment = useRef(new Compartment());
+  useEffect(
+    function configurePlaceholder() {
+      if (cm.current === null) return;
+      const ext = placeholderExt(placeholderElFromText(placeholder));
+      const effects = placeholderCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects });
+    },
+    [placeholder],
+  );
+
+  // Update vim
+  const keymapCompartment = useRef(new Compartment());
+  useEffect(
+    function configureKeymap() {
+      if (cm.current === null) return;
+      const current = keymapCompartment.current.get(cm.current.view.state) ?? [];
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (editorKeymap === "default" && current === keymapExtensions.default) return; // Nothing to do
+      if (editorKeymap === "vim" && current === keymapExtensions.vim) return; // Nothing to do
+      if (editorKeymap === "vscode" && current === keymapExtensions.vscode) return; // Nothing to do
+      if (editorKeymap === "emacs" && current === keymapExtensions.emacs) return; // Nothing to do
+
+      const ext = keymapExtensions[editorKeymap] ?? keymapExtensions.default;
+      const effects = keymapCompartment.current.reconfigure(ext);
+      cm.current.view.dispatch({ effects });
+    },
+    [editorKeymap],
+  );
+
+  // Update wrap lines
+  const wrapLinesCompartment = useRef(new Compartment());
+  useEffect(
+    function configureWrapLines() {
+      if (cm.current === null) return;
+      const current = wrapLinesCompartment.current.get(cm.current.view.state) ?? emptyExtension;
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (wrapLines && current !== emptyExtension) return; // Nothing to do
+      if (!wrapLines && current === emptyExtension) return; // Nothing to do
+
+      const ext = wrapLines ? EditorView.lineWrapping : emptyExtension;
+      const effects = wrapLinesCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects });
+    },
+    [wrapLines],
+  );
+
+  // Update tab indent
+  const tabIndentCompartment = useRef(new Compartment());
+  useEffect(
+    function configureTabIndent() {
+      if (cm.current === null) return;
+      const current = tabIndentCompartment.current.get(cm.current.view.state) ?? emptyExtension;
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (disableTabIndent && current !== emptyExtension) return; // Nothing to do
+      if (!disableTabIndent && current === emptyExtension) return; // Nothing to do
+
+      const ext = !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension;
+      const effects = tabIndentCompartment.current.reconfigure(ext);
+      cm.current?.view.dispatch({ effects });
+    },
+    [disableTabIndent],
+  );
+
+  const modeExtensions = useMemo(
+    () => ({
+      readOnly: extraReadOnlyExtensions
+        ? [readonlyExtensions, extraReadOnlyExtensions]
+        : readonlyExtensions,
+      editable: extraEditableExtensions
+        ? [editableExtensions, extraEditableExtensions]
+        : editableExtensions,
+    }),
+    [extraReadOnlyExtensions, extraEditableExtensions],
+  );
+
+  // Update read-only
+  const readOnlyCompartment = useRef(new Compartment());
+  useEffect(
+    function configureReadOnly() {
+      if (cm.current === null) return;
+      const current = readOnlyCompartment.current.get(cm.current.view.state) ?? emptyExtension;
+      const next = readOnly ? modeExtensions.readOnly : modeExtensions.editable;
+      // PERF: This is expensive with hundreds of editors on screen, so only do it when necessary
+      if (current === next) return;
+
+      const effects = readOnlyCompartment.current.reconfigure(next);
+      cm.current?.view.dispatch({ effects });
+    },
+    [readOnly, modeExtensions],
+  );
+
+  const langExt = useMemo(
+    () => languageExtension ?? getLanguageExtension({ language, lintExtension, hideGutter }),
+    [languageExtension, language, lintExtension, hideGutter],
+  );
+
+  // Update the language extension when the language changes
+  useEffect(() => {
+    if (cm.current === null) return;
+    const { view, languageCompartment } = cm.current;
+    if (languageCompartment.get(view.state) === langExt) return;
+    view.dispatch({ effects: languageCompartment.reconfigure(langExt) });
+  }, [langExt]);
+
+  // Initialize the editor when ref mounts
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- only reinitialize when necessary
+  const initEditorRef = useCallback(
+    function initEditorRef(container: HTMLDivElement | null) {
+      if (container === null) {
+        flushCachedEditorState(stateKey);
+        cm.current?.view.destroy();
+        cm.current = null;
+        return;
+      }
+
+      try {
+        const languageCompartment = new Compartment();
+        const extensions = [
+          languageCompartment.of(langExt),
+          placeholderCompartment.current.of(placeholderExt(placeholderElFromText(placeholder))),
+          wrapLinesCompartment.current.of(wrapLines ? EditorView.lineWrapping : emptyExtension),
+          tabIndentCompartment.current.of(
+            !disableTabIndent ? keymap.of([indentWithTab]) : emptyExtension,
+          ),
+          keymapCompartment.current.of(keymapExtensions[editorKeymap] ?? keymapExtensions.default),
+          readOnlyCompartment.current.of(
+            readOnly ? modeExtensions.readOnly : modeExtensions.editable,
+          ),
+          ...getExtensions({
+            container,
+            singleLine,
+            hideGutter,
+            stateKey,
+            onChange: handleChange,
+            onPaste: handlePaste,
+            onPasteOverwrite: handlePasteOverwrite,
+            onFocus: handleFocus,
+            onBlur: handleBlur,
+            onKeyDown: handleKeyDown,
+            keyDownHandler: handleKeyDownFirst,
+          }),
+          ...(Array.isArray(extraExtensions)
+            ? extraExtensions
+            : extraExtensions
+              ? [extraExtensions]
+              : []),
+        ];
+
+        const cachedJsonState = getCachedEditorState(defaultValue ?? "", stateKey, !!readOnly);
+
+        const doc = `${defaultValue ?? ""}`;
+        const config: EditorStateConfig = { extensions, doc };
+
+        const state = cachedJsonState
+          ? EditorState.fromJSON(cachedJsonState, config, stateFields)
+          : EditorState.create(config);
+
+        // PERF: Built detached and attached in a microtask, rather than passing `parent` and
+        // letting the constructor attach it first.
+        //
+        // The constructor sets `contenteditable` on the content element and then reads
+        // `document.fonts.ready`. Both force the browser to flush style and layout when the
+        // element is already in the document, and whatever the previous editor attached has
+        // just dirtied it again — so mounting n editors in one commit costs n forced layouts.
+        // The environment editor mounts two per variable row (~60 of them), which is where its
+        // half-second open went.
+        //
+        // Building detached moves that work off the live document, and deferring the attach to
+        // a microtask means every editor in the commit is built before any of them is inserted:
+        // one forced layout for the batch instead of one each. The microtask still runs before
+        // paint, so nothing is visible in the meantime.
+        const view = new EditorView({ state });
+
+        // For large documents, the parser may parse the max number of lines and fail to add
+        // things like fold markers because of it.
+        // This forces it to parse more but keeps the timeout to the default of 100 ms.
+        forceParsing(view, 9e6, 100);
+
+        cm.current = { view, languageCompartment };
+        queueMicrotask(() => {
+          // The editor was torn down (or replaced) before we got here
+          if (cm.current?.view !== view) return;
+
+          // Runs after the surrounding try/catch has returned, so it needs its own
+          try {
+            container.appendChild(view.dom);
+            // Everything the constructor measured, it measured detached
+            view.requestMeasure();
+
+            if (autoFocus) {
+              view.focus();
+            }
+            if (autoSelect) {
+              view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+            }
+          } catch (e) {
+            console.log("Failed to attach Codemirror", e);
+          }
+        });
+        setRef?.(view);
+      } catch (e) {
+        console.log("Failed to initialize Codemirror", e);
+      }
+    },
+    [forceUpdateKey],
+  );
+
+  // For read-only mode, update content when `defaultValue` changes
+  useEffect(
+    function updateReadOnlyEditor() {
+      if (readOnly && cm.current?.view != null) {
+        updateContents(cm.current.view, defaultValue || "");
+      }
+    },
+    [defaultValue, readOnly],
+  );
+
+  // Force input to update when receiving change and not in focus
+  useLayoutEffect(
+    function updateNonFocusedEditor() {
+      const notFocused = !cm.current?.view.hasFocus;
+      if (notFocused && cm.current != null) {
+        updateContents(cm.current.view, defaultValue || "");
+      }
+    },
+    [defaultValue],
+  );
+
+  // Add bg classes to actions, so they appear over the text
+  const decoratedActions = useMemo(() => {
+    const results = [];
+    const actionClassName = classNames(
+      "bg-surface transition-opacity transform-gpu opacity-0 group-hover:opacity-100 hover:opacity-100! shadow",
+    );
+
+    if (format) {
+      results.push(
+        <IconButton
+          showConfirm
+          key="format"
+          size="sm"
+          title="Reformat contents"
+          icon="magic_wand"
+          variant="border"
+          className={classNames(actionClassName)}
+          onClick={async () => {
+            if (cm.current === null) return;
+            const { doc } = cm.current.view.state;
+            const formatted = await format(doc.toString());
+            // Update editor and blur because the cursor will reset anyway
+            cm.current.view.dispatch({
+              changes: { from: 0, to: doc.length, insert: formatted },
+            });
+            cm.current.view.contentDOM.blur();
+            // Fire change event
+            onChange?.(formatted);
+          }}
+        />,
+      );
+    }
+    results.push(
+      Children.map(actions, (existingChild) => {
+        if (!isValidElement<{ className?: string }>(existingChild)) return null;
+        const existingProps = existingChild.props;
+
+        return cloneElement(existingChild, {
+          ...existingProps,
+          className: classNames(existingProps.className, actionClassName),
+        });
+      }),
+    );
+    return results;
+  }, [actions, format, onChange]);
+
+  const cmContainer = (
+    <div
+      ref={initEditorRef}
+      className={classNames(
+        className,
+        "cm-wrapper text-base",
+        disabled && "opacity-disabled",
+        type === "password" && "cm-obscure-text",
+        heightMode === "auto" ? "cm-auto-height" : "cm-full-height",
+        singleLine ? "cm-singleline" : "cm-multiline",
+        readOnly && "cm-readonly",
+      )}
+    />
+  );
+
+  if (singleLine || containerOnly) {
+    return cmContainer;
+  }
+
+  return (
+    <div className="group relative h-full w-full x-theme-editor bg-surface">
+      {cmContainer}
+      {decoratedActions && (
+        <HStack
+          space={1}
+          justifyContent="end"
+          className={classNames(
+            "absolute bottom-2 left-0 right-0",
+            "pointer-events-none", // No pointer events, so we don't block the editor
+          )}
+        >
+          {decoratedActions}
+        </HStack>
+      )}
+    </div>
+  );
+}
+
+function getExtensions({
+  stateKey,
+  container,
+  singleLine,
+  hideGutter,
+  onChange,
+  onPaste,
+  onPasteOverwrite,
+  onFocus,
+  onBlur,
+  onKeyDown,
+  keyDownHandler,
+}: Pick<CodeEditorProps, "singleLine" | "hideGutter"> & {
+  stateKey: CodeEditorProps["stateKey"];
+  container: HTMLDivElement | null;
+  onChange: RefObject<CodeEditorProps["onChange"]>;
+  onPaste: RefObject<CodeEditorProps["onPaste"]>;
+  onPasteOverwrite: RefObject<CodeEditorProps["onPasteOverwrite"]>;
+  onFocus: RefObject<CodeEditorProps["onFocus"]>;
+  onBlur: RefObject<CodeEditorProps["onBlur"]>;
+  onKeyDown: RefObject<CodeEditorProps["onKeyDown"]>;
+  keyDownHandler: RefObject<CodeEditorProps["keyDownHandler"]>;
+}) {
+  // TODO: Ensure tooltips render inside the dialog if we are in one.
+  const parent =
+    container?.closest<HTMLDivElement>('[role="dialog"]') ??
+    document.querySelector<HTMLDivElement>("#cm-portal") ??
+    undefined;
+
+  return [
+    ...baseExtensions, // Must be first
+    EditorView.contentAttributes.of({
+      autocapitalize: "off",
+      autocorrect: "off",
+      // Keeps macOS Writing Tools from offering to write code for us
+      writingsuggestions: "false",
+    }),
+    EditorView.domEventHandlers({
+      focus: () => {
+        onFocus.current?.();
+      },
+      blur: () => {
+        onBlur.current?.();
+      },
+      keydown: (e, view) => {
+        if (keyDownHandler.current?.(e, view)) {
+          return true;
+        }
+        onKeyDown.current?.(e);
+      },
+      paste: (e, v) => {
+        const textData = e.clipboardData?.getData("text/plain") ?? "";
+        onPaste.current?.(textData);
+        if (v.state.selection.main.from === 0 && v.state.selection.main.to === v.state.doc.length) {
+          onPasteOverwrite.current?.(e, textData);
+        }
+      },
+    }),
+    tooltips({ parent }),
+    keymap.of(singleLine ? defaultKeymap.filter((k) => k.key !== "Enter") : defaultKeymap),
+    ...(singleLine ? [singleLineExtensions()] : []),
+    ...(!singleLine ? multiLineExtensions({ hideGutter }) : []),
+
+    // ------------------------ //
+    // Things that must be last //
+    // ------------------------ //
+
+    EditorView.updateListener.of((update) => {
+      if (update.startState === update.state) return;
+
+      if (onChange && update.docChanged) {
+        onChange.current?.(update.state.doc.toString());
+      }
+
+      saveCachedEditorStateDebounced(stateKey, update.state);
+    }),
+  ];
+}
+
+const placeholderElFromText = (text: string | undefined) => {
+  const el = document.createElement("div");
+  // Default to <SPACE> because codemirror needs it for sizing. I'm not sure why, but probably something
+  // to do with how Yaak "hacks" it with CSS for single line input.
+  el.innerHTML = text ? text.replaceAll("\n", "<br/>") : " ";
+  return el;
+};
+
+// Caching the state is too expensive to do on every update (every keystroke and cursor move),
+// so debounce it per state key and flush when the editor unmounts.
+//
+// The cost scales with the document, and every update pays it in full:
+//   - `state.toJSON` flattens the whole rope into a string, ~0.13 ms per 200 KB
+//   - the fingerprint is an exact md5 for editable documents, ~0.3 ms per 200 KB. `docFingerprint`
+//     only samples read-only ones, so editing a large body still hashes all of it
+//   - `sessionStorage.setItem` is synchronous and blocks the main thread
+// Typing in a 200 KB body costs ~0.4 ms per keystroke before the storage write, and a 1 MB one
+// ~2.3 ms. Read-only documents skip most of the hashing but still serialize, which is the larger
+// half once documents get into the megabytes.
+const SAVE_STATE_DEBOUNCE_MS = 500;
+const stateSavers = new Map<string, ReturnType<typeof debounce>>();
+
+function saveCachedEditorStateDebounced(stateKey: string | null, state: EditorState) {
+  if (!stateKey) return;
+  let saver = stateSavers.get(stateKey);
+  if (saver == null) {
+    saver = debounce(
+      (s: EditorState) => saveCachedEditorState(stateKey, s),
+      SAVE_STATE_DEBOUNCE_MS,
+    );
+    stateSavers.set(stateKey, saver);
+  }
+  saver(state);
+}
+
+// NOTE: Only called when an editor unmounts, so the saver is dropped rather than left in the map
+//  for every state key the session has ever shown. A pending saver holds the last EditorState,
+//  which holds the whole document.
+function flushCachedEditorState(stateKey: string | null) {
+  if (!stateKey) return;
+  const saver = stateSavers.get(stateKey);
+  if (saver == null) return;
+  saver.flush();
+  stateSavers.delete(stateKey);
+}
+
+function saveCachedEditorState(stateKey: string | null, state: EditorState | null) {
+  if (!stateKey || state == null) return;
+  const stateObj = state.toJSON(stateFields);
+
+  // Save state in sessionStorage by removing doc and saving a fingerprint of it instead.
+  // This will be checked on restore and put back in if it matches.
+  // Editable documents get the exact hash, so a collision can never restore undo history
+  // belonging to other content
+  stateObj.docHash = docFingerprint(stateObj.doc, { exact: !state.readOnly });
+  stateObj.doc = undefined;
+
+  try {
+    sessionStorage.setItem(computeFullStateKey(stateKey), JSON.stringify(stateObj));
+  } catch (err) {
+    console.log("Failed to save to editor state", stateKey, err);
+  }
+}
+
+function getCachedEditorState(doc: string, stateKey: string | null, readOnly: boolean) {
+  if (stateKey == null) return;
+
+  try {
+    const stateStr = sessionStorage.getItem(computeFullStateKey(stateKey));
+    if (stateStr == null) return null;
+
+    const { docHash, ...state } = JSON.parse(stateStr);
+
+    // Ensure the doc matches the one that was used to save the state
+    if (docHash !== docFingerprint(doc, { exact: !readOnly })) {
+      return null;
+    }
+
+    state.doc = doc;
+    return state;
+  } catch (err) {
+    console.log("Failed to restore editor storage", stateKey, err);
+  }
+
+  return null;
+}
+
+function computeFullStateKey(stateKey: string): string {
+  return `editor.${stateKey}`;
+}
+
+function updateContents(view: EditorView, text: string) {
+  // Replace codemirror contents
+  const currentDoc = view.state.doc.toString();
+
+  if (currentDoc === text) {
+    return;
+  }
+
+  if (text.startsWith(currentDoc)) {
+    // If we're just appending, append only the changes. This preserves
+    // things like scroll position.
+    view.dispatch({
+      changes: view.state.changes({
+        from: currentDoc.length,
+        insert: text.slice(currentDoc.length),
+      }),
+    });
+  } else {
+    // If we're replacing everything, reset the entire content
+    view.dispatch({
+      changes: view.state.changes({
+        from: 0,
+        to: currentDoc.length,
+        insert: text,
+      }),
+    });
+  }
+}

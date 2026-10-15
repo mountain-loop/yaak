@@ -1,5 +1,5 @@
 import type { HttpRequestHeader } from "@yaakapp-internal/models";
-import { HStack } from "@yaakapp-internal/ui";
+import { HStack, CountBadge } from "@yaakapp-internal/ui";
 import { acceptLanguages } from "../lib/data/acceptLanguages";
 import { cacheControlDirectives } from "../lib/data/cacheControl";
 import { charsets } from "../lib/data/charsets";
@@ -10,7 +10,6 @@ import { headerNames } from "../lib/data/headerNames";
 import { mimeTypes } from "../lib/data/mimetypes";
 import { userAgents } from "../lib/data/userAgents";
 import { validateHttpHeader } from "../lib/validateHttpHeader";
-import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
 import type { GenericCompletion, GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import type { InputProps } from "./core/Input";
