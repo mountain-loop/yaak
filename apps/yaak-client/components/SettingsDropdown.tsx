@@ -82,7 +82,7 @@ export function SettingsDropdown() {
         },
         {
           label: "Install CLI",
-          hidden: appInfo.cliVersion != null,
+          hidden: appInfo.cliVersion != null || !platform.capabilities.agents,
           leftSlot: <Icon icon="square_terminal" />,
           onSelect: () => openSettings.mutate("agents"),
         },
