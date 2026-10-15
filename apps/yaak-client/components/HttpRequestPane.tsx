@@ -15,8 +15,6 @@ import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
 import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
 import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
 import { useSendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
-import { languageFromContentType } from "../lib/contentType";
-import { generateId } from "../lib/generateId";
 import { derivePathPlaceholderPairs, renamePathPlaceholder } from "../lib/pathPlaceholders";
 import { convertRequestBody } from "../lib/requestBodyConversion";
 import {
@@ -35,11 +33,10 @@ import { resolvedModelName } from "../lib/resolvedModelName";
 import { showToast } from "../lib/toast";
 import { BinaryFileEditor } from "./BinaryFileEditor";
 import { ConfirmLargeRequestBody } from "./ConfirmLargeRequestBody";
-import { CountBadge } from "./core/CountBadge";
 import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import { getUrlCompletionConfig } from "./core/Editor/url/completion";
 import { Editor } from "./core/Editor/LazyEditor";
-import { InlineCode } from "@yaakapp-internal/ui";
+import { InlineCode, languageFromContentType, CountBadge } from "@yaakapp-internal/ui";
 import { PlainInput } from "./core/PlainInput";
 import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
 import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
@@ -54,6 +51,7 @@ import { RequestMethodDropdown } from "./RequestMethodDropdown";
 import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
 import { UrlBar } from "./UrlBar";
 import { UrlParametersEditor } from "./UrlParameterEditor";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 const GraphQLEditor = lazy(() =>
   import("./graphql/GraphQLEditor").then((m) => ({ default: m.GraphQLEditor })),

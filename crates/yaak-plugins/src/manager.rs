@@ -9,14 +9,13 @@ use crate::events::{
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
     CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
     CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
-    FilterRequest, FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
-    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse,
-    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
-    InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose,
-    ShowToastRequest,
+    GetFolderActionsResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigRequest,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionConfigRequest,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesRequest,
+    GetThemesResponse, GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse,
+    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
+    PluginContext, RenderPurpose, ShowToastRequest,
 };
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
@@ -1139,46 +1138,6 @@ impl PluginManager {
             Some(resp) => Ok(resp),
         }
     }
-
-    pub async fn filter_data(
-        &self,
-        plugin_context: &PluginContext,
-        filter: &str,
-        content: &str,
-        content_type: &str,
-    ) -> Result<FilterResponse> {
-        let ct = content_type.to_lowercase();
-        let plugin_name = if ct.contains("xml") || ct.contains("html") {
-            "@yaak/filter-xpath"
-        } else {
-            "@yaak/filter-jsonpath"
-        };
-
-        let plugin = self
-            .get_plugin_by_name(plugin_name)
-            .await
-            .ok_or(PluginNotFoundErr(plugin_name.to_string()))?;
-
-        let event = self
-            .send_to_plugin_and_wait(
-                plugin_context,
-                &plugin,
-                &InternalEventPayload::FilterRequest(FilterRequest {
-                    filter: filter.to_string(),
-                    content: content.to_string(),
-                }),
-                Duration::from_secs(5),
-            )
-            .await?;
-
-        match event.payload {
-            InternalEventPayload::FilterResponse(resp) => Ok(resp),
-            InternalEventPayload::EmptyResponse(_) => {
-                Err(PluginErr("Filter returned empty".to_string()))
-            }
-            e => Err(PluginErr(format!("Export returned invalid event {:?}", e))),
-        }
-    }
 }
 
 fn source_priority(source: &PluginSource) -> i32 {
@@ -1207,8 +1166,9 @@ fn prefer_plugin(candidate: &Plugin, existing: &Plugin) -> bool {
 /// whose directory isn't in this list are filtered out by `resolve_plugins_for_runtime`.
 ///
 /// `exporter-curl` was renamed to `action-copy-curl` in 19ffcd18, which is why affected
-/// installs show "Copy as cURL" twice.
-const REMOVED_BUNDLED_PLUGIN_DIRS: &[&str] = &["exporter-curl"];
+/// installs show "Copy as cURL" twice. `filter-jsonpath` and `filter-xpath` moved into
+/// the `yaak-filter` crate.
+const REMOVED_BUNDLED_PLUGIN_DIRS: &[&str] = &["exporter-curl", "filter-jsonpath", "filter-xpath"];
 
 /// Whether a plugin directory path is one of the known-removed bundled plugins.
 fn is_removed_bundled_plugin_dir(dir: &str) -> bool {
@@ -1256,6 +1216,8 @@ mod tests {
             r"C:\Users\me\AppData\Local\Yaak\vendored\plugins\exporter-curl"
         ));
         assert!(is_removed_bundled_plugin_dir("vendored/plugins/exporter-curl/"));
+        assert!(is_removed_bundled_plugin_dir("vendored/plugins/filter-jsonpath"));
+        assert!(is_removed_bundled_plugin_dir("vendored/plugins/filter-xpath"));
     }
 
     #[test]

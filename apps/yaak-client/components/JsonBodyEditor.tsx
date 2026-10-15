@@ -1,7 +1,7 @@
 import { linter } from "@codemirror/lint";
 import type { HttpRequest } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
-import { Banner, Icon } from "@yaakapp-internal/ui";
+import { Banner, Icon, IconTooltip } from "@yaakapp-internal/ui";
 import { useCallback, useMemo } from "react";
 import { useKeyValue } from "../hooks/useKeyValue";
 import { fireAndForget } from "../lib/fireAndForget";
@@ -12,7 +12,6 @@ import type { EditorProps } from "./core/Editor/Editor";
 import { jsonParseLinter } from "./core/Editor/json-lint";
 import { Editor } from "./core/Editor/LazyEditor";
 import { IconButton } from "./core/IconButton";
-import { IconTooltip } from "./core/IconTooltip";
 
 interface Props {
   forceUpdateKey: string;

@@ -14,7 +14,7 @@ const jotaiStore = createStore();
 
 // Load initial models from the database
 void rpc("list_models", {}).then((res) => {
-  jotaiStore.set(dataAtom, (prev) => replaceAll(prev, "http_exchange", res.httpExchanges));
+  jotaiStore.set(dataAtom, (prev) => replaceAll(prev, "flow", res.flows));
 });
 
 // Register hotkeys from action metadata
@@ -22,9 +22,7 @@ void initHotkeys();
 
 // Subscribe to model change events from the backend
 void listen("model_write", (payload) => {
-  jotaiStore.set(dataAtom, (prev) =>
-    applyChange(prev, "http_exchange", payload.model, payload.change),
-  );
+  jotaiStore.set(dataAtom, (prev) => applyChange(prev, "flow", payload.model, payload.change));
 });
 
 const motionFeatures = () => import("framer-motion").then((mod) => mod.domAnimation);

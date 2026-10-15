@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::http_request::send_http_request_with_context;
+use crate::http_request::{SentHttpRequest, send_http_request_with_context};
 use crate::models_ext::BlobManagerExt;
 use crate::models_ext::QueryManagerExt;
 use crate::render::{render_grpc_request, render_http_request, render_json_value};
@@ -12,7 +12,7 @@ use base64::prelude::BASE64_STANDARD;
 use chrono::Utc;
 use log::error;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Listener, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Listener, Manager, Runtime, WebviewWindow};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 use yaak::plugin_events::{
@@ -21,7 +21,7 @@ use yaak::plugin_events::{
 use yaak::response_body::FileResponseBodyStore;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::cookies::get_cookie_value_from_jar;
-use yaak_models::models::{HttpResponse, Plugin};
+use yaak_models::models::{HttpRequest, HttpResponse, Plugin};
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::error::Error::PluginErr;
@@ -280,64 +280,20 @@ async fn handle_host_plugin_request<R: Runtime>(
         }
         HostRequest::SendHttpRequest(req) => {
             let window = get_window_from_plugin_context(app_handle, plugin_context)?;
-            let mut http_request = req.http_request.clone();
-            let workspace =
-                workspace_from_window(&window).expect("Failed to get workspace_id from window URL");
-            let cookie_jar = cookie_jar_from_window(&window);
-
-            if http_request.workspace_id.is_empty() {
-                http_request.workspace_id = workspace.id.clone();
-            }
-
-            let environment =
-                if let Some(environment_id) = req.environment_id.as_deref() {
-                    if http_request.workspace_id != workspace.id {
-                        return Err(crate::error::Error::GenericError(
-                            "HTTP request does not belong to the selected workspace".to_string(),
-                        ));
-                    }
-                    Some(window.db().get_environment_for_workspace(
-                        &http_request.workspace_id,
-                        environment_id,
-                    )?)
-                } else {
-                    environment_from_window(&window)
-                };
-
-            let http_response = if http_request.id.is_empty() {
-                HttpResponse::default()
-            } else {
-                let blobs = window.blob_manager();
-                window.with_tx(|tx| {
-                    tx.upsert_http_response(
-                        &HttpResponse {
-                            request_id: http_request.id.clone(),
-                            workspace_id: http_request.workspace_id.clone(),
-                            ..Default::default()
-                        },
-                        &UpdateSource::from_window_label(window.label()),
-                        &blobs,
-                    )
-                })?
-            };
-
-            let http_response = send_http_request_with_context(
+            let sent = send_http_request_in_window(
                 &window,
-                &http_request,
-                &http_response,
-                environment,
-                cookie_jar,
-                &mut tokio::sync::watch::channel(false).1,
+                req.http_request.clone(),
+                req.environment_id.as_deref(),
                 plugin_context,
             )
             .await?;
 
             // An ad-hoc request saves nothing, so the engine hands the body
             // back and this reply is the only place the plugin can get it.
-            let body = http_response.body.returned_bytes().map(|b| BASE64_STANDARD.encode(b));
+            let body = sent.body.returned_bytes().map(|b| BASE64_STANDARD.encode(b));
 
             Ok(Some(InternalEventPayload::SendHttpRequestResponse(SendHttpRequestResponse {
-                http_response: http_response.response,
+                http_response: sent.response,
                 body,
             })))
         }
@@ -477,4 +433,64 @@ async fn handle_host_plugin_request<R: Runtime>(
             })))
         }
     }
+}
+
+/// Send on behalf of a plugin or MCP client, from `window`'s workspace and
+/// with its selected environment unless `environment_id` overrides it.
+pub(crate) async fn send_http_request_in_window<R: Runtime>(
+    window: &WebviewWindow<R>,
+    mut http_request: HttpRequest,
+    environment_id: Option<&str>,
+    plugin_context: &yaak_plugins::events::PluginContext,
+) -> Result<SentHttpRequest> {
+    let workspace =
+        workspace_from_window(window).expect("Failed to get workspace_id from window URL");
+    let cookie_jar = cookie_jar_from_window(window);
+
+    if http_request.workspace_id.is_empty() {
+        http_request.workspace_id = workspace.id.clone();
+    }
+
+    let environment = if let Some(environment_id) = environment_id {
+        if http_request.workspace_id != workspace.id {
+            return Err(crate::error::Error::GenericError(
+                "HTTP request does not belong to the selected workspace".to_string(),
+            ));
+        }
+        Some(
+            window
+                .db()
+                .get_environment_for_workspace(&http_request.workspace_id, environment_id)?,
+        )
+    } else {
+        environment_from_window(window)
+    };
+
+    let http_response = if http_request.id.is_empty() {
+        HttpResponse::default()
+    } else {
+        let blobs = window.blob_manager();
+        window.with_tx(|tx| {
+            tx.upsert_http_response(
+                &HttpResponse {
+                    request_id: http_request.id.clone(),
+                    workspace_id: http_request.workspace_id.clone(),
+                    ..Default::default()
+                },
+                &UpdateSource::from_window_label(window.label()),
+                &blobs,
+            )
+        })?
+    };
+
+    send_http_request_with_context(
+        window,
+        &http_request,
+        &http_response,
+        environment,
+        cookie_jar,
+        &tokio::sync::watch::channel(false).1,
+        plugin_context,
+    )
+    .await
 }

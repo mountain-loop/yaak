@@ -1,15 +1,20 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import { Banner, Button, HStack, LoadingIcon } from "@yaakapp-internal/ui";
+import {
+  Banner,
+  Button,
+  HStack,
+  LoadingIcon,
+  AudioViewer,
+  ImageViewer,
+  SvgViewer,
+  VideoViewer,
+} from "@yaakapp-internal/ui";
 import type { ReactNode } from "react";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { SniffedValue } from "./core/Editor/sniffValue";
 import { showDialog } from "../lib/dialog";
 import { decodeValue, largeValueActions } from "../lib/largeValue";
 import { Dropdown } from "./core/Dropdown";
-import { AudioViewer } from "./responseViewers/AudioViewer";
-import { ImageViewer } from "./responseViewers/ImageViewer";
-import { SvgViewer } from "./responseViewers/SvgViewer";
-import { VideoViewer } from "./responseViewers/VideoViewer";
 
 const PdfViewer = lazy(() =>
   import("./responseViewers/PdfViewer").then((m) => ({ default: m.PdfViewer })),

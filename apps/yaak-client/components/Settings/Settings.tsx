@@ -1,14 +1,14 @@
 import { platform } from "@yaakapp-internal/platform";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
-import { HeaderSize, HStack, Icon } from "@yaakapp-internal/ui";
+import { HeaderSize, HStack, Icon, CountBadge } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import { useKeyPressEvent } from "react-use";
 import { appInfo } from "../../lib/appInfo";
 import { capitalize } from "../../lib/capitalize";
-import { CountBadge } from "../core/CountBadge";
 import { TabContent, type TabItem, Tabs } from "../core/Tabs/Tabs";
+import { SettingsAgents } from "./SettingsAgents";
 import { SettingsCertificates } from "./SettingsCertificates";
 import { SettingsGeneral } from "./SettingsGeneral";
 import { SettingsHotkeys } from "./SettingsHotkeys";
@@ -31,6 +31,7 @@ const TAB_SHORTCUTS = "shortcuts";
 const TAB_PROXY = "proxy";
 const TAB_CERTIFICATES = "certificates";
 const TAB_PLUGINS = "plugins";
+const TAB_AGENTS = "agents";
 const TAB_LICENSE = "license";
 const tabs = [
   TAB_GENERAL,
@@ -38,6 +39,7 @@ const tabs = [
   TAB_INTERFACE,
   TAB_SHORTCUTS,
   TAB_PLUGINS,
+  TAB_AGENTS,
   TAB_CERTIFICATES,
   TAB_PROXY,
   TAB_LICENSE,
@@ -93,7 +95,9 @@ export default function Settings({ tab, hide }: Props) {
           (value): TabItem => ({
             value,
             label: capitalize(value),
-            hidden: !appInfo.featureLicense && value === TAB_LICENSE,
+            hidden:
+              (!appInfo.featureLicense && value === TAB_LICENSE) ||
+              (!platform.capabilities.agents && value === TAB_AGENTS),
             leftSlot:
               value === TAB_GENERAL ? (
                 <Icon icon="settings" className="text-secondary" />
@@ -109,6 +113,8 @@ export default function Settings({ tab, hide }: Props) {
                 <Icon icon="wifi" className="text-secondary" />
               ) : value === TAB_PLUGINS ? (
                 <Icon icon="puzzle" className="text-secondary" />
+              ) : value === TAB_AGENTS ? (
+                <Icon icon="sparkles" className="text-secondary" />
               ) : value === TAB_LICENSE ? (
                 <Icon icon="key_round" className="text-secondary" />
               ) : null,
@@ -117,6 +123,8 @@ export default function Settings({ tab, hide }: Props) {
                 <CountBadge count={settings.clientCertificates.length} />
               ) : value === TAB_PLUGINS ? (
                 <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
+              ) : value === TAB_AGENTS && settings.mcpServerEnabled ? (
+                <CountBadge count />
               ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
                 <CountBadge count />
               ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (
@@ -139,6 +147,9 @@ export default function Settings({ tab, hide }: Props) {
         </TabContent>
         <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1">
           <SettingsPlugins defaultSubtab={mainTab === TAB_PLUGINS ? subtab : undefined} />
+        </TabContent>
+        <TabContent value={TAB_AGENTS} className="overflow-y-auto h-full px-6 py-4!">
+          <SettingsAgents />
         </TabContent>
         <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-6 py-4!">
           <SettingsProxy />

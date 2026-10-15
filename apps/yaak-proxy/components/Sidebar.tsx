@@ -1,10 +1,10 @@
-import type { HttpExchange } from "@yaakapp-internal/proxy-lib";
+import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
 import { atomFamily } from "jotai-family";
 import { useCallback } from "react";
-import { httpExchangesAtom } from "../lib/store";
+import { flowsAtom } from "../lib/store";
 
 /** A node in the sidebar tree — either a domain or a path segment. */
 export type SidebarItem = {
@@ -18,13 +18,13 @@ const collapsedAtom = atomFamily((_treeId: string) => atom<Record<string, boolea
 export const SIDEBAR_TREE_ID = "proxy-sidebar";
 
 const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
-  const exchanges = get(httpExchangesAtom);
+  const exchanges = get(flowsAtom);
   return buildTree(exchanges);
 });
 
 /** Exchanges filtered by the currently selected sidebar node(s). */
 export const filteredExchangesAtom = atom((get) => {
-  const exchanges = get(httpExchangesAtom);
+  const exchanges = get(flowsAtom);
   const tree = get(sidebarTreeAtom);
   const selectedIds = get(selectedIdsFamily(SIDEBAR_TREE_ID));
 
@@ -72,7 +72,7 @@ function collectNodes(node: TreeNode<SidebarItem>, map: Map<string, SidebarItem>
  *         /123
  *       /orders
  */
-function buildTree(exchanges: HttpExchange[]): TreeNode<SidebarItem> {
+function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
   const root: SidebarItem = { id: "root", label: "All Traffic", exchangeIds: [] };
   const rootNode: TreeNode<SidebarItem> = {
     item: root,

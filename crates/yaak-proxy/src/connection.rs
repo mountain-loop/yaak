@@ -1,32 +1,32 @@
 use std::sync::Arc;
-use std::sync::mpsc as std_mpsc;
 
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use tokio::net::TcpStream;
+use hyper_util::rt::TokioIo;
+use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::ProxyEvent;
-use crate::cert::CertificateAuthority;
+use crate::Engine;
 use crate::request::handle_request;
 
-pub(crate) async fn handle_connection(
-    stream: TcpStream,
-    event_tx: std_mpsc::Sender<ProxyEvent>,
-    ca: Arc<CertificateAuthority>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let tx = event_tx.clone();
+pub(crate) async fn serve_http1<S, F, Fut>(io: S, handler: F) -> Result<(), hyper::Error>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    F: Fn(hyper::Request<hyper::body::Incoming>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<hyper::Response<crate::request::BoxBody>, std::convert::Infallible>>
+        + Send
+        + 'static,
+{
     http1::Builder::new()
         .preserve_header_case(true)
         .title_case_headers(true)
-        .serve_connection(
-            hyper_util::rt::TokioIo::new(stream),
-            service_fn(move |req| {
-                let tx = tx.clone();
-                let ca = ca.clone();
-                async move { handle_request(req, tx, ca).await }
-            }),
-        )
+        .serve_connection(TokioIo::new(io), service_fn(handler))
         .with_upgrades()
         .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+}
+
+pub(crate) async fn handle_connection(
+    stream: tokio::net::TcpStream,
+    engine: Arc<Engine>,
+) -> Result<(), hyper::Error> {
+    serve_http1(stream, move |req| handle_request(req, engine.clone())).await
 }

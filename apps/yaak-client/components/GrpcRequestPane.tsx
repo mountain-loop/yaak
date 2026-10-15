@@ -4,7 +4,7 @@ import {
   patchModel,
   patchModelDebounced,
 } from "@yaakapp-internal/models";
-import { HStack, Icon, useContainerSize, VStack } from "@yaakapp-internal/ui";
+import { HStack, Icon, useContainerSize, VStack, CountBadge } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties } from "react";
 import { useCallback, useMemo, useRef } from "react";
@@ -15,7 +15,6 @@ import { useInheritedHeaders } from "../hooks/useInheritedHeaders";
 import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { Button } from "./core/Button";
-import { CountBadge } from "./core/CountBadge";
 import { IconButton } from "./core/IconButton";
 import { PlainInput } from "./core/PlainInput";
 import { RadioDropdown } from "./core/RadioDropdown";

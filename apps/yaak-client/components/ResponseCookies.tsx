@@ -3,9 +3,9 @@ import classNames from "classnames";
 import { useMemo } from "react";
 import type { JSX } from "react/jsx-runtime";
 import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
-import { CountBadge } from "./core/CountBadge";
 import { DetailsBanner } from "./core/DetailsBanner";
-import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { KeyValueRow } from "./core/KeyValueRow";
+import { CountBadge, KeyValueRows } from "@yaakapp-internal/ui";
 
 interface Props {
   response: HttpResponse;

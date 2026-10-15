@@ -3,12 +3,12 @@ import { patchModel, workspacesAtom } from "@yaakapp-internal/models";
 import { InlineCode, VStack } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useState } from "react";
-import { pluralizeCount } from "../lib/pluralize";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { router } from "../lib/router";
 import { showToast } from "../lib/toast";
 import { Button } from "./core/Button";
 import { Select } from "./core/Select";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 interface Props {
   activeWorkspaceId: string;

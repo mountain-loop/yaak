@@ -14,10 +14,10 @@
     "dev": "yaakcli dev"
   },
   "dependencies": {
-    "@readme/httpsnippet": "^11.0.0"
+    "@readme/httpsnippet": "^11.4.1"
   },
   "devDependencies": {
-    "@types/node": "^22.20.4",
+    "@types/node": "^22.20.5",
     "typescript": "^5.9.3"
   },
   "minYaakVersion": "2026.2.0-beta.10"

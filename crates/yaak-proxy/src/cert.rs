@@ -1,69 +1,175 @@
 use std::collections::HashMap;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use rcgen::{BasicConstraints, Certificate, CertificateParams, IsCa, KeyPair, KeyUsagePurpose};
+use rcgen::{
+    BasicConstraints, Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, IsCa,
+    KeyPair, KeyUsagePurpose,
+};
 use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+use time::{Duration, OffsetDateTime};
 
-pub struct CertificateAuthority {
-    ca_cert: Certificate,
-    ca_cert_der: CertificateDer<'static>,
-    ca_key: KeyPair,
-    cache: Mutex<HashMap<String, Arc<ServerConfig>>>,
+const CA_COMMON_NAME: &str = "Yaak Proxy CA";
+const CA_VALIDITY_DAYS: i64 = 3650;
+const LEAF_VALIDITY_DAYS: i64 = 365;
+
+/// The proxy's root CA, kept on disk as `ca.pem` and `ca.key` so trust survives restarts.
+pub struct CaStore {
+    cert_path: PathBuf,
+    key_path: PathBuf,
+    pem: String,
+    cert_der: CertificateDer<'static>,
+    issuer: Certificate,
+    key: KeyPair,
+    leaf_configs: Mutex<HashMap<String, Arc<ServerConfig>>>,
 }
 
-impl CertificateAuthority {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
-        let mut params = CertificateParams::default();
-        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
-        params.key_usages.push(KeyUsagePurpose::KeyCertSign);
-        params.key_usages.push(KeyUsagePurpose::CrlSign);
-        params.distinguished_name.push(rcgen::DnType::CommonName, "Debug Proxy CA");
-        params.distinguished_name.push(rcgen::DnType::OrganizationName, "Debug Proxy");
+impl CaStore {
+    /// Loads the CA from `dir`, or creates one there (key mode 0600) if either file is missing.
+    /// Safe to call from several processes at once: `ca.lock` serializes them.
+    pub fn load_or_create(dir: &Path) -> io::Result<Self> {
+        let cert_path = dir.join("ca.pem");
+        let key_path = dir.join("ca.key");
 
-        let key = KeyPair::generate()?;
-        let ca_cert = params.self_signed(&key)?;
-        let ca_cert_der = ca_cert.der().clone();
+        fs::create_dir_all(dir)?;
+        let lock = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.join("ca.lock"))?;
+        lock.lock()?;
 
-        Ok(Self { ca_cert, ca_cert_der, ca_key: key, cache: Mutex::new(HashMap::new()) })
+        let (pem, key) = if cert_path.exists() && key_path.exists() {
+            let key =
+                KeyPair::from_pem(&fs::read_to_string(&key_path)?).map_err(io::Error::other)?;
+            (fs::read_to_string(&cert_path)?, key)
+        } else {
+            log::info!("Creating proxy CA in {}", dir.display());
+            let key = KeyPair::generate().map_err(io::Error::other)?;
+            let now = OffsetDateTime::now_utc();
+            let mut params = ca_params();
+            params.not_before = now - Duration::days(1);
+            params.not_after = now + Duration::days(CA_VALIDITY_DAYS);
+            let pem = params.self_signed(&key).map_err(io::Error::other)?.pem();
+            remove_if_exists(&cert_path)?;
+            write_atomic(&key_path, key.serialize_pem().as_bytes(), true)?;
+            write_atomic(&cert_path, pem.as_bytes(), false)?;
+            (pem, key)
+        };
+        drop(lock);
+
+        let cert_der = pem::parse(&pem)
+            .map_err(io::Error::other)
+            .map(|p| CertificateDer::from(p.into_contents()))?;
+        let issuer = ca_params().self_signed(&key).map_err(io::Error::other)?;
+
+        Ok(Self {
+            cert_path,
+            key_path,
+            pem,
+            cert_der,
+            issuer,
+            key,
+            leaf_configs: Mutex::new(HashMap::new()),
+        })
     }
 
-    pub fn ca_pem(&self) -> String {
-        pem::encode(&pem::Pem::new("CERTIFICATE", self.ca_cert_der.to_vec()))
+    /// The CA certificate as PEM, for installing into a trust store.
+    pub fn pem(&self) -> &str {
+        &self.pem
     }
 
-    pub fn server_config(
+    /// Path of `ca.pem`.
+    pub fn cert_path(&self) -> &Path {
+        &self.cert_path
+    }
+
+    /// Path of `ca.key`.
+    pub fn key_path(&self) -> &Path {
+        &self.key_path
+    }
+
+    pub(crate) fn server_config(
         &self,
-        domain: &str,
+        host: &str,
     ) -> Result<Arc<ServerConfig>, Box<dyn std::error::Error + Send + Sync>> {
-        {
-            let cache = self.cache.lock().unwrap();
-            if let Some(config) = cache.get(domain) {
-                return Ok(config.clone());
-            }
+        if let Some(config) = self.leaf_configs.lock().unwrap().get(host) {
+            return Ok(config.clone());
         }
 
-        let mut params = CertificateParams::new(vec![domain.to_string()])?;
-        params.distinguished_name.push(rcgen::DnType::CommonName, domain);
+        let now = OffsetDateTime::now_utc();
+        let mut params = CertificateParams::new(vec![host.to_string()])?;
+        params.distinguished_name.push(DnType::CommonName, host);
+        params.key_usages = vec![
+            KeyUsagePurpose::DigitalSignature,
+            KeyUsagePurpose::KeyEncipherment,
+        ];
+        params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
+        params.use_authority_key_identifier_extension = true;
+        params.not_before = now - Duration::days(1);
+        params.not_after = now + Duration::days(LEAF_VALIDITY_DAYS);
 
         let leaf_key = KeyPair::generate()?;
-        let leaf_cert = params.signed_by(&leaf_key, &self.ca_cert, &self.ca_key)?;
-
-        let cert_der = leaf_cert.der().clone();
-        let key_der = leaf_key.serialize_der();
+        let leaf_cert = params.signed_by(&leaf_key, &self.issuer, &self.key)?;
 
         let mut config =
             ServerConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
                 .with_safe_default_protocol_versions()?
                 .with_no_client_auth()
                 .with_single_cert(
-                    vec![cert_der, self.ca_cert_der.clone()],
-                    PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der)),
+                    vec![leaf_cert.der().clone(), self.cert_der.clone()],
+                    PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(leaf_key.serialize_der())),
                 )?;
-        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
 
         let config = Arc::new(config);
-        self.cache.lock().unwrap().insert(domain.to_string(), config.clone());
+        self.leaf_configs.lock().unwrap().insert(host.to_string(), config.clone());
         Ok(config)
     }
+}
+
+/// Issuer fields for the CA. Leaf certificates are signed against these, so they must stay
+/// identical to what was written to `ca.pem`.
+fn ca_params() -> CertificateParams {
+    let mut params = CertificateParams::default();
+    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    params.key_usages = vec![KeyUsagePurpose::KeyCertSign, KeyUsagePurpose::CrlSign];
+    params.distinguished_name.push(DnType::CommonName, CA_COMMON_NAME);
+    params.distinguished_name.push(DnType::OrganizationName, "Yaak");
+    params
+}
+
+fn remove_if_exists(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// Writes through a temporary file and a rename, so readers never see a partial file.
+fn write_atomic(path: &Path, contents: &[u8], private: bool) -> io::Result<()> {
+    use std::io::Write;
+    let mut tmp_name = path.file_name().unwrap_or_default().to_os_string();
+    tmp_name.push(".tmp");
+    let tmp = path.with_file_name(tmp_name);
+
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    if private {
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = private;
+    let mut file = options.open(&tmp)?;
+    #[cfg(unix)]
+    if private {
+        file.set_permissions(std::os::unix::fs::PermissionsExt::from_mode(0o600))?;
+    }
+    file.write_all(contents)?;
+    file.sync_all()?;
+    fs::rename(&tmp, path)
 }

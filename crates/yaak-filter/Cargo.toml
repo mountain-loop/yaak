@@ -1,0 +1,14 @@
+[package]
+name = "yaak-filter"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+fancy-regex = "0.17"
+indexmap = "2"
+sxd-document = "0.3.2"
+sxd-xpath = "0.4.2"
+
+[dev-dependencies]
+serde_json = { workspace = true, features = ["preserve_order"] }

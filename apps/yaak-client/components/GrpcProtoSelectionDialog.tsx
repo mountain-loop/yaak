@@ -3,11 +3,11 @@ import { Banner, InlineCode, VStack } from "@yaakapp-internal/ui";
 import { useActiveRequest } from "../hooks/useActiveRequest";
 import { useGrpc } from "../hooks/useGrpc";
 import { useGrpcProtoFiles } from "../hooks/useGrpcProtoFiles";
-import { pluralizeCount } from "../lib/pluralize";
 import { DialogFooter } from "./core/Dialog";
 import { PathList } from "./core/PathList";
 import { Link } from "./core/Link";
 import { platform } from "@yaakapp-internal/platform";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 interface Props {
   onDone: () => void;

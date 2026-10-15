@@ -92,6 +92,9 @@ pub enum Commands {
 
     /// Response commands
     Response(ResponseArgs),
+
+    /// Serve Yaak's MCP tools over stdio, for AI agents like Claude Code
+    Mcp,
 }
 
 #[derive(Args)]

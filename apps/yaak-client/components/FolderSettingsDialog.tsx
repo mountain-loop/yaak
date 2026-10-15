@@ -1,5 +1,5 @@
 import { createWorkspaceModel, foldersAtom, patchModel } from "@yaakapp-internal/models";
-import { HStack, Icon, InlineCode, VStack } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, VStack, CountBadge } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { Fragment, useMemo } from "react";
 import { useAuthTab } from "../hooks/useAuthTab";
@@ -11,7 +11,6 @@ import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { hideDialog } from "../lib/dialog";
 import { CopyIconButton } from "./CopyIconButton";
 import { Button } from "./core/Button";
-import { CountBadge } from "./core/CountBadge";
 import { Input } from "./core/Input";
 import { Link } from "./core/Link";
 import type { TabItem } from "./core/Tabs/Tabs";

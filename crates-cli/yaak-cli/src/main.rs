@@ -10,7 +10,7 @@ mod version_check;
 use clap::{CommandFactory, FromArgMatches};
 use cli::{AGENT_HINTS, Cli, Commands, PluginCommands, RequestCommands};
 use context::{CliContext, CliExecutionContext};
-use std::path::PathBuf;
+use yaak_common::data_dir::resolve_data_dir;
 use yaak_models::queries::any_request::AnyRequest;
 
 /// Built at runtime so root `--help` can report whether the installed agent skill is
@@ -184,6 +184,20 @@ async fn main() {
             context.shutdown().await;
             exit_code
         }
+        Commands::Mcp => {
+            let mut context = CliContext::new(data_dir.clone(), app_id);
+            context
+                .init_plugins(CliExecutionContext {
+                    environment_id: environment.clone(),
+                    cookie_jar_id: cookie_jar.clone(),
+                    ..CliExecutionContext::default()
+                })
+                .await;
+            let exit_code =
+                commands::mcp::run(&context, environment.as_deref(), cookie_jar.as_deref()).await;
+            context.shutdown().await;
+            exit_code
+        }
         Commands::Environment(args) => {
             let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::environment::run(&context, args);
@@ -285,47 +299,4 @@ fn resolve_cookie_jar_id(
         .min_by_key(|jar| jar.created_at)
         .map(|jar| jar.id);
     Ok(default_cookie_jar)
-}
-
-fn resolve_data_dir(app_id: &str) -> PathBuf {
-    if let Some(dir) = wsl_data_dir(app_id) {
-        return dir;
-    }
-    dirs::data_dir().expect("Could not determine data directory").join(app_id)
-}
-
-/// Detect WSL and resolve the Windows AppData\Roaming path for the Yaak data directory.
-fn wsl_data_dir(app_id: &str) -> Option<PathBuf> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-
-    let proc_version = std::fs::read_to_string("/proc/version").ok()?;
-    let is_wsl = proc_version.to_lowercase().contains("microsoft");
-    if !is_wsl {
-        return None;
-    }
-
-    // We're in WSL, so try to resolve the Yaak app's data directory in Windows
-
-    // Get the Windows %APPDATA% path via cmd.exe
-    let appdata_output =
-        std::process::Command::new("cmd.exe").args(["/C", "echo", "%APPDATA%"]).output().ok()?;
-
-    let win_path = String::from_utf8(appdata_output.stdout).ok()?.trim().to_string();
-    if win_path.is_empty() || win_path == "%APPDATA%" {
-        return None;
-    }
-
-    // Convert Windows path to WSL path using wslpath (handles custom mount points)
-    let wslpath_output = std::process::Command::new("wslpath").arg(&win_path).output().ok()?;
-
-    let wsl_appdata = String::from_utf8(wslpath_output.stdout).ok()?.trim().to_string();
-    if wsl_appdata.is_empty() {
-        return None;
-    }
-
-    let wsl_path = PathBuf::from(wsl_appdata).join(app_id);
-
-    if wsl_path.exists() { Some(wsl_path) } else { None }
 }

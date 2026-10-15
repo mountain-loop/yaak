@@ -62,6 +62,7 @@ mod grpc;
 mod history;
 mod http_request;
 mod import;
+mod mcp_ext;
 mod models_ext;
 mod notifications;
 mod plugin_events;
@@ -1003,10 +1004,11 @@ async fn cmd_http_response_body<R: Runtime>(
         .ok_or(GenericError("Failed to find response body".to_string()))?;
 
     match filter {
-        Some(filter) if !filter.is_empty() => Ok(plugins_ext::plugin_manager(&window)
-            .await?
-            .filter_data(&window.plugin_context(), filter, &body, content_type)
-            .await?),
+        Some(filter) if !filter.is_empty() => {
+            let language = yaak_filter::Language::for_content_type(content_type);
+            let result = yaak_filter::filter(language, &body, filter);
+            Ok(FilterResponse { content: result.content, error: result.error })
+        }
         _ => Ok(FilterResponse { content: body, error: None }),
     }
 }
@@ -1360,6 +1362,7 @@ pub fn run() {
             app.app_handle().set_native_titlebar(settings.use_native_titlebar);
 
             monitor_plugin_events(&app.app_handle().clone());
+            mcp_ext::init(app.app_handle());
 
             Ok(())
         })

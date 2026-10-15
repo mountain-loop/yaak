@@ -18,7 +18,7 @@ default = ["wasm"]
 wasm = []
 
 [dependencies]
-base64 = "0.22.1"
+base64 = "0.23.1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

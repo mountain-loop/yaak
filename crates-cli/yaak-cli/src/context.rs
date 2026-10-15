@@ -1,4 +1,4 @@
-use crate::plugin_events::CliPluginEventBridge;
+use crate::plugin_events::{CliPluginEventBridge, SendContexts};
 use include_dir::{Dir, include_dir};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -130,8 +130,16 @@ impl CliContext {
         &self.blob_manager
     }
 
-    pub fn connection_manager(&self) -> &HttpConnectionManager {
+    pub fn connection_manager(&self) -> &Arc<HttpConnectionManager> {
         &self.connection_manager
+    }
+
+    /// Where a send registers its execution context for the plugin calls it makes.
+    pub async fn send_contexts(&self) -> SendContexts {
+        match &*self.plugin_event_bridge.lock().await {
+            Some(bridge) => bridge.send_contexts(),
+            None => SendContexts::default(),
+        }
     }
 
     pub fn plugin_manager(&self) -> Arc<PluginManager> {

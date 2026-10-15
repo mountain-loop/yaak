@@ -5,20 +5,17 @@ import {
   setWorkspaceKey,
 } from "@yaakapp-internal/crypto";
 import type { WorkspaceMeta } from "@yaakapp-internal/models";
-import { Banner, HStack, VStack } from "@yaakapp-internal/ui";
+import { Banner, HStack, VStack, useStateWithDeps, IconTooltip, Label } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import { useEffect, useState } from "react";
 import { activeWorkspaceAtom, activeWorkspaceMetaAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
-import { useStateWithDeps } from "../hooks/useStateWithDeps";
 import { showConfirm } from "../lib/confirm";
 import { CopyIconButton } from "./CopyIconButton";
 import type { ButtonProps } from "./core/Button";
 import { Button } from "./core/Button";
 import { IconButton } from "./core/IconButton";
-import { IconTooltip } from "./core/IconTooltip";
-import { Label } from "./core/Label";
 import { PlainInput } from "./core/PlainInput";
 import { SettingRow } from "./core/SettingRow";
 import { EncryptionHelp } from "./EncryptionHelp";

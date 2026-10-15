@@ -14,7 +14,7 @@ import { createFastMutation } from "../hooks/useFastMutation";
 import { showAlert } from "./alert";
 import { showDialog } from "./dialog";
 import { jotaiStore } from "./jotai";
-import { pluralizeCount } from "./pluralize";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 import { router } from "./router";
 import { rpc } from "./rpc";
 

@@ -1,5 +1,5 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode } from "@yaakapp-internal/ui";
+import { Banner, HStack, InlineCode, SizeTag } from "@yaakapp-internal/ui";
 import { type ReactNode, useMemo } from "react";
 import { getRequestBodyText as getHttpResponseRequestBodyText } from "../hooks/useHttpRequestBody";
 import { useToggle } from "../hooks/useToggle";
@@ -7,7 +7,6 @@ import { isProbablyTextContentType } from "../lib/contentType";
 import { getContentTypeFromHeaders } from "../lib/model_util";
 import { CopyButton } from "./CopyButton";
 import { Button } from "./core/Button";
-import { SizeTag } from "./core/SizeTag";
 
 interface Props {
   children: ReactNode;

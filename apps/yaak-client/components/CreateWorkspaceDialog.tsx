@@ -1,7 +1,7 @@
 import { gitMutations } from "@yaakapp-internal/git";
 import type { WorkspaceMeta } from "@yaakapp-internal/models";
 import { createGlobalModel, updateModel } from "@yaakapp-internal/models";
-import { VStack } from "@yaakapp-internal/ui";
+import { VStack, Label } from "@yaakapp-internal/ui";
 import { useId, useState } from "react";
 import { router } from "../lib/router";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
@@ -9,7 +9,6 @@ import { rpc } from "../lib/rpc";
 import { showErrorToast } from "../lib/toast";
 import { Checkbox } from "./core/Checkbox";
 import { DialogFooter } from "./core/Dialog";
-import { Label } from "./core/Label";
 import { PlainInput } from "./core/PlainInput";
 import { EncryptionHelp } from "./EncryptionHelp";
 import { gitCallbacks } from "./git/callbacks";

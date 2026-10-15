@@ -1,5 +1,21 @@
 import type { HttpResponse, HttpResponseEvent } from "@yaakapp-internal/models";
-import { Banner, HStack, Icon, LoadingIcon, VStack } from "@yaakapp-internal/ui";
+import {
+  Banner,
+  HStack,
+  Icon,
+  LoadingIcon,
+  VStack,
+  CountBadge,
+  HttpResponseDurationTag,
+  HttpStatusTag,
+  SizeTag,
+  Tooltip,
+  AudioViewer,
+  CsvViewer,
+  ImageViewer,
+  SvgViewer,
+  VideoViewer,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { ComponentType, CSSProperties } from "react";
 import { lazy, Suspense, useMemo } from "react";
@@ -17,15 +33,10 @@ import { getContentTypeFromHeaders, getCookieCounts } from "../lib/model_util";
 import { ConfirmLargeResponse } from "./ConfirmLargeResponse";
 import { ConfirmLargeResponseRequest } from "./ConfirmLargeResponseRequest";
 import { Button } from "./core/Button";
-import { CountBadge } from "./core/CountBadge";
 import { HotkeyList } from "./core/HotkeyList";
-import { HttpResponseDurationTag } from "./core/HttpResponseDurationTag";
-import { HttpStatusTag } from "./core/HttpStatusTag";
 import { PillButton } from "./core/PillButton";
-import { SizeTag } from "./core/SizeTag";
 import type { TabItem } from "./core/Tabs/Tabs";
 import { TabContent, Tabs } from "./core/Tabs/Tabs";
-import { Tooltip } from "./core/Tooltip";
 import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HttpResponseTimeline } from "./HttpResponseTimeline";
@@ -33,14 +44,9 @@ import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";
 import { RequestBodyViewer } from "./RequestBodyViewer";
 import { ResponseCookies } from "./ResponseCookies";
 import { ResponseHeaders } from "./ResponseHeaders";
-import { AudioViewer } from "./responseViewers/AudioViewer";
-import { CsvViewer } from "./responseViewers/CsvViewer";
 import { EventStreamViewer } from "./responseViewers/EventStreamViewer";
 import { HTMLOrTextViewer } from "./responseViewers/HTMLOrTextViewer";
-import { ImageViewer } from "./responseViewers/ImageViewer";
 import { MultipartViewer } from "./responseViewers/MultipartViewer";
-import { SvgViewer } from "./responseViewers/SvgViewer";
-import { VideoViewer } from "./responseViewers/VideoViewer";
 
 const PdfViewer = lazy(() =>
   import("./responseViewers/PdfViewer").then((m) => ({ default: m.PdfViewer })),

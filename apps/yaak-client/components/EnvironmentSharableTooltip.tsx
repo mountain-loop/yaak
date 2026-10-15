@@ -1,4 +1,4 @@
-import { IconTooltip } from "./core/IconTooltip";
+import { IconTooltip } from "@yaakapp-internal/ui";
 
 export function EnvironmentSharableTooltip() {
   return (

@@ -5,11 +5,10 @@ import {
   type ImportSource,
   type Workspace,
 } from "@yaakapp-internal/models";
-import { Banner, FormattedError, HStack, Icon, VStack } from "@yaakapp-internal/ui";
+import { Banner, FormattedError, HStack, Icon, VStack, IconTooltip } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../lib/errorMessage";
-import { pluralize } from "../lib/pluralize";
 import { CommercialUseBanner } from "./CommercialUseBanner";
 import {
   ImportSourceList,
@@ -22,9 +21,9 @@ import type { CheckboxTreeNode } from "./core/CheckboxTree";
 import { CheckboxTree } from "./core/CheckboxTree";
 import { Chip } from "./core/Chip";
 import { DialogFooter } from "./core/Dialog";
-import { IconTooltip } from "./core/IconTooltip";
 import { Select } from "./core/Select";
 import { SegmentedControl } from "./core/SegmentedControl";
+import { pluralize } from "@yaakapp-internal/lib/pluralize";
 
 interface Props {
   currentWorkspace: Workspace | null;
