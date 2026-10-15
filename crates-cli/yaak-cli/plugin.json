@@ -1,0 +1,33 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "yaak",
+  "description": "Build, save, and send API requests with the yaak CLI",
+  "author": {
+    "name": "Yaak",
+    "url": "https://yaak.app"
+  },
+  "homepage": "https://yaak.app",
+  "repository": "https://github.com/mountain-loop/yaak",
+  "license": "MIT",
+  "keywords": ["api", "http", "rest", "graphql", "grpc", "openapi", "api-client"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Yaak",
+        "shortDescription": "Build, save, and send API requests with Yaak",
+        "longDescription": "Teaches the agent the yaak CLI: create workspaces, requests, environments, and auth, send one request or a whole suite, chain responses, and import OpenAPI, Postman, Insomnia, Bruno, or cURL. Requests are saved to Yaak, so you can open them in the desktop app.",
+        "developerName": "Yaak",
+        "category": "Developer Tools",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://yaak.app",
+        "privacyPolicyURL": "https://yaak.app/privacy",
+        "termsOfServiceURL": "https://yaak.app/terms",
+        "defaultPrompt": [
+          "Create Yaak requests for every route in this API",
+          "Import this OpenAPI spec into a Yaak workspace",
+          "Send my Yaak requests against staging and report failures"
+        ]
+      }
+    }
+  }
+}

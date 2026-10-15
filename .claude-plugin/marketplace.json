@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "yaak",
+  "description": "Plugins for Yaak, the desktop API client",
+  "owner": {
+    "name": "Yaak",
+    "url": "https://yaak.app"
+  },
+  "plugins": [
+    {
+      "name": "yaak",
+      "source": "./crates-cli/yaak-cli",
+      "description": "Build, save, and send API requests with the yaak CLI, with its MCP server for agents",
+      "category": "development",
+      "tags": ["api", "http", "rest", "graphql", "grpc", "openapi", "api-client"]
+    }
+  ]
+}

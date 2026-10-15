@@ -1,0 +1,20 @@
+{
+  "name": "yaak",
+  "interface": {
+    "displayName": "Yaak"
+  },
+  "plugins": [
+    {
+      "name": "yaak",
+      "source": {
+        "source": "local",
+        "path": "./crates-cli/yaak-cli"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
