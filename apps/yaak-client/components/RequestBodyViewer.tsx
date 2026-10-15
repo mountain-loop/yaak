@@ -1,17 +1,20 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { lazy, Suspense } from "react";
 import { useHttpRequestBody } from "../hooks/useHttpRequestBody";
-import { getMimeTypeFromContentType, languageFromContentType } from "../lib/contentType";
-import { LoadingIcon } from "@yaakapp-internal/ui";
+import { getMimeTypeFromContentType } from "../lib/contentType";
+import {
+  LoadingIcon,
+  languageFromContentType,
+  AudioViewer,
+  CsvViewer,
+  ImageViewer,
+  SvgViewer,
+  VideoViewer,
+  WebPageViewer,
+} from "@yaakapp-internal/ui";
 import { EmptyStateText } from "./EmptyStateText";
-import { AudioViewer } from "./responseViewers/AudioViewer";
-import { CsvViewer } from "./responseViewers/CsvViewer";
-import { ImageViewer } from "./responseViewers/ImageViewer";
 import { MultipartViewer } from "./responseViewers/MultipartViewer";
-import { SvgViewer } from "./responseViewers/SvgViewer";
 import { TextViewer } from "./responseViewers/TextViewer";
-import { VideoViewer } from "./responseViewers/VideoViewer";
-import { WebPageViewer } from "./responseViewers/WebPageViewer";
 
 const PdfViewer = lazy(() =>
   import("./responseViewers/PdfViewer").then((m) => ({ default: m.PdfViewer })),

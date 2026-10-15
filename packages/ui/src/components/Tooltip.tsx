@@ -1,8 +1,8 @@
 import classNames from "classnames";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useRef, useState } from "react";
-import { generateId } from "../../lib/generateId";
-import { Portal } from "@yaakapp-internal/ui";
+import { generateId } from "@yaakapp-internal/lib/generateId";
+import { Portal } from "./Portal";
 
 export interface TooltipProps {
   children: ReactNode;

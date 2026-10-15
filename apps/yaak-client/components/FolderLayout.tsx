@@ -1,6 +1,14 @@
 import type { Folder, GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-internal/models";
 import { foldersAtom } from "@yaakapp-internal/models";
-import { Heading, HStack, Icon, LoadingIcon } from "@yaakapp-internal/ui";
+import {
+  Heading,
+  HStack,
+  Icon,
+  LoadingIcon,
+  HttpResponseDurationTag,
+  HttpStatusTag,
+  SizeTag,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { CSSProperties, ReactNode } from "react";
@@ -13,11 +21,8 @@ import { showDialog } from "../lib/dialog";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { router } from "../lib/router";
 import { Button } from "./core/Button";
-import { HttpResponseDurationTag } from "./core/HttpResponseDurationTag";
-import { HttpStatusTag } from "./core/HttpStatusTag";
 import { IconButton } from "./core/IconButton";
 import { Separator } from "./core/Separator";
-import { SizeTag } from "./core/SizeTag";
 import { HttpResponsePane } from "./HttpResponsePane";
 
 interface Props {

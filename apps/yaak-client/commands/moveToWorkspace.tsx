@@ -3,9 +3,9 @@ import type { GrpcRequest, HttpRequest, WebsocketRequest } from "@yaakapp-intern
 import { MoveToWorkspaceDialog } from "../components/MoveToWorkspaceDialog";
 import { activeWorkspaceIdAtom } from "../hooks/useActiveWorkspace";
 import { createFastMutation } from "../hooks/useFastMutation";
-import { pluralizeCount } from "../lib/pluralize";
 import { showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 export const moveToWorkspace = createFastMutation({
   mutationKey: ["move_workspace"],

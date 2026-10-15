@@ -1,60 +1,27 @@
-import classNames from "classnames";
-import { atom, useAtom } from "jotai";
-import type { HTMLAttributes, ReactNode } from "react";
-import { useMemo } from "react";
+import {
+  DetailsBanner as BaseDetailsBanner,
+  type DetailsBannerProps,
+  type StoredValue,
+} from "@yaakapp-internal/ui";
+import { atom, useAtom, type WritableAtom } from "jotai";
+import { type SetStateAction, useMemo } from "react";
 import { atomWithKVStorage } from "../../lib/atoms/atomWithKVStorage";
-import type { BannerProps } from "@yaakapp-internal/ui";
-import { Banner } from "@yaakapp-internal/ui";
 
-interface Props extends HTMLAttributes<HTMLDetailsElement> {
-  summary: ReactNode;
-  color?: BannerProps["color"];
-  defaultOpen?: boolean;
-  storageKey?: string;
+export function DetailsBanner(props: Omit<DetailsBannerProps, "useStoredValue">) {
+  return <BaseDetailsBanner {...props} useStoredValue={useDetailsBannerStoredValue} />;
 }
 
-export function DetailsBanner({
-  className,
-  color,
-  summary,
-  children,
-  defaultOpen,
-  storageKey,
-  ...extraProps
-}: Props) {
-  // oxlint-disable-next-line react-hooks/exhaustive-deps -- We only want to recompute the atom when storageKey changes
-  const openAtom = useMemo(
+export function useDetailsBannerStoredValue<T extends StoredValue>(
+  key: string | string[] | null,
+  fallback: T,
+) {
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- We only want to recompute the atom when the key changes
+  const valueAtom = useMemo<WritableAtom<T, [SetStateAction<T>], void>>(
     () =>
-      storageKey
-        ? atomWithKVStorage<boolean>(["details_banner", storageKey], defaultOpen ?? false)
-        : atom(defaultOpen ?? false),
-    [storageKey],
+      key != null
+        ? atomWithKVStorage<T>(["details_banner", ...[key].flat()], fallback)
+        : atom(fallback),
+    [key],
   );
-
-  const [isOpen, setIsOpen] = useAtom(openAtom);
-
-  const handleToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
-    if (storageKey) {
-      setIsOpen(e.currentTarget.open);
-    }
-  };
-
-  return (
-    <Banner color={color} className={className}>
-      <details className="group list-none" open={isOpen} onToggle={handleToggle} {...extraProps}>
-        <summary className="cursor-default! select-none! list-none flex items-center gap-3 focus:outline-hidden opacity-70">
-          <div
-            className={classNames(
-              "transition-transform",
-              "group-open:rotate-90",
-              "w-0 h-0 border-t-[0.3em] border-b-[0.3em] border-l-[0.5em] border-r-0",
-              "border-t-transparent border-b-transparent border-l-text-subtle",
-            )}
-          />
-          {summary}
-        </summary>
-        <div className="mt-1.5 pb-2">{children}</div>
-      </details>
-    </Banner>
-  );
+  return useAtom(valueAtom);
 }

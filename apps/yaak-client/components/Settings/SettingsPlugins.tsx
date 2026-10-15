@@ -20,6 +20,7 @@ import {
   TableHeaderCell,
   TableRow,
   useDebouncedValue,
+  CountBadge,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
@@ -31,7 +32,6 @@ import { showConfirmDelete } from "../../lib/confirm";
 import { minPromiseMillis } from "../../lib/minPromiseMillis";
 import { Button } from "../core/Button";
 import { Checkbox } from "../core/Checkbox";
-import { CountBadge } from "../core/CountBadge";
 import { IconButton } from "../core/IconButton";
 import { Link } from "../core/Link";
 import { PlainInput } from "../core/PlainInput";

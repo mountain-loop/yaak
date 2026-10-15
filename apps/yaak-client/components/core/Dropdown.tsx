@@ -1,4 +1,12 @@
-import { HStack, Icon, type IconProps, LoadingIcon, Overlay, VStack } from "@yaakapp-internal/ui";
+import {
+  HStack,
+  Icon,
+  type IconProps,
+  LoadingIcon,
+  Overlay,
+  VStack,
+  useStateWithDeps,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { atom } from "jotai";
 import * as m from "motion/react-m";
@@ -28,8 +36,6 @@ import { useKey, useWindowSize } from "react-use";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import type { HotkeyAction } from "../../hooks/useHotKey";
 import { useHotKey } from "../../hooks/useHotKey";
-import { useStateWithDeps } from "../../hooks/useStateWithDeps";
-import { generateId } from "../../lib/generateId";
 import { getNodeText } from "../../lib/getNodeText";
 import { jotaiStore } from "../../lib/jotai";
 import { fireAndForget } from "../../lib/fireAndForget";
@@ -39,6 +45,7 @@ import { Hotkey } from "./Hotkey";
 import { IconButton } from "./IconButton";
 import type { SeparatorAction } from "./Separator";
 import { Separator } from "./Separator";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 export type DropdownItemSeparator = {
   type: "separator";

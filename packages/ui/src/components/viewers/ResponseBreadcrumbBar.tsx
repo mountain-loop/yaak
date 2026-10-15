@@ -1,9 +1,9 @@
-import { Icon } from "@yaakapp-internal/ui";
+import { Icon } from "../Icon";
 import classNames from "classnames";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { JsonPathSegment } from "../core/Editor/json/jsonPath";
-import { IconButton } from "../core/IconButton";
-import { Tooltip } from "../core/Tooltip";
+import type { JsonPathSegment } from "../editor/json/jsonPath";
+import { IconButton } from "../IconButton";
+import { Tooltip } from "../Tooltip";
 
 interface Props {
   segments: JsonPathSegment[];

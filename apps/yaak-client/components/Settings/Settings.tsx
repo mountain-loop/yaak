@@ -1,13 +1,12 @@
 import { platform } from "@yaakapp-internal/platform";
 import { useLicense } from "@yaakapp-internal/license";
 import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
-import { HeaderSize, HStack, Icon } from "@yaakapp-internal/ui";
+import { HeaderSize, HStack, Icon, CountBadge } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import { useKeyPressEvent } from "react-use";
 import { appInfo } from "../../lib/appInfo";
 import { capitalize } from "../../lib/capitalize";
-import { CountBadge } from "../core/CountBadge";
 import { TabContent, type TabItem, Tabs } from "../core/Tabs/Tabs";
 import { SettingsCertificates } from "./SettingsCertificates";
 import { SettingsGeneral } from "./SettingsGeneral";

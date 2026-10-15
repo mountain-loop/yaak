@@ -4,7 +4,6 @@ import { differenceInDays } from "date-fns";
 import { formatDate } from "date-fns/format";
 import { useState } from "react";
 import { useToggle } from "../../hooks/useToggle";
-import { pluralizeCount } from "../../lib/pluralize";
 import { pricingUrl } from "../../lib/pricingUrl";
 import { CargoFeature } from "../CargoFeature";
 import { Button } from "../core/Button";
@@ -12,6 +11,7 @@ import { Link } from "../core/Link";
 import { PlainInput } from "../core/PlainInput";
 import { Separator } from "../core/Separator";
 import { platform } from "@yaakapp-internal/platform";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 export function SettingsLicense() {
   return (

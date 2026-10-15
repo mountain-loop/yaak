@@ -1,6 +1,6 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { deleteModel } from "@yaakapp-internal/models";
-import { HStack, Icon } from "@yaakapp-internal/ui";
+import { HStack, Icon, formatMillis, HttpStatusTag, SizeTag } from "@yaakapp-internal/ui";
 import {
   differenceInHours,
   differenceInMinutes,
@@ -12,10 +12,7 @@ import { useDeleteHttpResponses } from "../hooks/useDeleteHttpResponses";
 import { useKeyValue } from "../hooks/useKeyValue";
 import { DismissibleBanner } from "./core/DismissibleBanner";
 import { Dropdown, type DropdownItem } from "./core/Dropdown";
-import { formatMillis } from "./core/HttpResponseDurationTag";
-import { HttpStatusTag } from "./core/HttpStatusTag";
 import { IconButton } from "./core/IconButton";
-import { SizeTag } from "./core/SizeTag";
 
 interface Props {
   responses: HttpResponse[];

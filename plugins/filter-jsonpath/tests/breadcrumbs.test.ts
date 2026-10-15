@@ -7,7 +7,7 @@ import {
   jsonPathSegmentsAt,
   jsonPathToSegments,
   segmentsToJsonPath,
-} from "../../../apps/yaak-client/components/core/Editor/json/jsonPath";
+} from "../../../packages/ui/src/components/editor/json/jsonPath";
 import { plugin } from "../src";
 
 async function filter(json: unknown, path: string) {

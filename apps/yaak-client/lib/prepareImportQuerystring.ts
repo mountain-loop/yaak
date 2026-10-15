@@ -1,5 +1,5 @@
 import type { HttpUrlParameter } from "@yaakapp-internal/models";
-import { generateId } from "./generateId";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 export function prepareImportQuerystring(
   url: string,

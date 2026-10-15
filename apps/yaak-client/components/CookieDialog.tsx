@@ -25,12 +25,13 @@ import {
   TableHeaderCell,
   TableRow,
   TruncatedWideTableCell,
+  KeyValueRows,
 } from "@yaakapp-internal/ui";
 import { IconButton } from "./core/IconButton";
 import { Checkbox } from "./core/Checkbox";
 import classNames from "classnames";
 import { EventDetailHeader } from "./core/EventViewer";
-import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { KeyValueRow } from "./core/KeyValueRow";
 import { EmptyStateText } from "./EmptyStateText";
 import { PlainInput } from "./core/PlainInput";
 import { Select } from "./core/Select";

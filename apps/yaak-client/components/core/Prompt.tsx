@@ -1,9 +1,9 @@
 import type { FormInput, JsonPrimitive } from "@yaakapp-internal/plugins";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { generateId } from "../../lib/generateId";
 import { DynamicForm } from "../DynamicForm";
 import { DialogFooter } from "./Dialog";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 
 export interface PromptProps {
   inputs: FormInput[];

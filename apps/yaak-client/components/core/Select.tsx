@@ -1,11 +1,10 @@
 import { platform } from "@yaakapp-internal/platform";
-import { HStack } from "@yaakapp-internal/ui";
+import { HStack, Label } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
 import type { ButtonProps } from "./Button";
 import { Button } from "./Button";
-import { Label } from "./Label";
 import type { RadioDropdownItem } from "./RadioDropdown";
 import { RadioDropdown } from "./RadioDropdown";
 

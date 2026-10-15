@@ -1,7 +1,7 @@
 import type { Environment, Workspace } from "@yaakapp-internal/models";
 import { duplicateModel, patchModel } from "@yaakapp-internal/models";
 import type { TreeHandle, TreeNode, TreeProps } from "@yaakapp-internal/ui";
-import { Banner, Icon, InlineCode, SplitLayout, Tree } from "@yaakapp-internal/ui";
+import { Banner, Icon, InlineCode, SplitLayout, Tree, IconTooltip } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
 import { atomFamily } from "jotai-family";
 import {
@@ -30,7 +30,6 @@ import { showColorPicker } from "../lib/showColorPicker";
 import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
 import { ContextMenu } from "./core/Dropdown";
 import { IconButton } from "./core/IconButton";
-import { IconTooltip } from "./core/IconTooltip";
 import type { PairEditorHandle } from "./core/PairEditor";
 import { EnvironmentColorIndicator } from "./EnvironmentColorIndicator";
 import { EnvironmentEditor } from "./EnvironmentEditor";
