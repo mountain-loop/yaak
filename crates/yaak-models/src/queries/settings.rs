@@ -54,6 +54,7 @@ fn default_settings() -> Settings {
         colored_methods: false,
         hide_license_badge: false,
         prompt_feedback: true,
+        mcp_server_enabled: false,
         auto_download_updates: true,
         check_notifications: true,
         hotkeys: HashMap::new(),

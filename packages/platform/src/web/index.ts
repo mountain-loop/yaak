@@ -72,6 +72,8 @@ function capabilitiesFor(): PlatformCapabilities {
     clipboardRead: false,
     systemFonts: false,
     license: false,
+    // No local CLI to find and no app process to serve MCP from.
+    agents: false,
   };
 }
 

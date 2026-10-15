@@ -2,6 +2,9 @@
 
 Exposes Yaak's functionality via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
+**Deprecated.** Yaak now has a built-in MCP server with the same tools. Uninstall this plugin,
+then turn the server on in Settings > Agents, or run `yaak mcp` from the Yaak CLI.
+
 ## Setup
 
 Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):

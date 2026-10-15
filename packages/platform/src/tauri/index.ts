@@ -67,6 +67,7 @@ const ALL_CAPABILITIES: PlatformCapabilities = {
   clipboardRead: true,
   systemFonts: true,
   license: true,
+  agents: true,
 };
 
 function createWindow(): PlatformWindow {

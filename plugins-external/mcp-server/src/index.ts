@@ -11,6 +11,13 @@ export const plugin: PluginDefinition = {
     // like show the startup toast.
     console.log("Initializing MCP Server plugin");
     setTimeout(async () => {
+      void ctx.toast.show({
+        message:
+          "The MCP Server plugin is deprecated. Yaak now has a built-in MCP server: uninstall this plugin, then turn it on in Settings > Agents.",
+        icon: "alert_triangle",
+        color: "notice",
+        timeout: 30000,
+      });
       try {
         mcpServer = createMcpServer({ yaak: ctx }, serverPort);
       } catch (err) {

@@ -184,6 +184,20 @@ async fn main() {
             context.shutdown().await;
             exit_code
         }
+        Commands::Mcp => {
+            let mut context = CliContext::new(data_dir.clone(), app_id);
+            context
+                .init_plugins(CliExecutionContext {
+                    environment_id: environment.clone(),
+                    cookie_jar_id: cookie_jar.clone(),
+                    ..CliExecutionContext::default()
+                })
+                .await;
+            let exit_code =
+                commands::mcp::run(&context, environment.as_deref(), cookie_jar.as_deref()).await;
+            context.shutdown().await;
+            exit_code
+        }
         Commands::Environment(args) => {
             let context = CliContext::new(data_dir.clone(), app_id);
             let exit_code = commands::environment::run(&context, args);
