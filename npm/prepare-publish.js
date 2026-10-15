@@ -74,4 +74,12 @@ for (const pkg of packages) {
   writeFileSync(filepath, `${JSON.stringify(json, null, 2)}\n`);
 }
 
+const serverJsonPath = join(__dirname, "cli", "server.json");
+const serverJson = JSON.parse(readFileSync(serverJsonPath, "utf-8"));
+serverJson.version = version;
+for (const pkg of serverJson.packages) {
+  pkg.version = version;
+}
+writeFileSync(serverJsonPath, `${JSON.stringify(serverJson, null, 2)}\n`);
+
 console.log(`Prepared @yaakapp/cli npm packages for ${version}`);

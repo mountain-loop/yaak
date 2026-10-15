@@ -18,7 +18,7 @@ log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal", "net"] }
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.7", features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]

@@ -14,7 +14,7 @@ flate2 = "1"
 futures-util = "0.3"
 http-body = "1"
 url = "2"
-zstd = "0.13"
+zstd = "0.14"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
 mime_guess = "2.0.5"
