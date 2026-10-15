@@ -76,10 +76,17 @@ export function TextViewer({
   });
   const hasFilter = filterText != null;
 
-  const textFingerprint = useMemo(() => docFingerprint(text, { exact: false }), [text]);
+  // Exact, so two same-length bodies never share a cached filter result
+  const textFingerprint = useMemo(() => docFingerprint(text, { exact: true }), [text]);
   const filterResult = useQuery({
     placeholderData: (prev) => prev, // Keep previous data on refetch
-    queryKey: ["text_viewer_filter", filterStateKey, textFingerprint, filter.appliedFilter],
+    queryKey: [
+      "text_viewer_filter",
+      filterStateKey,
+      stateKey,
+      textFingerprint,
+      filter.appliedFilter,
+    ],
     queryFn: () => (filterText ?? rejectFilter)(filter.appliedFilter ?? ""),
     enabled: hasFilter && filter.appliedFilter != null,
   });
