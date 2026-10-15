@@ -21,11 +21,11 @@ export interface AgentSetup {
 export function skillInstallCommand(client: AgentClient): string {
   switch (client) {
     case "claude_code":
-      return "yaak agent install claude-code";
+      return "yaak agent install --agent claude-code";
     case "codex":
-      return "yaak agent install codex";
+      return "yaak agent install --agent codex";
     case "cursor":
-      return "yaak agent install cursor";
+      return "yaak agent install --agent cursor";
     case "vscode":
     case "other":
       return "yaak agent install";

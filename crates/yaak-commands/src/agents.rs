@@ -13,7 +13,10 @@ const SKILL_NAME: &str = "use-yaak";
 const SERVER_NAME: &str = "yaak";
 
 pub fn agent_setup_status(home: &Path, agent: AgentClient) -> AgentSetupStatus {
-    AgentSetupStatus { mcp_server: mcp_server_added(home, agent), skill: skill_installed(home, agent) }
+    AgentSetupStatus {
+        mcp_server: mcp_server_added(home, agent),
+        skill: skill_installed(home, agent),
+    }
 }
 
 fn skill_installed(home: &Path, agent: AgentClient) -> Option<bool> {
@@ -58,8 +61,20 @@ fn read_json(path: &Path) -> Option<Value> {
     serde_json::from_str(&text).ok()
 }
 
+/// Only the CLI's own entry counts. An entry named `yaak` that points at a
+/// URL is the deprecated plugin's server and still needs replacing.
 fn has_server(servers: Option<&Value>) -> bool {
-    servers.and_then(|s| s.get(SERVER_NAME)).is_some_and(|v| v.is_object())
+    servers.and_then(|s| s.get(SERVER_NAME)).is_some_and(is_cli_server)
+}
+
+fn is_cli_server(entry: &Value) -> bool {
+    let command = entry.get("command").and_then(Value::as_str);
+    let args = entry.get("args").and_then(Value::as_array);
+    is_yaak_command(command) && args.is_some_and(|a| a.iter().any(|v| v.as_str() == Some("mcp")))
+}
+
+fn is_yaak_command(command: Option<&str>) -> bool {
+    command.is_some_and(|c| Path::new(c).file_stem().and_then(|s| s.to_str()) == Some("yaak"))
 }
 
 fn json_has_server(path: &Path, key: &str) -> bool {
@@ -80,13 +95,30 @@ fn claude_code_has_server(path: &Path) -> bool {
         .is_some_and(|projects| projects.values().any(|p| has_server(p.get("mcpServers"))))
 }
 
-/// A `[mcp_servers.yaak]` table header (or a sub-table of it), with the key
-/// bare or quoted, is enough. The file is not otherwise parsed.
+/// A `[mcp_servers.yaak]` table, key bare or quoted, whose `command` is yaak
+/// and whose `args` include mcp. The file is scanned line by line, not parsed.
 fn codex_has_server(path: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(path) else {
         return false;
     };
-    text.lines().map(str::trim).any(is_codex_server_header)
+    let mut in_table = false;
+    let mut command = false;
+    let mut args = false;
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_table = is_codex_server_header(line);
+        } else if in_table {
+            if let Some((key, value)) = line.split_once('=') {
+                let value = value.trim().trim_matches(|c| c == '"' || c == '\'');
+                if key.trim() == "command" {
+                    command = is_yaak_command(Some(value));
+                } else if key.trim() == "args" {
+                    args = value.contains("\"mcp\"") || value.contains("'mcp'");
+                }
+            }
+        }
+    }
+    command && args
 }
 
 fn is_codex_server_header(line: &str) -> bool {
@@ -113,9 +145,12 @@ mod tests {
     #[test]
     fn nothing_installed() {
         let home = tempfile::tempdir().unwrap();
-        for agent in
-            [AgentClient::ClaudeCode, AgentClient::Codex, AgentClient::Cursor, AgentClient::Vscode]
-        {
+        for agent in [
+            AgentClient::ClaudeCode,
+            AgentClient::Codex,
+            AgentClient::Cursor,
+            AgentClient::Vscode,
+        ] {
             let status = agent_setup_status(home.path(), agent);
             assert_eq!(status.mcp_server, Some(false), "{agent:?}");
             assert_eq!(status.skill, Some(false), "{agent:?}");
@@ -148,9 +183,18 @@ mod tests {
 
         write(
             &path,
-            r#"{"projects":{"/Users/me/app":{"mcpServers":{"yaak":{"command":"yaak"}}}}}"#,
+            r#"{"projects":{"/Users/me/app":{"mcpServers":{"yaak":{"command":"/usr/local/bin/yaak","args":["mcp"]}}}}}"#,
         );
         assert_eq!(agent_setup_status(home.path(), AgentClient::ClaudeCode).mcp_server, Some(true));
+
+        write(
+            &path,
+            r#"{"mcpServers":{"yaak":{"type":"http","url":"http://127.0.0.1:64343/mcp"}}}"#,
+        );
+        assert_eq!(
+            agent_setup_status(home.path(), AgentClient::ClaudeCode).mcp_server,
+            Some(false)
+        );
 
         write(&path, r#"{"mcpServers":{"other":{}},"projects":{"/x":{"mcpServers":{}}}}"#);
         assert_eq!(
@@ -170,14 +214,26 @@ mod tests {
         let home = tempfile::tempdir().unwrap();
         let path = home.path().join(".codex/config.toml");
 
-        write(&path, "model = \"o3\"\n\n[mcp_servers.yaak]\ncommand = \"yaak\"\nargs = [\"mcp\"]\n");
+        write(
+            &path,
+            "model = \"o3\"\n\n[mcp_servers.yaak]\ncommand = \"yaak\"\nargs = [\"mcp\"]\n",
+        );
         assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(true));
 
-        write(&path, "  [ mcp_servers . \"yaak\" ]\nurl = \"http://127.0.0.1:64343/mcp\"\n");
+        write(&path, "  [ mcp_servers . \"yaak\" ]\ncommand = 'yaak'\nargs = ['mcp']\n[other]\n");
         assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(true));
+
+        write(&path, "[mcp_servers.yaak]\nurl = \"http://127.0.0.1:64343/mcp\"\n");
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(false));
 
         write(&path, "[mcp_servers.yaak.env]\nFOO = \"bar\"\n");
-        assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(true));
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(false));
+
+        write(
+            &path,
+            "[mcp_servers.yaak]\n[mcp_servers.other]\ncommand = \"yaak\"\nargs = [\"mcp\"]\n",
+        );
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(false));
 
         write(&path, "[mcp_servers.yaakish]\ncommand = \"x\"\n[mcp_servers]\n");
         assert_eq!(agent_setup_status(home.path(), AgentClient::Codex).mcp_server, Some(false));
@@ -187,8 +243,17 @@ mod tests {
     fn cursor_and_vscode_json() {
         let home = tempfile::tempdir().unwrap();
 
-        write(&home.path().join(".cursor/mcp.json"), r#"{"mcpServers":{"yaak":{"command":"yaak"}}}"#);
+        write(
+            &home.path().join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"yaak":{"command":"yaak","args":["mcp"]}}}"#,
+        );
         assert_eq!(agent_setup_status(home.path(), AgentClient::Cursor).mcp_server, Some(true));
+
+        write(
+            &home.path().join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"yaak":{"url":"http://127.0.0.1:64343/mcp"}}}"#,
+        );
+        assert_eq!(agent_setup_status(home.path(), AgentClient::Cursor).mcp_server, Some(false));
 
         write(&home.path().join(".cursor/mcp.json"), r#"{"servers":{"yaak":{}}}"#);
         assert_eq!(agent_setup_status(home.path(), AgentClient::Cursor).mcp_server, Some(false));

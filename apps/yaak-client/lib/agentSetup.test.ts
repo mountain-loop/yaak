@@ -40,9 +40,9 @@ describe("cliSetup", () => {
 
 describe("skillInstallCommand", () => {
   test("targets the agents the installer knows by name", () => {
-    expect(skillInstallCommand("claude_code")).toBe("yaak agent install claude-code");
-    expect(skillInstallCommand("codex")).toBe("yaak agent install codex");
-    expect(skillInstallCommand("cursor")).toBe("yaak agent install cursor");
+    expect(skillInstallCommand("claude_code")).toBe("yaak agent install --agent claude-code");
+    expect(skillInstallCommand("codex")).toBe("yaak agent install --agent codex");
+    expect(skillInstallCommand("cursor")).toBe("yaak agent install --agent cursor");
   });
 
   test("installs everywhere for agents it cannot target", () => {
