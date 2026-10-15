@@ -107,6 +107,29 @@ describe("segmentsToJsonPath", () => {
 });
 
 describe("jsonPathToSegments", () => {
+  // The filter side of these keys is tested in crates/yaak-filter.
+  test.each([
+    "identifier",
+    "a.b",
+    "space key",
+    "",
+    'quote"key',
+    "back\\slash",
+    "combined\"\\]'key",
+    "*",
+    "$",
+    "$foo",
+    "?(true)",
+    "line\nbreak\t\u0000",
+    "emoji 🤔",
+    "__proto__",
+  ])("round-trips the caret path to the literal key %j", (key) => {
+    const doc = JSON.stringify({ [key]: "needle-value", decoy: "wrong-value" }, null, 2);
+    const segments = jsonPathSegmentsAt(stateFor(doc), doc.indexOf('"needle-value"') + 4);
+    expect(segments).toEqual([{ kind: "key", key }]);
+    expect(jsonPathToSegments(segmentsToJsonPath(segments ?? []))).toEqual(segments);
+  });
+
   test("round-trips paths built by segmentsToJsonPath", () => {
     for (const path of ["$", "$[0]", "$[0].id", '$.data["user.name"][12]', '$["say \\"hi\\""]']) {
       const segments = jsonPathToSegments(path);

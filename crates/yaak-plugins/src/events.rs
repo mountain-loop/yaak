@@ -69,6 +69,8 @@ pub enum InternalEventPayload {
 
     FilterRequest(FilterRequest),
     FilterResponse(FilterResponse),
+    FilterTextRequest(FilterTextRequest),
+    FilterTextResponse(FilterResponse),
 
     ExportHttpRequestRequest(ExportHttpRequestRequest),
     ExportHttpRequestResponse(ExportHttpRequestResponse),
@@ -286,7 +288,26 @@ pub struct FilterRequest {
 pub struct FilterResponse {
     pub content: String,
     #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// A plugin asking the host to run a JSONPath or XPath query over some text.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub struct FilterTextRequest {
+    pub language: FilterLanguage,
+    pub text: String,
+    pub query: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "gen_events.ts")]
+pub enum FilterLanguage {
+    JsonPath,
+    XPath,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]

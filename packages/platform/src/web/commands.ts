@@ -199,7 +199,7 @@ const HANDLERS: Partial<Record<AppCmd, Handler>> = {
     if (str(payload, "filter") != null) {
       return {
         content: "",
-        error: "Response filters come from a plugin, which this host doesn't run yet",
+        error: "Response filters are not available in the browser yet",
       };
     }
 

@@ -30,8 +30,6 @@
     "plugins/auth-ntlm",
     "plugins/auth-oauth2",
     "plugins/auth-oauth1",
-    "plugins/filter-jsonpath",
-    "plugins/filter-xpath",
     "plugins/importer-bruno",
     "plugins/importer-curl",
     "plugins/importer-insomnia",
