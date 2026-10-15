@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type { Plugin } from "@yaakapp-internal/models";
 import { pluginsAtom } from "@yaakapp-internal/models";
 import type { PluginMetadata } from "@yaakapp-internal/plugins";
@@ -21,6 +21,22 @@ export function usePluginInfo(id: string | null) {
       if (id == null) return null;
       return rpc<PluginMetadata>("cmd_plugin_info", { id });
     },
+  });
+}
+
+/** Every plugin with its metadata, once loaded; the ones still loading are left out. */
+export function usePluginInfos() {
+  const plugins = useAtomValue(pluginsAtom);
+  return useQueries({
+    queries: plugins.map((plugin) => ({
+      queryKey: pluginInfoKey(plugin.id, plugin),
+      queryFn: () => rpc<PluginMetadata>("cmd_plugin_info", { id: plugin.id }),
+    })),
+    combine: (results) =>
+      results.flatMap((result, i) => {
+        const plugin = plugins[i];
+        return result.data == null || plugin == null ? [] : [{ plugin, info: result.data }];
+      }),
   });
 }
 

@@ -1,5 +1,8 @@
+use crate::cli::McpArgs;
 use crate::context::{CliContext, CliExecutionContext};
 use crate::plugin_events::SendContexts;
+use rand::Rng;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
@@ -13,7 +16,27 @@ use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{PluginContext, ShowToastRequest};
 use yaak_plugins::manager::PluginManager;
 
-pub async fn run(ctx: &CliContext, environment: Option<&str>, cookie_jar_id: Option<&str>) -> i32 {
+enum Transport {
+    Stdio,
+    Http { port: u16, token: Option<String> },
+}
+
+impl From<McpArgs> for Transport {
+    fn from(args: McpArgs) -> Self {
+        if args.http {
+            Transport::Http { port: args.port, token: args.token }
+        } else {
+            Transport::Stdio
+        }
+    }
+}
+
+pub async fn run(
+    ctx: &CliContext,
+    args: McpArgs,
+    environment: Option<&str>,
+    cookie_jar_id: Option<&str>,
+) -> i32 {
     let host = CliMcpHost {
         query_manager: ctx.query_manager().clone(),
         blob_manager: ctx.blob_manager().clone(),
@@ -25,13 +48,35 @@ pub async fn run(ctx: &CliContext, environment: Option<&str>, cookie_jar_id: Opt
         environment_id: environment.map(str::to_string),
         cookie_jar_id: cookie_jar_id.map(str::to_string),
     };
-    match yaak_mcp::serve_stdio(host).await {
+    let result = match Transport::from(args) {
+        Transport::Stdio => yaak_mcp::serve_stdio(host).await,
+        Transport::Http { port, token } => serve_http(host, port, token).await,
+    };
+    match result {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("Error: {error}");
             1
         }
     }
+}
+
+async fn serve_http(host: CliMcpHost, port: u16, token: Option<String>) -> Result<(), String> {
+    let token = token.unwrap_or_else(generate_token);
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let server = yaak_mcp::http::serve(Arc::new(host), addr, token.clone())
+        .await
+        .map_err(|e| format!("Failed to start MCP server on {addr}: {e}"))?;
+    eprintln!("Yaak MCP server listening on http://{}{}", server.addr, yaak_mcp::http::PATH);
+    eprintln!("Token: {token}");
+    eprintln!("Clients must send it as \"Authorization: Bearer <token>\". Press Ctrl+C to stop.");
+    tokio::signal::ctrl_c().await.map_err(|e| format!("Failed to wait for Ctrl+C: {e}"))?;
+    server.stop().await;
+    Ok(())
+}
+
+fn generate_token() -> String {
+    hex::encode(rand::thread_rng().r#gen::<[u8; 32]>())
 }
 
 /// Every workspace in the database is "open", and the global `--environment`

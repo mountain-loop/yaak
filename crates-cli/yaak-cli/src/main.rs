@@ -184,7 +184,7 @@ async fn main() {
             context.shutdown().await;
             exit_code
         }
-        Commands::Mcp => {
+        Commands::Mcp(args) => {
             let mut context = CliContext::new(data_dir.clone(), app_id);
             context
                 .init_plugins(CliExecutionContext {
@@ -194,7 +194,8 @@ async fn main() {
                 })
                 .await;
             let exit_code =
-                commands::mcp::run(&context, environment.as_deref(), cookie_jar.as_deref()).await;
+                commands::mcp::run(&context, args, environment.as_deref(), cookie_jar.as_deref())
+                    .await;
             context.shutdown().await;
             exit_code
         }

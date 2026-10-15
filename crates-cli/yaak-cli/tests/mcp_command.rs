@@ -222,3 +222,129 @@ async fn mcp_send_settings_reach_template_functions() {
     client.cancel().await.unwrap();
     assert!(child.wait().await.unwrap().success());
 }
+
+/// Spawns `yaak mcp --http` with `args` and returns the child, the URL it
+/// printed, and the token it printed or was given.
+async fn spawn_http(data_dir: &std::path::Path, args: &[&str]) -> (tokio::process::Child, String, String) {
+    use tokio::io::AsyncBufReadExt;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_yaak"))
+        .arg("--data-dir")
+        .arg(data_dir)
+        .args(["mcp", "--http", "--port", "0"])
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut stderr = tokio::io::BufReader::new(child.stderr.take().unwrap()).lines();
+    let mut url = None;
+    let mut token = None;
+    while url.is_none() || token.is_none() {
+        let line = stderr.next_line().await.unwrap().expect("server exited before announcing");
+        if let Some(rest) = line.strip_prefix("Yaak MCP server listening on ") {
+            url = Some(rest.to_string());
+        } else if let Some(rest) = line.strip_prefix("Token: ") {
+            token = Some(rest.to_string());
+        }
+    }
+    (child, url.unwrap(), token.unwrap())
+}
+
+/// Posts one JSON-RPC message, with the session id when there is one, and
+/// returns the response and its body parsed out of either JSON or SSE.
+async fn post(
+    client: &reqwest::Client,
+    url: &str,
+    auth: Option<&str>,
+    session: Option<&str>,
+    body: Value,
+) -> (reqwest::StatusCode, reqwest::header::HeaderMap, Option<Value>) {
+    let mut request = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .body(body.to_string());
+    if let Some(auth) = auth {
+        request = request.header("Authorization", auth);
+    }
+    if let Some(session) = session {
+        request = request.header("Mcp-Session-Id", session);
+    }
+    let response = request.send().await.unwrap();
+    let status = response.status();
+    let headers = response.headers().clone();
+    let text = response.text().await.unwrap();
+    let message = text
+        .lines()
+        .filter_map(|l| l.strip_prefix("data:"))
+        .last()
+        .map(str::trim)
+        .unwrap_or(text.trim());
+    (status, headers, serde_json::from_str(message).ok())
+}
+
+#[tokio::test]
+async fn mcp_http_requires_the_token() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+    let (mut child, url, token) = spawn_http(data_dir, &["--token", "s3cret"]).await;
+    assert_eq!(token, "s3cret");
+    assert!(url.starts_with("http://127.0.0.1:"), "{url}");
+    assert!(url.ends_with("/mcp"), "{url}");
+    let client = reqwest::Client::new();
+    let initialize = json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1.0" } }
+    });
+
+    for auth in [None, Some("Bearer wrong")] {
+        let (status, headers, _) = post(&client, &url, auth, None, initialize.clone()).await;
+        assert_eq!(status, reqwest::StatusCode::UNAUTHORIZED, "{auth:?}");
+        assert_eq!(headers["www-authenticate"], "Bearer");
+    }
+
+    let auth = Some("Bearer s3cret");
+    let (status, headers, body) = post(&client, &url, auth, None, initialize).await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let session = headers["mcp-session-id"].to_str().unwrap().to_string();
+    assert_eq!(body.unwrap()["result"]["serverInfo"]["name"], "yaak-mcp-server");
+
+    let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
+    let (status, _, _) = post(&client, &url, auth, Some(&session), initialized).await;
+    assert_eq!(status, reqwest::StatusCode::ACCEPTED);
+
+    let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {} });
+    let (status, _, body) = post(&client, &url, auth, Some(&session), list).await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let tools = body.unwrap()["result"]["tools"].as_array().unwrap().len();
+    assert_eq!(tools, 15);
+
+    child.kill().await.unwrap();
+}
+
+#[tokio::test]
+async fn mcp_http_generates_a_token() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+    let (mut child, url, token) = spawn_http(data_dir, &[]).await;
+    assert_eq!(token.len(), 64, "{token}");
+    assert!(token.chars().all(|c| c.is_ascii_hexdigit()), "{token}");
+
+    let client = reqwest::Client::new();
+    let initialize = json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1.0" } }
+    });
+    let (status, _, _) = post(&client, &url, None, None, initialize.clone()).await;
+    assert_eq!(status, reqwest::StatusCode::UNAUTHORIZED);
+    let (status, _, _) =
+        post(&client, &url, Some(&format!("Bearer {token}")), None, initialize).await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+
+    child.kill().await.unwrap();
+}
