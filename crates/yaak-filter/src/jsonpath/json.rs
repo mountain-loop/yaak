@@ -34,7 +34,11 @@ struct Parser<'t> {
 
 impl Parser<'_> {
     fn error(&self, message: &str) -> String {
-        let before = &self.text[..self.pos.min(self.text.len())];
+        let mut end = self.pos.min(self.text.len());
+        while !self.text.is_char_boundary(end) {
+            end -= 1;
+        }
+        let before = &self.text[..end];
         let line = before.matches('\n').count() + 1;
         let column = before.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1;
         format!("{message} at line {line} column {column}")

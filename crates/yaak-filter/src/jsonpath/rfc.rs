@@ -444,6 +444,10 @@ impl Parser {
     fn call(&mut self, name: &str) -> Result<Call, String> {
         let function =
             RfcFunction::from_name(name).ok_or_else(|| format!("unknown function {name}()"))?;
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err("filter expression is nested too deeply".to_string());
+        }
         self.index += 1;
         let mut args = Vec::new();
         loop {
@@ -474,6 +478,7 @@ impl Parser {
         if args.len() != function.arity() {
             return Err(format!("{}() takes {} argument(s)", function.name(), function.arity()));
         }
+        self.depth -= 1;
         Ok(Call { function, args })
     }
 
@@ -684,7 +689,16 @@ fn json_equal(a: &Json, b: &Json) -> bool {
         (Json::Object(a), Json::Object(b)) => {
             a.len() == b.len() && a.iter().all(|(k, v)| b.get(k).is_some_and(|w| json_equal(v, w)))
         }
-        (a, b) => deep_equal(&JsValue::from_doc(a), &JsValue::from_doc(b)),
+        (Json::Null, Json::Null) => true,
+        (Json::Bool(a), Json::Bool(b)) => a == b,
+        (Json::Number(a), Json::Number(b)) => a == b,
+        (Json::String(a), Json::String(b)) => a == b,
+        (Json::Null, _)
+        | (Json::Bool(_), _)
+        | (Json::Number(_), _)
+        | (Json::String(_), _)
+        | (Json::Array(_), _)
+        | (Json::Object(_), _) => false,
     }
 }
 

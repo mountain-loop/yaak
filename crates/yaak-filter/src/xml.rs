@@ -28,7 +28,7 @@ pub(crate) fn evaluate(text: &str, query: &str) -> Result<String, String> {
         }
         Value::String(s) => s,
         Value::Boolean(b) => b.to_string(),
-        Value::Number(n) => format_number(n),
+        Value::Number(n) => crate::jsonpath::number_to_string(n),
     })
 }
 
@@ -52,19 +52,6 @@ fn merge_adjacent_text(element: Element) {
                 previous = None
             }
         }
-    }
-}
-
-/// Numbers print the way JavaScript's `String(n)` does, as the XPath plugin did.
-fn format_number(n: f64) -> String {
-    if n.is_nan() {
-        "NaN".to_string()
-    } else if n.is_infinite() {
-        if n > 0.0 { "Infinity" } else { "-Infinity" }.to_string()
-    } else if n == 0.0 {
-        "0".to_string()
-    } else {
-        n.to_string()
     }
 }
 

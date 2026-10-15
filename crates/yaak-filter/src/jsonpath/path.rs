@@ -1,6 +1,7 @@
 //! Path strings into the steps the engine traces: jsonpath-plus's
 //! `toPathArray`, after lifting out what this engine reads differently.
 
+use super::json::{self, Json};
 use super::rfc::{closing_bracket, quoted_string};
 use fancy_regex::{Captures, Regex};
 use std::rc::Rc;
@@ -94,6 +95,54 @@ pub fn parse(path: &str) -> Result<Vec<Loc>, String> {
             })
         })
         .collect()
+}
+
+/// The old plugin walked complete literal paths containing `["` by own
+/// property instead of handing them to jsonpath-plus (so `$["s"].length` is
+/// `0` for an empty string). These are their keys.
+pub fn literal_keys(path: &str) -> Option<Vec<String>> {
+    if !path.contains("[\"") {
+        return None;
+    }
+    let mut rest = path.trim().strip_prefix('$')?;
+    let mut keys = Vec::new();
+    while !rest.is_empty() {
+        if let Some(after) = rest.strip_prefix('.') {
+            let len = after
+                .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
+                .unwrap_or(after.len());
+            let name = &after[..len];
+            if name.is_empty() || name == "$" || name.starts_with(|c: char| c.is_ascii_digit()) {
+                return None;
+            }
+            keys.push(name.to_string());
+            rest = &after[len..];
+        } else if let Some(after) = rest.strip_prefix("[\"") {
+            let mut escaped = false;
+            let end = after.char_indices().find_map(|(i, c)| {
+                let closes = c == '"' && !escaped;
+                escaped = c == '\\' && !escaped;
+                closes.then_some(i)
+            })?;
+            let Json::String(key) = json::parse(&format!("\"{}", &after[..=end])).ok()? else {
+                return None;
+            };
+            keys.push(key);
+            rest = after[end + 1..].strip_prefix(']')?;
+        } else if let Some(after) = rest.strip_prefix('[') {
+            let len = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
+            let digits = &after[..len];
+            let index = digits.parse::<u64>().ok().filter(|i| *i <= 9_007_199_254_740_991)?;
+            if digits.len() > 1 && digits.starts_with('0') {
+                return None;
+            }
+            keys.push(index.to_string());
+            rest = after[len..].strip_prefix(']')?;
+        } else {
+            return None;
+        }
+    }
+    Some(keys)
 }
 
 fn placeholder_index(part: &str) -> Option<usize> {

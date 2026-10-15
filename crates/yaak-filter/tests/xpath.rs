@@ -95,3 +95,11 @@ fn invalid_queries_and_documents_are_errors() {
 fn filter_dispatches_to_xpath() {
     assert_eq!(filter(Language::XPath, ITEMS, "count(//item)").content, "2");
 }
+
+#[test]
+fn numbers_switch_to_exponents_where_javascript_does() {
+    assert_eq!(content("<a>0.0000001</a>", "number(/a)"), "1e-7");
+    assert_eq!(content("<a>0.000001</a>", "number(/a)"), "0.000001");
+    assert_eq!(content("<a>1000000000000000000000</a>", "number(/a)"), "1e+21");
+    assert_eq!(content("<a>100000000000000000000</a>", "number(/a)"), "100000000000000000000");
+}

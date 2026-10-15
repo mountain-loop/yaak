@@ -147,6 +147,7 @@ const docs = {
   roottrue: true,
   rootzero: 0,
   rootempty: "",
+  falsy: { s: "", t: "abc", a: [], z: 0, f: false, n: null, o: {} },
   rootfalse: false,
   rootnull: null,
   rootarr: [],
@@ -1376,6 +1377,23 @@ add("rootempty", "$", "falsy-root", [""]);
 add("rootfalse", "$", "falsy-root", [false]);
 add("rootnull", "$", "falsy-root", [null]);
 add("rootnull", "$.a", "falsy-root", []);
+
+// The plugin's literal fast path reads own properties of falsy values too.
+same(
+  "falsy",
+  '$["s"].length',
+  '$["s"][0]',
+  '$["t"].length',
+  '$["t"][1]',
+  '$["a"].length',
+  '$["z"].length',
+  '$["f"].x',
+  '$["n"].x',
+  '$["o"].length',
+  "$.s.length",
+  "$.t.length",
+  '$.s["length"]',
+);
 
 // Duplicate keys keep their first position and last value.
 same("dupes", "$", "$.*", "$.a", "$.*~", "$[0]", "$[1]");

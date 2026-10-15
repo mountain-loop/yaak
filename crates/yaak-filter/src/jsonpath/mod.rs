@@ -12,7 +12,8 @@ mod rfc;
 mod script;
 mod value;
 
-use json::{Json, number_to_string};
+use json::Json;
+pub(crate) use json::number_to_string;
 use path::Loc;
 use regex::JsRegex;
 use rfc::Query;
@@ -29,6 +30,10 @@ const MAX_STEPS: usize = 20_000_000;
 
 pub fn evaluate(text: &str, query: &str) -> Result<String, String> {
     let root = json::parse(text).map_err(|e| format!("Invalid JSON: {e}"))?;
+    if let Some(keys) = path::literal_keys(query) {
+        let found = keys.iter().try_fold(JsValue::from_doc(&root), |v, k| own_property(&v, k));
+        return Ok(json::stringify_results(found.as_slice()));
+    }
     let engine = Engine::new(&root);
     let values =
         engine.run(query, &JsValue::from_doc(&root)).map_err(|e| format!("Invalid filter: {e}"))?;

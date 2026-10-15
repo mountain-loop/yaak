@@ -19,6 +19,7 @@
     "roottrue": "true",
     "rootzero": "0",
     "rootempty": "\"\"",
+    "falsy": "{\"s\":\"\",\"t\":\"abc\",\"a\":[],\"z\":0,\"f\":false,\"n\":null,\"o\":{}}",
     "rootfalse": "false",
     "rootnull": "null",
     "rootarr": "[]",
@@ -8577,6 +8578,90 @@
       },
       "jsonpathPlus": {
         "content": null
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"s\"].length",
+      "expected": {
+        "content": "[\n  0\n]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"s\"][0]",
+      "expected": {
+        "content": "[]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"t\"].length",
+      "expected": {
+        "content": "[\n  3\n]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"t\"][1]",
+      "expected": {
+        "content": "[\n  \"b\"\n]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"a\"].length",
+      "expected": {
+        "content": "[\n  0\n]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"z\"].length",
+      "expected": {
+        "content": "[]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"f\"].x",
+      "expected": {
+        "content": "[]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"n\"].x",
+      "expected": {
+        "content": "[]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$[\"o\"].length",
+      "expected": {
+        "content": "[]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$.s.length",
+      "expected": {
+        "content": "[]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$.t.length",
+      "expected": {
+        "content": "[\n  3\n]"
+      }
+    },
+    {
+      "doc": "falsy",
+      "path": "$.s[\"length\"]",
+      "expected": {
+        "content": "[\n  0\n]"
       }
     },
     {

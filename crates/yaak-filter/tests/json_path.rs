@@ -270,3 +270,31 @@ fn content_type_picks_the_language() {
     assert_eq!(Language::for_content_type("text/html; charset=utf-8"), Language::XPath);
     assert_eq!(filter(Language::JsonPath, "[1]", "$[0]").content, "[\n  1\n]");
 }
+
+#[test]
+fn comparing_an_array_to_an_object_is_false() {
+    let result = json_path(r#"[{"a":[],"b":{}},{"a":[1],"b":[1]}]"#, "$[?@.a == @.b].a");
+    assert_eq!(result.content, "[\n  [\n    1\n  ]\n]");
+}
+
+#[test]
+fn invalid_escape_before_a_multibyte_character_is_an_error() {
+    let result = json_path("{\"a\":\"\\é\"}", "$");
+    assert!(result.error.unwrap().starts_with("Invalid JSON: "));
+}
+
+#[test]
+fn deeply_nested_filters_are_errors() {
+    let nested = |open: &str, inner: &str, close: &str| {
+        format!("{}{inner}{}", open.repeat(5000), close.repeat(5000))
+    };
+    for query in [
+        format!("$[?{} == 1]", nested("length(", "@", ")")),
+        format!("$[?{}]", nested("(", "@", ")")),
+        format!("$[?({} == 1)]", nested("(", "@", ")")),
+        nested("$[?@", "", "]"),
+    ] {
+        let result = json_path("[[1]]", &query);
+        assert!(result.error.unwrap().starts_with("Invalid filter: "), "{}", &query[..20]);
+    }
+}
