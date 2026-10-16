@@ -391,6 +391,14 @@ async fn cmd_metadata<R: Runtime>(ctx: ClientCtx<R>, _req: CmdMetadataReq) -> Re
     Ok(crate::cmd_metadata(ctx.window.app_handle().clone()).await?)
 }
 
+async fn cmd_agent_setup_status<R: Runtime>(
+    ctx: ClientCtx<R>,
+    req: CmdAgentSetupStatusReq,
+) -> Result<AgentSetupStatus> {
+    let home = ctx.window.app_handle().path().home_dir()?;
+    Ok(yaak_commands::agents::agent_setup_status(&home, req.agent))
+}
+
 async fn cmd_template_tokens_to_string<R: Runtime>(
     ctx: ClientCtx<R>,
     req: CmdTemplateTokensToStringReq,

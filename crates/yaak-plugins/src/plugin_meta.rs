@@ -14,6 +14,8 @@ pub struct PluginMetadata {
     pub description: Option<String>,
     pub homepage_url: Option<String>,
     pub repository_url: Option<String>,
+    /// Why the plugin should no longer be used, from `deprecated` in its package.json
+    pub deprecated: Option<String>,
 }
 
 pub fn get_plugin_meta(plugin_dir: &Path) -> Result<PluginMetadata> {
@@ -37,6 +39,7 @@ pub fn get_plugin_meta(plugin_dir: &Path) -> Result<PluginMetadata> {
         name: package_json.name,
         display_name,
         homepage_url: package_json.homepage,
+        deprecated: package_json.deprecated,
         repository_url: match package_json.repository {
             None => None,
             Some(RepositoryField::Object { url }) => Some(url),
@@ -54,6 +57,7 @@ struct PackageJson {
     pub repository: Option<RepositoryField>,
     pub homepage: Option<String>,
     pub description: Option<String>,
+    pub deprecated: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
