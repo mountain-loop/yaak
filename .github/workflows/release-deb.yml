@@ -17,16 +17,7 @@ jobs:
             args: >-
               --bundles deb
               --config ./tauri.release.conf.json
-              --config '{"build":{"features":["license","wry"]},"bundle":{"createUpdaterArtifacts":false}}'
-            yaak_arch: "x64"
-            os: "ubuntu"
-            runtime: "wry"
-            targets: ""
-          - platform: "ubuntu-22.04"
-            args: >-
-              --bundles deb
-              --config ./tauri.release.conf.json
-              --config '{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'
+              --config '{"productName":"yaak-sthasam-cef","mainBinaryName":"yaak-sthasam-cef","identifier":"app.yaak.desktop.sthasam.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'
             yaak_arch: "x64"
             os: "ubuntu"
             runtime: "cef"
@@ -34,6 +25,16 @@ jobs:
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 360
     steps:
+      - name: Validate tag is semver
+        shell: bash
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+            echo "::error::Tag '$tag' is not valid semver. Use vMAJOR.MINOR.PATCH, e.g. v0.1.0 or v0.1.0-beta.1 (dots between numbers, hyphen only before the pre-release suffix)."
+            exit 1
+          fi
+          echo "Tag '$tag' is valid semver."
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -52,7 +53,6 @@ jobs:
           cache-on-failure: true
 
       - name: Cache CEF
-        if: matrix.runtime == 'cef'
         uses: actions/cache@v4
         with:
           path: ~/.cache/tauri-cef
