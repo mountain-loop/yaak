@@ -17,7 +17,7 @@ jobs:
             args: >-
               --bundles deb
               --config ./tauri.release.conf.json
-              --config '{"productName":"yaak-sthasam-cef","mainBinaryName":"yaak-sthasam-cef","identifier":"app.yaak.desktop.sthasam.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'
+              --config '{"productName":"Yaak","mainBinaryName":"yaak","identifier":"app.yaak.desktop.sthasam.cef","build":{"features":["cef"]},"bundle":{"createUpdaterArtifacts":false}}'
             yaak_arch: "x64"
             os: "ubuntu"
             runtime: "cef"
