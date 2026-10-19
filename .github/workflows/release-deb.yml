@@ -1,0 +1,127 @@
+name: Release App Artifacts
+on:
+  push:
+    tags: [v*]
+
+jobs:
+  build-artifacts:
+    permissions:
+      contents: write
+
+    name: Build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "ubuntu-22.04"
+            args: >-
+              --bundles deb
+              --config ./tauri.release.conf.json
+              --config '{"build":{"features":["license","wry"]},"bundle":{"createUpdaterArtifacts":false}}'
+            yaak_arch: "x64"
+            os: "ubuntu"
+            runtime: "wry"
+            targets: ""
+          - platform: "ubuntu-22.04"
+            args: >-
+              --bundles deb
+              --config ./tauri.release.conf.json
+              --config '{"productName":"yaak-cef","mainBinaryName":"yaak-cef","identifier":"app.yaak.desktop.cef","build":{"features":["license","cef"]},"bundle":{"createUpdaterArtifacts":false}}'
+            yaak_arch: "x64"
+            os: "ubuntu"
+            runtime: "cef"
+            targets: ""
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          cache-on-failure: true
+
+      - name: Cache CEF
+        if: matrix.runtime == 'cef'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tauri-cef
+          key: cef-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libnss3 patchelf xdg-utils
+          # crates/yaak-wasm compiles SQLite to wasm via sqlite-wasm-rs, which needs
+          # clang >= 18. Ubuntu 22.04 ships <= 15, so install 18 from apt.llvm.org.
+          # Only the wasm build uses this compiler.
+          wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh 18
+          echo "CC_wasm32_unknown_unknown=/usr/bin/clang-18" >> "$GITHUB_ENV"
+          echo "AR_wasm32_unknown_unknown=/usr/bin/llvm-ar-18" >> "$GITHUB_ENV"
+
+      - name: Install Protoc for plugin-runtime
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: vp install
+      - run: npm run bootstrap
+        env:
+          YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
+      - run: npm run lint
+      - name: Run JS Tests
+        run: vp test
+      - name: Run Rust Tests
+        run: cargo test --all --exclude yaak-cli --features yaak-app-client/wry
+
+      - name: Set version
+        run: npm run replace-version
+        env:
+          YAAK_VERSION: ${{ github.ref_name }}
+
+      - name: Build and upload Tauri bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          YAAK_TARGET_ARCH: ${{ matrix.yaak_arch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          retryAttempts: 3
+          tauriScript: "node ../../node_modules/@tauri-apps/cli/tauri.js"
+          tagName: "v__VERSION__"
+          releaseName: "Release __VERSION__"
+          releaseBody: "<!-- generated-by-yaak-releases -->"
+          releaseDraft: true
+          prerelease: true
+          projectPath: ./crates-tauri/yaak-app-client
+          args: "${{ matrix.args }}"
+
+      - name: Snapshot release bundles
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/preserve-release-artifacts.mjs
+        env:
+          RELEASE_TARGET: ${{ matrix.targets }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_RUNTIME: ${{ matrix.runtime }}
+          RELEASE_ARCH: ${{ matrix.yaak_arch }}
+          RELEASE_ARGS: ${{ matrix.args }}
+
+      - name: Retain release bundles for recovery
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.runtime }}-${{ matrix.yaak_arch }}-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/yaak-release-artifacts/
+          retention-days: 7
+          if-no-files-found: warn
