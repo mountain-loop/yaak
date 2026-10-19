@@ -1,15 +1,48 @@
 //! Mocked license module for a self-built fork (Yaak source is MIT).
 //!
-//! No network calls and no database access. `check_license` always reports an
-//! active license. The types are unchanged so the ts-rs generated TypeScript
-//! bindings (license.ts / gen_models.ts) keep the same shape.
+//! The activation ID is stored in the same KV row the real code uses
+//! (namespace "license", key "activation_id"), but the check is answered
+//! locally. Nothing talks to license.yaak.app. The types are unchanged so the
+//! ts-rs generated TypeScript bindings keep the same shape.
 
 use crate::error::Result;
 use chrono::{DateTime, Duration, Utc};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use ts_rs::TS;
+use yaak_models::client_db::{ClientDb, WriteDb};
+use yaak_models::query_manager::QueryManager;
+use yaak_models::util::UpdateSource;
+
+/// Extension trait for accessing the QueryManager from Tauri Manager types.
+/// This is needed temporarily until all crates are refactored to not use Tauri.
+trait QueryManagerExt<'a, R> {
+    fn db(&'a self) -> ClientDb<'a>;
+    fn with_tx<T>(
+        &'a self,
+        func: impl FnOnce(&WriteDb) -> yaak_models::error::Result<T>,
+    ) -> yaak_models::error::Result<T>;
+}
+
+impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
+    fn db(&'a self) -> ClientDb<'a> {
+        let qm = self.state::<QueryManager>();
+        qm.inner().connect()
+    }
+
+    fn with_tx<T>(
+        &'a self,
+        func: impl FnOnce(&WriteDb) -> yaak_models::error::Result<T>,
+    ) -> yaak_models::error::Result<T> {
+        let qm = self.state::<QueryManager>();
+        qm.inner().with_tx(func)
+    }
+}
+
+const KV_NAMESPACE: &str = "license";
+const KV_ACTIVATION_ID_KEY: &str = "activation_id";
+const MOCK_ACTIVATION_ID: &str = "local-activation";
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -94,36 +127,70 @@ pub enum LicenseCheckStatus {
     },
 }
 
-/// Mock: accepts any key, stores nothing, contacts no server.
+/// Writes the activation ID into the KV store, as the real activation does.
+fn store_activation<R: Runtime>(window: &WebviewWindow<R>) {
+    if let Err(e) = window.app_handle().with_tx(|tx| {
+        tx.set_key_value_str(
+            KV_ACTIVATION_ID_KEY,
+            KV_NAMESPACE,
+            MOCK_ACTIVATION_ID,
+            &UpdateSource::from_window_label(window.label()),
+        );
+        Ok(())
+    }) {
+        warn!("Failed to store license activation: {e}");
+    }
+}
+
+/// Mock: accepts any key and records an activation locally. No network.
 pub async fn activate_license<R: Runtime>(
     window: &WebviewWindow<R>,
     _license_key: &str,
 ) -> Result<()> {
-    info!("Mock license: activate (no-op)");
+    info!("Mock license: activate");
+    store_activation(window);
+
     if let Err(e) = window.emit("license-activated", true) {
         warn!("Failed to emit license-activated event: {}", e);
     }
+
     Ok(())
 }
 
-/// Mock: no-op, contacts no server.
+/// Mock: removes the stored activation. No network.
 pub async fn deactivate_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<()> {
-    info!("Mock license: deactivate (no-op)");
-    if let Err(e) = window.emit("license-deactivated", true) {
+    info!("Mock license: deactivate");
+    let app_handle = window.app_handle();
+
+    app_handle.with_tx(|tx| {
+        tx.delete_key_value(
+            KV_ACTIVATION_ID_KEY,
+            KV_NAMESPACE,
+            &UpdateSource::from_window_label(window.label()),
+        )
+    })?;
+
+    if let Err(e) = app_handle.emit("license-deactivated", true) {
         warn!("Failed to emit license-deactivated event: {}", e);
     }
+
     Ok(())
 }
 
-/// Mock: always reports an active license ten years out.
-pub async fn check_license<R: Runtime>(_window: &WebviewWindow<R>) -> Result<LicenseCheckStatus> {
+/// Mock: if no activation is stored yet, writes one, then reports Active.
+/// (A later deactivate is undone by the next check. To make deactivate stick,
+/// delete the seeding block below and activate once from the settings dialog.)
+pub async fn check_license<R: Runtime>(window: &WebviewWindow<R>) -> Result<LicenseCheckStatus> {
+    if get_activation_id(window.app_handle()).await.is_empty() {
+        store_activation(window);
+    }
+
     Ok(LicenseCheckStatus::Active {
         period_end: Utc::now() + Duration::days(3650),
         cancel_at: None,
     })
 }
 
-/// Mock: returns a fixed placeholder ID so callers see an "activated" state.
-pub async fn get_activation_id<R: Runtime>(_app_handle: &AppHandle<R>) -> String {
-    "mock-activation".to_string()
+pub async fn get_activation_id<R: Runtime>(app_handle: &AppHandle<R>) -> String {
+    app_handle.db().get_key_value_str(KV_ACTIVATION_ID_KEY, KV_NAMESPACE, "")
 }
