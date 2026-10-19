@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-fancy-regex = "0.17"
+fancy-regex = "0.19"
 indexmap = "2"
 sxd-document = "0.3.2"
 sxd-xpath = "0.4.2"

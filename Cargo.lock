@@ -2374,6 +2374,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fancy-regex"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax 0.8.11",
+]
+
+[[package]]
 name = "fancy_constructor"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6146,7 +6157,7 @@ checksum = "a6e38320d5a8e386647f622067588bdb338c9e6e43eb32cf6f8991dd0e8f0046"
 dependencies = [
  "byteorder",
  "concurrent_lru",
- "fancy-regex",
+ "fancy-regex 0.17.0",
  "flate2",
  "nodejs-built-in-modules",
  "pathdiff",
@@ -11499,7 +11510,7 @@ dependencies = [
 name = "yaak-filter"
 version = "0.1.0"
 dependencies = [
- "fancy-regex",
+ "fancy-regex 0.19.2",
  "indexmap 2.14.2",
  "serde_json",
  "sxd-document",
