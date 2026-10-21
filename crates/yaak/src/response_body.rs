@@ -9,6 +9,7 @@
 //! its body back with the reply instead, which is the only copy of it there is.
 
 use crate::error::Result;
+use crate::send::ResponseBody;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use yaak_models::models::HttpResponseState;
@@ -107,6 +108,22 @@ impl ResponseBodyStore for FileResponseBodyStore<'_> {
         file.take(length).read_to_end(&mut buf)?;
         Ok(buf)
     }
+}
+
+/// A send's body as text: the bytes the send handed back, or its stored
+/// body read back in full. `None` when the body was streamed to a caller,
+/// is not valid UTF-8, or cannot be read.
+pub fn sent_body_text(
+    store: &impl ResponseBodyStore,
+    response_id: &str,
+    body: ResponseBody,
+) -> Option<String> {
+    let bytes = match body {
+        ResponseBody::Returned(bytes) => bytes,
+        ResponseBody::Stored => store.read_chunk(response_id, 0, MAX_CHUNK_BYTES).ok()?,
+        ResponseBody::Streamed => return None,
+    };
+    String::from_utf8(bytes).ok()
 }
 
 #[cfg(test)]

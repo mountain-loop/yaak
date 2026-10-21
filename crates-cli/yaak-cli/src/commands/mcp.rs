@@ -2,12 +2,13 @@ use crate::context::{CliContext, CliExecutionContext};
 use crate::plugin_events::SendContexts;
 use std::path::PathBuf;
 use std::sync::Arc;
+use yaak::response_body::{FileResponseBodyStore, sent_body_text};
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
 use yaak_http::manager::HttpConnectionManager;
-use yaak_mcp::{HostResult, McpHost, WorkspaceInfo};
+use yaak_mcp::{HostResult, McpHost, SentHttpResponse, WorkspaceInfo};
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::models::{Folder, HttpRequest, HttpResponse};
+use yaak_models::models::{Folder, HttpRequest};
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{PluginContext, ShowToastRequest};
@@ -127,7 +128,7 @@ impl McpHost for CliMcpHost {
         workspace_id: &str,
         request: HttpRequest,
         environment_id: Option<String>,
-    ) -> HostResult<HttpResponse> {
+    ) -> HostResult<SentHttpResponse> {
         let environment_id = match environment_id {
             Some(environment_id) => {
                 if request.workspace_id != workspace_id {
@@ -185,7 +186,9 @@ impl McpHost for CliMcpHost {
         })
         .await
         .map_err(|e| e.to_string())?;
-        Ok(result.response)
+        let store = FileResponseBodyStore::new(&self.query_manager);
+        let body = sent_body_text(&store, &result.response.id, result.response_body);
+        Ok(SentHttpResponse { response: result.response, body })
     }
 
     fn show_toast(&self, toast: ShowToastRequest) -> HostResult<()> {
@@ -464,6 +467,7 @@ mod tests {
             .await;
         assert_eq!(response["status"], 200);
         assert!(response.get("bodyPath").is_none(), "{response}");
+        assert_eq!(response["body"], "ok");
         assert_eq!(fx.next_marker().await, "b");
         fx.finish().await;
     }
