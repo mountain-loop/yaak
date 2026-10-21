@@ -141,13 +141,15 @@ impl<H: McpHost> YaakMcpServer<H> {
             .host
             .get_http_request(&p.id)?
             .ok_or_else(|| format!("HTTP request with ID {} not found", p.id))?;
-        let response =
-            self.host.send_http_request(&workspace.id, request, p.environment_id).await?;
+        let sent = self.host.send_http_request(&workspace.id, request, p.environment_id).await?;
 
         // Plugins never saw where the host keeps the body, so neither do MCP clients
-        let mut response = serde_json::to_value(response).map_err(|e| e.to_string())?;
+        let mut response = serde_json::to_value(sent.response).map_err(|e| e.to_string())?;
         if let Value::Object(fields) = &mut response {
             fields.remove("bodyPath");
+            if let Some(body) = sent.body {
+                fields.insert("body".into(), Value::String(body));
+            }
         }
         to_json(&response)
     }

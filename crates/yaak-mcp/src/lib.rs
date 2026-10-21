@@ -20,6 +20,13 @@ pub struct WorkspaceInfo {
     pub name: String,
 }
 
+/// A response as a send produced it, with its body as text when the body
+/// could be read back as one. Binary bodies come back as `None`.
+pub struct SentHttpResponse {
+    pub response: HttpResponse,
+    pub body: Option<String>,
+}
+
 /// What the tools need from whichever process hosts them. Errors are shown to
 /// the MCP client as is.
 pub trait McpHost: Send + Sync + 'static {
@@ -46,7 +53,7 @@ pub trait McpHost: Send + Sync + 'static {
         workspace_id: &str,
         request: HttpRequest,
         environment_id: Option<String>,
-    ) -> impl Future<Output = HostResult<HttpResponse>> + Send;
+    ) -> impl Future<Output = HostResult<SentHttpResponse>> + Send;
 
     fn show_toast(&self, toast: ShowToastRequest) -> HostResult<()>;
 }

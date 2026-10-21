@@ -11,9 +11,10 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 use tokio::sync::Mutex;
+use yaak::response_body::{FileResponseBodyStore, sent_body_text};
 use yaak_mcp::http::{DEFAULT_PORT, HttpServer};
-use yaak_mcp::{HostResult, McpHost, WorkspaceInfo};
-use yaak_models::models::{Folder, HttpRequest, HttpResponse};
+use yaak_mcp::{HostResult, McpHost, SentHttpResponse, WorkspaceInfo};
+use yaak_models::models::{Folder, HttpRequest};
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{Color, PluginContext, ShowToastRequest};
 
@@ -166,7 +167,7 @@ impl<R: Runtime> McpHost for AppMcpHost<R> {
         workspace_id: &str,
         request: HttpRequest,
         environment_id: Option<String>,
-    ) -> HostResult<HttpResponse> {
+    ) -> HostResult<SentHttpResponse> {
         let window = self
             .window_for_workspace(workspace_id)
             .ok_or_else(|| format!("No window is open for workspace {workspace_id}"))?;
@@ -183,7 +184,9 @@ impl<R: Runtime> McpHost for AppMcpHost<R> {
         )
         .await
         .map_err(|e| e.to_string())?;
-        Ok(sent.response)
+        let store = FileResponseBodyStore::new(self.app_handle.db_manager().inner());
+        let body = sent_body_text(&store, &sent.response.id, sent.body);
+        Ok(SentHttpResponse { response: sent.response, body })
     }
 
     fn show_toast(&self, toast: ShowToastRequest) -> HostResult<()> {
