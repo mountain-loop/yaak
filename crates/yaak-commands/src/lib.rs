@@ -12,6 +12,7 @@
 //! can serve (native windows, the updater, dialogs) or that still lean on it.
 
 pub mod actions;
+pub mod agents;
 pub mod auth;
 pub mod data;
 pub mod encryption;

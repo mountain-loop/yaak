@@ -93,8 +93,23 @@ pub enum Commands {
     /// Response commands
     Response(ResponseArgs),
 
-    /// Serve Yaak's MCP tools over stdio, for AI agents like Claude Code
-    Mcp,
+    /// Serve Yaak's MCP tools to AI agents like Claude Code, over stdio or with --http
+    Mcp(McpArgs),
+}
+
+#[derive(Args)]
+pub struct McpArgs {
+    /// Serve over HTTP on 127.0.0.1 instead of stdio, for agents that cannot run this command
+    #[arg(long)]
+    pub http: bool,
+
+    /// Port to listen on with --http
+    #[arg(long, default_value_t = yaak_mcp::http::DEFAULT_PORT, requires = "http")]
+    pub port: u16,
+
+    /// Bearer token clients must send with --http; generated and printed when omitted
+    #[arg(long, requires = "http", value_name = "TOKEN")]
+    pub token: Option<String>,
 }
 
 #[derive(Args)]

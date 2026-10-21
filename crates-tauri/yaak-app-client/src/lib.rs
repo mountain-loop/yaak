@@ -62,7 +62,6 @@ mod grpc;
 mod history;
 mod http_request;
 mod import;
-mod mcp_ext;
 mod models_ext;
 mod notifications;
 mod plugin_events;
@@ -1362,7 +1361,6 @@ pub fn run() {
             app.app_handle().set_native_titlebar(settings.use_native_titlebar);
 
             monitor_plugin_events(&app.app_handle().clone());
-            mcp_ext::init(app.app_handle());
 
             Ok(())
         })
