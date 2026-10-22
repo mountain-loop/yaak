@@ -4490,7 +4490,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
 dependencies = [
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -5936,7 +5936,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d5285893bb5eb82e6aaf5d59ee909a06a16737a8970984dd7746ba9283498d6"
 dependencies = [
  "phf_shared 0.10.0",
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -5946,7 +5946,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c80231409c20246a13fddb31776fb942c38553c51e871f8cbd687a4cfb5843d"
 dependencies = [
  "phf_shared 0.11.3",
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -6510,9 +6510,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -11313,7 +11313,7 @@ dependencies = [
  "pretty_graphql",
  "r2d2",
  "r2d2_sqlite",
- "rand 0.9.5",
+ "rand 0.10.2",
  "reqwest",
  "rlimit",
  "serde",
@@ -11401,7 +11401,7 @@ dependencies = [
  "log 0.4.34",
  "oxc_resolver",
  "predicates",
- "rand 0.8.7",
+ "rand 0.10.2",
  "reqwest",
  "rmcp",
  "rolldown",
@@ -11632,7 +11632,7 @@ dependencies = [
  "csscolorparser",
  "log 0.4.34",
  "objc",
- "rand 0.9.5",
+ "rand 0.10.2",
  "tauri",
  "tauri-plugin",
 ]
@@ -11712,7 +11712,7 @@ dependencies = [
  "log 0.4.34",
  "md5 0.7.0",
  "path-slash",
- "rand 0.9.5",
+ "rand 0.10.2",
  "reqwest",
  "serde",
  "serde_json",
@@ -11938,7 +11938,7 @@ version = "0.1.0"
 dependencies = [
  "log 0.4.34",
  "md5 0.8.0",
- "rand 0.9.5",
+ "rand 0.10.2",
  "serde",
  "serde_json",
  "tauri",
