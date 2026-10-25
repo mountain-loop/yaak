@@ -180,8 +180,8 @@ impl Engine {
         self.passthrough.lock().unwrap().contains(addr)
     }
 
-    /// Returns whether `addr` is now passed through. macOS clients reject the CA with a bare
-    /// reset, indistinguishable from an abandoned handshake, so those need two in a row.
+    /// Returns whether `addr` is now passed through. macOS and Windows clients reject the CA with
+    /// a bare hang-up, indistinguishable from an abandoned connection, so those need two in a row.
     fn record_handshake_failure(&self, addr: &str, certificate_rejected: bool) -> bool {
         let mut failures = self.handshake_failures.lock().unwrap();
         let count = failures.entry(addr.to_string()).or_default();

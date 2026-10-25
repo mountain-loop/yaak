@@ -464,6 +464,35 @@ async fn certificate_alert_passes_through_on_the_next_connection() {
         .expect("one certificate alert should be enough to pass the host through");
 }
 
+/// SChannel (native-tls on Windows) checks the certificate only after sending its Finished, so
+/// the proxy sees a completed handshake and then a hang-up instead of an alert.
+#[tokio::test(flavor = "multi_thread")]
+async fn hang_up_after_the_handshake_passes_through() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let port = upstream.port();
+    let name = ServerName::try_from("localhost").unwrap();
+
+    let hangs_up = TlsConnector::from(h.tls_client_config());
+    for _ in 0..2 {
+        let tls = hangs_up.connect(name.clone(), h.connect_tunnel(port).await).await.unwrap();
+        drop(tls);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let mut roots = RootCertStore::empty();
+    roots.add(h.pki.ca_der.clone()).unwrap();
+    let config = ClientConfig::builder_with_provider(ring())
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    TlsConnector::from(Arc::new(config))
+        .connect(name, h.connect_tunnel(port).await)
+        .await
+        .expect("two hang-ups after the handshake should pass the host through");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn abandoned_handshake_does_not_disable_capture() {
     let h = Harness::start(1024);
