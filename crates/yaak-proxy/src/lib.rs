@@ -133,6 +133,7 @@ pub struct ProxyHandle {
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     thread_handle: Option<std::thread::JoinHandle<()>>,
     event_rx: Option<std_mpsc::Receiver<ProxyEvent>>,
+    engine: Arc<Engine>,
     /// The bound port.
     pub port: u16,
 }
@@ -141,6 +142,14 @@ impl ProxyHandle {
     /// Take the event receiver. Can only be called once — returns `None` after the first call.
     pub fn take_event_rx(&mut self) -> Option<std_mpsc::Receiver<ProxyEvent>> {
         self.event_rx.take()
+    }
+
+    /// Handshake failures counted toward passing `addr` (`host:port`) through, and whether it
+    /// already is. For tests that must wait for the engine to record a failure.
+    #[doc(hidden)]
+    pub fn handshake_state(&self, addr: &str) -> (u32, bool) {
+        let failures = self.engine.handshake_failures.lock().unwrap().get(addr).copied();
+        (failures.unwrap_or_default(), self.engine.is_passthrough(addr))
     }
 }
 
@@ -237,6 +246,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
     });
 
     let port = config.port;
+    let handle_engine = engine.clone();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let (ready_tx, ready_rx) = std_mpsc::channel();
 
@@ -286,6 +296,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
             shutdown_tx: Some(shutdown_tx),
             thread_handle: Some(thread_handle),
             event_rx: Some(event_rx),
+            engine: handle_engine,
             port,
         }),
         Ok(Err(e)) => Err(e),

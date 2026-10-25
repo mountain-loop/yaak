@@ -203,6 +203,19 @@ impl Harness {
         Arc::new(config)
     }
 
+    /// Waits until the engine reports `state` (failures counted, passed through) for `addr`.
+    async fn wait_for_handshake_state(&self, addr: &str, state: (u32, bool)) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while self.proxy.handshake_state(addr) != state {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "{addr} stayed at {:?}, expected {state:?}",
+                self.proxy.handshake_state(addr)
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     /// Events of the next flow, through its terminal event plus any stragglers.
     fn flow_events(&self) -> Vec<ProxyEvent> {
         let mut events = Vec::new();
@@ -473,11 +486,12 @@ async fn hang_up_after_the_handshake_passes_through() {
     let port = upstream.port();
     let name = ServerName::try_from("localhost").unwrap();
 
+    let addr = format!("localhost:{port}");
     let hangs_up = TlsConnector::from(h.tls_client_config());
-    for _ in 0..2 {
+    for state in [(1, false), (0, true)] {
         let tls = hangs_up.connect(name.clone(), h.connect_tunnel(port).await).await.unwrap();
         drop(tls);
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        h.wait_for_handshake_state(&addr, state).await;
     }
 
     let mut roots = RootCertStore::empty();
