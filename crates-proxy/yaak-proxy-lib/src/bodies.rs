@@ -37,7 +37,9 @@ pub async fn read_body(
 ) -> Result<DecodedBody, String> {
     let raw = read_raw_body(blobs, &flow.id, body)?;
     let stored_size = raw.len();
-    let wire_truncated = flow.truncated(body);
+    // A response that failed after its headers ended short on the wire.
+    let cut = body == FlowBody::Response && flow.status.is_some() && flow.error.is_some();
+    let wire_truncated = flow.truncated(body) || cut;
     let encoding =
         ContentEncoding::from_header(find_header(flow.headers(body), "content-encoding"));
     // A HEAD or 304 response names its encoding but has no body to decode.
@@ -61,4 +63,34 @@ pub async fn read_body(
     let truncated = wire_truncated || decode_error.is_some() || data.len() > limit;
     data.truncate(limit);
     Ok(DecodedBody { data, stored_size, truncated, decode_error })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use yaak_models::blob_manager::BodyChunkWriter;
+
+    #[tokio::test]
+    async fn response_failed_after_its_headers_is_truncated() {
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let mut writer =
+            BodyChunkWriter::new(blobs.clone(), Flow::body_id("fl_cut", FlowBody::Response));
+        writer.write(b"{\"rows\": [").unwrap();
+        writer.finish().unwrap();
+        let cut = Flow {
+            id: "fl_cut".into(),
+            status: Some(200),
+            error: Some("error reading a body from connection".into()),
+            ..Default::default()
+        };
+
+        let body = read_body(&blobs, &cut, FlowBody::Response, 1024).await.unwrap();
+        assert_eq!((body.data.as_slice(), body.truncated), (&b"{\"rows\": ["[..], true));
+        // The request went out whole; the error is the response's.
+        let request = read_body(&blobs, &cut, FlowBody::Request, 1024).await.unwrap();
+        assert!(!request.truncated);
+        // With no headers there was never a response body to cut.
+        let refused = Flow { status: None, ..cut };
+        assert!(!read_body(&blobs, &refused, FlowBody::Response, 1024).await.unwrap().truncated);
+    }
 }
