@@ -37,6 +37,7 @@ fn fallback_plugin_metadata(directory: &str) -> PluginMetadata {
         description: Some(format!("Plugin metadata could not be loaded from {directory}")),
         homepage_url: None,
         repository_url: None,
+        deprecated: None,
     }
 }
 

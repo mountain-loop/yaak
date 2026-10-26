@@ -1,13 +1,18 @@
 import { describe, expect, test } from "vite-plus/test";
-import { AGENT_CLIENTS, appSetup, cliSetup } from "./agentSetup";
-
-const URL = "http://127.0.0.1:64343/mcp";
-const TOKEN = "abc123";
+import { AGENT_CLIENTS, cliSetup, skillInstallCommand } from "./agentSetup";
 
 describe("cliSetup", () => {
   test("uses each client's own add command", () => {
-    expect(cliSetup("claude_code").snippet).toBe("claude mcp add yaak -- yaak mcp");
+    expect(cliSetup("claude_code").snippet).toBe("claude mcp add -s user yaak -- yaak mcp");
     expect(cliSetup("codex").snippet).toBe("codex mcp add yaak -- yaak mcp");
+  });
+
+  test("names a file only when the snippet goes in one", () => {
+    expect(cliSetup("claude_code").where).toBeNull();
+    expect(cliSetup("codex").where).toBeNull();
+    expect(cliSetup("cursor").where).toBe("Add to ~/.cursor/mcp.json.");
+    expect(cliSetup("vscode").where).toContain("mcp.json");
+    expect(cliSetup("other").where).not.toBeNull();
   });
 
   test("writes the config shape each client reads", () => {
@@ -21,42 +26,27 @@ describe("cliSetup", () => {
       mcpServers: { yaak: { command: "yaak", args: ["mcp"] } },
     });
   });
-});
-
-describe("appSetup", () => {
-  test("passes the token as a bearer header", () => {
-    expect(appSetup("claude_code", URL, TOKEN).snippet).toBe(
-      `claude mcp add --transport http yaak ${URL} --header "Authorization: Bearer ${TOKEN}"`,
-    );
-    expect(appSetup("codex", URL, TOKEN).snippet).toBe(
-      `[mcp_servers.yaak]\nurl = "${URL}"\nhttp_headers = { "Authorization" = "Bearer ${TOKEN}" }`,
-    );
-    expect(JSON.parse(appSetup("cursor", URL, TOKEN).snippet)).toEqual({
-      mcpServers: { yaak: { url: URL, headers: { Authorization: `Bearer ${TOKEN}` } } },
-    });
-    expect(JSON.parse(appSetup("vscode", URL, TOKEN).snippet)).toEqual({
-      servers: { yaak: { type: "http", url: URL, headers: { Authorization: `Bearer ${TOKEN}` } } },
-    });
-    expect(JSON.parse(appSetup("other", URL, TOKEN).snippet)).toEqual({
-      mcpServers: {
-        yaak: {
-          command: "npx",
-          args: ["-y", "mcp-remote", URL, "--header", `Authorization: Bearer ${TOKEN}`],
-        },
-      },
-    });
-  });
 
   test("keeps argument lists on one line", () => {
-    expect(appSetup("other", URL, TOKEN).snippet).toContain(
-      `"args": ["-y", "mcp-remote", "${URL}", "--header", "Authorization: Bearer ${TOKEN}"]`,
-    );
+    expect(cliSetup("cursor").snippet).toContain(`"args": ["mcp"]`);
   });
 
   test("covers every listed client", () => {
     for (const { value } of AGENT_CLIENTS) {
       expect(cliSetup(value).snippet).not.toBe("");
-      expect(appSetup(value, URL, TOKEN).snippet).toContain(TOKEN);
     }
+  });
+});
+
+describe("skillInstallCommand", () => {
+  test("targets the agents the installer knows by name", () => {
+    expect(skillInstallCommand("claude_code")).toBe("yaak agent install --agent claude-code");
+    expect(skillInstallCommand("codex")).toBe("yaak agent install --agent codex");
+    expect(skillInstallCommand("cursor")).toBe("yaak agent install --agent cursor");
+  });
+
+  test("installs everywhere for agents it cannot target", () => {
+    expect(skillInstallCommand("vscode")).toBe("yaak agent install");
+    expect(skillInstallCommand("other")).toBe("yaak agent install");
   });
 });
