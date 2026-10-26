@@ -219,22 +219,55 @@ where
         .map(str::to_string)
         .unwrap_or_else(|| target.server_name.clone());
     let config = engine.ca.server_config(&server_name)?;
-    let tls = match start.into_stream(config).await {
+    let mut tls = match start.into_stream(config).await {
         Ok(tls) => tls,
         Err(e) => {
-            if engine.record_handshake_failure(&target.addr, is_certificate_rejection(&e)) {
-                info!("Client rejected the proxy for {}, passing it through: {e}", target.addr);
-            } else {
-                debug!("TLS handshake with client failed for {}: {e}", target.addr);
-            }
+            record_handshake_failure(&engine, &target.addr, is_certificate_rejection(&e), &e);
             return Ok(());
         }
     };
+
+    // SChannel (native-tls on Windows) checks the certificate only after sending its Finished,
+    // so it rejects the proxy by hanging up on a completed handshake. Only a request counts as
+    // success.
+    let mut buf = vec![0u8; 4096];
+    let n = match tls.read(&mut buf).await {
+        Ok(n) => n,
+        Err(e) if is_hang_up(&e) => {
+            record_handshake_failure(&engine, &target.addr, false, &e);
+            return Ok(());
+        }
+        Err(e) => return Err(e.into()),
+    };
+    if n == 0 {
+        return Ok(());
+    }
+    buf.truncate(n);
     engine.record_handshake_success(&target.addr);
 
+    let tls = Rewind::new(Bytes::from(buf), tls);
     let target = Arc::new(Target { server_name, ..target });
     serve_http1(tls, move |req| forward_https(req, target.clone(), engine.clone())).await?;
     Ok(())
+}
+
+fn record_handshake_failure(
+    engine: &Engine,
+    addr: &str,
+    certificate_rejected: bool,
+    e: &std::io::Error,
+) {
+    if engine.record_handshake_failure(addr, certificate_rejected) {
+        info!("Client rejected the proxy for {addr}, passing it through: {e}");
+    } else {
+        debug!("TLS handshake with client failed for {addr}: {e}");
+    }
+}
+
+/// The client closed the connection without a TLS `close_notify`, or reset it.
+fn is_hang_up(e: &std::io::Error) -> bool {
+    use std::io::ErrorKind::{ConnectionAborted, ConnectionReset, UnexpectedEof};
+    matches!(e.kind(), UnexpectedEof | ConnectionReset | ConnectionAborted)
 }
 
 fn is_certificate_rejection(e: &std::io::Error) -> bool {

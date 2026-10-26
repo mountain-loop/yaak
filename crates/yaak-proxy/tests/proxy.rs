@@ -203,6 +203,19 @@ impl Harness {
         Arc::new(config)
     }
 
+    /// Waits until the engine reports `state` (failures counted, passed through) for `addr`.
+    async fn wait_for_handshake_state(&self, addr: &str, state: (u32, bool)) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while self.proxy.handshake_state(addr) != state {
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "{addr} stayed at {:?}, expected {state:?}",
+                self.proxy.handshake_state(addr)
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
     /// Events of the next flow, through its terminal event plus any stragglers.
     fn flow_events(&self) -> Vec<ProxyEvent> {
         let mut events = Vec::new();
@@ -462,6 +475,36 @@ async fn certificate_alert_passes_through_on_the_next_connection() {
         .connect(name, h.connect_tunnel(port).await)
         .await
         .expect("one certificate alert should be enough to pass the host through");
+}
+
+/// SChannel (native-tls on Windows) checks the certificate only after sending its Finished, so
+/// the proxy sees a completed handshake and then a hang-up instead of an alert.
+#[tokio::test(flavor = "multi_thread")]
+async fn hang_up_after_the_handshake_passes_through() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let port = upstream.port();
+    let name = ServerName::try_from("localhost").unwrap();
+
+    let addr = format!("localhost:{port}");
+    let hangs_up = TlsConnector::from(h.tls_client_config());
+    for state in [(1, false), (0, true)] {
+        let tls = hangs_up.connect(name.clone(), h.connect_tunnel(port).await).await.unwrap();
+        drop(tls);
+        h.wait_for_handshake_state(&addr, state).await;
+    }
+
+    let mut roots = RootCertStore::empty();
+    roots.add(h.pki.ca_der.clone()).unwrap();
+    let config = ClientConfig::builder_with_provider(ring())
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    TlsConnector::from(Arc::new(config))
+        .connect(name, h.connect_tunnel(port).await)
+        .await
+        .expect("two hang-ups after the handshake should pass the host through");
 }
 
 #[tokio::test(flavor = "multi_thread")]
