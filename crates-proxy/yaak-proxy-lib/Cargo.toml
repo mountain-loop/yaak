@@ -12,7 +12,7 @@ chrono = { workspace = true, features = ["serde"] }
 log = { workspace = true }
 http-body-util = "0.1"
 hyper = { version = "1", features = ["http1", "server"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
+hyper-util = { version = "0.1", features = ["server-graceful", "tokio"] }
 include_dir = "0.7"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.32"

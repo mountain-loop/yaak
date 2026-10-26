@@ -206,6 +206,11 @@ async fn stale_control_file_is_replaced() {
         assert_ne!(info.token, "stale");
         drop(server);
     }
+
+    // A file that does not parse is never a claim in progress, since claims are published whole.
+    std::fs::write(dir.path().join("control.json"), "{\"pid\": 12").unwrap();
+    let server = ControlServer::start(ctx.clone()).unwrap();
+    assert_eq!(control::read(dir.path()).unwrap(), *server.info());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -216,11 +221,18 @@ async fn stop_reaches_a_cli_owner() {
     let mut server = ControlServer::start(ctx.clone()).unwrap();
     let stop_rx = server.take_stop_rx().unwrap();
 
+    // The daemon exits as soon as it hears the stop, and the stop is still answered.
+    let daemon = std::thread::spawn(move || {
+        stop_rx.recv().unwrap();
+        drop(server);
+    });
     let client = ControlClient::new(control::read(dir.path()).unwrap());
     client.start(None).await.unwrap();
-    client.stop().await.unwrap();
-    stop_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    let status = client.stop().await.unwrap();
+    assert_eq!(status.state, ProxyState::Stopped);
+    daemon.join().unwrap();
     assert_eq!(ctx.port(), None);
+    assert!(!dir.path().join("control.json").exists());
 }
 
 #[tokio::test(flavor = "multi_thread")]

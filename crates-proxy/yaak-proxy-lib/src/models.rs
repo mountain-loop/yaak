@@ -202,7 +202,11 @@ impl UpsertModelInfo for Flow {
             elapsed_headers_ms: r.get("elapsed_headers_ms")?,
             elapsed_ms: r.get("elapsed_ms")?,
             error: r.get("error")?,
-            saved_request_id: r.get("saved_request_id")?,
+            // Absent from a database read before its migrations have run.
+            saved_request_id: match r.get("saved_request_id") {
+                Err(rusqlite::Error::InvalidColumnName(_)) => None,
+                v => v?,
+            },
         })
     }
 }

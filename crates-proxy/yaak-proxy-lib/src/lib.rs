@@ -46,6 +46,10 @@ pub struct ProxyCtx {
     owner: Owner,
     client_data_dir: PathBuf,
     control: Arc<Mutex<Option<ControlFile>>>,
+    /// Held through each system proxy change, password dialog included, so they apply in turn.
+    system_proxy_turn: Arc<Mutex<()>>,
+    /// The port the engine last ran on, which the system proxy may still point at.
+    last_port: Arc<Mutex<Option<u16>>>,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -64,6 +68,8 @@ impl ProxyCtx {
             owner: Owner::App,
             client_data_dir: save::client_data_dir(),
             control: Arc::new(Mutex::new(None)),
+            system_proxy_turn: Arc::new(Mutex::new(())),
+            last_port: Arc::new(Mutex::new(None)),
             db,
             blobs,
             events,
@@ -133,11 +139,14 @@ impl ProxyCtx {
         *handle = Some(proxy_handle);
         drop(handle);
         self.set_control_proxy_port(Some(bound));
+        if let Ok(mut last_port) = self.last_port.lock() {
+            *last_port = Some(bound);
+        }
         if settings.system_proxy {
             // The password dialog can sit open for a while; the engine is up regardless.
-            let backend = self.system_proxy_backend();
+            let ctx = self.clone();
             std::thread::spawn(move || {
-                if let Err(e) = macos::set(true, bound, backend) {
+                if let Err(e) = ctx.change_system_proxy(true, bound, true) {
                     warn!("Failed to turn on the system proxy: {e}");
                 }
             });
@@ -150,9 +159,9 @@ impl ProxyCtx {
     pub fn stop(&self) -> Result<(), String> {
         let port = self.take_handle()?;
         if let Some(port) = port {
-            let backend = self.system_proxy_backend();
+            let ctx = self.clone();
             std::thread::spawn(move || {
-                if let Err(e) = macos::set(false, port, backend) {
+                if let Err(e) = ctx.change_system_proxy(false, port, true) {
                     warn!("Failed to turn off the system proxy: {e}");
                 }
             });
@@ -161,10 +170,13 @@ impl ProxyCtx {
         Ok(())
     }
 
-    /// [`Self::stop`] for a process about to exit: waits for the system proxy to be off.
+    /// [`Self::stop`] for a process about to exit: waits for the system proxy to be off, also
+    /// when a `stop` just before is still turning it off.
     pub fn shutdown(&self) {
-        if let Ok(Some(port)) = self.take_handle()
-            && let Err(e) = macos::set(false, port, self.system_proxy_backend())
+        let running = self.take_handle().ok().flatten();
+        let last = self.last_port.lock().ok().and_then(|p| *p);
+        if let Some(port) = running.or(last)
+            && let Err(e) = self.change_system_proxy(false, port, false)
         {
             warn!("Failed to turn off the system proxy: {e}");
         }
@@ -227,13 +239,38 @@ impl ProxyCtx {
     /// Blocks, through the password dialog.
     pub fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
         let mut settings = self.settings()?;
-        let running = self.port();
-        if !enabled || running.is_some() {
-            macos::set(enabled, running.unwrap_or(settings.port), self.system_proxy_backend())?;
-        }
+        let previous = settings.system_proxy;
         settings.system_proxy = enabled;
         settings.save(&self.settings_path())?;
+        let port = self.port().unwrap_or(settings.port);
+        if let Err(e) = self.change_system_proxy(enabled, port, enabled) {
+            settings.system_proxy = previous;
+            let _ = settings.save(&self.settings_path());
+            return Err(e);
+        }
         self.system_proxy_status()
+    }
+
+    /// Points the system proxy at `port`, or turns it off there, once the changes before it
+    /// are done. With `follow_engine`, the change is dropped if the engine has moved on by its
+    /// turn: an enable once the engine is off `port` or the setting is off, a disable once the
+    /// engine is back on `port`. A start and a stop in quick succession then end in the state
+    /// the engine is in, whichever password dialog is answered first.
+    fn change_system_proxy(
+        &self,
+        enabled: bool,
+        port: u16,
+        follow_engine: bool,
+    ) -> Result<(), String> {
+        let _turn = self.system_proxy_turn.lock().map_err(|_| "lock poisoned".to_string())?;
+        if follow_engine {
+            let on_port = self.port() == Some(port);
+            let current = if enabled { on_port && self.settings()?.system_proxy } else { !on_port };
+            if !current {
+                return Ok(());
+            }
+        }
+        macos::set(enabled, port, self.system_proxy_backend())
     }
 
     /// Turns off a system proxy left pointing at one of `ports` by an owner that crashed, so
@@ -250,7 +287,7 @@ impl ProxyCtx {
             let status = macos::status(port, self.system_proxy_backend())?;
             if status.services.iter().any(|s| s.points_at(port)) {
                 info!("Turning off a stale system proxy on port {port}");
-                macos::set(false, port, self.system_proxy_backend())?;
+                self.change_system_proxy(false, port, false)?;
             }
         }
         Ok(())

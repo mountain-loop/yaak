@@ -111,6 +111,28 @@ mod tests {
     }
 
     #[test]
+    fn reads_flows_read_only_before_migrations() {
+        use crate::models::Flow;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("proxy.db");
+        drop(ProxyQueryManager::new(&path).unwrap());
+
+        // As a build from before the saved request column left it.
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE flows DROP COLUMN saved_request_id;
+            INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://example.com', 'GET');",
+        )
+        .unwrap();
+        drop(conn);
+
+        let db = ProxyQueryManager::open_read_only(&path).unwrap();
+        let flows = db.with_conn(|c| c.find_all::<Flow>()).unwrap();
+        assert_eq!(flows.len(), 1);
+        assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
+    }
+
+    #[test]
     fn migrates_an_old_schema_db() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("proxy.db");

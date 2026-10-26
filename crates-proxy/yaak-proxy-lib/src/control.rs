@@ -17,6 +17,7 @@ use hyper::body::Incoming;
 use hyper::header::{AUTHORIZATION, CONTENT_TYPE};
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
+use hyper_util::server::graceful::GracefulShutdown;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -34,6 +35,7 @@ pub const CONTROL_FILE: &str = "control.json";
 pub const DEFAULT_BODY_PREVIEW_LIMIT: usize = 1024 * 1024;
 const MAX_REQUEST_BODY: usize = 64 * 1024;
 const LIVENESS_TIMEOUT: Duration = Duration::from_millis(500);
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(5);
 
 /// The process that runs the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -72,9 +74,16 @@ pub fn read(data_dir: &Path) -> Option<ControlInfo> {
     serde_json::from_str(&contents).ok()
 }
 
-/// The owner running the engine now. A stale `control.json` is removed on the way.
+/// The owner running the engine now. A stale `control.json` is removed on the way, as is one
+/// that does not parse: it is only ever published whole, so that is never a claim in progress.
 pub fn live_owner(data_dir: &Path) -> Option<ControlInfo> {
-    let info = read(data_dir)?;
+    let path = control_path(data_dir);
+    let contents = std::fs::read_to_string(&path).ok()?;
+    let Ok(info) = serde_json::from_str::<ControlInfo>(&contents) else {
+        warn!("Removing unreadable {}", path.display());
+        let _ = std::fs::remove_file(&path);
+        return None;
+    };
     if is_live(&info) {
         return Some(info);
     }
@@ -119,27 +128,28 @@ fn remove_if_token(data_dir: &Path, token: &str) {
     }
 }
 
-/// Writes `info` to `path` readable by its owner alone. With `create_new`, fails when a file is
-/// already there, so two processes cannot both claim the engine.
+/// Writes `info` to `path`, readable by its owner alone and never seen half-written. With
+/// `create_new`, fails when a file is already there, so two processes cannot both claim the
+/// engine.
 fn write_file(path: &Path, info: &ControlInfo, create_new: bool) -> std::io::Result<()> {
     let contents = serde_json::to_vec_pretty(info)?;
+    let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
     let mut options = std::fs::OpenOptions::new();
-    options.write(true);
-    if create_new {
-        options.create_new(true);
-    } else {
-        options.create(true).truncate(true);
-    }
+    options.write(true).create_new(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let tmp = path.with_extension("json.tmp");
-    if create_new {
-        options.open(path)?.write_all(&contents)
+    options.open(&tmp)?.write_all(&contents)?;
+    let published = if create_new {
+        // A link, unlike a rename, refuses to replace an existing file.
+        std::fs::hard_link(&tmp, path).and_then(|_| std::fs::remove_file(&tmp))
     } else {
-        // Readers never see a half-written file.
-        options.open(&tmp)?.write_all(&contents)?;
         std::fs::rename(&tmp, path)
+    };
+    if published.is_err() {
+        let _ = std::fs::remove_file(&tmp);
     }
+    published
 }
 
 /// The owner's `control.json`, rewritten as the engine starts and stops.
@@ -338,25 +348,32 @@ async fn serve(
     state: Arc<ServerState>,
     mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
 ) {
+    // Lets a request in flight at shutdown finish, such as the `POST /stop` a daemon exits on.
+    let graceful = GracefulShutdown::new();
     loop {
         tokio::select! {
             result = listener.accept() => match result {
                 Ok((stream, _)) => {
                     let state = state.clone();
+                    let service = hyper::service::service_fn(move |req| {
+                        let state = state.clone();
+                        async move { Ok::<_, std::convert::Infallible>(handle(&state, req).await) }
+                    });
+                    let conn = hyper::server::conn::http1::Builder::new()
+                        .serve_connection(TokioIo::new(stream), service);
+                    let conn = graceful.watch(conn);
                     tokio::spawn(async move {
-                        let service = hyper::service::service_fn(move |req| {
-                            let state = state.clone();
-                            async move { Ok::<_, std::convert::Infallible>(handle(&state, req).await) }
-                        });
-                        let _ = hyper::server::conn::http1::Builder::new()
-                            .serve_connection(TokioIo::new(stream), service)
-                            .await;
+                        let _ = conn.await;
                     });
                 }
                 Err(e) => warn!("Control accept error: {e}"),
             },
             _ = &mut shutdown_rx => break,
         }
+    }
+    drop(listener);
+    if tokio::time::timeout(SHUTDOWN_GRACE, graceful.shutdown()).await.is_err() {
+        warn!("Control connections were still open after {SHUTDOWN_GRACE:?}");
     }
 }
 

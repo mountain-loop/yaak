@@ -60,7 +60,8 @@ pub fn flow_to_request(flow: &Flow, body: &DecodedBody) -> Conversion {
     let mut warnings = Vec::new();
     let (url, url_parameters) = split_query(&flow.url);
     let (headers, dropped_headers) = split_headers(flow, body);
-    if headers.iter().any(|h| h.name.eq_ignore_ascii_case("authorization")) {
+    let has_authorization = headers.iter().any(|h| h.name.eq_ignore_ascii_case("authorization"));
+    if has_authorization {
         warnings.push("The Authorization header is saved as captured, in plain text.".into());
     }
     let (body_type, body_fields) = request_body(flow, body, &mut warnings);
@@ -79,6 +80,9 @@ pub fn flow_to_request(flow: &Flow, body: &DecodedBody) -> Conversion {
         headers,
         body_type,
         body: body_fields,
+        // No auth rather than inherited, so a folder's or workspace's auth cannot replace the
+        // captured header when the request is sent.
+        authentication_type: has_authorization.then(|| "none".to_string()),
         ..Default::default()
     };
     Conversion { request, dropped_headers, warnings }
@@ -207,6 +211,10 @@ fn graphql_body(flow: &Flow, text: &str) -> Option<BTreeMap<String, Value>> {
     let Value::Object(body) = serde_json::from_str::<Value>(text).ok()? else {
         return None;
     };
+    // Anything else, such as persisted-query `extensions`, would be lost in a GraphQL body.
+    if body.keys().any(|k| !matches!(k.as_str(), "query" | "variables" | "operationName")) {
+        return None;
+    }
     let query = body.get("query")?.as_str()?;
     let mut fields = BTreeMap::from([("query".to_string(), json!(query))]);
     if let Some(variables) = body.get("variables").filter(|v| !v.is_null()) {
@@ -279,6 +287,7 @@ mod tests {
         assert_eq!(params, vec![("q", "is:open label:bug"), ("per_page", "5")]);
         assert_eq!(names(r), vec!["Accept", "Authorization"]);
         assert_eq!(r.headers[1].value, "Bearer ghp_secret");
+        assert_eq!(r.authentication_type.as_deref(), Some("none"));
         assert_eq!(r.body_type, None);
         assert!(r.body.is_empty());
 
@@ -315,6 +324,8 @@ mod tests {
         assert_eq!(c.request.body["text"], r#"{"amount":42}"#);
         assert_eq!(names(&c.request), vec!["Content-Type"]);
         assert!(c.warnings.is_empty());
+        // Without a captured Authorization, the request inherits its folder's auth.
+        assert_eq!(c.request.authentication_type, None);
     }
 
     #[test]
@@ -338,6 +349,11 @@ mod tests {
         assert_eq!(c.request.body["query"], "query($n:Int){viewer{login}}");
         assert_eq!(c.request.body["variables"], "{\n  \"n\": 1\n}");
         assert_eq!(c.request.body["operationName"], "Me");
+
+        // Fields a GraphQL body cannot hold keep it plain JSON.
+        let persisted = r#"{"query":"q","extensions":{"persistedQuery":{"version":1}}}"#;
+        let c = flow_to_request(&f, &body(persisted));
+        assert_eq!(c.request.body_type.as_deref(), Some("application/json"));
 
         // The same body anywhere else is plain JSON.
         let f = flow("POST", "https://x.test/api", &[("Content-Type", "application/json")]);
