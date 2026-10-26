@@ -67,16 +67,16 @@ impl ServiceProxy {
     }
 }
 
-/// The enabled services from `networksetup -listallnetworkservices`. The first line is a
-/// legend; a leading `*` marks a disabled service.
+/// The services from `networksetup -listallnetworkservices`, the disabled ones too with
+/// `include_disabled`. The first line is a legend; a leading `*` marks a disabled service.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn parse_services(output: &str) -> Vec<String> {
+fn parse_services(output: &str, include_disabled: bool) -> Vec<String> {
     output
         .lines()
         .skip(1)
         .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with('*'))
-        .map(String::from)
+        .filter(|l| !l.is_empty() && (include_disabled || !l.starts_with('*')))
+        .map(|l| l.trim_start_matches('*').to_string())
         .collect()
 }
 
@@ -181,8 +181,8 @@ mod imp {
         })
     }
 
-    pub fn services() -> Result<Vec<ServiceProxy>, String> {
-        parse_services(&networksetup(&["-listallnetworkservices"])?)
+    pub fn services(include_disabled: bool) -> Result<Vec<ServiceProxy>, String> {
+        parse_services(&networksetup(&["-listallnetworkservices"])?, include_disabled)
             .into_iter()
             .map(|name| {
                 let http = parse_proxy(&networksetup(&["-getwebproxy", &name])?);
@@ -229,20 +229,22 @@ mod imp {
 /// Which services point where, judged against `port`.
 #[cfg(target_os = "macos")]
 pub fn status(port: u16, backend: SystemProxyBackend) -> Result<SystemProxyStatus, String> {
-    let services = imp::services()?;
+    let services = imp::services(false)?;
     let enabled = !services.is_empty()
         && services.iter().all(|s| s.http.points_at(port) && s.https.points_at(port));
     Ok(SystemProxyStatus { enabled, port, services, backend, supported: true })
 }
 
 /// Points every enabled service at `127.0.0.1:<port>`, or turns off the services that point
-/// there, leaving other proxies alone. Turning off with nothing pointing at `port` does nothing.
+/// there, disabled ones included, leaving other proxies alone. Turning off with nothing
+/// pointing at `port` does nothing.
 #[cfg(target_os = "macos")]
 pub fn set(enabled: bool, port: u16, backend: SystemProxyBackend) -> Result<(), String> {
     if port == 0 {
         return Err("The system proxy needs a port".to_string());
     }
-    let commands = commands(&imp::services()?, enabled, port);
+    // A service disabled since it was pointed at us would point at us again once re-enabled.
+    let commands = commands(&imp::services(!enabled)?, enabled, port);
     if commands.is_empty() {
         return Ok(());
     }
@@ -273,7 +275,12 @@ mod tests {
     #[test]
     fn parses_services() {
         let output = "An asterisk (*) denotes that a network service is disabled.\nWi-Fi\n*Thunderbolt Bridge\nUSB 10/100/1000 LAN\n\n";
-        assert_eq!(parse_services(output), vec!["Wi-Fi", "USB 10/100/1000 LAN"]);
+        assert_eq!(parse_services(output, false), vec!["Wi-Fi", "USB 10/100/1000 LAN"]);
+        // A disabled service can still hold a proxy setting pointing at us.
+        assert_eq!(
+            parse_services(output, true),
+            vec!["Wi-Fi", "Thunderbolt Bridge", "USB 10/100/1000 LAN"]
+        );
     }
 
     #[test]

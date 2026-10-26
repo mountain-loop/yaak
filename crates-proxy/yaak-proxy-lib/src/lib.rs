@@ -23,7 +23,7 @@ use crate::settings::ProxySettings;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::{DateTime, Utc};
-use log::{info, warn};
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream};
@@ -295,11 +295,9 @@ impl ProxyCtx {
             if Some(port) == self.port() || is_listening(port) {
                 continue;
             }
-            let status = macos::status(port, self.system_proxy_backend())?;
-            if status.services.iter().any(|s| s.points_at(port)) {
-                info!("Turning off a stale system proxy on port {port}");
-                macos::set(false, port, self.system_proxy_backend())?;
-            }
+            // Covers disabled services too, and asks for nothing when none point at the port.
+            debug!("Turning off any stale system proxy on port {port}");
+            macos::set(false, port, self.system_proxy_backend())?;
         }
         Ok(())
     }
