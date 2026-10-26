@@ -18,7 +18,8 @@ pub struct FlowFilter {
     pub status: Option<String>,
     /// At most this many flows, the newest.
     pub limit: Option<usize>,
-    /// Only flows that started after the flow with this id, for following new traffic.
+    /// Only flows recorded after the flow with this id, for following new traffic. Flows are
+    /// recorded when they end, so a slow one that started earlier still comes through.
     pub after: Option<String>,
 }
 
@@ -94,20 +95,31 @@ fn host_of(url: &str) -> &str {
 pub fn list(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
     db.with_conn(|c| {
         let flows = c.find_all::<Flow>().map_err(|e| e.to_string())?;
-        let after = match &filter.after {
-            Some(id) => Some(
-                c.find_optional::<Flow>(FlowIden::Id, id.as_str())
-                    .ok_or_else(|| format!("No flow {id}"))?,
-            ),
+        let recorded_after = match &filter.after {
+            Some(id) => Some(recorded_after(c.conn().resolve(), id)?),
             None => None,
         };
         Ok(flows
             .into_iter()
-            .filter(|f| after.as_ref().is_none_or(|a| f.started_at > a.started_at))
+            .filter(|f| recorded_after.as_ref().is_none_or(|ids| ids.contains(&f.id)))
             .filter(|f| filter.matches(f))
             .take(filter.limit.unwrap_or(usize::MAX))
             .collect())
     })
+}
+
+/// Ids of the flows inserted after flow `id`, by rowid, which only grows as flows are written.
+fn recorded_after(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> Result<std::collections::HashSet<String>, String> {
+    let rowid: i64 = conn
+        .query_row("SELECT rowid FROM flows WHERE id = ?", [id], |r| r.get(0))
+        .map_err(|_| format!("No flow {id}"))?;
+    let mut stmt =
+        conn.prepare("SELECT id FROM flows WHERE rowid > ?").map_err(|e| e.to_string())?;
+    let ids = stmt.query_map([rowid], |r| r.get(0)).map_err(|e| e.to_string())?;
+    ids.collect::<Result<_, _>>().map_err(|e| e.to_string())
 }
 
 pub fn find(db: &ProxyQueryManager, flow_id: &str) -> Option<Flow> {
@@ -231,6 +243,28 @@ mod tests {
         assert_eq!(by(FlowFilter { status: Some("2xx".into()), ..Default::default() }), 1);
         assert_eq!(by(FlowFilter { status: Some("5XX".into()), ..Default::default() }), 0);
         assert_eq!(by(FlowFilter { status: Some("error".into()), ..Default::default() }), 1);
+    }
+
+    #[test]
+    fn after_follows_flows_as_they_are_recorded() {
+        use yaak_database::UpdateSource;
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let at = |s| chrono::DateTime::from_timestamp(s, 0).unwrap().naive_utc();
+        // A slow flow that started first but ended, and so was written, after a quick one.
+        for (id, started) in [("fl_quick", 20), ("fl_slow", 10), ("fl_next", 30)] {
+            let flow = Flow { id: id.into(), started_at: at(started), ..Default::default() };
+            db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+        }
+
+        let after = |id: &str| {
+            let filter = FlowFilter { after: Some(id.into()), ..Default::default() };
+            list(&db, &filter).unwrap().into_iter().map(|f| f.id).collect::<Vec<_>>()
+        };
+        assert_eq!(after("fl_quick"), vec!["fl_next", "fl_slow"]);
+        assert_eq!(after("fl_next"), Vec::<String>::new());
+        let missing = FlowFilter { after: Some("fl_gone".into()), ..Default::default() };
+        assert_eq!(list(&db, &missing).unwrap_err(), "No flow fl_gone");
     }
 
     #[test]

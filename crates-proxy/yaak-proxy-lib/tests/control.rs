@@ -82,7 +82,11 @@ async fn capture_flow(ctx: &ProxyCtx) -> Flow {
 
 /// A process id that is certainly not running.
 fn dead_pid() -> u32 {
-    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let mut child = if cfg!(windows) {
+        std::process::Command::new("cmd").args(["/C", "exit"]).spawn().unwrap()
+    } else {
+        std::process::Command::new("true").spawn().unwrap()
+    };
     let pid = child.id();
     child.wait().unwrap();
     pid
@@ -130,6 +134,8 @@ async fn round_trip() {
 
     let flows = client.flows(&FlowFilter::default()).await.unwrap();
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
+    let following = FlowFilter { after: Some(flow.id.clone()), ..Default::default() };
+    assert!(client.flows(&following).await.unwrap().is_empty());
     let filter = FlowFilter { status: Some("4xx".into()), ..Default::default() };
     assert!(client.flows(&filter).await.unwrap().is_empty());
 

@@ -526,8 +526,11 @@ async fn raw_body(ctx: &ProxyCtx, id: &str, which: FlowBody) -> Result<ControlRe
     let body = bodies::read_body(&ctx.blobs, &flow, which, ctx.capture_body_limit()?).await?;
     let content_type =
         find_header(flow.headers(which), "content-type").unwrap_or("application/octet-stream");
+    // A response that failed after its headers ended short on the wire.
+    let cut = which == FlowBody::Response && flow.status.is_some() && flow.error.is_some();
+    let truncated = body.truncated || cut;
     let mut resp = response(StatusCode::OK, content_type, body.data);
-    resp.headers_mut().insert(TRUNCATED_HEADER, body.truncated.to_string().parse().unwrap());
+    resp.headers_mut().insert(TRUNCATED_HEADER, truncated.to_string().parse().unwrap());
     Ok(resp)
 }
 

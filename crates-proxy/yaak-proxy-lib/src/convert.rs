@@ -119,7 +119,8 @@ fn split_headers(flow: &Flow, body: &DecodedBody) -> (Vec<HttpRequestHeader>, Ve
         .filter(|n| !n.is_empty())
         .collect();
     let encoding = find_header(&flow.request_headers, "content-encoding");
-    let decoded = !body.data.is_empty()
+    // A body that decodes to nothing was still decoded.
+    let decoded = body.stored_size > 0
         && encoding.is_some_and(|e| !e.trim().eq_ignore_ascii_case("identity"));
 
     let mut kept = Vec::new();
@@ -417,6 +418,17 @@ mod tests {
         assert_eq!(c.request.body_type.as_deref(), Some("other"));
         assert_eq!(c.request.body["text"], "a\u{fffd}b");
         assert_eq!(c.warnings.len(), 1);
+    }
+
+    #[test]
+    fn decoded_empty_body() {
+        let f = flow("POST", "https://x.test/", &[("Content-Encoding", "gzip")]);
+        // A gzip stream of nothing: stored bytes, but an empty body once decoded.
+        let data = DecodedBody { data: Vec::new(), stored_size: 20, truncated: false };
+        let c = flow_to_request(&f, &data);
+        assert!(c.request.headers.is_empty());
+        assert_eq!(c.dropped_headers[0].reason, DropReason::BodyDecoded);
+        assert_eq!(c.request.body_type, None);
     }
 
     #[test]
