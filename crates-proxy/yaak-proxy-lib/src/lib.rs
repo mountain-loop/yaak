@@ -281,13 +281,18 @@ impl ProxyCtx {
         ports.sort_unstable();
         ports.dedup();
         for port in ports {
-            if port == 0 || Some(port) == self.port() || is_listening(port) {
+            if port == 0 {
+                continue;
+            }
+            // Checked in its turn, so an engine started on the port meanwhile keeps its proxy.
+            let _turn = self.system_proxy_turn.lock().map_err(|_| "lock poisoned".to_string())?;
+            if Some(port) == self.port() || is_listening(port) {
                 continue;
             }
             let status = macos::status(port, self.system_proxy_backend())?;
             if status.services.iter().any(|s| s.points_at(port)) {
                 info!("Turning off a stale system proxy on port {port}");
-                self.change_system_proxy(false, port, false)?;
+                macos::set(false, port, self.system_proxy_backend())?;
             }
         }
         Ok(())
