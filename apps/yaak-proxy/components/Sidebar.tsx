@@ -50,6 +50,14 @@ export const filteredExchangesAtom = atom((get) => {
   return exchanges.filter((ex) => allowedIds.has(ex.id));
 });
 
+/** The selected sidebar node's name, for the header */
+export const selectedSidebarLabelAtom = atom((get) => {
+  const selectedId = get(selectedIdsFamily(SIDEBAR_TREE_ID))[0];
+  if (selectedId?.startsWith("domain:")) return selectedId.slice("domain:".length);
+  if (selectedId?.startsWith("path:")) return selectedId.slice("path:".length);
+  return "All traffic";
+});
+
 function collectNodes(node: TreeNode<SidebarItem>, map: Map<string, SidebarItem>) {
   map.set(node.item.id, node.item);
   for (const child of node.children ?? []) {
@@ -204,7 +212,7 @@ export function Sidebar() {
 
   return (
     <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 overflow-y-auto border-r border-border-subtle">
-      <div className="pt-2 text-xs">
+      <div className="pt-2">
         <Tree
           treeId={treeId}
           collapsedAtom={collapsedAtom(treeId)}

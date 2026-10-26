@@ -8,12 +8,25 @@ export { CountBadge } from "./components/CountBadge";
 export type { DetailsBannerProps } from "./components/DetailsBanner";
 export { DetailsBanner } from "./components/DetailsBanner";
 export { DropMarker } from "./components/DropMarker";
+export type {
+  ContextMenuProps,
+  DropdownItem,
+  DropdownItemContent,
+  DropdownItemDefault,
+  DropdownItemSeparator,
+  DropdownProps,
+  DropdownRef,
+} from "./components/Dropdown";
+export { ContextMenu, Dropdown } from "./components/Dropdown";
 export { LazyCodeEditor } from "./components/editor/LazyCodeEditor";
+export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
+export { ErrorBoundary } from "./components/ErrorBoundary";
 export { FormattedError } from "./components/FormattedError";
 export { HeaderSize } from "./components/HeaderSize";
 export type { HeadersTableProps } from "./components/HeadersTable";
 export { HeadersTable } from "./components/HeadersTable";
 export { Heading } from "./components/Heading";
+export { Hotkey, HotkeyRaw } from "./components/Hotkey";
 export type { IconProps } from "./components/Icon";
 export { Icon } from "./components/Icon";
 export type { IconButtonProps } from "./components/IconButton";
@@ -28,6 +41,8 @@ export { Label } from "./components/Label";
 export { LoadingIcon } from "./components/LoadingIcon";
 export { Overlay } from "./components/Overlay";
 export { Portal } from "./components/Portal";
+export type { SeparatorAction } from "./components/Separator";
+export { Separator } from "./components/Separator";
 export type { ResizeHandleEvent } from "./components/ResizeHandle";
 export { ResizeHandle } from "./components/ResizeHandle";
 export { SidebarLayout } from "./components/SidebarLayout";
@@ -77,9 +92,17 @@ export { TextViewer } from "./components/viewers/TextViewer";
 export { VideoViewer } from "./components/viewers/VideoViewer";
 export { WebPageViewer } from "./components/viewers/WebPageViewer";
 export { WindowControls } from "./components/WindowControls";
+export { useClickOutside } from "./hooks/useClickOutside";
 export { useContainerSize } from "./hooks/useContainerSize";
 export { useDebouncedState } from "./hooks/useDebouncedState";
 export { useDebouncedValue } from "./hooks/useDebouncedValue";
+export type {
+  HotKeyOptions,
+  HotkeyAction,
+  HotkeyActionRegistry,
+  HotkeyContextValue,
+} from "./hooks/useHotKey";
+export { formatHotkey, HotkeyProvider, useFormattedHotkey, useHotKey } from "./hooks/useHotKey";
 export { useIsFullscreen } from "./hooks/useIsFullscreen";
 export { usePortal } from "./hooks/usePortal";
 export { useStateWithDeps } from "./hooks/useStateWithDeps";
@@ -93,4 +116,5 @@ export { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from "./lib/con
 export { languageFromContent, languageFromContentType } from "./lib/contentType";
 export { computeSideForDragMove } from "./lib/dnd";
 export { docFingerprint } from "./lib/docFingerprint";
+export { getNodeText } from "./lib/getNodeText";
 export { minPromiseMillis } from "./lib/minPromiseMillis";

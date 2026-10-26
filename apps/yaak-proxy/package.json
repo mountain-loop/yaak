@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.2",
+    "@tanstack/react-virtual": "^3.14.17",
     "@tauri-apps/api": "^2.12.3",
     "@tauri-apps/plugin-os": "^2.4.0",
     "@yaakapp-internal/model-store": "^1.0.0",
@@ -21,7 +22,8 @@
     "jotai-family": "^1.0.1",
     "motion": "^14.0.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "vkbeautify": "^0.99.3"
   },
   "devDependencies": {
     "@rolldown/plugin-babel": "^0.2.3",

@@ -55,7 +55,9 @@ pub struct Flow {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
 pub enum FlowBody {
     Request,
     Response,
