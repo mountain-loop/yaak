@@ -356,3 +356,30 @@ async fn save_writes_the_request_into_yaak() {
     let wrong = SaveFlowRequest { workspace_id: "wk_missing".into(), ..Default::default() };
     assert!(client.save(&flow.id, &wrong).await.unwrap_err().contains("No workspace"));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stale_removal_waits_for_the_claim_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let stale = ControlInfo {
+        pid: dead_pid(),
+        control_port: 1,
+        proxy_port: None,
+        token: "stale".into(),
+        owner: Owner::Cli,
+        started_at: chrono::Utc::now(),
+    };
+    let path = dir.path().join("control.json");
+    std::fs::write(&path, serde_json::to_vec(&stale).unwrap()).unwrap();
+
+    // Another process mid-claim holds the lock; it may be about to replace the stale file.
+    let lock = std::fs::File::create(dir.path().join("control.lock")).unwrap();
+    lock.lock().unwrap();
+    let data_dir = dir.path().to_path_buf();
+    let cleaner = std::thread::spawn(move || control::live_owner(&data_dir));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(path.exists(), "the stale file was removed under another process's claim lock");
+
+    lock.unlock().unwrap();
+    assert!(cleaner.join().unwrap().is_none());
+    assert!(!path.exists());
+}

@@ -31,6 +31,7 @@ use ts_rs::TS;
 use yaak_proxy::CaStore;
 
 pub const CONTROL_FILE: &str = "control.json";
+const LOCK_FILE: &str = "control.lock";
 /// Body bytes `GET /flows/{id}` returns per side unless `bodyLimit` says otherwise.
 pub const DEFAULT_BODY_PREVIEW_LIMIT: usize = 1024 * 1024;
 const MAX_REQUEST_BODY: usize = 64 * 1024;
@@ -74,9 +75,30 @@ pub fn read(data_dir: &Path) -> Option<ControlInfo> {
     serde_json::from_str(&contents).ok()
 }
 
+/// Held while `control.json` is checked and then removed or claimed, across processes, so two
+/// of them cleaning up a stale file cannot delete each other's fresh claim. Released on drop.
+fn claim_lock(data_dir: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::create_dir_all(data_dir)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(data_dir.join(LOCK_FILE))?;
+    file.lock()?;
+    Ok(file)
+}
+
 /// The owner running the engine now. A stale `control.json` is removed on the way, as is one
 /// that does not parse: it is only ever published whole, so that is never a claim in progress.
 pub fn live_owner(data_dir: &Path) -> Option<ControlInfo> {
+    let _lock = claim_lock(data_dir)
+        .inspect_err(|e| warn!("Failed to lock {LOCK_FILE}, checking without it: {e}"))
+        .ok();
+    live_owner_locked(data_dir)
+}
+
+/// [`live_owner`] for a caller holding the claim lock.
+fn live_owner_locked(data_dir: &Path) -> Option<ControlInfo> {
     let path = control_path(data_dir);
     let contents = std::fs::read_to_string(&path).ok()?;
     let Ok(info) = serde_json::from_str::<ControlInfo>(&contents) else {
@@ -121,7 +143,7 @@ fn pid_alive(_pid: u32) -> bool {
 }
 
 /// Removes `control.json` if it is still the one with `token`, so an owner never removes its
-/// successor's file.
+/// successor's file. The caller holds the claim lock.
 fn remove_if_token(data_dir: &Path, token: &str) {
     if read(data_dir).is_some_and(|info| info.token == token) {
         let _ = std::fs::remove_file(control_path(data_dir));
@@ -287,17 +309,18 @@ impl ControlServer {
             stop_rx: Some(stop_rx),
         };
 
-        if let Err(e) = write_file(&path, &info, true) {
-            // Lost a race to another claimer, or the file appeared since the check.
-            if e.kind() != std::io::ErrorKind::AlreadyExists {
-                return Err(format!("Failed to write {}: {e}", path.display()));
-            }
-            if let Some(owner) = live_owner(&data_dir) {
-                server.info.token.clear();
-                return Err(already_owned(&owner));
-            }
-            write_file(&path, &info, true)
-                .map_err(|e| format!("Failed to write {}: {e}", path.display()))?;
+        // Checked again under the lock: another process may have claimed it since.
+        let claimed = claim_lock(&data_dir)
+            .map_err(|e| format!("Failed to lock {LOCK_FILE}: {e}"))
+            .and_then(|_lock| match live_owner_locked(&data_dir) {
+                Some(owner) => Err(already_owned(&owner)),
+                None => write_file(&path, &info, true)
+                    .map_err(|e| format!("Failed to write {}: {e}", path.display())),
+            });
+        if let Err(e) = claimed {
+            // Nothing of this server's to remove.
+            server.info.token.clear();
+            return Err(e);
         }
         ctx.set_control_file(Some(ControlFile { path, info }));
         info!("Control API listening on 127.0.0.1:{control_port}");
@@ -332,6 +355,7 @@ impl Drop for ControlServer {
         }
         if !self.info.token.is_empty() {
             self.ctx.set_control_file(None);
+            let _lock = claim_lock(&self.data_dir).ok();
             remove_if_token(&self.data_dir, &self.info.token);
         }
     }
