@@ -256,7 +256,12 @@ mod tests {
     }
 
     fn body(data: &str) -> DecodedBody {
-        DecodedBody { data: data.as_bytes().to_vec(), stored_size: data.len(), truncated: false }
+        DecodedBody {
+            data: data.as_bytes().to_vec(),
+            stored_size: data.len(),
+            truncated: false,
+            decode_error: None,
+        }
     }
 
     fn names(request: &HttpRequest) -> Vec<&str> {
@@ -413,7 +418,12 @@ mod tests {
     #[test]
     fn binary_body() {
         let f = flow("POST", "https://x.test/bin", &[("Content-Type", "application/octet-stream")]);
-        let data = DecodedBody { data: vec![b'a', 0xff, b'b'], stored_size: 3, truncated: false };
+        let data = DecodedBody {
+            data: vec![b'a', 0xff, b'b'],
+            stored_size: 3,
+            truncated: false,
+            decode_error: None,
+        };
         let c = flow_to_request(&f, &data);
         assert_eq!(c.request.body_type.as_deref(), Some("other"));
         assert_eq!(c.request.body["text"], "a\u{fffd}b");
@@ -424,7 +434,8 @@ mod tests {
     fn decoded_empty_body() {
         let f = flow("POST", "https://x.test/", &[("Content-Encoding", "gzip")]);
         // A gzip stream of nothing: stored bytes, but an empty body once decoded.
-        let data = DecodedBody { data: Vec::new(), stored_size: 20, truncated: false };
+        let data =
+            DecodedBody { data: Vec::new(), stored_size: 20, truncated: false, decode_error: None };
         let c = flow_to_request(&f, &data);
         assert!(c.request.headers.is_empty());
         assert_eq!(c.dropped_headers[0].reason, DropReason::BodyDecoded);
@@ -441,7 +452,12 @@ mod tests {
                 ("Content-Encoding", "gzip"),
             ],
         );
-        let data = DecodedBody { data: b"[1,2".to_vec(), stored_size: 4, truncated: true };
+        let data = DecodedBody {
+            data: b"[1,2".to_vec(),
+            stored_size: 4,
+            truncated: true,
+            decode_error: None,
+        };
         let c = flow_to_request(&f, &data);
         assert_eq!(names(&c.request), vec!["Content-Type"]);
         assert_eq!(c.dropped_headers[0].reason, DropReason::BodyDecoded);

@@ -20,12 +20,15 @@ pub struct DecodedBody {
     pub data: Vec<u8>,
     /// Bytes stored for the body, as they were on the wire.
     pub stored_size: usize,
-    /// The body is incomplete: cut on the wire at the capture limit, or decoded past `limit`.
+    /// The body is incomplete: cut on the wire at the capture limit, decoded past `limit`, or
+    /// decoded only as far as `decode_error`.
     pub truncated: bool,
+    /// Why decoding stopped before the end of the stored bytes.
+    pub decode_error: Option<String>,
 }
 
-/// A flow's body decoded with its Content-Encoding, at most `limit` bytes of it. A body cut
-/// at the capture limit decodes as far as its stored bytes go.
+/// A flow's body decoded with its Content-Encoding, at most `limit` bytes of it. A body that
+/// fails to decode, as one cut short does, keeps what decoded before the failure.
 pub async fn read_body(
     blobs: &BlobManager,
     flow: &Flow,
@@ -42,19 +45,20 @@ pub async fn read_body(
         let truncated = wire_truncated || raw.len() > limit;
         let mut data = raw;
         data.truncate(limit);
-        return Ok(DecodedBody { data, stored_size, truncated });
+        return Ok(DecodedBody { data, stored_size, truncated, decode_error: None });
     }
 
     // One byte past the limit tells a body that fills it from one that overflows it.
     let take = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
     let mut data = Vec::new();
     let mut decoder = streaming_decoder(Cursor::new(raw), encoding).take(take);
-    match decoder.read_to_end(&mut data).await {
-        Ok(_) => {}
-        Err(_) if wire_truncated => {}
-        Err(e) => return Err(format!("Failed to decode {encoding:?} body: {e}")),
-    }
-    let truncated = wire_truncated || data.len() > limit;
+    let decode_error = match decoder.read_to_end(&mut data).await {
+        Ok(_) => None,
+        // Expected of a body cut on the wire; anything else is worth saying.
+        Err(_) if wire_truncated => None,
+        Err(e) => Some(format!("Failed to decode {encoding:?} body: {e}")),
+    };
+    let truncated = wire_truncated || decode_error.is_some() || data.len() > limit;
     data.truncate(limit);
-    Ok(DecodedBody { data, stored_size, truncated })
+    Ok(DecodedBody { data, stored_size, truncated, decode_error })
 }

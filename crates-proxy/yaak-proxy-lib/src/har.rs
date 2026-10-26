@@ -181,7 +181,11 @@ pub fn entry(flow: &Flow, request_body: &DecodedBody, response_body: &DecodedBod
         cache: Default::default(),
         timings: HarTimings { send: 0, wait, receive: elapsed - wait },
         server_ip_address: flow.remote_addr.as_deref().map(ip_of),
-        error: flow.error.clone(),
+        error: flow
+            .error
+            .clone()
+            .or_else(|| response_body.decode_error.clone())
+            .or_else(|| request_body.decode_error.clone()),
     }
 }
 
@@ -251,7 +255,7 @@ mod tests {
     }
 
     fn body(data: &[u8], truncated: bool) -> DecodedBody {
-        DecodedBody { data: data.to_vec(), stored_size: data.len(), truncated }
+        DecodedBody { data: data.to_vec(), stored_size: data.len(), truncated, decode_error: None }
     }
 
     fn at(second: u32) -> chrono::NaiveDateTime {
@@ -354,6 +358,52 @@ mod tests {
             (cut, body(b"", false), body(b"0123456789", true)),
             (failed, body(b"", false), body(b"", false)),
         ]
+    }
+
+    #[tokio::test]
+    async fn export_keeps_a_body_that_fails_to_decode() {
+        use std::io::Write;
+        use yaak_models::blob_manager::BodyChunkWriter;
+
+        // Text that does not compress to nothing, gzipped, with the stream cut in half.
+        let mut seed = 7u32;
+        let text: Vec<u8> = (0..8000)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                b'a' + (seed >> 16) as u8 % 26
+            })
+            .collect();
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(&text).unwrap();
+        let gz = gz.finish().unwrap();
+
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let mut writer =
+            BodyChunkWriter::new(blobs.clone(), Flow::body_id("fl_bad", FlowBody::Response));
+        writer.write(&gz[..gz.len() / 2]).unwrap();
+        writer.finish().unwrap();
+        let flow = Flow {
+            id: "fl_bad".into(),
+            method: "GET".into(),
+            url: "https://cdn.example.com/a.txt".into(),
+            status: Some(200),
+            response_headers: vec![
+                header("Content-Type", "text/plain"),
+                header("Content-Encoding", "gzip"),
+            ],
+            ..Default::default()
+        };
+
+        let har = export(&blobs, &[flow], 1024 * 1024).await.unwrap();
+        let entry = &har.log.entries[0];
+        let text_kept = entry.response.content.text.as_deref().unwrap();
+        assert!(!text_kept.is_empty() && text.starts_with(text_kept.as_bytes()));
+        assert!(entry.response.content.truncated);
+        assert!(
+            entry.error.as_deref().unwrap().starts_with("Failed to decode"),
+            "{:?}",
+            entry.error
+        );
     }
 
     #[test]

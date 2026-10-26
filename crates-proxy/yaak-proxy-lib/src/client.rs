@@ -111,7 +111,7 @@ impl ControlClient {
             self.send(self.http.get(self.url(&format!("/flows/{}/{side}", encode(id))))).await?;
         let truncated = resp.headers().get(TRUNCATED_HEADER).is_some_and(|v| v == "true");
         let data = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-        Ok(DecodedBody { stored_size: data.len(), data, truncated })
+        Ok(DecodedBody { stored_size: data.len(), data, truncated, decode_error: None })
     }
 
     pub async fn har(&self, filter: &FlowFilter) -> Result<Har, String> {
