@@ -37,7 +37,8 @@ pub async fn read_body(
     let wire_truncated = flow.truncated(body);
     let encoding =
         ContentEncoding::from_header(find_header(flow.headers(body), "content-encoding"));
-    if encoding == ContentEncoding::Identity {
+    // A HEAD or 304 response names its encoding but has no body to decode.
+    if raw.is_empty() || encoding == ContentEncoding::Identity {
         let truncated = wire_truncated || raw.len() > limit;
         let mut data = raw;
         data.truncate(limit);

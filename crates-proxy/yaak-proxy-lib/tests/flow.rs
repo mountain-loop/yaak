@@ -61,6 +61,12 @@ async fn route(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallib
             .header("content-type", "application/json")
             .body(Full::from(r#"{"items":[{"id":1},{"id":2}]}"#))
             .unwrap(),
+        // Names an encoding but, like any 304, has no body
+        "/not-modified" => Response::builder()
+            .status(304)
+            .header("content-encoding", "gzip")
+            .body(Full::new(Bytes::new()))
+            .unwrap(),
         // XML that only its body says is XML
         "/xml-as-text" => Response::builder()
             .header("content-type", "text/plain")
@@ -232,6 +238,13 @@ async fn body_rpcs() {
     let empty =
         rpc(&ctx, "get_flow_body", json!({"flowId": flow.id, "which": "request"})).await.unwrap();
     assert_eq!(empty, json!({"data": "", "truncated": false, "storedSize": 0}));
+
+    let not_modified_url = format!("http://{upstream}/not-modified");
+    client.get(&not_modified_url).send().await.unwrap().bytes().await.unwrap();
+    let flow = wait_for_flow(&ctx, &not_modified_url).await;
+    let body =
+        rpc(&ctx, "get_flow_body", json!({"flowId": flow.id, "which": "response"})).await.unwrap();
+    assert_eq!(body, json!({"data": "", "truncated": false, "storedSize": 0}));
 
     let json_url = format!("http://{upstream}/json");
     client.get(&json_url).send().await.unwrap().bytes().await.unwrap();
