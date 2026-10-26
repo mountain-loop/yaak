@@ -1,7 +1,7 @@
 use reqwest::StatusCode;
 use std::sync::Arc;
-use yaak_mcp::{HostResult, McpHost, WorkspaceInfo};
-use yaak_models::models::{Folder, HttpRequest, HttpResponse};
+use yaak_mcp::{HostResult, McpHost, SentHttpResponse, WorkspaceInfo};
+use yaak_models::models::{Folder, HttpRequest};
 use yaak_plugins::events::ShowToastRequest;
 
 struct EmptyHost;
@@ -39,7 +39,7 @@ impl McpHost for EmptyHost {
         _: &str,
         _: HttpRequest,
         _: Option<String>,
-    ) -> HostResult<HttpResponse> {
+    ) -> HostResult<SentHttpResponse> {
         Err("missing".into())
     }
     fn show_toast(&self, _: ShowToastRequest) -> HostResult<()> {
