@@ -53,6 +53,8 @@ pub struct Flow {
     /// Milliseconds from `started_at` to the end of the response.
     pub elapsed_ms: Option<i32>,
     pub error: Option<String>,
+    /// The id of the Yaak request this flow was last saved as.
+    pub saved_request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -145,6 +147,7 @@ impl UpsertModelInfo for Flow {
             (ElapsedHeadersMs, self.elapsed_headers_ms.into()),
             (ElapsedMs, self.elapsed_ms.into()),
             (Error, self.error.into()),
+            (SavedRequestId, self.saved_request_id.into()),
         ])
     }
 
@@ -168,6 +171,7 @@ impl UpsertModelInfo for Flow {
             FlowIden::ElapsedHeadersMs,
             FlowIden::ElapsedMs,
             FlowIden::Error,
+            FlowIden::SavedRequestId,
         ]
     }
 
@@ -198,6 +202,7 @@ impl UpsertModelInfo for Flow {
             elapsed_headers_ms: r.get("elapsed_headers_ms")?,
             elapsed_ms: r.get("elapsed_ms")?,
             error: r.get("error")?,
+            saved_request_id: r.get("saved_request_id")?,
         })
     }
 }

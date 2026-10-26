@@ -69,10 +69,46 @@ export type ListModelsRequest = Record<string, never>;
 
 export type ListModelsResponse = { flows: Array<Flow>, };
 
+/**
+ * The process that runs the engine.
+ */
+export type Owner = "app" | "cli";
+
+export type ProxySetting = { enabled: boolean, server: string, port: number, };
+
 export type ProxyState = "running" | "stopped";
 
 export type ProxyStatePayload = { state: ProxyState, };
 
 export type RpcEventSchema = { model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_models: [ListModelsRequest, ListModelsResponse], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_models: [ListModelsRequest, ListModelsResponse], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], };
+
+export type ServiceProxy = { 
+/**
+ * The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
+ */
+name: string, http: ProxySetting, https: ProxySetting, };
+
+/**
+ * How a change gets administrator rights.
+ */
+export type SystemProxyBackend = "helper" | "admin_prompt" | "sudo";
+
+export type SystemProxySetRequest = { enabled: boolean, };
+
+export type SystemProxyStatus = { 
+/**
+ * Every enabled network service sends HTTP and HTTPS to `127.0.0.1:<port>`.
+ */
+enabled: boolean, 
+/**
+ * The port checked against.
+ */
+port: number, services: Array<ServiceProxy>, backend: SystemProxyBackend, 
+/**
+ * This platform has a system proxy the app can set.
+ */
+supported: boolean, };
+
+export type SystemProxyStatusRequest = Record<string, never>;

@@ -1,10 +1,11 @@
 use include_dir::{Dir, include_dir};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{Transaction, TransactionBehavior};
+use rusqlite::{OpenFlags, Transaction, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
 use yaak_database::{ConnectionOrTx, DbContext, Error, Result, SqlitePool, run_migrations};
+use yaak_models::blob_manager::BlobManager;
 
 static MIGRATIONS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/migrations");
 
@@ -24,6 +25,13 @@ impl ProxyQueryManager {
         let writer = file_pool(db_path, 1)?;
         run_migrations(&writer, &MIGRATIONS)?;
         Ok(Self { readers: file_pool(db_path, 5)?, writer })
+    }
+
+    /// `proxy.db` for reading while another process may be writing it, or none is. Writes
+    /// fail. No migrations run, so an older database reads as it is.
+    pub fn open_read_only(db_path: &Path) -> Result<Self> {
+        let readers = read_only_pool(db_path)?;
+        Ok(Self { writer: readers.clone(), readers })
     }
 
     pub fn with_conn<F, T>(&self, func: F) -> T
@@ -60,6 +68,23 @@ impl ProxyQueryManager {
             }
         }
     }
+}
+
+/// `blobs.sqlite` for reading, alongside [`ProxyQueryManager::open_read_only`].
+pub fn open_blobs_read_only(path: &Path) -> Result<BlobManager> {
+    let readers = read_only_pool(path)?;
+    Ok(BlobManager::new(readers.clone(), readers))
+}
+
+fn read_only_pool(path: &Path) -> Result<SqlitePool> {
+    let manager = SqliteConnectionManager::file(path)
+        .with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
+        .with_init(|conn| conn.busy_timeout(Duration::from_millis(5000)));
+    Pool::builder()
+        .max_size(2)
+        .connection_timeout(Duration::from_secs(10))
+        .build(manager)
+        .map_err(|e| Error::Database(e.to_string()))
 }
 
 fn file_pool(path: &Path, max_size: u32) -> Result<SqlitePool> {
@@ -124,8 +149,7 @@ mod tests {
         assert!(flow_columns.contains(&"response_truncated".to_string()));
         assert!(!flow_columns.iter().any(|c| c.contains("body")), "{flow_columns:?}");
 
-        let journal_mode: String =
-            conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert_eq!(journal_mode, "wal");
     }
 }
