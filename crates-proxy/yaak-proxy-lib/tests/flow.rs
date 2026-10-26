@@ -61,6 +61,11 @@ async fn route(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallib
             .header("content-type", "application/json")
             .body(Full::from(r#"{"items":[{"id":1},{"id":2}]}"#))
             .unwrap(),
+        // XML that only its body says is XML
+        "/xml-as-text" => Response::builder()
+            .header("content-type", "text/plain")
+            .body(Full::from("<items><id>1</id><id>2</id></items>"))
+            .unwrap(),
         _ => Response::new(Full::from(vec![b'x'; BIG_BODY])),
     })
 }
@@ -248,6 +253,28 @@ async fn body_rpcs() {
     .unwrap();
     assert_eq!(invalid["content"], json!(""));
     assert!(invalid["error"].is_string());
+
+    let xml_url = format!("http://{upstream}/xml-as-text");
+    client.get(&xml_url).send().await.unwrap().bytes().await.unwrap();
+    let flow = wait_for_flow(&ctx, &xml_url).await;
+    let xpath = json!({
+        "flowId": flow.id,
+        "which": "response",
+        "expression": "//id[2]",
+        "language": "xpath",
+    });
+    let filtered = rpc(&ctx, "filter_body", xpath).await.unwrap();
+    assert_eq!(filtered, json!({"content": "<id>2</id>", "error": null}));
+    // Without the viewer's language, `text/plain` means JSONPath, which can't read XML
+    let by_header = rpc(
+        &ctx,
+        "filter_body",
+        json!({"flowId": flow.id, "which": "response", "expression": "//id[2]"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(by_header["content"], json!(""));
+    assert!(by_header["error"].is_string());
 
     let missing =
         rpc(&ctx, "get_flow_body", json!({"flowId": "fl_missing", "which": "response"})).await;

@@ -1,4 +1,4 @@
-import type { FlowBody } from "@yaakapp-internal/proxy-lib";
+import type { FilterLanguage, FlowBody } from "@yaakapp-internal/proxy-lib";
 import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import vkBeautify from "vkbeautify";
 import { rpc } from "./rpc";
@@ -43,12 +43,25 @@ export async function formatText(
   return text;
 }
 
+/** The filter syntax for a body the viewer detected as `language`: XPath for XML and HTML */
+export function filterLanguage(language: CodeEditorProps["language"]): FilterLanguage | undefined {
+  if (language === "json") return "jsonpath";
+  if (language === "xml" || language === "html") return "xpath";
+  return undefined;
+}
+
 export async function filterText(
   flowId: string,
   which: FlowBody,
   expression: string,
+  language: CodeEditorProps["language"],
 ): Promise<string> {
-  const result = await rpc("filter_body", { flowId, which, expression });
+  const result = await rpc("filter_body", {
+    flowId,
+    which,
+    expression,
+    language: filterLanguage(language),
+  });
   if (result.error != null) throw new Error(result.error);
   return result.content;
 }

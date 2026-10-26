@@ -3,11 +3,13 @@ import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { formatMillis, HttpMethodTagRaw, HttpStatusTagRaw, Icon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
+import { countNewFlows } from "../lib/follow";
+import { flowsAtom } from "../lib/store";
 
 const ROW_HEIGHT = 24;
 const BOTTOM_PADDING = 6;
@@ -25,8 +27,10 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const ignoreScroll = useRef(false);
   const [following, setFollowing] = useState(true);
-  const [heldAfterId, setHeldAfterId] = useState<string | null>(null);
-  const lastId = flows[flows.length - 1]?.id ?? null;
+  const [heldAt, setHeldAt] = useState<string | null>(null);
+  // The newest flow across all traffic, not just this list, so a filter change keeps the hold
+  const allFlows = useAtomValue(flowsAtom);
+  const newestStartedAt = allFlows[allFlows.length - 1]?.startedAt ?? null;
 
   const virtualizer = useVirtualizer({
     count: flows.length,
@@ -50,12 +54,12 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
   const hold = useCallback(() => {
     if (!following) return;
     setFollowing(false);
-    setHeldAfterId(lastId);
-  }, [following, lastId]);
+    setHeldAt(newestStartedAt);
+  }, [following, newestStartedAt]);
 
   const follow = useCallback(() => {
     setFollowing(true);
-    setHeldAfterId(null);
+    setHeldAt(null);
     setScrollTop(Number.MAX_SAFE_INTEGER);
   }, [setScrollTop]);
 
@@ -73,7 +77,7 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
     const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 2;
     if (atEnd) {
       setFollowing(true);
-      setHeldAfterId(null);
+      setHeldAt(null);
     } else {
       hold();
     }
@@ -108,14 +112,7 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
     [flows, select, selectedId],
   );
 
-  const heldIndex = heldAfterId == null ? -1 : flows.findIndex((f) => f.id === heldAfterId);
-  const newCount = following
-    ? 0
-    : heldAfterId == null
-      ? flows.length
-      : heldIndex === -1
-        ? 0
-        : flows.length - heldIndex - 1;
+  const newCount = following ? 0 : countNewFlows(flows, heldAt);
 
   const columns = sideBySide
     ? "grid-cols-[0.9rem_2.6rem_minmax(0,2fr)_minmax(0,3fr)_2.4rem_3.6rem]"

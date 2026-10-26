@@ -12,6 +12,7 @@ import {
   TextViewer,
   WebPageViewer,
 } from "@yaakapp-internal/ui";
+import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -47,10 +48,6 @@ export function useFlowBody(flow: Flow, which: FlowBody, enabled = true) {
 
 export function FlowBodyViewer({ flow, which, pretty }: Props) {
   const body = useFlowBody(flow, which);
-  const runFilter = useCallback(
-    (expression: string) => filterText(flow.id, which, expression),
-    [flow.id, which],
-  );
 
   if (body.isPending) {
     return (
@@ -100,15 +97,7 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
       viewer = <WebPageViewer html={text} baseUrl={flow.url} />;
     } else {
       viewer = (
-        <TextViewer
-          text={text}
-          language={language}
-          stateKey={`flow.${flow.id}.${which}`}
-          pretty={pretty}
-          className="-mr-2 bg-surface"
-          formatText={formatText}
-          filterText={runFilter}
-        />
+        <FlowTextViewer flow={flow} which={which} text={text} language={language} pretty={pretty} />
       );
     }
   }
@@ -124,6 +113,32 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
       </Banner>
       <div className="min-h-0">{viewer}</div>
     </div>
+  );
+}
+
+/** A text body, filtered with the syntax for the language detected from it, not just its header */
+function FlowTextViewer({
+  flow,
+  which,
+  text,
+  language,
+  pretty,
+}: Props & { text: string; language: CodeEditorProps["language"] }) {
+  const runFilter = useCallback(
+    (expression: string) => filterText(flow.id, which, expression, language),
+    [flow.id, which, language],
+  );
+
+  return (
+    <TextViewer
+      text={text}
+      language={language}
+      stateKey={`flow.${flow.id}.${which}`}
+      pretty={pretty}
+      className="-mr-2 bg-surface"
+      formatText={formatText}
+      filterText={runFilter}
+    />
   );
 }
 

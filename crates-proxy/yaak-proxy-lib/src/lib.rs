@@ -186,6 +186,17 @@ pub struct FilterBodyRequest {
     pub which: FlowBody,
     /// JSONPath, or XPath for an XML or HTML body.
     pub expression: String,
+    /// The language the viewer detected from the body. Without it, the Content-Type decides.
+    #[ts(optional)]
+    pub language: Option<FilterLanguage>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum FilterLanguage {
+    JsonPath,
+    XPath,
 }
 
 #[derive(Serialize, TS)]
@@ -250,8 +261,14 @@ async fn filter_body(
     let limit = settings(&ctx)?.capture_body_limit;
     let body = bodies::read_body(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
     let text = String::from_utf8_lossy(&body.data);
-    let content_type = find_header(flow.headers(req.which), "content-type").unwrap_or_default();
-    let language = yaak_filter::Language::for_content_type(content_type);
+    let language = match req.language {
+        Some(FilterLanguage::JsonPath) => yaak_filter::Language::JsonPath,
+        Some(FilterLanguage::XPath) => yaak_filter::Language::XPath,
+        None => {
+            let content_type = find_header(flow.headers(req.which), "content-type");
+            yaak_filter::Language::for_content_type(content_type.unwrap_or_default())
+        }
+    };
     let result = yaak_filter::filter(language, &text, &req.expression);
     Ok(FilterBodyResponse { content: result.content, error: result.error })
 }

@@ -23,9 +23,15 @@ export type FilterBodyRequest = { flowId: string, which: FlowBody,
 /**
  * JSONPath, or XPath for an XML or HTML body.
  */
-expression: string, };
+expression: string, 
+/**
+ * The language the viewer detected from the body. Without it, the Content-Type decides.
+ */
+language?: FilterLanguage, };
 
 export type FilterBodyResponse = { content: string, error: string | null, };
+
+export type FilterLanguage = "jsonpath" | "xpath";
 
 export type FormatBodyRequest = { text: string, };
 
