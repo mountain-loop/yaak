@@ -42,6 +42,8 @@ elapsedHeadersMs: number | null,
  */
 elapsedMs: number | null, error: string | null, };
 
+export type FlowBody = "request" | "response";
+
 export type ModelPayload = { model: Flow, change: ModelChangeEvent, };
 
 export type ProxyHeader = { name: string, value: string, };

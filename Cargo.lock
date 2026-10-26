@@ -11755,6 +11755,7 @@ dependencies = [
 name = "yaak-proxy-lib"
 version = "0.0.0"
 dependencies = [
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "flate2",
@@ -11774,10 +11775,12 @@ dependencies = [
  "tokio",
  "ts-rs",
  "yaak-database",
+ "yaak-filter",
  "yaak-http",
  "yaak-models",
  "yaak-proxy",
  "yaak-rpc",
+ "yaak-templates",
 ]
 
 [[package]]

@@ -1,13 +1,17 @@
 pub mod actions;
 pub mod bodies;
+pub mod ca;
 pub mod db;
 pub mod models;
 pub mod settings;
 
 use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
+use crate::ca::CaStatus;
 use crate::db::ProxyQueryManager;
-use crate::models::{Flow, FlowBody, ModelPayload, ProxyHeader, find_header};
+use crate::models::{Flow, FlowBody, FlowIden, ModelPayload, ProxyHeader, find_header};
 use crate::settings::ProxySettings;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::{DateTime, Utc};
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -89,6 +93,10 @@ impl ProxyCtx {
     pub fn port(&self) -> Option<u16> {
         self.handle.lock().ok()?.as_ref().map(|h| h.port)
     }
+
+    pub fn ca_dir(&self) -> PathBuf {
+        self.data_dir.join("ca")
+    }
 }
 
 // -- Proxy state --
@@ -136,9 +144,64 @@ pub struct GetProxyStateRequest {}
 
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
 pub struct GetProxyStateResponse {
     pub state: ProxyState,
+    /// The port the engine is bound to, while it runs.
+    pub port: Option<u16>,
 }
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GetFlowBodyRequest {
+    pub flow_id: String,
+    pub which: FlowBody,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GetFlowBodyResponse {
+    /// The body decoded with its Content-Encoding, at most the capture limit of it, in base64.
+    pub data: String,
+    /// The body is incomplete: cut on the wire, or decoded past the capture limit.
+    pub truncated: bool,
+    /// Bytes stored for the body, as they were on the wire.
+    #[ts(type = "number")]
+    pub stored_size: usize,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FormatBodyRequest {
+    pub text: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FilterBodyRequest {
+    pub flow_id: String,
+    pub which: FlowBody,
+    /// JSONPath, or XPath for an XML or HTML body.
+    pub expression: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FilterBodyResponse {
+    pub content: String,
+    pub error: Option<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CaStatusRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CaTrustRequest {}
 
 // -- Handlers --
 
@@ -156,9 +219,65 @@ fn get_proxy_state(
     ctx: &ProxyCtx,
     _req: GetProxyStateRequest,
 ) -> Result<GetProxyStateResponse, RpcError> {
-    let handle = ctx.handle.lock().map_err(|_| RpcError { message: "lock poisoned".into() })?;
-    let state = if handle.is_some() { ProxyState::Running } else { ProxyState::Stopped };
-    Ok(GetProxyStateResponse { state })
+    let port = ctx.port();
+    let state = if port.is_some() { ProxyState::Running } else { ProxyState::Stopped };
+    Ok(GetProxyStateResponse { state, port })
+}
+
+fn format_body(_ctx: &ProxyCtx, req: FormatBodyRequest) -> Result<String, RpcError> {
+    Ok(yaak_templates::format_json::format_json(&req.text, "  "))
+}
+
+async fn get_flow_body(
+    ctx: ProxyCtx,
+    req: GetFlowBodyRequest,
+) -> Result<GetFlowBodyResponse, RpcError> {
+    let flow = find_flow(&ctx, &req.flow_id)?;
+    let limit = settings(&ctx)?.capture_body_limit;
+    let body = bodies::read_body(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    Ok(GetFlowBodyResponse {
+        data: BASE64.encode(&body.data),
+        truncated: body.truncated,
+        stored_size: body.stored_size,
+    })
+}
+
+async fn filter_body(
+    ctx: ProxyCtx,
+    req: FilterBodyRequest,
+) -> Result<FilterBodyResponse, RpcError> {
+    let flow = find_flow(&ctx, &req.flow_id)?;
+    let limit = settings(&ctx)?.capture_body_limit;
+    let body = bodies::read_body(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let text = String::from_utf8_lossy(&body.data);
+    let content_type = find_header(flow.headers(req.which), "content-type").unwrap_or_default();
+    let language = yaak_filter::Language::for_content_type(content_type);
+    let result = yaak_filter::filter(language, &text, &req.expression);
+    Ok(FilterBodyResponse { content: result.content, error: result.error })
+}
+
+async fn ca_status(ctx: ProxyCtx, _req: CaStatusRequest) -> Result<CaStatus, RpcError> {
+    ca::status(&ctx.ca_dir().join("ca.pem")).await.map_err(rpc_error)
+}
+
+async fn ca_trust(ctx: ProxyCtx, _req: CaTrustRequest) -> Result<CaStatus, RpcError> {
+    // Creates the CA when the engine has never run, so there is something to trust.
+    let ca = CaStore::load_or_create(&ctx.ca_dir())
+        .map_err(|e| rpc_error(format!("Failed to load proxy CA: {e}")))?;
+    ca::trust(ca.cert_path()).await.map_err(rpc_error)?;
+    ca::status(ca.cert_path()).await.map_err(rpc_error)
+}
+
+fn settings(ctx: &ProxyCtx) -> Result<ProxySettings, RpcError> {
+    ProxySettings::load(&ctx.settings_path()).map_err(rpc_error)
+}
+
+fn find_flow(ctx: &ProxyCtx, flow_id: &str) -> Result<Flow, RpcError> {
+    ctx.db.with_conn(|db| db.find_one::<Flow>(FlowIden::Id, flow_id)).map_err(rpc_error)
+}
+
+fn rpc_error(e: impl ToString) -> RpcError {
+    RpcError { message: e.to_string() }
 }
 
 fn list_actions(
@@ -324,9 +443,16 @@ define_rpc! {
     ProxyCtx;
     commands {
         execute_action(ActionInvocation) -> bool,
+        format_body(FormatBodyRequest) -> String,
         get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
         list_actions(ListActionsRequest) -> ListActionsResponse,
         list_models(ListModelsRequest) -> ListModelsResponse,
+    }
+    async_commands {
+        ca_status(CaStatusRequest) -> CaStatus,
+        ca_trust(CaTrustRequest) -> CaStatus,
+        filter_body(FilterBodyRequest) -> FilterBodyResponse,
+        get_flow_body(GetFlowBodyRequest) -> GetFlowBodyResponse,
     }
     events {
         model_write(ModelPayload),

@@ -3,6 +3,8 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use bytes::Bytes;
 use flate2::Compression;
 use flate2::write::GzEncoder;
@@ -12,9 +14,10 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use yaak_proxy_lib::ProxyCtx;
-use yaak_proxy_lib::bodies::{read_body, read_raw_body};
+use yaak_proxy_lib::bodies::{DecodedBody, read_body, read_raw_body};
 use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::settings::ProxySettings;
 use yaak_rpc::RpcEventEmitter;
@@ -48,6 +51,16 @@ async fn route(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallib
             });
             Response::new(Full::from("ok"))
         }
+        // Small on the wire, past the capture limit once decoded.
+        "/expands" => Response::builder()
+            .header("content-type", "text/plain")
+            .header("content-encoding", "gzip")
+            .body(Full::from(gzip(&vec![b'z'; BIG_BODY])))
+            .unwrap(),
+        "/json" => Response::builder()
+            .header("content-type", "application/json")
+            .body(Full::from(r#"{"items":[{"id":1},{"id":2}]}"#))
+            .unwrap(),
         _ => Response::new(Full::from(vec![b'x'; BIG_BODY])),
     })
 }
@@ -58,7 +71,9 @@ async fn spawn_upstream() -> SocketAddr {
     tokio::spawn(async move {
         loop {
             let (tcp, _) = listener.accept().await.unwrap();
-            tokio::spawn(http1::Builder::new().serve_connection(TokioIo::new(tcp), service_fn(route)));
+            tokio::spawn(
+                http1::Builder::new().serve_connection(TokioIo::new(tcp), service_fn(route)),
+            );
         }
     });
     addr
@@ -120,7 +135,13 @@ async fn flow_is_stored_with_its_bodies() {
 
     assert_eq!(read_raw_body(&ctx.blobs, &flow.id, FlowBody::Request).unwrap(), b"hello proxy");
     assert_eq!(read_raw_body(&ctx.blobs, &flow.id, FlowBody::Response).unwrap(), compressed);
-    assert_eq!(read_body(&ctx.blobs, &flow, FlowBody::Response).await.unwrap(), b"hello proxy");
+    let decoded = read_body(&ctx.blobs, &flow, FlowBody::Response, CAPTURE_LIMIT).await.unwrap();
+    let expected = DecodedBody {
+        data: b"hello proxy".to_vec(),
+        stored_size: compressed.len(),
+        truncated: false,
+    };
+    assert_eq!(decoded, expected);
 
     let big_url = format!("http://{upstream}/big");
     let resp = client.get(&big_url).send().await.unwrap();
@@ -165,4 +186,73 @@ async fn early_response_keeps_request_totals() {
     assert!(stored > 0);
     assert!(flow.request_size >= stored, "{} < {stored}", flow.request_size);
     assert_eq!(flow.request_truncated, flow.request_size > stored);
+}
+
+async fn rpc(ctx: &ProxyCtx, cmd: &str, payload: Value) -> Result<Value, String> {
+    yaak_proxy_lib::build_router().dispatch(cmd, payload, ctx).await.map_err(|e| e.message)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn body_rpcs() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings =
+        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+
+    let (events, _event_rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    ctx.start().unwrap();
+    let port = ctx.port().unwrap();
+
+    let state = rpc(&ctx, "get_proxy_state", json!({})).await.unwrap();
+    assert_eq!(state, json!({"state": "running", "port": port}));
+
+    let upstream = spawn_upstream().await;
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}")).unwrap())
+        .build()
+        .unwrap();
+
+    let expands_url = format!("http://{upstream}/expands");
+    client.get(&expands_url).send().await.unwrap().bytes().await.unwrap();
+    let flow = wait_for_flow(&ctx, &expands_url).await;
+    assert!(!flow.response_truncated);
+    let body =
+        rpc(&ctx, "get_flow_body", json!({"flowId": flow.id, "which": "response"})).await.unwrap();
+    assert_eq!(body["truncated"], json!(true));
+    assert!(body["storedSize"].as_u64().unwrap() < CAPTURE_LIMIT as u64);
+    let data = BASE64.decode(body["data"].as_str().unwrap()).unwrap();
+    assert_eq!(data, vec![b'z'; CAPTURE_LIMIT]);
+
+    let empty =
+        rpc(&ctx, "get_flow_body", json!({"flowId": flow.id, "which": "request"})).await.unwrap();
+    assert_eq!(empty, json!({"data": "", "truncated": false, "storedSize": 0}));
+
+    let json_url = format!("http://{upstream}/json");
+    client.get(&json_url).send().await.unwrap().bytes().await.unwrap();
+    let flow = wait_for_flow(&ctx, &json_url).await;
+    let filtered = rpc(
+        &ctx,
+        "filter_body",
+        json!({"flowId": flow.id, "which": "response", "expression": "$.items[*].id"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(filtered, json!({"content": "[\n  1,\n  2\n]", "error": null}));
+    let invalid = rpc(
+        &ctx,
+        "filter_body",
+        json!({"flowId": flow.id, "which": "response", "expression": "$.items[?(@.id ==)]"}),
+    )
+    .await
+    .unwrap();
+    assert_eq!(invalid["content"], json!(""));
+    assert!(invalid["error"].is_string());
+
+    let missing =
+        rpc(&ctx, "get_flow_body", json!({"flowId": "fl_missing", "which": "response"})).await;
+    assert!(missing.is_err());
+
+    let formatted = rpc(&ctx, "format_body", json!({"text": r#"{"a":[1,2]}"#})).await.unwrap();
+    assert_eq!(formatted, json!("{\n  \"a\": [\n    1,\n    2\n  ]\n}"));
 }

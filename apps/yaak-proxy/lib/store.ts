@@ -8,4 +8,5 @@ type ProxyModels = {
 export const { dataAtom, applyChange, replaceAll, listAtom, orderedListAtom } =
   createModelStore<ProxyModels>(["flow"]);
 
-export const flowsAtom = orderedListAtom("flow", "startedAt", "desc");
+/** Oldest first, so new traffic arrives at the end of the list */
+export const flowsAtom = orderedListAtom("flow", "startedAt", "asc");

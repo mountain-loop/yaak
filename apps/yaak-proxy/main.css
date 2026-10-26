@@ -12,6 +12,7 @@
   :root {
     --font-family-interface: "";
     --font-family-editor: "";
+    --editor-font-size: 12px;
   }
 
   :root {
