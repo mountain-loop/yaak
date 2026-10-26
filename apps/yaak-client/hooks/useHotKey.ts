@@ -1,10 +1,25 @@
 import { platform } from "@yaakapp-internal/platform";
 import { debounce } from "@yaakapp-internal/lib";
 import { settingsAtom } from "@yaakapp-internal/models";
+import {
+  formatHotkey,
+  type HotkeyContextValue,
+  type HotKeyOptions,
+  useFormattedHotkey,
+  useHotKey,
+} from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
-import { useEffect } from "react";
-import { capitalize } from "../lib/capitalize";
+import { useEffect, useMemo } from "react";
 import { jotaiStore } from "../lib/jotai";
+
+export type { HotKeyOptions };
+export { useFormattedHotkey, useHotKey };
+
+declare module "@yaakapp-internal/ui" {
+  interface HotkeyActionRegistry {
+    action: HotkeyAction;
+  }
+}
 
 const HOLD_KEYS = ["Shift", "Control", "Command", "Alt", "Meta"];
 const SINGLE_WHITELIST = ["Delete", "Enter", "Backspace"];
@@ -188,12 +203,6 @@ export const hotkeyActions: HotkeyAction[] = (
     return hotkeyLabels[a].localeCompare(hotkeyLabels[b]);
   });
 
-export type HotKeyOptions = {
-  enable?: boolean | (() => boolean);
-  priority?: number;
-  allowDefault?: boolean;
-};
-
 interface Callback {
   action: HotkeyAction;
   callback: (e: KeyboardEvent) => void;
@@ -210,25 +219,34 @@ const clearCurrentKeysDebounced = debounce(() => {
   jotaiStore.set(currentKeysAtom, new Set([]));
 }, 5000);
 
-export function useHotKey(
-  action: HotkeyAction | null,
+function registerHotkey(
+  action: HotkeyAction,
   callback: (e: KeyboardEvent) => void,
-  options: HotKeyOptions = {},
+  options: HotKeyOptions,
 ) {
-  useEffect(() => {
-    if (action == null) return;
-    jotaiStore.set(callbacksAtom, (prev) => {
-      const without = prev.filter((cb) => {
-        const isTheSame = cb.action === action && cb.options.priority === options.priority;
-        return !isTheSame;
-      });
-      const newCb: Callback = { action, callback, options };
-      return [...without, newCb];
+  jotaiStore.set(callbacksAtom, (prev) => {
+    const without = prev.filter((cb) => {
+      const isTheSame = cb.action === action && cb.options.priority === options.priority;
+      return !isTheSame;
     });
-    return () => {
-      jotaiStore.set(callbacksAtom, (prev) => prev.filter((cb) => cb.callback !== callback));
-    };
-  }, [action, callback, options]);
+    const newCb: Callback = { action, callback, options };
+    return [...without, newCb];
+  });
+  return () => {
+    jotaiStore.set(callbacksAtom, (prev) => prev.filter((cb) => cb.callback !== callback));
+  };
+}
+
+export function useHotkeyContextValue(): HotkeyContextValue {
+  const hotkeys = useAtomValue(hotkeysAtom);
+  return useMemo(
+    () => ({
+      os: platform.osType(),
+      bindingFor: (action: HotkeyAction) => hotkeys[action] ?? null,
+      register: registerHotkey,
+    }),
+    [hotkeys],
+  );
 }
 
 export function useSubscribeHotKeys() {
@@ -330,66 +348,7 @@ export function getHotkeyScope(action: HotkeyAction): string {
 }
 
 export function formatHotkeyString(trigger: string): string[] {
-  const os = platform.osType();
-  const parts = trigger.split("+");
-  const labelParts: string[] = [];
-
-  for (const p of parts) {
-    if (os === "macos") {
-      if (p === "Meta") {
-        labelParts.push("⌘");
-      } else if (p === "Shift") {
-        labelParts.push("⇧");
-      } else if (p === "Control") {
-        labelParts.push("⌃");
-      } else if (p === "Alt") {
-        labelParts.push("⌥");
-      } else if (p === "Enter") {
-        // U+21A9 has an emoji presentation, which Chromium's font fallback picks
-        // (a blue glyph among monochrome ones). U+FE0E forces the text form.
-        labelParts.push("↩︎");
-      } else if (p === "Tab") {
-        labelParts.push("⇥");
-      } else if (p === "Backspace") {
-        labelParts.push("⌫");
-      } else if (p === "Delete") {
-        labelParts.push("⌦");
-      } else if (p === "Minus") {
-        labelParts.push("-");
-      } else if (p === "Plus") {
-        labelParts.push("+");
-      } else if (p === "Equal") {
-        labelParts.push("=");
-      } else if (p === "Space") {
-        labelParts.push("Space");
-      } else {
-        labelParts.push(capitalize(p));
-      }
-    } else {
-      if (p === "Control") {
-        labelParts.push("Ctrl");
-      } else if (p === "Space") {
-        labelParts.push("Space");
-      } else {
-        labelParts.push(capitalize(p));
-      }
-    }
-  }
-
-  if (os === "macos") {
-    return labelParts;
-  }
-  return [labelParts.join("+")];
-}
-
-export function useFormattedHotkey(action: HotkeyAction | null): string[] | null {
-  const hotkeys = useAtomValue(hotkeysAtom);
-  const trigger = action != null ? (hotkeys[action]?.[0] ?? null) : null;
-  if (trigger == null) {
-    return null;
-  }
-
-  return formatHotkeyString(trigger);
+  return formatHotkey(trigger, platform.osType());
 }
 
 function compareKeys(keysA: string[], keysB: string[]) {

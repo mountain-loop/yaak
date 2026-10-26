@@ -1,12 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { platform } from "@yaakapp-internal/platform";
+import { HotkeyProvider } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { Provider as JotaiProvider } from "jotai";
 import { LazyMotion, MotionConfig } from "motion/react";
-import { lazy, Suspense } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { GlobalHooks } from "../components/GlobalHooks";
 import RouteError from "../components/RouteError";
+import { useHotkeyContextValue } from "../hooks/useHotKey";
 import { jotaiStore } from "../lib/jotai";
 import { queryClient } from "../lib/queryClient";
 
@@ -27,20 +29,26 @@ function RouteComponent() {
   return (
     <JotaiProvider store={jotaiStore}>
       <QueryClientProvider client={queryClient}>
-        <LazyMotion strict features={motionFeatures}>
-          <MotionConfig transition={{ duration: 0.1 }}>
-            <Suspense>
-              <Toasts />
-              <Dialogs />
-              <ContextMenus />
-            </Suspense>
-            <Layout />
-            <GlobalHooks />
-          </MotionConfig>
-        </LazyMotion>
+        <Hotkeys>
+          <LazyMotion strict features={motionFeatures}>
+            <MotionConfig transition={{ duration: 0.1 }}>
+              <Suspense>
+                <Toasts />
+                <Dialogs />
+                <ContextMenus />
+              </Suspense>
+              <Layout />
+              <GlobalHooks />
+            </MotionConfig>
+          </LazyMotion>
+        </Hotkeys>
       </QueryClientProvider>
     </JotaiProvider>
   );
+}
+
+function Hotkeys({ children }: { children: ReactNode }) {
+  return <HotkeyProvider value={useHotkeyContextValue()}>{children}</HotkeyProvider>;
 }
 
 function Layout() {
