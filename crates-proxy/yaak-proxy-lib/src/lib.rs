@@ -114,8 +114,14 @@ impl ProxyCtx {
     }
 
     /// Starts the engine on `port`, or the one in `settings.json`. Does nothing if it is
-    /// running. Points the system proxy at it when the settings ask for that.
+    /// running. Points the system proxy at it when the settings ask for that. Refused while
+    /// another process owns the engine, so there are never two.
     pub fn start_on(&self, port: Option<u16>) -> Result<(), String> {
+        if let Some(owner) = control::live_owner(&self.data_dir)
+            && owner.pid != std::process::id()
+        {
+            return Err(control::already_owned(&owner));
+        }
         let mut handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
         if handle.is_some() {
             return Ok(());

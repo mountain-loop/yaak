@@ -383,3 +383,34 @@ async fn stale_removal_waits_for_the_claim_lock() {
     assert!(cleaner.join().unwrap().is_none());
     assert!(!path.exists());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn start_is_refused_while_another_process_owns_the_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+
+    // A live CLI daemon: a running process, and a control port that answers.
+    let mut daemon = if cfg!(windows) {
+        std::process::Command::new("ping").args(["-n", "30", "127.0.0.1"]).spawn().unwrap()
+    } else {
+        std::process::Command::new("sleep").arg("30").spawn().unwrap()
+    };
+    let control_port = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let owner = ControlInfo {
+        pid: daemon.id(),
+        control_port: control_port.local_addr().unwrap().port(),
+        proxy_port: Some(9090),
+        token: "daemon".into(),
+        owner: Owner::Cli,
+        started_at: chrono::Utc::now(),
+    };
+    std::fs::write(dir.path().join("control.json"), serde_json::to_vec(&owner).unwrap()).unwrap();
+
+    let err = ctx.start().unwrap_err();
+    assert!(err.contains("already running in the yaak CLI"), "{err}");
+    assert_eq!(ctx.port(), None);
+
+    daemon.kill().unwrap();
+    daemon.wait().unwrap();
+}

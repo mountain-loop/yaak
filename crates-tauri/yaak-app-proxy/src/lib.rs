@@ -58,6 +58,7 @@ fn host_control_api(ctx: &ProxyCtx) -> Option<ControlServer> {
     // Read first: a crashed owner's file names the port its system proxy may still point at.
     let previous = control::read(ctx.data_dir());
     if let Some(owner) = control::live_owner(ctx.data_dir()) {
+        // Starting the engine here is refused too, until the owner stops.
         warn!(
             "The proxy engine is owned by {:?} (pid {}), so this app does not serve the control API",
             owner.owner, owner.pid

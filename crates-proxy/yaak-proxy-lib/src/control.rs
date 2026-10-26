@@ -337,7 +337,7 @@ impl ControlServer {
     }
 }
 
-fn already_owned(owner: &ControlInfo) -> String {
+pub(crate) fn already_owned(owner: &ControlInfo) -> String {
     let who = match owner.owner {
         Owner::App => "Yaak Proxy",
         Owner::Cli => "the yaak CLI",
