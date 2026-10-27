@@ -412,26 +412,26 @@ async fn forward_https(
 
     let (mut parts, body) = req.into_parts();
     let uri = match &upstream {
-        Upstream::H2(_) => url.parse::<Uri>(),
+        // `Host` moves into `:authority`. Google's servers reset any stream that has both, even
+        // when they match.
+        Upstream::H2(_) => match parts.headers.remove(HOST) {
+            Some(host) => match host.to_str() {
+                Ok(host) => format!("https://{host}{path}").parse::<Uri>(),
+                Err(e) => return Ok(flow.fail(e.to_string())),
+            },
+            None => url.parse::<Uri>(),
+        },
         Upstream::H1(_) => path.parse::<Uri>(),
     };
     parts.uri = match uri {
         Ok(uri) => uri,
         Err(e) => return Ok(flow.fail(e.to_string())),
     };
-    match &upstream {
-        // The URL carries `:authority`. Google's servers reset any stream that also has `Host`,
-        // even a matching one.
-        Upstream::H2(_) => {
-            parts.headers.remove(HOST);
-        }
-        Upstream::H1(_) => {
-            if !parts.headers.contains_key(HOST)
-                && let Ok(host) = target.authority.parse()
-            {
-                parts.headers.insert(HOST, host);
-            }
-        }
+    if matches!(upstream, Upstream::H1(_))
+        && !parts.headers.contains_key(HOST)
+        && let Ok(host) = target.authority.parse()
+    {
+        parts.headers.insert(HOST, host);
     }
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
 

@@ -441,6 +441,17 @@ async fn https_h2_upstream_gets_authority_without_host() {
     assert!(captured_host, "the captured request keeps Host");
 }
 
+/// A `Host` other than the CONNECT target still names the virtual host upstream.
+#[tokio::test(flavor = "multi_thread")]
+async fn https_h2_upstream_gets_the_clients_host_as_authority() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let url = format!("https://localhost:{}/authority", upstream.port());
+
+    let resp = h.client().get(&url).header("host", "yaak.test:8443").send().await.unwrap();
+    assert_eq!(resp.text().await.unwrap(), "authority=yaak.test:8443 host=none");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn https_not_found() {
     let h = Harness::start(1024);
