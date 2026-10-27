@@ -1,23 +1,35 @@
 pub mod actions;
 pub mod bodies;
 pub mod ca;
+pub mod client;
+pub mod control;
+pub mod convert;
 pub mod db;
+pub mod flows;
+pub mod har;
+pub mod macos;
 pub mod models;
+pub mod save;
 pub mod settings;
 
 use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
 use crate::ca::CaStatus;
+use crate::control::{ControlFile, ControlInfo, Owner};
 use crate::db::ProxyQueryManager;
+use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::models::{Flow, FlowBody, FlowIden, ModelPayload, ProxyHeader, find_header};
+use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
 use crate::settings::ProxySettings;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::{DateTime, Utc};
-use log::warn;
+use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource, UpsertModelInfo};
 use yaak_models::blob_manager::{BlobManager, BodyChunkWriter};
@@ -31,6 +43,13 @@ use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
 pub struct ProxyCtx {
     handle: Arc<Mutex<Option<ProxyHandle>>>,
     data_dir: PathBuf,
+    owner: Owner,
+    client_data_dir: PathBuf,
+    control: Arc<Mutex<Option<ControlFile>>>,
+    /// Held through each system proxy change, password dialog included, so they apply in turn.
+    system_proxy_turn: Arc<Mutex<()>>,
+    /// The port the engine last ran on, which the system proxy may still point at.
+    last_port: Arc<Mutex<Option<u16>>>,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -46,27 +65,72 @@ impl ProxyCtx {
         Ok(Self {
             handle: Arc::new(Mutex::new(None)),
             data_dir: data_dir.to_path_buf(),
+            owner: Owner::App,
+            client_data_dir: save::client_data_dir(),
+            control: Arc::new(Mutex::new(None)),
+            system_proxy_turn: Arc::new(Mutex::new(())),
+            last_port: Arc::new(Mutex::new(None)),
             db,
             blobs,
             events,
         })
     }
 
+    /// The process this runs in, which decides how the system proxy gets admin rights.
+    pub fn with_owner(mut self, owner: Owner) -> Self {
+        self.owner = owner;
+        self
+    }
+
+    /// Yaak's data directory, where flows are saved as requests.
+    pub fn with_client_data_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.client_data_dir = dir.into();
+        self
+    }
+
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
+    pub fn owner(&self) -> Owner {
+        self.owner
+    }
+
     pub fn settings_path(&self) -> PathBuf {
         self.data_dir.join("settings.json")
     }
 
+    pub fn settings(&self) -> Result<ProxySettings, String> {
+        ProxySettings::load(&self.settings_path())
+    }
+
+    pub fn capture_body_limit(&self) -> Result<usize, String> {
+        Ok(self.settings()?.capture_body_limit)
+    }
+
     /// Starts the engine with the current `settings.json`. Does nothing if it is running.
     pub fn start(&self) -> Result<(), String> {
+        self.start_on(None)
+    }
+
+    /// Starts the engine on `port`, or the one in `settings.json`. Does nothing if it is
+    /// running. Points the system proxy at it when the settings ask for that. Refused while
+    /// another process owns the engine, so there are never two.
+    pub fn start_on(&self, port: Option<u16>) -> Result<(), String> {
+        if let Some(owner) = control::live_owner(&self.data_dir)
+            && owner.pid != std::process::id()
+        {
+            return Err(control::already_owned(&owner));
+        }
         let mut handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
         if handle.is_some() {
             return Ok(());
         }
 
-        let settings = ProxySettings::load(&self.settings_path())?;
-        let ca = CaStore::load_or_create(&self.data_dir.join("ca"))
+        let settings = self.settings()?;
+        let ca = CaStore::load_or_create(&self.ca_dir())
             .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
-        let mut config = ProxyConfig::new(settings.port, Arc::new(ca));
+        let mut config = ProxyConfig::new(port.unwrap_or(settings.port), Arc::new(ca));
         config.capture_body_limit = settings.capture_body_limit;
         let mut proxy_handle = yaak_proxy::start_proxy(config)?;
 
@@ -77,16 +141,61 @@ impl ProxyCtx {
             std::thread::spawn(move || run_event_loop(event_rx, db, blobs, events));
         }
 
+        let bound = proxy_handle.port;
         *handle = Some(proxy_handle);
+        drop(handle);
+        self.set_control_proxy_port(Some(bound));
+        if let Ok(mut last_port) = self.last_port.lock() {
+            *last_port = Some(bound);
+        }
+        if settings.system_proxy {
+            // The password dialog can sit open for a while; the engine is up regardless.
+            let ctx = self.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = ctx.change_system_proxy(true, bound, true) {
+                    warn!("Failed to turn on the system proxy: {e}");
+                }
+            });
+        }
         self.events.emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Running });
         Ok(())
     }
 
+    /// Stops the engine and turns off a system proxy that points at it.
     pub fn stop(&self) -> Result<(), String> {
-        let mut handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
-        handle.take();
+        let port = self.take_handle()?;
+        if let Some(port) = port {
+            let ctx = self.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = ctx.change_system_proxy(false, port, true) {
+                    warn!("Failed to turn off the system proxy: {e}");
+                }
+            });
+        }
         self.events.emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Stopped });
         Ok(())
+    }
+
+    /// [`Self::stop`] for a process about to exit: waits for the system proxy to be off, also
+    /// when a `stop` just before is still turning it off.
+    pub fn shutdown(&self) {
+        let running = self.take_handle().ok().flatten();
+        let last = self.last_port.lock().ok().and_then(|p| *p);
+        if let Some(port) = running.or(last)
+            && let Err(e) = self.change_system_proxy(false, port, false)
+        {
+            warn!("Failed to turn off the system proxy: {e}");
+        }
+    }
+
+    /// Stops the engine, returning the port it was on.
+    fn take_handle(&self) -> Result<Option<u16>, String> {
+        let mut handle = self.handle.lock().map_err(|_| "lock poisoned".to_string())?;
+        // Dropping the handle stops the listener and joins its thread.
+        let port = handle.take().map(|h| h.port);
+        drop(handle);
+        self.set_control_proxy_port(None);
+        Ok(port)
     }
 
     /// The port the engine is bound to, while it runs.
@@ -97,6 +206,135 @@ impl ProxyCtx {
     pub fn ca_dir(&self) -> PathBuf {
         self.data_dir.join("ca")
     }
+
+    pub(crate) fn set_control_file(&self, file: Option<ControlFile>) {
+        if let Ok(mut control) = self.control.lock() {
+            *control = file;
+        }
+    }
+
+    /// This process's `control.json`, while it serves the control API.
+    pub fn control_info(&self) -> Option<ControlInfo> {
+        self.control.lock().ok()?.as_ref().map(|c| c.info.clone())
+    }
+
+    fn set_control_proxy_port(&self, port: Option<u16>) {
+        if let Ok(mut control) = self.control.lock()
+            && let Some(control) = control.as_mut()
+        {
+            control.set_proxy_port(port);
+        }
+    }
+
+    pub fn system_proxy_backend(&self) -> SystemProxyBackend {
+        match self.owner {
+            Owner::App => SystemProxyBackend::AdminPrompt,
+            Owner::Cli => SystemProxyBackend::Sudo,
+        }
+    }
+
+    /// Judged against the running engine's port, or the configured one while it is stopped.
+    /// Blocks.
+    pub fn system_proxy_status(&self) -> Result<SystemProxyStatus, String> {
+        let port = self.port().unwrap_or(self.settings()?.port);
+        macos::status(port, self.system_proxy_backend())
+    }
+
+    /// Turns the system proxy on or off and remembers the choice. Turned on while the engine
+    /// is stopped, it waits for the engine to start, so the Mac is never pointed at nothing.
+    /// Blocks, through the password dialog.
+    pub fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
+        let mut settings = self.settings()?;
+        let previous = settings.system_proxy;
+        settings.system_proxy = enabled;
+        settings.save(&self.settings_path())?;
+        let port = self.port().unwrap_or(settings.port);
+        if let Err(e) = self.change_system_proxy(enabled, port, enabled) {
+            settings.system_proxy = previous;
+            let _ = settings.save(&self.settings_path());
+            return Err(e);
+        }
+        self.system_proxy_status()
+    }
+
+    /// Points the system proxy at `port`, or turns it off there, once the changes before it
+    /// are done. With `follow_engine`, the change is dropped if the engine has moved on by its
+    /// turn: an enable once the engine is off `port` or the setting is off, a disable once the
+    /// engine is back on `port`. A start and a stop in quick succession then end in the state
+    /// the engine is in, whichever password dialog is answered first.
+    fn change_system_proxy(
+        &self,
+        enabled: bool,
+        port: u16,
+        follow_engine: bool,
+    ) -> Result<(), String> {
+        let _turn = self.system_proxy_turn.lock().map_err(|_| "lock poisoned".to_string())?;
+        if follow_engine {
+            let on_port = self.port() == Some(port);
+            let current = if enabled { on_port && self.settings()?.system_proxy } else { !on_port };
+            if !current {
+                return Ok(());
+            }
+        }
+        macos::set(enabled, port, self.system_proxy_backend())
+    }
+
+    /// Turns off a system proxy left pointing at one of `ports` by an owner that crashed, so
+    /// the Mac is not left offline. Leaves it alone when something is serving on the port.
+    /// Blocks.
+    pub fn reset_stale_system_proxy(&self, ports: &[u16]) -> Result<(), String> {
+        let mut ports = ports.to_vec();
+        ports.sort_unstable();
+        ports.dedup();
+        for port in ports {
+            if port == 0 {
+                continue;
+            }
+            // Checked in its turn, so an engine started on the port meanwhile keeps its proxy.
+            let _turn = self.system_proxy_turn.lock().map_err(|_| "lock poisoned".to_string())?;
+            if Some(port) == self.port() || is_listening(port) {
+                continue;
+            }
+            // Covers disabled services too, and asks for nothing when none point at the port.
+            debug!("Turning off any stale system proxy on port {port}");
+            macos::set(false, port, self.system_proxy_backend())?;
+        }
+        Ok(())
+    }
+
+    /// Yaak's workspaces and their folders, to save a flow into.
+    pub fn workspaces(&self) -> Result<Vec<WorkspaceSummary>, String> {
+        ClientDb::open(&self.client_data_dir)?.workspaces()
+    }
+
+    /// Saves a flow as a request in Yaak and records the request on the flow.
+    pub async fn save_flow(
+        &self,
+        flow_id: &str,
+        req: &SaveFlowRequest,
+    ) -> Result<SaveFlowResponse, String> {
+        let flow = flows::get(&self.db, flow_id)?;
+        let limit = self.capture_body_limit()?;
+        let body = bodies::read_body(&self.blobs, &flow, FlowBody::Request, limit).await?;
+        let saved = ClientDb::open(&self.client_data_dir)?.save(&flow, &body, req)?;
+
+        let flow = Flow { saved_request_id: Some(saved.request.id.clone()), ..flow };
+        let (flow, created) = self
+            .db
+            .with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background))
+            .map_err(|e| format!("Failed to record the saved request on the flow: {e}"))?;
+        self.events.emit(
+            "model_write",
+            &ModelPayload { model: flow, change: ModelChangeEvent::Upsert { created } },
+        );
+        Ok(saved)
+    }
+}
+
+/// Something accepts connections on `127.0.0.1:<port>`.
+fn is_listening(port: u16) -> bool {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
 // -- Proxy state --
@@ -214,6 +452,16 @@ pub struct CaStatusRequest {}
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct CaTrustRequest {}
 
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SystemProxyStatusRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SystemProxySetRequest {
+    pub enabled: bool,
+}
+
 // -- Handlers --
 
 fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, RpcError> {
@@ -245,12 +493,27 @@ async fn get_flow_body(
 ) -> Result<GetFlowBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body = bodies::read_body(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let body = viewer_body(&ctx, &flow, req.which, limit).await?;
     Ok(GetFlowBodyResponse {
         data: BASE64.encode(&body.data),
         truncated: body.truncated,
         stored_size: body.stored_size,
     })
+}
+
+/// A body for the app's viewer, which shows a body that failed to decode as its error, as it
+/// always has, rather than as what decoded before the failure.
+async fn viewer_body(
+    ctx: &ProxyCtx,
+    flow: &Flow,
+    which: FlowBody,
+    limit: usize,
+) -> Result<bodies::DecodedBody, RpcError> {
+    let body = bodies::read_body(&ctx.blobs, flow, which, limit).await.map_err(rpc_error)?;
+    match body.decode_error {
+        Some(e) => Err(rpc_error(e)),
+        None => Ok(body),
+    }
 }
 
 async fn filter_body(
@@ -259,7 +522,7 @@ async fn filter_body(
 ) -> Result<FilterBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body = bodies::read_body(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let body = viewer_body(&ctx, &flow, req.which, limit).await?;
     let text = String::from_utf8_lossy(&body.data);
     let language = match req.language {
         Some(FilterLanguage::JsonPath) => yaak_filter::Language::JsonPath,
@@ -285,8 +548,28 @@ async fn ca_trust(ctx: ProxyCtx, _req: CaTrustRequest) -> Result<CaStatus, RpcEr
     ca::status(ca.cert_path()).await.map_err(rpc_error)
 }
 
+async fn system_proxy_status(
+    ctx: ProxyCtx,
+    _req: SystemProxyStatusRequest,
+) -> Result<SystemProxyStatus, RpcError> {
+    blocking(move || ctx.system_proxy_status()).await
+}
+
+async fn system_proxy_set(
+    ctx: ProxyCtx,
+    req: SystemProxySetRequest,
+) -> Result<SystemProxyStatus, RpcError> {
+    blocking(move || ctx.set_system_proxy(req.enabled)).await
+}
+
+async fn blocking<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, RpcError> {
+    tokio::task::spawn_blocking(f).await.map_err(rpc_error)?.map_err(rpc_error)
+}
+
 fn settings(ctx: &ProxyCtx) -> Result<ProxySettings, RpcError> {
-    ProxySettings::load(&ctx.settings_path()).map_err(rpc_error)
+    ctx.settings().map_err(rpc_error)
 }
 
 fn find_flow(ctx: &ProxyCtx, flow_id: &str) -> Result<Flow, RpcError> {
@@ -470,9 +753,48 @@ define_rpc! {
         ca_trust(CaTrustRequest) -> CaStatus,
         filter_body(FilterBodyRequest) -> FilterBodyResponse,
         get_flow_body(GetFlowBodyRequest) -> GetFlowBodyResponse,
+        system_proxy_set(SystemProxySetRequest) -> SystemProxyStatus,
+        system_proxy_status(SystemProxyStatusRequest) -> SystemProxyStatus,
     }
     events {
         model_write(ModelPayload),
         proxy_state_changed(ProxyStatePayload),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn the_app_still_hears_why_a_body_failed_to_decode() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let flow = Flow {
+            id: "fl_bad".into(),
+            status: Some(200),
+            response_headers: vec![ProxyHeader {
+                name: "Content-Encoding".into(),
+                value: "gzip".into(),
+            }],
+            ..Default::default()
+        };
+        ctx.db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+        let mut writer =
+            BodyChunkWriter::new(ctx.blobs.clone(), Flow::body_id("fl_bad", FlowBody::Response));
+        writer.write(b"not a gzip stream").unwrap();
+        writer.finish().unwrap();
+
+        let req = GetFlowBodyRequest { flow_id: "fl_bad".into(), which: FlowBody::Response };
+        let err = get_flow_body(ctx.clone(), req).await.err().unwrap();
+        assert!(err.message.starts_with("Failed to decode"), "{}", err.message);
+        let req = FilterBodyRequest {
+            flow_id: "fl_bad".into(),
+            which: FlowBody::Response,
+            expression: "$".into(),
+            language: None,
+        };
+        assert!(filter_body(ctx, req).await.is_err());
     }
 }

@@ -40,7 +40,11 @@ elapsedHeadersMs: number | null,
 /**
  * Milliseconds from `started_at` to the end of the response.
  */
-elapsedMs: number | null, error: string | null, };
+elapsedMs: number | null, error: string | null, 
+/**
+ * The id of the Yaak request this flow was last saved as.
+ */
+savedRequestId: string | null, };
 
 export type FlowBody = "request" | "response";
 

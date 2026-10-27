@@ -5,3 +5,4 @@ crates/yaak-templates/pkg/* linguist-generated=true
 
 # Ensure consistent line endings for test files that check exact content
 crates/yaak-http/tests/test.txt text eol=lf
+crates-proxy/yaak-proxy-lib/tests/fixtures/export.har text eol=lf

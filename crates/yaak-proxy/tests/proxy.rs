@@ -6,9 +6,10 @@ use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming;
-use hyper::header::{CONNECTION, UPGRADE};
+use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Full, StreamBody};
+use hyper::body::{Frame, Incoming};
+use hyper::header::{CONNECTION, CONTENT_LENGTH, UPGRADE};
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -76,19 +77,42 @@ fn test_pki() -> TestPki {
     TestPki { ca_pem: ca.pem(), ca_der: ca.der().clone(), server: Arc::new(server) }
 }
 
-async fn route(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+type TestBody = BoxBody<Bytes, Infallible>;
+
+fn full(data: impl Into<Bytes>) -> TestBody {
+    Full::new(data.into()).boxed()
+}
+
+async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible> {
     Ok(match req.uri().path() {
-        "/hello" => Response::new(Full::from("hello")),
-        "/echo" => Response::new(Full::new(req.into_body().collect().await.unwrap().to_bytes())),
-        "/big" => Response::new(Full::from(vec![b'x'; BIG_BODY])),
+        "/hello" => Response::new(full("hello")),
+        "/echo" => Response::new(full(req.into_body().collect().await.unwrap().to_bytes())),
+        "/big" => Response::new(full(vec![b'x'; BIG_BODY])),
+        "/late-end" => late_end(5),
+        // The stream ends with half the promised bytes, so the upstream resets it mid-body.
+        "/cut" => late_end(10),
         "/ws" => websocket_echo(req),
-        _ => {
-            Response::builder().status(StatusCode::NOT_FOUND).body(Full::from("not found")).unwrap()
-        }
+        _ => Response::builder().status(StatusCode::NOT_FOUND).body(full("not found")).unwrap(),
     })
 }
 
-fn websocket_echo(mut req: Request<Incoming>) -> Response<Full<Bytes>> {
+/// "hello" under a Content-Length of `content_length`, its end of stream sent a while after the
+/// last byte, as an HTTP/2 server does when its final DATA frame has no END_STREAM.
+fn late_end(content_length: usize) -> Response<TestBody> {
+    let frames = futures_util::stream::unfold(false, |sent| async move {
+        if sent {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            return None;
+        }
+        Some((Ok(Frame::data(Bytes::from("hello"))), true))
+    });
+    Response::builder()
+        .header(CONTENT_LENGTH, content_length)
+        .body(BodyExt::boxed(StreamBody::new(frames)))
+        .unwrap()
+}
+
+fn websocket_echo(mut req: Request<Incoming>) -> Response<TestBody> {
     let accept = derive_accept_key(req.headers()["sec-websocket-key"].as_bytes());
     let on_upgrade = hyper::upgrade::on(&mut req);
     tokio::spawn(async move {
@@ -105,7 +129,7 @@ fn websocket_echo(mut req: Request<Incoming>) -> Response<Full<Bytes>> {
         .header(UPGRADE, "websocket")
         .header(CONNECTION, "Upgrade")
         .header("sec-websocket-accept", accept)
-        .body(Full::default())
+        .body(full(Bytes::new()))
         .unwrap()
 }
 
@@ -372,6 +396,41 @@ async fn https_not_found() {
     let error = find!(events, ProxyEvent::ResponseBodyComplete { error, .. } => error.clone());
     assert_eq!(error, None);
     assert_eq!(body(&events, false), (b"not found".to_vec(), 9));
+}
+
+/// The client is sent every byte the Content-Length promised, and hyper drops the body there,
+/// before an HTTP/2 upstream's end of stream arrives. That is a complete response, not an error.
+#[tokio::test(flavor = "multi_thread")]
+async fn https_body_complete_before_end_of_stream() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let url = format!("https://localhost:{}/late-end", upstream.port());
+
+    let resp = h.client().get(&url).send().await.unwrap();
+    assert_eq!(resp.text().await.unwrap(), "hello");
+
+    let events = h.flow_events();
+    let version =
+        find!(events, ProxyEvent::ResponseStart { http_version, .. } => http_version.clone());
+    assert_eq!(version, "HTTP/2");
+    let (size, error) = find!(events,
+        ProxyEvent::ResponseBodyComplete { size, error, .. } => (*size, error.clone()));
+    assert_eq!((size, error), (5, None));
+    assert_eq!(body(&events, false), (b"hello".to_vec(), 5));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn https_body_cut_short_is_an_error() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let url = format!("https://localhost:{}/cut", upstream.port());
+
+    let resp = h.client().get(&url).send().await.unwrap();
+    assert!(resp.bytes().await.is_err());
+
+    let events = h.flow_events();
+    let error = find!(events, ProxyEvent::ResponseBodyComplete { error, .. } => error.clone());
+    assert!(error.is_some(), "{events:#?}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

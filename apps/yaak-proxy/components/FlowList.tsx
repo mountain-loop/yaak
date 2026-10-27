@@ -212,7 +212,9 @@ const FlowRow = memo(function FlowRow({
   onSelect,
 }: RowProps) {
   const { host, path, query } = splitUrl(flow.url);
-  const failed = flow.error != null && flow.status == null;
+  const failed = flow.error != null;
+  // Failed before any response; an error after the headers is a body cut short mid-way.
+  const noResponse = failed && flow.status == null;
   const type = shortContentType(flow.contentType);
 
   return (
@@ -261,7 +263,11 @@ const FlowRow = memo(function FlowRow({
             flow.responseTruncated ? "text-notice" : "text-text-subtle",
           )}
         >
-          {failed ? <span className="text-text-subtlest">--</span> : formatSize(flow.responseSize)}
+          {noResponse ? (
+            <span className="text-text-subtlest">--</span>
+          ) : (
+            formatSize(flow.responseSize)
+          )}
         </span>
       )}
       <span className="font-mono text-right text-text-subtle">

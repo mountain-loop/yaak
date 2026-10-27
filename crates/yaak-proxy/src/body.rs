@@ -38,6 +38,13 @@ impl CaptureBody {
         Self { inner, direction, id, start, engine, captured: 0, size: 0, finished: false }
     }
 
+    /// Every byte the body declared has arrived. An HTTP/2 stream's end can come in a frame after
+    /// its last byte, and hyper stops polling a Content-Length body once it has written that
+    /// many bytes, so the stream's end alone would call a complete body cut short.
+    fn complete(&self) -> bool {
+        self.inner.is_end_stream() || self.inner.size_hint().exact() == Some(0)
+    }
+
     fn finish(&mut self, error: Option<String>) {
         if self.finished {
             return;
@@ -84,7 +91,7 @@ impl Body for CaptureBody {
                         Direction::Response => ProxyEvent::ResponseBodyChunk { id, len, data },
                     });
                 }
-                if self.inner.is_end_stream() {
+                if self.complete() {
                     self.finish(None);
                 }
             }
@@ -109,7 +116,7 @@ impl Body for CaptureBody {
 
 impl Drop for CaptureBody {
     fn drop(&mut self) {
-        let error = (self.direction == Direction::Response && !self.inner.is_end_stream())
+        let error = (self.direction == Direction::Response && !self.complete())
             .then(|| "Client closed the connection before the response finished".to_string());
         self.finish(error);
     }

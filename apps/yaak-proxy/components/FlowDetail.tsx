@@ -73,7 +73,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
 function FlowPane({ flow }: { flow: Flow }) {
   const [pretty, setPretty] = useState(true);
   const responseBody = useFlowBody(flow, "response", flow.responseTruncated);
-  const failed = flow.error != null && flow.status == null;
+  // Failed before any response; an error after the headers is a body cut short mid-way.
+  const noResponse = flow.error != null && flow.status == null;
   const mime = mimeEssence(findHeader(flow.responseHeaders, "content-type"));
   const queryCount = useMemo(() => queryParams(flow.url).length, [flow.url]);
 
@@ -153,7 +154,7 @@ function FlowPane({ flow }: { flow: Flow }) {
               </span>
             </>
           )}
-          {!failed && (
+          {!noResponse && (
             <>
               <span>&bull;</span>
               <SizeTag contentLength={flow.responseSize} />
@@ -178,7 +179,7 @@ function FlowPane({ flow }: { flow: Flow }) {
       </div>
 
       <div className="overflow-hidden flex flex-col min-h-0">
-        {failed && (
+        {flow.error != null && (
           <Banner color="danger" className="mx-3 mt-1 shrink-0 font-mono text-sm">
             {flow.error}
           </Banner>
@@ -190,7 +191,7 @@ function FlowPane({ flow }: { flow: Flow }) {
           tabListClassName="mt-0.5 -mb-1.5"
         >
           <TabContent value={TAB_RESPONSE}>
-            {failed ? (
+            {noResponse ? (
               <EmptyState>
                 <div className="text-text-subtle mb-1">No response</div>
                 <div className="text-xs">

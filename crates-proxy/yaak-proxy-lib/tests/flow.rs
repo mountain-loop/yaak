@@ -151,6 +151,7 @@ async fn flow_is_stored_with_its_bodies() {
         data: b"hello proxy".to_vec(),
         stored_size: compressed.len(),
         truncated: false,
+        decode_error: None,
     };
     assert_eq!(decoded, expected);
 
