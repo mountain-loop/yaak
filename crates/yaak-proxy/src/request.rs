@@ -7,7 +7,8 @@ use std::time::{Duration, Instant, SystemTime};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-use hyper::header::{HOST, UPGRADE};
+use hyper::header::{CONTENT_TYPE, HOST, UPGRADE, VIA};
+use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
 use hyper_util::client::legacy::connect::HttpInfo;
@@ -113,6 +114,21 @@ impl Flow {
         Response::from_parts(parts, body.boxed())
     }
 
+    /// Answers the client with `status` and `error` without contacting any server.
+    fn reject(self, status: StatusCode, error: &str) -> Response<BoxBody> {
+        debug!("Flow {} rejected: {error}", self.id);
+        self.engine.emit(ProxyEvent::Error {
+            id: self.id,
+            error: error.to_string(),
+            elapsed_ms: self.start.elapsed().as_millis() as u64,
+        });
+        Response::builder()
+            .status(status)
+            .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+            .body(text_body(error.to_string()))
+            .unwrap()
+    }
+
     fn fail(self, error: String) -> Response<BoxBody> {
         debug!("Flow {} failed: {error}", self.id);
         let body = format!("Yaak Proxy could not reach the server: {error}");
@@ -130,14 +146,24 @@ fn bad_gateway(body: String) -> Response<BoxBody> {
 }
 
 pub(crate) async fn handle_request(
-    req: Request<Incoming>,
+    mut req: Request<Incoming>,
     engine: Arc<Engine>,
 ) -> Result<Response<BoxBody>, Infallible> {
     if req.method() == Method::CONNECT {
         return Ok(handle_connect(req, engine));
     }
 
+    // Some clients send a bare path (`POST /api`) as they would to the server itself.
+    let from_host = req.uri().authority().is_none();
+    let rejected = if from_host { url_from_host(&mut req, &engine).err() } else { None };
     let flow = Flow::begin(engine.clone(), &req, req.uri().to_string());
+    if let Some((status, error)) = rejected {
+        return Ok(flow.reject(status, error));
+    }
+    if from_host {
+        req.headers_mut().append(VIA, engine.via.clone());
+    }
+
     let (parts, body) = req.into_parts();
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
     Ok(match engine.http_client.request(outgoing).await {
@@ -147,6 +173,41 @@ pub(crate) async fn handle_request(
         }
         Err(e) => flow.fail(error_chain(&e)),
     })
+}
+
+/// Gives a bare-path request the `http://` URL its `Host` names. Fails when there is no usable
+/// `Host`, or when the request carries this engine's `Via` mark: then it is one the engine sent
+/// that was routed back to it, and forwarding it again would loop forever.
+fn url_from_host(
+    req: &mut Request<Incoming>,
+    engine: &Engine,
+) -> Result<(), (StatusCode, &'static str)> {
+    let Some(host) = req.headers().get(HOST) else {
+        return Err((StatusCode::BAD_REQUEST, "no host in request"));
+    };
+    let Some(authority) = host.to_str().ok().and_then(|h| h.parse::<Authority>().ok()) else {
+        return Err((StatusCode::BAD_REQUEST, "invalid host in request"));
+    };
+    let mut parts = std::mem::take(req.uri_mut()).into_parts();
+    parts.scheme = Some(Scheme::HTTP);
+    parts.authority = Some(authority);
+    if parts.path_and_query.is_none() {
+        parts.path_and_query = Some(PathAndQuery::from_static("/"));
+    }
+    *req.uri_mut() =
+        Uri::from_parts(parts).map_err(|_| (StatusCode::BAD_REQUEST, "invalid host in request"))?;
+
+    let via = engine.via.to_str().unwrap_or_default();
+    let looped = req
+        .headers()
+        .get_all(VIA)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .any(|v| v.split(',').any(|hop| hop.trim() == via));
+    if looped {
+        return Err((StatusCode::LOOP_DETECTED, "request looped back to Yaak Proxy"));
+    }
+    Ok(())
 }
 
 /// Where an intercepted CONNECT tunnel leads.
@@ -358,10 +419,19 @@ async fn forward_https(
         Ok(uri) => uri,
         Err(e) => return Ok(flow.fail(e.to_string())),
     };
-    if !parts.headers.contains_key(HOST)
-        && let Ok(host) = target.authority.parse()
-    {
-        parts.headers.insert(HOST, host);
+    match &upstream {
+        // The URL carries `:authority`. Google's servers reset any stream that also has `Host`,
+        // even a matching one.
+        Upstream::H2(_) => {
+            parts.headers.remove(HOST);
+        }
+        Upstream::H1(_) => {
+            if !parts.headers.contains_key(HOST)
+                && let Ok(host) = target.authority.parse()
+            {
+                parts.headers.insert(HOST, host);
+            }
+        }
     }
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
 

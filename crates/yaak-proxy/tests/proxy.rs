@@ -9,7 +9,7 @@ use futures_util::{SinkExt, StreamExt};
 use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
 use hyper::body::{Frame, Incoming};
-use hyper::header::{CONNECTION, CONTENT_LENGTH, UPGRADE};
+use hyper::header::{CONNECTION, CONTENT_LENGTH, CONTENT_TYPE, HOST, UPGRADE};
 use hyper::service::service_fn;
 use hyper::{Request, Response, StatusCode};
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -87,6 +87,11 @@ async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible>
     Ok(match req.uri().path() {
         "/hello" => Response::new(full("hello")),
         "/echo" => Response::new(full(req.into_body().collect().await.unwrap().to_bytes())),
+        "/authority" => Response::new(full(format!(
+            "authority={} host={}",
+            req.uri().authority().map_or("none".into(), |a| a.to_string()),
+            req.headers().get(HOST).map_or("none", |h| h.to_str().unwrap()),
+        ))),
         "/big" => Response::new(full(vec![b'x'; BIG_BODY])),
         "/late-end" => late_end(5),
         // The stream ends with half the promised bytes, so the upstream resets it mid-body.
@@ -198,6 +203,16 @@ impl Harness {
 
     fn client(&self) -> reqwest::Client {
         self.client_trusting(self.ca.pem())
+    }
+
+    /// Sends `req` to the proxy exactly as built, bare path and all, as a client that doesn't know
+    /// it is talking to a proxy would.
+    async fn send_as_written(&self, req: Request<TestBody>) -> Response<Incoming> {
+        let tcp = TcpStream::connect(("127.0.0.1", self.proxy.port)).await.unwrap();
+        let (mut sender, conn) =
+            hyper::client::conn::http1::handshake(TokioIo::new(tcp)).await.unwrap();
+        tokio::spawn(conn);
+        sender.send_request(req).await.unwrap()
     }
 
     /// A raw connection tunneled through the proxy with CONNECT to `localhost:port`.
@@ -379,6 +394,51 @@ async fn https_post_with_body() {
     assert_eq!((size, truncated), (9, false));
     assert_eq!(body(&events, true), (b"name=yaak".to_vec(), 9));
     assert_eq!(body(&events, false), (b"name=yaak".to_vec(), 9));
+}
+
+/// Chrome's request headers for `optimizationguide-pa.googleapis.com`, plus the other headers
+/// HTTP/2 forbids. Google resets an HTTP/2 stream that has `Host` alongside `:authority`, and
+/// hyper's HTTP/2 server resets one with any of the rest.
+#[tokio::test(flavor = "multi_thread")]
+async fn https_h2_upstream_gets_authority_without_host() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let url = format!("https://localhost:{}/authority", upstream.port());
+
+    let resp = h
+        .client()
+        .post(&url)
+        .header("connection", "keep-alive, x-hop")
+        .header("x-hop", "1")
+        .header("keep-alive", "timeout=5")
+        .header("proxy-connection", "keep-alive")
+        .header("te", "gzip")
+        .header("content-type", "application/x-protobuf")
+        .header("sec-fetch-site", "none")
+        .header("sec-fetch-mode", "no-cors")
+        .header("sec-fetch-dest", "empty")
+        .header(
+            "user-agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like \
+             Gecko) Chrome/156.0.0.0 Safari/537.36",
+        )
+        .header("accept-encoding", "gzip, deflate, br, zstd")
+        .body(vec![0u8; 1034])
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let expected = format!("authority=localhost:{} host=none", upstream.port());
+    assert_eq!(resp.text().await.unwrap(), expected);
+
+    let events = h.flow_events();
+    let version = find!(events, ProxyEvent::ResponseStart { http_version, .. } => http_version);
+    assert_eq!(version, "HTTP/2");
+    let captured_host = events.iter().any(|e| {
+        matches!(e, ProxyEvent::RequestHeader { name, value, .. }
+            if name == "host" && *value == format!("localhost:{}", upstream.port()))
+    });
+    assert!(captured_host, "the captured request keeps Host");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -647,4 +707,75 @@ async fn unreachable_upstream_is_an_error() {
     let error = find!(events, ProxyEvent::Error { error, .. } => error.clone());
     assert!(error.to_lowercase().contains("connect"), "{error}");
     assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })));
+}
+
+/// Telegram's HTTP transport request, `POST /api` with only `Host` to say where it goes, from the
+/// failing flows. `host` replaces Telegram's `149.154.175.58:80`.
+fn telegram_request(host: Option<&str>, path: &str, payload: &[u8]) -> Request<TestBody> {
+    let mut builder = Request::post(path);
+    if let Some(host) = host {
+        builder = builder.header("host", host);
+    }
+    builder
+        .header("content-length", payload.len())
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("connection", "Keep-Alive")
+        .header("accept-encoding", "gzip, deflate")
+        .header("accept-language", "en-US,*")
+        .header("user-agent", "Mozilla/5.0")
+        .body(full(payload.to_vec()))
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn plain_http_bare_path_is_sent_to_host() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(None).await;
+    let payload = [0xefu8; 44];
+
+    let resp = h.send_as_written(telegram_request(Some(&upstream.to_string()), "/echo", &payload));
+    let resp = resp.await;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), &payload[..]);
+
+    let events = h.flow_events();
+    let url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
+    assert_eq!(url, format!("http://{upstream}/echo"));
+    let (status, remote_addr) = find!(events,
+        ProxyEvent::ResponseStart { status, remote_addr, .. } => (*status, *remote_addr));
+    assert_eq!((status, remote_addr), (200, Some(upstream)));
+    assert_eq!(body(&events, true), (payload.to_vec(), 44));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn plain_http_bare_path_without_host_is_a_bad_request() {
+    let h = Harness::start(1024);
+
+    let resp = h.send_as_written(telegram_request(None, "/api", &[0xefu8; 44])).await;
+    assert_eq!(resp.status(), 400);
+    assert_eq!(resp.headers()[CONTENT_TYPE], "text/plain; charset=utf-8");
+    assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), "no host in request");
+
+    let events = h.flow_events();
+    assert_eq!(find!(events, ProxyEvent::RequestStart { url, .. } => url.clone()), "/api");
+    let error = find!(events, ProxyEvent::Error { error, .. } => error.clone());
+    assert_eq!(error, "no host in request");
+    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })));
+}
+
+/// A request whose connection upstream is routed back into the proxy, as happened to Telegram's
+/// while the system proxy was on, arrives again with a bare path. Sending that on would loop
+/// forever.
+#[tokio::test(flavor = "multi_thread")]
+async fn plain_http_request_looped_back_to_the_proxy_stops() {
+    let h = Harness::start(1024);
+    let url = format!("http://127.0.0.1:{}/api", h.proxy.port);
+
+    let resp = h.client().post(&url).body(vec![0xefu8; 44]).send().await.unwrap();
+    assert_eq!(resp.status(), 508);
+    assert_eq!(resp.text().await.unwrap(), "request looped back to Yaak Proxy");
+
+    let events = h.flow_events();
+    let error = find!(events, ProxyEvent::Error { error, .. } => error.clone());
+    assert_eq!(error, "request looped back to Yaak Proxy");
 }

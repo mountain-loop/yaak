@@ -4,7 +4,9 @@ mod connection;
 mod request;
 mod tunnel;
 
+use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
+use std::hash::{BuildHasher, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc as std_mpsc;
@@ -12,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use bytes::Bytes;
+use http::HeaderValue;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
@@ -120,7 +123,9 @@ pub enum ProxyEvent {
         elapsed_ms: u64,
         error: Option<String>,
     },
-    /// No response: connecting to or requesting from upstream failed. The client got a 502.
+    /// No response: connecting to or requesting from upstream failed, and the client got a 502,
+    /// or the engine refused the request (no host to send it to, or it looped back to the engine)
+    /// with a 4xx or 5xx of its own.
     Error {
         id: u64,
         error: String,
@@ -174,6 +179,9 @@ pub(crate) struct Engine {
     upstream_tls_h1: Arc<ClientConfig>,
     passthrough: Mutex<HashSet<String>>,
     handshake_failures: Mutex<HashMap<String, u32>>,
+    /// `Via` value marking requests whose URL the engine rebuilt from `Host`, unique to this run,
+    /// so one that comes back to the engine is refused instead of forwarded again.
+    via: HeaderValue,
 }
 
 impl Engine {
@@ -222,6 +230,11 @@ fn upstream_tls_config(
     Ok(Arc::new(config))
 }
 
+fn via_marker() -> HeaderValue {
+    let run = RandomState::new().build_hasher().finish();
+    HeaderValue::try_from(format!("1.1 yaak-proxy-{run:016x}")).unwrap()
+}
+
 /// Starts the engine on its own thread and Tokio runtime, returning once the port is bound.
 pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
     let mut roots = rustls::RootCertStore::empty();
@@ -243,6 +256,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
         passthrough: Mutex::new(HashSet::new()),
         handshake_failures: Mutex::new(HashMap::new()),
+        via: via_marker(),
     });
 
     let port = config.port;
