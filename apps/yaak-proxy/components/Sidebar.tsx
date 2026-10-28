@@ -2,8 +2,9 @@ import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
-import { atomFamily } from "jotai-family";
+import { atomWithStorage } from "jotai/utils";
 import { useCallback } from "react";
+import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { flowsAtom, flowTotalAtom } from "../lib/store";
 
 /** A node in the sidebar tree — either a domain or a path segment. */
@@ -14,14 +15,33 @@ export type SidebarItem = {
   count: number;
 };
 
-const collapsedAtom = atomFamily((_treeId: string) => atom<Record<string, boolean>>({}));
-
 export const SIDEBAR_TREE_ID = "proxy-sidebar";
 
 const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
   const exchanges = get(flowsAtom);
   return buildTree(exchanges, get(flowTotalAtom));
 });
+
+/** The domains and paths the user expanded, by node id, kept across launches */
+const expandedAtom = atomWithStorage<Record<string, boolean>>("sidebar_expanded", {}, undefined, {
+  getOnInit: true,
+});
+
+/** The other nodes' collapsed flags, for this launch, as before */
+const otherCollapsedAtom = atom<CollapsedMap>({});
+
+/** Domains and paths collapsed until the user expands them, for the tree */
+const collapsedAtom = atom(
+  (get) =>
+    collapsedMap(folderIds(get(sidebarTreeAtom)), get(expandedAtom), get(otherCollapsedAtom)),
+  (get, set, action: CollapsedMap | ((prev: CollapsedMap) => CollapsedMap)) => {
+    const prev = get(collapsedAtom);
+    const next = typeof action === "function" ? action(prev) : action;
+    const split = applyCollapsed(prev, next, get(expandedAtom), get(otherCollapsedAtom));
+    set(expandedAtom, split.expanded);
+    set(otherCollapsedAtom, split.others);
+  },
+);
 
 /** The sidebar nodes selected, or null when the list shows all traffic */
 const selectedNodeIdsAtom = atom((get) => {
@@ -204,7 +224,7 @@ export function Sidebar() {
     <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle">
       <Tree
         treeId={treeId}
-        collapsedAtom={collapsedAtom(treeId)}
+        collapsedAtom={collapsedAtom}
         className="px-2 pt-2 pb-10"
         root={tree}
         getItemKey={getItemKey}

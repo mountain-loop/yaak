@@ -18,7 +18,6 @@
     "@yaakapp-internal/ui": "^1.0.0",
     "classnames": "^2.5.1",
     "jotai": "^2.18.0",
-    "jotai-family": "^1.0.1",
     "motion": "^14.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
