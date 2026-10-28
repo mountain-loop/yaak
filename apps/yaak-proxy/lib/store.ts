@@ -42,24 +42,33 @@ export const followAtom = atom(
   },
 );
 
-let loadingOlder = false;
+/**
+ * Changes applied while a page of older flows loads, or null when none is loading. A slow flow
+ * that ends meanwhile may be older than the window, so left out of it, and missing from a page
+ * read before it was written; applying these again once the page is in keeps it.
+ */
+let changesDuringPage: ModelPayload[] | null = null;
 
 /** Loads the page of flows before the oldest one held */
 export const loadOlderFlowsAtom = atom(null, async (get, set) => {
   const { flows, hasOlder } = get(flowWindowAtom);
   const first = flows[0];
-  if (loadingOlder || !hasOlder || first == null) return;
-  loadingOlder = true;
+  if (changesDuringPage != null || !hasOlder || first == null) return;
+  const changes: ModelPayload[] = [];
+  changesDuringPage = changes;
   try {
     const res = await rpc("list_flows", { before: first.id, limit: PAGE_SIZE });
     // Dropped when the window moved on meanwhile, trimmed or cleared.
-    set(flowWindowAtom, (win) =>
-      win.flows[0]?.id === first.id ? prependOlder(win, res.flows, PAGE_SIZE) : win,
-    );
+    set(flowWindowAtom, (win) => {
+      if (win.flows[0]?.id !== first.id) return win;
+      const merged = prependOlder(win, res.flows, PAGE_SIZE);
+      // Counted when they first applied.
+      return { ...applyChanges(merged, changes), total: merged.total };
+    });
   } catch (err) {
     console.warn("Failed to load older flows", err);
   } finally {
-    loadingOlder = false;
+    changesDuringPage = null;
   }
 });
 
@@ -78,6 +87,7 @@ export function syncFlows(store: ReturnType<typeof createStore>) {
     if (!loaded || pending.length === 0) return;
     const changes = pending;
     pending = [];
+    changesDuringPage?.push(...changes);
     store.set(flowWindowAtom, (win) => {
       const next = applyChanges(win, changes);
       return store.get(followingAtom) ? trimWindow(next) : next;

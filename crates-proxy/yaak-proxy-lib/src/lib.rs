@@ -607,8 +607,7 @@ fn list_actions(
 }
 
 fn list_flows(ctx: &ProxyCtx, req: flows::FlowFilter) -> Result<ListFlowsResponse, RpcError> {
-    let flows = flows::list(&ctx.db, &req).map_err(rpc_error)?;
-    let total = flows::count(&ctx.db).map_err(rpc_error)?;
+    let (flows, total) = flows::page(&ctx.db, &req).map_err(rpc_error)?;
     Ok(ListFlowsResponse { flows, total })
 }
 

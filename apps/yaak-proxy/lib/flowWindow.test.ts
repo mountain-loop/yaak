@@ -128,4 +128,15 @@ describe("prependOlder", () => {
     const win = prependOlder(windowFromPage([flow(5), flow(4)], 2, 5), [flow(4), flow(3)], 2);
     expect(ids(win)).toEqual(["fl_03", "fl_04", "fl_05"]);
   });
+
+  test("keeps a slow flow that ended while the page loaded, once its changes apply again", () => {
+    const before = windowFromPage([flow(5), flow(4)], 2, 5);
+    // Ended mid-request, older than the window, so left out, and missing from the page.
+    const slow = created(flow(2));
+    const live = applyChanges(before, [slow]);
+    expect(ids(live)).toEqual(["fl_04", "fl_05"]);
+    const merged = prependOlder(live, [flow(3), flow(1)], 2);
+    const replayed = applyChanges(merged, [slow]);
+    expect(ids(replayed)).toEqual(["fl_01", "fl_02", "fl_03", "fl_04", "fl_05"]);
+  });
 });

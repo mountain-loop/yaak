@@ -109,67 +109,80 @@ fn host_of(url: &str) -> &str {
 /// The flows `filter` covers, newest first: by start, then by id. Reads only as far into the
 /// table as the limit needs, so a page costs the same however many flows there are.
 pub fn list(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
+    db.with_conn(|c| list_in(c.conn().resolve(), filter))
+}
+
+/// [`list`] and the count of every flow, read from one snapshot of the database, so the count
+/// takes in exactly the flows written before the page was read.
+pub fn page(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<(Vec<Flow>, usize), String> {
     db.with_conn(|c| {
-        let conn = c.conn().resolve();
-        let mut sql = String::from("SELECT * FROM flows WHERE 1");
-        let mut params: Vec<rusqlite::types::Value> = Vec::new();
-        if let Some(id) = &filter.after {
-            // By rowid, which only grows as flows are written.
-            let rowid: i64 = conn
-                .query_row("SELECT rowid FROM flows WHERE id = ?", [id], |r| r.get(0))
-                .map_err(|_| format!("No flow {id}"))?;
-            sql.push_str(" AND rowid > ?");
-            params.push(rowid.into());
-        }
-        if let Some(id) = &filter.before {
-            let started_at: rusqlite::types::Value = conn
-                .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
-                .map_err(|_| format!("No flow {id}"))?;
-            sql.push_str(" AND (started_at, id) < (?, ?)");
-            params.push(started_at);
-            params.push(id.clone().into());
-        }
-        sql.push_str(" ORDER BY started_at DESC, id DESC");
-        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(params), Flow::from_row)
-            .map_err(|e| e.to_string())?;
-        let mut flows = Vec::new();
-        for flow in rows {
-            if flows.len() >= filter.limit.unwrap_or(usize::MAX) {
-                break;
-            }
-            let flow = flow.map_err(|e| e.to_string())?;
-            if filter.matches(&flow) {
-                flows.push(flow);
-            }
-        }
-        Ok(flows)
+        let tx = c.conn().resolve().unchecked_transaction().map_err(|e| e.to_string())?;
+        let flows = list_in(&tx, filter)?;
+        let total = count_in(&tx)?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok((flows, total))
     })
 }
 
-/// Deletes every flow, then their bodies, each in a transaction. Returns how many there were.
+fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
+    let mut sql = String::from("SELECT * FROM flows WHERE 1");
+    let mut params: Vec<rusqlite::types::Value> = Vec::new();
+    if let Some(id) = &filter.after {
+        // By rowid, which only grows as flows are written.
+        let rowid: i64 = conn
+            .query_row("SELECT rowid FROM flows WHERE id = ?", [id], |r| r.get(0))
+            .map_err(|_| format!("No flow {id}"))?;
+        sql.push_str(" AND rowid > ?");
+        params.push(rowid.into());
+    }
+    if let Some(id) = &filter.before {
+        let started_at: rusqlite::types::Value = conn
+            .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
+            .map_err(|_| format!("No flow {id}"))?;
+        sql.push_str(" AND (started_at, id) < (?, ?)");
+        params.push(started_at);
+        params.push(id.clone().into());
+    }
+    sql.push_str(" ORDER BY started_at DESC, id DESC");
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(params), Flow::from_row)
+        .map_err(|e| e.to_string())?;
+    let mut flows = Vec::new();
+    for flow in rows {
+        if flows.len() >= filter.limit.unwrap_or(usize::MAX) {
+            break;
+        }
+        let flow = flow.map_err(|e| e.to_string())?;
+        if filter.matches(&flow) {
+            flows.push(flow);
+        }
+    }
+    Ok(flows)
+}
+
+/// Deletes every flow and their bodies, in a transaction in each database. The flows' deletion
+/// commits only after their bodies' has, so when clearing the bodies fails the flows stay, to be
+/// cleared again. Returns how many there were.
 pub fn clear(db: &ProxyQueryManager, blobs: &BlobManager) -> Result<usize, String> {
-    let ids = db
-        .with_tx(|c| {
-            let conn = c.conn().resolve();
-            let mut stmt = conn.prepare("SELECT id FROM flows")?;
-            let ids = stmt.query_map([], |r| r.get(0))?.collect::<Result<Vec<String>, _>>()?;
-            conn.execute("DELETE FROM flows", [])?;
-            Ok::<_, yaak_database::Error>(ids)
-        })
-        .map_err(|e| format!("Failed to clear flows: {e}"))?;
-    // Only the deleted flows' bodies, so a flow still in flight keeps what it has written.
-    blobs
-        .with_tx(|b| {
-            for id in &ids {
-                b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
-                b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
-            }
-            Ok::<_, yaak_models::error::Error>(())
-        })
-        .map_err(|e| format!("Failed to clear flow bodies: {e}"))?;
-    Ok(ids.len())
+    db.with_tx(|c| {
+        let conn = c.conn().resolve();
+        let mut stmt = conn.prepare("SELECT id FROM flows")?;
+        let ids = stmt.query_map([], |r| r.get(0))?.collect::<Result<Vec<String>, _>>()?;
+        conn.execute("DELETE FROM flows", [])?;
+        // Only the deleted flows' bodies, so a flow still in flight keeps what it has written.
+        blobs
+            .with_tx(|b| {
+                for id in &ids {
+                    b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
+                    b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
+                }
+                Ok::<_, yaak_models::error::Error>(())
+            })
+            .map_err(|e| yaak_database::Error::Database(format!("flow bodies: {e}")))?;
+        Ok::<_, yaak_database::Error>(ids.len())
+    })
+    .map_err(|e| format!("Failed to clear flows: {e}"))
 }
 
 pub fn find(db: &ProxyQueryManager, flow_id: &str) -> Option<Flow> {
@@ -181,13 +194,13 @@ pub fn get(db: &ProxyQueryManager, flow_id: &str) -> Result<Flow, String> {
 }
 
 pub fn count(db: &ProxyQueryManager) -> Result<usize, String> {
-    db.with_conn(|c| {
-        c.conn()
-            .resolve()
-            .query_row("SELECT COUNT(*) FROM flows", [], |r| r.get::<_, i64>(0))
-            .map(|n| n as usize)
-            .map_err(|e| e.to_string())
-    })
+    db.with_conn(|c| count_in(c.conn().resolve()))
+}
+
+fn count_in(conn: &rusqlite::Connection) -> Result<usize, String> {
+    conn.query_row("SELECT COUNT(*) FROM flows", [], |r| r.get::<_, i64>(0))
+        .map(|n| n as usize)
+        .map_err(|e| e.to_string())
 }
 
 /// A body in JSON: text when it is UTF-8, base64 when it is not.
@@ -324,8 +337,13 @@ mod tests {
         let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
         let at = |s| chrono::DateTime::from_timestamp(s, 0).unwrap().naive_utc();
         // Two started together, which their ids order.
-        for (id, started) in [("fl_a", 10), ("fl_b", 20), ("fl_c", 20), ("fl_d", 30), ("fl_e", 40)]
-        {
+        for (id, started) in [
+            ("fl_a", 10),
+            ("fl_b", 20),
+            ("fl_c", 20),
+            ("fl_d", 30),
+            ("fl_e", 40),
+        ] {
             let flow = Flow {
                 id: id.into(),
                 started_at: at(started),
@@ -340,9 +358,11 @@ mod tests {
         };
         let newest = FlowFilter { limit: Some(2), ..Default::default() };
         assert_eq!(page(newest), vec!["fl_e", "fl_d"]);
-        let older = FlowFilter { before: Some("fl_d".into()), limit: Some(2), ..Default::default() };
+        let older =
+            FlowFilter { before: Some("fl_d".into()), limit: Some(2), ..Default::default() };
         assert_eq!(page(older), vec!["fl_c", "fl_b"]);
-        let oldest = FlowFilter { before: Some("fl_b".into()), limit: Some(2), ..Default::default() };
+        let oldest =
+            FlowFilter { before: Some("fl_b".into()), limit: Some(2), ..Default::default() };
         assert_eq!(page(oldest), vec!["fl_a"]);
         // The limit counts flows the filter keeps.
         let ok = FlowFilter {
@@ -376,6 +396,11 @@ mod tests {
         }
         // A flow still in flight has written a body but not its row.
         write_body("fl_live", FlowBody::Request);
+
+        // Bodies that fail to clear keep their flows, to clear again.
+        let read_only = crate::db::open_blobs_read_only(&dir.path().join("blobs.sqlite")).unwrap();
+        assert!(clear(&db, &read_only).is_err());
+        assert_eq!(count(&db).unwrap(), 2);
 
         assert_eq!(clear(&db, &blobs).unwrap(), 2);
         assert_eq!(count(&db).unwrap(), 0);
