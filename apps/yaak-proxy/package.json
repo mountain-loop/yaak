@@ -13,7 +13,6 @@
     "@tanstack/react-virtual": "^3.14.17",
     "@tauri-apps/api": "^2.12.3",
     "@tauri-apps/plugin-os": "^2.4.0",
-    "@yaakapp-internal/model-store": "^1.0.0",
     "@yaakapp-internal/proxy-lib": "^1.0.0",
     "@yaakapp-internal/theme": "^1.0.0",
     "@yaakapp-internal/ui": "^1.0.0",

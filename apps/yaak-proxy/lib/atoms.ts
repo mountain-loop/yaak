@@ -1,8 +1,15 @@
+import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { SplitLayoutLayout } from "@yaakapp-internal/ui";
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 
-export const selectedFlowIdAtom = atom<string | null>(null);
+/** The selected flow as last seen, kept once the window has dropped it so the detail stays */
+export const selectedFlowAtom = atom<Flow | null>(null);
+
+export const selectedFlowIdAtom = atom((get) => get(selectedFlowAtom)?.id ?? null);
+
+/** The list follows new traffic, rather than being held where it was scrolled or selected */
+export const followingAtom = atom(true);
 
 /** Stacked by default; the header's toggle switches to side by side */
 export const flowLayoutAtom = atomWithStorage<SplitLayoutLayout>("flow_layout", "vertical");

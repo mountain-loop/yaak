@@ -329,6 +329,14 @@ impl ProxyCtx {
         );
         Ok(saved)
     }
+
+    /// Deletes every flow and its bodies, and tells the app so its list empties. Returns how
+    /// many there were.
+    pub fn clear_flows(&self) -> Result<usize, String> {
+        let cleared = flows::clear(&self.db, &self.blobs)?;
+        self.events.emit("flows_cleared", &FlowsClearedPayload {});
+        Ok(cleared)
+    }
 }
 
 /// Something accepts connections on `127.0.0.1:<port>`.
@@ -365,16 +373,24 @@ pub struct ListActionsResponse {
     pub actions: Vec<(ActionInvocation, ActionMetadata)>,
 }
 
-#[derive(Deserialize, TS)]
-#[ts(export, export_to = "gen_rpc.ts")]
-pub struct ListModelsRequest {}
-
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 #[serde(rename_all = "camelCase")]
-pub struct ListModelsResponse {
+pub struct ListFlowsResponse {
+    /// Newest first.
     pub flows: Vec<Flow>,
+    /// Flows in the database, whatever the filter.
+    #[ts(type = "number")]
+    pub total: usize,
 }
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ClearFlowsRequest {}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FlowsClearedPayload {}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
@@ -469,6 +485,9 @@ fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, 
         ActionInvocation::Global { action } => match action {
             GlobalAction::ProxyStart => ctx.start().map_err(|message| RpcError { message })?,
             GlobalAction::ProxyStop => ctx.stop().map_err(|message| RpcError { message })?,
+            GlobalAction::FlowsClear => {
+                ctx.clear_flows().map_err(|message| RpcError { message })?;
+            }
         },
     }
     Ok(true)
@@ -587,12 +606,14 @@ fn list_actions(
     Ok(ListActionsResponse { actions: crate::actions::all_global_actions() })
 }
 
-fn list_models(ctx: &ProxyCtx, _req: ListModelsRequest) -> Result<ListModelsResponse, RpcError> {
-    ctx.db.with_conn(|db| {
-        Ok(ListModelsResponse {
-            flows: db.find_all::<Flow>().map_err(|e| RpcError { message: e.to_string() })?,
-        })
-    })
+fn list_flows(ctx: &ProxyCtx, req: flows::FlowFilter) -> Result<ListFlowsResponse, RpcError> {
+    let flows = flows::list(&ctx.db, &req).map_err(rpc_error)?;
+    let total = flows::count(&ctx.db).map_err(rpc_error)?;
+    Ok(ListFlowsResponse { flows, total })
+}
+
+async fn clear_flows(ctx: ProxyCtx, _req: ClearFlowsRequest) -> Result<usize, RpcError> {
+    blocking(move || ctx.clear_flows()).await
 }
 
 // -- Event loop --
@@ -746,17 +767,19 @@ define_rpc! {
         format_body(FormatBodyRequest) -> String,
         get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
         list_actions(ListActionsRequest) -> ListActionsResponse,
-        list_models(ListModelsRequest) -> ListModelsResponse,
+        list_flows(flows::FlowFilter) -> ListFlowsResponse,
     }
     async_commands {
         ca_status(CaStatusRequest) -> CaStatus,
         ca_trust(CaTrustRequest) -> CaStatus,
+        clear_flows(ClearFlowsRequest) -> usize,
         filter_body(FilterBodyRequest) -> FilterBodyResponse,
         get_flow_body(GetFlowBodyRequest) -> GetFlowBodyResponse,
         system_proxy_set(SystemProxySetRequest) -> SystemProxyStatus,
         system_proxy_status(SystemProxyStatusRequest) -> SystemProxyStatus,
     }
     events {
+        flows_cleared(FlowsClearedPayload),
         model_write(ModelPayload),
         proxy_state_changed(ProxyStatePayload),
     }

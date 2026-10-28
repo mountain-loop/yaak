@@ -4,13 +4,14 @@ import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
 import { atomFamily } from "jotai-family";
 import { useCallback } from "react";
-import { flowsAtom } from "../lib/store";
+import { flowsAtom, flowTotalAtom } from "../lib/store";
 
 /** A node in the sidebar tree — either a domain or a path segment. */
 export type SidebarItem = {
   id: string;
   label: string;
-  exchangeIds: string[];
+  /** Flows held under this node; for the Domains folder, every flow in the database */
+  count: number;
 };
 
 const collapsedAtom = atomFamily((_treeId: string) => atom<Record<string, boolean>>({}));
@@ -19,36 +20,31 @@ export const SIDEBAR_TREE_ID = "proxy-sidebar";
 
 const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
   const exchanges = get(flowsAtom);
-  return buildTree(exchanges);
+  return buildTree(exchanges, get(flowTotalAtom));
+});
+
+/** The sidebar nodes selected, or null when the list shows all traffic */
+const selectedNodeIdsAtom = atom((get) => {
+  const selectedIds = get(selectedIdsFamily(SIDEBAR_TREE_ID));
+  // Nothing selected, or a node holding everything → show all
+  if (selectedIds.length === 0 || selectedIds.includes("root") || selectedIds.includes("domains")) {
+    return null;
+  }
+  return new Set(selectedIds);
 });
 
 /** Exchanges filtered by the currently selected sidebar node(s). */
 export const filteredExchangesAtom = atom((get) => {
   const exchanges = get(flowsAtom);
-  const tree = get(sidebarTreeAtom);
-  const selectedIds = get(selectedIdsFamily(SIDEBAR_TREE_ID));
-
-  // Nothing selected or root selected → show all
-  if (selectedIds.length === 0 || selectedIds.includes("root")) {
-    return exchanges;
-  }
-
-  // Collect exchange IDs from all selected nodes
-  const allowedIds = new Set<string>();
-  const nodeMap = new Map<string, SidebarItem>();
-  collectNodes(tree, nodeMap);
-
-  for (const selectedId of selectedIds) {
-    const node = nodeMap.get(selectedId);
-    if (node) {
-      for (const id of node.exchangeIds) {
-        allowedIds.add(id);
-      }
-    }
-  }
-
-  return exchanges.filter((ex) => allowedIds.has(ex.id));
+  const selected = get(selectedNodeIdsAtom);
+  if (selected == null) return exchanges;
+  return exchanges.filter((ex) => nodeIdsOf(ex).some((id) => selected.has(id)));
 });
+
+/** Flows in the database for all traffic, or those held under the selected nodes */
+export const filteredCountAtom = atom((get) =>
+  get(selectedNodeIdsAtom) == null ? get(flowTotalAtom) : get(filteredExchangesAtom).length,
+);
 
 /** The selected sidebar node's name, for the header */
 export const selectedSidebarLabelAtom = atom((get) => {
@@ -58,12 +54,36 @@ export const selectedSidebarLabelAtom = atom((get) => {
   return "All traffic";
 });
 
-function collectNodes(node: TreeNode<SidebarItem>, map: Map<string, SidebarItem>) {
-  map.set(node.item.id, node.item);
-  for (const child of node.children ?? []) {
-    collectNodes(child, map);
+const nodeIdsByFlow = new WeakMap<Flow, string[]>();
+
+/**
+ * The ids of the nodes a flow sits under, its domain first and then each path segment's, parsed
+ * once per flow rather than on every change to the list.
+ */
+function nodeIdsOf(ex: Flow): string[] {
+  let ids = nodeIdsByFlow.get(ex);
+  if (ids != null) return ids;
+  let hostname: string;
+  let segments: string[];
+  try {
+    const url = new URL(ex.url);
+    hostname = url.host;
+    segments = url.pathname.split("/").filter(Boolean);
+  } catch {
+    hostname = ex.url;
+    segments = [];
   }
+  ids = [`domain:${hostname}`];
+  let path = `path:${hostname}`;
+  for (const seg of segments) {
+    path += `/${seg}`;
+    ids.push(path);
+  }
+  nodeIdsByFlow.set(ex, ids);
+  return ids;
 }
+
+const collator = new Intl.Collator();
 
 /**
  * Build a domain → path-segment trie from a flat list of exchanges.
@@ -80,8 +100,8 @@ function collectNodes(node: TreeNode<SidebarItem>, map: Map<string, SidebarItem>
  *         /123
  *       /orders
  */
-function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
-  const root: SidebarItem = { id: "root", label: "All Traffic", exchangeIds: [] };
+function buildTree(exchanges: Flow[], total: number): TreeNode<SidebarItem> {
+  const root: SidebarItem = { id: "root", label: "All Traffic", count: 0 };
   const rootNode: TreeNode<SidebarItem> = {
     item: root,
     parent: null,
@@ -94,54 +114,26 @@ function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
   type TrieNode = {
     id: string;
     label: string;
-    exchangeIds: string[];
+    count: number;
     children: Map<string, TrieNode>;
   };
 
   const domainMap = new Map<string, TrieNode>();
 
   for (const ex of exchanges) {
-    let hostname: string;
-    let segments: string[];
-    try {
-      const url = new URL(ex.url);
-      hostname = url.host;
-      segments = url.pathname.split("/").filter(Boolean);
-    } catch {
-      hostname = ex.url;
-      segments = [];
-    }
-
-    // Get or create domain node
-    let domainNode = domainMap.get(hostname);
-    if (!domainNode) {
-      domainNode = {
-        id: `domain:${hostname}`,
-        label: hostname,
-        exchangeIds: [],
-        children: new Map(),
-      };
-      domainMap.set(hostname, domainNode);
-    }
-    domainNode.exchangeIds.push(ex.id);
-
-    // Walk path segments
-    let current = domainNode;
-    const pathSoFar: string[] = [];
-    for (const seg of segments) {
-      pathSoFar.push(seg);
-      let child = current.children.get(seg);
-      if (!child) {
-        child = {
-          id: `path:${hostname}/${pathSoFar.join("/")}`,
-          label: `/${seg}`,
-          exchangeIds: [],
-          children: new Map(),
-        };
-        current.children.set(seg, child);
+    const ids = nodeIdsOf(ex);
+    let current: TrieNode | undefined;
+    for (const id of ids) {
+      const siblings = current == null ? domainMap : current.children;
+      let node = siblings.get(id);
+      if (node == null) {
+        // The domain, or the path's last segment
+        const label = current == null ? id.slice("domain:".length) : id.slice(id.lastIndexOf("/"));
+        node = { id, label, count: 0, children: new Map() };
+        siblings.set(id, node);
       }
-      child.exchangeIds.push(ex.id);
-      current = child;
+      node.count++;
+      current = node;
     }
   }
 
@@ -155,7 +147,7 @@ function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
       item: {
         id: trie.id,
         label: trie.label,
-        exchangeIds: trie.exchangeIds,
+        count: trie.count,
       },
       parent,
       depth,
@@ -163,7 +155,7 @@ function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
       draggable: false,
     };
     const sortedChildren = [...trie.children.values()].sort((a, b) =>
-      a.label.localeCompare(b.label),
+      collator.compare(a.label, b.label),
     );
     for (const child of sortedChildren) {
       node.children?.push(toTreeNode(child, node, depth + 1));
@@ -172,16 +164,15 @@ function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
   }
 
   // Add a "Domains" folder between root and domain nodes
-  const allExchangeIds = exchanges.map((ex) => ex.id);
   const domainsFolder: TreeNode<SidebarItem> = {
-    item: { id: "domains", label: "Domains", exchangeIds: allExchangeIds },
+    item: { id: "domains", label: "Domains", count: total },
     parent: rootNode,
     depth: 1,
     children: [],
     draggable: false,
   };
 
-  const sortedDomains = [...domainMap.values()].sort((a, b) => a.label.localeCompare(b.label));
+  const sortedDomains = [...domainMap.values()].sort((a, b) => collator.compare(a.label, b.label));
   for (const domain of sortedDomains) {
     domainsFolder.children?.push(toTreeNode(domain, domainsFolder, 2));
   }
@@ -192,7 +183,7 @@ function buildTree(exchanges: Flow[]): TreeNode<SidebarItem> {
 }
 
 function ItemInner({ item }: { item: SidebarItem }) {
-  const count = item.exchangeIds.length;
+  const count = item.count;
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
       <span className="truncate">{item.label}</span>
@@ -205,23 +196,20 @@ export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
   const treeId = SIDEBAR_TREE_ID;
 
-  const getItemKey = useCallback(
-    (item: SidebarItem) => `${item.id}:${item.exchangeIds.length}`,
-    [],
-  );
+  const getItemKey = useCallback((item: SidebarItem) => `${item.id}:${item.count}`, []);
 
   return (
-    <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 overflow-y-auto border-r border-border-subtle">
-      <div className="pt-2">
-        <Tree
-          treeId={treeId}
-          collapsedAtom={collapsedAtom(treeId)}
-          className="px-2 pb-10"
-          root={tree}
-          getItemKey={getItemKey}
-          ItemInner={ItemInner}
-        />
-      </div>
+    // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows
+    // in view rather than every domain and path.
+    <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle">
+      <Tree
+        treeId={treeId}
+        collapsedAtom={collapsedAtom(treeId)}
+        className="px-2 pt-2 pb-10"
+        root={tree}
+        getItemKey={getItemKey}
+        ItemInner={ItemInner}
+      />
     </aside>
   );
 }

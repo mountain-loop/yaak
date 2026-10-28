@@ -5,14 +5,14 @@ import { useState } from "react";
 import { useLocalStorage } from "react-use";
 import { flowLayoutAtom } from "../lib/atoms";
 import { getOsType } from "../lib/tauri";
+import { ClearFlowsButton } from "./ClearFlowsButton";
 import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
 import { ProxyStatus } from "./ProxyStatus";
-import { filteredExchangesAtom, selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
+import { filteredCountAtom, selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
 
 export function ProxyLayout() {
   const os = getOsType();
-  const exchanges = useAtomValue(filteredExchangesAtom);
   const title = useAtomValue(selectedSidebarLabelAtom);
   const [flowLayout, setFlowLayout] = useAtom(flowLayoutAtom);
   const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
@@ -61,12 +61,11 @@ export function ProxyLayout() {
             className="pointer-events-none flex items-center justify-center gap-2 text-sm px-2 min-w-0"
           >
             <span className="truncate">{title}</span>
-            <span className="text-text-subtlest shrink-0">
-              {exchanges.length === 1 ? "1 flow" : `${exchanges.length} flows`}
-            </span>
+            <FlowCount />
           </div>
           <div className="flex items-center gap-1 pr-1">
             <ProxyStatus />
+            <ClearFlowsButton />
             <IconButton
               className="pointer-events-auto"
               icon={flowLayout === "horizontal" ? "columns_2" : "rows_2"}
@@ -127,12 +126,7 @@ export function ProxyLayout() {
           layout={flowLayout}
           defaultRatio={0.55}
           firstSlot={({ style, orientation }) => (
-            <FlowList
-              flows={exchanges}
-              sideBySide={orientation === "horizontal"}
-              style={style}
-              className="pt-1"
-            />
+            <FlowList sideBySide={orientation === "horizontal"} style={style} className="pt-1" />
           )}
           secondSlot={({ style, orientation }) => (
             <FlowDetail style={style} sideBySide={orientation === "horizontal"} />
@@ -140,5 +134,13 @@ export function ProxyLayout() {
         />
       </SidebarLayout>
     </div>
+  );
+}
+
+/** Its own component, so new traffic re-renders the count rather than the whole layout */
+function FlowCount() {
+  const count = useAtomValue(filteredCountAtom);
+  return (
+    <span className="text-text-subtlest shrink-0">{count === 1 ? "1 flow" : `${count} flows`}</span>
   );
 }

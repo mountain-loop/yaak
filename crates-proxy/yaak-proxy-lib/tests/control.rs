@@ -164,6 +164,16 @@ async fn round_trip() {
     );
     assert_eq!(control::read(dir.path()).unwrap().proxy_port, None);
 
+    let clear = http
+        .post(format!("{}/flows/clear", info.base_url()))
+        .bearer_auth(&info.token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(clear.json::<control::ClearResponse>().await.unwrap().cleared, 1);
+    assert!(client.flows(&FlowFilter::default()).await.unwrap().is_empty());
+    assert!(client.body(&flow.id, FlowBody::Response).await.is_err());
+
     drop(server);
     assert!(!dir.path().join("control.json").exists());
     assert!(control::live_owner(dir.path()).is_none());

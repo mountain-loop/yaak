@@ -19,6 +19,8 @@ export type CaStatusRequest = Record<string, never>;
 
 export type CaTrustRequest = Record<string, never>;
 
+export type ClearFlowsRequest = Record<string, never>;
+
 export type FilterBodyRequest = { flowId: string, which: FlowBody, 
 /**
  * JSONPath, or XPath for an XML or HTML body.
@@ -32,6 +34,39 @@ language?: FilterLanguage, };
 export type FilterBodyResponse = { content: string, error: string | null, };
 
 export type FilterLanguage = "jsonpath" | "xpath";
+
+/**
+ * Which flows a listing or a HAR export covers. Every field narrows it; none is all of them.
+ */
+export type FlowFilter = { 
+/**
+ * Part of the host, any case: `stripe` matches `api.stripe.com`.
+ */
+host?: string, 
+/**
+ * The method, any case.
+ */
+method?: string, 
+/**
+ * A status (`404`), a class of them (`4xx`), or `error` for flows that failed.
+ */
+status?: string, 
+/**
+ * At most this many flows, the newest.
+ */
+limit?: number, 
+/**
+ * Only flows recorded after the flow with this id, for following new traffic. Flows are
+ * recorded when they end, so a slow one that started earlier still comes through.
+ */
+after?: string, 
+/**
+ * Only flows older than the flow with this id, by start and then id, for paging back
+ * through older traffic.
+ */
+before?: string, };
+
+export type FlowsClearedPayload = Record<string, never>;
 
 export type FormatBodyRequest = { text: string, };
 
@@ -59,15 +94,21 @@ export type GetProxyStateResponse = { state: ProxyState,
  */
 port: number | null, };
 
-export type GlobalAction = "proxy_start" | "proxy_stop";
+export type GlobalAction = "proxy_start" | "proxy_stop" | "flows_clear";
 
 export type ListActionsRequest = Record<string, never>;
 
 export type ListActionsResponse = { actions: Array<[ActionInvocation, ActionMetadata]>, };
 
-export type ListModelsRequest = Record<string, never>;
-
-export type ListModelsResponse = { flows: Array<Flow>, };
+export type ListFlowsResponse = { 
+/**
+ * Newest first.
+ */
+flows: Array<Flow>, 
+/**
+ * Flows in the database, whatever the filter.
+ */
+total: number, };
 
 /**
  * The process that runs the engine.
@@ -80,9 +121,9 @@ export type ProxyState = "running" | "stopped";
 
 export type ProxyStatePayload = { state: ProxyState, };
 
-export type RpcEventSchema = { model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
+export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_models: [ListModelsRequest, ListModelsResponse], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], };
 
 export type ServiceProxy = { 
 /**

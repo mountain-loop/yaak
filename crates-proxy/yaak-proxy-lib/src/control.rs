@@ -223,6 +223,12 @@ pub struct SystemProxyRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClearResponse {
+    /// How many flows were deleted.
+    pub cleared: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorBody {
     pub error: String,
 }
@@ -469,6 +475,10 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["flows"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
             json(&flows::list(&ctx.db, &filter)?)
+        }
+        (&Method::POST, ["flows", "clear"]) => {
+            let ctx = ctx.clone();
+            json(&ClearResponse { cleared: blocking(move || ctx.clear_flows()).await? })
         }
         (&Method::GET, ["flows", id]) => {
             found(ctx, id)?;

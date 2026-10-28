@@ -3,34 +3,48 @@ import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { formatMillis, HttpMethodTagRaw, HttpStatusTagRaw, Icon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtom, useAtomValue } from "jotai";
-import type { CSSProperties, KeyboardEvent } from "react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import type { CSSProperties, KeyboardEvent, WheelEvent } from "react";
 import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { selectedFlowIdAtom } from "../lib/atoms";
+import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
+import { compareFlows } from "../lib/flowWindow";
 import { countNewFlows } from "../lib/follow";
-import { flowsAtom } from "../lib/store";
+import { followAtom, loadOlderFlowsAtom, newestStartedAtAtom, oldestFlowAtom } from "../lib/store";
+import { filteredExchangesAtom } from "./Sidebar";
 
 const ROW_HEIGHT = 24;
 const BOTTOM_PADDING = 6;
+/** Rows from the top at which older flows start loading */
+const LOAD_OLDER_ROWS = 20;
 
 interface Props {
-  flows: Flow[];
   sideBySide: boolean;
   style?: CSSProperties;
   className?: string;
 }
 
-/** Follows new traffic until a flow is selected or the list is scrolled, then holds */
-export function FlowList({ flows, sideBySide, style, className }: Props) {
-  const [selectedId, setSelectedId] = useAtom(selectedFlowIdAtom);
+/**
+ * Follows new traffic until a flow is selected or the list is scrolled, then holds. Scrolling to
+ * the top loads older flows from the database.
+ */
+export function FlowList({ sideBySide, style, className }: Props) {
+  const flows = useAtomValue(filteredExchangesAtom);
+  const selectedId = useAtomValue(selectedFlowIdAtom);
+  const setSelectedFlow = useSetAtom(selectedFlowAtom);
+  const loadOlder = useSetAtom(loadOlderFlowsAtom);
+  const oldestFlow = useAtomValue(oldestFlowAtom);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ignoreScroll = useRef(false);
-  const [following, setFollowing] = useState(true);
+  const [following, setFollowing] = useAtom(followAtom);
   const [heldAt, setHeldAt] = useState<string | null>(null);
   // The newest flow across all traffic, not just this list, so a filter change keeps the hold
-  const allFlows = useAtomValue(flowsAtom);
-  const newestStartedAt = allFlows[allFlows.length - 1]?.startedAt ?? null;
+  const newestStartedAt = useAtomValue(newestStartedAtAtom);
+  // Read by the callbacks below, which stay the same across new traffic so rows don't re-render
+  const latest = useRef({ flows, following, newestStartedAt });
+  useLayoutEffect(() => {
+    latest.current = { flows, following, newestStartedAt };
+  });
 
   const virtualizer = useVirtualizer({
     count: flows.length,
@@ -52,20 +66,37 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
   }, []);
 
   const hold = useCallback(() => {
-    if (!following) return;
+    if (!latest.current.following) return;
     setFollowing(false);
-    setHeldAt(newestStartedAt);
-  }, [following, newestStartedAt]);
+    setHeldAt(latest.current.newestStartedAt);
+  }, [setFollowing]);
 
   const follow = useCallback(() => {
     setFollowing(true);
     setHeldAt(null);
     setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [setScrollTop]);
+  }, [setFollowing, setScrollTop]);
 
   useLayoutEffect(() => {
     if (following) setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [following, flows.length, setScrollTop]);
+  }, [following, flows, setScrollTop]);
+
+  // Older flows that loaded in above push the rows down; scroll by as much, so they stay put.
+  const anchor = useRef<Flow | null>(null);
+  useLayoutEffect(() => {
+    const previous = anchor.current;
+    anchor.current = oldestFlow;
+    if (following || previous == null || oldestFlow == null) return;
+    if (compareFlows(oldestFlow, previous) >= 0) return;
+    const added = flows.findIndex((f) => compareFlows(f, previous) >= 0);
+    const el = scrollRef.current;
+    if (added > 0 && el != null) setScrollTop(el.scrollTop + added * ROW_HEIGHT);
+  }, [oldestFlow, flows, following, setScrollTop]);
+
+  const loadOlderHeld = useCallback(() => {
+    hold();
+    void loadOlder();
+  }, [hold, loadOlder]);
 
   const handleScroll = useCallback(() => {
     if (ignoreScroll.current) {
@@ -80,14 +111,23 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
       setHeldAt(null);
     } else {
       hold();
+      if (el.scrollTop < LOAD_OLDER_ROWS * ROW_HEIGHT) void loadOlder();
     }
-  }, [hold]);
+  }, [hold, loadOlder, setFollowing]);
+
+  // A list too short to scroll still loads older flows on scrolling up.
+  const handleWheel = useCallback(
+    (e: WheelEvent<HTMLDivElement>) => {
+      if (e.deltaY < 0 && e.currentTarget.scrollTop <= 0) loadOlderHeld();
+    },
+    [loadOlderHeld],
+  );
 
   const select = useCallback(
     (index: number) => {
-      const flow = flows[index];
+      const flow = latest.current.flows[index];
       if (flow == null) return;
-      setSelectedId(flow.id);
+      setSelectedFlow(flow);
       hold();
       const el = scrollRef.current;
       if (el == null) return;
@@ -97,7 +137,7 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
         setScrollTop(top + ROW_HEIGHT - el.clientHeight);
       }
     },
-    [flows, hold, setSelectedId, setScrollTop],
+    [hold, setSelectedFlow, setScrollTop],
   );
 
   const handleKeyDown = useCallback(
@@ -107,9 +147,10 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
       e.preventDefault();
       const index = flows.findIndex((f) => f.id === selectedId);
       if (index === -1) select(e.key === "ArrowDown" ? 0 : flows.length - 1);
+      else if (index === 0 && e.key === "ArrowUp") loadOlderHeld();
       else select(e.key === "ArrowDown" ? index + 1 : index - 1);
     },
-    [flows, select, selectedId],
+    [flows, loadOlderHeld, select, selectedId],
   );
 
   const newCount = following ? 0 : countNewFlows(flows, heldAt);
@@ -146,6 +187,7 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
           aria-label="Flows"
           tabIndex={0}
           onScroll={handleScroll}
+          onWheel={handleWheel}
           onKeyDown={handleKeyDown}
           className="group/flows h-full overflow-y-auto px-1.5 outline-hidden"
         >

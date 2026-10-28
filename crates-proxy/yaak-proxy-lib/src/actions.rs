@@ -7,6 +7,7 @@ use ts_rs::TS;
 pub enum GlobalAction {
     ProxyStart,
     ProxyStop,
+    FlowsClear,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -43,6 +44,13 @@ pub fn all_global_actions() -> Vec<(ActionInvocation, ActionMetadata)> {
             ActionMetadata {
                 label: "Stop Proxy".into(),
                 default_hotkey: default_hotkey("Meta+Shift+S", "Ctrl+Shift+S"),
+            },
+        ),
+        (
+            ActionInvocation::Global { action: GlobalAction::FlowsClear },
+            ActionMetadata {
+                label: "Clear Flows".into(),
+                default_hotkey: default_hotkey("Meta+K", "Ctrl+K"),
             },
         ),
     ]

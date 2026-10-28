@@ -17,20 +17,14 @@ import {
   Tabs,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { atom, useAtomValue } from "jotai";
+import { useAtomValue } from "jotai";
 import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
-import { selectedFlowIdAtom } from "../lib/atoms";
+import { selectedFlowAtom } from "../lib/atoms";
 import { findHeader, mimeEssence } from "../lib/body";
 import { statusReason } from "../lib/statusReason";
-import { flowsAtom } from "../lib/store";
 import { EmptyState, FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowHeaders, FlowQuery, queryParams } from "./FlowHeaders";
-
-const selectedFlowAtom = atom((get) => {
-  const id = get(selectedFlowIdAtom);
-  return id == null ? null : (get(flowsAtom).find((f) => f.id === id) ?? null);
-});
 
 const TAB_RESPONSE = "response";
 const TAB_REQUEST = "request";
@@ -60,6 +54,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
               <Keys keys={["⌘", "⇧", "P"]} />
               <span>Stop the proxy</span>
               <Keys keys={["⌘", "⇧", "S"]} />
+              <span>Clear flows</span>
+              <Keys keys={["⌘", "K"]} />
             </div>
           </EmptyState>
         ) : (
