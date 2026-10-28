@@ -8,11 +8,14 @@ export function startsCollapsed(id: string): boolean {
   return id.startsWith("domain:") || id.startsWith("path:");
 }
 
-/** Ids of the nodes with children, the only ones that collapse */
+/**
+ * Ids of the nodes the tree treats as folders, those with a children list, empty or not. The
+ * tree collapses an empty one before moving to its parent on the left arrow, so it needs a flag.
+ */
 export function folderIds(root: TreeNode<{ id: string }>): string[] {
   const ids: string[] = [];
   const walk = (node: TreeNode<{ id: string }>) => {
-    if ((node.children?.length ?? 0) === 0) return;
+    if (node.children == null) return;
     ids.push(node.item.id);
     for (const child of node.children ?? []) walk(child);
   };

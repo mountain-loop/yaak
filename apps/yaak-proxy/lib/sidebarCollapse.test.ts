@@ -2,7 +2,7 @@ import type { TreeNode } from "@yaakapp-internal/ui";
 import { describe, expect, test } from "vite-plus/test";
 import { applyCollapsed, collapsedMap, folderIds } from "./sidebarCollapse";
 
-/** A node with these children, which `folderIds` counts as a folder when there are any */
+/** A node with a children list, empty or not, as the sidebar builds every node */
 function node(id: string, children: TreeNode<{ id: string }>[] = []): TreeNode<{ id: string }> {
   return { item: { id }, parent: null, depth: 0, children };
 }
@@ -13,7 +13,6 @@ const tree = node("root", [
       node("path:api.example.com/v1", [node("path:api.example.com/v1/users")]),
     ]),
     node("domain:cdn.example.com", [node("path:cdn.example.com/app.js")]),
-    // A host only ever hit at its root has no paths, so nothing to collapse.
     node("domain:empty.example.com"),
   ]),
 ]);
@@ -21,10 +20,14 @@ const tree = node("root", [
 describe("collapsedMap", () => {
   test("collapses every domain and path, and leaves the root and Domains open", () => {
     const map = collapsedMap(folderIds(tree), {}, {});
+    // Empty ones too: the tree collapses one before the left arrow moves to its parent.
     expect(map).toEqual({
       "domain:api.example.com": true,
       "path:api.example.com/v1": true,
+      "path:api.example.com/v1/users": true,
       "domain:cdn.example.com": true,
+      "path:cdn.example.com/app.js": true,
+      "domain:empty.example.com": true,
     });
     expect(map.root).toBeUndefined();
     expect(map.domains).toBeUndefined();
