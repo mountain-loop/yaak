@@ -319,14 +319,21 @@ impl ProxyCtx {
         let saved = ClientDb::open(&self.client_data_dir)?.save(&flow, &body, req)?;
 
         let flow = Flow { saved_request_id: Some(saved.request.id.clone()), ..flow };
-        let (flow, created) = self
-            .db
-            .with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background))
+        self.db
+            .with_tx(|tx| {
+                // Cleared while saving: recording it would bring the flow back without bodies.
+                if tx.find_optional::<Flow>(FlowIden::Id, flow_id).is_none() {
+                    return Ok(());
+                }
+                let (flow, created) = tx.upsert(&flow, &UpdateSource::Background)?;
+                // Sent before the commit, so it cannot reach the app after a clear that follows.
+                self.events.emit(
+                    "model_write",
+                    &ModelPayload { model: flow, change: ModelChangeEvent::Upsert { created } },
+                );
+                Ok::<_, yaak_database::Error>(())
+            })
             .map_err(|e| format!("Failed to record the saved request on the flow: {e}"))?;
-        self.events.emit(
-            "model_write",
-            &ModelPayload { model: flow, change: ModelChangeEvent::Upsert { created } },
-        );
         Ok(saved)
     }
 
@@ -334,6 +341,8 @@ impl ProxyCtx {
     /// many there were.
     pub fn clear_flows(&self) -> Result<usize, String> {
         let cleared = flows::clear(&self.db, &self.blobs)?;
+        // After the commit, so the app reloads what is left. Flows written before the clear sent
+        // their events before it began.
         self.events.emit("flows_cleared", &FlowsClearedPayload {});
         Ok(cleared)
     }
@@ -746,14 +755,18 @@ fn finish_flow(db: &ProxyQueryManager, events: &RpcEventEmitter, f: InFlight) {
 
     let mut flow = f.flow;
     flow.content_type = find_header(&flow.response_headers, "content-type").map(String::from);
-    match db.with_tx(|ctx| ctx.upsert(&flow, &UpdateSource::Background)) {
-        Ok((saved, created)) => {
-            events.emit(
-                "model_write",
-                &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
-            );
-        }
-        Err(e) => warn!("Failed to write proxy flow: {e}"),
+    let written = db.with_tx(|ctx| {
+        let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
+        // Sent while this holds the writer, before the commit, so a clear's event, sent after
+        // its own commit, always comes after it.
+        events.emit(
+            "model_write",
+            &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
+        );
+        Ok::<_, yaak_database::Error>(())
+    });
+    if let Err(e) = written {
+        warn!("Failed to write proxy flow: {e}");
     }
 }
 

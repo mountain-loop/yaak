@@ -15,6 +15,8 @@ import { listen, rpc } from "./rpc";
 
 /** How long new flows gather before they reach the list, so a burst renders once */
 const FLUSH_MS = 100;
+/** How long after new flows the total is counted again from the database */
+const RECOUNT_MS = 1000;
 
 /** The flows in memory: a window onto the database, which keeps them all */
 export const flowWindowAtom = atom<FlowWindow>(emptyWindow);
@@ -81,6 +83,7 @@ export function syncFlows(store: ReturnType<typeof createStore>) {
   let pending: ModelPayload[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
   let loaded = false;
+  let loads = 0;
 
   function flush() {
     timer = null;
@@ -97,6 +100,21 @@ export function syncFlows(store: ReturnType<typeof createStore>) {
     if (change != null) {
       store.set(selectedFlowAtom, change.change.type === "delete" ? null : change.model);
     }
+    if (recountTimer == null) recountTimer = setTimeout(recount, RECOUNT_MS);
+  }
+
+  // The total counts each new flow as it comes, which a flow both in a page and in the events
+  // around it can count twice or not at all; a count from the database a moment later settles it.
+  let recountTimer: ReturnType<typeof setTimeout> | null = null;
+  function recount() {
+    recountTimer = null;
+    const thisLoad = loads;
+    void rpc("list_flows", { limit: 0 }).then((res) => {
+      if (thisLoad !== loads) return;
+      store.set(flowWindowAtom, (win) =>
+        win.total === res.total ? win : { ...win, total: res.total },
+      );
+    });
   }
 
   listen("model_write", (payload) => {
@@ -113,7 +131,6 @@ export function syncFlows(store: ReturnType<typeof createStore>) {
     load();
   });
 
-  let loads = 0;
   function load() {
     loaded = false;
     const thisLoad = ++loads;
