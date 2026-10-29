@@ -1,3 +1,4 @@
+import type { HelperState } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test } from "vite-plus/test";
 import { helperRow, recordingLabel, type SystemProxyState, systemProxySwitch } from "./systemProxy";
 
@@ -68,6 +69,31 @@ describe("helperRow", () => {
     expect(helperRow("not_found", "admin_prompt")).toMatchObject({
       title: "Helper: macOS can't find the helper in this app bundle",
       action: "install",
+    });
+  });
+
+  test("has a titled row for every state the backend sends", () => {
+    // A missing key here fails the typecheck, so a new state can't be left out.
+    const states: Record<HelperState, true> = {
+      unavailable: true,
+      not_found: true,
+      not_registered: true,
+      requires_approval: true,
+      enabled: true,
+    };
+    for (const state of Object.keys(states) as HelperState[]) {
+      for (const backend of ["helper", "admin_prompt", "sudo"] as const) {
+        expect(helperRow(state, backend).title).toMatch(/^Helper: \S/);
+      }
+    }
+  });
+
+  test("still gives a row for a state this build doesn't know", () => {
+    const row = helperRow("from_the_future" as HelperState, "admin_prompt");
+    expect(row).toEqual({
+      title: "Helper: from_the_future",
+      description: "Changes use the password prompt.",
+      action: null,
     });
   });
 

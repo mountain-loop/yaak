@@ -97,6 +97,16 @@ export function helperRow(helper: HelperState, backend: SystemProxyBackend): Hel
             : "The password prompt puts back the settings it saved once more, then the helper takes over.",
         action: "unregister",
       };
+    default: {
+      // Every state is handled above; one this build doesn't know still gets a row, rather
+      // than taking the whole menu down.
+      const unknown: never = helper;
+      return {
+        title: `Helper: ${String(unknown)}`,
+        description: "Changes use the password prompt.",
+        action: null,
+      };
+    }
   }
 }
 
