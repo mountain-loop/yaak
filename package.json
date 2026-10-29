@@ -81,6 +81,7 @@
     "client:dev": "node scripts/run-dev.mjs client",
     "client:bundle": "node scripts/run-build.mjs client --config crates-tauri/yaak-app-client/tauri.release.conf.json --no-sign",
     "proxy:build": "node scripts/run-build.mjs proxy",
+    "proxy:bundle": "node scripts/bundle-proxy.mjs",
     "proxy:dev": "node scripts/run-dev.mjs proxy",
     "web:dev": "run-p web:dev:*",
     "web:dev:app": "node scripts/run-web.mjs dev",
@@ -110,6 +111,8 @@
     "client:tauri-before-build": "npm run bootstrap",
     "client:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-client",
     "proxy:tauri-before-build": "npm run bootstrap",
+    "proxy:tauri-before-bundle": "run-s bootstrap proxy:vendor-helper",
+    "proxy:vendor-helper": "node scripts/vendor-proxy-helper.cjs",
     "proxy:tauri-before-dev": "node scripts/run-workspaces-dev.mjs apps/yaak-proxy"
   },
   "dependencies": {

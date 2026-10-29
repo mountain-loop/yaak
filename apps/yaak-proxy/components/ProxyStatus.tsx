@@ -17,7 +17,7 @@ import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
-import { recordingLabel, systemProxySwitch } from "../lib/systemProxy";
+import { helperRow, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { useShowToast } from "../lib/toast";
 
 /**
@@ -129,6 +129,11 @@ export function ProxyStatus() {
           />
         </KeepMenuOpen>
       ),
+    },
+    {
+      type: "content",
+      hidden: systemProxy.data?.supported !== true,
+      label: systemProxy.data != null && <HelperMenuRow status={systemProxy.data} />,
     },
     {
       type: "content",
@@ -254,7 +259,55 @@ export function useSystemProxySwitch(setup: ReturnType<typeof useProxySetup>) {
     port: proxyState?.port ?? proxyState?.configuredPort ?? null,
     pending: setSystemProxy.isPending ? (setSystemProxy.variables?.enabled ?? null) : null,
     error: setSystemProxy.error?.message ?? null,
+    helper: systemProxy.data?.backend === "helper",
   });
+}
+
+/** The privileged helper: whether it is installed and approved, and which way changes go */
+function HelperMenuRow({ status }: { status: SystemProxyStatus }) {
+  const queryClient = useQueryClient();
+  const onSuccess = (status: SystemProxyStatus) =>
+    queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status);
+  const register = useRpcMutation("helper_register", { onSuccess });
+  const unregister = useRpcMutation("helper_unregister", { onSuccess });
+  const row = helperRow(status.helper, status.backend);
+  const error = register.error ?? unregister.error;
+  return (
+    <MenuRow
+      icon={
+        <Icon
+          icon={status.helper === "enabled" ? "badge_check" : "lock"}
+          size="sm"
+          color={status.helper === "enabled" ? "success" : "secondary"}
+        />
+      }
+      title={row.title}
+      description={
+        error != null ? <span className="text-danger">{error.message}</span> : row.description
+      }
+      action={
+        row.action != null && (
+          <Button
+            size="2xs"
+            variant="border"
+            color={row.action === "unregister" ? "default" : "primary"}
+            isLoading={register.isPending || unregister.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (row.action === "unregister") unregister.mutate({});
+              else register.mutate({});
+            }}
+          >
+            {row.action === "install"
+              ? "Install"
+              : row.action === "open_settings"
+                ? "Open Settings"
+                : "Unregister"}
+          </Button>
+        )
+      }
+    />
+  );
 }
 
 /** Saves whether the system proxy turns on as the app launches */

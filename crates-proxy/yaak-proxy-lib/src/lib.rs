@@ -8,6 +8,7 @@ pub mod convert;
 pub mod db;
 pub mod flows;
 pub mod har;
+pub mod helper;
 pub mod macos;
 pub mod models;
 pub mod save;
@@ -20,6 +21,7 @@ use crate::client::ControlClient;
 use crate::control::{ControlFile, ControlInfo, ControlServer, Owner};
 use crate::convert::DroppedHeader;
 use crate::db::ProxyQueryManager;
+use crate::helper::HelperState;
 use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::models::{Flow, FlowBody, FlowIden, ModelPayload, ProxyHeader, find_header};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
@@ -363,18 +365,61 @@ impl ProxyCtx {
         }
     }
 
+    /// The helper once it is enabled; until then, and while the password dialog still has the
+    /// user's settings to put back, the dialog. The CLI daemon always uses `sudo`.
     pub fn system_proxy_backend(&self) -> SystemProxyBackend {
+        self.backend_for(self.helper_state())
+    }
+
+    fn backend_for(&self, helper: HelperState) -> SystemProxyBackend {
         match self.owner {
-            Owner::App => SystemProxyBackend::AdminPrompt,
             Owner::Cli => SystemProxyBackend::Sudo,
+            // What the dialog saved only it can restore, as the helper never saw it.
+            Owner::App if helper == HelperState::Enabled && !self.snapshot_path().exists() => {
+                SystemProxyBackend::Helper
+            }
+            Owner::App => SystemProxyBackend::AdminPrompt,
         }
+    }
+
+    /// The helper's registration, as far as this process can use it.
+    pub fn helper_state(&self) -> HelperState {
+        match self.owner {
+            Owner::App => helper::state(),
+            Owner::Cli => HelperState::Unavailable,
+        }
+    }
+
+    /// Where the password dialog and `sudo` keep the settings they replaced.
+    fn snapshot_path(&self) -> PathBuf {
+        self.data_dir.join(macos::SNAPSHOT_FILE)
     }
 
     /// Judged against the running engine's port, or the configured one while it is stopped.
     /// Blocks.
     pub fn system_proxy_status(&self) -> Result<SystemProxyStatus, String> {
         let port = self.port().unwrap_or(self.settings()?.port);
-        macos::status(port, self.system_proxy_backend())
+        let helper = self.helper_state();
+        macos::status(port, self.backend_for(helper), helper)
+    }
+
+    /// Registers the helper, opening System Settings for the user to allow it. Blocks.
+    pub fn register_helper(&self) -> Result<SystemProxyStatus, String> {
+        helper::register()?;
+        self.system_proxy_status()
+    }
+
+    /// Removes the helper, which first puts back the settings it replaced, so the system proxy
+    /// is off afterwards. Blocks.
+    pub fn unregister_helper(&self) -> Result<SystemProxyStatus, String> {
+        let turn = self.system_proxy_turn.lock().map_err(|_| "lock poisoned".to_string())?;
+        let restores = self.system_proxy_backend() == SystemProxyBackend::Helper;
+        helper::unregister()?;
+        if restores {
+            self.system_proxy_on.store(false, Ordering::SeqCst);
+        }
+        drop(turn);
+        self.system_proxy_status()
     }
 
     /// Points this Mac's web traffic at the running engine, or stops, at once, through the
@@ -450,12 +495,12 @@ impl ProxyCtx {
                 return Ok(());
             }
         }
-        macos::set(enabled, port, self.system_proxy_backend())
+        macos::set(enabled, port, self.system_proxy_backend(), &self.snapshot_path())
     }
 
     /// Turns off a system proxy left pointing at one of `ports` by an owner that crashed, so
-    /// the Mac is not left offline. Leaves it alone when something is serving on the port.
-    /// Blocks.
+    /// the Mac is not left offline, putting back the settings it replaced when they were
+    /// saved. Leaves it alone when something is serving on the port. Blocks.
     pub fn reset_stale_system_proxy(&self, ports: &[u16]) -> Result<(), String> {
         let mut ports = ports.to_vec();
         ports.sort_unstable();
@@ -471,7 +516,7 @@ impl ProxyCtx {
             }
             // Covers disabled services too, and asks for nothing when none point at the port.
             debug!("Turning off any stale system proxy on port {port}");
-            macos::set(false, port, self.system_proxy_backend())?;
+            macos::set(false, port, self.system_proxy_backend(), &self.snapshot_path())?;
         }
         Ok(())
     }
@@ -839,6 +884,14 @@ pub struct SystemProxySetRequest {
     pub enabled: bool,
 }
 
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct HelperRegisterRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct HelperUnregisterRequest {}
+
 // -- Handlers --
 
 fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, RpcError> {
@@ -1064,6 +1117,20 @@ async fn system_proxy_set(
     req: SystemProxySetRequest,
 ) -> Result<SystemProxyStatus, RpcError> {
     blocking(move || ctx.set_system_proxy(req.enabled)).await
+}
+
+async fn helper_register(
+    ctx: ProxyCtx,
+    _req: HelperRegisterRequest,
+) -> Result<SystemProxyStatus, RpcError> {
+    blocking(move || ctx.register_helper()).await
+}
+
+async fn helper_unregister(
+    ctx: ProxyCtx,
+    _req: HelperUnregisterRequest,
+) -> Result<SystemProxyStatus, RpcError> {
+    blocking(move || ctx.unregister_helper()).await
 }
 
 async fn blocking<T: Send + 'static>(
@@ -1316,6 +1383,8 @@ define_rpc! {
         filter_body(FilterBodyRequest) -> FilterBodyResponse,
         get_flow_body(GetFlowBodyRequest) -> GetFlowBodyResponse,
         get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
+        helper_register(HelperRegisterRequest) -> SystemProxyStatus,
+        helper_unregister(HelperUnregisterRequest) -> SystemProxyStatus,
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
         preview_save(PreviewSaveRequest) -> SavePreview,
         save_flow(SaveFlowToYaakRequest) -> SavedFlow,
