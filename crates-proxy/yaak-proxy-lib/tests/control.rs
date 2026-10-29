@@ -46,7 +46,7 @@ async fn spawn_upstream() -> SocketAddr {
 
 /// A context over `dir` whose engine picks a free port, saving into Yaak's data in `client`.
 fn ctx(dir: &Path, client: &Path) -> ProxyCtx {
-    let settings = ProxySettings { port: 0, ..Default::default() };
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, _rx) = RpcEventEmitter::new();
     ProxyCtx::new(dir, events).unwrap().with_client_data_dir(client)
@@ -641,4 +641,93 @@ async fn flows_name_the_app_that_sent_them() {
     // The search and the sidebar's Apps group find it by its path.
     let filter = FlowFilter { app: Some(vec!["/usr/bin/curl".into()]), ..Default::default() };
     assert_eq!(yaak_proxy_lib::flows::list(&ctx.db, &filter).unwrap().len(), 1);
+}
+
+/// Sends one GET through the engine, without waiting for a flow.
+async fn send_through(ctx: &ProxyCtx, path: &str) -> String {
+    let upstream = spawn_upstream().await;
+    let url = format!("http://{upstream}{path}");
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::http(format!("http://127.0.0.1:{}", ctx.port().unwrap())).unwrap())
+        .build()
+        .unwrap();
+    let resp = client.get(&url).send().await.unwrap();
+    assert_eq!(resp.status(), 200, "traffic passes through either way");
+    url
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pausing_stores_no_flows_and_resuming_stores_them_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    ctx.start().unwrap();
+    let client = ControlClient::new(control::read(dir.path()).unwrap());
+    assert!(client.status().await.unwrap().recording);
+
+    // Paused from the app.
+    assert_eq!(rpc(&ctx, "set_recording", json!({ "enabled": false })).await.unwrap(), false);
+    let state = rpc(&ctx, "get_proxy_state", json!({})).await.unwrap();
+    assert_eq!((state["state"].as_str(), &state["recording"]), (Some("running"), &json!(false)));
+    let paused = send_through(&ctx, "/while-paused").await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+    assert!(flows.iter().all(|f| f.url != paused), "a flow was stored while paused");
+    assert!(ctx.blobs.connect().list_body_ids().unwrap().is_empty(), "a body was stored");
+
+    // Resumed through the control API, as the CLI would.
+    let status = client.set_recording(true).await.unwrap();
+    assert!(status.recording);
+    assert!(ctx.recording());
+    let flow = capture_flow(&ctx).await;
+    assert_eq!(flow.method, "POST");
+    // And the hotkey's toggle pauses again.
+    rpc(&ctx, "execute_action", json!({ "scope": "global", "action": "recording_toggle" }))
+        .await
+        .unwrap();
+    assert!(!client.status().await.unwrap().recording);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_start_is_kept_for_the_app_until_the_engine_starts() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    // Something else has the port.
+    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port();
+    let settings = ProxySettings { port, system_proxy_at_launch: false, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+
+    assert!(ctx.start().is_err());
+    let state = rpc(&ctx, "get_proxy_state", json!({})).await.unwrap();
+    assert_eq!(state["state"], "stopped");
+    assert!(state["startError"].as_str().unwrap().contains(&port.to_string()), "{state}");
+
+    drop(taken);
+    ctx.start().unwrap();
+    let state = rpc(&ctx, "get_proxy_state", json!({})).await.unwrap();
+    assert_eq!((state["state"].as_str(), &state["startError"]), (Some("running"), &Value::Null));
+    ctx.stop().unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_system_proxy_at_launch_setting_is_saved_and_routing_needs_an_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+
+    // Defaults on, like Proxyman.
+    assert!(ProxySettings::default().system_proxy_at_launch);
+    for enabled in [true, false] {
+        rpc(&ctx, "set_system_proxy_at_launch", json!({ "enabled": enabled })).await.unwrap();
+        assert_eq!(ctx.settings().unwrap().system_proxy_at_launch, enabled);
+        let state = rpc(&ctx, "get_proxy_state", json!({})).await.unwrap();
+        assert_eq!(state["systemProxyAtLaunch"], enabled);
+    }
+
+    // With no engine there is nothing to point the Mac at.
+    let err = rpc(&ctx, "system_proxy_set", json!({ "enabled": true })).await.unwrap_err();
+    assert!(err.contains("not running"), "{err}");
 }

@@ -7,15 +7,20 @@ use yaak_proxy::DEFAULT_CAPTURE_BODY_LIMIT;
 #[serde(default, rename_all = "camelCase")]
 pub struct ProxySettings {
     pub port: u16,
-    /// Whether the system proxy points at the engine while it runs.
-    pub system_proxy: bool,
+    /// Point this Mac's web traffic at the engine as it starts. It is turned off again as the
+    /// engine stops, and can be turned on and off any time between.
+    pub system_proxy_at_launch: bool,
     /// Bytes of each request and response body stored per flow.
     pub capture_body_limit: usize,
 }
 
 impl Default for ProxySettings {
     fn default() -> Self {
-        Self { port: 9090, system_proxy: false, capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT }
+        Self {
+            port: 9090,
+            system_proxy_at_launch: true,
+            capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
+        }
     }
 }
 
@@ -46,7 +51,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let settings = ProxySettings::load(&dir.path().join("settings.json")).unwrap();
         assert_eq!(settings.port, 9090);
-        assert!(!settings.system_proxy);
+        assert!(settings.system_proxy_at_launch);
         assert_eq!(settings.capture_body_limit, 10 * 1024 * 1024);
     }
 
@@ -63,7 +68,8 @@ mod tests {
     fn round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
-        let settings = ProxySettings { port: 8080, system_proxy: true, capture_body_limit: 1024 };
+        let settings =
+            ProxySettings { port: 8080, system_proxy_at_launch: false, capture_body_limit: 1024 };
         settings.save(&path).unwrap();
         assert_eq!(ProxySettings::load(&path).unwrap(), settings);
 
@@ -71,7 +77,7 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"port": 8080, "systemProxy": true, "captureBodyLimit": 1024})
+            serde_json::json!({"port": 8080, "systemProxyAtLaunch": false, "captureBodyLimit": 1024})
         );
     }
 

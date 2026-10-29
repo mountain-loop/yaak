@@ -33,6 +33,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use ts_rs::TS;
@@ -58,6 +59,12 @@ pub struct ProxyCtx {
     system_proxy_turn: Arc<Mutex<()>>,
     /// The port the engine last ran on, which the system proxy may still point at.
     last_port: Arc<Mutex<Option<u16>>>,
+    /// Flows are stored. While paused, traffic still passes through, untouched and unrecorded.
+    recording: Arc<AtomicBool>,
+    /// This Mac's web traffic is meant to point at the running engine.
+    system_proxy_on: Arc<AtomicBool>,
+    /// Why the engine last failed to start, until it starts.
+    start_error: Arc<Mutex<Option<String>>>,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -79,6 +86,9 @@ impl ProxyCtx {
             control_server: Arc::new(Mutex::new(None)),
             system_proxy_turn: Arc::new(Mutex::new(())),
             last_port: Arc::new(Mutex::new(None)),
+            recording: Arc::new(AtomicBool::new(true)),
+            system_proxy_on: Arc::new(AtomicBool::new(false)),
+            start_error: Arc::new(Mutex::new(None)),
             db,
             blobs,
             events,
@@ -124,8 +134,26 @@ impl ProxyCtx {
 
     /// Starts the engine on `port`, or the one in `settings.json`. Does nothing if it is
     /// running. Points the system proxy at it when the settings ask for that. Refused while
-    /// another process owns the engine, so there are never two.
+    /// another process owns the engine, so there are never two. A failure is kept until the
+    /// next start, for the app to show.
     pub fn start_on(&self, port: Option<u16>) -> Result<(), String> {
+        let started = self.start_engine(port);
+        if let Ok(mut start_error) = self.start_error.lock() {
+            *start_error = started.as_ref().err().cloned();
+        }
+        if started.is_err() {
+            self.events
+                .emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Stopped });
+        }
+        started
+    }
+
+    /// Why the engine last failed to start, if it has not started since.
+    pub fn start_error(&self) -> Option<String> {
+        self.start_error.lock().ok()?.clone()
+    }
+
+    fn start_engine(&self, port: Option<u16>) -> Result<(), String> {
         if let Some(owner) = control::live_owner(&self.data_dir)
             && owner.pid != std::process::id()
         {
@@ -157,10 +185,14 @@ impl ProxyCtx {
         let _ = attribution_slot.set(attribution.clone());
 
         if let Some(event_rx) = proxy_handle.take_event_rx() {
-            let db = self.db.clone();
-            let blobs = self.blobs.clone();
-            let events = self.events.clone();
-            std::thread::spawn(move || run_event_loop(event_rx, db, blobs, events, attribution));
+            let sink = FlowSink {
+                db: self.db.clone(),
+                blobs: self.blobs.clone(),
+                events: self.events.clone(),
+                attribution,
+                recording: self.recording.clone(),
+            };
+            std::thread::spawn(move || run_event_loop(event_rx, sink));
         }
 
         let bound = proxy_handle.port;
@@ -170,13 +202,18 @@ impl ProxyCtx {
         if let Ok(mut last_port) = self.last_port.lock() {
             *last_port = Some(bound);
         }
-        if settings.system_proxy {
+        self.system_proxy_on.store(settings.system_proxy_at_launch, Ordering::SeqCst);
+        if settings.system_proxy_at_launch {
             // The password dialog can sit open for a while; the engine is up regardless.
             let ctx = self.clone();
             std::thread::spawn(move || {
                 if let Err(e) = ctx.change_system_proxy(true, bound, true) {
                     warn!("Failed to turn on the system proxy: {e}");
+                    ctx.system_proxy_on.store(false, Ordering::SeqCst);
                 }
+                // So the app reads the system proxy again once the dialog is answered.
+                ctx.events
+                    .emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Running });
             });
         }
         self.events.emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Running });
@@ -185,6 +222,7 @@ impl ProxyCtx {
 
     /// Stops the engine and turns off a system proxy that points at it.
     pub fn stop(&self) -> Result<(), String> {
+        self.system_proxy_on.store(false, Ordering::SeqCst);
         let port = self.take_handle()?;
         if let Some(port) = port {
             let ctx = self.clone();
@@ -334,21 +372,46 @@ impl ProxyCtx {
         macos::status(port, self.system_proxy_backend())
     }
 
-    /// Turns the system proxy on or off and remembers the choice. Turned on while the engine
-    /// is stopped, it waits for the engine to start, so the Mac is never pointed at nothing.
-    /// Blocks, through the password dialog.
+    /// Points this Mac's web traffic at the running engine, or stops, at once, through the
+    /// password dialog. Not saved: the `systemProxyAtLaunch` setting decides whether it turns
+    /// on as the engine starts. Blocks.
     pub fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
-        let mut settings = self.settings()?;
-        let previous = settings.system_proxy;
-        settings.system_proxy = enabled;
-        settings.save(&self.settings_path())?;
-        let port = self.port().unwrap_or(settings.port);
+        let Some(port) = self.port() else {
+            if enabled {
+                return Err("The proxy is not running, so there is nothing to route to".into());
+            }
+            // Clears one left pointing at the configured port; asks for nothing otherwise.
+            self.change_system_proxy(false, self.settings()?.port, false)?;
+            return self.system_proxy_status();
+        };
+        let previous = self.system_proxy_on.swap(enabled, Ordering::SeqCst);
         if let Err(e) = self.change_system_proxy(enabled, port, enabled) {
-            settings.system_proxy = previous;
-            let _ = settings.save(&self.settings_path());
+            self.system_proxy_on.store(previous, Ordering::SeqCst);
             return Err(e);
         }
         self.system_proxy_status()
+    }
+
+    /// Whether the system proxy turns on as the engine starts, saved in `settings.json`.
+    pub fn set_system_proxy_at_launch(&self, enabled: bool) -> Result<(), String> {
+        let mut settings = self.settings()?;
+        settings.system_proxy_at_launch = enabled;
+        settings.save(&self.settings_path())
+    }
+
+    /// Flows are being stored.
+    pub fn recording(&self) -> bool {
+        self.recording.load(Ordering::SeqCst)
+    }
+
+    /// Resumes or pauses storing flows. Paused, traffic still passes through the engine, but no
+    /// new flow is stored; one already under way is finished.
+    pub fn set_recording(&self, recording: bool) {
+        if self.recording.swap(recording, Ordering::SeqCst) != recording {
+            let state =
+                if self.port().is_some() { ProxyState::Running } else { ProxyState::Stopped };
+            self.events.emit("proxy_state_changed", &ProxyStatePayload { state });
+        }
     }
 
     /// Points the system proxy at `port`, or turns it off there, once the changes before it
@@ -365,7 +428,8 @@ impl ProxyCtx {
         let _turn = self.system_proxy_turn.lock().map_err(|_| "lock poisoned".to_string())?;
         if follow_engine {
             let on_port = self.port() == Some(port);
-            let current = if enabled { on_port && self.settings()?.system_proxy } else { !on_port };
+            let wanted = self.system_proxy_on.load(Ordering::SeqCst);
+            let current = if enabled { on_port && wanted } else { !on_port };
             if !current {
                 return Ok(());
             }
@@ -516,8 +580,12 @@ pub struct GetProxyStateResponse {
     pub port: Option<u16>,
     /// The port the engine starts on.
     pub configured_port: u16,
-    /// The system proxy is meant to point at the engine while it runs.
-    pub system_proxy_wanted: bool,
+    /// Flows are stored. Paused, traffic still passes through, unrecorded.
+    pub recording: bool,
+    /// The system proxy turns on as the engine starts.
+    pub system_proxy_at_launch: bool,
+    /// Why the engine last failed to start, until it starts.
+    pub start_error: Option<String>,
     /// Another process that owns the engine, such as the CLI daemon. While one does, this app
     /// cannot start its own, and new flows reach it only through the database.
     pub other_owner: Option<OtherOwner>,
@@ -537,6 +605,18 @@ pub struct OtherOwner {
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct TakeOverRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetRecordingRequest {
+    pub enabled: bool,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetSystemProxyAtLaunchRequest {
+    pub enabled: bool,
+}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
@@ -699,14 +779,7 @@ pub struct SystemProxySetRequest {
 fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, RpcError> {
     match invocation {
         ActionInvocation::Global { action } => match action {
-            GlobalAction::ProxyStart => {
-                // Claims the engine first when the app launched while another process had it.
-                if ctx.owner() == Owner::App {
-                    ctx.serve_control_api().map_err(|message| RpcError { message })?;
-                }
-                ctx.start().map_err(|message| RpcError { message })?
-            }
-            GlobalAction::ProxyStop => ctx.stop().map_err(|message| RpcError { message })?,
+            GlobalAction::RecordingToggle => ctx.set_recording(!ctx.recording()),
             GlobalAction::FlowsClear => {
                 ctx.clear_flows().map_err(|message| RpcError { message })?;
             }
@@ -734,11 +807,26 @@ async fn get_proxy_state(
             state,
             port,
             configured_port: settings.port,
-            system_proxy_wanted: settings.system_proxy,
+            recording: ctx.recording(),
+            system_proxy_at_launch: settings.system_proxy_at_launch,
+            start_error: ctx.start_error(),
             other_owner,
         })
     })
     .await
+}
+
+fn set_recording(ctx: &ProxyCtx, req: SetRecordingRequest) -> Result<bool, RpcError> {
+    ctx.set_recording(req.enabled);
+    Ok(ctx.recording())
+}
+
+fn set_system_proxy_at_launch(
+    ctx: &ProxyCtx,
+    req: SetSystemProxyAtLaunchRequest,
+) -> Result<bool, RpcError> {
+    ctx.set_system_proxy_at_launch(req.enabled).map_err(rpc_error)?;
+    Ok(req.enabled)
 }
 
 async fn take_over(ctx: ProxyCtx, _req: TakeOverRequest) -> Result<bool, RpcError> {
@@ -967,13 +1055,17 @@ struct InFlight {
     response_body: Option<BodyChunkWriter>,
 }
 
-fn run_event_loop(
-    rx: std::sync::mpsc::Receiver<ProxyEvent>,
+/// Where the event loop stores flows, and whether it does.
+struct FlowSink {
     db: ProxyQueryManager,
     blobs: BlobManager,
     events: RpcEventEmitter,
     attribution: Attribution,
-) {
+    recording: Arc<AtomicBool>,
+}
+
+fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
+    let FlowSink { db, blobs, events, attribution, recording } = sink;
     let mut in_flight: HashMap<u64, InFlight> = HashMap::new();
 
     while let Ok(event) = rx.recv() {
@@ -987,6 +1079,10 @@ fn run_event_loop(
                 connection,
                 client_addr,
             } => {
+                // Paused: the request passes through, and none of its events are kept.
+                if !recording.load(Ordering::SeqCst) {
+                    continue;
+                }
                 // Begun as the connection was accepted; this covers one accepted before the
                 // engine's port was known.
                 attribution.begin(connection, client_addr);
@@ -1136,6 +1232,8 @@ define_rpc! {
         format_body(FormatBodyRequest) -> String,
         list_actions(ListActionsRequest) -> ListActionsResponse,
         list_flows(flows::FlowFilter) -> ListFlowsResponse,
+        set_recording(SetRecordingRequest) -> bool,
+        set_system_proxy_at_launch(SetSystemProxyAtLaunchRequest) -> bool,
     }
     async_commands {
         app_icon(AppIconRequest) -> Option<String>,

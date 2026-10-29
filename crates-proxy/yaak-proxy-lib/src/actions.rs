@@ -5,8 +5,8 @@ use ts_rs::TS;
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub enum GlobalAction {
-    ProxyStart,
-    ProxyStop,
+    /// Pauses or resumes storing flows.
+    RecordingToggle,
     FlowsClear,
 }
 
@@ -33,17 +33,10 @@ fn default_hotkey(mac: &str, other: &str) -> Option<String> {
 pub fn all_global_actions() -> Vec<(ActionInvocation, ActionMetadata)> {
     vec![
         (
-            ActionInvocation::Global { action: GlobalAction::ProxyStart },
+            ActionInvocation::Global { action: GlobalAction::RecordingToggle },
             ActionMetadata {
-                label: "Start Proxy".into(),
-                default_hotkey: default_hotkey("Meta+Shift+P", "Ctrl+Shift+P"),
-            },
-        ),
-        (
-            ActionInvocation::Global { action: GlobalAction::ProxyStop },
-            ActionMetadata {
-                label: "Stop Proxy".into(),
-                default_hotkey: default_hotkey("Meta+Shift+S", "Ctrl+Shift+S"),
+                label: "Pause or Resume Recording".into(),
+                default_hotkey: default_hotkey("Meta+Shift+R", "Ctrl+Shift+R"),
             },
         ),
         (

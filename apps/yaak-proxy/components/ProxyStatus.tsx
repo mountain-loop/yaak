@@ -17,57 +17,75 @@ import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
+import { recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { useShowToast } from "../lib/toast";
 
-/** How often the system proxy is read while it is meant to be on and is not yet */
-const SYSTEM_PROXY_POLL_MS = 2000;
-
 /**
- * The header's state pill and its menu: the engine, the system proxy and the certificate. The
- * system proxy and the certificate step out of the menu beside the pill while they are broken.
+ * The header's state pill and its menu: recording, the system proxy and the certificate. The
+ * engine runs for as long as the app does, so the pill shows whether flows are being stored. A
+ * certificate that is not trusted steps out of the menu beside the pill until it is.
  */
 export function ProxyStatus() {
   const dropdownRef = useRef<DropdownRef>(null);
   const proxyState = useAtomValue(proxyStateAtom);
   const setup = useProxySetup();
   const execute = useRpcMutation("execute_action");
+  const retry = useRpcMutation("take_over");
+  const setAtLaunch = useSetSystemProxyAtLaunch();
   const copyEnvironment = useCopyEnvironment();
   const { caStatus, trust, systemProxy, setSystemProxy } = setup;
+  const systemSwitch = useSystemProxySwitch(setup);
 
   const running = proxyState?.state === "running";
+  const recording = proxyState?.recording !== false;
   const other = proxyState?.otherOwner ?? null;
   const port = proxyState?.port ?? other?.proxyPort ?? null;
   const untrusted = caStatus.data != null && !caStatus.data.trusted;
-  const systemProxyBroken =
-    setSystemProxy.error != null ||
-    (running &&
-      proxyState?.systemProxyWanted === true &&
-      systemProxy.data?.supported === true &&
-      !systemProxy.data.enabled &&
-      !setSystemProxy.isPending);
+
+  const stateRow =
+    other != null ? (
+      <MenuRow
+        icon={<StateDot state="cli" />}
+        title="Running from the CLI"
+        description={`Started by yaak proxy start, pid ${other.pid}, since ${timeOf(other.startedAt)}.${other.proxyPort == null ? "" : ` Port ${other.proxyPort}.`}`}
+      />
+    ) : running ? (
+      <MenuRow
+        icon={<StateDot state={recording ? "recording" : "paused"} />}
+        title={recording ? `Recording on port ${port}` : `Paused on port ${port}`}
+        description={
+          recording
+            ? "Listening on 127.0.0.1, and storing every flow."
+            : "Traffic passes through untouched, and no flows are stored."
+        }
+      />
+    ) : (
+      <MenuRow
+        icon={<Icon icon="alert_triangle" size="sm" color="warning" />}
+        title="Not running"
+        description={
+          <span className="text-danger">
+            {retry.error?.message ?? proxyState?.startError ?? "The proxy has not started."}
+          </span>
+        }
+        action={
+          <Button
+            size="2xs"
+            variant="border"
+            isLoading={retry.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              retry.mutate({});
+            }}
+          >
+            Retry
+          </Button>
+        }
+      />
+    );
 
   const items: DropdownItem[] = [
-    {
-      type: "content",
-      label:
-        other != null ? (
-          <MenuRow
-            icon={<StateDot state="cli" />}
-            title="Running from the CLI"
-            description={`Started by yaak proxy start, pid ${other.pid}, since ${timeOf(other.startedAt)}.${other.proxyPort == null ? "" : ` Port ${other.proxyPort}.`}`}
-          />
-        ) : (
-          <MenuRow
-            icon={<StateDot state={running ? "running" : "stopped"} />}
-            title={running && port != null ? `Running on port ${port}` : "Stopped"}
-            description={
-              running
-                ? "Listening on 127.0.0.1."
-                : "Start the proxy to capture traffic from apps pointed at it."
-            }
-          />
-        ),
-    },
+    { type: "content", label: stateRow },
     { type: "separator", hidden: systemProxy.data?.supported !== true },
     {
       type: "content",
@@ -75,22 +93,41 @@ export function ProxyStatus() {
       label: (
         <MenuRow
           icon={<Icon icon="wifi" size="sm" color="secondary" />}
-          title="System proxy"
-          description={<SystemProxyDescription setup={setup} />}
+          title="Override system proxy"
+          description={
+            <span className={classNames(systemSwitch.failed && "text-danger")}>
+              {systemSwitch.description}
+            </span>
+          }
           action={
-            <Checkbox
-              title="System proxy"
-              hideLabel
-              checked={
-                setSystemProxy.isPending
-                  ? (setSystemProxy.variables?.enabled ?? false)
-                  : systemProxy.data?.enabled === true
-              }
-              disabled={other != null || setSystemProxy.isPending}
-              onChange={(enabled) => setSystemProxy.mutate({ enabled })}
-            />
+            <KeepMenuOpen>
+              <Checkbox
+                title="Override system proxy"
+                hideLabel
+                checked={systemSwitch.checked}
+                // Only the process that owns the engine routes to it.
+                disabled={!running || other != null || setSystemProxy.isPending}
+                onChange={(enabled) => setSystemProxy.mutate({ enabled })}
+              />
+            </KeepMenuOpen>
           }
         />
+      ),
+    },
+    {
+      type: "content",
+      hidden: systemProxy.data?.supported !== true,
+      label: (
+        <KeepMenuOpen className="block pl-[2.125rem] pr-1.5 pb-1.5">
+          <Checkbox
+            title={
+              <span className="text-xs text-text-subtle">Override system proxy at launch</span>
+            }
+            checked={proxyState?.systemProxyAtLaunch ?? true}
+            disabled={setAtLaunch.isPending}
+            onChange={(enabled) => setAtLaunch.mutate({ enabled })}
+          />
+        </KeepMenuOpen>
       ),
     },
     {
@@ -138,25 +175,17 @@ export function ProxyStatus() {
       onSelect: copyEnvironment,
     },
     {
-      label: running ? "Stop Proxy" : "Start Proxy",
-      icon: running ? "circle_stop" : "circle_play",
-      hidden: other != null,
-      hotKeyAction: running ? "proxy_stop" : "proxy_start",
+      label: recordingLabel(recording),
+      icon: recording ? "circle_pause" : "circle_play",
+      hidden: !running,
+      hotKeyAction: "recording_toggle",
       hotKeyLabelOnly: true,
-      onSelect: () => {
-        execute.mutate({ scope: "global", action: running ? "proxy_stop" : "proxy_start" });
-      },
+      onSelect: () => execute.mutate({ scope: "global", action: "recording_toggle" }),
     },
   ];
 
   return (
     <>
-      {systemProxyBroken && (
-        <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
-          <Icon icon="wifi" size="xs" />
-          {setSystemProxy.error != null ? "System proxy not changed" : "System proxy off"}
-        </Pill>
-      )}
       {untrusted && (
         <Pill color="warning" onClick={() => dropdownRef.current?.open()}>
           <Icon icon="shield_off" size="xs" />
@@ -164,7 +193,7 @@ export function ProxyStatus() {
         </Pill>
       )}
       <Dropdown ref={dropdownRef} items={items}>
-        <Pill>
+        <Pill color={!running && other == null && proxyState != null ? "warning" : undefined}>
           {other != null ? (
             <>
               <StateDot state="cli" />
@@ -175,14 +204,14 @@ export function ProxyStatus() {
             </>
           ) : running ? (
             <>
-              <StateDot state="running" />
-              <span className="text-text">Running</span>
+              <StateDot state={recording ? "recording" : "paused"} />
+              <span className="text-text">{recording ? "Recording" : "Paused"}</span>
               {port != null && <span className="font-mono text-text-subtle">:{port}</span>}
             </>
           ) : (
             <>
-              <StateDot state="stopped" />
-              Stopped
+              <Icon icon="alert_triangle" size="xs" />
+              Not running
             </>
           )}
           <Icon icon="chevron_down" size="xs" className="text-text-subtlest" />
@@ -198,22 +227,8 @@ export function ProxyStatus() {
  */
 export function useProxySetup() {
   const queryClient = useQueryClient();
-  const store = useStore();
   const caStatus = useRpcQuery("ca_status", {});
-  const proxyState = useAtomValue(proxyStateAtom);
-  // The engine turns the system proxy on in the background as it starts, through a password
-  // prompt that can take a while, so its state is read again until it matches the setting.
-  const settling = proxyState?.state === "running" && proxyState.systemProxyWanted;
-  const systemProxy = useRpcQuery(
-    "system_proxy_status",
-    {},
-    {
-      refetchInterval: (query) =>
-        settling && query.state.data?.supported === true && !query.state.data.enabled
-          ? SYSTEM_PROXY_POLL_MS
-          : false,
-    },
-  );
+  const systemProxy = useRpcQuery("system_proxy_status", {});
   const trust = useRpcMutation("ca_trust", {
     mutationKey: ["ca_trust"],
     onSuccess: (status) => queryClient.setQueryData<CaStatus>(["ca_status", {}], status),
@@ -222,17 +237,34 @@ export function useProxySetup() {
     mutationKey: ["system_proxy_set"],
     onSuccess: (status) => {
       queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status);
-      void refreshProxyState(store);
     },
   });
-  // The system proxy follows the engine on and off.
-  useRpcEvent("proxy_state_changed", () => {
-    setTimeout(() => void systemProxy.refetch(), 1500);
-  });
+  // The engine turns the system proxy on as it starts, and says so once the prompt is
+  // answered, and turns it off as it stops.
+  useRpcEvent("proxy_state_changed", () => void systemProxy.refetch());
   return { caStatus, trust, systemProxy, setSystemProxy };
 }
 
-/** Copies the shell exports for the engine's port and the CA, with a toast */
+/** The system proxy switch's state, from where it points and the change in flight */
+export function useSystemProxySwitch(setup: ReturnType<typeof useProxySetup>) {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const { systemProxy, setSystemProxy } = setup;
+  return systemProxySwitch({
+    routing: systemProxy.data?.enabled === true,
+    port: proxyState?.port ?? proxyState?.configuredPort ?? null,
+    pending: setSystemProxy.isPending ? (setSystemProxy.variables?.enabled ?? null) : null,
+    error: setSystemProxy.error?.message ?? null,
+  });
+}
+
+/** Saves whether the system proxy turns on as the app launches */
+function useSetSystemProxyAtLaunch() {
+  const store = useStore();
+  return useRpcMutation("set_system_proxy_at_launch", {
+    onSettled: () => void refreshProxyState(store),
+  });
+}
+
 export function useCopyEnvironment() {
   const proxyState = useAtomValue(proxyStateAtom);
   const caStatus = useRpcQuery("ca_status", {});
@@ -252,18 +284,14 @@ export function useCopyEnvironment() {
     }
   };
 }
-
-function SystemProxyDescription({ setup }: { setup: ReturnType<typeof useProxySetup> }) {
-  const { systemProxy, setSystemProxy } = setup;
-  if (setSystemProxy.isPending) return <>Waiting for your password in the macOS prompt.</>;
-  if (setSystemProxy.error != null) {
-    return <span className="text-danger">{setSystemProxy.error.message}</span>;
-  }
-  const services = systemProxy.data?.services.map((s) => s.name) ?? [];
-  if (systemProxy.data?.enabled && services.length > 0) {
-    return <>{`${services.join(" and ")} point at 127.0.0.1:${systemProxy.data.port}.`}</>;
-  }
-  return <>Routes this Mac's web traffic through Yaak Proxy. Turns off when it quits.</>;
+/** Keeps a click on a control inside a menu row from closing the menu, as a row's click does */
+function KeepMenuOpen({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- only stops the click reaching the row
+    <span className={className} onClick={(e) => e.stopPropagation()}>
+      {children}
+    </span>
+  );
 }
 
 function timeOf(iso: string): string {
@@ -294,15 +322,15 @@ function Pill({ children, color, ref, ...props }: PillProps) {
   );
 }
 
-export function StateDot({ state }: { state: "running" | "stopped" | "cli" }) {
+export function StateDot({ state }: { state: "recording" | "paused" | "cli" }) {
   return (
     <span
       aria-hidden
       className={classNames(
         "inline-block w-[7px] h-[7px] rounded-full shrink-0",
-        state === "running" && "bg-success ring-3 ring-success/20",
+        state === "recording" && "bg-success ring-3 ring-success/20",
         state === "cli" && "bg-info ring-3 ring-info/20",
-        state === "stopped" && "border-[1.5px] border-text-subtlest",
+        state === "paused" && "border-[1.5px] border-text-subtlest",
       )}
     />
   );

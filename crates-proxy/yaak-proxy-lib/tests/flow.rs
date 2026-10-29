@@ -107,7 +107,7 @@ async fn wait_for_flow(ctx: &ProxyCtx, url: &str) -> Flow {
 async fn flow_is_stored_with_its_bodies() {
     let dir = tempfile::tempdir().unwrap();
     let settings =
-        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, ..Default::default() };
+        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, system_proxy_at_launch: false };
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
@@ -175,7 +175,7 @@ async fn flow_is_stored_with_its_bodies() {
 async fn early_response_keeps_request_totals() {
     let dir = tempfile::tempdir().unwrap();
     let settings =
-        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, ..Default::default() };
+        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, system_proxy_at_launch: false };
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
@@ -208,7 +208,7 @@ async fn rpc(ctx: &ProxyCtx, cmd: &str, payload: Value) -> Result<Value, String>
 async fn body_rpcs() {
     let dir = tempfile::tempdir().unwrap();
     let settings =
-        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, ..Default::default() };
+        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, system_proxy_at_launch: false };
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
@@ -223,7 +223,9 @@ async fn body_rpcs() {
             "state": "running",
             "port": port,
             "configuredPort": 0,
-            "systemProxyWanted": false,
+            "recording": true,
+            "systemProxyAtLaunch": false,
+            "startError": null,
             "otherOwner": null,
         })
     );

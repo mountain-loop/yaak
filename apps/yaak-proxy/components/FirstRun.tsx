@@ -4,7 +4,7 @@ import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { proxyStateAtom } from "../lib/store";
-import { useCopyEnvironment, useProxySetup } from "./ProxyStatus";
+import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./ProxyStatus";
 
 type StepState = "todo" | "next" | "wait" | "done" | "fail";
 
@@ -15,12 +15,17 @@ type StepState = "todo" | "next" | "wait" | "done" | "fail";
  */
 export function FirstRun() {
   const proxyState = useAtomValue(proxyStateAtom);
-  const { caStatus, trust, systemProxy, setSystemProxy } = useProxySetup();
+  const setup = useProxySetup();
+  const { caStatus, trust, systemProxy, setSystemProxy } = setup;
+  const systemSwitch = useSystemProxySwitch(setup);
   const execute = useRpcMutation("execute_action");
+  const retry = useRpcMutation("take_over");
   const copyEnvironment = useCopyEnvironment();
 
-  const running = proxyState?.state === "running" || proxyState?.otherOwner != null;
-  const port = proxyState?.port ?? proxyState?.otherOwner?.proxyPort ?? proxyState?.configuredPort;
+  const running = proxyState?.state === "running";
+  // Changed only by the process that owns the engine, so not from here while the CLI does.
+  const otherOwner = proxyState?.otherOwner != null;
+  const recording = proxyState?.recording !== false;
   const trusted = caStatus.data?.trusted === true;
   const systemSupported = systemProxy.data?.supported !== false;
   const systemOn = systemProxy.data?.enabled === true;
@@ -32,26 +37,17 @@ export function FirstRun() {
       : trust.error != null
         ? "fail"
         : "next";
-  const systemState: StepState = systemOn
-    ? "done"
-    : setSystemProxy.isPending
-      ? "wait"
-      : setSystemProxy.error != null
+  const systemState: StepState = setSystemProxy.isPending
+    ? "wait"
+    : systemOn
+      ? "done"
+      : systemSwitch.failed
         ? "fail"
         : trusted
           ? "next"
           : "todo";
-  // Changed only by the process that owns the engine, so not from here while the CLI does.
-  const otherOwner = proxyState?.otherOwner != null;
-  const trafficState: StepState =
-    trusted && (systemOn || !systemSupported) ? (running ? "wait" : "next") : "todo";
-
-  const turnOn = async () => {
-    if (proxyState?.state !== "running" && proxyState?.otherOwner == null) {
-      await execute.mutateAsync({ scope: "global", action: "proxy_start" });
-    }
-    setSystemProxy.mutate({ enabled: true });
-  };
+  const ready = trusted && (systemOn || !systemSupported);
+  const trafficState: StepState = !running && !otherOwner ? "fail" : ready ? "wait" : "todo";
 
   return (
     <div className="grid place-items-center h-full px-10 pb-16 pt-6">
@@ -92,32 +88,19 @@ export function FirstRun() {
             <Step
               n={2}
               state={systemState}
-              title={
-                systemOn
-                  ? "System proxy on"
-                  : systemState === "wait"
-                    ? "Turning on the system proxy"
-                    : "Turn on the system proxy"
-              }
+              title={systemOn ? "System proxy on" : "Turn on the system proxy"}
               description={
-                systemOn
-                  ? `${(systemProxy.data?.services ?? []).map((s) => s.name).join(" and ")} point at 127.0.0.1:${systemProxy.data?.port}.`
-                  : systemState === "wait"
-                    ? "Waiting for your password in the macOS prompt."
-                    : otherOwner
-                      ? "The CLI owns the proxy. Take over to turn this on from here."
-                      : systemState === "fail"
-                        ? (setSystemProxy.error?.message ?? "The system proxy was not changed.")
-                        : `Sends this Mac's web traffic through port ${port ?? 9090}. Turns off when Yaak Proxy quits.`
+                otherOwner && !systemOn
+                  ? "The CLI owns the proxy. Take over to turn this on from here."
+                  : systemSwitch.description
               }
               action={
-                (systemState === "next" || systemState === "fail") && !otherOwner ? (
+                (systemState === "next" || systemState === "fail") && running ? (
                   <Button
                     size="2xs"
                     variant={systemState === "fail" ? "border" : "solid"}
                     color={systemState === "fail" ? "default" : "primary"}
-                    isLoading={execute.isPending}
-                    onClick={() => void turnOn()}
+                    onClick={() => setSystemProxy.mutate({ enabled: true })}
                   >
                     {systemState === "fail" ? "Try again" : "Turn on"}
                   </Button>
@@ -130,21 +113,31 @@ export function FirstRun() {
             state={trafficState}
             title={trafficState === "wait" ? "Waiting for traffic" : "See traffic"}
             description={
-              trafficState === "wait"
-                ? "Open a website or send a request, and its flow appears here."
-                : running
-                  ? "Flows appear here as apps send requests."
-                  : "Start the proxy, and flows appear here as apps send requests."
+              trafficState === "fail"
+                ? (retry.error?.message ?? proxyState?.startError ?? "The proxy has not started.")
+                : !recording
+                  ? "Recording is paused, so traffic passes through without being stored."
+                  : trafficState === "wait"
+                    ? "Open a website or send a request, and its flow appears here."
+                    : "Flows appear here as apps send requests."
             }
             action={
-              trafficState === "next" ? (
+              trafficState === "fail" ? (
+                <Button
+                  size="2xs"
+                  variant="border"
+                  isLoading={retry.isPending}
+                  onClick={() => retry.mutate({})}
+                >
+                  Retry
+                </Button>
+              ) : !recording && running ? (
                 <Button
                   size="2xs"
                   color="primary"
-                  isLoading={execute.isPending}
-                  onClick={() => execute.mutate({ scope: "global", action: "proxy_start" })}
+                  onClick={() => execute.mutate({ scope: "global", action: "recording_toggle" })}
                 >
-                  Start proxy
+                  Resume recording
                 </Button>
               ) : null
             }
@@ -162,9 +155,6 @@ export function FirstRun() {
             Copy environment
           </Button>
         </div>
-        {execute.error != null && (
-          <div className="mt-3 text-sm text-danger">{execute.error.message}</div>
-        )}
       </div>
     </div>
   );

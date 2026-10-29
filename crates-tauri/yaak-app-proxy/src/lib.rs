@@ -71,8 +71,18 @@ pub fn run() {
             let (emitter, event_rx) = RpcEventEmitter::new();
             let ctx = ProxyCtx::new(&data_dir, emitter)?;
             // Not while the CLI daemon owns the engine: the window offers to take it over.
-            if let Err(e) = ctx.serve_control_api() {
-                warn!("Not serving the proxy control API: {e}");
+            match ctx.serve_control_api() {
+                // The engine runs for as long as the app does. A failure, such as the port
+                // being taken, is kept for the window to show.
+                Ok(()) => {
+                    let ctx = ctx.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = ctx.start() {
+                            warn!("Failed to start the proxy: {e}");
+                        }
+                    });
+                }
+                Err(e) => warn!("Not serving the proxy control API: {e}"),
             }
             app.manage(ctx);
             app.manage(yaak_proxy_lib::build_router());

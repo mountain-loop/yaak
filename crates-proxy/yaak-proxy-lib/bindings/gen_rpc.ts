@@ -156,16 +156,24 @@ port: number | null,
  */
 configuredPort: number, 
 /**
- * The system proxy is meant to point at the engine while it runs.
+ * Flows are stored. Paused, traffic still passes through, unrecorded.
  */
-systemProxyWanted: boolean, 
+recording: boolean, 
+/**
+ * The system proxy turns on as the engine starts.
+ */
+systemProxyAtLaunch: boolean, 
+/**
+ * Why the engine last failed to start, until it starts.
+ */
+startError: string | null, 
 /**
  * Another process that owns the engine, such as the CLI daemon. While one does, this app
  * cannot start its own, and new flows reach it only through the database.
  */
 otherOwner: OtherOwner | null, };
 
-export type GlobalAction = "proxy_start" | "proxy_stop" | "flows_clear";
+export type GlobalAction = "recording_toggle" | "flows_clear";
 
 export type ListActionsRequest = Record<string, never>;
 
@@ -214,7 +222,7 @@ export type ProxyStatePayload = { state: ProxyState, };
 
 export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
 
 export type SaveFlowToYaakRequest = { flowId: string, workspaceId: string, folderId?: string, 
 /**
@@ -258,6 +266,10 @@ export type ServiceProxy = {
  * The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
  */
 name: string, http: ProxySetting, https: ProxySetting, };
+
+export type SetRecordingRequest = { enabled: boolean, };
+
+export type SetSystemProxyAtLaunchRequest = { enabled: boolean, };
 
 /**
  * How a change gets administrator rights.

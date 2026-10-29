@@ -52,10 +52,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
             <div className="grid grid-cols-[auto_auto] gap-x-6 gap-y-2 text-left">
               <span>Select a flow</span>
               <Keys keys={["↑", "↓"]} />
-              <span>Start the proxy</span>
-              <Keys keys={["⌘", "⇧", "P"]} />
-              <span>Stop the proxy</span>
-              <Keys keys={["⌘", "⇧", "S"]} />
+              <span>Pause or resume recording</span>
+              <Keys keys={["⌘", "⇧", "R"]} />
               <span>Clear flows</span>
               <Keys keys={["⌘", "K"]} />
             </div>
