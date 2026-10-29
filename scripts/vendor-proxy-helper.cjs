@@ -21,13 +21,19 @@ function hostTriple() {
   return output.match(/^host: (\S+)$/m)[1];
 }
 
+/** Where Cargo builds, which CARGO_TARGET_DIR or a config's build.target-dir can move */
+function targetDir() {
+  const args = ["metadata", "--format-version", "1", "--no-deps"];
+  return JSON.parse(execFileSync("cargo", args, { cwd: rootDir })).target_directory;
+}
+
 function build(triple) {
   execFileSync(
     "cargo",
     ["build", "--package", "yaak-proxy-helper", "--release", "--target", triple],
     { cwd: rootDir, stdio: "inherit" },
   );
-  return path.join(rootDir, "target", triple, "release", "yaak-proxy-helper");
+  return path.join(targetDir(), triple, "release", "yaak-proxy-helper");
 }
 
 mkdirSync(destDir, { recursive: true });

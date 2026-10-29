@@ -141,18 +141,15 @@ mod imp {
     /// Removes the daemon, once it has put the system proxy back.
     pub fn unregister() -> Result<HelperState, String> {
         let service = service().ok_or_else(unavailable)?;
+        // A helper that has not put the settings back stays registered, so launchd restarts it
+        // and it can try again; removed, nothing could restore them.
         if state_of(&service) == HelperState::Enabled {
-            match UnixStream::connect(yaak_proxy_helper::SOCKET_PATH) {
-                // A helper that could not put the settings back stays, so it can try again;
-                // removed, nothing could.
-                Ok(stream) => {
-                    exchange(stream, &Request::Unregister).map_err(|e| {
-                        format!("The helper could not restore your proxy settings: {e}")
-                    })?;
-                }
-                // Not running, so its saved settings wait in its state file for the next run.
-                Err(e) => log::warn!("The helper was not running to restore: {e}"),
-            }
+            request(&Request::Unregister).map_err(|e| {
+                format!(
+                    "The helper could not restore your proxy settings, so it was kept: {e}. Try \
+                     again in a moment."
+                )
+            })?;
         }
         // SAFETY: unregisters the plist bundled with this app.
         unsafe { service.unregisterAndReturnError() }
