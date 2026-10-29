@@ -141,11 +141,18 @@ mod imp {
     /// Removes the daemon, once it has put the system proxy back.
     pub fn unregister() -> Result<HelperState, String> {
         let service = service().ok_or_else(unavailable)?;
-        if state_of(&service) == HelperState::Enabled
-            && let Err(e) = request(&Request::Unregister)
-        {
-            // launchd stops it on unregistering, and it restores as it stops.
-            log::warn!("The helper did not restore before unregistering: {e}");
+        if state_of(&service) == HelperState::Enabled {
+            match UnixStream::connect(yaak_proxy_helper::SOCKET_PATH) {
+                // A helper that could not put the settings back stays, so it can try again;
+                // removed, nothing could.
+                Ok(stream) => {
+                    exchange(stream, &Request::Unregister).map_err(|e| {
+                        format!("The helper could not restore your proxy settings: {e}")
+                    })?;
+                }
+                // Not running, so its saved settings wait in its state file for the next run.
+                Err(e) => log::warn!("The helper was not running to restore: {e}"),
+            }
         }
         // SAFETY: unregisters the plist bundled with this app.
         unsafe { service.unregisterAndReturnError() }
@@ -169,6 +176,10 @@ mod imp {
                 Err(e) => return Err(format!("The helper is not running: {e}")),
             }
         };
+        exchange(stream, request)
+    }
+
+    fn exchange(stream: UnixStream, request: &Request) -> Result<Status, String> {
         let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
         let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
         let mut line = serde_json::to_string(request).map_err(|e| e.to_string())?;

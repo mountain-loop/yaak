@@ -62,9 +62,34 @@ pub struct Snapshot {
     #[serde(default)]
     pub previous_ports: Vec<u16>,
     pub services: Vec<ServiceProxy>,
+    /// Proxies a restore has started putting the saved server back on, as `(service, "http"
+    /// or "https")`. Setting a server turns the proxy on, so one of these found on with its
+    /// saved server, saved as off, is a restore that stopped halfway.
+    #[serde(default)]
+    pub restoring: Vec<(String, String)>,
 }
 
 impl Snapshot {
+    /// Records the restores `commands` start, saved before running them.
+    pub fn mark_restoring(&mut self, commands: &[Vec<String>]) {
+        for args in commands {
+            let proto = match args.first().map(String::as_str) {
+                Some("-setwebproxy") => "http",
+                Some("-setsecurewebproxy") => "https",
+                _ => continue,
+            };
+            let Some(name) = args.get(1) else { continue };
+            let entry = (name.clone(), proto.to_string());
+            if !self.restoring.contains(&entry) {
+                self.restoring.push(entry);
+            }
+        }
+    }
+
+    fn is_restoring(&self, name: &str, proto: &str) -> bool {
+        self.restoring.iter().any(|(n, p)| n == name && p == proto)
+    }
+
     pub fn capture(services: &[ServiceProxy], port: u16) -> Self {
         let mut snapshot = Self::default();
         snapshot.extend(services, port);
@@ -188,16 +213,18 @@ pub fn restore_commands(
             (&service.http, saved.map(|s| &s.http)),
             (&service.https, saved.map(|s| &s.https)),
         ];
-        for ((current, saved), (set, state)) in proxies.into_iter().zip(WEB) {
+        for (((current, saved), (set, state)), proto) in
+            proxies.into_iter().zip(WEB).zip(["http", "https"])
+        {
             let name = service.name.clone();
             // An earlier restore set the user's server, which turned it on, and stopped
-            // before turning it back off. Never one of ours, which may be live.
+            // before turning it back off.
             let unfinished = saved.is_some_and(|s| {
                 !s.enabled
                     && current.enabled
-                    && current.server != HOST
                     && current.server == s.server
                     && current.port == s.port
+                    && snapshot.is_some_and(|snapshot| snapshot.is_restoring(&name, proto))
             });
             if unfinished {
                 commands.push(vec![state.into(), name, "off".into()]);
@@ -545,24 +572,58 @@ mod tests {
         assert_eq!(snapshot.services[1].https, corp);
     }
 
+    /// Enables on 9090 over `parked`, then runs only the first call of the restore, as a crash
+    /// would leave it: the saved server is back, but on.
+    fn cut_short(parked: &ProxySetting) -> (FakeNetworksetup, Snapshot) {
+        let ns = FakeNetworksetup::new(vec![("Wi-Fi", parked.clone(), parked.clone())]);
+        let mut snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+        let restore =
+            restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
+        snapshot.mark_restoring(&restore);
+        apply(&ns, &restore[..1]).unwrap();
+        assert!(ns.proxies()[0].http.enabled);
+        (ns, snapshot)
+    }
+
     #[test]
     fn a_restore_cut_short_is_finished_on_the_next_try() {
         let parked = setting(false, "old-proxy", 8888);
-        let ns = FakeNetworksetup::new(vec![("Wi-Fi", parked.clone(), parked.clone())]);
-        let snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
-        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
-        // Only the first call of the restore ran: the user's server is back, but on.
-        let restore =
-            restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
-        apply(&ns, &restore[..1]).unwrap();
-        assert!(ns.proxies()[0].http.enabled);
-
+        let (ns, snapshot) = cut_short(&parked);
         let (retry, used_up) =
             disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
         assert!(used_up);
         apply(&ns, &retry).unwrap();
         assert_eq!(ns.proxies()[0].http, parked);
         assert_eq!(ns.proxies()[0].https, parked);
+    }
+
+    #[test]
+    fn a_cut_short_restore_of_a_localhost_proxy_is_finished_too() {
+        let parked = setting(false, HOST, 8888);
+        let (ns, snapshot) = cut_short(&parked);
+        let (retry, _) =
+            disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
+        apply(&ns, &retry).unwrap();
+        assert_eq!(ns.proxies()[0].http, parked);
+    }
+
+    #[test]
+    fn a_proxy_the_user_turned_on_themselves_is_left_on() {
+        let parked = setting(false, "corp-proxy", 3128);
+        let ns = FakeNetworksetup::new(vec![
+            ("Wi-Fi", ProxySetting::default(), ProxySetting::default()),
+            ("Ethernet", parked.clone(), parked.clone()),
+        ]);
+        let snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&ns.proxies()[..1], 9090)).unwrap();
+        // A VPN turns the parked corporate proxy on while ours runs on Wi-Fi.
+        let on = setting(true, "corp-proxy", 3128);
+        ns.set_proxy("Ethernet", on.clone(), on.clone());
+        let (commands, _) =
+            disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
+        apply(&ns, &commands).unwrap();
+        assert_eq!(ns.proxies()[1].http, on);
     }
 
     #[test]

@@ -117,12 +117,27 @@ fn set_scripted(
     // Disabled services too: one disabled since it was pointed at us would point at us again
     // once re-enabled.
     let services = read_services(ns, true)?;
-    let snapshot = load_snapshot(snapshot_path)?;
+    let mut snapshot = load_snapshot(snapshot_path)?;
     let (commands, used_up) = disable_commands(&services, snapshot.as_ref(), port);
+    if commands.is_empty() && !used_up {
+        return Ok(());
+    }
+    // Saved first, so a restore cut short is finished by the next one.
+    if let Some(snapshot) = snapshot.as_mut() {
+        snapshot.mark_restoring(&commands);
+        save_snapshot(snapshot_path, snapshot)?;
+    }
     if !commands.is_empty() {
         run(&commands)?;
     }
-    if used_up { remove_snapshot(snapshot_path) } else { Ok(()) }
+    match snapshot {
+        Some(_) if used_up => remove_snapshot(snapshot_path),
+        Some(mut snapshot) => {
+            snapshot.restoring.clear();
+            save_snapshot(snapshot_path, &snapshot)
+        }
+        None => Ok(()),
+    }
 }
 
 /// The calls as one `sh` script that stops at the first failure.

@@ -114,12 +114,19 @@ impl<N: Networksetup, P: Processes> Daemon<N, P> {
         }
         let services = read_services(&self.ns, true)?;
         let (commands, used_up) = disable_commands(&services, snapshot, port);
-        // Kept on failure, so the next try still knows what to put back.
-        apply(&self.ns, &commands)?;
-        if used_up && state.active.take().is_some() {
+        // Saved first, so a restore cut short is finished by the next one.
+        if let Some(active) = state.active.as_mut() {
+            active.snapshot.mark_restoring(&commands);
             self.save(state)?;
         }
-        Ok(())
+        // Kept on failure, so the next try still knows what to put back.
+        apply(&self.ns, &commands)?;
+        if used_up {
+            state.active = None;
+        } else if let Some(active) = state.active.as_mut() {
+            active.snapshot.restoring.clear();
+        }
+        self.save(state)
     }
 
     /// Restores, then deletes the state file, as the app is about to remove the daemon.
