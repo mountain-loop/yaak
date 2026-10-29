@@ -364,7 +364,11 @@ const FlowRow = memo(function FlowRow({
         {path}
         <span className="text-text-subtlest">{query}</span>
       </span>
-      <HttpStatusTagRaw status={flow.status ?? 0} short />
+      {flow.cancelled && flow.status == null ? (
+        <span className="font-mono text-text-subtlest">--</span>
+      ) : (
+        <HttpStatusTagRaw status={flow.status ?? 0} short />
+      )}
       {!sideBySide &&
         (failed ? (
           <span className="text-danger" title={flow.error ?? undefined}>

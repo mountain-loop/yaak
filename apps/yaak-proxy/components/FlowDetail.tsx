@@ -133,11 +133,15 @@ function FlowPane({ flow }: { flow: Flow }) {
         )}
       >
         <HStack space={2} className="w-full shrink-0">
-          <HttpStatusTagRaw
-            showReason
-            status={flow.status ?? 0}
-            statusReason={flow.status == null ? null : statusReason(flow.status)}
-          />
+          {flow.cancelled && flow.status == null ? (
+            <span>Cancelled</span>
+          ) : (
+            <HttpStatusTagRaw
+              showReason
+              status={flow.status ?? 0}
+              statusReason={flow.status == null ? null : statusReason(flow.status)}
+            />
+          )}
           {flow.elapsedMs != null && (
             <>
               <span>&bull;</span>
