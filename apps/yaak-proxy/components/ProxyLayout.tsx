@@ -1,15 +1,26 @@
-import { HeaderSize, IconButton, SidebarLayout, SplitLayout } from "@yaakapp-internal/ui";
+import {
+  HeaderSize,
+  IconButton,
+  SidebarLayout,
+  SplitLayout,
+  type SplitLayoutLayout,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import { useState } from "react";
 import { useLocalStorage } from "react-use";
 import { flowLayoutAtom } from "../lib/atoms";
+import { searchWindowAtom, showFirstRunAtom, shownTotalAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { ClearFlowsButton } from "./ClearFlowsButton";
+import { FirstRun } from "./FirstRun";
 import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
 import { ProxyStatus } from "./ProxyStatus";
-import { filteredCountAtom, selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
+import { SaveDialog } from "./SaveDialog";
+import { selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
+import { TakeOverBanner } from "./TakeOverBanner";
+import { Toasts } from "./Toasts";
 
 export function ProxyLayout() {
   const os = getOsType();
@@ -120,27 +131,45 @@ export function ProxyLayout() {
           )
         }
       >
-        <SplitLayout
-          storageKey="proxy_detail"
-          className="gap-1"
-          layout={flowLayout}
-          defaultRatio={0.55}
-          firstSlot={({ style, orientation }) => (
-            <FlowList sideBySide={orientation === "horizontal"} style={style} className="pt-1" />
-          )}
-          secondSlot={({ style, orientation }) => (
-            <FlowDetail style={style} sideBySide={orientation === "horizontal"} />
-          )}
-        />
+        <div className="h-full flex flex-col min-h-0">
+          <TakeOverBanner />
+          <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)]">
+            <FlowsOrFirstRun flowLayout={flowLayout} />
+          </div>
+        </div>
       </SidebarLayout>
+      <SaveDialog />
+      <Toasts />
     </div>
   );
 }
 
 /** Its own component, so new traffic re-renders the count rather than the whole layout */
 function FlowCount() {
-  const count = useAtomValue(filteredCountAtom);
+  const count = useAtomValue(shownTotalAtom);
+  const searching = useAtomValue(searchWindowAtom) != null;
+  const noun = searching ? (count === 1 ? "match" : "matches") : count === 1 ? "flow" : "flows";
+  return <span className="text-text-subtlest shrink-0">{`${count} ${noun}`}</span>;
+}
+
+/**
+ * The flow list above the detail pane, or, while the database has no flows at all, the first-run
+ * card across the whole area: it is the empty state until traffic replaces it.
+ */
+function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
+  if (useAtomValue(showFirstRunAtom)) return <FirstRun />;
   return (
-    <span className="text-text-subtlest shrink-0">{count === 1 ? "1 flow" : `${count} flows`}</span>
+    <SplitLayout
+      storageKey="proxy_detail"
+      className="gap-1"
+      layout={flowLayout}
+      defaultRatio={0.55}
+      firstSlot={({ style, orientation }) => (
+        <FlowList sideBySide={orientation === "horizontal"} style={style} className="pt-1" />
+      )}
+      secondSlot={({ style, orientation }) => (
+        <FlowDetail style={style} sideBySide={orientation === "horizontal"} />
+      )}
+    />
   );
 }

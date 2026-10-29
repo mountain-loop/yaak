@@ -352,12 +352,15 @@ async fn https_get() {
     assert_eq!(resp.text().await.unwrap(), "hello");
 
     let events = h.flow_events();
-    let (method, req_url, req_version, started_at) = find!(events,
-        ProxyEvent::RequestStart { method, url, http_version, started_at, .. } =>
-            (method.clone(), url.clone(), http_version.clone(), *started_at));
+    let (method, req_url, req_version, started_at, connection, client_addr) = find!(events,
+        ProxyEvent::RequestStart { method, url, http_version, started_at, connection, client_addr, .. } =>
+            (method.clone(), url.clone(), http_version.clone(), *started_at, *connection, *client_addr));
     assert_eq!(method, "GET");
     assert_eq!(req_url, url);
     assert_eq!(req_version, "HTTP/1.1");
+    // The request inside the tunnel keeps the connection the CONNECT came on.
+    assert_eq!(connection, 1);
+    assert!(client_addr.ip().is_loopback() && client_addr.port() != h.proxy.port, "{client_addr}");
     assert!(SystemTime::now().duration_since(started_at).unwrap() < Duration::from_secs(30));
 
     let (status, res_version, remote_addr, headers_ms) = find!(events,

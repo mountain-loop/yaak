@@ -22,7 +22,7 @@ use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 use crate::body::{CaptureBody, Direction};
 use crate::connection::serve_http1;
 use crate::tunnel::{Rewind, splice, tunnel};
-use crate::{Engine, ProxyEvent};
+use crate::{ClientConn, Engine, ProxyEvent};
 
 pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
 type BoxError = Box<dyn Error + Send + Sync>;
@@ -67,7 +67,12 @@ struct Flow {
 }
 
 impl Flow {
-    fn begin(engine: Arc<Engine>, req: &Request<Incoming>, url: String) -> Self {
+    fn begin(
+        engine: Arc<Engine>,
+        client: ClientConn,
+        req: &Request<Incoming>,
+        url: String,
+    ) -> Self {
         let flow = Self { id: engine.next_flow_id(), start: Instant::now(), engine };
         flow.engine.emit(ProxyEvent::RequestStart {
             id: flow.id,
@@ -75,6 +80,8 @@ impl Flow {
             method: req.method().to_string(),
             url,
             http_version: version_str(req.version()),
+            connection: client.connection,
+            client_addr: client.addr,
         });
         for (name, value) in req.headers() {
             flow.engine.emit(ProxyEvent::RequestHeader {
@@ -147,16 +154,17 @@ fn bad_gateway(body: String) -> Response<BoxBody> {
 
 pub(crate) async fn handle_request(
     mut req: Request<Incoming>,
+    client: ClientConn,
     engine: Arc<Engine>,
 ) -> Result<Response<BoxBody>, Infallible> {
     if req.method() == Method::CONNECT {
-        return Ok(handle_connect(req, engine));
+        return Ok(handle_connect(req, client, engine));
     }
 
     // Some clients send a bare path (`POST /api`) as they would to the server itself.
     let from_host = req.uri().authority().is_none();
     let rejected = if from_host { url_from_host(&mut req, &engine).err() } else { None };
-    let flow = Flow::begin(engine.clone(), &req, req.uri().to_string());
+    let flow = Flow::begin(engine.clone(), client, &req, req.uri().to_string());
     if let Some((status, error)) = rejected {
         return Ok(flow.reject(status, error));
     }
@@ -220,7 +228,11 @@ struct Target {
     addr: String,
 }
 
-fn handle_connect(req: Request<Incoming>, engine: Arc<Engine>) -> Response<BoxBody> {
+fn handle_connect(
+    req: Request<Incoming>,
+    client: ClientConn,
+    engine: Arc<Engine>,
+) -> Response<BoxBody> {
     let Some(authority) = req.uri().authority().cloned() else {
         return Response::builder()
             .status(StatusCode::BAD_REQUEST)
@@ -240,7 +252,7 @@ fn handle_connect(req: Request<Incoming>, engine: Arc<Engine>) -> Response<BoxBo
             authority: if port == 443 { host.clone() } else { format!("{host}:{port}") },
             addr: format!("{host}:{port}"),
         };
-        if let Err(e) = intercept(upgraded, target, engine).await {
+        if let Err(e) = intercept(upgraded, target, client, engine).await {
             debug!("Tunnel to {host}:{port} ended: {}", error_chain(e.as_ref()));
         }
     });
@@ -248,7 +260,12 @@ fn handle_connect(req: Request<Incoming>, engine: Arc<Engine>) -> Response<BoxBo
     Response::new(text_body(Bytes::new()))
 }
 
-async fn intercept<S>(mut client: S, target: Target, engine: Arc<Engine>) -> Result<(), BoxError>
+async fn intercept<S>(
+    mut client: S,
+    target: Target,
+    conn: ClientConn,
+    engine: Arc<Engine>,
+) -> Result<(), BoxError>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -308,7 +325,7 @@ where
 
     let tls = Rewind::new(Bytes::from(buf), tls);
     let target = Arc::new(Target { server_name, ..target });
-    serve_http1(tls, move |req| forward_https(req, target.clone(), engine.clone())).await?;
+    serve_http1(tls, move |req| forward_https(req, target.clone(), conn, engine.clone())).await?;
     Ok(())
 }
 
@@ -395,11 +412,12 @@ async fn connect_upstream(
 async fn forward_https(
     mut req: Request<Incoming>,
     target: Arc<Target>,
+    client: ClientConn,
     engine: Arc<Engine>,
 ) -> Result<Response<BoxBody>, Infallible> {
     let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
     let url = format!("https://{}{path}", target.authority);
-    let flow = Flow::begin(engine.clone(), &req, url.clone());
+    let flow = Flow::begin(engine.clone(), client, &req, url.clone());
 
     let client_upgrade: Option<OnUpgrade> =
         req.headers().contains_key(UPGRADE).then(|| hyper::upgrade::on(&mut req));

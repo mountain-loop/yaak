@@ -42,7 +42,14 @@ pub struct ProxyConfig {
     pub capture_body_limit: usize,
     /// Roots trusted for upstream TLS in addition to the platform's.
     pub upstream_root_certs: Vec<CertificateDer<'static>>,
+    /// Runs on a blocking thread as each client connection is accepted, with the connection's
+    /// number and the client's address, before anything is read from it, so the client is
+    /// still there to be looked up. The connection waits for it.
+    pub on_accept: Option<AcceptHook>,
 }
+
+/// See [`ProxyConfig::on_accept`].
+pub type AcceptHook = Arc<dyn Fn(u64, SocketAddr) + Send + Sync>;
 
 impl ProxyConfig {
     pub fn new(port: u16, ca: Arc<CaStore>) -> Self {
@@ -51,6 +58,7 @@ impl ProxyConfig {
             ca,
             capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
             upstream_root_certs: Vec::new(),
+            on_accept: None,
         }
     }
 }
@@ -69,6 +77,10 @@ pub enum ProxyEvent {
         url: String,
         /// Version spoken by the client.
         http_version: String,
+        /// The client connection the request came on, numbered from 1 for each run.
+        connection: u64,
+        /// The client's end of that connection, to find the app that opened it.
+        client_addr: SocketAddr,
     },
     RequestHeader {
         id: u64,
@@ -169,11 +181,19 @@ impl Drop for ProxyHandle {
     }
 }
 
+/// The client connection a request came on.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ClientConn {
+    connection: u64,
+    addr: SocketAddr,
+}
+
 pub(crate) struct Engine {
     ca: Arc<CaStore>,
     capture_body_limit: usize,
     events: std_mpsc::Sender<ProxyEvent>,
     next_id: AtomicU64,
+    next_connection: AtomicU64,
     http_client: Client<HttpConnector, BoxBody>,
     upstream_tls: Arc<ClientConfig>,
     upstream_tls_h1: Arc<ClientConfig>,
@@ -251,6 +271,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         capture_body_limit: config.capture_body_limit,
         events: event_tx,
         next_id: AtomicU64::new(1),
+        next_connection: AtomicU64::new(1),
         http_client: Client::builder(TokioExecutor::new()).build_http(),
         upstream_tls: upstream_tls_config(&roots, &[b"h2", b"http/1.1"])?,
         upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
@@ -260,6 +281,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
     });
 
     let port = config.port;
+    let on_accept = config.on_accept;
     let handle_engine = engine.clone();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let (ready_tx, ready_rx) = std_mpsc::channel();
@@ -289,10 +311,19 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
             loop {
                 tokio::select! {
                     result = listener.accept() => match result {
-                        Ok((stream, _)) => {
+                        Ok((stream, addr)) => {
                             let engine = engine.clone();
+                            let client = ClientConn {
+                                connection: engine.next_connection.fetch_add(1, Ordering::Relaxed),
+                                addr,
+                            };
+                            let on_accept = on_accept.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = handle_connection(stream, engine).await {
+                                if let Some(hook) = on_accept {
+                                    let (connection, addr) = (client.connection, client.addr);
+                                    let _ = tokio::task::spawn_blocking(move || hook(connection, addr)).await;
+                                }
+                                if let Err(e) = handle_connection(stream, client, engine).await {
                                     log::debug!("Client connection error: {e}");
                                 }
                             });

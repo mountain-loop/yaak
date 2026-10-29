@@ -344,11 +344,14 @@ impl ControlServer {
 }
 
 pub(crate) fn already_owned(owner: &ControlInfo) -> String {
-    let who = match owner.owner {
+    format!("The proxy is already running in {} (pid {})", owner_name(owner.owner), owner.pid)
+}
+
+pub(crate) fn owner_name(owner: Owner) -> &'static str {
+    match owner {
         Owner::App => "Yaak Proxy",
         Owner::Cli => "the yaak CLI",
-    };
-    format!("The proxy is already running in {who} (pid {})", owner.pid)
+    }
 }
 
 impl Drop for ControlServer {

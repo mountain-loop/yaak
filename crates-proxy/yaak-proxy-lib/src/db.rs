@@ -117,10 +117,14 @@ mod tests {
         let path = dir.path().join("proxy.db");
         drop(ProxyQueryManager::new(&path).unwrap());
 
-        // As a build from before the saved request column left it.
+        // As a build from before the saved request and client columns left it.
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(
             "ALTER TABLE flows DROP COLUMN saved_request_id;
+            ALTER TABLE flows DROP COLUMN client_pid;
+            ALTER TABLE flows DROP COLUMN client_name;
+            ALTER TABLE flows DROP COLUMN client_bundle_id;
+            ALTER TABLE flows DROP COLUMN client_path;
             INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://example.com', 'GET');",
         )
         .unwrap();
@@ -130,6 +134,7 @@ mod tests {
         let flows = db.with_conn(|c| c.find_all::<Flow>()).unwrap();
         assert_eq!(flows.len(), 1);
         assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
+        assert_eq!((flows[0].client_pid, flows[0].client_name.as_deref()), (None, None));
     }
 
     #[test]
@@ -169,6 +174,22 @@ mod tests {
 
         let flow_columns = columns(&conn, "flows");
         assert!(flow_columns.contains(&"response_truncated".to_string()));
+        for column in [
+            "client_pid",
+            "client_name",
+            "client_bundle_id",
+            "client_path",
+        ] {
+            assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
+        }
+        let indexes: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'flows' AND sql IS NOT NULL")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|i| i.unwrap())
+            .collect();
+        assert_eq!(indexes, vec!["idx_flows_started_at_id"]);
         assert!(!flow_columns.iter().any(|c| c.contains("body")), "{flow_columns:?}");
 
         let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();

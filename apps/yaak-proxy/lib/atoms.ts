@@ -3,6 +3,9 @@ import type { SplitLayoutLayout } from "@yaakapp-internal/ui";
 import { atom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 
+/** The sidebar's tree, whose selection narrows the list */
+export const SIDEBAR_TREE_ID = "proxy-sidebar";
+
 /** The selected flow as last seen, kept once the window has dropped it so the detail stays */
 export const selectedFlowAtom = atom<Flow | null>(null);
 

@@ -7,6 +7,7 @@ use crate::models::{Flow, find_header};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use ts_rs::TS;
 use yaak_models::models::{HttpRequest, HttpRequestHeader, HttpUrlParameter};
 
 // The client's body types (`apps/yaak-client/lib/model_util.ts`).
@@ -28,16 +29,18 @@ const HOP_BY_HOP: &[&str] = &[
 /// Yaak works these out itself when it sends the request.
 const AUTOMATIC: &[&str] = &["host", "content-length", "accept-encoding"];
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub struct DroppedHeader {
     pub name: String,
     pub value: String,
     pub reason: DropReason,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub enum DropReason {
     /// Only meant for the hop between the app and the proxy.
     HopByHop,

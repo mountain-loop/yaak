@@ -7,6 +7,7 @@ use crate::convert::{self, DroppedHeader};
 use crate::models::Flow;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 use yaak_models::models::HttpRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::UpdateSource;
@@ -17,16 +18,18 @@ pub fn client_data_dir() -> PathBuf {
     yaak_common::data_dir::resolve_data_dir(app_id)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub struct WorkspaceSummary {
     pub id: String,
     pub name: String,
     pub folders: Vec<FolderSummary>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
 pub struct FolderSummary {
     pub id: String,
     pub name: String,
@@ -56,11 +59,16 @@ pub struct ClientDb {
 }
 
 impl ClientDb {
+    /// Yaak has run on this machine, so there is a database to save into.
+    pub fn exists(data_dir: &Path) -> bool {
+        data_dir.join("db.sqlite").exists()
+    }
+
     /// Opens `db.sqlite` in Yaak's data directory `data_dir`. Fails when there is none, rather
     /// than creating a database for a Yaak that has never run.
     pub fn open(data_dir: &Path) -> Result<Self, String> {
         let db_path = data_dir.join("db.sqlite");
-        if !db_path.exists() {
+        if !Self::exists(data_dir) {
             return Err(format!(
                 "Yaak's database was not found at {}. Install Yaak and open it once.",
                 db_path.display()

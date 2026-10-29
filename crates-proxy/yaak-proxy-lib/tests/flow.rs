@@ -217,7 +217,16 @@ async fn body_rpcs() {
     let port = ctx.port().unwrap();
 
     let state = rpc(&ctx, "get_proxy_state", json!({})).await.unwrap();
-    assert_eq!(state, json!({"state": "running", "port": port}));
+    assert_eq!(
+        state,
+        json!({
+            "state": "running",
+            "port": port,
+            "configuredPort": 0,
+            "systemProxyWanted": false,
+            "otherOwner": null,
+        })
+    );
 
     let upstream = spawn_upstream().await;
     let client = reqwest::Client::builder()
