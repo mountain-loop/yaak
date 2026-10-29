@@ -4,7 +4,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { atom, useSetAtom } from "jotai";
 import { useCallback } from "react";
 import { base64ToBytes } from "./body";
-import { toCurl } from "./curl";
+import { curlBodyText, toCurl } from "./curl";
 import { rpc } from "./rpc";
 import { useShowToast } from "./toast";
 
@@ -65,10 +65,28 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
         {
           label: "Copy as cURL",
           icon: "square_terminal",
-          onSelect: () =>
-            copy("cURL", async () =>
-              toCurl(flow, flow.requestSize > 0 ? await bodyText(flow, "request") : null),
-            ),
+          onSelect: async () => {
+            let body: string | null = null;
+            if (flow.requestSize > 0) {
+              let res;
+              try {
+                res = await rpc("get_flow_body", { flowId: flow.id, which: "request" });
+              } catch (err) {
+                showToast({ message: `Failed to copy cURL: ${String(err)}`, color: "danger" });
+                return;
+              }
+              body = curlBodyText(base64ToBytes(res.data), res.truncated);
+              // A command that sends other bytes than the app did would mislead.
+              if (body == null) {
+                showToast({
+                  message: "Body is binary or truncated; export HAR instead",
+                  color: "info",
+                });
+                return;
+              }
+            }
+            await copy("cURL", () => toCurl(flow, body));
+          },
         },
         { label: "Copy URL", icon: "copy", onSelect: () => copy("URL", () => flow.url) },
         {

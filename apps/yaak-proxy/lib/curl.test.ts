@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { shellQuote, toCurl } from "./curl";
+import { curlBodyText, shellQuote, toCurl } from "./curl";
 
 const headers = (...pairs: [string, string][]) => pairs.map(([name, value]) => ({ name, value }));
 
@@ -77,5 +77,18 @@ describe("shellQuote", () => {
   test("closes and reopens the quotes around a quote", () => {
     expect(shellQuote("a'b")).toBe(`'a'\\''b'`);
     expect(shellQuote("$HOME `x`")).toBe("'$HOME `x`'");
+  });
+});
+
+describe("curlBodyText", () => {
+  test("is the text of a complete UTF-8 body", () => {
+    expect(curlBodyText(new TextEncoder().encode('{"note":"héllo"}'), false)).toBe(
+      '{"note":"héllo"}',
+    );
+  });
+
+  test("refuses a body curl would send different bytes for", () => {
+    expect(curlBodyText(new Uint8Array([0xff, 0x00, 0xfe]), false)).toBeNull();
+    expect(curlBodyText(new TextEncoder().encode("the first part"), true)).toBeNull();
   });
 });

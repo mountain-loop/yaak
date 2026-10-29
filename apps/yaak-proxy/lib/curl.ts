@@ -12,6 +12,19 @@ const LEFT_OUT = new Set([
   "upgrade",
 ]);
 
+/**
+ * A request body as the text a curl command can carry, or null when it would not send the same
+ * bytes: when it is not valid UTF-8, or only its start was captured.
+ */
+export function curlBodyText(bytes: Uint8Array, truncated: boolean): string | null {
+  if (truncated) return null;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 /** `value` in single quotes for a POSIX shell */
 export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
