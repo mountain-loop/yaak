@@ -37,10 +37,11 @@ impl ProxySetting {
         self.enabled && self.server == HOST && self.port == port
     }
 
-    /// This setting as the user's own: one pointing at `port` is ours, left behind, so it is
-    /// saved as off.
-    fn owned(&self, port: u16) -> Self {
-        Self { enabled: self.enabled && !self.points_at(port), ..self.clone() }
+    /// This setting as the user's own: one pointing at one of `ports` is ours, left behind, so
+    /// it is saved as off.
+    fn owned(&self, ports: &[u16]) -> Self {
+        let ours = ports.iter().any(|p| self.points_at(*p));
+        Self { enabled: self.enabled && !ours, ..self.clone() }
     }
 }
 
@@ -56,6 +57,10 @@ impl ServiceProxy {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snapshot {
     pub port: u16,
+    /// Ports it pointed at before moving to `port`, where a service it could not move, or a
+    /// disabled one, may still point.
+    #[serde(default)]
+    pub previous_ports: Vec<u16>,
     pub services: Vec<ServiceProxy>,
 }
 
@@ -69,21 +74,54 @@ impl Snapshot {
     /// Records `services` not saved yet, a network connected since the first capture, and
     /// moves the snapshot to `port`. Those already saved keep the user's settings, not ours.
     pub fn extend(&mut self, services: &[ServiceProxy], port: u16) {
+        if self.port != 0 && self.port != port && !self.previous_ports.contains(&self.port) {
+            self.previous_ports.push(self.port);
+        }
+        self.previous_ports.retain(|p| *p != port);
+        self.port = port;
+        let ports = self.ports();
         for service in services {
             if self.services.iter().any(|s| s.name == service.name) {
                 continue;
             }
             self.services.push(ServiceProxy {
                 name: service.name.clone(),
-                http: service.http.owned(port),
-                https: service.https.owned(port),
+                http: service.http.owned(&ports),
+                https: service.https.owned(&ports),
             });
         }
-        self.port = port;
+    }
+
+    /// Every port this snapshot has pointed services at, the current one first.
+    pub fn ports(&self) -> Vec<u16> {
+        std::iter::once(self.port).chain(self.previous_ports.iter().copied()).collect()
     }
 
     fn get(&self, name: &str) -> Option<&ServiceProxy> {
         self.services.iter().find(|s| s.name == name)
+    }
+}
+
+/// The calls that turn the system proxy off at `port`, and whether `snapshot` is used up by
+/// them. At the snapshot's current port, or at port 0 meaning wherever it is, they put back
+/// everything it saved. At any other port they only turn off what points there, leaving the
+/// snapshot to the routing still live on its own port.
+pub fn disable_commands(
+    services: &[ServiceProxy],
+    snapshot: Option<&Snapshot>,
+    port: u16,
+) -> (Vec<Vec<String>>, bool) {
+    match snapshot {
+        Some(snapshot) if port == 0 || port == snapshot.port => {
+            let mut ports = snapshot.ports();
+            if port != 0 && !ports.contains(&port) {
+                ports.push(port);
+            }
+            (restore_commands(services, Some(snapshot), &ports), true)
+        }
+        Some(_) => (restore_commands(services, None, &[port]), false),
+        None if port == 0 => (Vec::new(), true),
+        None => (restore_commands(services, None, &[port]), true),
     }
 }
 

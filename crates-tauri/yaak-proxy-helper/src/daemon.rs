@@ -3,8 +3,8 @@
 
 use crate::auth::{CodeSignature, Peer, Verifier};
 use crate::networksetup::{
-    Networksetup, Snapshot, SystemNetworksetup, apply, enable_commands, read_services,
-    restore_commands,
+    Networksetup, Snapshot, SystemNetworksetup, apply, disable_commands, enable_commands,
+    read_services,
 };
 use crate::process::{Owner, Processes, SystemProcesses};
 use crate::protocol::{MAX_LINE, Request, Response, Status, parse_request};
@@ -97,8 +97,9 @@ impl<N: Networksetup, P: Processes> Daemon<N, P> {
         Ok(status(&state))
     }
 
-    /// Puts back the saved settings, and turns off proxies left pointing at `port` with
-    /// nothing saved for them.
+    /// Turns the system proxy off at `port`, or wherever it points without one: at the saved
+    /// port this puts back everything saved; at another, a stale one, it only turns off what
+    /// points there, and the saved settings stay with the routing still live.
     fn restore(&self, port: Option<u16>) -> Result<Status, String> {
         let mut state = self.lock();
         self.restore_locked(&mut state, port)?;
@@ -106,15 +107,16 @@ impl<N: Networksetup, P: Processes> Daemon<N, P> {
     }
 
     fn restore_locked(&self, state: &mut State, port: Option<u16>) -> Result<(), String> {
+        let port = port.unwrap_or(0);
         let snapshot = state.active.as_ref().map(|a| &a.snapshot);
-        let ports: Vec<u16> =
-            snapshot.map(|s| s.port).into_iter().chain(port).filter(|p| *p != 0).collect();
-        if !ports.is_empty() {
-            let services = read_services(&self.ns, true)?;
-            // Kept on failure, so the next try still knows what to put back.
-            apply(&self.ns, &restore_commands(&services, snapshot, &ports))?;
+        if snapshot.is_none() && port == 0 {
+            return Ok(());
         }
-        if state.active.take().is_some() {
+        let services = read_services(&self.ns, true)?;
+        let (commands, used_up) = disable_commands(&services, snapshot, port);
+        // Kept on failure, so the next try still knows what to put back.
+        apply(&self.ns, &commands)?;
+        if used_up && state.active.take().is_some() {
             self.save(state)?;
         }
         Ok(())
@@ -454,6 +456,44 @@ mod tests {
         daemon.handle(&set(true, 9191)).into_result().unwrap();
         assert!(all_point_at(&daemon, 9191));
         daemon.handle(&Request::Restore).into_result().unwrap();
+        assert_eq!(daemon.ns.proxies()[0], before[0]);
+    }
+
+    #[test]
+    fn a_failed_port_move_still_restores_the_old_port() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = daemon(dir.path());
+        let before = daemon.ns.proxies();
+        daemon.handle(&set(true, 9090)).into_result().unwrap();
+        // Moving to 9191 fails on Ethernet, after Wi-Fi moved.
+        *daemon.ns.failing.lock().unwrap() = Some("Ethernet".into());
+        assert!(!daemon.handle(&set(true, 9191)).ok);
+        // The undo failed on Ethernet too, so what to put back is kept for the next try.
+        assert!(daemon.state().active.is_some());
+        *daemon.ns.failing.lock().unwrap() = None;
+        daemon.handle(&Request::Restore).into_result().unwrap();
+        // Restored everywhere, the old port included.
+        assert_eq!(daemon.ns.proxies()[0], before[0]);
+        assert!(!daemon.ns.proxies()[1].points_at(9090));
+        assert_eq!(daemon.state(), State::default());
+    }
+
+    #[test]
+    fn turning_off_a_stale_port_keeps_the_live_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = daemon(dir.path());
+        let before = daemon.ns.proxies();
+        daemon.handle(&set(true, 9090)).into_result().unwrap();
+        daemon.ns.set_enabled("Ethernet", false);
+        daemon.handle(&set(true, 9191)).into_result().unwrap();
+
+        // The app's launch cleanup of its old port.
+        let status = daemon.handle(&set(false, 9090)).into_result().unwrap();
+        assert!(status.active && status.port == Some(9191));
+        assert!(daemon.ns.proxies()[0].http.points_at(9191));
+        assert!(!daemon.ns.proxies()[1].points_at(9090));
+
+        daemon.handle(&set(false, 9191)).into_result().unwrap();
         assert_eq!(daemon.ns.proxies()[0], before[0]);
     }
 

@@ -503,6 +503,7 @@ impl ProxyCtx {
     /// saved. Leaves it alone when something is serving on the port. Blocks.
     pub fn reset_stale_system_proxy(&self, ports: &[u16]) -> Result<(), String> {
         let mut ports = ports.to_vec();
+        ports.extend(macos::saved_port(&self.snapshot_path()));
         ports.sort_unstable();
         ports.dedup();
         for port in ports {

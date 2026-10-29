@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use ts_rs::TS;
 use yaak_proxy_helper::networksetup::{
-    NETWORKSETUP, Networksetup, Snapshot, enable_commands, read_services, restore_commands,
+    NETWORKSETUP, Networksetup, Snapshot, disable_commands, enable_commands, read_services,
 };
 
 pub use yaak_proxy_helper::networksetup::{ProxySetting, ServiceProxy};
@@ -59,6 +59,12 @@ fn load_snapshot(path: &Path) -> Result<Option<Snapshot>, String> {
     }
 }
 
+/// The port the password dialog or `sudo` last pointed the system proxy at, while they have
+/// settings saved to put back.
+pub fn saved_port(snapshot_path: &Path) -> Option<u16> {
+    load_snapshot(snapshot_path).ok().flatten().map(|s| s.port)
+}
+
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn save_snapshot(path: &Path, snapshot: &Snapshot) -> Result<(), String> {
     let json = serde_json::to_vec_pretty(snapshot).map_err(|e| e.to_string())?;
@@ -97,8 +103,10 @@ fn set_scripted(
         // Saved before anything changes, so a crash after the change still restores.
         save_snapshot(snapshot_path, &snapshot)?;
         if let Err(e) = run(&enable_commands(&services, port)) {
-            // Usually cancelled, with nothing changed; a snapshot kept would go stale.
-            if created {
+            // Usually cancelled, with nothing changed, and a snapshot kept would go stale.
+            // Once anything points at us, it is what puts the rest back.
+            let changed = read_services(ns, false)?.iter().any(|s| s.points_at(port));
+            if created && !changed {
                 remove_snapshot(snapshot_path)?;
             }
             return Err(e);
@@ -110,13 +118,11 @@ fn set_scripted(
     // once re-enabled.
     let services = read_services(ns, true)?;
     let snapshot = load_snapshot(snapshot_path)?;
-    let mut ports = vec![port];
-    ports.extend(snapshot.as_ref().map(|s| s.port).filter(|p| *p != port));
-    let commands = restore_commands(&services, snapshot.as_ref(), &ports);
+    let (commands, used_up) = disable_commands(&services, snapshot.as_ref(), port);
     if !commands.is_empty() {
         run(&commands)?;
     }
-    remove_snapshot(snapshot_path)
+    if used_up { remove_snapshot(snapshot_path) } else { Ok(()) }
 }
 
 /// The calls as one `sh` script that stops at the first failure.
@@ -321,11 +327,54 @@ mod tests {
         let prompts = std::cell::Cell::new(0);
         set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
 
-        // The app crashed; the next launch resets the port its control file named, which the
-        // settings since moved away from.
+        // The app crashed; the next launch resets the configured port, now another one, which
+        // leaves the snapshot alone, and then the port it saved.
+        assert_eq!(saved_port(&path), Some(9090));
         set_scripted(&ns, runner(&ns, &prompts), false, 8080, &path).unwrap();
+        assert!(path.exists());
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
         assert_eq!(ns.proxies()[0], before[0]);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_stale_reset_at_an_old_port_leaves_live_routing_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        // A crash left a disabled service on 9090; the new engine routes on 9191.
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        ns.set_enabled("Ethernet", false);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9191, &path).unwrap();
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert!(ns.proxies()[0].http.points_at(9191), "live routing kept");
+        assert!(!ns.proxies()[1].points_at(9090), "the stale port cleared");
+        assert!(path.exists());
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9191, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_partly_applied_change_keeps_its_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        // Wi-Fi is changed, then Ethernet fails.
+        *ns.failing.lock().unwrap() = Some("Ethernet".into());
+        assert!(set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).is_err());
+        assert!(ns.proxies()[0].points_at(9090));
+        assert!(path.exists());
+
+        *ns.failing.lock().unwrap() = None;
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
     }
 
     #[test]
