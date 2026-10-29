@@ -741,3 +741,23 @@ async fn the_system_proxy_at_launch_setting_is_saved_and_routing_needs_an_engine
     let err = rpc(&ctx, "system_proxy_set", json!({ "enabled": true })).await.unwrap_err();
     assert!(err.contains("not running"), "{err}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn another_app_owning_the_engine_is_not_taken_over() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    // Another app instance, whose engine a stop would halt without releasing its claim.
+    let other = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(other.clone()).unwrap();
+    other.start().unwrap();
+
+    let app = ctx(dir.path(), client_dir.path());
+    let state = rpc(&app, "get_proxy_state", json!({})).await.unwrap();
+    assert_eq!(state["otherOwner"]["owner"], "app");
+    let err = rpc(&app, "take_over", json!({})).await.unwrap_err();
+    assert_eq!(err, yaak_proxy_lib::ANOTHER_APP_OWNS);
+    // Refused before touching it: the other app keeps running.
+    assert!(other.port().is_some());
+    assert_eq!(app.port(), None);
+    other.stop().unwrap();
+}

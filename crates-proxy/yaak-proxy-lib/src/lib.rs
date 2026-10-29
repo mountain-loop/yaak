@@ -319,6 +319,11 @@ impl ProxyCtx {
     /// does not let go.
     pub async fn take_over(&self) -> Result<(), String> {
         if let Some(owner) = self.other_owner() {
+            // Stopped through the control API, another app halts its engine but keeps the claim,
+            // so only the CLI daemon, which exits on it, can be taken over.
+            if owner.owner == Owner::App {
+                return Err(ANOTHER_APP_OWNS.to_string());
+            }
             ControlClient::new(owner.clone()).stop().await?;
             let ctx = self.clone();
             let released = tokio::task::spawn_blocking(move || {
@@ -1096,6 +1101,10 @@ async fn clear_flows(ctx: ProxyCtx, _req: ClearFlowsRequest) -> Result<usize, Rp
 }
 
 // -- Event loop --
+
+/// Why the engine cannot be taken over from another app.
+pub const ANOTHER_APP_OWNS: &str =
+    "Another Yaak Proxy window owns the engine. Quit it to use this one.";
 
 /// How long taking over waits for the owner to let go of the engine.
 const TAKE_OVER_WAIT: Duration = Duration::from_secs(10);

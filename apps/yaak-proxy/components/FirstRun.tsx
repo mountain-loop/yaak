@@ -91,7 +91,9 @@ export function FirstRun() {
               title={systemOn ? "System proxy on" : "Turn on the system proxy"}
               description={
                 otherOwner && !systemOn
-                  ? "The CLI owns the proxy. Take over to turn this on from here."
+                  ? proxyState?.otherOwner?.owner === "cli"
+                    ? "The CLI owns the proxy. Take over to turn this on from here."
+                    : "Another Yaak Proxy window owns the engine. Quit it to use this one."
                   : systemSwitch.description
               }
               action={
