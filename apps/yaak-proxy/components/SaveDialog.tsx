@@ -12,6 +12,7 @@ import {
   LoadingIcon,
   PlainInput,
 } from "@yaakapp-internal/ui";
+import { unnamedRequestName } from "@yaakapp-internal/ui/resolvedModelName";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAtom } from "jotai";
 import { useEffect, useMemo, useState } from "react";
@@ -68,7 +69,7 @@ function SaveForm({
     workspaces.find((w) => w.id === lastWorkspaceId)?.id ?? workspaces[0]?.id ?? "",
   );
   const [folderId, setFolderId] = useState("");
-  const [name, setName] = useState<string | null>(null);
+  const [name, setName] = useState("");
   const save = useRpcMutation("save_flow");
 
   const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -76,7 +77,11 @@ function SaveForm({
   useEffect(() => setFolderId(""), [workspaceId]);
 
   const p = preview.data;
-  const shownName = name ?? p?.name ?? "";
+  // Unnamed unless one is typed, as Yaak leaves a new request, which then shows its URL.
+  const unnamed =
+    p == null
+      ? ""
+      : unnamedRequestName({ model: "http_request", url: p.requestUrl, bodyType: p.bodyType });
   const folderName = folders.find((f) => f.id === folderId)?.name;
 
   const submit = () => {
@@ -86,7 +91,7 @@ function SaveForm({
         flowId: flow.id,
         workspaceId: workspace.id,
         ...(folderId === "" ? {} : { folderId }),
-        name: shownName,
+        ...(name.trim() === "" ? {} : { name }),
       },
       {
         onSuccess: (saved) => {
@@ -95,7 +100,7 @@ function SaveForm({
           showToast({
             message: (
               <>
-                Saved <b className="font-semibold">{saved.name}</b> to {workspace.name}
+                Saved <b className="font-semibold">{saved.name || unnamed}</b> to {workspace.name}
                 {folderName == null ? "." : `, in ${folderName}.`} Yaak picks it up within a second.
               </>
             ),
@@ -163,7 +168,7 @@ function SaveForm({
           </select>
         </Field>
       </div>
-      <PlainInput label="Name" autoFocus autoSelect defaultValue={shownName} onChange={setName} />
+      <PlainInput label="Name" autoFocus defaultValue="" placeholder={unnamed} onChange={setName} />
       {p.droppedHeaders.length > 0 && (
         <div className="rounded-md border border-border-subtle px-3.5 py-2.5">
           <div className="text-sm text-text">

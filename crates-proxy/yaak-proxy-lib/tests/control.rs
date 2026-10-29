@@ -368,6 +368,15 @@ async fn save_writes_the_request_into_yaak() {
     let flow = yaak_proxy_lib::flows::get(&ctx.db, &flow.id).unwrap();
     assert_eq!(flow.saved_request_id, Some(saved.request.id));
 
+    // Without a name, through the control API as the CLI saves, it stays unnamed, as Yaak
+    // leaves a new request, so Yaak shows its URL.
+    for name in [None, Some("  ".to_string())] {
+        let target = SaveFlowRequest { workspace_id: workspace.id.clone(), folder_id: None, name };
+        let saved = client.save(&flow.id, &target).await.unwrap();
+        let request = query_manager.connect().get_http_request(&saved.request.id).unwrap();
+        assert_eq!(request.name, "");
+    }
+
     let wrong = SaveFlowRequest { workspace_id: "wk_missing".into(), ..Default::default() };
     assert!(client.save(&flow.id, &wrong).await.unwrap_err().contains("No workspace"));
 }
@@ -516,7 +525,8 @@ async fn the_save_dialog_reads_workspaces_previews_and_saves() {
 
     let preview = rpc(&ctx, "preview_save", json!({ "flowId": flow.id })).await.unwrap();
     assert_eq!(preview["method"], "POST");
-    assert_eq!(preview["name"], "/v1/charges");
+    assert!(preview["requestUrl"].as_str().unwrap().ends_with("/v1/charges"), "{preview}");
+    assert_eq!(preview["bodyType"], "application/json");
     assert_eq!(preview["body"], "JSON");
     assert_eq!(preview["authorization"], true);
     let dropped: Vec<&str> = preview["droppedHeaders"]

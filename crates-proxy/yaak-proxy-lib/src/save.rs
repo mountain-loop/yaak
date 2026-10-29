@@ -42,7 +42,7 @@ pub struct FolderSummary {
 pub struct SaveFlowRequest {
     pub workspace_id: String,
     pub folder_id: Option<String>,
-    /// Defaults to the URL's path.
+    /// None or blank leaves the request unnamed, and Yaak shows its URL.
     pub name: Option<String>,
 }
 

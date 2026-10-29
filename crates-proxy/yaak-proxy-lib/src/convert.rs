@@ -75,8 +75,8 @@ pub fn flow_to_request(flow: &Flow, body: &DecodedBody) -> Conversion {
         ));
     }
 
+    // No name, as in Yaak, which then shows the URL.
     let request = HttpRequest {
-        name: default_name(&url),
         method: flow.method.clone(),
         url,
         url_parameters,
@@ -231,16 +231,6 @@ fn graphql_body(flow: &Flow, text: &str) -> Option<BTreeMap<String, Value>> {
     Some(fields)
 }
 
-/// The path, or the host for a request to the root.
-fn default_name(url: &str) -> String {
-    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
-    match rest.split_once('/') {
-        Some((_, path)) if !path.is_empty() => format!("/{path}"),
-        Some((host, _)) => host.to_string(),
-        None => rest.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,7 +280,7 @@ mod tests {
         let r = &c.request;
         assert_eq!(r.method, "GET");
         assert_eq!(r.url, "https://api.github.com/search/issues");
-        assert_eq!(r.name, "/search/issues");
+        assert_eq!(r.name, "");
         let params: Vec<(&str, &str)> =
             r.url_parameters.iter().map(|p| (p.name.as_str(), p.value.as_str())).collect();
         assert_eq!(params, vec![("q", "is:open label:bug"), ("per_page", "5")]);
@@ -394,7 +384,7 @@ mod tests {
                 { "enabled": true, "name": "note", "value": "hello world!" },
             ])
         );
-        assert_eq!(c.request.name, "/login");
+        assert_eq!(c.request.name, "", "unnamed, so Yaak shows its URL");
     }
 
     #[test]
@@ -415,7 +405,7 @@ mod tests {
         let c = flow_to_request(&f, &body("hello"));
         assert_eq!(c.request.body_type.as_deref(), Some("other"));
         assert_eq!(c.request.body["text"], "hello");
-        assert_eq!(c.request.name, "x.test");
+        assert_eq!(c.request.name, "");
     }
 
     #[test]

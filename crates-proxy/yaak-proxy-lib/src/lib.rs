@@ -709,8 +709,11 @@ pub struct PreviewSaveRequest {
 pub struct SavePreview {
     pub method: String,
     pub url: String,
-    /// The name the request gets unless one is given.
-    pub name: String,
+    /// The URL as saved, its query split out into parameters, which Yaak shows for an unnamed
+    /// request.
+    pub request_url: String,
+    /// The saved body type, which Yaak shows for an unnamed GraphQL request with no URL.
+    pub body_type: Option<String>,
     /// Headers Yaak sets itself or that only meant something to the proxy.
     pub dropped_headers: Vec<DroppedHeader>,
     /// Headers saved as captured, Authorization among them.
@@ -732,7 +735,7 @@ pub struct SaveFlowToYaakRequest {
     pub workspace_id: String,
     #[ts(optional)]
     pub folder_id: Option<String>,
-    /// Defaults to the URL's path.
+    /// None or blank leaves the request unnamed, and Yaak shows its URL.
     #[ts(optional)]
     pub name: Option<String>,
 }
@@ -934,7 +937,8 @@ async fn preview_save(ctx: ProxyCtx, req: PreviewSaveRequest) -> Result<SavePrev
     Ok(SavePreview {
         method: flow.method.clone(),
         url: flow.url.clone(),
-        name: request.name,
+        request_url: request.url.clone(),
+        body_type: request.body_type.clone(),
         dropped_headers: conversion.dropped_headers,
         kept_headers: request.headers.len(),
         body,

@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./editor": "./src/editor.ts",
+    "./resolvedModelName": "./src/lib/resolvedModelName.ts",
+    "./templateTags": "./src/lib/templateTags.ts",
     "./toast": "./src/lib/toast.ts"
   },
   "sideEffects": [

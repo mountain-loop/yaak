@@ -226,7 +226,7 @@ export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_bo
 
 export type SaveFlowToYaakRequest = { flowId: string, workspaceId: string, folderId?: string, 
 /**
- * Defaults to the URL's path.
+ * None or blank leaves the request unnamed, and Yaak shows its URL.
  */
 name?: string, };
 
@@ -235,9 +235,14 @@ name?: string, };
  */
 export type SavePreview = { method: string, url: string, 
 /**
- * The name the request gets unless one is given.
+ * The URL as saved, its query split out into parameters, which Yaak shows for an unnamed
+ * request.
  */
-name: string, 
+requestUrl: string, 
+/**
+ * The saved body type, which Yaak shows for an unnamed GraphQL request with no URL.
+ */
+bodyType: string | null, 
 /**
  * Headers Yaak sets itself or that only meant something to the proxy.
  */
