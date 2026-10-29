@@ -42,6 +42,17 @@ describe("toCurl", () => {
     );
   });
 
+  test("quotes a method that is not a plain word, and drops the decoded body's encoding", () => {
+    const flow = {
+      method: "`id`",
+      url: "https://x.test/a",
+      requestHeaders: headers(["Content-Encoding", "gzip"], ["X-Trace", "1"]),
+    };
+    expect(toCurl(flow, "plain")).toBe(
+      "curl -X '`id`' \\\n  'https://x.test/a' \\\n  -H 'X-Trace: 1' \\\n  --data-raw 'plain'",
+    );
+  });
+
   test("names any other method", () => {
     const flow = { method: "DELETE", url: "https://x.test/a", requestHeaders: [] };
     expect(toCurl(flow, null)).toBe("curl -X DELETE \\\n  'https://x.test/a'");

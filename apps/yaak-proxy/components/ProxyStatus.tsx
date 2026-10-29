@@ -12,6 +12,9 @@ import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
 import { showToastAtom } from "../lib/toast";
 
+/** How often the system proxy is read while it is meant to be on and is not yet */
+const SYSTEM_PROXY_POLL_MS = 2000;
+
 /**
  * The header's state pill and its menu: the engine, the system proxy and the certificate. The
  * system proxy and the certificate step out of the menu beside the pill while they are broken.
@@ -190,7 +193,20 @@ export function useProxySetup() {
   const queryClient = useQueryClient();
   const store = useStore();
   const caStatus = useRpcQuery("ca_status", {});
-  const systemProxy = useRpcQuery("system_proxy_status", {});
+  const proxyState = useAtomValue(proxyStateAtom);
+  // The engine turns the system proxy on in the background as it starts, through a password
+  // prompt that can take a while, so its state is read again until it matches the setting.
+  const settling = proxyState?.state === "running" && proxyState.systemProxyWanted;
+  const systemProxy = useRpcQuery(
+    "system_proxy_status",
+    {},
+    {
+      refetchInterval: (query) =>
+        settling && query.state.data?.supported === true && !query.state.data.enabled
+          ? SYSTEM_PROXY_POLL_MS
+          : false,
+    },
+  );
   const trust = useRpcMutation("ca_trust", {
     mutationKey: ["ca_trust"],
     onSuccess: (status) => queryClient.setQueryData<CaStatus>(["ca_status", {}], status),

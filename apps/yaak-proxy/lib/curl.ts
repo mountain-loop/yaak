@@ -18,19 +18,26 @@ export function shellQuote(value: string): string {
 }
 
 /**
- * The flow's request as a curl command: its method, URL, headers and body. Headers curl sets
- * itself are left out, and an encoded response is asked for with `--compressed`, as the app did.
+ * The flow's request as a curl command: its method, URL, headers and `body`, the request body
+ * decoded. Headers curl sets itself are left out, and an encoded response is asked for with
+ * `--compressed`, as the app did.
  */
 export function toCurl(flow: Pick<Flow, "method" | "url" | "requestHeaders">, body: string | null) {
   const args: string[] = [];
   const hasBody = body != null && body !== "";
   const defaultMethod = hasBody ? "POST" : "GET";
-  if (flow.method.toUpperCase() !== defaultMethod) args.push(`-X ${flow.method}`);
+  if (flow.method.toUpperCase() !== defaultMethod) {
+    // A method is any token, which can hold characters a shell would act on.
+    const plain = /^[A-Za-z0-9_-]+$/.test(flow.method);
+    args.push(`-X ${plain ? flow.method : shellQuote(flow.method)}`);
+  }
   args.push(shellQuote(flow.url));
   let compressed = false;
   for (const { name, value } of flow.requestHeaders) {
     const lower = name.toLowerCase();
     if (LEFT_OUT.has(lower) || lower.startsWith("proxy-") || lower.startsWith(":")) continue;
+    // The body is the decoded one, so its encoding no longer applies.
+    if (lower === "content-encoding" && hasBody) continue;
     if (lower === "accept-encoding") {
       compressed = true;
       continue;

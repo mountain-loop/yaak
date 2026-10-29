@@ -70,6 +70,8 @@ export interface SearchWindow {
   win: FlowWindow;
   /** The first page has not arrived yet */
   loading: boolean;
+  /** Changes that came while the first page loaded, applied once it is in */
+  buffered: ModelPayload[];
 }
 
 export const searchWindowAtom = atom<SearchWindow | null>(null);
@@ -169,7 +171,9 @@ export function syncFlows(store: Store) {
       return following ? trimWindow(next) : next;
     });
     store.set(searchWindowAtom, (s) => {
-      if (s == null || s.loading) return s;
+      if (s == null) return s;
+      // A matching flow written after the page's snapshot would otherwise be missed.
+      if (s.loading) return { ...s, buffered: [...s.buffered, ...changes] };
       const next = applyChanges(s.win, changesFor(s.query, changes));
       return { ...s, win: following ? trimWindow(next) : next };
     });
@@ -244,16 +248,24 @@ export function syncFlows(store: Store) {
       return;
     }
     const key = JSON.stringify(query);
-    store.set(searchWindowAtom, { key, query, win: emptyWindow, loading: true });
+    store.set(searchWindowAtom, { key, query, win: emptyWindow, loading: true, buffered: [] });
+    const settle = (page: FlowWindow | null) =>
+      store.set(searchWindowAtom, (s) => {
+        if (s?.key !== key) return s;
+        // Applied again over the page: a flow already in it is replaced, not added.
+        const win = applyChanges(page ?? s.win, changesFor(query, s.buffered));
+        return {
+          ...s,
+          win: page == null ? win : { ...win, total: page.total },
+          loading: false,
+          buffered: [],
+        };
+      });
     void rpc("list_flows", { ...query, limit: WINDOW_SIZE })
-      .then((res) => {
-        const win = windowFromPage(res.flows, WINDOW_SIZE, res.matching ?? res.total);
-        // Flows that arrived while it loaded are in the page or come with the next flush.
-        store.set(searchWindowAtom, (s) => (s?.key === key ? { ...s, win, loading: false } : s));
-      })
+      .then((res) => settle(windowFromPage(res.flows, WINDOW_SIZE, res.matching ?? res.total)))
       .catch((err) => {
         console.warn("Failed to search flows", err);
-        store.set(searchWindowAtom, (s) => (s?.key === key ? { ...s, loading: false } : s));
+        settle(null);
       });
   }
 
@@ -281,6 +293,11 @@ export function syncFlows(store: Store) {
     read
       .then((res) => {
         if (res.flows.length === 0) return;
+        // More arrived than one read holds: load the newest again rather than leave a gap.
+        if (res.flows.length >= WINDOW_SIZE) {
+          load();
+          return;
+        }
         if (seenId === after) seenId = res.flows[0]?.id ?? seenId;
         const known = new Set(store.get(flowsAtom).map((f) => f.id));
         receive(
@@ -303,7 +320,10 @@ export function syncFlows(store: Store) {
   load();
 }
 
-/** Keeps `proxyStateAtom` current: on each state change, and polled while another owner has it */
+/**
+ * Keeps `proxyStateAtom` current: on each state change, and polled while the engine is not
+ * running here, so another process taking it or letting it go shows.
+ */
 export function syncProxyState(store: Store) {
   function refresh() {
     rpc("get_proxy_state", {})
@@ -312,7 +332,7 @@ export function syncProxyState(store: Store) {
   }
   listen("proxy_state_changed", refresh);
   setInterval(() => {
-    if (store.get(proxyStateAtom)?.otherOwner != null) refresh();
+    if (store.get(proxyStateAtom)?.state !== "running") refresh();
   }, OWNER_POLL_MS);
   refresh();
 }

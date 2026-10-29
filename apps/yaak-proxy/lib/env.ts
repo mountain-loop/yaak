@@ -11,6 +11,9 @@ export function environmentExports(port: number, caPath: string): string {
   return [
     `export HTTP_PROXY=${proxy}`,
     `export HTTPS_PROXY=${proxy}`,
+    // curl reads only the lowercase name for plain HTTP.
+    `export http_proxy=${proxy}`,
+    `export https_proxy=${proxy}`,
     `export SSL_CERT_FILE=${ca}`,
     `export NODE_EXTRA_CA_CERTS=${ca}`,
     `export REQUESTS_CA_BUNDLE=${ca}`,

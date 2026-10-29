@@ -140,28 +140,37 @@ impl FlowFilter {
         }
         if let Some(under) = &self.under {
             // Each is `scheme://` and then the node, ending the URL or followed by what can
-            // follow a host or a path segment.
+            // follow a host or a path segment. The host matches in any case, as the app's
+            // sidebar lowercases it; the path as written.
             let mut any = Vec::new();
             for node in under {
+                let (host, path) = node.find('/').map_or((node.as_str(), ""), |i| node.split_at(i));
+                let path_len = path.chars().count() as i64;
                 for scheme in ["http://", "https://"] {
-                    let prefix = format!("{scheme}{node}");
+                    let origin = format!("{scheme}{host}");
+                    let origin_len = origin.chars().count() as i64;
                     any.push(
-                        "(substr(url, 1, ?) = ? AND substr(url, ? + 1, 1) IN ('', '/', '?', '#'))",
+                        "(lower(substr(url, 1, ?)) = lower(?) AND substr(url, ? + 1, ?) = ? \
+                        AND substr(url, ? + ? + 1, 1) IN ('', '/', '?', '#'))",
                     );
-                    let len = prefix.chars().count() as i64;
-                    params.extend([len.into(), prefix.into(), len.into()]);
-                    if !node.contains('/') && !node.contains(':') {
+                    params.extend([
+                        origin_len.into(),
+                        origin.clone().into(),
+                        origin_len.into(),
+                        path_len.into(),
+                        path.to_string().into(),
+                        origin_len.into(),
+                        path_len.into(),
+                    ]);
+                    if path.is_empty() && !host.contains(':') {
                         // A host's flows on another port sit under it too.
-                        any.push("(substr(url, 1, ?) = ?)");
-                        let prefix = format!("{scheme}{node}:");
-                        params.extend([(prefix.chars().count() as i64).into(), prefix.into()]);
+                        any.push("(lower(substr(url, 1, ?)) = lower(?))");
+                        params.extend([(origin_len + 1).into(), format!("{origin}:").into()]);
                     }
                 }
             }
-            sql.push_str(&format!(
-                " AND ({})",
-                if any.is_empty() { "0".into() } else { any.join(" OR ") }
-            ));
+            let any = if any.is_empty() { "0".to_string() } else { any.join(" OR ") };
+            sql.push_str(&format!(" AND ({any})"));
         }
         if let Some(apps) = &self.app {
             let marks = vec!["?"; apps.len()].join(", ");
@@ -516,6 +525,9 @@ mod tests {
         assert_eq!(under(&["api.stripe.com/v1/charges"]), 2);
         assert_eq!(under(&["api.stripe.com/v1/charges", "example.com"]), 3);
         assert_eq!(under(&[]), 0);
+        // The sidebar lowercases hosts; paths keep their case.
+        assert_eq!(under(&["API.stripe.com/v1/charges"]), 2);
+        assert_eq!(under(&["api.stripe.com/V1/charges"]), 0);
     }
 
     #[test]

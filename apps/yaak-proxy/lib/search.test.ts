@@ -71,6 +71,9 @@ describe("matchesQuery", () => {
     );
     expect(under("api.stripe.com/v1/charges", "https://api.stripe.com/v1/chargesx")).toBe(false);
     expect(under("api.stripe.com:8443", "https://api.stripe.com/v1")).toBe(false);
+    // The sidebar lowercases hosts; paths keep their case.
+    expect(under("example.com/A", "http://EXAMPLE.com/A/b")).toBe(true);
+    expect(under("example.com/a", "http://example.com/A")).toBe(false);
   });
 
   test("keeps flows from an app, by bundle id or path", () => {

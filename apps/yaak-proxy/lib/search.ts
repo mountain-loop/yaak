@@ -67,11 +67,19 @@ function matchesStatus(status: number | null, term: string): boolean {
   return term.length === 3 ? status === Number(term) : String(status).startsWith(term);
 }
 
-/** The URL is the host or path `node` names, or something below it */
+/**
+ * The URL is the host or path `node` names, or something below it. The host matches in any
+ * case, as the sidebar lowercases it; the path as written.
+ */
 function isUnder(url: string, node: string): boolean {
+  const slash = node.indexOf("/");
+  const host = slash === -1 ? node : node.slice(0, slash);
+  const path = slash === -1 ? "" : node.slice(slash);
   for (const scheme of ["http://", "https://"]) {
-    const prefix = scheme + node;
-    if (!url.startsWith(prefix)) continue;
+    const origin = scheme + host;
+    if (url.slice(0, origin.length).toLowerCase() !== origin.toLowerCase()) continue;
+    if (url.slice(origin.length, origin.length + path.length) !== path) continue;
+    const prefix = origin + path;
     const next = url.charAt(prefix.length);
     if (next === "" || next === "/" || next === "?" || next === "#") return true;
     // A host's flows on another port sit under it too.

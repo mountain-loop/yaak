@@ -8,6 +8,8 @@ describe("environmentExports", () => {
       [
         "export HTTP_PROXY=http://127.0.0.1:9090",
         "export HTTPS_PROXY=http://127.0.0.1:9090",
+        "export http_proxy=http://127.0.0.1:9090",
+        "export https_proxy=http://127.0.0.1:9090",
         `export SSL_CERT_FILE='${path}'`,
         `export NODE_EXTRA_CA_CERTS='${path}'`,
         `export REQUESTS_CA_BUNDLE='${path}'`,
