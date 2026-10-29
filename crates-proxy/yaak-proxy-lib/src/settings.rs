@@ -8,7 +8,9 @@ use yaak_proxy::DEFAULT_CAPTURE_BODY_LIMIT;
 pub struct ProxySettings {
     pub port: u16,
     /// Point this Mac's web traffic at the engine as it starts. It is turned off again as the
-    /// engine stops, and can be turned on and off any time between.
+    /// engine stops, and can be turned on and off any time between. Read from the earlier
+    /// `systemProxy` too, so a saved choice to keep it off carries over.
+    #[serde(alias = "systemProxy")]
     pub system_proxy_at_launch: bool,
     /// Bytes of each request and response body stored per flow.
     pub capture_body_limit: usize,
@@ -79,6 +81,24 @@ mod tests {
             json,
             serde_json::json!({"port": 8080, "systemProxyAtLaunch": false, "captureBodyLimit": 1024})
         );
+    }
+
+    #[test]
+    fn the_earlier_system_proxy_key_carries_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, r#"{"port": 9090, "systemProxy": false}"#).unwrap();
+        assert!(!ProxySettings::load(&path).unwrap().system_proxy_at_launch);
+        std::fs::write(&path, r#"{"systemProxy": true}"#).unwrap();
+        assert!(ProxySettings::load(&path).unwrap().system_proxy_at_launch);
+
+        // Saved again under the new key only.
+        let settings = ProxySettings { system_proxy_at_launch: false, ..Default::default() };
+        settings.save(&path).unwrap();
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(json["systemProxyAtLaunch"], false);
+        assert!(json.get("systemProxy").is_none());
     }
 
     #[test]
