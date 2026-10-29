@@ -524,6 +524,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let ca = CaStore::load_or_create(&ctx.ca_dir())
                 .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
             ca::trust(ca.cert_path()).await.map_err(bad_request)?;
+            ctx.forget_passthrough();
             json(&ca::status(ca.cert_path()).await?)
         }
         (&Method::GET, ["system-proxy"]) => {

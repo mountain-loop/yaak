@@ -35,7 +35,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource, UpsertModelInfo};
 use yaak_models::blob_manager::{BlobManager, BodyChunkWriter};
@@ -60,7 +60,7 @@ pub struct ProxyCtx {
     /// The port the engine last ran on, which the system proxy may still point at.
     last_port: Arc<Mutex<Option<u16>>>,
     /// Flows are stored. While paused, traffic still passes through, untouched and unrecorded.
-    recording: Arc<AtomicBool>,
+    recording: Arc<Mutex<RecordingLog>>,
     /// This Mac's web traffic is meant to point at the running engine.
     system_proxy_on: Arc<AtomicBool>,
     /// Why the engine last failed to start, until it starts.
@@ -86,7 +86,7 @@ impl ProxyCtx {
             control_server: Arc::new(Mutex::new(None)),
             system_proxy_turn: Arc::new(Mutex::new(())),
             last_port: Arc::new(Mutex::new(None)),
-            recording: Arc::new(AtomicBool::new(true)),
+            recording: Arc::new(Mutex::new(RecordingLog::default())),
             system_proxy_on: Arc::new(AtomicBool::new(false)),
             start_error: Arc::new(Mutex::new(None)),
             db,
@@ -399,15 +399,26 @@ impl ProxyCtx {
         settings.save(&self.settings_path())
     }
 
+    /// Intercepts again the hosts passed through after clients rejected the CA, as they no
+    /// longer will once it is trusted.
+    pub fn forget_passthrough(&self) {
+        if let Ok(handle) = self.handle.lock()
+            && let Some(handle) = handle.as_ref()
+        {
+            handle.forget_passthrough();
+        }
+    }
+
     /// Flows are being stored.
     pub fn recording(&self) -> bool {
-        self.recording.load(Ordering::SeqCst)
+        self.recording.lock().map(|r| r.is_on()).unwrap_or(true)
     }
 
     /// Resumes or pauses storing flows. Paused, traffic still passes through the engine, but no
     /// new flow is stored; one already under way is finished.
     pub fn set_recording(&self, recording: bool) {
-        if self.recording.swap(recording, Ordering::SeqCst) != recording {
+        let changed = self.recording.lock().map(|mut r| r.set(recording)).unwrap_or(false);
+        if changed {
             let state =
                 if self.port().is_some() { ProxyState::Running } else { ProxyState::Stopped };
             self.events.emit("proxy_state_changed", &ProxyStatePayload { state });
@@ -515,6 +526,52 @@ impl ProxyCtx {
 fn is_listening(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
+
+// -- Recording --
+
+/// Changes to recording kept, so a request whose events are read late is still judged by when
+/// it started.
+const RECORDING_CHANGES: usize = 64;
+
+/// Whether flows are stored, and when that changed.
+struct RecordingLog {
+    /// Oldest first, starting from recording since the beginning.
+    changes: std::collections::VecDeque<(SystemTime, bool)>,
+}
+
+impl Default for RecordingLog {
+    fn default() -> Self {
+        Self { changes: [(SystemTime::UNIX_EPOCH, true)].into() }
+    }
+}
+
+impl RecordingLog {
+    fn is_on(&self) -> bool {
+        self.changes.back().is_none_or(|(_, on)| *on)
+    }
+
+    /// Returns whether it changed.
+    fn set(&mut self, on: bool) -> bool {
+        if self.is_on() == on {
+            return false;
+        }
+        self.changes.push_back((SystemTime::now(), on));
+        while self.changes.len() > RECORDING_CHANGES {
+            self.changes.pop_front();
+        }
+        true
+    }
+
+    /// Whether flows were stored at `time`.
+    fn was_on_at(&self, time: SystemTime) -> bool {
+        self.changes
+            .iter()
+            .rev()
+            .find(|(at, _)| *at <= time)
+            .or(self.changes.front())
+            .is_none_or(|(_, on)| *on)
+    }
 }
 
 // -- Proxy state --
@@ -982,6 +1039,7 @@ async fn ca_trust(ctx: ProxyCtx, _req: CaTrustRequest) -> Result<CaStatus, RpcEr
     let ca = CaStore::load_or_create(&ctx.ca_dir())
         .map_err(|e| rpc_error(format!("Failed to load proxy CA: {e}")))?;
     ca::trust(ca.cert_path()).await.map_err(rpc_error)?;
+    ctx.forget_passthrough();
     ca::status(ca.cert_path()).await.map_err(rpc_error)
 }
 
@@ -1061,7 +1119,7 @@ struct FlowSink {
     blobs: BlobManager,
     events: RpcEventEmitter,
     attribution: Attribution,
-    recording: Arc<AtomicBool>,
+    recording: Arc<Mutex<RecordingLog>>,
 }
 
 fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
@@ -1079,8 +1137,9 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                 connection,
                 client_addr,
             } => {
-                // Paused: the request passes through, and none of its events are kept.
-                if !recording.load(Ordering::SeqCst) {
+                // Paused when it started: it passes through, and none of its events are kept.
+                // Judged by its start rather than now, as the loop can run behind.
+                if !recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true) {
                     continue;
                 }
                 // Begun as the connection was accepted; this covers one accepted before the
@@ -1261,6 +1320,24 @@ define_rpc! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_request_is_recorded_by_the_state_when_it_started() {
+        let mut log = RecordingLog::default();
+        let before = SystemTime::now();
+        std::thread::sleep(Duration::from_millis(5));
+        assert!(log.set(false));
+        assert!(!log.set(false), "no change");
+        std::thread::sleep(Duration::from_millis(5));
+        let while_paused = SystemTime::now();
+        std::thread::sleep(Duration::from_millis(5));
+        assert!(log.set(true));
+        // Read after recording resumed, each is judged by when it started.
+        assert!(log.is_on());
+        assert!(log.was_on_at(before));
+        assert!(!log.was_on_at(while_paused));
+        assert!(log.was_on_at(SystemTime::now()));
+    }
 
     #[tokio::test]
     async fn the_app_still_hears_why_a_body_failed_to_decode() {

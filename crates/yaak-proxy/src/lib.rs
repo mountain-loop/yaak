@@ -161,6 +161,13 @@ impl ProxyHandle {
         self.event_rx.take()
     }
 
+    /// Forgets the hosts passed through after clients rejected the CA, so they are intercepted
+    /// again, as once the CA is trusted.
+    pub fn forget_passthrough(&self) {
+        self.engine.passthrough.lock().unwrap().clear();
+        self.engine.handshake_failures.lock().unwrap().clear();
+    }
+
     /// Handshake failures counted toward passing `addr` (`host:port`) through, and whether it
     /// already is. For tests that must wait for the engine to record a failure.
     #[doc(hidden)]

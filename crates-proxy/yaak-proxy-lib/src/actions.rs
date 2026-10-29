@@ -36,7 +36,8 @@ pub fn all_global_actions() -> Vec<(ActionInvocation, ActionMetadata)> {
             ActionInvocation::Global { action: GlobalAction::RecordingToggle },
             ActionMetadata {
                 label: "Pause or Resume Recording".into(),
-                default_hotkey: default_hotkey("Meta+Shift+R", "Ctrl+Shift+R"),
+                // Not Cmd+Shift+R, which reloads the window in development builds.
+                default_hotkey: default_hotkey("Meta+R", "Ctrl+Shift+R"),
             },
         ),
         (

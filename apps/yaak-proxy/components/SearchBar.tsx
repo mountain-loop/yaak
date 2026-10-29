@@ -40,10 +40,12 @@ export const SearchBar = memo(function SearchBar() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // The field is replaced to empty it, so focus moves to the new one.
   const clear = () => {
     setText("");
     setTerms(null);
     setResetKey((k) => k + 1);
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   return (
@@ -79,10 +81,7 @@ export const SearchBar = memo(function SearchBar() {
                 title="Clear search"
                 iconColor="secondary"
                 className="self-center"
-                onClick={() => {
-                  clear();
-                  requestAnimationFrame(() => inputRef.current?.focus());
-                }}
+                onClick={clear}
               />
             )
           }

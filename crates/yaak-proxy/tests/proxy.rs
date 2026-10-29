@@ -638,6 +638,10 @@ async fn hang_up_after_the_handshake_passes_through() {
         .connect(name, h.connect_tunnel(port).await)
         .await
         .expect("two hang-ups after the handshake should pass the host through");
+
+    // Once the CA is trusted the host is intercepted again.
+    h.proxy.forget_passthrough();
+    assert_eq!(h.proxy.handshake_state(&addr), (0, false));
 }
 
 #[tokio::test(flavor = "multi_thread")]
