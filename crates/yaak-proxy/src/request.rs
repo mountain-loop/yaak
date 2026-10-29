@@ -11,7 +11,7 @@ use hyper::body::Body;
 use hyper::body::Incoming;
 use hyper::client::conn::TrySendError;
 use hyper::header::{
-    CONTENT_LENGTH, CONTENT_TYPE, HOST, HeaderValue, TRANSFER_ENCODING, UPGRADE, VIA,
+    CONTENT_LENGTH, CONTENT_TYPE, COOKIE, HOST, HeaderValue, TRANSFER_ENCODING, UPGRADE, VIA,
 };
 use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
@@ -72,6 +72,8 @@ struct Flow {
     engine: Arc<Engine>,
     /// It has answered the client, so dropping it is no cancel.
     answered: bool,
+    /// Reading the client's upload failed: it reset the stream or closed the connection.
+    upload_failed: Arc<AtomicBool>,
 }
 
 impl Flow {
@@ -81,8 +83,13 @@ impl Flow {
         req: &Request<Incoming>,
         url: String,
     ) -> Self {
-        let flow =
-            Self { id: engine.next_flow_id(), start: Instant::now(), engine, answered: false };
+        let flow = Self {
+            id: engine.next_flow_id(),
+            start: Instant::now(),
+            engine,
+            answered: false,
+            upload_failed: Arc::new(AtomicBool::new(false)),
+        };
         flow.engine.emit(ProxyEvent::RequestStart {
             id: flow.id,
             started_at: SystemTime::now(),
@@ -115,7 +122,9 @@ impl Flow {
     }
 
     fn capture_request(&self, body: Incoming) -> BoxBody {
-        CaptureBody::new(body, Direction::Request, self.id, self.start, self.engine.clone()).boxed()
+        CaptureBody::new(body, Direction::Request, self.id, self.start, self.engine.clone())
+            .flag_failure(self.upload_failed.clone())
+            .boxed()
     }
 
     fn respond(
@@ -161,6 +170,12 @@ impl Flow {
     }
 
     fn fail(mut self, error: String) -> Response<BoxBody> {
+        // The request failed because the client stopped sending its body: it cancelled. The
+        // answer goes nowhere, and dropping the flow unanswered says so.
+        if self.upload_failed.load(Ordering::Relaxed) {
+            debug!("Flow {} upload ended by the client: {error}", self.id);
+            return bad_gateway(error);
+        }
         self.answered = true;
         debug!("Flow {} failed: {error}", self.id);
         let body = format!("Yaak Proxy could not reach the server: {error}");
@@ -588,6 +603,19 @@ fn address(
             // `Trailer`: hyper's HTTP/1.1 encoder drops any others.
             if has_body && !parts.headers.contains_key(CONTENT_LENGTH) {
                 parts.headers.insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
+            }
+            // HTTP/2 may split `Cookie` into a field per cookie; HTTP/1.1 has one (RFC 9113
+            // 8.2.3).
+            if parts.headers.get_all(COOKIE).iter().nth(1).is_some() {
+                let joined = parts
+                    .headers
+                    .get_all(COOKIE)
+                    .iter()
+                    .map(HeaderValue::as_bytes)
+                    .collect::<Vec<_>>()
+                    .join(&b"; "[..]);
+                let joined = HeaderValue::from_bytes(&joined).map_err(|e| e.to_string())?;
+                parts.headers.insert(COOKIE, joined);
             }
         }
     }

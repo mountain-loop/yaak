@@ -89,7 +89,11 @@ fn full(data: impl Into<Bytes>) -> TestBody {
 async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible> {
     Ok(match req.uri().path() {
         "/hello" => Response::new(full("hello")),
-        "/echo" => Response::new(full(req.into_body().collect().await.unwrap().to_bytes())),
+        // An upload cut short, as a cancelled one is, gets an empty answer.
+        "/echo" => match req.into_body().collect().await {
+            Ok(body) => Response::new(full(body.to_bytes())),
+            Err(_) => Response::builder().status(StatusCode::BAD_REQUEST).body(full("")).unwrap(),
+        },
         "/authority" => Response::new(full(format!(
             "authority={} host={}",
             req.uri().authority().map_or("none".into(), |a| a.to_string()),
@@ -101,6 +105,12 @@ async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible>
         "/cut" => late_end(10),
         "/ws" => websocket_echo(req),
         "/trailers" => echo_with_trailers(req).await,
+        "/cookies" => {
+            let cookies = req.headers().get_all("cookie").iter();
+            Response::new(full(
+                cookies.map(|c| c.to_str().unwrap()).collect::<Vec<_>>().join(" | "),
+            ))
+        }
         "/slow" => {
             tokio::time::sleep(SLOW).await;
             Response::new(full("slow"))
@@ -1231,6 +1241,57 @@ async fn h2_trailers_pass_through() {
             ProxyEvent::ResponseBodyComplete { size, error, .. } => (*size, error.clone()));
         assert_eq!((size, error), (7, None));
         assert_eq!(body(&events, true), (b"message".to_vec(), 7));
+    }
+}
+
+/// HTTP/2 may send a field per cookie; an HTTP/1.1 server gets them as the one `Cookie` it
+/// expects.
+#[tokio::test(flavor = "multi_thread")]
+async fn h2_cookies_are_joined_for_an_h1_upstream() {
+    let h = Harness::start(1024);
+    for (tls, expected) in [
+        (h1_only(&h.pki.server), "theme=dark; session=abc"),
+        (h.pki.server.clone(), "theme=dark | session=abc"),
+    ] {
+        let upstream = spawn_upstream(Some(tls)).await;
+        let port = upstream.port();
+        let mut client = h.h2_client(port).await;
+        let mut req = h2_request("GET", port, "/cookies", full(""));
+        req.headers_mut().append("cookie", HeaderValue::from_static("theme=dark"));
+        req.headers_mut().append("cookie", HeaderValue::from_static("session=abc"));
+        let resp = client.send_request(req).await.unwrap();
+        assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), expected);
+        h.flow_events();
+    }
+}
+
+/// A client that resets its stream partway through an upload cancels the flow, whichever
+/// version the server speaks.
+#[tokio::test(flavor = "multi_thread")]
+async fn h2_upload_cancelled_by_the_client() {
+    let h = Harness::start(1024);
+    for tls in [h1_only(&h.pki.server), h.pki.server.clone()] {
+        let upstream = spawn_upstream(Some(tls)).await;
+        let port = upstream.port();
+        let client = h.h2_client(port).await;
+
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Result<Frame<Bytes>, Infallible>>();
+        tx.send(Ok(Frame::data(Bytes::from("first part")))).unwrap();
+        let frames = futures_util::stream::unfold(rx, |mut rx| async move {
+            rx.recv().await.map(|frame| (frame, rx))
+        });
+        let upload = BodyExt::boxed(StreamBody::new(frames));
+        let pending = tokio::spawn({
+            let mut client = client.clone();
+            async move { client.send_request(h2_request("POST", port, "/echo", upload)).await }
+        });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        pending.abort();
+        drop(tx);
+
+        let events = h.flow_events();
+        find!(events, ProxyEvent::Cancelled { .. } => ());
+        assert!(!events.iter().any(|e| matches!(e, ProxyEvent::Error { .. })), "{events:#?}");
     }
 }
 

@@ -1,5 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
@@ -25,6 +26,8 @@ pub(crate) struct CaptureBody {
     captured: usize,
     size: u64,
     finished: bool,
+    /// Set when reading the body fails.
+    failed: Option<Arc<AtomicBool>>,
 }
 
 impl CaptureBody {
@@ -35,7 +38,23 @@ impl CaptureBody {
         start: Instant,
         engine: Arc<Engine>,
     ) -> Self {
-        Self { inner, direction, id, start, engine, captured: 0, size: 0, finished: false }
+        Self {
+            inner,
+            direction,
+            id,
+            start,
+            engine,
+            captured: 0,
+            size: 0,
+            finished: false,
+            failed: None,
+        }
+    }
+
+    /// Sets `failed` if reading the body fails, as a client's upload does when it cancels.
+    pub(crate) fn flag_failure(mut self, failed: Arc<AtomicBool>) -> Self {
+        self.failed = Some(failed);
+        self
     }
 
     /// Every byte the body declared has arrived. An HTTP/2 stream's end can come in a frame after
@@ -97,6 +116,9 @@ impl Body for CaptureBody {
                 }
             }
             Poll::Ready(Some(Err(e))) => {
+                if let Some(failed) = &self.failed {
+                    failed.store(true, Ordering::Relaxed);
+                }
                 let error = e.to_string();
                 self.finish(Some(error), false);
             }
