@@ -9,15 +9,22 @@ import {
   Icon,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue, useStore } from "jotai";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
+import { helperDialogOpenAtom, helperRegisteredAtAtom } from "../lib/atoms";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
-import { helperRow, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
+import {
+  helperPollInterval,
+  helperRow,
+  recordingLabel,
+  systemProxySwitch,
+} from "../lib/systemProxy";
+import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 
 /**
@@ -33,6 +40,7 @@ export function ProxyStatus() {
   const retry = useRpcMutation("take_over");
   const setAtLaunch = useSetSystemProxyAtLaunch();
   const copyEnvironment = useCopyEnvironment();
+  const setHelperDialogOpen = useSetAtom(helperDialogOpenAtom);
   const { caStatus, trust, systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
 
@@ -133,7 +141,15 @@ export function ProxyStatus() {
     {
       type: "content",
       hidden: systemProxy.data?.supported !== true,
-      label: systemProxy.data != null && <HelperMenuRow status={systemProxy.data} />,
+      label: systemProxy.data != null && (
+        <HelperMenuRow
+          status={systemProxy.data}
+          onOpenDialog={() => {
+            dropdownRef.current?.close?.();
+            setHelperDialogOpen(true);
+          }}
+        />
+      ),
     },
     {
       type: "content",
@@ -233,7 +249,19 @@ export function ProxyStatus() {
 export function useProxySetup() {
   const queryClient = useQueryClient();
   const caStatus = useRpcQuery("ca_status", {});
-  const systemProxy = useRpcQuery("system_proxy_status", {});
+  const registeredAt = useAtomValue(helperRegisteredAtAtom);
+  const systemProxy = useRpcQuery(
+    "system_proxy_status",
+    {},
+    {
+      // The helper is approved in System Settings, out of the app's sight.
+      refetchInterval: (query) =>
+        helperPollInterval(query.state.data?.helper, registeredAt, Date.now()),
+    },
+  );
+  // The user comes back from System Settings, maybe having just allowed the helper.
+  const { refetch: refetchSystemProxy } = systemProxy;
+  useEffect(() => onWindowFocus(() => void refetchSystemProxy()), [refetchSystemProxy]);
   const trust = useRpcMutation("ca_trust", {
     mutationKey: ["ca_trust"],
     onSuccess: (status) => queryClient.setQueryData<CaStatus>(["ca_status", {}], status),
@@ -264,14 +292,20 @@ export function useSystemProxySwitch(setup: ReturnType<typeof useProxySetup>) {
 }
 
 /** The privileged helper: whether it is installed and approved, and which way changes go */
-function HelperMenuRow({ status }: { status: SystemProxyStatus }) {
+function HelperMenuRow({
+  status,
+  onOpenDialog,
+}: {
+  status: SystemProxyStatus;
+  onOpenDialog: () => void;
+}) {
   const queryClient = useQueryClient();
-  const onSuccess = (status: SystemProxyStatus) =>
-    queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status);
-  const register = useRpcMutation("helper_register", { onSuccess });
-  const unregister = useRpcMutation("helper_unregister", { onSuccess });
+  const unregister = useRpcMutation("helper_unregister", {
+    onSuccess: (status) =>
+      queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status),
+  });
   const row = helperRow(status.helper, status.backend);
-  const error = register.error ?? unregister.error;
+  const error = unregister.error;
   return (
     <MenuRow
       icon={
@@ -291,17 +325,17 @@ function HelperMenuRow({ status }: { status: SystemProxyStatus }) {
             size="2xs"
             variant="border"
             color={row.action === "unregister" ? "default" : "primary"}
-            isLoading={register.isPending || unregister.isPending}
+            isLoading={unregister.isPending}
             onClick={(e) => {
               e.stopPropagation();
               if (row.action === "unregister") unregister.mutate({});
-              else register.mutate({});
+              else onOpenDialog();
             }}
           >
             {row.action === "install"
               ? "Install"
-              : row.action === "open_settings"
-                ? "Open Settings"
+              : row.action === "approve"
+                ? "Approve"
                 : "Unregister"}
           </Button>
         )

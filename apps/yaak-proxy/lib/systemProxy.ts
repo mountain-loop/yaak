@@ -54,47 +54,45 @@ export interface HelperRow {
   title: string;
   /** Which way changes go, and why */
   description: string;
-  /** What the row's button does, if it has one */
-  action: "install" | "open_settings" | "unregister" | null;
+  /** What the row's button does, if it has one: the first two open the approval dialog */
+  action: "install" | "approve" | "unregister" | null;
 }
 
-/** The privileged helper's row in the state pill menu */
+/** The privileged helper's row in the state pill menu, kept short */
 export function helperRow(helper: HelperState, backend: SystemProxyBackend): HelperRow {
   switch (helper) {
     case "unavailable":
       return {
-        title: "Helper: not available in dev builds",
-        description: "Only the installed app can run it, so changes use the password prompt.",
+        title: "Helper: not in dev builds",
+        description: "Changes use the password prompt.",
         action: null,
       };
     case "not_found":
+      // What macOS reports until the helper is first installed.
       return {
-        title: "Helper: macOS can't find the helper in this app bundle",
-        description:
-          "macOS says this until the helper is first installed. Changes use the password prompt until then.",
+        title: "Helper: not found by macOS",
+        description: "Changes use the password prompt.",
         action: "install",
       };
     case "not_registered":
       return {
         title: "Helper: not installed",
-        description:
-          "Changes use the password prompt. Install the helper to change the system proxy without one.",
+        description: "Changes use the password prompt.",
         action: "install",
       };
     case "requires_approval":
       return {
-        title: "Helper: awaiting approval in System Settings",
-        description:
-          "Allow Yaak Proxy under General > Login Items & Extensions. Until then, changes use the password prompt.",
-        action: "open_settings",
+        title: "Helper: awaiting approval",
+        description: "Changes use the password prompt.",
+        action: "approve",
       };
     case "enabled":
       return {
         title: "Helper: enabled",
         description:
           backend === "helper"
-            ? "Changes need no password, and your own proxy settings come back when Yaak Proxy quits or crashes."
-            : "The password prompt puts back the settings it saved once more, then the helper takes over.",
+            ? "No password prompts."
+            : "One more password prompt puts back your settings.",
         action: "unregister",
       };
     default: {
@@ -108,6 +106,27 @@ export function helperRow(helper: HelperState, backend: SystemProxyBackend): Hel
       };
     }
   }
+}
+
+/** How often the helper's state is read while it can change outside the app */
+export const HELPER_POLL_MS = 2000;
+
+/** How long after registering the state is read even before it shows approval pending */
+export const HELPER_REGISTER_POLL_MS = 10_000;
+
+/**
+ * The interval to read the helper's state at: while it awaits approval in System Settings, and
+ * briefly after registering, until it settles as enabled or not registered. Never otherwise.
+ */
+export function helperPollInterval(
+  helper: HelperState | undefined,
+  registeredAt: number | null,
+  now: number,
+): number | false {
+  if (helper === "requires_approval") return HELPER_POLL_MS;
+  if (helper === "enabled" || helper === "not_registered") return false;
+  const justRegistered = registeredAt != null && now - registeredAt < HELPER_REGISTER_POLL_MS;
+  return justRegistered ? HELPER_POLL_MS : false;
 }
 
 /** The menu item that pauses or resumes storing flows */

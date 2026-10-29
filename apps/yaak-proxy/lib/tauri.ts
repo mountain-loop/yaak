@@ -19,6 +19,18 @@ export function subscribe<T>(event: string, callback: (payload: T) => void): () 
   return () => unsub?.();
 }
 
+/** Calls `callback` each time the window regains focus. Returns an unsubscribe function. */
+export function onWindowFocus(callback: () => void): () => void {
+  let unsub: (() => void) | null = null;
+  getCurrentWebviewWindow()
+    .onFocusChanged(({ payload: focused }) => focused && callback())
+    .then((fn) => {
+      unsub = fn;
+    })
+    .catch(console.error);
+  return () => unsub?.();
+}
+
 /** Show the current webview window. */
 export function showWindow(): Promise<void> {
   return getCurrentWebviewWindow().show();
