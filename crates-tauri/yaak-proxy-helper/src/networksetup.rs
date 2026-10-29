@@ -19,6 +19,11 @@ pub const HOST: &str = "127.0.0.1";
 pub struct ServiceProxy {
     /// The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
     pub name: String,
+    /// What stays the same when the service is renamed: its device ("en0"), or its hardware
+    /// port when it has none. Absent when `networksetup` lists neither.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub id: Option<String>,
     pub http: ProxySetting,
     pub https: ProxySetting,
 }
@@ -46,6 +51,11 @@ impl ProxySetting {
 }
 
 impl ServiceProxy {
+    /// A service known by its name only.
+    pub fn new(name: &str, http: ProxySetting, https: ProxySetting) -> Self {
+        Self { name: name.into(), id: None, http, https }
+    }
+
     /// Either proxy of the service sends traffic to `127.0.0.1:<port>`.
     pub fn points_at(&self, port: u16) -> bool {
         self.http.points_at(port) || self.https.points_at(port)
@@ -106,11 +116,12 @@ impl Snapshot {
         self.port = port;
         let ports = self.ports();
         for service in services {
-            if self.services.iter().any(|s| s.name == service.name) {
+            if self.get(service).is_some() {
                 continue;
             }
             self.services.push(ServiceProxy {
                 name: service.name.clone(),
+                id: service.id.clone(),
                 http: service.http.owned(&ports),
                 https: service.https.owned(&ports),
             });
@@ -122,8 +133,35 @@ impl Snapshot {
         std::iter::once(self.port).chain(self.previous_ports.iter().copied()).collect()
     }
 
-    fn get(&self, name: &str) -> Option<&ServiceProxy> {
-        self.services.iter().find(|s| s.name == name)
+    /// What was saved for `service`: matched by its id, so a rename keeps it, or by its name
+    /// when the two ids don't disagree.
+    fn get(&self, service: &ServiceProxy) -> Option<&ServiceProxy> {
+        if let Some(id) = &service.id
+            && let Some(saved) = self.services.iter().find(|s| s.id.as_ref() == Some(id))
+        {
+            return Some(saved);
+        }
+        self.services
+            .iter()
+            .find(|s| s.name == service.name && (s.id.is_none() || service.id.is_none()))
+    }
+
+    /// What is left once this snapshot is restored over `services`: the saved entries none of
+    /// them matched, a service removed or unplugged, kept so its settings are not lost. They
+    /// are parked at port 0, which routes nothing.
+    pub fn leftover(&self, services: &[ServiceProxy]) -> Option<Snapshot> {
+        let unmatched: Vec<ServiceProxy> = self
+            .services
+            .iter()
+            .filter(|saved| {
+                !services.iter().any(|s| self.get(s).is_some_and(|m| std::ptr::eq(m, *saved)))
+            })
+            .cloned()
+            .collect();
+        if unmatched.is_empty() {
+            return None;
+        }
+        Some(Snapshot { services: unmatched, ..Snapshot::default() })
     }
 }
 
@@ -160,6 +198,32 @@ pub fn parse_services(output: &str, include_disabled: bool) -> Vec<String> {
         .filter(|l| !l.is_empty() && (include_disabled || !l.starts_with('*')))
         .map(|l| l.trim_start_matches('*').to_string())
         .collect()
+}
+
+/// Each service's id from `networksetup -listnetworkserviceorder`, as `(name, id)`: its device,
+/// or `port:<hardware port>` when it has no device, as a VPN may not.
+pub fn parse_service_ids(output: &str) -> Vec<(String, String)> {
+    let mut ids = Vec::new();
+    let mut name = None;
+    for line in output.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix("(Hardware Port:") {
+            let Some(name) = name.take() else { continue };
+            let rest = rest.trim_end_matches(')');
+            let (port, device) = rest.split_once(", Device:").unwrap_or((rest, ""));
+            let (port, device) = (port.trim(), device.trim());
+            if !device.is_empty() {
+                ids.push((name, device.to_string()));
+            } else if !port.is_empty() {
+                ids.push((name, format!("port:{port}")));
+            }
+        } else if line.starts_with('(')
+            && let Some((_, rest)) = line.split_once(") ")
+        {
+            // "(1) Wi-Fi", or "(*) Name" for a disabled service.
+            name = Some(rest.to_string());
+        }
+    }
+    ids
 }
 
 /// The output of `networksetup -getwebproxy` or `-getsecurewebproxy`.
@@ -208,7 +272,7 @@ pub fn restore_commands(
 ) -> Vec<Vec<String>> {
     let mut commands = Vec::new();
     for service in services {
-        let saved = snapshot.and_then(|s| s.get(&service.name));
+        let saved = snapshot.and_then(|s| s.get(service));
         let proxies = [
             (&service.http, saved.map(|s| &s.http)),
             (&service.https, saved.map(|s| &s.https)),
@@ -289,12 +353,18 @@ pub fn read_services(
     include_disabled: bool,
 ) -> Result<Vec<ServiceProxy>, String> {
     let list = ns.run(&["-listallnetworkservices".to_string()])?;
+    // Without ids, services are still matched by name.
+    let ids = ns
+        .run(&["-listnetworkserviceorder".to_string()])
+        .map(|order| parse_service_ids(&order))
+        .unwrap_or_default();
     parse_services(&list, include_disabled)
         .into_iter()
         .map(|name| {
             let http = parse_proxy(&ns.run(&["-getwebproxy".into(), name.clone()])?);
             let https = parse_proxy(&ns.run(&["-getsecurewebproxy".into(), name.clone()])?);
-            Ok(ServiceProxy { name, http, https })
+            let id = ids.iter().find(|(n, _)| *n == name).map(|(_, id)| id.clone());
+            Ok(ServiceProxy { name, id, http, https })
         })
         .collect()
 }
@@ -329,15 +399,33 @@ pub mod fake {
     }
 
     impl FakeNetworksetup {
+        /// Services on devices `en0`, `en1` and on, in order.
         pub fn new(services: Vec<(&str, ProxySetting, ProxySetting)>) -> Self {
             let services = services
                 .into_iter()
-                .map(|(name, http, https)| FakeService {
-                    proxy: ServiceProxy { name: name.into(), http, https },
+                .enumerate()
+                .map(|(i, (name, http, https))| FakeService {
+                    proxy: ServiceProxy {
+                        name: name.into(),
+                        id: Some(format!("en{i}")),
+                        http,
+                        https,
+                    },
                     enabled: true,
                 })
                 .collect();
             Self { services: Mutex::new(services), ..Default::default() }
+        }
+
+        /// Renames a service, as System Settings can; its device stays.
+        pub fn rename(&self, name: &str, to: &str) {
+            let mut services = self.services.lock().unwrap();
+            services.iter_mut().find(|s| s.proxy.name == name).unwrap().proxy.name = to.into();
+        }
+
+        /// Removes a service, as unplugging an adapter can.
+        pub fn remove(&self, name: &str) {
+            self.services.lock().unwrap().retain(|s| s.proxy.name != name);
         }
 
         /// The services' proxies, disabled ones included.
@@ -369,6 +457,19 @@ pub mod fake {
                         "{}{}\n",
                         if s.enabled { "" } else { "*" },
                         s.proxy.name
+                    ));
+                }
+                return Ok(out);
+            }
+            if args.first().map(String::as_str) == Some("-listnetworkserviceorder") {
+                let mut out =
+                    "An asterisk (*) denotes that a network service is disabled.\n".to_string();
+                for (i, s) in services.iter().enumerate() {
+                    let order = if s.enabled { (i + 1).to_string() } else { "*".into() };
+                    let device = s.proxy.id.clone().unwrap_or_default();
+                    out.push_str(&format!(
+                        "({order}) {}\n(Hardware Port: {}, Device: {device})\n\n",
+                        s.proxy.name, s.proxy.name
                     ));
                 }
                 return Ok(out);
@@ -446,12 +547,77 @@ mod tests {
     }
 
     #[test]
+    fn parses_service_ids() {
+        let output = "An asterisk (*) denotes that a network service is disabled.\n(1) Wi-Fi\n(Hardware Port: Wi-Fi, Device: en0)\n\n(*) Thunderbolt Bridge\n(Hardware Port: Thunderbolt Bridge, Device: bridge0)\n\n(3) Tailscale\n(Hardware Port: io.tailscale.ipn.macsys, Device: )\n\n";
+        assert_eq!(
+            parse_service_ids(output),
+            vec![
+                ("Wi-Fi".to_string(), "en0".to_string()),
+                ("Thunderbolt Bridge".to_string(), "bridge0".to_string()),
+                ("Tailscale".to_string(), "port:io.tailscale.ipn.macsys".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_service_renamed_while_routing_gets_its_settings_back() {
+        let corp = setting(true, "corp-proxy", 3128);
+        let ns = FakeNetworksetup::new(vec![("Wi-Fi", corp.clone(), corp.clone())]);
+        let snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        assert_eq!(snapshot.services[0].id.as_deref(), Some("en0"));
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+
+        ns.rename("Wi-Fi", "Office Wi-Fi");
+        let services = read_services(&ns, true).unwrap();
+        let (commands, used_up) = disable_commands(&services, Some(&snapshot), 9090);
+        apply(&ns, &commands).unwrap();
+        assert_eq!(ns.proxies()[0].http, corp);
+        assert_eq!(ns.proxies()[0].https, corp);
+        assert!(used_up && snapshot.leftover(&services).is_none());
+    }
+
+    #[test]
+    fn a_saved_entry_no_service_matches_is_kept() {
+        let corp = setting(true, "corp-proxy", 3128);
+        let ns = FakeNetworksetup::new(vec![
+            ("Wi-Fi", corp.clone(), corp.clone()),
+            ("USB LAN", corp.clone(), corp.clone()),
+        ]);
+        let snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+        ns.remove("USB LAN");
+
+        let leftover = snapshot.leftover(&read_services(&ns, true).unwrap()).unwrap();
+        assert_eq!(leftover.port, 0);
+        assert_eq!(leftover.services.len(), 1);
+        assert_eq!(leftover.services[0].name, "USB LAN");
+        assert_eq!(leftover.services[0].http, corp);
+    }
+
+    #[test]
+    fn a_same_named_service_on_another_device_is_not_matched() {
+        let corp = setting(true, "corp-proxy", 3128);
+        let mut saved = ServiceProxy::new("Ethernet", corp.clone(), corp);
+        saved.id = Some("en5".into());
+        let snapshot = Snapshot { port: 9090, services: vec![saved], ..Snapshot::default() };
+        let mut other = ServiceProxy::new("Ethernet", setting(true, HOST, 9090), ours(9090));
+        other.id = Some("en6".into());
+        assert_eq!(
+            restore_commands(&[other], Some(&snapshot), &[9090]),
+            vec![
+                vec!["-setwebproxystate", "Ethernet", "off"],
+                vec!["-setsecurewebproxystate", "Ethernet", "off"],
+            ]
+        );
+    }
+
+    #[test]
     fn enabling_points_every_service_at_localhost() {
-        let services = vec![ServiceProxy {
-            name: "Wi-Fi".into(),
-            http: ProxySetting::default(),
-            https: ProxySetting::default(),
-        }];
+        let services = vec![ServiceProxy::new(
+            "Wi-Fi",
+            ProxySetting::default(),
+            ProxySetting::default(),
+        )];
         assert_eq!(
             enable_commands(&services, 9090),
             vec![
@@ -514,13 +680,9 @@ mod tests {
     #[test]
     fn restoring_without_a_snapshot_turns_off_only_our_proxies() {
         let services = vec![
-            ServiceProxy { name: "Wi-Fi".into(), http: ours(9090), https: ours(9090) },
+            ServiceProxy::new("Wi-Fi", ours(9090), ours(9090)),
             // Someone else's proxy, and ours on another port.
-            ServiceProxy {
-                name: "Ethernet".into(),
-                http: setting(true, "corp-proxy", 9090),
-                https: ours(8080),
-            },
+            ServiceProxy::new("Ethernet", setting(true, "corp-proxy", 9090), ours(8080)),
         ];
         assert!(services[0].points_at(9090) && !services[1].points_at(9090));
         assert_eq!(
@@ -535,8 +697,7 @@ mod tests {
     #[test]
     fn a_capture_over_our_own_leftover_saves_it_as_off() {
         // A crash left Wi-Fi pointing at us with nothing saved.
-        let services =
-            vec![ServiceProxy { name: "Wi-Fi".into(), http: ours(9090), https: ours(9090) }];
+        let services = vec![ServiceProxy::new("Wi-Fi", ours(9090), ours(9090))];
         let snapshot = Snapshot::capture(&services, 9090);
         assert!(!snapshot.services[0].http.enabled && !snapshot.services[0].https.enabled);
         let restore = restore_commands(&services, Some(&snapshot), &[9090]);
@@ -554,15 +715,13 @@ mod tests {
     #[test]
     fn extending_keeps_the_first_capture_and_adds_new_services() {
         let corp = setting(true, "corp-proxy", 3128);
-        let mut snapshot = Snapshot::capture(
-            &[ServiceProxy { name: "Wi-Fi".into(), http: corp.clone(), https: corp.clone() }],
-            9090,
-        );
+        let mut snapshot =
+            Snapshot::capture(&[ServiceProxy::new("Wi-Fi", corp.clone(), corp.clone())], 9090);
         // Turned on again on another port: Wi-Fi now shows ours, and Ethernet is new.
         snapshot.extend(
             &[
-                ServiceProxy { name: "Wi-Fi".into(), http: ours(9090), https: ours(9090) },
-                ServiceProxy { name: "Ethernet".into(), http: corp.clone(), https: corp.clone() },
+                ServiceProxy::new("Wi-Fi", ours(9090), ours(9090)),
+                ServiceProxy::new("Ethernet", corp.clone(), corp.clone()),
             ],
             9191,
         );

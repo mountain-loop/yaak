@@ -62,7 +62,8 @@ fn load_snapshot(path: &Path) -> Result<Option<Snapshot>, String> {
 /// The port the password dialog or `sudo` last pointed the system proxy at, while they have
 /// settings saved to put back.
 pub fn saved_port(snapshot_path: &Path) -> Option<u16> {
-    load_snapshot(snapshot_path).ok().flatten().map(|s| s.port)
+    // Port 0 holds only settings no service matched, which route nothing.
+    load_snapshot(snapshot_path).ok().flatten().map(|s| s.port).filter(|p| *p != 0)
 }
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
@@ -97,17 +98,20 @@ fn set_scripted(
     if enabled {
         let services = read_services(ns, false)?;
         let saved = load_snapshot(snapshot_path)?;
-        let created = saved.is_none();
-        let mut snapshot = saved.unwrap_or_default();
+        let mut snapshot = saved.clone().unwrap_or_default();
         snapshot.extend(&services, port);
         // Saved before anything changes, so a crash after the change still restores.
         save_snapshot(snapshot_path, &snapshot)?;
         if let Err(e) = run(&enable_commands(&services, port)) {
-            // Usually cancelled, with nothing changed, and a snapshot kept would go stale.
-            // Once anything points at us, it is what puts the rest back.
+            // Usually cancelled, with nothing changed, and a snapshot kept would go stale, so
+            // what was there before goes back. Once anything points at us, it is what puts the
+            // rest back.
             let changed = read_services(ns, false)?.iter().any(|s| s.points_at(port));
-            if created && !changed {
-                remove_snapshot(snapshot_path)?;
+            if !changed {
+                match saved {
+                    Some(saved) => save_snapshot(snapshot_path, &saved)?,
+                    None => remove_snapshot(snapshot_path)?,
+                }
             }
             return Err(e);
         }
@@ -131,7 +135,15 @@ fn set_scripted(
         run(&commands)?;
     }
     match snapshot {
-        Some(_) if used_up => remove_snapshot(snapshot_path),
+        Some(snapshot) if used_up => match snapshot.leftover(&services) {
+            // Kept for when the service is back, and merged into the next capture.
+            Some(leftover) => {
+                let names: Vec<&str> = leftover.services.iter().map(|s| s.name.as_str()).collect();
+                log::warn!("Keeping saved proxy settings no service matched: {}", names.join(", "));
+                save_snapshot(snapshot_path, &leftover)
+            }
+            None => remove_snapshot(snapshot_path),
+        },
         Some(mut snapshot) => {
             snapshot.restoring.clear();
             save_snapshot(snapshot_path, &snapshot)
@@ -372,6 +384,27 @@ mod tests {
         set_scripted(&ns, runner(&ns, &prompts), false, 9191, &path).unwrap();
         assert_eq!(ns.proxies()[0], before[0]);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn the_password_path_restores_a_renamed_service_and_keeps_an_unplugged_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        ns.rename("Wi-Fi", "Office Wi-Fi");
+        ns.remove("Ethernet");
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        let wifi = &ns.proxies()[0];
+        assert_eq!((&wifi.http, &wifi.https), (&before[0].http, &before[0].https));
+        // Ethernet's settings stay saved, without counting as routing.
+        let kept = load_snapshot(&path).unwrap().unwrap();
+        assert_eq!(kept.services.len(), 1);
+        assert_eq!(kept.services[0].name, "Ethernet");
+        assert_eq!(saved_port(&path), None);
     }
 
     #[test]

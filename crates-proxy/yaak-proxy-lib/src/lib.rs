@@ -375,7 +375,10 @@ impl ProxyCtx {
         match self.owner {
             Owner::Cli => SystemProxyBackend::Sudo,
             // What the dialog saved only it can restore, as the helper never saw it.
-            Owner::App if helper == HelperState::Enabled && !self.snapshot_path().exists() => {
+            Owner::App
+                if helper == HelperState::Enabled
+                    && macos::saved_port(&self.snapshot_path()).is_none() =>
+            {
                 SystemProxyBackend::Helper
             }
             Owner::App => SystemProxyBackend::AdminPrompt,

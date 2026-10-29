@@ -276,7 +276,12 @@ export type ServiceProxy = {
 /**
  * The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
  */
-name: string, http: ProxySetting, https: ProxySetting, };
+name: string, 
+/**
+ * What stays the same when the service is renamed: its device ("en0"), or its hardware
+ * port when it has none. Absent when `networksetup` lists neither.
+ */
+id?: string, http: ProxySetting, https: ProxySetting, };
 
 export type SetRecordingRequest = { enabled: boolean, };
 

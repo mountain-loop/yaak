@@ -27,6 +27,10 @@ const IO_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct State {
     pub active: Option<Active>,
+    /// Saved settings a restore found no service for, a service removed or unplugged, kept
+    /// for when it is back and merged into the next capture.
+    #[serde(default)]
+    pub parked: Option<Snapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,7 +86,10 @@ impl<N: Networksetup, P: Processes> Daemon<N, P> {
             .ok_or_else(|| format!("The owner, pid {owner_pid}, is not running"))?;
         let mut state = self.lock();
         let services = read_services(&self.ns, false)?;
-        let mut snapshot = state.active.take().map(|a| a.snapshot).unwrap_or_default();
+        let mut snapshot = match state.active.take() {
+            Some(active) => active.snapshot,
+            None => state.parked.take().unwrap_or_default(),
+        };
         snapshot.extend(&services, port);
         state.active = Some(Active { owner, snapshot });
         // Saved before anything changes, so whatever happens next can be undone.
@@ -122,17 +129,27 @@ impl<N: Networksetup, P: Processes> Daemon<N, P> {
         // Kept on failure, so the next try still knows what to put back.
         apply(&self.ns, &commands)?;
         if used_up {
-            state.active = None;
+            if let Some(active) = state.active.take()
+                && let Some(leftover) = active.snapshot.leftover(&services)
+            {
+                let names: Vec<&str> = leftover.services.iter().map(|s| s.name.as_str()).collect();
+                log(&format!("Keeping saved settings no service matched: {}", names.join(", ")));
+                state.parked = Some(leftover);
+            }
         } else if let Some(active) = state.active.as_mut() {
             active.snapshot.restoring.clear();
         }
         self.save(state)
     }
 
-    /// Restores, then deletes the state file, as the app is about to remove the daemon.
+    /// Restores, then deletes the state file, as the app is about to remove the daemon. Saved
+    /// settings no service matched stay in it, for a daemon registered again.
     fn unregister(&self) -> Result<Status, String> {
         let mut state = self.lock();
         self.restore_locked(&mut state, None)?;
+        if state.parked.is_some() {
+            return Ok(status(&state));
+        }
         match std::fs::remove_file(&self.state_path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -483,6 +500,41 @@ mod tests {
 
         daemon.handle(&set(false, 9191)).into_result().unwrap();
         assert_eq!(daemon.ns.proxies()[0], before[0]);
+    }
+
+    #[test]
+    fn a_service_renamed_while_routing_is_restored() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = daemon(dir.path());
+        let before = daemon.ns.proxies();
+        daemon.handle(&set(true, 9090)).into_result().unwrap();
+        daemon.ns.rename("Wi-Fi", "Office Wi-Fi");
+        daemon.handle(&set(false, 9090)).into_result().unwrap();
+        let after = &daemon.ns.proxies()[0];
+        assert_eq!((&after.http, &after.https), (&before[0].http, &before[0].https));
+        assert_eq!(daemon.state(), State::default());
+    }
+
+    #[test]
+    fn settings_no_service_matched_are_parked_and_merged_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let daemon = daemon(dir.path());
+        let wifi = daemon.ns.proxies()[0].clone();
+        daemon.handle(&set(true, 9090)).into_result().unwrap();
+        // Wi-Fi is unplugged while ours is on.
+        daemon.ns.remove("Wi-Fi");
+        daemon.handle(&set(false, 9090)).into_result().unwrap();
+        let parked = daemon.state().parked.unwrap();
+        assert_eq!(parked.services.len(), 1);
+        assert_eq!(parked.services[0].http, wifi.http);
+
+        // Kept through unregister, and back in the next capture.
+        daemon.handle(&Request::Unregister).into_result().unwrap();
+        assert!(dir.path().join("state.json").exists());
+        daemon.handle(&set(true, 9090)).into_result().unwrap();
+        let state = daemon.state();
+        assert!(state.parked.is_none());
+        assert!(state.active.unwrap().snapshot.services.iter().any(|s| s.http == wifi.http));
     }
 
     #[test]
