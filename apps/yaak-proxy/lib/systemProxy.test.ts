@@ -64,6 +64,13 @@ describe("helperRow", () => {
     expect(helperRow("enabled", "admin_prompt").description).toMatch(/password prompt/);
   });
 
+  test("offers to install when macOS can't find it, rather than blaming a dev build", () => {
+    expect(helperRow("not_found", "admin_prompt")).toMatchObject({
+      title: "Helper: macOS can't find the helper in this app bundle",
+      action: "install",
+    });
+  });
+
   test("says plainly that a dev build cannot use it", () => {
     expect(helperRow("unavailable", "admin_prompt")).toMatchObject({
       title: "Helper: not available in dev builds",

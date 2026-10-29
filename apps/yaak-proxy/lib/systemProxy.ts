@@ -67,6 +67,13 @@ export function helperRow(helper: HelperState, backend: SystemProxyBackend): Hel
         description: "Only the installed app can run it, so changes use the password prompt.",
         action: null,
       };
+    case "not_found":
+      return {
+        title: "Helper: macOS can't find the helper in this app bundle",
+        description:
+          "macOS says this until the helper is first installed. Changes use the password prompt until then.",
+        action: "install",
+      };
     case "not_registered":
       return {
         title: "Helper: not installed",

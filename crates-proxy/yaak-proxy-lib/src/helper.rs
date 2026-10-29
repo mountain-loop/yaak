@@ -15,6 +15,8 @@ pub enum HelperState {
     /// Registered, and waiting for the user to allow it in System Settings.
     RequiresApproval,
     Enabled,
+    /// The app has the helper's plist, but `SMAppService` reports it not found.
+    NotFound,
 }
 
 #[cfg(target_os = "macos")]
@@ -25,6 +27,7 @@ mod imp {
     use objc2_service_management::{SMAppService, SMAppServiceStatus};
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
+    use std::path::PathBuf;
     use std::time::{Duration, Instant};
     use yaak_proxy_helper::protocol::{Request, Response, Status};
 
@@ -34,38 +37,83 @@ mod imp {
     /// Long enough for `networksetup` on every service.
     const IO_TIMEOUT: Duration = Duration::from_secs(30);
 
-    /// This app is a bundle with the helper's plist inside, so `SMAppService` can find it.
-    fn bundled() -> bool {
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| Some(exe.parent()?.parent()?.to_path_buf()))
-            .map(|contents| {
-                contents.join("Library/LaunchDaemons").join(yaak_proxy_helper::PLIST_NAME).is_file()
-            })
-            .unwrap_or(false)
+    /// The helper's plist inside this app, when it runs from a bundle that has one, so
+    /// `SMAppService` can find it.
+    fn plist_path() -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        let contents = exe.parent()?.parent()?;
+        let path = contents.join("Library/LaunchDaemons").join(yaak_proxy_helper::PLIST_NAME);
+        path.is_file().then_some(path)
     }
 
     fn service() -> Option<Retained<SMAppService>> {
-        if !bundled() {
-            return None;
-        }
+        plist_path()?;
         let plist = NSString::from_str(yaak_proxy_helper::PLIST_NAME);
         // SAFETY: a class method taking a valid NSString.
         Some(unsafe { SMAppService::daemonServiceWithPlistName(&plist) })
     }
 
-    fn state_of(service: &SMAppService) -> HelperState {
+    fn raw_status(service: &SMAppService) -> SMAppServiceStatus {
         // SAFETY: reads the service's registration status.
-        match unsafe { service.status() } {
+        unsafe { service.status() }
+    }
+
+    fn state_of(service: &SMAppService) -> HelperState {
+        match raw_status(service) {
             SMAppServiceStatus::Enabled => HelperState::Enabled,
             SMAppServiceStatus::RequiresApproval => HelperState::RequiresApproval,
             SMAppServiceStatus::NotRegistered => HelperState::NotRegistered,
-            _ => HelperState::Unavailable,
+            _ => HelperState::NotFound,
+        }
+    }
+
+    fn status_name(status: SMAppServiceStatus) -> &'static str {
+        match status {
+            SMAppServiceStatus::NotRegistered => "notRegistered",
+            SMAppServiceStatus::Enabled => "enabled",
+            SMAppServiceStatus::RequiresApproval => "requiresApproval",
+            SMAppServiceStatus::NotFound => "notFound",
+            _ => "unknown",
         }
     }
 
     pub fn state() -> HelperState {
-        service().map(|s| state_of(&s)).unwrap_or(HelperState::Unavailable)
+        let Some(plist) = plist_path() else {
+            log::debug!("No helper plist in this app, so the helper is unavailable");
+            return HelperState::Unavailable;
+        };
+        let Some(service) = service() else {
+            return HelperState::Unavailable;
+        };
+        let status = raw_status(&service);
+        log::debug!(
+            "SMAppService status {} ({}) for {}",
+            status.0,
+            status_name(status),
+            plist.display()
+        );
+        state_of(&service)
+    }
+
+    /// What `SMAppService` says about the helper, for `--helper-status`.
+    pub fn diagnose() -> String {
+        let exe = std::env::current_exe()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|e| format!("unknown ({e})"));
+        let mut lines = vec![format!("executable: {exe}")];
+        match plist_path() {
+            Some(plist) => lines.push(format!("plist: {}", plist.display())),
+            None => lines.push(format!(
+                "plist: none at Contents/Library/LaunchDaemons/{}",
+                yaak_proxy_helper::PLIST_NAME
+            )),
+        }
+        if let Some(service) = service() {
+            let status = raw_status(&service);
+            lines.push(format!("SMAppService status: {} ({})", status.0, status_name(status)));
+        }
+        lines.push(format!("state: {:?}", state()));
+        lines.join("\n")
     }
 
     /// Registers the daemon and, while it awaits approval, opens the System Settings pane
@@ -143,11 +191,16 @@ mod imp {
 }
 
 #[cfg(target_os = "macos")]
-pub use imp::{register, set, state, unregister};
+pub use imp::{diagnose, register, set, state, unregister};
 
 #[cfg(not(target_os = "macos"))]
 pub fn state() -> HelperState {
     HelperState::Unavailable
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn diagnose() -> String {
+    "The helper is only available on macOS".to_string()
 }
 
 #[cfg(not(target_os = "macos"))]

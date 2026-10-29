@@ -177,7 +177,7 @@ export type GlobalAction = "recording_toggle" | "flows_clear";
 
 export type HelperRegisterRequest = Record<string, never>;
 
-export type HelperState = "unavailable" | "not_registered" | "requires_approval" | "enabled";
+export type HelperState = "unavailable" | "not_registered" | "requires_approval" | "enabled" | "not_found";
 
 export type HelperUnregisterRequest = Record<string, never>;
 
