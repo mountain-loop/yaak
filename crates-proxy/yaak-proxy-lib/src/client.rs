@@ -5,7 +5,8 @@
 use crate::bodies::{self, DecodedBody};
 use crate::ca::CaStatus;
 use crate::control::{
-    self, ControlInfo, ControlStatus, ErrorBody, StartRequest, SystemProxyRequest, TRUNCATED_HEADER,
+    self, ControlInfo, ControlStatus, ErrorBody, RecordingRequest, StartRequest,
+    SystemProxyRequest, TRUNCATED_HEADER,
 };
 use crate::db::ProxyQueryManager;
 use crate::flows::{self, FlowDetail, FlowFilter};
@@ -125,6 +126,11 @@ impl ControlClient {
 
     pub async fn trust_ca(&self) -> Result<CaStatus, String> {
         self.post("/ca/trust", &serde_json::json!({})).await
+    }
+
+    /// Resumes or pauses storing flows in the owner's engine.
+    pub async fn set_recording(&self, enabled: bool) -> Result<ControlStatus, String> {
+        self.post("/recording", &RecordingRequest { enabled }).await
     }
 
     pub async fn system_proxy(&self) -> Result<SystemProxyStatus, String> {

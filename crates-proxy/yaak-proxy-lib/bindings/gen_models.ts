@@ -44,7 +44,23 @@ elapsedMs: number | null, error: string | null,
 /**
  * The id of the Yaak request this flow was last saved as.
  */
-savedRequestId: string | null, };
+savedRequestId: string | null, 
+/**
+ * The process that opened the client connection, where the platform can tell (macOS).
+ */
+clientPid: number | null, 
+/**
+ * Its app's name, or its executable's outside an app: "Google Chrome", "curl".
+ */
+clientName: string | null, 
+/**
+ * Its app's bundle id.
+ */
+clientBundleId: string | null, 
+/**
+ * Its app bundle's path, or its executable's outside an app.
+ */
+clientPath: string | null, };
 
 export type FlowBody = "request" | "response";
 

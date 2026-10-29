@@ -10,6 +10,7 @@ import {
   HStack,
   HttpStatusTagRaw,
   Icon,
+  IconButton,
   SizeTag,
   type TabButtonRenderProps,
   type TabItem,
@@ -17,11 +18,12 @@ import {
   Tabs,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
 import { selectedFlowAtom } from "../lib/atoms";
 import { findHeader, mimeEssence } from "../lib/body";
+import { saveDialogFlowAtom, useFlowActions } from "../lib/flowActions";
 import { statusReason } from "../lib/statusReason";
 import { EmptyState, FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowHeaders, FlowQuery, queryParams } from "./FlowHeaders";
@@ -50,10 +52,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
             <div className="grid grid-cols-[auto_auto] gap-x-6 gap-y-2 text-left">
               <span>Select a flow</span>
               <Keys keys={["↑", "↓"]} />
-              <span>Start the proxy</span>
-              <Keys keys={["⌘", "⇧", "P"]} />
-              <span>Stop the proxy</span>
-              <Keys keys={["⌘", "⇧", "S"]} />
+              <span>Pause or resume recording</span>
+              <Keys keys={["⌘", "R"]} />
               <span>Clear flows</span>
               <Keys keys={["⌘", "K"]} />
             </div>
@@ -73,6 +73,8 @@ function FlowPane({ flow }: { flow: Flow }) {
   const noResponse = flow.error != null && flow.status == null;
   const mime = mimeEssence(findHeader(flow.responseHeaders, "content-type"));
   const queryCount = useMemo(() => queryParams(flow.url).length, [flow.url]);
+  const openSave = useSetAtom(saveDialogFlowAtom);
+  const flowActions = useFlowActions();
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -125,7 +127,7 @@ function FlowPane({ flow }: { flow: Flow }) {
     <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
       <div
         className={classNames(
-          "grid grid-cols-[auto_minmax(4rem,1fr)] items-center h-sm -mb-1.5",
+          "grid grid-cols-[auto_minmax(4rem,1fr)_auto] items-center h-sm -mb-1.5",
           "cursor-default select-none whitespace-nowrap w-full px-3",
           "overflow-x-auto font-mono text-sm text-text-subtle hide-scrollbars",
         )}
@@ -172,6 +174,21 @@ function FlowPane({ flow }: { flow: Flow }) {
         ) : (
           <span />
         )}
+        <HStack space={1} className="font-sans ml-3">
+          <Button
+            size="2xs"
+            variant="border"
+            color={flow.savedRequestId == null ? "default" : "primary"}
+            title={flow.savedRequestId == null ? undefined : "Saved to Yaak. Click to save again."}
+            leftSlot={<Icon icon="bookmark" size="xs" />}
+            onClick={() => openSave(flow)}
+          >
+            {flow.savedRequestId == null ? "Save to Yaak" : "Saved"}
+          </Button>
+          <Dropdown items={flowActions(flow).slice(2)}>
+            <IconButton size="xs" icon="ellipsis" iconColor="secondary" title="Copy and export" />
+          </Dropdown>
+        </HStack>
       </div>
 
       <div className="overflow-hidden flex flex-col min-h-0">

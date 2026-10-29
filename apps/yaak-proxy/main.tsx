@@ -6,12 +6,13 @@ import { type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ProxyLayout } from "./components/ProxyLayout";
 import { useHotkeyContextValue } from "./lib/hotkeys";
-import { syncFlows } from "./lib/store";
+import { syncFlows, syncProxyState } from "./lib/store";
 import "./main.css";
 
 const queryClient = new QueryClient();
 const jotaiStore = createStore();
 
+syncProxyState(jotaiStore);
 syncFlows(jotaiStore);
 
 function Hotkeys({ children }: { children: ReactNode }) {

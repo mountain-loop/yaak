@@ -4,18 +4,21 @@ import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useCallback } from "react";
+import { SIDEBAR_TREE_ID } from "../lib/atoms";
+import { appKeyOf, appNodeId, sidebarPath } from "../lib/search";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { flowsAtom, flowTotalAtom } from "../lib/store";
+import { AppIcon } from "./AppIcon";
 
-/** A node in the sidebar tree — either a domain or a path segment. */
+/** A node in the sidebar tree: a domain, a path segment, or an app. */
 export type SidebarItem = {
   id: string;
   label: string;
   /** Flows held under this node; for the Domains folder, every flow in the database */
   count: number;
+  /** An app's path, for its icon */
+  appPath?: string;
 };
-
-export const SIDEBAR_TREE_ID = "proxy-sidebar";
 
 const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
   const exchanges = get(flowsAtom);
@@ -43,34 +46,15 @@ const collapsedAtom = atom(
   },
 );
 
-/** The sidebar nodes selected, or null when the list shows all traffic */
-const selectedNodeIdsAtom = atom((get) => {
-  const selectedIds = get(selectedIdsFamily(SIDEBAR_TREE_ID));
-  // Nothing selected, or a node holding everything → show all
-  if (selectedIds.length === 0 || selectedIds.includes("root") || selectedIds.includes("domains")) {
-    return null;
-  }
-  return new Set(selectedIds);
-});
-
-/** Exchanges filtered by the currently selected sidebar node(s). */
-export const filteredExchangesAtom = atom((get) => {
-  const exchanges = get(flowsAtom);
-  const selected = get(selectedNodeIdsAtom);
-  if (selected == null) return exchanges;
-  return exchanges.filter((ex) => nodeIdsOf(ex).some((id) => selected.has(id)));
-});
-
-/** Flows in the database for all traffic, or those held under the selected nodes */
-export const filteredCountAtom = atom((get) =>
-  get(selectedNodeIdsAtom) == null ? get(flowTotalAtom) : get(filteredExchangesAtom).length,
-);
-
 /** The selected sidebar node's name, for the header */
 export const selectedSidebarLabelAtom = atom((get) => {
   const selectedId = get(selectedIdsFamily(SIDEBAR_TREE_ID))[0];
   if (selectedId?.startsWith("domain:")) return selectedId.slice("domain:".length);
   if (selectedId?.startsWith("path:")) return selectedId.slice("path:".length);
+  if (selectedId?.startsWith("app:")) {
+    const apps = get(sidebarTreeAtom).children?.find((c) => c.item.id === "apps");
+    return apps?.children?.find((c) => c.item.id === selectedId)?.item.label ?? "All traffic";
+  }
   return "All traffic";
 });
 
@@ -83,21 +67,15 @@ const nodeIdsByFlow = new WeakMap<Flow, string[]>();
 function nodeIdsOf(ex: Flow): string[] {
   let ids = nodeIdsByFlow.get(ex);
   if (ids != null) return ids;
-  let hostname: string;
-  let segments: string[];
-  try {
-    const url = new URL(ex.url);
-    hostname = url.host;
-    segments = url.pathname.split("/").filter(Boolean);
-  } catch {
-    hostname = ex.url;
-    segments = [];
-  }
+  // By the rules the database filters by, so a node shows the flows it counts.
+  const path = sidebarPath(ex.url);
+  const schemeless = !ex.url.includes("://");
+  const [hostname = "", ...segments] = schemeless ? [path] : path.split("/");
   ids = [`domain:${hostname}`];
-  let path = `path:${hostname}`;
+  let node = `path:${hostname}`;
   for (const seg of segments) {
-    path += `/${seg}`;
-    ids.push(path);
+    node += `/${seg}`;
+    ids.push(node);
   }
   nodeIdsByFlow.set(ex, ids);
   return ids;
@@ -197,6 +175,34 @@ function buildTree(exchanges: Flow[], total: number): TreeNode<SidebarItem> {
     domainsFolder.children?.push(toTreeNode(domain, domainsFolder, 2));
   }
 
+  // The apps flows came from, where the platform can tell; none on others, so no group.
+  const apps = new Map<string, SidebarItem>();
+  for (const ex of exchanges) {
+    const key = appKeyOf(ex);
+    if (key == null) continue;
+    const id = appNodeId(key);
+    const app = apps.get(id);
+    if (app == null) {
+      apps.set(id, { id, label: ex.clientName ?? key, count: 1, appPath: ex.clientPath ?? key });
+    } else {
+      app.count++;
+    }
+  }
+  if (apps.size > 0) {
+    const appsFolder: TreeNode<SidebarItem> = {
+      item: { id: "apps", label: "Apps", count: 0 },
+      parent: rootNode,
+      depth: 1,
+      children: [],
+      draggable: false,
+    };
+    const sortedApps = [...apps.values()].sort((a, b) => collator.compare(a.label, b.label));
+    for (const item of sortedApps) {
+      appsFolder.children?.push({ item, parent: appsFolder, depth: 2, draggable: false });
+    }
+    rootNode.children?.push(appsFolder);
+  }
+
   rootNode.children?.push(domainsFolder);
 
   return rootNode;
@@ -206,6 +212,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
   const count = item.count;
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
+      {item.appPath != null && <AppIcon path={item.appPath} />}
       <span className="truncate">{item.label}</span>
       {count > 0 && <span className="ml-auto text-text-subtlest text-2xs shrink-0">{count}</span>}
     </div>
@@ -214,9 +221,9 @@ function ItemInner({ item }: { item: SidebarItem }) {
 
 export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
-  const treeId = SIDEBAR_TREE_ID;
 
   const getItemKey = useCallback((item: SidebarItem) => `${item.id}:${item.count}`, []);
+  const treeId = SIDEBAR_TREE_ID;
 
   return (
     // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows

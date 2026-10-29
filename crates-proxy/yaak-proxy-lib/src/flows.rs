@@ -3,6 +3,7 @@ use crate::db::ProxyQueryManager;
 use crate::models::{Flow, FlowBody, FlowIden};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use rusqlite::types::Value;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use yaak_database::UpsertModelInfo;
@@ -13,9 +14,21 @@ use yaak_models::blob_manager::BlobManager;
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct FlowFilter {
+    /// Search terms, any case, each of which must match the URL (host, path or query), the
+    /// method, the status (`404`, `40`, `4xx`) or the content type: `stripe post 4xx`.
+    #[ts(optional)]
+    pub q: Option<String>,
     /// Part of the host, any case: `stripe` matches `api.stripe.com`.
     #[ts(optional)]
     pub host: Option<String>,
+    /// Only flows under one of these hosts or paths, as the app's sidebar names them:
+    /// `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host.
+    #[ts(optional)]
+    pub under: Option<Vec<String>>,
+    /// Only flows from one of these apps, by bundle id, or by path for a process outside an
+    /// app bundle.
+    #[ts(optional)]
+    pub app: Option<Vec<String>>,
     /// The method, any case.
     #[ts(optional)]
     pub method: Option<String>,
@@ -36,14 +49,17 @@ pub struct FlowFilter {
 }
 
 impl FlowFilter {
-    /// The filter from a query string's `host`, `method`, `status`, `limit`, `after` and
-    /// `before`.
+    /// The filter from a query string's `q`, `host`, `under`, `app`, `method`, `status`,
+    /// `limit`, `after` and `before`. `under` and `app` may repeat.
     pub fn from_query(query: &str) -> Result<Self, String> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
             let value = Some(value.into_owned()).filter(|v| !v.is_empty());
             match key.as_ref() {
+                "q" => filter.q = value,
                 "host" => filter.host = value,
+                "under" => filter.under.get_or_insert_default().extend(value),
+                "app" => filter.app.get_or_insert_default().extend(value),
                 "method" => filter.method = value,
                 "status" => filter.status = value,
                 "after" => filter.after = value,
@@ -62,8 +78,17 @@ impl FlowFilter {
     pub fn to_query(&self) -> String {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         let limit = self.limit.map(|l| l.to_string());
+        for (key, value) in [("q", &self.q), ("host", &self.host)] {
+            if let Some(value) = value {
+                query.append_pair(key, value);
+            }
+        }
+        for (key, values) in [("under", &self.under), ("app", &self.app)] {
+            for value in values.iter().flatten() {
+                query.append_pair(key, value);
+            }
+        }
         for (key, value) in [
-            ("host", &self.host),
             ("method", &self.method),
             ("status", &self.status),
             ("limit", &limit),
@@ -77,56 +102,175 @@ impl FlowFilter {
         query.finish()
     }
 
-    pub fn matches(&self, flow: &Flow) -> bool {
-        if let Some(host) = &self.host
-            && !host_of(&flow.url).to_ascii_lowercase().contains(&host.to_ascii_lowercase())
-        {
-            return false;
+    /// Narrows more than `after`, `before` and `limit` do, so it covers fewer than all flows.
+    pub fn narrows(&self) -> bool {
+        let given = |v: &Option<String>| v.as_deref().is_some_and(|v| !v.trim().is_empty());
+        given(&self.q)
+            || given(&self.host)
+            || given(&self.method)
+            || given(&self.status)
+            || self.under.is_some()
+            || self.app.is_some()
+    }
+
+    /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters.
+    fn condition(&self) -> (String, Vec<Value>) {
+        let mut sql = String::from("1");
+        let mut params: Vec<Value> = Vec::new();
+        for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
+            let term = term.to_lowercase();
+            sql.push_str(
+                " AND (instr(lower(url), ?) > 0 OR lower(method) = ? \
+                OR instr(lower(content_type), ?) > 0",
+            );
+            params.extend([
+                term.clone().into(),
+                term.clone().into(),
+                term.clone().into(),
+            ]);
+            if let Some(status) = status_condition(&term, &mut params) {
+                sql.push_str(" OR ");
+                sql.push_str(&status);
+            }
+            sql.push(')');
         }
-        if let Some(method) = &self.method
-            && !flow.method.eq_ignore_ascii_case(method)
-        {
-            return false;
+        if let Some(host) = self.host.as_deref().filter(|h| !h.is_empty()) {
+            sql.push_str(&format!(" AND instr(lower({HOST_SQL}), ?) > 0"));
+            params.push(host.to_lowercase().into());
+        }
+        if let Some(under) = &self.under {
+            // The node itself, or anything below it, by the sidebar's rules.
+            let mut any = Vec::new();
+            for node in under {
+                let node = normalize_node(node);
+                any.push("(sidebar_path(url) = ? OR substr(sidebar_path(url), 1, ?) = ?)");
+                let below = format!("{node}/");
+                params.extend([
+                    node.into(),
+                    (below.chars().count() as i64).into(),
+                    below.into(),
+                ]);
+            }
+            let any = if any.is_empty() { "0".to_string() } else { any.join(" OR ") };
+            sql.push_str(&format!(" AND ({any})"));
+        }
+        if let Some(apps) = &self.app {
+            let marks = vec!["?"; apps.len()].join(", ");
+            sql.push_str(&format!(" AND coalesce(client_bundle_id, client_path) IN ({marks})"));
+            params.extend(apps.iter().map(|a| a.clone().into()));
+        }
+        if let Some(method) = self.method.as_deref().filter(|m| !m.is_empty()) {
+            sql.push_str(" AND lower(method) = ?");
+            params.push(method.to_lowercase().into());
         }
         match self.status.as_deref().map(str::trim) {
-            None | Some("") => true,
-            Some(s) if s.eq_ignore_ascii_case("error") => flow.error.is_some(),
-            Some(s) => match (flow.status, s.to_ascii_lowercase().strip_suffix("xx")) {
-                (Some(status), Some(class)) => class.parse() == Ok(status / 100),
-                (Some(status), None) => s.parse() == Ok(status),
-                (None, _) => false,
+            None | Some("") => {}
+            Some(s) if s.eq_ignore_ascii_case("error") => sql.push_str(" AND error IS NOT NULL"),
+            // A whole status or a class, not the start of one as a search term may be.
+            Some(s) if s.len() == 3 => match status_condition(&s.to_ascii_lowercase(), &mut params)
+            {
+                Some(status) => {
+                    sql.push_str(" AND ");
+                    sql.push_str(&status);
+                }
+                None => sql.push_str(" AND 0"),
             },
+            Some(_) => sql.push_str(" AND 0"),
         }
+        (sql, params)
     }
 }
 
-/// `host[:port]` of a captured URL.
-fn host_of(url: &str) -> &str {
-    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
-    rest.split(['/', '?', '#']).next().unwrap_or_default()
+/// The host and port of `url`, in SQL: what follows `://` up to the first `/`, `?` or `#`.
+const HOST_SQL: &str = "(SELECT CASE WHEN instr(r, '/') > 0 THEN substr(r, 1, instr(r, '/') - 1) \
+    ELSE r END FROM (SELECT replace(replace(CASE WHEN instr(url, '://') > 0 \
+    THEN substr(url, instr(url, '://') + 3) ELSE url END, '?', '/'), '#', '/') AS r))";
+
+/// Where the app's sidebar places a URL: its host, lowercased and without its scheme's default
+/// port, then its path's non-empty segments, joined by `/`, as in `api.stripe.com/v1/charges`.
+/// A URL without a scheme is a host of its own. `sidebarPath` in the app's `lib/search.ts`
+/// follows the same rules, and the sidebar's nodes are built from it.
+pub fn sidebar_path(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return url.to_string();
+    };
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let (authority, rest) = rest.split_at(end);
+    let mut host = authority.to_ascii_lowercase();
+    let default_port = match scheme.to_ascii_lowercase().as_str() {
+        "http" | "ws" => Some(":80"),
+        "https" | "wss" => Some(":443"),
+        _ => None,
+    };
+    if let Some(port) = default_port
+        && host.ends_with(port)
+    {
+        host.truncate(host.len() - port.len());
+    }
+    let path = rest.split(['?', '#']).next().unwrap_or_default();
+    let mut key = host;
+    for segment in path.split('/').filter(|s| !s.is_empty()) {
+        key.push('/');
+        key.push_str(segment);
+    }
+    key
 }
 
-/// The flows `filter` covers, newest first: by start, then by id. Reads only as far into the
-/// table as the limit needs, so a page costs the same however many flows there are.
+/// A sidebar node as `sidebar_path` writes it, its host lowercased.
+fn normalize_node(node: &str) -> String {
+    match node.split_once('/') {
+        Some((host, path)) => format!("{}/{path}", host.to_ascii_lowercase()),
+        None => node.to_ascii_lowercase(),
+    }
+}
+
+/// The SQL condition for a status term: `404` exactly, `40` as the start of one, or a class
+/// such as `4xx`. None when the term is not one.
+fn status_condition(term: &str, params: &mut Vec<Value>) -> Option<String> {
+    if let Some(class) = term.strip_suffix("xx")
+        && let Ok(class @ 1..=9) = class.parse::<i64>()
+    {
+        params.push(class.into());
+        return Some("status / 100 = ?".into());
+    }
+    if term.is_empty() || term.len() > 3 || !term.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    if term.len() == 3 {
+        params.push(term.parse::<i64>().ok()?.into());
+        return Some("status = ?".into());
+    }
+    params.push(format!("{term}%").into());
+    Some("CAST(status AS TEXT) LIKE ?".into())
+}
+
+/// The flows `filter` covers, newest first: by start, then by id. Reads the table in that order
+/// through its index and stops at the limit, so a page of a common match costs the same however
+/// many flows there are.
 pub fn list(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
     db.with_conn(|c| list_in(c.conn().resolve(), filter))
 }
 
 /// [`list`] and the count of every flow, read from one snapshot of the database, so the count
-/// takes in exactly the flows written before the page was read.
-pub fn page(db: &ProxyQueryManager, filter: &FlowFilter) -> Result<(Vec<Flow>, usize), String> {
+/// takes in exactly the flows written before the page was read. With a filter that narrows,
+/// also the count of the flows it covers, whatever the limit.
+pub fn page(
+    db: &ProxyQueryManager,
+    filter: &FlowFilter,
+) -> Result<(Vec<Flow>, usize, Option<usize>), String> {
     db.with_conn(|c| {
         let tx = c.conn().resolve().unchecked_transaction().map_err(|e| e.to_string())?;
         let flows = list_in(&tx, filter)?;
         let total = count_in(&tx)?;
+        let matching = if filter.narrows() { Some(count_matching(&tx, filter)?) } else { None };
         tx.commit().map_err(|e| e.to_string())?;
-        Ok((flows, total))
+        Ok((flows, total, matching))
     })
 }
 
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
-    let mut sql = String::from("SELECT * FROM flows WHERE 1");
-    let mut params: Vec<rusqlite::types::Value> = Vec::new();
+    let (condition, mut params) = filter.condition();
+    let mut sql = format!("SELECT * FROM flows WHERE {condition}");
     if let Some(id) = &filter.after {
         // By rowid, which only grows as flows are written.
         let rowid: i64 = conn
@@ -136,7 +280,7 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
         params.push(rowid.into());
     }
     if let Some(id) = &filter.before {
-        let started_at: rusqlite::types::Value = conn
+        let started_at: Value = conn
             .query_row("SELECT started_at FROM flows WHERE id = ?", [id], |r| r.get(0))
             .map_err(|_| format!("No flow {id}"))?;
         sql.push_str(" AND (started_at, id) < (?, ?)");
@@ -144,21 +288,26 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
         params.push(id.clone().into());
     }
     sql.push_str(" ORDER BY started_at DESC, id DESC");
+    if let Some(limit) = filter.limit {
+        sql.push_str(" LIMIT ?");
+        params.push((limit.min(i64::MAX as usize) as i64).into());
+    }
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(params), Flow::from_row)
         .map_err(|e| e.to_string())?;
-    let mut flows = Vec::new();
-    for flow in rows {
-        if flows.len() >= filter.limit.unwrap_or(usize::MAX) {
-            break;
-        }
-        let flow = flow.map_err(|e| e.to_string())?;
-        if filter.matches(&flow) {
-            flows.push(flow);
-        }
-    }
-    Ok(flows)
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
+    let (condition, params) = filter.condition();
+    conn.query_row(
+        &format!("SELECT COUNT(*) FROM flows WHERE {condition}"),
+        rusqlite::params_from_iter(params),
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n as usize)
+    .map_err(|e| e.to_string())
 }
 
 /// Deletes every flow and their bodies, in a transaction in each database. The flows' deletion
@@ -288,24 +437,216 @@ mod tests {
         }
     }
 
+    /// A database of `flows`, started a second apart in the order given, and a function that
+    /// lists the urls a filter covers, newest first.
+    fn db_of(flows: Vec<Flow>) -> (tempfile::TempDir, ProxyQueryManager) {
+        use yaak_database::UpdateSource;
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        for (i, flow) in flows.into_iter().enumerate() {
+            let started_at = chrono::DateTime::from_timestamp(i as i64, 0).unwrap().naive_utc();
+            let flow = Flow { id: format!("fl_{i:03}"), started_at, ..flow };
+            db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+        }
+        (dir, db)
+    }
+
+    fn urls(db: &ProxyQueryManager, filter: FlowFilter) -> Vec<String> {
+        list(db, &filter).unwrap().into_iter().map(|f| f.url).collect()
+    }
+
     #[test]
     fn filters() {
-        let ok = flow("https://api.stripe.com:8443/v1/charges?x=1", "POST", Some(200), None);
-        let missing = flow("http://example.com/missing", "GET", Some(404), None);
-        let failed = flow("https://down.example.com/", "GET", None, Some("refused"));
-
-        let by = |filter: FlowFilter| {
-            [&ok, &missing, &failed].iter().filter(|f| filter.matches(f)).count()
-        };
+        let (_dir, db) = db_of(vec![
+            flow("https://api.stripe.com:8443/v1/charges?x=1", "POST", Some(200), None),
+            flow("http://example.com/missing", "GET", Some(404), None),
+            flow("https://down.example.com/", "GET", None, Some("refused")),
+        ]);
+        let by = |filter: FlowFilter| urls(&db, filter).len();
         assert_eq!(by(FlowFilter::default()), 3);
         assert_eq!(by(FlowFilter { host: Some("STRIPE".into()), ..Default::default() }), 1);
         assert_eq!(by(FlowFilter { host: Some("example.com".into()), ..Default::default() }), 2);
         assert_eq!(by(FlowFilter { host: Some("charges".into()), ..Default::default() }), 0);
+        assert_eq!(by(FlowFilter { host: Some("8443".into()), ..Default::default() }), 1);
         assert_eq!(by(FlowFilter { method: Some("get".into()), ..Default::default() }), 2);
         assert_eq!(by(FlowFilter { status: Some("404".into()), ..Default::default() }), 1);
         assert_eq!(by(FlowFilter { status: Some("2xx".into()), ..Default::default() }), 1);
         assert_eq!(by(FlowFilter { status: Some("5XX".into()), ..Default::default() }), 0);
+        assert_eq!(by(FlowFilter { status: Some("40".into()), ..Default::default() }), 0);
         assert_eq!(by(FlowFilter { status: Some("error".into()), ..Default::default() }), 1);
+    }
+
+    #[test]
+    fn search_matches_url_method_status_and_content_type() {
+        let json = |url: &str, method: &str, status| Flow {
+            content_type: Some("application/json; charset=utf-8".into()),
+            ..flow(url, method, Some(status), None)
+        };
+        let (_dir, db) = db_of(vec![
+            json("https://api.stripe.com/v1/charges?customer=cus_9", "POST", 200),
+            json("https://api.github.com/repos/yaak", "GET", 404),
+            Flow {
+                content_type: Some("image/png".into()),
+                ..flow("https://images.ctfassets.net/logo.png", "GET", Some(200), None)
+            },
+            flow("http://localhost:3000/health", "HEAD", Some(503), None),
+        ]);
+        let search = |q: &str| {
+            let filter = FlowFilter { q: Some(q.into()), ..Default::default() };
+            let mut found = urls(&db, filter);
+            found.sort();
+            found
+        };
+        let stripe = "https://api.stripe.com/v1/charges?customer=cus_9";
+        let github = "https://api.github.com/repos/yaak";
+        let logo = "https://images.ctfassets.net/logo.png";
+        let health = "http://localhost:3000/health";
+        // The host, the path and the query, any case.
+        assert_eq!(search("STRIPE"), vec![stripe]);
+        assert_eq!(search("/repos/"), vec![github]);
+        assert_eq!(search("cus_9"), vec![stripe]);
+        // The method, whole.
+        assert_eq!(search("head"), vec![health]);
+        assert_eq!(search("ead"), Vec::<&str>::new());
+        // A status, its start, or its class.
+        assert_eq!(search("404"), vec![github]);
+        assert_eq!(search("50"), vec![health]);
+        assert_eq!(search("2xx"), vec![stripe, logo]);
+        // The content type.
+        assert_eq!(search("png"), vec![logo]);
+        assert_eq!(search("json"), vec![github, stripe]);
+        // Every term must match, each anywhere.
+        assert_eq!(search("json get"), vec![github]);
+        assert_eq!(search("  json   2xx "), vec![stripe]);
+        assert_eq!(search("json 5xx"), Vec::<&str>::new());
+        // `%` and `_` are plain characters, not patterns.
+        assert_eq!(search("%"), Vec::<&str>::new());
+        assert_eq!(search("cus_"), vec![stripe]);
+        assert_eq!(search(""), vec![health, github, stripe, logo]);
+    }
+
+    #[test]
+    fn under_matches_a_host_or_a_path_as_the_sidebar_does() {
+        let (_dir, db) = db_of(vec![
+            flow("https://api.stripe.com/v1/charges", "GET", Some(200), None),
+            flow("https://api.stripe.com/v1/charges/ch_1?expand=x", "GET", Some(200), None),
+            flow("https://api.stripe.com/v1/chargesx", "GET", Some(200), None),
+            flow("https://api.stripe.com:8443/v1/charges", "GET", Some(200), None),
+            flow("http://api.stripe.com", "GET", Some(200), None),
+            flow("https://api.stripe.community/", "GET", Some(200), None),
+            flow("https://example.com/v1//users", "GET", Some(200), None),
+            flow("http://x.com:80/a", "GET", Some(200), None),
+            flow("https://x.com:443/a", "GET", Some(200), None),
+        ]);
+        let under = |nodes: &[&str]| {
+            let nodes = nodes.iter().map(|n| n.to_string()).collect();
+            urls(&db, FlowFilter { under: Some(nodes), ..Default::default() }).len()
+        };
+        // A host on another port is a node of its own, as in the sidebar.
+        assert_eq!(under(&["api.stripe.com"]), 4);
+        assert_eq!(under(&["api.stripe.com:8443"]), 1);
+        assert_eq!(under(&["api.stripe.com/v1/charges"]), 2);
+        // Empty segments and default ports are left out, as the sidebar leaves them.
+        assert_eq!(under(&["example.com/v1/users"]), 1);
+        assert_eq!(under(&["x.com/a"]), 2);
+        assert_eq!(under(&["api.stripe.com/v1/charges", "example.com"]), 3);
+        assert_eq!(under(&[]), 0);
+        // The sidebar lowercases hosts; paths keep their case.
+        assert_eq!(under(&["API.stripe.com/v1/charges"]), 2);
+        assert_eq!(under(&["api.stripe.com/V1/charges"]), 0);
+    }
+
+    /// The cases `lib/search.test.ts` checks `sidebarPath` against, so the two agree.
+    #[test]
+    fn sidebar_path_rules() {
+        for (url, path) in [
+            ("https://example.com/v1//users", "example.com/v1/users"),
+            ("http://x.com:80/a", "x.com/a"),
+            ("https://x.com:443/a?q=1#f", "x.com/a"),
+            ("http://x.com:443/a", "x.com:443/a"),
+            ("https://API.Stripe.com:8443/", "api.stripe.com:8443"),
+            ("https://api.stripe.com", "api.stripe.com"),
+            ("https://api.stripe.com?x=/y", "api.stripe.com"),
+            ("http://[::1]:80/a/B", "[::1]/a/B"),
+            ("/api", "/api"),
+        ] {
+            assert_eq!(sidebar_path(url), path, "{url}");
+        }
+    }
+
+    #[test]
+    fn app_matches_a_bundle_id_or_a_path() {
+        let from = |bundle_id: Option<&str>, path: &str| Flow {
+            client_bundle_id: bundle_id.map(String::from),
+            client_path: Some(path.into()),
+            ..flow("https://example.com/", "GET", Some(200), None)
+        };
+        let (_dir, db) = db_of(vec![
+            from(Some("com.google.Chrome"), "/Applications/Google Chrome.app"),
+            from(Some("com.google.Chrome"), "/Applications/Google Chrome.app"),
+            from(None, "/usr/bin/curl"),
+            flow("https://example.com/", "GET", Some(200), None),
+        ]);
+        let app = |apps: &[&str]| {
+            let apps = apps.iter().map(|a| a.to_string()).collect();
+            urls(&db, FlowFilter { app: Some(apps), ..Default::default() }).len()
+        };
+        assert_eq!(app(&["com.google.Chrome"]), 2);
+        assert_eq!(app(&["/usr/bin/curl"]), 1);
+        assert_eq!(app(&["/Applications/Google Chrome.app"]), 0);
+        assert_eq!(app(&["com.google.Chrome", "/usr/bin/curl"]), 3);
+    }
+
+    #[test]
+    fn a_search_pages_back_and_counts_what_it_matches() {
+        // Every third flow is a POST, newest last.
+        let (_dir, db) = db_of(
+            (0..30)
+                .map(|i| {
+                    let method = if i % 3 == 0 { "POST" } else { "GET" };
+                    flow(&format!("https://api.example.com/{i}"), method, Some(200), None)
+                })
+                .collect(),
+        );
+        let search = |before: Option<String>| FlowFilter {
+            q: Some("post".into()),
+            before,
+            limit: Some(4),
+            ..Default::default()
+        };
+        let (first, total, matching) = page(&db, &search(None)).unwrap();
+        let ids = |flows: &[Flow]| flows.iter().map(|f| f.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&first), vec!["fl_027", "fl_024", "fl_021", "fl_018"]);
+        assert_eq!((total, matching), (30, Some(10)));
+        let (second, _, _) = page(&db, &search(Some("fl_018".into()))).unwrap();
+        assert_eq!(ids(&second), vec!["fl_015", "fl_012", "fl_009", "fl_006"]);
+        let (last, _, _) = page(&db, &search(Some("fl_006".into()))).unwrap();
+        assert_eq!(ids(&last), vec!["fl_003", "fl_000"]);
+        // Without a narrowing filter there is nothing more to count.
+        let (_, _, matching) =
+            page(&db, &FlowFilter { limit: Some(1), ..Default::default() }).unwrap();
+        assert_eq!(matching, None);
+    }
+
+    #[test]
+    fn a_search_reads_the_newest_page_through_the_index() {
+        let (_dir, db) = db_of(vec![]);
+        let plan: Vec<String> = db.with_conn(|c| {
+            let conn = c.conn().resolve();
+            let (condition, params) =
+                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition();
+            let sql = format!(
+                "EXPLAIN QUERY PLAN SELECT * FROM flows WHERE {condition} \
+                ORDER BY started_at DESC, id DESC LIMIT 500"
+            );
+            let mut stmt = conn.prepare(&sql).unwrap();
+            stmt.query_map(rusqlite::params_from_iter(params), |r| r.get::<_, String>(3))
+                .unwrap()
+                .map(|r| r.unwrap())
+                .collect()
+        });
+        assert!(plan.iter().any(|p| p.contains("idx_flows_started_at_id")), "{plan:?}");
+        assert!(!plan.iter().any(|p| p.contains("TEMP B-TREE")), "{plan:?}");
     }
 
     #[test]
@@ -412,12 +753,19 @@ mod tests {
     #[test]
     fn query_round_trip() {
         let filter = FlowFilter {
+            q: Some("post json".into()),
             host: Some("api.stripe.com".into()),
+            under: Some(vec!["api.stripe.com/v1".into(), "example.com".into()]),
+            app: Some(vec!["com.google.Chrome".into()]),
             status: Some("4xx".into()),
             limit: Some(20),
             ..Default::default()
         };
-        assert_eq!(filter.to_query(), "host=api.stripe.com&status=4xx&limit=20");
+        assert_eq!(
+            filter.to_query(),
+            "q=post+json&host=api.stripe.com&under=api.stripe.com%2Fv1&under=example.com\
+            &app=com.google.Chrome&status=4xx&limit=20"
+        );
         assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
         assert_eq!(FlowFilter::from_query("").unwrap(), FlowFilter::default());
         assert!(FlowFilter::from_query("limit=lots").is_err());

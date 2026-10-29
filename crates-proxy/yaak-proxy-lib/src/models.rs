@@ -55,6 +55,14 @@ pub struct Flow {
     pub error: Option<String>,
     /// The id of the Yaak request this flow was last saved as.
     pub saved_request_id: Option<String>,
+    /// The process that opened the client connection, where the platform can tell (macOS).
+    pub client_pid: Option<i32>,
+    /// Its app's name, or its executable's outside an app: "Google Chrome", "curl".
+    pub client_name: Option<String>,
+    /// Its app's bundle id.
+    pub client_bundle_id: Option<String>,
+    /// Its app bundle's path, or its executable's outside an app.
+    pub client_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -148,6 +156,10 @@ impl UpsertModelInfo for Flow {
             (ElapsedMs, self.elapsed_ms.into()),
             (Error, self.error.into()),
             (SavedRequestId, self.saved_request_id.into()),
+            (ClientPid, self.client_pid.into()),
+            (ClientName, self.client_name.into()),
+            (ClientBundleId, self.client_bundle_id.into()),
+            (ClientPath, self.client_path.into()),
         ])
     }
 
@@ -172,6 +184,10 @@ impl UpsertModelInfo for Flow {
             FlowIden::ElapsedMs,
             FlowIden::Error,
             FlowIden::SavedRequestId,
+            FlowIden::ClientPid,
+            FlowIden::ClientName,
+            FlowIden::ClientBundleId,
+            FlowIden::ClientPath,
         ]
     }
 
@@ -202,11 +218,19 @@ impl UpsertModelInfo for Flow {
             elapsed_headers_ms: r.get("elapsed_headers_ms")?,
             elapsed_ms: r.get("elapsed_ms")?,
             error: r.get("error")?,
-            // Absent from a database read before its migrations have run.
-            saved_request_id: match r.get("saved_request_id") {
-                Err(rusqlite::Error::InvalidColumnName(_)) => None,
-                v => v?,
-            },
+            saved_request_id: added_column(r, "saved_request_id")?,
+            client_pid: added_column(r, "client_pid")?,
+            client_name: added_column(r, "client_name")?,
+            client_bundle_id: added_column(r, "client_bundle_id")?,
+            client_path: added_column(r, "client_path")?,
         })
+    }
+}
+
+/// A column added by a later migration, absent from a database read before it has run.
+fn added_column<T: rusqlite::types::FromSql>(r: &Row, name: &str) -> rusqlite::Result<Option<T>> {
+    match r.get(name) {
+        Err(rusqlite::Error::InvalidColumnName(_)) => Ok(None),
+        v => v,
     }
 }

@@ -1,6 +1,7 @@
 use include_dir::{Dir, include_dir};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{OpenFlags, Transaction, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
@@ -76,10 +77,23 @@ pub fn open_blobs_read_only(path: &Path) -> Result<BlobManager> {
     Ok(BlobManager::new(readers.clone(), readers))
 }
 
+/// `sidebar_path(url)`, the app sidebar's place for a URL, for filtering by its nodes.
+fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.create_scalar_function(
+        "sidebar_path",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?)),
+    )
+}
+
 fn read_only_pool(path: &Path) -> Result<SqlitePool> {
     let manager = SqliteConnectionManager::file(path)
         .with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
-        .with_init(|conn| conn.busy_timeout(Duration::from_millis(5000)));
+        .with_init(|conn| {
+            conn.busy_timeout(Duration::from_millis(5000))?;
+            add_functions(conn)
+        });
     Pool::builder()
         .max_size(2)
         .connection_timeout(Duration::from_secs(10))
@@ -91,7 +105,8 @@ fn file_pool(path: &Path, max_size: u32) -> Result<SqlitePool> {
     let manager = SqliteConnectionManager::file(path).with_init(|conn| {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        conn.busy_timeout(Duration::from_millis(5000))
+        conn.busy_timeout(Duration::from_millis(5000))?;
+        add_functions(conn)
     });
     Pool::builder()
         .max_size(max_size)
@@ -117,10 +132,14 @@ mod tests {
         let path = dir.path().join("proxy.db");
         drop(ProxyQueryManager::new(&path).unwrap());
 
-        // As a build from before the saved request column left it.
+        // As a build from before the saved request and client columns left it.
         let conn = Connection::open(&path).unwrap();
         conn.execute_batch(
             "ALTER TABLE flows DROP COLUMN saved_request_id;
+            ALTER TABLE flows DROP COLUMN client_pid;
+            ALTER TABLE flows DROP COLUMN client_name;
+            ALTER TABLE flows DROP COLUMN client_bundle_id;
+            ALTER TABLE flows DROP COLUMN client_path;
             INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://example.com', 'GET');",
         )
         .unwrap();
@@ -130,6 +149,7 @@ mod tests {
         let flows = db.with_conn(|c| c.find_all::<Flow>()).unwrap();
         assert_eq!(flows.len(), 1);
         assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
+        assert_eq!((flows[0].client_pid, flows[0].client_name.as_deref()), (None, None));
     }
 
     #[test]
@@ -169,6 +189,22 @@ mod tests {
 
         let flow_columns = columns(&conn, "flows");
         assert!(flow_columns.contains(&"response_truncated".to_string()));
+        for column in [
+            "client_pid",
+            "client_name",
+            "client_bundle_id",
+            "client_path",
+        ] {
+            assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
+        }
+        let indexes: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'flows' AND sql IS NOT NULL")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|i| i.unwrap())
+            .collect();
+        assert_eq!(indexes, vec!["idx_flows_started_at_id"]);
         assert!(!flow_columns.iter().any(|c| c.contains("body")), "{flow_columns:?}");
 
         let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();

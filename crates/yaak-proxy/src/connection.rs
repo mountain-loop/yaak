@@ -5,8 +5,8 @@ use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::Engine;
 use crate::request::handle_request;
+use crate::{ClientConn, Engine};
 
 pub(crate) async fn serve_http1<S, F, Fut>(io: S, handler: F) -> Result<(), hyper::Error>
 where
@@ -26,7 +26,8 @@ where
 
 pub(crate) async fn handle_connection(
     stream: tokio::net::TcpStream,
+    client: ClientConn,
     engine: Arc<Engine>,
 ) -> Result<(), hyper::Error> {
-    serve_http1(stream, move |req| handle_request(req, engine.clone())).await
+    serve_http1(stream, move |req| handle_request(req, client, engine.clone())).await
 }

@@ -205,6 +205,8 @@ pub struct ControlStatus {
     pub proxy_port: Option<u16>,
     /// The port the engine starts on.
     pub configured_port: u16,
+    /// Flows are stored. Paused, traffic still passes through, unrecorded.
+    pub recording: bool,
     pub flow_count: usize,
     pub ca: CaStatus,
     /// `None` when it could not be read.
@@ -219,6 +221,11 @@ pub struct StartRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemProxyRequest {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordingRequest {
     pub enabled: bool,
 }
 
@@ -344,11 +351,14 @@ impl ControlServer {
 }
 
 pub(crate) fn already_owned(owner: &ControlInfo) -> String {
-    let who = match owner.owner {
+    format!("The proxy is already running in {} (pid {})", owner_name(owner.owner), owner.pid)
+}
+
+pub(crate) fn owner_name(owner: Owner) -> &'static str {
+    match owner {
         Owner::App => "Yaak Proxy",
         Owner::Cli => "the yaak CLI",
-    };
-    format!("The proxy is already running in {who} (pid {})", owner.pid)
+    }
 }
 
 impl Drop for ControlServer {
@@ -472,6 +482,11 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let _ = state.stop_tx.send(());
             json(&status(ctx).await?)
         }
+        (&Method::POST, ["recording"]) => {
+            let body: RecordingRequest = read_json(req).await?;
+            ctx.set_recording(body.enabled);
+            json(&status(ctx).await?)
+        }
         (&Method::GET, ["flows"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
             json(&flows::list(&ctx.db, &filter)?)
@@ -509,6 +524,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let ca = CaStore::load_or_create(&ctx.ca_dir())
                 .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
             ca::trust(ca.cert_path()).await.map_err(bad_request)?;
+            ctx.forget_passthrough();
             json(&ca::status(ca.cert_path()).await?)
         }
         (&Method::GET, ["system-proxy"]) => {
@@ -541,6 +557,7 @@ async fn status(ctx: &ProxyCtx) -> Result<ControlStatus, ApiError> {
         state: if proxy_port.is_some() { ProxyState::Running } else { ProxyState::Stopped },
         proxy_port,
         configured_port: ctx.settings()?.port,
+        recording: ctx.recording(),
         flow_count: flows::count(&ctx.db)?,
         ca,
         system_proxy,

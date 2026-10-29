@@ -4,6 +4,9 @@
   "windows": ["*"],
   "permissions": [
     "core:default",
+    "dialog:allow-save",
+    "opener:allow-default-urls",
+    "opener:allow-open-url",
     "os:allow-os-type",
     "core:window:allow-close",
     "core:window:allow-is-fullscreen",

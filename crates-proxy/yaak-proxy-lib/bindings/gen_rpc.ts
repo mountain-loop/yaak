@@ -5,6 +5,12 @@ export type ActionInvocation = { "scope": "global", action: GlobalAction, };
 
 export type ActionMetadata = { label: string, defaultHotkey: string | null, };
 
+export type AppIconRequest = { 
+/**
+ * A flow's `clientPath`.
+ */
+path: string, };
+
 export type CaStatus = { 
 /**
  * macOS trusts this app's CA, so HTTPS flows can be decrypted.
@@ -20,6 +26,37 @@ export type CaStatusRequest = Record<string, never>;
 export type CaTrustRequest = Record<string, never>;
 
 export type ClearFlowsRequest = Record<string, never>;
+
+/**
+ * The app behind a client connection.
+ */
+export type ClientApp = { pid: number, 
+/**
+ * The app's name ("Google Chrome"), or the executable's for a process outside an app ("curl").
+ */
+name: string, 
+/**
+ * The outermost `.app` bundle's CFBundleIdentifier, if any.
+ */
+bundleId: string | null, 
+/**
+ * The outermost `.app` bundle's path, or the executable's path when there is no bundle.
+ */
+path: string, };
+
+export type DropReason = "hop_by_hop" | "set_by_sending" | "body_decoded";
+
+export type DroppedHeader = { name: string, value: string, reason: DropReason, };
+
+export type ExportHarRequest = { 
+/**
+ * The file to write.
+ */
+path: string, 
+/**
+ * These flows, or else every flow the filter covers.
+ */
+ids?: Array<string>, filter?: FlowFilter, };
 
 export type FilterBodyRequest = { flowId: string, which: FlowBody, 
 /**
@@ -40,9 +77,24 @@ export type FilterLanguage = "jsonpath" | "xpath";
  */
 export type FlowFilter = { 
 /**
+ * Search terms, any case, each of which must match the URL (host, path or query), the
+ * method, the status (`404`, `40`, `4xx`) or the content type: `stripe post 4xx`.
+ */
+q?: string, 
+/**
  * Part of the host, any case: `stripe` matches `api.stripe.com`.
  */
 host?: string, 
+/**
+ * Only flows under one of these hosts or paths, as the app's sidebar names them:
+ * `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host.
+ */
+under?: Array<string>, 
+/**
+ * Only flows from one of these apps, by bundle id, or by path for a process outside an
+ * app bundle.
+ */
+app?: Array<string>, 
 /**
  * The method, any case.
  */
@@ -68,6 +120,12 @@ before?: string, };
 
 export type FlowsClearedPayload = Record<string, never>;
 
+export type FolderSummary = { id: string, name: string, 
+/**
+ * The folder this one is in, if any.
+ */
+folderId: string | null, };
+
 export type FormatBodyRequest = { text: string, };
 
 export type GetFlowBodyRequest = { flowId: string, which: FlowBody, };
@@ -92,9 +150,30 @@ export type GetProxyStateResponse = { state: ProxyState,
 /**
  * The port the engine is bound to, while it runs.
  */
-port: number | null, };
+port: number | null, 
+/**
+ * The port the engine starts on.
+ */
+configuredPort: number, 
+/**
+ * Flows are stored. Paused, traffic still passes through, unrecorded.
+ */
+recording: boolean, 
+/**
+ * The system proxy turns on as the engine starts.
+ */
+systemProxyAtLaunch: boolean, 
+/**
+ * Why the engine last failed to start, until it starts.
+ */
+startError: string | null, 
+/**
+ * Another process that owns the engine, such as the CLI daemon. While one does, this app
+ * cannot start its own, and new flows reach it only through the database.
+ */
+otherOwner: OtherOwner | null, };
 
-export type GlobalAction = "proxy_start" | "proxy_stop" | "flows_clear";
+export type GlobalAction = "recording_toggle" | "flows_clear";
 
 export type ListActionsRequest = Record<string, never>;
 
@@ -108,12 +187,32 @@ flows: Array<Flow>,
 /**
  * Flows in the database, whatever the filter.
  */
-total: number, };
+total: number, 
+/**
+ * Flows the filter covers, whatever the limit, when it narrows to fewer than all of them.
+ */
+matching: number | null, };
+
+export type ListWorkspacesRequest = Record<string, never>;
+
+export type ListWorkspacesResponse = { 
+/**
+ * Yaak has run on this machine. Without it there is nothing to save into.
+ */
+yaakFound: boolean, workspaces: Array<WorkspaceSummary>, };
+
+export type OtherOwner = { owner: Owner, pid: number, startedAt: string, 
+/**
+ * The engine's port while it runs.
+ */
+proxyPort: number | null, };
 
 /**
  * The process that runs the engine.
  */
 export type Owner = "app" | "cli";
+
+export type PreviewSaveRequest = { flowId: string, };
 
 export type ProxySetting = { enabled: boolean, server: string, port: number, };
 
@@ -123,13 +222,59 @@ export type ProxyStatePayload = { state: ProxyState, };
 
 export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+
+export type SaveFlowToYaakRequest = { flowId: string, workspaceId: string, folderId?: string, 
+/**
+ * None or blank leaves the request unnamed, and Yaak shows its URL.
+ */
+name?: string, };
+
+/**
+ * What saving a flow as a Yaak request writes, for the save dialog.
+ */
+export type SavePreview = { method: string, url: string, 
+/**
+ * The URL as saved, its query split out into parameters, which Yaak shows for an unnamed
+ * request.
+ */
+requestUrl: string, 
+/**
+ * The saved body type, which Yaak shows for an unnamed GraphQL request with no URL.
+ */
+bodyType: string | null, 
+/**
+ * Headers Yaak sets itself or that only meant something to the proxy.
+ */
+droppedHeaders: Array<DroppedHeader>, 
+/**
+ * Headers saved as captured, Authorization among them.
+ */
+keptHeaders: number, 
+/**
+ * The body as it is saved: "JSON", "form URL-encoded with 7 fields". None without a body.
+ */
+body: string | null, 
+/**
+ * What does not carry over exactly, one sentence each.
+ */
+warnings: Array<string>, 
+/**
+ * An Authorization header is saved in plain text.
+ */
+authorization: boolean, };
+
+export type SavedFlow = { requestId: string, name: string, };
 
 export type ServiceProxy = { 
 /**
  * The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
  */
 name: string, http: ProxySetting, https: ProxySetting, };
+
+export type SetRecordingRequest = { enabled: boolean, };
+
+export type SetSystemProxyAtLaunchRequest = { enabled: boolean, };
 
 /**
  * How a change gets administrator rights.
@@ -153,3 +298,7 @@ port: number, services: Array<ServiceProxy>, backend: SystemProxyBackend,
 supported: boolean, };
 
 export type SystemProxyStatusRequest = Record<string, never>;
+
+export type TakeOverRequest = Record<string, never>;
+
+export type WorkspaceSummary = { id: string, name: string, folders: Array<FolderSummary>, };
