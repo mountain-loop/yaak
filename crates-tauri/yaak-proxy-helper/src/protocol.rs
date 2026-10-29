@@ -23,7 +23,7 @@ pub enum Request {
     },
     /// Puts back the saved settings.
     Restore,
-    /// Restores, deletes the daemon's state and exits, before the app unregisters it.
+    /// Restores and deletes the daemon's state, before the app unregisters it, which stops it.
     Unregister,
 }
 

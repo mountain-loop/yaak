@@ -184,20 +184,14 @@ fn status(state: &State) -> Status {
     }
 }
 
-/// What the server does once a connection is done.
-#[derive(Debug, PartialEq, Eq)]
-pub enum After {
-    Continue,
-    /// The daemon was unregistered, so it exits.
-    Exit,
-}
-
-/// Answers one connection's requests, one line each, once the peer passes `verifier`.
+/// Answers one connection's requests, one line each, once the peer passes `verifier`. An
+/// unregister leaves the daemon running: it stops when macOS confirms the unregistration, and
+/// if that never comes, it is still there to answer.
 pub fn serve_connection<N: Networksetup, P: Processes>(
     stream: UnixStream,
     daemon: &Daemon<N, P>,
     verifier: &dyn Verifier,
-) -> After {
+) {
     let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
     let mut writer = &stream;
@@ -213,7 +207,7 @@ pub fn serve_connection<N: Networksetup, P: Processes>(
         Err(e) => {
             log(&e);
             reply(&Response::error(e));
-            return After::Continue;
+            return;
         }
     };
 
@@ -221,31 +215,23 @@ pub fn serve_connection<N: Networksetup, P: Processes>(
     loop {
         let mut line = String::new();
         match (&mut reader).take(MAX_LINE as u64).read_line(&mut line) {
-            Ok(0) => return After::Continue,
+            Ok(0) => return,
             Ok(_) if !line.ends_with('\n') => {
                 reply(&Response::error("Request too long or unterminated"));
-                return After::Continue;
+                return;
             }
             Ok(_) => {}
-            Err(_) => return After::Continue,
+            Err(_) => return,
         }
-        let request = match parse_request(&line) {
-            Ok(request) => request,
-            Err(e) => {
-                if !reply(&Response::error(e)) {
-                    return After::Continue;
-                }
-                continue;
+        let response = match parse_request(&line) {
+            Ok(request) => {
+                log(&format!("pid {}: {request:?}", peer.pid));
+                daemon.handle(&request)
             }
+            Err(e) => Response::error(e),
         };
-        log(&format!("pid {}: {request:?}", peer.pid));
-        let response = daemon.handle(&request);
-        let exit = request == Request::Unregister && response.ok;
-        if !reply(&response) && !exit {
-            return After::Continue;
-        }
-        if exit {
-            return After::Exit;
+        if !reply(&response) {
+            return;
         }
     }
 }
@@ -313,12 +299,7 @@ pub fn run() -> i32 {
         };
         let daemon = daemon.clone();
         let verifier = verifier.clone();
-        std::thread::spawn(move || {
-            if serve_connection(stream, &daemon, verifier.as_ref()) == After::Exit {
-                log("Unregistered; exiting");
-                exit();
-            }
-        });
+        std::thread::spawn(move || serve_connection(stream, &daemon, verifier.as_ref()));
     }
     0
 }
@@ -572,10 +553,7 @@ mod tests {
         assert!(daemon.ns.changes.lock().unwrap().is_empty());
     }
 
-    fn exchange(
-        verifier: &dyn Verifier,
-        lines: &[&str],
-    ) -> (Vec<Response>, After, Vec<ProxySetting>) {
+    fn exchange(verifier: &dyn Verifier, lines: &[&str]) -> (Vec<Response>, Vec<ProxySetting>) {
         let dir = tempfile::tempdir().unwrap();
         let daemon = daemon(dir.path());
         let (server, mut client) = UnixStream::pair().unwrap();
@@ -583,18 +561,18 @@ mod tests {
             client.write_all(format!("{line}\n").as_bytes()).unwrap();
         }
         client.shutdown(std::net::Shutdown::Write).unwrap();
-        let after = serve_connection(server, &daemon, verifier);
+        serve_connection(server, &daemon, verifier);
         let mut out = String::new();
         client.read_to_string(&mut out).unwrap();
         let responses = out.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
         let http = daemon.ns.proxies().into_iter().map(|s| s.http).collect();
-        (responses, after, http)
+        (responses, http)
     }
 
     #[test]
     fn serves_a_verified_peer_line_by_line() {
         let pid = std::process::id() as i32;
-        let (responses, after, http) = exchange(
+        let (responses, http) = exchange(
             &AllowWithOwner(pid),
             &[
                 r#"{"cmd":"get"}"#,
@@ -602,7 +580,6 @@ mod tests {
                 r#"{"cmd":"set","enabled":true,"port":9090,"owner_pid":42}"#,
             ],
         );
-        assert_eq!(after, After::Continue);
         assert_eq!(responses.len(), 3);
         assert!(responses[0].ok && !responses[1].ok && responses[2].ok);
         assert!(http.iter().all(|s| s.server == HOST && s.port == 9090));
@@ -610,9 +587,8 @@ mod tests {
 
     #[test]
     fn refuses_an_unverified_peer_before_reading_anything() {
-        let (responses, after, http) =
+        let (responses, http) =
             exchange(&Refuse, &[r#"{"cmd":"set","enabled":true,"port":9090,"owner_pid":42}"#]);
-        assert_eq!(after, After::Continue);
         assert_eq!(responses.len(), 1);
         assert!(responses[0].error.as_deref().unwrap().starts_with("Refused pid"));
         assert!(http.iter().all(|s| s.server != HOST));
@@ -621,23 +597,30 @@ mod tests {
     #[test]
     fn refuses_a_peer_with_the_real_check() {
         // The test binary is not the signed app.
-        let (responses, _, http) = exchange(&CodeSignature::default(), &[r#"{"cmd":"restore"}"#]);
+        let (responses, http) = exchange(&CodeSignature::default(), &[r#"{"cmd":"restore"}"#]);
         assert!(!responses[0].ok);
         assert!(http.iter().all(|s| s.server != HOST));
     }
 
     #[test]
-    fn exits_after_unregister() {
-        let (responses, after, _) = exchange(&Allow, &[r#"{"cmd":"unregister"}"#]);
-        assert!(responses[0].ok);
-        assert_eq!(after, After::Exit);
+    fn keeps_answering_after_unregister() {
+        // Should macOS fail to unregister it, the app can still reach it.
+        let (responses, _) = exchange(
+            &Allow,
+            &[
+                r#"{"cmd":"set","enabled":true,"port":9090,"owner_pid":42}"#,
+                r#"{"cmd":"unregister"}"#,
+                r#"{"cmd":"set","enabled":true,"port":9090,"owner_pid":42}"#,
+            ],
+        );
+        assert_eq!(responses.len(), 3);
+        assert!(responses.iter().all(|r| r.ok));
     }
 
     #[test]
     fn stops_reading_an_overlong_line() {
         let long = format!(r#"{{"cmd":"get","x":"{}"}}"#, "a".repeat(MAX_LINE));
-        let (responses, after, _) = exchange(&Allow, &[&long, r#"{"cmd":"get"}"#]);
-        assert_eq!(after, After::Continue);
+        let (responses, _) = exchange(&Allow, &[&long, r#"{"cmd":"get"}"#]);
         assert_eq!(responses.len(), 1);
         assert!(!responses[0].ok);
     }
