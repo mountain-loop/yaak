@@ -2,12 +2,15 @@ use std::convert::Infallible;
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
+use hyper::client::conn::TrySendError;
 use hyper::header::{CONTENT_TYPE, HOST, UPGRADE, VIA};
+use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
@@ -20,7 +23,7 @@ use tokio::net::TcpStream;
 use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
 use crate::body::{CaptureBody, Direction};
-use crate::connection::serve_http1;
+use crate::connection::serve_tls;
 use crate::tunnel::{Rewind, splice, tunnel};
 use crate::{ClientConn, Engine, ProxyEvent};
 
@@ -64,6 +67,8 @@ struct Flow {
     id: u64,
     start: Instant,
     engine: Arc<Engine>,
+    /// It has answered the client, so dropping it is no cancel.
+    answered: bool,
 }
 
 impl Flow {
@@ -73,7 +78,8 @@ impl Flow {
         req: &Request<Incoming>,
         url: String,
     ) -> Self {
-        let flow = Self { id: engine.next_flow_id(), start: Instant::now(), engine };
+        let flow =
+            Self { id: engine.next_flow_id(), start: Instant::now(), engine, answered: false };
         flow.engine.emit(ProxyEvent::RequestStart {
             id: flow.id,
             started_at: SystemTime::now(),
@@ -83,6 +89,18 @@ impl Flow {
             connection: client.connection,
             client_addr: client.addr,
         });
+        // HTTP/2 carries the host in `:authority`, which hyper keeps in the URI. Shown as `Host`,
+        // as HTTP/1.1 requests have it.
+        if req.version() == hyper::Version::HTTP_2
+            && !req.headers().contains_key(HOST)
+            && let Some(authority) = req.uri().authority()
+        {
+            flow.engine.emit(ProxyEvent::RequestHeader {
+                id: flow.id,
+                name: HOST.to_string(),
+                value: authority.to_string(),
+            });
+        }
         for (name, value) in req.headers() {
             flow.engine.emit(ProxyEvent::RequestHeader {
                 id: flow.id,
@@ -98,10 +116,11 @@ impl Flow {
     }
 
     fn respond(
-        self,
+        mut self,
         resp: Response<Incoming>,
         remote_addr: Option<SocketAddr>,
     ) -> Response<BoxBody> {
+        self.answered = true;
         self.engine.emit(ProxyEvent::ResponseStart {
             id: self.id,
             status: resp.status().as_u16(),
@@ -117,12 +136,14 @@ impl Flow {
             });
         }
         let (parts, body) = resp.into_parts();
-        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, self.engine);
+        let engine = self.engine.clone();
+        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, engine);
         Response::from_parts(parts, body.boxed())
     }
 
     /// Answers the client with `status` and `error` without contacting any server.
-    fn reject(self, status: StatusCode, error: &str) -> Response<BoxBody> {
+    fn reject(mut self, status: StatusCode, error: &str) -> Response<BoxBody> {
+        self.answered = true;
         debug!("Flow {} rejected: {error}", self.id);
         self.engine.emit(ProxyEvent::Error {
             id: self.id,
@@ -136,7 +157,8 @@ impl Flow {
             .unwrap()
     }
 
-    fn fail(self, error: String) -> Response<BoxBody> {
+    fn fail(mut self, error: String) -> Response<BoxBody> {
+        self.answered = true;
         debug!("Flow {} failed: {error}", self.id);
         let body = format!("Yaak Proxy could not reach the server: {error}");
         self.engine.emit(ProxyEvent::Error {
@@ -145,6 +167,20 @@ impl Flow {
             elapsed_ms: self.start.elapsed().as_millis() as u64,
         });
         bad_gateway(body)
+    }
+}
+
+/// A flow dropped before it answered was abandoned by the client, which reset its stream or
+/// closed the connection: hyper drops the request's future, and the request upstream with it.
+impl Drop for Flow {
+    fn drop(&mut self) {
+        if !self.answered {
+            debug!("Flow {} cancelled by the client", self.id);
+            self.engine.emit(ProxyEvent::Cancelled {
+                id: self.id,
+                elapsed_ms: self.start.elapsed().as_millis() as u64,
+            });
+        }
     }
 }
 
@@ -296,7 +332,7 @@ where
         .server_name()
         .map(str::to_string)
         .unwrap_or_else(|| target.server_name.clone());
-    let config = engine.ca.server_config(&server_name)?;
+    let config = engine.ca.server_config(&server_name, engine.offers_http2())?;
     let mut tls = match start.into_stream(config).await {
         Ok(tls) => tls,
         Err(e) => {
@@ -323,10 +359,11 @@ where
     buf.truncate(n);
     engine.record_handshake_success(&target.addr);
 
+    let http2 = tls.get_ref().1.alpn_protocol() == Some(b"h2");
     let tls = Rewind::new(Bytes::from(buf), tls);
-    let target = Arc::new(Target { server_name, ..target });
-    serve_http1(tls, move |req| forward_https(req, target.clone(), conn, engine.clone())).await?;
-    Ok(())
+    let upstreams = Arc::new(Upstreams::new(Target { server_name, ..target }));
+    serve_tls(tls, http2, move |req| forward_https(req, upstreams.clone(), conn, engine.clone()))
+        .await
 }
 
 fn record_handshake_failure(
@@ -371,11 +408,115 @@ enum Upstream {
     H2(hyper::client::conn::http2::SendRequest<BoxBody>),
 }
 
+/// A connection to the server, and the address it reached.
+struct UpstreamConn {
+    sender: Upstream,
+    remote_addr: Option<SocketAddr>,
+}
+
+impl UpstreamConn {
+    fn is_h2(&self) -> bool {
+        matches!(self.sender, Upstream::H2(_))
+    }
+
+    fn is_closed(&self) -> bool {
+        match &self.sender {
+            Upstream::H1(s) => s.is_closed(),
+            Upstream::H2(s) => s.is_closed(),
+        }
+    }
+
+    /// Can take a request now: an HTTP/2 connection any time it is open, an HTTP/1.1 one once
+    /// the response before has been read.
+    fn is_ready(&self) -> bool {
+        match &self.sender {
+            Upstream::H1(s) => s.is_ready(),
+            Upstream::H2(s) => s.is_ready(),
+        }
+    }
+
+    async fn send(
+        &mut self,
+        req: Request<BoxBody>,
+    ) -> Result<Response<Incoming>, TrySendError<Request<BoxBody>>> {
+        match &mut self.sender {
+            Upstream::H1(s) => s.try_send_request(req).await,
+            Upstream::H2(s) => s.try_send_request(req).await,
+        }
+    }
+}
+
+/// Idle HTTP/1.1 connections kept per client connection, for its requests to come.
+const MAX_IDLE_H1: usize = 6;
+
+/// The connections to the server of one intercepted client connection, reused by its requests,
+/// so an HTTP/2 client's streams do not each pay for a handshake. An HTTP/2 connection carries
+/// them all at once; an HTTP/1.1 one a request at a time.
+struct Upstreams {
+    target: Target,
+    conns: tokio::sync::Mutex<Vec<UpstreamConn>>,
+    /// The server answered in HTTP/1.1, so each request in flight needs a connection of its
+    /// own, and new ones need not wait to see whether the one before can be shared.
+    h1: AtomicBool,
+}
+
+impl Upstreams {
+    fn new(target: Target) -> Self {
+        Self { target, conns: tokio::sync::Mutex::new(Vec::new()), h1: AtomicBool::new(false) }
+    }
+
+    /// A connection for one request, and whether it carried one before. Requests that arrive
+    /// before the first connection is up wait for it, to share it if it is HTTP/2.
+    async fn take(&self, engine: &Engine) -> Result<(UpstreamConn, bool), BoxError> {
+        let mut conns = self.conns.lock().await;
+        conns.retain(|c| !c.is_closed());
+        if let Some(i) = conns.iter().position(UpstreamConn::is_ready) {
+            let conn = match &conns[i].sender {
+                Upstream::H2(s) => UpstreamConn {
+                    sender: Upstream::H2(s.clone()),
+                    remote_addr: conns[i].remote_addr,
+                },
+                Upstream::H1(_) => conns.swap_remove(i),
+            };
+            return Ok((conn, true));
+        }
+        if self.h1.load(Ordering::Relaxed) {
+            drop(conns);
+            return Ok((connect_upstream(engine, &self.target, false).await?, false));
+        }
+        let conn = connect_upstream(engine, &self.target, false).await?;
+        match &conn.sender {
+            Upstream::H2(s) => conns.push(UpstreamConn {
+                sender: Upstream::H2(s.clone()),
+                remote_addr: conn.remote_addr,
+            }),
+            Upstream::H1(_) => self.h1.store(true, Ordering::Relaxed),
+        }
+        Ok((conn, false))
+    }
+
+    /// Keeps a connection for later requests. An HTTP/1.1 one takes the next once this response
+    /// has been read. An HTTP/2 one is kept already, unless it was opened to send a request again.
+    async fn put_back(&self, conn: UpstreamConn) {
+        if conn.is_closed() {
+            return;
+        }
+        let mut conns = self.conns.lock().await;
+        if conn.is_h2() {
+            if !conns.iter().any(|c| c.is_h2() && !c.is_closed()) {
+                conns.push(conn);
+            }
+        } else if conns.len() < MAX_IDLE_H1 {
+            conns.push(conn);
+        }
+    }
+}
+
 async fn connect_upstream(
     engine: &Engine,
     target: &Target,
     h1_only: bool,
-) -> Result<(Upstream, Option<SocketAddr>), BoxError> {
+) -> Result<UpstreamConn, BoxError> {
     let tcp = TcpStream::connect(&target.addr).await?;
     let remote_addr = tcp.peer_addr().ok();
     let config = if h1_only { &engine.upstream_tls_h1 } else { &engine.upstream_tls };
@@ -406,61 +547,98 @@ async fn connect_upstream(
         });
         Upstream::H1(sender)
     };
-    Ok((upstream, remote_addr))
+    Ok(UpstreamConn { sender: upstream, remote_addr })
+}
+
+/// Addresses a request to the server in the protocol of `conn`. It may be addressed for the
+/// other one already, when it is sent again on a new connection.
+fn address(
+    parts: &mut Parts,
+    conn: &UpstreamConn,
+    target: &Target,
+    path: &str,
+) -> Result<(), String> {
+    // The host the client asked for: `Host` over HTTP/1.1, `:authority` over HTTP/2, which
+    // hyper keeps in the URI.
+    let authority =
+        parts.uri.authority().map_or_else(|| target.authority.clone(), |a| a.to_string());
+    if conn.is_h2() {
+        // `Host` moves into `:authority`. Google's servers reset any stream that has both, even
+        // when they match.
+        let host = match parts.headers.remove(HOST) {
+            Some(host) => host.to_str().map_err(|e| e.to_string())?.to_string(),
+            None => authority,
+        };
+        parts.uri = format!("https://{host}{path}").parse::<Uri>().map_err(|e| e.to_string())?;
+    } else {
+        parts.uri = path.parse::<Uri>().map_err(|e| e.to_string())?;
+        if !parts.headers.contains_key(HOST)
+            && let Ok(host) = authority.parse()
+        {
+            parts.headers.insert(HOST, host);
+        }
+        if parts.version == hyper::Version::HTTP_2 {
+            parts.version = hyper::Version::HTTP_11;
+        }
+    }
+    Ok(())
 }
 
 async fn forward_https(
     mut req: Request<Incoming>,
-    target: Arc<Target>,
+    upstreams: Arc<Upstreams>,
     client: ClientConn,
     engine: Arc<Engine>,
 ) -> Result<Response<BoxBody>, Infallible> {
+    let target = &upstreams.target;
     let path = req.uri().path_and_query().map(|pq| pq.to_string()).unwrap_or_else(|| "/".into());
     let url = format!("https://{}{path}", target.authority);
-    let flow = Flow::begin(engine.clone(), client, &req, url.clone());
+    let flow = Flow::begin(engine.clone(), client, &req, url);
 
+    // Only HTTP/1.1 has `Upgrade`. Its connection is the tunnel afterwards, so it is not shared.
     let client_upgrade: Option<OnUpgrade> =
         req.headers().contains_key(UPGRADE).then(|| hyper::upgrade::on(&mut req));
-
-    let (mut upstream, remote_addr) =
-        match connect_upstream(&engine, &target, client_upgrade.is_some()).await {
-            Ok(u) => u,
-            Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
-        };
+    let taken = match client_upgrade {
+        Some(_) => connect_upstream(&engine, target, true).await.map(|c| (c, false)),
+        None => upstreams.take(&engine).await,
+    };
+    let (mut conn, mut reused) = match taken {
+        Ok(taken) => taken,
+        Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
+    };
 
     let (mut parts, body) = req.into_parts();
-    let uri = match &upstream {
-        // `Host` moves into `:authority`. Google's servers reset any stream that has both, even
-        // when they match.
-        Upstream::H2(_) => match parts.headers.remove(HOST) {
-            Some(host) => match host.to_str() {
-                Ok(host) => format!("https://{host}{path}").parse::<Uri>(),
-                Err(e) => return Ok(flow.fail(e.to_string())),
-            },
-            None => url.parse::<Uri>(),
-        },
-        Upstream::H1(_) => path.parse::<Uri>(),
-    };
-    parts.uri = match uri {
-        Ok(uri) => uri,
-        Err(e) => return Ok(flow.fail(e.to_string())),
-    };
-    if matches!(upstream, Upstream::H1(_))
-        && !parts.headers.contains_key(HOST)
-        && let Ok(host) = target.authority.parse()
-    {
-        parts.headers.insert(HOST, host);
+    if let Err(e) = address(&mut parts, &conn, target, &path) {
+        return Ok(flow.fail(e));
     }
-    let outgoing = Request::from_parts(parts, flow.capture_request(body));
+    let mut outgoing = Request::from_parts(parts, flow.capture_request(body));
 
-    let sent = match &mut upstream {
-        Upstream::H1(s) => s.send_request(outgoing).await,
-        Upstream::H2(s) => s.send_request(outgoing).await,
+    let mut resp = loop {
+        let mut e = match conn.send(outgoing).await {
+            Ok(resp) => break resp,
+            Err(e) => e,
+        };
+        // A reused connection the server closed as the request went out: the request never
+        // left, so it goes again, once, on a new connection.
+        let Some(unsent) = e.take_message().filter(|_| reused) else {
+            return Ok(flow.fail(error_chain(e.error())));
+        };
+        debug!("Upstream connection to {} was closed, retrying on a new one", target.addr);
+        conn = match connect_upstream(&engine, target, false).await {
+            Ok(conn) => conn,
+            Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
+        };
+        reused = false;
+        let (mut parts, body) = unsent.into_parts();
+        if let Err(e) = address(&mut parts, &conn, target, &path) {
+            return Ok(flow.fail(e));
+        }
+        outgoing = Request::from_parts(parts, body);
     };
-    let mut resp = match sent {
-        Ok(resp) => resp,
-        Err(e) => return Ok(flow.fail(error_chain(&e))),
-    };
+    let remote_addr = conn.remote_addr;
+    if client_upgrade.is_none() {
+        upstreams.put_back(conn).await;
+    }
 
     if resp.status() == StatusCode::SWITCHING_PROTOCOLS
         && let Some(client_upgrade) = client_upgrade

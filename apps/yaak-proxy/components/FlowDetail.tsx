@@ -69,8 +69,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
 function FlowPane({ flow }: { flow: Flow }) {
   const [pretty, setPretty] = useState(true);
   const responseBody = useFlowBody(flow, "response", flow.responseTruncated);
-  // Failed before any response; an error after the headers is a body cut short mid-way.
-  const noResponse = flow.error != null && flow.status == null;
+  // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
+  const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
   const mime = mimeEssence(findHeader(flow.responseHeaders, "content-type"));
   const queryCount = useMemo(() => queryParams(flow.url).length, [flow.url]);
   const openSave = useSetAtom(saveDialogFlowAtom);
@@ -197,6 +197,13 @@ function FlowPane({ flow }: { flow: Flow }) {
             {flow.error}
           </Banner>
         )}
+        {flow.cancelled && (
+          <Banner color="secondary" className="mx-3 mt-1 shrink-0 text-sm">
+            {flow.status == null
+              ? "The app cancelled the request before a response came back."
+              : "The app cancelled the request before the response finished."}
+          </Banner>
+        )}
         <Tabs
           tabs={tabs}
           label="Flow"
@@ -206,9 +213,14 @@ function FlowPane({ flow }: { flow: Flow }) {
           <TabContent value={TAB_RESPONSE}>
             {noResponse ? (
               <EmptyState>
-                <div className="text-text-subtle mb-1">No response</div>
+                <div className="text-text-subtle mb-1">
+                  {flow.cancelled ? "Cancelled" : "No response"}
+                </div>
                 <div className="text-xs">
-                  The request never got a response. The Request tab has what the app sent.
+                  {flow.cancelled
+                    ? "The app cancelled the request before a response came back."
+                    : "The request never got a response."}{" "}
+                  The Request tab has what the app sent.
                 </div>
               </EmptyState>
             ) : (

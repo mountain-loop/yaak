@@ -45,7 +45,7 @@ impl CaptureBody {
         self.inner.is_end_stream() || self.inner.size_hint().exact() == Some(0)
     }
 
-    fn finish(&mut self, error: Option<String>) {
+    fn finish(&mut self, error: Option<String>, cancelled: bool) {
         if self.finished {
             return;
         }
@@ -62,6 +62,7 @@ impl CaptureBody {
                 truncated,
                 elapsed_ms: self.start.elapsed().as_millis() as u64,
                 error,
+                cancelled,
             },
         };
         self.engine.emit(event);
@@ -92,14 +93,14 @@ impl Body for CaptureBody {
                     });
                 }
                 if self.complete() {
-                    self.finish(None);
+                    self.finish(None, false);
                 }
             }
             Poll::Ready(Some(Err(e))) => {
                 let error = e.to_string();
-                self.finish(Some(error));
+                self.finish(Some(error), false);
             }
-            Poll::Ready(None) => self.finish(None),
+            Poll::Ready(None) => self.finish(None, false),
             Poll::Pending => {}
         }
         result
@@ -114,10 +115,11 @@ impl Body for CaptureBody {
     }
 }
 
+/// A response body dropped before its end was abandoned by the client, which reset its stream or
+/// closed the connection. Dropping the upstream body with it cancels the request there too.
 impl Drop for CaptureBody {
     fn drop(&mut self) {
-        let error = (self.direction == Direction::Response && !self.complete())
-            .then(|| "Client closed the connection before the response finished".to_string());
-        self.finish(error);
+        let cancelled = self.direction == Direction::Response && !self.complete();
+        self.finish(None, cancelled);
     }
 }

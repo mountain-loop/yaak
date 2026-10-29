@@ -24,7 +24,8 @@ pub struct CaStore {
     cert_der: CertificateDer<'static>,
     issuer: Certificate,
     key: KeyPair,
-    leaf_configs: Mutex<HashMap<String, Arc<ServerConfig>>>,
+    /// Keyed by host and whether HTTP/2 is offered.
+    leaf_configs: Mutex<HashMap<(String, bool), Arc<ServerConfig>>>,
 }
 
 impl CaStore {
@@ -92,12 +93,25 @@ impl CaStore {
         &self.key_path
     }
 
+    /// The TLS config presented to clients of `host`, offering `h2` in ALPN when `http2` is set
+    /// and `http/1.1` always.
     pub(crate) fn server_config(
         &self,
         host: &str,
+        http2: bool,
     ) -> Result<Arc<ServerConfig>, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(config) = self.leaf_configs.lock().unwrap().get(host) {
+        let key = (host.to_string(), http2);
+        let mut configs = self.leaf_configs.lock().unwrap();
+        if let Some(config) = configs.get(&key) {
             return Ok(config.clone());
+        }
+        // The same leaf serves both, so switching HTTP/2 off and on signs nothing new.
+        if let Some(other) = configs.get(&(host.to_string(), !http2)) {
+            let mut config = ServerConfig::clone(other);
+            config.alpn_protocols = alpn(http2);
+            let config = Arc::new(config);
+            configs.insert(key, config.clone());
+            return Ok(config);
         }
 
         let now = OffsetDateTime::now_utc();
@@ -123,12 +137,16 @@ impl CaStore {
                     vec![leaf_cert.der().clone(), self.cert_der.clone()],
                     PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(leaf_key.serialize_der())),
                 )?;
-        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        config.alpn_protocols = alpn(http2);
 
         let config = Arc::new(config);
-        self.leaf_configs.lock().unwrap().insert(host.to_string(), config.clone());
+        configs.insert(key, config.clone());
         Ok(config)
     }
+}
+
+fn alpn(http2: bool) -> Vec<Vec<u8>> {
+    if http2 { vec![b"h2".to_vec(), b"http/1.1".to_vec()] } else { vec![b"http/1.1".to_vec()] }
 }
 
 /// Issuer fields for the CA. Leaf certificates are signed against these, so they must stay

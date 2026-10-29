@@ -53,6 +53,9 @@ pub struct Flow {
     /// Milliseconds from `started_at` to the end of the response.
     pub elapsed_ms: Option<i32>,
     pub error: Option<String>,
+    /// The client gave up before the response ended, by resetting its HTTP/2 stream or closing
+    /// the connection. Not an error.
+    pub cancelled: bool,
     /// The id of the Yaak request this flow was last saved as.
     pub saved_request_id: Option<String>,
     /// The process that opened the client connection, where the platform can tell (macOS).
@@ -155,6 +158,7 @@ impl UpsertModelInfo for Flow {
             (ElapsedHeadersMs, self.elapsed_headers_ms.into()),
             (ElapsedMs, self.elapsed_ms.into()),
             (Error, self.error.into()),
+            (Cancelled, self.cancelled.into()),
             (SavedRequestId, self.saved_request_id.into()),
             (ClientPid, self.client_pid.into()),
             (ClientName, self.client_name.into()),
@@ -183,6 +187,7 @@ impl UpsertModelInfo for Flow {
             FlowIden::ElapsedHeadersMs,
             FlowIden::ElapsedMs,
             FlowIden::Error,
+            FlowIden::Cancelled,
             FlowIden::SavedRequestId,
             FlowIden::ClientPid,
             FlowIden::ClientName,
@@ -218,6 +223,7 @@ impl UpsertModelInfo for Flow {
             elapsed_headers_ms: r.get("elapsed_headers_ms")?,
             elapsed_ms: r.get("elapsed_ms")?,
             error: r.get("error")?,
+            cancelled: added_column(r, "cancelled")?.unwrap_or_default(),
             saved_request_id: added_column(r, "saved_request_id")?,
             client_pid: added_column(r, "client_pid")?,
             client_name: added_column(r, "client_name")?,

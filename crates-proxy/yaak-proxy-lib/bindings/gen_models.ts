@@ -42,6 +42,11 @@ elapsedHeadersMs: number | null,
  */
 elapsedMs: number | null, error: string | null, 
 /**
+ * The client gave up before the response ended, by resetting its HTTP/2 stream or closing
+ * the connection. Not an error.
+ */
+cancelled: boolean, 
+/**
  * The id of the Yaak request this flow was last saved as.
  */
 savedRequestId: string | null, 

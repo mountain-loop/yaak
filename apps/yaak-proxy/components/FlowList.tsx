@@ -315,8 +315,8 @@ const FlowRow = memo(function FlowRow({
 }: RowProps) {
   const { host, path, query } = splitUrl(flow.url);
   const failed = flow.error != null;
-  // Failed before any response; an error after the headers is a body cut short mid-way.
-  const noResponse = failed && flow.status == null;
+  // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
+  const noResponse = (failed || flow.cancelled) && flow.status == null;
   const type = shortContentType(flow.contentType);
 
   return (
@@ -342,6 +342,8 @@ const FlowRow = memo(function FlowRow({
           <Icon icon="bookmark" size="xs" color="primary" title="Saved to Yaak" />
         ) : failed ? (
           <Icon icon="circle_alert" size="xs" color="danger" />
+        ) : flow.cancelled ? (
+          <Icon icon="circle_off" size="xs" color="secondary" title="Cancelled by the app" />
         ) : flow.responseTruncated ? (
           <Icon icon="scissors" size="xs" color="notice" title="Body cut at the capture limit" />
         ) : null}
@@ -368,6 +370,8 @@ const FlowRow = memo(function FlowRow({
           <span className="text-danger" title={flow.error ?? undefined}>
             {flow.error}
           </span>
+        ) : flow.cancelled ? (
+          <span className="text-text-subtle">Cancelled</span>
         ) : (
           <span className="text-text-subtle">
             {type ?? <span className="text-text-subtlest">--</span>}
