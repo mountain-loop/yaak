@@ -156,6 +156,7 @@ export function syncFlows(store: Store) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let loaded = false;
   let loads = 0;
+  let searchLoads = 0;
   /** A flow written at or before the newest the app has seen, for reading new ones after it */
   let seenId: string | null = null;
 
@@ -247,7 +248,9 @@ export function syncFlows(store: Store) {
       store.set(searchWindowAtom, null);
       return;
     }
-    const key = JSON.stringify(query);
+    // Unique to this load, so a slower answer to an earlier one with the same query, such as
+    // one read before a clear, is dropped.
+    const key = `${++searchLoads}:${JSON.stringify(query)}`;
     store.set(searchWindowAtom, { key, query, win: emptyWindow, loading: true, buffered: [] });
     const settle = (page: FlowWindow | null) =>
       store.set(searchWindowAtom, (s) => {
@@ -282,8 +285,8 @@ export function syncFlows(store: Store) {
   // database. Reading after a flow that started last can return a slow one already seen, which
   // applies as an update; it never skips one.
   let polling = false;
-  setInterval(() => {
-    if (polling || !loaded || store.get(proxyStateAtom)?.otherOwner == null) return;
+  function readNewFlows() {
+    if (polling || !loaded) return;
     polling = true;
     const after = seenId;
     const read =
@@ -315,7 +318,17 @@ export function syncFlows(store: Store) {
       .finally(() => {
         polling = false;
       });
+  }
+  setInterval(() => {
+    if (store.get(proxyStateAtom)?.otherOwner != null) readNewFlows();
   }, POLL_MS);
+  // One last read once another owner lets go, for flows it wrote after the last one.
+  let hadOtherOwner = store.get(proxyStateAtom)?.otherOwner != null;
+  store.sub(proxyStateAtom, () => {
+    const hasOtherOwner = store.get(proxyStateAtom)?.otherOwner != null;
+    if (hadOtherOwner && !hasOtherOwner) readNewFlows();
+    hadOtherOwner = hasOtherOwner;
+  });
 
   load();
 }

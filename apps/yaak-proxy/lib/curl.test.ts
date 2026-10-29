@@ -53,6 +53,17 @@ describe("toCurl", () => {
     );
   });
 
+  test("replays HEAD with --head and leaves brackets in the URL alone", () => {
+    const flow = {
+      method: "HEAD",
+      url: "https://x.test/a?filter[status]=open",
+      requestHeaders: [],
+    };
+    expect(toCurl(flow, null)).toBe(
+      "curl --head \\\n  --globoff \\\n  'https://x.test/a?filter[status]=open'",
+    );
+  });
+
   test("names any other method", () => {
     const flow = { method: "DELETE", url: "https://x.test/a", requestHeaders: [] };
     expect(toCurl(flow, null)).toBe("curl -X DELETE \\\n  'https://x.test/a'");

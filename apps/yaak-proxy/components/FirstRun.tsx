@@ -41,6 +41,8 @@ export function FirstRun() {
         : trusted
           ? "next"
           : "todo";
+  // Changed only by the process that owns the engine, so not from here while the CLI does.
+  const otherOwner = proxyState?.otherOwner != null;
   const trafficState: StepState =
     trusted && (systemOn || !systemSupported) ? (running ? "wait" : "next") : "todo";
 
@@ -102,12 +104,14 @@ export function FirstRun() {
                   ? `${(systemProxy.data?.services ?? []).map((s) => s.name).join(" and ")} point at 127.0.0.1:${systemProxy.data?.port}.`
                   : systemState === "wait"
                     ? "Waiting for your password in the macOS prompt."
-                    : systemState === "fail"
-                      ? (setSystemProxy.error?.message ?? "The system proxy was not changed.")
-                      : `Sends this Mac's web traffic through port ${port ?? 9090}. Turns off when Yaak Proxy quits.`
+                    : otherOwner
+                      ? "The CLI owns the proxy. Take over to turn this on from here."
+                      : systemState === "fail"
+                        ? (setSystemProxy.error?.message ?? "The system proxy was not changed.")
+                        : `Sends this Mac's web traffic through port ${port ?? 9090}. Turns off when Yaak Proxy quits.`
               }
               action={
-                systemState === "next" || systemState === "fail" ? (
+                (systemState === "next" || systemState === "fail") && !otherOwner ? (
                   <Button
                     size="2xs"
                     variant={systemState === "fail" ? "border" : "solid"}
