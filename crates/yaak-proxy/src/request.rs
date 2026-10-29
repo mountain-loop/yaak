@@ -7,9 +7,12 @@ use std::time::{Duration, Instant, SystemTime};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
+use hyper::body::Body;
 use hyper::body::Incoming;
 use hyper::client::conn::TrySendError;
-use hyper::header::{CONTENT_TYPE, HOST, UPGRADE, VIA};
+use hyper::header::{
+    CONTENT_LENGTH, CONTENT_TYPE, HOST, HeaderValue, TRANSFER_ENCODING, UPGRADE, VIA,
+};
 use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
@@ -557,6 +560,7 @@ fn address(
     conn: &UpstreamConn,
     target: &Target,
     path: &str,
+    has_body: bool,
 ) -> Result<(), String> {
     // The host the client asked for: `Host` over HTTP/1.1, `:authority` over HTTP/2, which
     // hyper keeps in the URI.
@@ -579,6 +583,12 @@ fn address(
         }
         if parts.version == hyper::Version::HTTP_2 {
             parts.version = hyper::Version::HTTP_11;
+            // HTTP/2 frames a body without a length. HTTP/1.1 needs one or chunks, and hyper
+            // sends a GET with neither as empty. Chunks also carry trailers, those named in
+            // `Trailer`: hyper's HTTP/1.1 encoder drops any others.
+            if has_body && !parts.headers.contains_key(CONTENT_LENGTH) {
+                parts.headers.insert(TRANSFER_ENCODING, HeaderValue::from_static("chunked"));
+            }
         }
     }
     Ok(())
@@ -608,7 +618,7 @@ async fn forward_https(
     };
 
     let (mut parts, body) = req.into_parts();
-    if let Err(e) = address(&mut parts, &conn, target, &path) {
+    if let Err(e) = address(&mut parts, &conn, target, &path, !body.is_end_stream()) {
         return Ok(flow.fail(e));
     }
     let mut outgoing = Request::from_parts(parts, flow.capture_request(body));
@@ -630,7 +640,7 @@ async fn forward_https(
         };
         reused = false;
         let (mut parts, body) = unsent.into_parts();
-        if let Err(e) = address(&mut parts, &conn, target, &path) {
+        if let Err(e) = address(&mut parts, &conn, target, &path, !body.is_end_stream()) {
             return Ok(flow.fail(e));
         }
         outgoing = Request::from_parts(parts, body);

@@ -182,7 +182,8 @@ export function ProxyStatus() {
                 title="HTTP/2"
                 hideLabel
                 checked={proxyState?.httpVersion !== "http1Only"}
-                disabled={setHttpVersion.isPending}
+                // The owner's engine would not see the change until it restarts.
+                disabled={other != null || setHttpVersion.isPending}
                 onChange={(enabled) =>
                   setHttpVersion.mutate({ httpVersion: enabled ? "auto" : "http1Only" })
                 }

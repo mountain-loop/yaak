@@ -127,7 +127,11 @@ async fn echo_with_trailers(req: Request<Incoming>) -> Response<TestBody> {
         Ok(Frame::data(collected.to_bytes())),
         Ok(Frame::trailers(trailers)),
     ];
-    Response::new(BodyExt::boxed(StreamBody::new(futures_util::stream::iter(frames))))
+    Response::builder()
+        // HTTP/1.1 sends only the trailers it names.
+        .header("trailer", "x-client-trailer, x-upstream-trailer")
+        .body(BodyExt::boxed(StreamBody::new(futures_util::stream::iter(frames))))
+        .unwrap()
 }
 
 /// "hello" under a Content-Length of `content_length`, its end of stream sent a while after the
@@ -1198,32 +1202,54 @@ async fn h2_stream_cancelled_during_the_body() {
 #[tokio::test(flavor = "multi_thread")]
 async fn h2_trailers_pass_through() {
     let h = Harness::start(1024);
-    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    for tls in [h.pki.server.clone(), h1_only(&h.pki.server)] {
+        let upstream = spawn_upstream(Some(tls)).await;
+        let port = upstream.port();
+        let mut client = h.h2_client(port).await;
+
+        let mut trailers = hyper::HeaderMap::new();
+        trailers.insert("x-client-trailer", HeaderValue::from_static("1"));
+        let frames = [
+            Ok(Frame::data(Bytes::from("message"))),
+            Ok(Frame::trailers(trailers)),
+        ];
+        let upload = BodyExt::boxed(StreamBody::new(futures_util::stream::iter(frames)));
+        let mut req = h2_request("POST", port, "/trailers", upload);
+        req.headers_mut().insert("te", HeaderValue::from_static("trailers"));
+        // HTTP/1.1 carries only trailers named up front, so an HTTP/1.1 server gets this one.
+        req.headers_mut().insert("trailer", HeaderValue::from_static("x-client-trailer"));
+
+        let resp = client.send_request(req).await.unwrap();
+        let collected = resp.into_body().collect().await.unwrap();
+        let trailers = collected.trailers().cloned().unwrap();
+        assert_eq!(trailers["x-client-trailer"], "1");
+        assert_eq!(trailers["x-upstream-trailer"], "yes");
+        assert_eq!(collected.to_bytes(), "message");
+
+        let events = h.flow_events();
+        let (size, error) = find!(events,
+            ProxyEvent::ResponseBodyComplete { size, error, .. } => (*size, error.clone()));
+        assert_eq!((size, error), (7, None));
+        assert_eq!(body(&events, true), (b"message".to_vec(), 7));
+    }
+}
+
+/// An HTTP/2 request's body has no length of its own, which HTTP/1.1 needs, even on a GET.
+#[tokio::test(flavor = "multi_thread")]
+async fn h2_streamed_body_reaches_an_h1_upstream() {
+    let h = Harness::start(1024);
+    let upstream = spawn_upstream(Some(h1_only(&h.pki.server))).await;
     let port = upstream.port();
     let mut client = h.h2_client(port).await;
 
-    let mut trailers = hyper::HeaderMap::new();
-    trailers.insert("x-client-trailer", HeaderValue::from_static("1"));
-    let frames = [
-        Ok(Frame::data(Bytes::from("message"))),
-        Ok(Frame::trailers(trailers)),
-    ];
-    let upload = BodyExt::boxed(StreamBody::new(futures_util::stream::iter(frames)));
-    let mut req = h2_request("POST", port, "/trailers", upload);
-    req.headers_mut().insert("te", HeaderValue::from_static("trailers"));
-
-    let resp = client.send_request(req).await.unwrap();
-    let collected = resp.into_body().collect().await.unwrap();
-    let trailers = collected.trailers().cloned().unwrap();
-    assert_eq!(trailers["x-client-trailer"], "1");
-    assert_eq!(trailers["x-upstream-trailer"], "yes");
-    assert_eq!(collected.to_bytes(), "message");
-
-    let events = h.flow_events();
-    let (size, error) = find!(events,
-        ProxyEvent::ResponseBodyComplete { size, error, .. } => (*size, error.clone()));
-    assert_eq!((size, error), (7, None));
-    assert_eq!(body(&events, true), (b"message".to_vec(), 7));
+    for method in ["GET", "POST"] {
+        let frames = ["streamed ", "body"].map(|s| Ok(Frame::data(Bytes::from(s))));
+        let upload = BodyExt::boxed(StreamBody::new(futures_util::stream::iter(frames)));
+        let resp = client.send_request(h2_request(method, port, "/echo", upload)).await.unwrap();
+        assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), "streamed body");
+        let events = h.flow_events();
+        assert_eq!(body(&events, true), (b"streamed body".to_vec(), 13), "{method}");
+    }
 }
 
 /// More than the flow-control windows hold, both ways, through an HTTP/2 and an HTTP/1.1 server.
