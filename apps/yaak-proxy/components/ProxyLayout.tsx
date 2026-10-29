@@ -4,6 +4,7 @@ import {
   SidebarLayout,
   SplitLayout,
   type SplitLayoutLayout,
+  Toasts,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
@@ -20,7 +21,6 @@ import { ProxyStatus } from "./ProxyStatus";
 import { SaveDialog } from "./SaveDialog";
 import { selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
 import { TakeOverBanner } from "./TakeOverBanner";
-import { Toasts } from "./Toasts";
 
 export function ProxyLayout() {
   const os = getOsType();

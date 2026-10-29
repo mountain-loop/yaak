@@ -4,18 +4,25 @@ import type {
   FolderSummary,
   WorkspaceSummary,
 } from "@yaakapp-internal/proxy-lib";
-import { Banner, Button, HttpMethodTagRaw, LoadingIcon } from "@yaakapp-internal/ui";
+import {
+  Banner,
+  Dialog,
+  DialogFooter,
+  HttpMethodTagRaw,
+  LoadingIcon,
+  PlainInput,
+} from "@yaakapp-internal/ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useAtom, useSetAtom } from "jotai";
+import { useAtom } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { useLocalStorage } from "react-use";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { exportHar, saveDialogFlowAtom } from "../lib/flowActions";
-import { showToastAtom } from "../lib/toast";
-import { Dialog } from "./Dialog";
+import { useShowToast } from "../lib/toast";
 
 const DOWNLOAD_URL = "https://yaak.app/download";
+const SAVE_FORM_ID = "save-flow-to-yaak";
 
 /** Save as Yaak request, for the flow in `saveDialogFlowAtom` */
 export function SaveDialog() {
@@ -29,6 +36,7 @@ export function SaveDialog() {
     <Dialog
       open
       onClose={close}
+      size="dynamic"
       title="Save as Yaak request"
       description="A new request in Yaak with this flow's method, URL, headers and body."
       className="w-[36rem]"
@@ -53,7 +61,7 @@ function SaveForm({
   workspaces: WorkspaceSummary[];
   onClose: () => void;
 }) {
-  const showToast = useSetAtom(showToastAtom);
+  const showToast = useShowToast();
   const preview = useRpcQuery("preview_save", { flowId: flow.id }, { staleTime: 0 });
   const [lastWorkspaceId, setLastWorkspaceId] = useLocalStorage<string>("save_workspace_id");
   const [workspaceId, setWorkspaceId] = useState(
@@ -105,9 +113,18 @@ function SaveForm({
     );
   }
 
+  if (p == null) {
+    return preview.error != null ? (
+      <Banner color="danger">{preview.error.message}</Banner>
+    ) : (
+      <LoadingIcon />
+    );
+  }
+
   return (
     <form
-      className="flex flex-col gap-3.5"
+      id={SAVE_FORM_ID}
+      className="flex flex-col gap-3.5 pb-2"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -146,17 +163,8 @@ function SaveForm({
           </select>
         </Field>
       </div>
-      <Field label="Name">
-        <input
-          // oxlint-disable-next-line jsx-a11y/no-autofocus -- the one field to change
-          autoFocus
-          className={inputClasses}
-          value={shownName}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </Field>
-      {preview.error != null && <Banner color="danger">{preview.error.message}</Banner>}
-      {p != null && p.droppedHeaders.length > 0 && (
+      <PlainInput label="Name" autoFocus autoSelect defaultValue={shownName} onChange={setName} />
+      {p.droppedHeaders.length > 0 && (
         <div className="rounded-md border border-border-subtle px-3.5 py-2.5">
           <div className="text-sm text-text">
             {p.droppedHeaders.length === 1
@@ -179,33 +187,32 @@ function SaveForm({
           </div>
         </div>
       )}
-      {p != null && (
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-1.5 text-sm">
-          <span className="text-text-subtle">Kept</span>
-          <span>
-            {p.keptHeaders === 1 ? "1 header" : `${p.keptHeaders} headers`}
-            {p.body == null ? ", and no body" : `, and the body as ${p.body}`}
-          </span>
-          {p.warnings.map((w) => (
-            <NoteRow key={w} warning={w} authorization={p.authorization} />
-          ))}
-        </div>
-      )}
-      {save.error != null && <Banner color="danger">{save.error.message}</Banner>}
-      <div className="flex items-center gap-2 pt-1">
-        <span className="mr-auto text-xs text-text-subtlest">Yaak picks it up within a second</span>
-        <Button variant="border" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          color="primary"
-          isLoading={save.isPending}
-          disabled={workspace == null || preview.data == null}
-        >
-          Save request
-        </Button>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3.5 gap-y-1.5 text-sm">
+        <span className="text-text-subtle">Kept</span>
+        <span>
+          {p.keptHeaders === 1 ? "1 header" : `${p.keptHeaders} headers`}
+          {p.body == null ? ", and no body" : `, and the body as ${p.body}`}
+        </span>
+        {p.warnings.map((w) => (
+          <NoteRow key={w} warning={w} authorization={p.authorization} />
+        ))}
       </div>
+      {save.error != null && <Banner color="danger">{save.error.message}</Banner>}
+      <DialogFooter
+        leftSlot={
+          <span className="text-xs text-text-subtlest">Yaak picks it up within a second</span>
+        }
+        actions={[
+          { label: "Cancel", onClick: onClose },
+          {
+            label: "Save request",
+            form: SAVE_FORM_ID,
+            color: "primary",
+            isLoading: save.isPending,
+            disabled: workspace == null,
+          },
+        ]}
+      />
     </form>
   );
 }
@@ -222,18 +229,15 @@ function NoteRow({ warning, authorization }: { warning: string; authorization: b
 
 /** Without Yaak there is nothing to save into: say so, and offer HAR as a way to keep the flow */
 function NoYaakDialog({ flow, onClose }: { flow: Flow; onClose: () => void }) {
-  const showToast = useSetAtom(showToastAtom);
+  const showToast = useShowToast();
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      className="w-[32rem]"
-      footer={
-        <>
-          <span className="mr-auto text-xs text-text-subtlest">Or keep the flow as a file</span>
-          <Button
-            variant="border"
-            onClick={async () => {
+    <Dialog open onClose={onClose} size="dynamic" className="w-[32rem]">
+      <DialogFooter
+        leftSlot={<span className="text-xs text-text-subtlest">Or keep the flow as a file</span>}
+        actions={[
+          {
+            label: "Export HAR",
+            onClick: async () => {
               try {
                 if ((await exportHar({ ids: [flow.id] }, "flow.har")) != null) {
                   onClose();
@@ -242,17 +246,12 @@ function NoYaakDialog({ flow, onClose }: { flow: Flow; onClose: () => void }) {
               } catch (err) {
                 showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
               }
-            }}
-          >
-            Export HAR
-          </Button>
-          <Button color="primary" onClick={() => void openUrl(DOWNLOAD_URL)}>
-            Download Yaak
-          </Button>
-        </>
-      }
-    >
-      <div className="pt-3">
+            },
+          },
+          { label: "Download Yaak", color: "primary", onClick: () => void openUrl(DOWNLOAD_URL) },
+        ]}
+      />
+      <div className="pt-6 pb-2">
         <div className="text-lg font-semibold mb-1.5">Saving needs Yaak</div>
         <div className="text-sm text-text-subtle leading-relaxed">
           This flow becomes a request in one of Yaak's workspaces, and Yaak has not been opened on

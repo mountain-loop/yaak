@@ -1,10 +1,10 @@
-import { Icon, IconButton } from "@yaakapp-internal/ui";
+import { Icon, IconButton, PlainInput } from "@yaakapp-internal/ui";
 import { useAtomValue, useSetAtom } from "jotai";
 import { memo, useEffect, useRef, useState } from "react";
 import { exportHar } from "../lib/flowActions";
 import { searchTerms } from "../lib/search";
 import { activeQueryAtom, searchTermsAtom } from "../lib/store";
-import { showToastAtom } from "../lib/toast";
+import { useShowToast } from "../lib/toast";
 
 /** How long typing settles before the search runs */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -17,8 +17,11 @@ export const SearchBar = memo(function SearchBar() {
   const [text, setText] = useState("");
   const setTerms = useSetAtom(searchTermsAtom);
   const query = useAtomValue(activeQueryAtom);
-  const showToast = useSetAtom(showToastAtom);
+  const showToast = useShowToast();
+  // PlainInput hands back its <input> as the ref
   const inputRef = useRef<HTMLInputElement>(null);
+  // Bumped to empty the field, which only takes a value from outside when this changes
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     const timer = setTimeout(() => setTerms(searchTerms(text)), SEARCH_DEBOUNCE_MS);
@@ -37,43 +40,53 @@ export const SearchBar = memo(function SearchBar() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  const clear = () => {
+    setText("");
+    setTerms(null);
+    setResetKey((k) => k + 1);
+  };
+
   return (
     <div className="flex items-center gap-1.5 px-3 pb-1.5">
-      <div className="group/search relative flex-1 min-w-0 flex items-center h-xs rounded-md border border-border-subtle focus-within:border-border-focus bg-surface">
-        <Icon icon="search" size="sm" className="ml-2 text-text-subtlest shrink-0" />
-        <input
+      <div className="flex-1 min-w-0">
+        <PlainInput
           ref={inputRef}
-          aria-label="Search flows"
+          label="Search flows"
+          hideLabel
+          size="xs"
           placeholder="Search flows by URL, method, status or type"
-          spellCheck={false}
-          className="flex-1 min-w-0 h-full bg-transparent px-2 text-sm text-text placeholder:text-text-subtlest outline-hidden"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
+          defaultValue={text}
+          forceUpdateKey={String(resetKey)}
+          onChange={setText}
+          onKeyDownCapture={(e) => {
             if (e.key === "Escape" && text !== "") {
               e.stopPropagation();
-              setText("");
-              setTerms(null);
+              clear();
             }
           }}
+          leftSlot={
+            <Icon icon="search" size="sm" className="ml-2 mr-2.5 self-center text-text-subtlest" />
+          }
+          rightSlot={
+            text === "" ? (
+              <kbd className="self-center mr-2 px-1 rounded-sm border border-border-subtle font-sans text-2xs text-text-subtlest">
+                ⌘F
+              </kbd>
+            ) : (
+              <IconButton
+                size="xs"
+                icon="x"
+                title="Clear search"
+                iconColor="secondary"
+                className="self-center"
+                onClick={() => {
+                  clear();
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                }}
+              />
+            )
+          }
         />
-        {text === "" ? (
-          <kbd className="mr-2 px-1 rounded-sm border border-border-subtle font-sans text-2xs text-text-subtlest">
-            ⌘F
-          </kbd>
-        ) : (
-          <IconButton
-            size="xs"
-            icon="x"
-            title="Clear search"
-            iconColor="secondary"
-            onClick={() => {
-              setText("");
-              setTerms(null);
-              inputRef.current?.focus();
-            }}
-          />
-        )}
       </div>
       <IconButton
         size="xs"

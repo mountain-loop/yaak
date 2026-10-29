@@ -6,7 +6,7 @@ import { useCallback } from "react";
 import { base64ToBytes } from "./body";
 import { toCurl } from "./curl";
 import { rpc } from "./rpc";
-import { showToastAtom } from "./toast";
+import { useShowToast } from "./toast";
 
 /** The flow the save dialog is open for */
 export const saveDialogFlowAtom = atom<Flow | null>(null);
@@ -36,7 +36,7 @@ export async function exportHar(
 
 /** What a flow's context menu and the detail pane's menu offer */
 export function useFlowActions(): (flow: Flow) => DropdownItem[] {
-  const showToast = useSetAtom(showToastAtom);
+  const showToast = useShowToast();
   const openSave = useSetAtom(saveDialogFlowAtom);
 
   return useCallback(
@@ -44,8 +44,10 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
       const copy = async (label: string, text: () => Promise<string | null> | string) => {
         try {
           const value = await text();
-          if (value == null)
-            return showToast({ message: `There is no ${label} to copy`, color: "info" });
+          if (value == null) {
+            showToast({ message: `There is no ${label} to copy`, color: "info" });
+            return;
+          }
           await navigator.clipboard.writeText(value);
           showToast({ message: `Copied ${label}` });
         } catch (err) {

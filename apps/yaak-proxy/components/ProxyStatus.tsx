@@ -1,8 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { CaStatus, SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
-import { Button, Dropdown, type DropdownItem, type DropdownRef, Icon } from "@yaakapp-internal/ui";
+import {
+  Button,
+  Checkbox,
+  Dropdown,
+  type DropdownItem,
+  type DropdownRef,
+  Icon,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtomValue, useStore } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { useRef } from "react";
 import { useRpcEvent } from "../hooks/useRpcEvent";
@@ -10,7 +17,7 @@ import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState } from "../lib/store";
-import { showToastAtom } from "../lib/toast";
+import { useShowToast } from "../lib/toast";
 
 /** How often the system proxy is read while it is meant to be on and is not yet */
 const SYSTEM_PROXY_POLL_MS = 2000;
@@ -71,15 +78,15 @@ export function ProxyStatus() {
           title="System proxy"
           description={<SystemProxyDescription setup={setup} />}
           action={
-            <Switch
-              on={
+            <Checkbox
+              title="System proxy"
+              hideLabel
+              checked={
                 setSystemProxy.isPending
                   ? (setSystemProxy.variables?.enabled ?? false)
                   : systemProxy.data?.enabled === true
               }
-              busy={setSystemProxy.isPending}
-              disabled={other != null}
-              label="System proxy"
+              disabled={other != null || setSystemProxy.isPending}
               onChange={(enabled) => setSystemProxy.mutate({ enabled })}
             />
           }
@@ -229,7 +236,7 @@ export function useProxySetup() {
 export function useCopyEnvironment() {
   const proxyState = useAtomValue(proxyStateAtom);
   const caStatus = useRpcQuery("ca_status", {});
-  const showToast = useSetAtom(showToastAtom);
+  const showToast = useShowToast();
   return async () => {
     const port =
       proxyState?.port ?? proxyState?.otherOwner?.proxyPort ?? proxyState?.configuredPort;
@@ -298,48 +305,6 @@ export function StateDot({ state }: { state: "running" | "stopped" | "cli" }) {
         state === "stopped" && "border-[1.5px] border-text-subtlest",
       )}
     />
-  );
-}
-
-/** An on and off switch, which spins while its change waits on the person */
-export function Switch({
-  on,
-  busy,
-  disabled,
-  label,
-  onChange,
-}: {
-  on: boolean;
-  busy?: boolean;
-  disabled?: boolean;
-  label: string;
-  onChange: (on: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      disabled={disabled || busy}
-      onClick={(e) => {
-        e.stopPropagation();
-        onChange(!on);
-      }}
-      className={classNames(
-        "relative inline-flex items-center w-[1.9rem] h-[1.1rem] rounded-full transition-colors shrink-0",
-        "outline-hidden focus-visible:ring-1 ring-border-focus disabled:opacity-60",
-        on ? "bg-primary" : "bg-border",
-      )}
-    >
-      <span
-        className={classNames(
-          "absolute w-[0.8rem] h-[0.8rem] rounded-full bg-[#fff] shadow-sm transition-[left]",
-          on ? "left-[0.95rem]" : "left-[0.15rem]",
-          busy && "animate-pulse",
-        )}
-      />
-    </button>
   );
 }
 
