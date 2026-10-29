@@ -16,7 +16,11 @@ pub enum Request {
     Get,
     /// Points every enabled service at `127.0.0.1:<port>`, saving the settings it replaces,
     /// and restores them once `owner_pid` exits. Off restores them now.
-    Set { enabled: bool, port: u16, owner_pid: i32 },
+    Set {
+        enabled: bool,
+        port: u16,
+        owner_pid: i32,
+    },
     /// Puts back the saved settings.
     Restore,
     /// Restores, deletes the daemon's state and exits, before the app unregisters it.
@@ -97,10 +101,16 @@ mod tests {
             let line = format!(r#"{{"cmd":"set","enabled":true,"port":{port},"owner_pid":42}}"#);
             assert!(parse_request(&line).is_err(), "port {port}");
         }
-        assert!(parse_request(r#"{"cmd":"set","enabled":true,"port":65536,"owner_pid":42}"#).is_err());
+        assert!(
+            parse_request(r#"{"cmd":"set","enabled":true,"port":65536,"owner_pid":42}"#).is_err()
+        );
         assert!(parse_request(r#"{"cmd":"set","enabled":true,"port":-1,"owner_pid":42}"#).is_err());
-        assert!(parse_request(r#"{"cmd":"set","enabled":true,"port":1024,"owner_pid":42}"#).is_ok());
-        assert!(parse_request(r#"{"cmd":"set","enabled":true,"port":65535,"owner_pid":42}"#).is_ok());
+        assert!(
+            parse_request(r#"{"cmd":"set","enabled":true,"port":1024,"owner_pid":42}"#).is_ok()
+        );
+        assert!(
+            parse_request(r#"{"cmd":"set","enabled":true,"port":65535,"owner_pid":42}"#).is_ok()
+        );
     }
 
     #[test]
@@ -111,7 +121,9 @@ mod tests {
 
     #[test]
     fn refuses_a_bad_owner_and_junk() {
-        assert!(parse_request(r#"{"cmd":"set","enabled":true,"port":9090,"owner_pid":0}"#).is_err());
+        assert!(
+            parse_request(r#"{"cmd":"set","enabled":true,"port":9090,"owner_pid":0}"#).is_err()
+        );
         assert!(parse_request(r#"{"cmd":"set","enabled":true,"port":9090}"#).is_err());
         assert!(parse_request(r#"{"cmd":"rm -rf"}"#).is_err());
         assert!(parse_request("not json").is_err());
@@ -126,7 +138,12 @@ mod tests {
 
     #[test]
     fn responses_round_trip() {
-        let ok = Response::ok(Status { active: true, port: Some(9090), owner_pid: Some(1), version: "1".into() });
+        let ok = Response::ok(Status {
+            active: true,
+            port: Some(9090),
+            owner_pid: Some(1),
+            version: "1".into(),
+        });
         let line = serde_json::to_string(&ok).unwrap();
         assert_eq!(serde_json::from_str::<Response>(&line).unwrap(), ok);
         assert_eq!(Response::error("no").into_result(), Err("no".to_string()));

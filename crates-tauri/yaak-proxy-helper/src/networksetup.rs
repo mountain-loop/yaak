@@ -104,7 +104,7 @@ impl Snapshot {
 
 /// The calls that turn the system proxy off at `port`, and whether `snapshot` is used up by
 /// them. At the snapshot's current port, or at port 0 meaning wherever it is, they put back
-/// everything it saved. At any other port they only turn off what points there, leaving the
+/// everything it saved. At any other port they put back only what points there, leaving the
 /// snapshot to the routing still live on its own port.
 pub fn disable_commands(
     services: &[ServiceProxy],
@@ -119,7 +119,7 @@ pub fn disable_commands(
             }
             (restore_commands(services, Some(snapshot), &ports), true)
         }
-        Some(_) => (restore_commands(services, None, &[port]), false),
+        Some(snapshot) => (restore_commands(services, Some(snapshot), &[port]), false),
         None if port == 0 => (Vec::new(), true),
         None => (restore_commands(services, None, &[port]), true),
     }
@@ -155,8 +155,10 @@ pub fn parse_proxy(output: &str) -> ProxySetting {
     setting
 }
 
-const WEB: [(&str, &str); 2] =
-    [("-setwebproxy", "-setwebproxystate"), ("-setsecurewebproxy", "-setsecurewebproxystate")];
+const WEB: [(&str, &str); 2] = [
+    ("-setwebproxy", "-setwebproxystate"),
+    ("-setsecurewebproxy", "-setsecurewebproxystate"),
+];
 
 /// The `networksetup` calls that point every one of `services` at `127.0.0.1:<port>`.
 pub fn enable_commands(services: &[ServiceProxy], port: u16) -> Vec<Vec<String>> {
@@ -187,10 +189,23 @@ pub fn restore_commands(
             (&service.https, saved.map(|s| &s.https)),
         ];
         for ((current, saved), (set, state)) in proxies.into_iter().zip(WEB) {
+            let name = service.name.clone();
+            // An earlier restore set the user's server, which turned it on, and stopped
+            // before turning it back off. Never one of ours, which may be live.
+            let unfinished = saved.is_some_and(|s| {
+                !s.enabled
+                    && current.enabled
+                    && current.server != HOST
+                    && current.server == s.server
+                    && current.port == s.port
+            });
+            if unfinished {
+                commands.push(vec![state.into(), name, "off".into()]);
+                continue;
+            }
             if !ports.iter().any(|p| current.points_at(*p)) {
                 continue;
             }
-            let name = service.name.clone();
             match saved {
                 // Setting the server turns the proxy on, so its state follows.
                 Some(saved) if !saved.server.is_empty() && saved.port != 0 => {
@@ -320,9 +335,14 @@ pub mod fake {
         fn run(&self, args: &[String]) -> Result<String, String> {
             let mut services = self.services.lock().unwrap();
             if args.first().map(String::as_str) == Some("-listallnetworkservices") {
-                let mut out = "An asterisk (*) denotes that a network service is disabled.\n".to_string();
+                let mut out =
+                    "An asterisk (*) denotes that a network service is disabled.\n".to_string();
                 for s in services.iter() {
-                    out.push_str(&format!("{}{}\n", if s.enabled { "" } else { "*" }, s.proxy.name));
+                    out.push_str(&format!(
+                        "{}{}\n",
+                        if s.enabled { "" } else { "*" },
+                        s.proxy.name
+                    ));
                 }
                 return Ok(out);
             }
@@ -431,7 +451,8 @@ mod tests {
         apply(&ns, &enable_commands(&services, 9090)).unwrap();
         assert!(ns.proxies().iter().all(|s| s.http.points_at(9090) && s.https.points_at(9090)));
 
-        let restore = restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
+        let restore =
+            restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
         apply(&ns, &restore).unwrap();
         let after = ns.proxies();
         assert_eq!(after[0], before[0]);
@@ -452,7 +473,8 @@ mod tests {
         // The user points HTTPS somewhere else while ours is on.
         ns.set_proxy("Wi-Fi", ours(9090), setting(true, "charles", 8888));
 
-        let restore = restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
+        let restore =
+            restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
         assert_eq!(
             restore,
             vec![
@@ -521,6 +543,49 @@ mod tests {
         assert_eq!(snapshot.services.len(), 2);
         assert_eq!(snapshot.services[0].http, corp);
         assert_eq!(snapshot.services[1].https, corp);
+    }
+
+    #[test]
+    fn a_restore_cut_short_is_finished_on_the_next_try() {
+        let parked = setting(false, "old-proxy", 8888);
+        let ns = FakeNetworksetup::new(vec![("Wi-Fi", parked.clone(), parked.clone())]);
+        let snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+        // Only the first call of the restore ran: the user's server is back, but on.
+        let restore =
+            restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
+        apply(&ns, &restore[..1]).unwrap();
+        assert!(ns.proxies()[0].http.enabled);
+
+        let (retry, used_up) =
+            disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
+        assert!(used_up);
+        apply(&ns, &retry).unwrap();
+        assert_eq!(ns.proxies()[0].http, parked);
+        assert_eq!(ns.proxies()[0].https, parked);
+    }
+
+    #[test]
+    fn clearing_an_old_port_puts_back_what_was_saved_there() {
+        let corp = setting(true, "corp-proxy", 3128);
+        let ns = FakeNetworksetup::new(vec![
+            ("Wi-Fi", corp.clone(), corp.clone()),
+            ("Ethernet", corp.clone(), corp.clone()),
+        ]);
+        let mut snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+        // Ethernet is disabled before the move to 9191, so it stays on 9090.
+        ns.set_enabled("Ethernet", false);
+        let enabled = read_services(&ns, false).unwrap();
+        snapshot.extend(&enabled, 9191);
+        apply(&ns, &enable_commands(&enabled, 9191)).unwrap();
+
+        let (commands, used_up) =
+            disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
+        assert!(!used_up);
+        apply(&ns, &commands).unwrap();
+        assert_eq!(ns.proxies()[1].http, corp);
+        assert!(ns.proxies()[0].http.points_at(9191), "live routing kept");
     }
 
     #[test]

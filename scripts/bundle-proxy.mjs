@@ -14,14 +14,21 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
 
-/** The first Developer ID Application identity, by hash, since names can repeat */
-function findIdentity() {
+/**
+ * The keychain's Developer ID Application identities, by hash, since names can repeat. With
+ * `wanted`, only the one with that hash or name.
+ */
+function findIdentity(wanted) {
   try {
     const output = execFileSync("security", ["find-identity", "-v", "-p", "codesigning"]);
-    const match = output
-      .toString()
-      .match(/^\s*\d+\) ([0-9A-F]{40}) "(Developer ID Application: .+ \(([A-Z0-9]{10})\))"$/m);
-    return match ? { hash: match[1], name: match[2], team: match[3] } : null;
+    const pattern =
+      /^\s*\d+\) ([0-9A-F]{40}) "(Developer ID Application: .+ \(([A-Z0-9]{10})\))"$/gm;
+    for (const match of output.toString().matchAll(pattern)) {
+      if (wanted == null || wanted === match[1] || wanted === match[2]) {
+        return { hash: match[1], name: match[2], team: match[3] };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -32,8 +39,16 @@ const args = ["--bundles", "app", "--config", "crates-tauri/yaak-app-proxy/tauri
 
 if (env.APPLE_SIGNING_IDENTITY) {
   console.log("Signing with APPLE_SIGNING_IDENTITY");
-  const team = env.APPLE_SIGNING_IDENTITY.match(/\(([A-Z0-9]{10})\)$/)?.[1];
+  const team =
+    env.APPLE_SIGNING_IDENTITY.match(/\(([A-Z0-9]{10})\)$/)?.[1] ??
+    findIdentity(env.APPLE_SIGNING_IDENTITY)?.team;
   env.YAAK_PROXY_TEAM_ID ??= env.APPLE_TEAM_ID ?? team;
+  if (env.YAAK_PROXY_TEAM_ID == null) {
+    console.error(
+      "Could not tell the signing team, which the helper must know. Set YAAK_PROXY_TEAM_ID or APPLE_TEAM_ID.",
+    );
+    process.exit(1);
+  }
 } else {
   const identity = process.platform === "darwin" ? findIdentity() : null;
   if (identity) {

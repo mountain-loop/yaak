@@ -261,11 +261,8 @@ pub fn run() -> i32 {
         log(&format!("Failed to create {}: {e}", state_dir.display()));
         return 1;
     }
-    let daemon = Arc::new(Daemon::open(
-        SystemNetworksetup,
-        SystemProcesses,
-        state_dir.join("state.json"),
-    ));
+    let daemon =
+        Arc::new(Daemon::open(SystemNetworksetup, SystemProcesses, state_dir.join("state.json")));
     // The owner may have exited while the daemon was down.
     daemon.watch();
 
@@ -340,10 +337,13 @@ fn blocked_signals() -> libc::sigset_t {
 }
 
 fn log(message: &str) {
-    eprintln!("{} {message}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or_default());
+    eprintln!(
+        "{} {message}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or_default()
+    );
 }
 
 #[cfg(test)]
@@ -565,7 +565,10 @@ mod tests {
         assert!(daemon.ns.changes.lock().unwrap().is_empty());
     }
 
-    fn exchange(verifier: &dyn Verifier, lines: &[&str]) -> (Vec<Response>, After, Vec<ProxySetting>) {
+    fn exchange(
+        verifier: &dyn Verifier,
+        lines: &[&str],
+    ) -> (Vec<Response>, After, Vec<ProxySetting>) {
         let dir = tempfile::tempdir().unwrap();
         let daemon = daemon(dir.path());
         let (server, mut client) = UnixStream::pair().unwrap();

@@ -36,8 +36,11 @@ pub const TEAM_ID: &str = match option_env!("YAAK_PROXY_TEAM_ID") {
 
 /// The bundle identifiers of the apps served: the release app, and the dev app as well in a
 /// debug build of the helper.
-pub const APP_IDENTIFIERS: &[&str] =
-    if cfg!(debug_assertions) { &["app.yaak.proxy", "app.yaak.proxy.dev"] } else { &["app.yaak.proxy"] };
+pub const APP_IDENTIFIERS: &[&str] = if cfg!(debug_assertions) {
+    &["app.yaak.proxy", "app.yaak.proxy.dev"]
+} else {
+    &["app.yaak.proxy"]
+};
 
 /// The code requirement a caller must satisfy.
 pub fn code_requirement() -> String {

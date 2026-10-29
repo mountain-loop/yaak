@@ -5,7 +5,9 @@
 
 use core_foundation::base::TCFType;
 use core_foundation::data::CFData;
-use security_framework::os::macos::code_signing::{Flags, GuestAttributes, SecCode, SecRequirement};
+use security_framework::os::macos::code_signing::{
+    Flags, GuestAttributes, SecCode, SecRequirement,
+};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::str::FromStr;
@@ -34,7 +36,10 @@ impl Peer {
             )
         };
         if rc != 0 {
-            return Err(format!("Failed to read the peer pid: {}", std::io::Error::last_os_error()));
+            return Err(format!(
+                "Failed to read the peer pid: {}",
+                std::io::Error::last_os_error()
+            ));
         }
         let mut audit_token = [0u8; 32];
         let mut len = audit_token.len() as libc::socklen_t;
