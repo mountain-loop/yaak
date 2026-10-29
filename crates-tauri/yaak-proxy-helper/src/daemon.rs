@@ -13,6 +13,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -201,11 +202,63 @@ fn status(state: &State) -> Status {
     }
 }
 
+/// How many connections are served at once. The app needs one; more are refused.
+pub const MAX_CONNECTIONS: usize = 4;
+
+/// A counting semaphore for connections being served.
+pub struct Slots {
+    taken: Arc<AtomicUsize>,
+    max: usize,
+}
+
+/// A connection's place among [`Slots`], given back when dropped.
+pub struct Slot(Arc<AtomicUsize>);
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl Slots {
+    pub fn new(max: usize) -> Self {
+        Self { taken: Arc::new(AtomicUsize::new(0)), max }
+    }
+
+    /// A slot, unless all are taken.
+    pub fn try_take(&self) -> Option<Slot> {
+        let max = self.max;
+        self.taken
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| (n < max).then_some(n + 1))
+            .ok()
+            .map(|_| Slot(self.taken.clone()))
+    }
+}
+
+/// Takes a connection on, before any thread is spawned for it: a free slot, and the kernel's
+/// word on who is calling. Both are cheap; the signature check is not, so it runs in the
+/// connection's own thread.
+pub fn admit(stream: &UnixStream, slots: &Slots) -> Result<(Peer, Slot), String> {
+    let slot = slots.try_take().ok_or("The helper is busy; try again")?;
+    let peer = Peer::of(stream)?;
+    Ok((peer, slot))
+}
+
+/// Answers a connection that was not admitted with why, briefly, before it is closed.
+fn refuse(stream: &UnixStream, why: &str) {
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+    let mut line = serde_json::to_string(&Response::error(why)).unwrap_or_default();
+    line.push('\n');
+    let mut writer = stream;
+    let _ = writer.write_all(line.as_bytes());
+}
+
 /// Answers one connection's requests, one line each, once the peer passes `verifier`. An
 /// unregister leaves the daemon running: it stops when macOS confirms the unregistration, and
 /// if that never comes, it is still there to answer.
 pub fn serve_connection<N: Networksetup, P: Processes>(
     stream: UnixStream,
+    peer: Peer,
     daemon: &Daemon<N, P>,
     verifier: &dyn Verifier,
 ) {
@@ -218,15 +271,11 @@ pub fn serve_connection<N: Networksetup, P: Processes>(
         writer.write_all(line.as_bytes()).is_ok()
     };
 
-    let peer = Peer::of(&stream).and_then(|peer| verifier.verify(&peer).map(|()| peer));
-    let peer = match peer {
-        Ok(peer) => peer,
-        Err(e) => {
-            log(&e);
-            reply(&Response::error(e));
-            return;
-        }
-    };
+    if let Err(e) = verifier.verify(&peer) {
+        log(&e);
+        reply(&Response::error(e));
+        return;
+    }
 
     let mut reader = BufReader::new(&stream);
     loop {
@@ -310,13 +359,29 @@ pub fn run() -> i32 {
     });
 
     let verifier: Arc<dyn Verifier> = Arc::new(CodeSignature::default());
+    let slots = Slots::new(MAX_CONNECTIONS);
     for stream in listener.incoming() {
         let Ok(stream) = stream else {
             continue;
         };
+        let (peer, slot) = match admit(&stream, &slots) {
+            Ok(admitted) => admitted,
+            Err(why) => {
+                log(&why);
+                refuse(&stream, &why);
+                continue;
+            }
+        };
         let daemon = daemon.clone();
         let verifier = verifier.clone();
-        std::thread::spawn(move || serve_connection(stream, &daemon, verifier.as_ref()));
+        let spawned = std::thread::Builder::new().spawn(move || {
+            let _slot = slot;
+            serve_connection(stream, peer, &daemon, verifier.as_ref());
+        });
+        // The closure, and with it the connection and its slot, is dropped: closed and freed.
+        if let Err(e) = spawned {
+            log(&format!("Failed to start a thread for pid {}: {e}", peer.pid));
+        }
     }
     0
 }
@@ -613,7 +678,8 @@ mod tests {
             client.write_all(format!("{line}\n").as_bytes()).unwrap();
         }
         client.shutdown(std::net::Shutdown::Write).unwrap();
-        serve_connection(server, &daemon, verifier);
+        let peer = Peer::of(&server).unwrap();
+        serve_connection(server, peer, &daemon, verifier);
         let mut out = String::new();
         client.read_to_string(&mut out).unwrap();
         let responses = out.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
@@ -667,6 +733,36 @@ mod tests {
         );
         assert_eq!(responses.len(), 3);
         assert!(responses.iter().all(|r| r.ok));
+    }
+
+    #[test]
+    fn slots_cap_connections_and_free_on_drop() {
+        let slots = Slots::new(2);
+        let a = slots.try_take().unwrap();
+        let _b = slots.try_take().unwrap();
+        assert!(slots.try_take().is_none());
+        drop(a);
+        assert!(slots.try_take().is_some());
+    }
+
+    #[test]
+    fn refuses_a_connection_over_the_cap_with_a_short_reply() {
+        let slots = Slots::new(MAX_CONNECTIONS);
+        let held: Vec<_> = (0..MAX_CONNECTIONS).map(|_| slots.try_take().unwrap()).collect();
+        let (server, mut client) = UnixStream::pair().unwrap();
+        let why = admit(&server, &slots).err().unwrap();
+        refuse(&server, &why);
+        drop(server);
+        let mut out = String::new();
+        client.read_to_string(&mut out).unwrap();
+        let response: Response = serde_json::from_str(out.trim()).unwrap();
+        assert_eq!(response.error.as_deref(), Some("The helper is busy; try again"));
+
+        // Admitted again once one is free, with the peer read before any thread runs.
+        drop(held);
+        let (server, _client) = UnixStream::pair().unwrap();
+        let (peer, _slot) = admit(&server, &slots).unwrap();
+        assert_eq!(peer.pid, std::process::id() as i32);
     }
 
     #[test]
