@@ -1,6 +1,7 @@
 use include_dir::{Dir, include_dir};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{OpenFlags, Transaction, TransactionBehavior};
 use std::path::Path;
 use std::time::Duration;
@@ -76,10 +77,23 @@ pub fn open_blobs_read_only(path: &Path) -> Result<BlobManager> {
     Ok(BlobManager::new(readers.clone(), readers))
 }
 
+/// `sidebar_path(url)`, the app sidebar's place for a URL, for filtering by its nodes.
+fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.create_scalar_function(
+        "sidebar_path",
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?)),
+    )
+}
+
 fn read_only_pool(path: &Path) -> Result<SqlitePool> {
     let manager = SqliteConnectionManager::file(path)
         .with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX)
-        .with_init(|conn| conn.busy_timeout(Duration::from_millis(5000)));
+        .with_init(|conn| {
+            conn.busy_timeout(Duration::from_millis(5000))?;
+            add_functions(conn)
+        });
     Pool::builder()
         .max_size(2)
         .connection_timeout(Duration::from_secs(10))
@@ -91,7 +105,8 @@ fn file_pool(path: &Path, max_size: u32) -> Result<SqlitePool> {
     let manager = SqliteConnectionManager::file(path).with_init(|conn| {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        conn.busy_timeout(Duration::from_millis(5000))
+        conn.busy_timeout(Duration::from_millis(5000))?;
+        add_functions(conn)
     });
     Pool::builder()
         .max_size(max_size)

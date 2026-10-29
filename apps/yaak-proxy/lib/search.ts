@@ -67,25 +67,46 @@ function matchesStatus(status: number | null, term: string): boolean {
   return term.length === 3 ? status === Number(term) : String(status).startsWith(term);
 }
 
-/**
- * The URL is the host or path `node` names, or something below it. The host matches in any
- * case, as the sidebar lowercases it; the path as written.
- */
+/** The URL is the host or path `node` names, or something below it, by the sidebar's rules */
 function isUnder(url: string, node: string): boolean {
-  const slash = node.indexOf("/");
-  const host = slash === -1 ? node : node.slice(0, slash);
-  const path = slash === -1 ? "" : node.slice(slash);
-  for (const scheme of ["http://", "https://"]) {
-    const origin = scheme + host;
-    if (url.slice(0, origin.length).toLowerCase() !== origin.toLowerCase()) continue;
-    if (url.slice(origin.length, origin.length + path.length) !== path) continue;
-    const prefix = origin + path;
-    const next = url.charAt(prefix.length);
-    if (next === "" || next === "/" || next === "?" || next === "#") return true;
-    // A host's flows on another port sit under it too.
-    if (next === ":" && !node.includes("/") && !node.includes(":")) return true;
+  const path = sidebarPath(url);
+  const want = normalizeNode(node);
+  return path === want || path.startsWith(`${want}/`);
+}
+
+/**
+ * Where the sidebar places a URL: its host, lowercased and without its scheme's default port,
+ * then its path's non-empty segments, joined by `/`, as in `api.stripe.com/v1/charges`. A URL
+ * without a scheme is a host of its own. `sidebar_path` in `crates-proxy/yaak-proxy-lib`, which
+ * the database filters by, follows the same rules.
+ */
+export function sidebarPath(url: string): string {
+  const schemeEnd = url.indexOf("://");
+  if (schemeEnd === -1) return url;
+  const scheme = url.slice(0, schemeEnd).toLowerCase();
+  const rest = url.slice(schemeEnd + 3);
+  const authorityEnd = rest.search(/[/?#]/);
+  let host = (authorityEnd === -1 ? rest : rest.slice(0, authorityEnd)).toLowerCase();
+  const defaultPort =
+    scheme === "http" || scheme === "ws"
+      ? ":80"
+      : scheme === "https" || scheme === "wss"
+        ? ":443"
+        : null;
+  if (defaultPort != null && host.endsWith(defaultPort)) {
+    host = host.slice(0, -defaultPort.length);
   }
-  return false;
+  const path = authorityEnd === -1 ? "" : (rest.slice(authorityEnd).split(/[?#]/)[0] ?? "");
+  const segments = path.split("/").filter((s) => s !== "");
+  return [host, ...segments].join("/");
+}
+
+/** A sidebar node as `sidebarPath` writes it, its host lowercased */
+function normalizeNode(node: string): string {
+  const slash = node.indexOf("/");
+  return slash === -1
+    ? node.toLowerCase()
+    : `${node.slice(0, slash).toLowerCase()}${node.slice(slash)}`;
 }
 
 /** The search box's text as terms for `list_flows`, or null when it has none */

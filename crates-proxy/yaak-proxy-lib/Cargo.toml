@@ -17,7 +17,7 @@ include_dir = "0.7"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.32"
 reqwest = { workspace = true, features = ["json"] }
-rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
+rusqlite = { version = "0.38", features = ["bundled", "chrono", "functions"] }
 sea-query = { version = "1.0", features = ["with-chrono", "attr"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

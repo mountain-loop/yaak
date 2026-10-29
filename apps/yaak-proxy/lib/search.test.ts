@@ -1,6 +1,6 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test } from "vite-plus/test";
-import { matchesQuery, searchTerms, selectionQuery } from "./search";
+import { matchesQuery, searchTerms, selectionQuery, sidebarPath } from "./search";
 
 function flow(url: string, extra: Partial<Flow> = {}): Flow {
   return {
@@ -60,11 +60,15 @@ describe("matchesQuery", () => {
     expect(search("")).toEqual(all);
   });
 
-  test("keeps flows under a host or path, on any port of a host", () => {
+  test("keeps flows under a host or path, as the sidebar places them", () => {
     const under = (node: string, url: string) => matchesQuery(flow(url), { under: [node] });
     expect(under("api.stripe.com", "https://api.stripe.com/v1/charges")).toBe(true);
     expect(under("api.stripe.com", "http://api.stripe.com")).toBe(true);
-    expect(under("api.stripe.com", "https://api.stripe.com:8443/v1")).toBe(true);
+    // Another port is a host node of its own, as in the sidebar.
+    expect(under("api.stripe.com", "https://api.stripe.com:8443/v1")).toBe(false);
+    // Empty segments and default ports are left out, as the sidebar leaves them.
+    expect(under("example.com/v1/users", "https://example.com/v1//users")).toBe(true);
+    expect(under("x.com/a", "http://x.com:80/a")).toBe(true);
     expect(under("api.stripe.com", "https://api.stripe.community/")).toBe(false);
     expect(under("api.stripe.com/v1/charges", "https://api.stripe.com/v1/charges/ch_1?x")).toBe(
       true,
@@ -92,6 +96,25 @@ describe("matchesQuery", () => {
   test("combines terms with the sidebar's selection", () => {
     expect(matchesQuery(stripe, { q: "post", under: ["api.stripe.com"] })).toBe(true);
     expect(matchesQuery(stripe, { q: "post", under: ["api.github.com"] })).toBe(false);
+  });
+});
+
+describe("sidebarPath", () => {
+  // The cases `sidebar_path_rules` in `flows.rs` checks, so the two agree.
+  test("is the lowercased host without its default port, then the non-empty segments", () => {
+    for (const [url, path] of [
+      ["https://example.com/v1//users", "example.com/v1/users"],
+      ["http://x.com:80/a", "x.com/a"],
+      ["https://x.com:443/a?q=1#f", "x.com/a"],
+      ["http://x.com:443/a", "x.com:443/a"],
+      ["https://API.Stripe.com:8443/", "api.stripe.com:8443"],
+      ["https://api.stripe.com", "api.stripe.com"],
+      ["https://api.stripe.com?x=/y", "api.stripe.com"],
+      ["http://[::1]:80/a/B", "[::1]/a/B"],
+      ["/api", "/api"],
+    ]) {
+      expect(sidebarPath(url ?? ""), url).toBe(path);
+    }
   });
 });
 

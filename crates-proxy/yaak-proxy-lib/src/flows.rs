@@ -139,35 +139,17 @@ impl FlowFilter {
             params.push(host.to_lowercase().into());
         }
         if let Some(under) = &self.under {
-            // Each is `scheme://` and then the node, ending the URL or followed by what can
-            // follow a host or a path segment. The host matches in any case, as the app's
-            // sidebar lowercases it; the path as written.
+            // The node itself, or anything below it, by the sidebar's rules.
             let mut any = Vec::new();
             for node in under {
-                let (host, path) = node.find('/').map_or((node.as_str(), ""), |i| node.split_at(i));
-                let path_len = path.chars().count() as i64;
-                for scheme in ["http://", "https://"] {
-                    let origin = format!("{scheme}{host}");
-                    let origin_len = origin.chars().count() as i64;
-                    any.push(
-                        "(lower(substr(url, 1, ?)) = lower(?) AND substr(url, ? + 1, ?) = ? \
-                        AND substr(url, ? + ? + 1, 1) IN ('', '/', '?', '#'))",
-                    );
-                    params.extend([
-                        origin_len.into(),
-                        origin.clone().into(),
-                        origin_len.into(),
-                        path_len.into(),
-                        path.to_string().into(),
-                        origin_len.into(),
-                        path_len.into(),
-                    ]);
-                    if path.is_empty() && !host.contains(':') {
-                        // A host's flows on another port sit under it too.
-                        any.push("(lower(substr(url, 1, ?)) = lower(?))");
-                        params.extend([(origin_len + 1).into(), format!("{origin}:").into()]);
-                    }
-                }
+                let node = normalize_node(node);
+                any.push("(sidebar_path(url) = ? OR substr(sidebar_path(url), 1, ?) = ?)");
+                let below = format!("{node}/");
+                params.extend([
+                    node.into(),
+                    (below.chars().count() as i64).into(),
+                    below.into(),
+                ]);
             }
             let any = if any.is_empty() { "0".to_string() } else { any.join(" OR ") };
             sql.push_str(&format!(" AND ({any})"));
@@ -203,6 +185,44 @@ impl FlowFilter {
 const HOST_SQL: &str = "(SELECT CASE WHEN instr(r, '/') > 0 THEN substr(r, 1, instr(r, '/') - 1) \
     ELSE r END FROM (SELECT replace(replace(CASE WHEN instr(url, '://') > 0 \
     THEN substr(url, instr(url, '://') + 3) ELSE url END, '?', '/'), '#', '/') AS r))";
+
+/// Where the app's sidebar places a URL: its host, lowercased and without its scheme's default
+/// port, then its path's non-empty segments, joined by `/`, as in `api.stripe.com/v1/charges`.
+/// A URL without a scheme is a host of its own. `sidebarPath` in the app's `lib/search.ts`
+/// follows the same rules, and the sidebar's nodes are built from it.
+pub fn sidebar_path(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return url.to_string();
+    };
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let (authority, rest) = rest.split_at(end);
+    let mut host = authority.to_ascii_lowercase();
+    let default_port = match scheme.to_ascii_lowercase().as_str() {
+        "http" | "ws" => Some(":80"),
+        "https" | "wss" => Some(":443"),
+        _ => None,
+    };
+    if let Some(port) = default_port
+        && host.ends_with(port)
+    {
+        host.truncate(host.len() - port.len());
+    }
+    let path = rest.split(['?', '#']).next().unwrap_or_default();
+    let mut key = host;
+    for segment in path.split('/').filter(|s| !s.is_empty()) {
+        key.push('/');
+        key.push_str(segment);
+    }
+    key
+}
+
+/// A sidebar node as `sidebar_path` writes it, its host lowercased.
+fn normalize_node(node: &str) -> String {
+    match node.split_once('/') {
+        Some((host, path)) => format!("{}/{path}", host.to_ascii_lowercase()),
+        None => node.to_ascii_lowercase(),
+    }
+}
 
 /// The SQL condition for a status term: `404` exactly, `40` as the start of one, or a class
 /// such as `4xx`. None when the term is not one.
@@ -514,20 +534,44 @@ mod tests {
             flow("https://api.stripe.com:8443/v1/charges", "GET", Some(200), None),
             flow("http://api.stripe.com", "GET", Some(200), None),
             flow("https://api.stripe.community/", "GET", Some(200), None),
-            flow("https://example.com/", "GET", Some(200), None),
+            flow("https://example.com/v1//users", "GET", Some(200), None),
+            flow("http://x.com:80/a", "GET", Some(200), None),
+            flow("https://x.com:443/a", "GET", Some(200), None),
         ]);
         let under = |nodes: &[&str]| {
             let nodes = nodes.iter().map(|n| n.to_string()).collect();
             urls(&db, FlowFilter { under: Some(nodes), ..Default::default() }).len()
         };
-        assert_eq!(under(&["api.stripe.com"]), 5);
+        // A host on another port is a node of its own, as in the sidebar.
+        assert_eq!(under(&["api.stripe.com"]), 4);
         assert_eq!(under(&["api.stripe.com:8443"]), 1);
         assert_eq!(under(&["api.stripe.com/v1/charges"]), 2);
+        // Empty segments and default ports are left out, as the sidebar leaves them.
+        assert_eq!(under(&["example.com/v1/users"]), 1);
+        assert_eq!(under(&["x.com/a"]), 2);
         assert_eq!(under(&["api.stripe.com/v1/charges", "example.com"]), 3);
         assert_eq!(under(&[]), 0);
         // The sidebar lowercases hosts; paths keep their case.
         assert_eq!(under(&["API.stripe.com/v1/charges"]), 2);
         assert_eq!(under(&["api.stripe.com/V1/charges"]), 0);
+    }
+
+    /// The cases `lib/search.test.ts` checks `sidebarPath` against, so the two agree.
+    #[test]
+    fn sidebar_path_rules() {
+        for (url, path) in [
+            ("https://example.com/v1//users", "example.com/v1/users"),
+            ("http://x.com:80/a", "x.com/a"),
+            ("https://x.com:443/a?q=1#f", "x.com/a"),
+            ("http://x.com:443/a", "x.com:443/a"),
+            ("https://API.Stripe.com:8443/", "api.stripe.com:8443"),
+            ("https://api.stripe.com", "api.stripe.com"),
+            ("https://api.stripe.com?x=/y", "api.stripe.com"),
+            ("http://[::1]:80/a/B", "[::1]/a/B"),
+            ("/api", "/api"),
+        ] {
+            assert_eq!(sidebar_path(url), path, "{url}");
+        }
     }
 
     #[test]

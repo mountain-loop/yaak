@@ -5,7 +5,7 @@ import { atom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useCallback } from "react";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
-import { appKeyOf, appNodeId } from "../lib/search";
+import { appKeyOf, appNodeId, sidebarPath } from "../lib/search";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { flowsAtom, flowTotalAtom } from "../lib/store";
 import { AppIcon } from "./AppIcon";
@@ -67,21 +67,15 @@ const nodeIdsByFlow = new WeakMap<Flow, string[]>();
 function nodeIdsOf(ex: Flow): string[] {
   let ids = nodeIdsByFlow.get(ex);
   if (ids != null) return ids;
-  let hostname: string;
-  let segments: string[];
-  try {
-    const url = new URL(ex.url);
-    hostname = url.host;
-    segments = url.pathname.split("/").filter(Boolean);
-  } catch {
-    hostname = ex.url;
-    segments = [];
-  }
+  // By the rules the database filters by, so a node shows the flows it counts.
+  const path = sidebarPath(ex.url);
+  const schemeless = !ex.url.includes("://");
+  const [hostname = "", ...segments] = schemeless ? [path] : path.split("/");
   ids = [`domain:${hostname}`];
-  let path = `path:${hostname}`;
+  let node = `path:${hostname}`;
   for (const seg of segments) {
-    path += `/${seg}`;
-    ids.push(path);
+    node += `/${seg}`;
+    ids.push(node);
   }
   nodeIdsByFlow.set(ex, ids);
   return ids;
