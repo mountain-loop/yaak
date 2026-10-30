@@ -164,6 +164,10 @@ recording: boolean,
  */
 systemProxyAtLaunch: boolean, 
 /**
+ * The HTTP versions offered to clients.
+ */
+httpVersion: HttpVersion, 
+/**
  * Why the engine last failed to start, until it starts.
  */
 startError: string | null, 
@@ -180,6 +184,12 @@ export type HelperRegisterRequest = Record<string, never>;
 export type HelperState = "unavailable" | "not_registered" | "requires_approval" | "enabled" | "not_found";
 
 export type HelperUnregisterRequest = Record<string, never>;
+
+/**
+ * The HTTP versions offered to clients in intercepted HTTPS. Upstream, the engine speaks
+ * whichever the server picks either way.
+ */
+export type HttpVersion = "auto" | "http1Only";
 
 export type ListActionsRequest = Record<string, never>;
 
@@ -228,7 +238,7 @@ export type ProxyStatePayload = { state: ProxyState, };
 
 export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
 
 export type SaveFlowToYaakRequest = { flowId: string, workspaceId: string, folderId?: string, 
 /**
@@ -282,6 +292,8 @@ name: string,
  * port when it has none. Absent when `networksetup` lists neither.
  */
 id?: string, http: ProxySetting, https: ProxySetting, };
+
+export type SetHttpVersionRequest = { httpVersion: HttpVersion, };
 
 export type SetRecordingRequest = { enabled: boolean, };
 

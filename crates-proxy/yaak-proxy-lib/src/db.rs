@@ -140,6 +140,7 @@ mod tests {
             ALTER TABLE flows DROP COLUMN client_name;
             ALTER TABLE flows DROP COLUMN client_bundle_id;
             ALTER TABLE flows DROP COLUMN client_path;
+            ALTER TABLE flows DROP COLUMN cancelled;
             INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://example.com', 'GET');",
         )
         .unwrap();
@@ -150,6 +151,7 @@ mod tests {
         assert_eq!(flows.len(), 1);
         assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
         assert_eq!((flows[0].client_pid, flows[0].client_name.as_deref()), (None, None));
+        assert!(!flows[0].cancelled);
     }
 
     #[test]
@@ -194,6 +196,7 @@ mod tests {
             "client_name",
             "client_bundle_id",
             "client_path",
+            "cancelled",
         ] {
             assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
         }

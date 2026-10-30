@@ -37,8 +37,10 @@ pub async fn read_body(
 ) -> Result<DecodedBody, String> {
     let raw = read_raw_body(blobs, &flow.id, body)?;
     let stored_size = raw.len();
-    // A response that failed after its headers ended short on the wire.
-    let cut = body == FlowBody::Response && flow.status.is_some() && flow.error.is_some();
+    // A response that failed or was cancelled after its headers ended short on the wire.
+    let cut = body == FlowBody::Response
+        && flow.status.is_some()
+        && (flow.error.is_some() || flow.cancelled);
     let wire_truncated = flow.truncated(body) || cut;
     let encoding =
         ContentEncoding::from_header(find_header(flow.headers(body), "content-encoding"));
@@ -90,7 +92,39 @@ mod tests {
         let request = read_body(&blobs, &cut, FlowBody::Request, 1024).await.unwrap();
         assert!(!request.truncated);
         // With no headers there was never a response body to cut.
-        let refused = Flow { status: None, ..cut };
+        let refused = Flow { status: None, ..cut.clone() };
         assert!(!read_body(&blobs, &refused, FlowBody::Response, 1024).await.unwrap().truncated);
+
+        // The client cancelling partway through cuts it short the same way.
+        let cancelled = Flow { error: None, cancelled: true, ..cut };
+        let body = read_body(&blobs, &cancelled, FlowBody::Response, 1024).await.unwrap();
+        assert_eq!((body.data.as_slice(), body.truncated), (&b"{\"rows\": ["[..], true));
+    }
+
+    #[tokio::test]
+    async fn cancelled_gzip_response_keeps_what_decoded() {
+        use std::io::Write;
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gzip.write_all(&[b'z'; 4096]).unwrap();
+        let gzip = gzip.finish().unwrap();
+        let mut writer =
+            BodyChunkWriter::new(blobs.clone(), Flow::body_id("fl_gz", FlowBody::Response));
+        writer.write(&gzip[..gzip.len() / 2]).unwrap();
+        writer.finish().unwrap();
+        let flow = Flow {
+            id: "fl_gz".into(),
+            status: Some(200),
+            cancelled: true,
+            response_headers: vec![crate::models::ProxyHeader {
+                name: "content-encoding".into(),
+                value: "gzip".into(),
+            }],
+            ..Default::default()
+        };
+
+        let body = read_body(&blobs, &flow, FlowBody::Response, 8192).await.unwrap();
+        assert!(body.truncated);
+        assert_eq!(body.decode_error, None);
     }
 }

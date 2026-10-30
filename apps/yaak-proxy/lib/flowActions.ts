@@ -54,7 +54,7 @@ export function useFlowActions(): (flow: Flow) => DropdownItem[] {
           showToast({ message: `Failed to copy ${label}: ${String(err)}`, color: "danger" });
         }
       };
-      const noResponse = flow.error != null && flow.status == null;
+      const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
       return [
         {
           label: flow.savedRequestId == null ? "Save as Yaak Request" : "Save to Yaak Again",

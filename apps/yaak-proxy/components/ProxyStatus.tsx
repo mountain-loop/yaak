@@ -28,7 +28,7 @@ import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 
 /**
- * The header's state pill and its menu: recording, the system proxy and the certificate. The
+ * The header's state pill and its menu: recording, the system proxy, the certificate and HTTP/2. The
  * engine runs for as long as the app does, so the pill shows whether flows are being stored. A
  * certificate that is not trusted steps out of the menu beside the pill until it is.
  */
@@ -39,6 +39,7 @@ export function ProxyStatus() {
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
   const setAtLaunch = useSetSystemProxyAtLaunch();
+  const setHttpVersion = useSetHttpVersion();
   const copyEnvironment = useCopyEnvironment();
   const setHelperDialogOpen = useSetAtom(helperDialogOpenAtom);
   const { caStatus, trust, systemProxy, setSystemProxy } = setup;
@@ -185,6 +186,30 @@ export function ProxyStatus() {
             >
               {trust.error != null ? "Try again" : "Trust certificate"}
             </Button>
+          }
+        />
+      ),
+    },
+    {
+      type: "content",
+      label: (
+        <MenuRow
+          icon={<Icon icon="zap" size="sm" color="secondary" />}
+          title="HTTP/2"
+          description="Lets browsers send many requests at once. Turn off for apps that misbehave on it. Applies to new connections."
+          action={
+            <KeepMenuOpen>
+              <Checkbox
+                title="HTTP/2"
+                hideLabel
+                checked={proxyState?.httpVersion !== "http1Only"}
+                // The owner's engine would not see the change until it restarts.
+                disabled={other != null || setHttpVersion.isPending}
+                onChange={(enabled) =>
+                  setHttpVersion.mutate({ httpVersion: enabled ? "auto" : "http1Only" })
+                }
+              />
+            </KeepMenuOpen>
           }
         />
       ),
@@ -348,6 +373,14 @@ function HelperMenuRow({
 function useSetSystemProxyAtLaunch() {
   const store = useStore();
   return useRpcMutation("set_system_proxy_at_launch", {
+    onSettled: () => void refreshProxyState(store),
+  });
+}
+
+/** Saves the HTTP versions offered to clients, which the engine applies to new connections */
+function useSetHttpVersion() {
+  const store = useStore();
+  return useRpcMutation("set_http_version", {
     onSettled: () => void refreshProxyState(store),
   });
 }

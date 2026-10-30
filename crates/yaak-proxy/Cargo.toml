@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 hyper = { version = "1", features = ["http1", "http2", "server", "client"] }
-hyper-util = { version = "0.1", features = ["tokio", "http1", "client-legacy"] }
+hyper-util = { version = "0.1", features = ["tokio", "http1", "client-legacy", "server-auto"] }
 http-body-util = "0.1"
 http = "1"
 bytes = "1"
