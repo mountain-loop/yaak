@@ -179,6 +179,12 @@ otherOwner: OtherOwner | null, };
 
 export type GlobalAction = "recording_toggle" | "flows_clear";
 
+export type HelperRegisterRequest = Record<string, never>;
+
+export type HelperState = "unavailable" | "not_registered" | "requires_approval" | "enabled" | "not_found";
+
+export type HelperUnregisterRequest = Record<string, never>;
+
 /**
  * The HTTP versions offered to clients in intercepted HTTPS. Upstream, the engine speaks
  * whichever the server picks either way.
@@ -232,7 +238,7 @@ export type ProxyStatePayload = { state: ProxyState, };
 
 export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
 
 export type SaveFlowToYaakRequest = { flowId: string, workspaceId: string, folderId?: string, 
 /**
@@ -280,7 +286,12 @@ export type ServiceProxy = {
 /**
  * The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
  */
-name: string, http: ProxySetting, https: ProxySetting, };
+name: string, 
+/**
+ * What stays the same when the service is renamed: its device ("en0"), or its hardware
+ * port when it has none. Absent when `networksetup` lists neither.
+ */
+id?: string, http: ProxySetting, https: ProxySetting, };
 
 export type SetHttpVersionRequest = { httpVersion: HttpVersion, };
 
@@ -304,6 +315,10 @@ enabled: boolean,
  * The port checked against.
  */
 port: number, services: Array<ServiceProxy>, backend: SystemProxyBackend, 
+/**
+ * The privileged helper's registration, which decides the backend.
+ */
+helper: HelperState, 
 /**
  * This platform has a system proxy the app can set.
  */

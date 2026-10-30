@@ -1,17 +1,26 @@
 //! The macOS system proxy: `networksetup` pointing the web and secure web proxies of every
 //! enabled network service at `127.0.0.1:<port>`. Reading needs no rights; changing needs an
-//! administrator, so changes run as one script through the backend in use. Everything here
-//! blocks, the password dialog included, so async callers go through `spawn_blocking`.
+//! administrator, which the privileged helper is, and which the password dialog and `sudo`
+//! borrow for one script. Each path saves the settings it replaces and puts them back when
+//! turned off. Everything here blocks, the password dialog included, so async callers go
+//! through `spawn_blocking`.
 
+use crate::helper::HelperState;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use ts_rs::TS;
+use yaak_proxy_helper::networksetup::{
+    NETWORKSETUP, Networksetup, Snapshot, disable_commands, enable_commands, read_services,
+};
+
+pub use yaak_proxy_helper::networksetup::{ProxySetting, ServiceProxy};
 
 /// How a change gets administrator rights.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub enum SystemProxyBackend {
-    /// The privileged helper, approved once in System Settings (not built yet).
+    /// The privileged helper, approved once in System Settings. No prompt.
     Helper,
     /// The standard macOS password dialog, through `osascript`.
     AdminPrompt,
@@ -29,101 +38,118 @@ pub struct SystemProxyStatus {
     pub port: u16,
     pub services: Vec<ServiceProxy>,
     pub backend: SystemProxyBackend,
+    /// The privileged helper's registration, which decides the backend.
+    pub helper: HelperState,
     /// This platform has a system proxy the app can set.
     pub supported: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_rpc.ts")]
-pub struct ServiceProxy {
-    /// The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
-    pub name: String,
-    pub http: ProxySetting,
-    pub https: ProxySetting,
-}
+/// Where the password dialog and `sudo` save the settings they replace, in the proxy data
+/// directory. The helper keeps its own, as root.
+pub const SNAPSHOT_FILE: &str = "system-proxy-snapshot.json";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "gen_rpc.ts")]
-pub struct ProxySetting {
-    pub enabled: bool,
-    pub server: String,
-    pub port: u16,
-}
-
-const HOST: &str = "127.0.0.1";
-
-impl ProxySetting {
-    fn points_at(&self, port: u16) -> bool {
-        self.enabled && self.server == HOST && self.port == port
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn load_snapshot(path: &Path) -> Result<Option<Snapshot>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Failed to read {}: {e}", path.display())),
     }
 }
 
-impl ServiceProxy {
-    /// Either proxy of the service sends traffic to `127.0.0.1:<port>`.
-    pub fn points_at(&self, port: u16) -> bool {
-        self.http.points_at(port) || self.https.points_at(port)
+/// The port the password dialog or `sudo` last pointed the system proxy at, while they have
+/// settings saved to put back.
+pub fn saved_port(snapshot_path: &Path) -> Option<u16> {
+    // Port 0 holds only settings no service matched, which route nothing.
+    load_snapshot(snapshot_path).ok().flatten().map(|s| s.port).filter(|p| *p != 0)
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn save_snapshot(path: &Path, snapshot: &Snapshot) -> Result<(), String> {
+    let json = serde_json::to_vec_pretty(snapshot).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("tmp");
+    std::fs::write(&tmp, json)
+        .and_then(|()| std::fs::rename(&tmp, path))
+        .map_err(|e| format!("Failed to save {}: {e}", path.display()))
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn remove_snapshot(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("Failed to delete {}: {e}", path.display())),
     }
 }
 
-/// The services from `networksetup -listallnetworkservices`, the disabled ones too with
-/// `include_disabled`. The first line is a legend; a leading `*` marks a disabled service.
+/// The password-dialog and `sudo` paths: reads through `ns`, and changes through `run`, which
+/// gets administrator rights for the whole list at once. Turning on saves the settings it
+/// replaces at `snapshot_path` first; turning off puts them back and deletes the file.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn parse_services(output: &str, include_disabled: bool) -> Vec<String> {
-    output
-        .lines()
-        .skip(1)
-        .map(str::trim)
-        .filter(|l| !l.is_empty() && (include_disabled || !l.starts_with('*')))
-        .map(|l| l.trim_start_matches('*').to_string())
-        .collect()
-}
-
-/// The output of `networksetup -getwebproxy` or `-getsecurewebproxy`.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn parse_proxy(output: &str) -> ProxySetting {
-    let mut setting = ProxySetting::default();
-    for line in output.lines() {
-        let Some((key, value)) = line.split_once(':') else {
-            continue;
-        };
-        let value = value.trim();
-        match key.trim() {
-            "Enabled" => setting.enabled = value.eq_ignore_ascii_case("yes"),
-            "Server" => setting.server = value.to_string(),
-            "Port" => setting.port = value.parse().unwrap_or_default(),
-            _ => {}
+fn set_scripted(
+    ns: &impl Networksetup,
+    run: impl FnOnce(&[Vec<String>]) -> Result<(), String>,
+    enabled: bool,
+    port: u16,
+    snapshot_path: &Path,
+) -> Result<(), String> {
+    if enabled {
+        let services = read_services(ns, false)?;
+        let saved = load_snapshot(snapshot_path)?;
+        let mut snapshot = saved.clone().unwrap_or_default();
+        snapshot.extend(&services, port);
+        // Saved before anything changes, so a crash after the change still restores.
+        save_snapshot(snapshot_path, &snapshot)?;
+        if let Err(e) = run(&enable_commands(&services, port)) {
+            // Usually cancelled, with nothing changed, and a snapshot kept would go stale, so
+            // what was there before goes back. Once anything points at us, it is what puts the
+            // rest back.
+            let changed = read_services(ns, false)?.iter().any(|s| s.points_at(port));
+            if !changed {
+                match saved {
+                    Some(saved) => save_snapshot(snapshot_path, &saved)?,
+                    None => remove_snapshot(snapshot_path)?,
+                }
+            }
+            return Err(e);
         }
+        return Ok(());
     }
-    setting
-}
 
-/// The `networksetup` calls that point `services` at `port`, or turn off those pointing at it.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-fn commands(services: &[ServiceProxy], enabled: bool, port: u16) -> Vec<Vec<String>> {
-    let mut commands = Vec::new();
-    for service in services {
-        let name = service.name.clone();
-        if enabled {
-            let port = port.to_string();
-            for (set, state) in [
-                ("-setwebproxy", "-setwebproxystate"),
-                ("-setsecurewebproxy", "-setsecurewebproxystate"),
-            ] {
-                commands.push(vec![set.into(), name.clone(), HOST.into(), port.clone()]);
-                commands.push(vec![state.into(), name.clone(), "on".into()]);
-            }
-        } else {
-            if service.http.points_at(port) {
-                commands.push(vec!["-setwebproxystate".into(), name.clone(), "off".into()]);
-            }
-            if service.https.points_at(port) {
-                commands.push(vec!["-setsecurewebproxystate".into(), name, "off".into()]);
-            }
-        }
+    // Disabled services too: one disabled since it was pointed at us would point at us again
+    // once re-enabled.
+    let services = read_services(ns, true)?;
+    let mut snapshot = load_snapshot(snapshot_path)?;
+    let (commands, used_up) = disable_commands(&services, snapshot.as_ref(), port);
+    if commands.is_empty() && !used_up {
+        return Ok(());
     }
-    commands
+    // Saved first, so a restore cut short is finished by the next one.
+    if let Some(snapshot) = snapshot.as_mut() {
+        snapshot.mark_restoring(&commands, &services);
+        save_snapshot(snapshot_path, snapshot)?;
+    }
+    if !commands.is_empty() {
+        run(&commands)?;
+    }
+    match snapshot {
+        Some(snapshot) if used_up => match snapshot.leftover(&services) {
+            // Kept for when the service is back, and merged into the next capture.
+            Some(leftover) => {
+                let names: Vec<&str> = leftover.services.iter().map(|s| s.name.as_str()).collect();
+                log::warn!("Keeping saved proxy settings no service matched: {}", names.join(", "));
+                save_snapshot(snapshot_path, &leftover)
+            }
+            None => remove_snapshot(snapshot_path),
+        },
+        Some(mut snapshot) => {
+            snapshot.restoring.clear();
+            save_snapshot(snapshot_path, &snapshot)
+        }
+        None => Ok(()),
+    }
 }
 
 /// The calls as one `sh` script that stops at the first failure.
@@ -152,22 +178,10 @@ fn applescript_string(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', r"\\").replace('"', "\\\""))
 }
 
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const NETWORKSETUP: &str = "/usr/sbin/networksetup";
-
 #[cfg(target_os = "macos")]
 mod imp {
     use super::*;
     use std::process::{Command, Output, Stdio};
-
-    fn networksetup(args: &[&str]) -> Result<String, String> {
-        let output = Command::new(NETWORKSETUP)
-            .args(args)
-            .output()
-            .map_err(|e| format!("Failed to run {NETWORKSETUP}: {e}"))?;
-        check(&output, NETWORKSETUP)?;
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
-    }
 
     fn check(output: &Output, program: &str) -> Result<(), String> {
         if output.status.success() {
@@ -181,21 +195,10 @@ mod imp {
         })
     }
 
-    pub fn services(include_disabled: bool) -> Result<Vec<ServiceProxy>, String> {
-        parse_services(&networksetup(&["-listallnetworkservices"])?, include_disabled)
-            .into_iter()
-            .map(|name| {
-                let http = parse_proxy(&networksetup(&["-getwebproxy", &name])?);
-                let https = parse_proxy(&networksetup(&["-getsecurewebproxy", &name])?);
-                Ok(ServiceProxy { name, http, https })
-            })
-            .collect()
-    }
-
     pub fn run_privileged(script: &str, backend: SystemProxyBackend) -> Result<(), String> {
         match backend {
             SystemProxyBackend::Helper => {
-                Err("The privileged helper is not available yet".to_string())
+                Err("The helper changes the system proxy itself, not by script".to_string())
             }
             SystemProxyBackend::AdminPrompt => {
                 let source = format!(
@@ -228,36 +231,67 @@ mod imp {
 
 /// Which services point where, judged against `port`.
 #[cfg(target_os = "macos")]
-pub fn status(port: u16, backend: SystemProxyBackend) -> Result<SystemProxyStatus, String> {
-    let services = imp::services(false)?;
+pub fn status(
+    port: u16,
+    backend: SystemProxyBackend,
+    helper: HelperState,
+) -> Result<SystemProxyStatus, String> {
+    let ns = yaak_proxy_helper::networksetup::SystemNetworksetup;
+    let services = read_services(&ns, false)?;
     let enabled = !services.is_empty()
         && services.iter().all(|s| s.http.points_at(port) && s.https.points_at(port));
-    Ok(SystemProxyStatus { enabled, port, services, backend, supported: true })
+    Ok(SystemProxyStatus { enabled, port, services, backend, helper, supported: true })
 }
 
-/// Points every enabled service at `127.0.0.1:<port>`, or turns off the services that point
-/// there, disabled ones included, leaving other proxies alone. Turning off with nothing
-/// pointing at `port` does nothing.
+/// Points every enabled service at `127.0.0.1:<port>`, or puts back the settings that were
+/// there, turning off any other proxy still pointing at `port`. Turning off with nothing
+/// pointing at `port` asks for nothing. `snapshot_path` is where the password dialog and
+/// `sudo` keep the settings they replace.
 #[cfg(target_os = "macos")]
-pub fn set(enabled: bool, port: u16, backend: SystemProxyBackend) -> Result<(), String> {
+pub fn set(
+    enabled: bool,
+    port: u16,
+    backend: SystemProxyBackend,
+    snapshot_path: &Path,
+) -> Result<(), String> {
     if port == 0 {
         return Err("The system proxy needs a port".to_string());
     }
-    // A service disabled since it was pointed at us would point at us again once re-enabled.
-    let commands = commands(&imp::services(!enabled)?, enabled, port);
-    if commands.is_empty() {
-        return Ok(());
+    match backend {
+        SystemProxyBackend::Helper => crate::helper::set(enabled, port),
+        SystemProxyBackend::AdminPrompt | SystemProxyBackend::Sudo => set_scripted(
+            &yaak_proxy_helper::networksetup::SystemNetworksetup,
+            |commands| imp::run_privileged(&script(commands), backend),
+            enabled,
+            port,
+            snapshot_path,
+        ),
     }
-    imp::run_privileged(&script(&commands), backend)
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn status(port: u16, backend: SystemProxyBackend) -> Result<SystemProxyStatus, String> {
-    Ok(SystemProxyStatus { enabled: false, port, services: Vec::new(), backend, supported: false })
+pub fn status(
+    port: u16,
+    backend: SystemProxyBackend,
+    helper: HelperState,
+) -> Result<SystemProxyStatus, String> {
+    Ok(SystemProxyStatus {
+        enabled: false,
+        port,
+        services: Vec::new(),
+        backend,
+        helper,
+        supported: false,
+    })
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn set(enabled: bool, _port: u16, _backend: SystemProxyBackend) -> Result<(), String> {
+pub fn set(
+    enabled: bool,
+    _port: u16,
+    _backend: SystemProxyBackend,
+    _snapshot_path: &Path,
+) -> Result<(), String> {
     if !enabled {
         return Ok(());
     }
@@ -267,54 +301,181 @@ pub fn set(enabled: bool, _port: u16, _backend: SystemProxyBackend) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yaak_proxy_helper::networksetup::HOST;
+    use yaak_proxy_helper::networksetup::fake::FakeNetworksetup;
 
     fn setting(enabled: bool, server: &str, port: u16) -> ProxySetting {
         ProxySetting { enabled, server: server.into(), port }
     }
 
-    #[test]
-    fn parses_services() {
-        let output = "An asterisk (*) denotes that a network service is disabled.\nWi-Fi\n*Thunderbolt Bridge\nUSB 10/100/1000 LAN\n\n";
-        assert_eq!(parse_services(output, false), vec!["Wi-Fi", "USB 10/100/1000 LAN"]);
-        // A disabled service can still hold a proxy setting pointing at us.
-        assert_eq!(
-            parse_services(output, true),
-            vec!["Wi-Fi", "Thunderbolt Bridge", "USB 10/100/1000 LAN"]
-        );
+    /// Runs the "privileged" commands against the fake, counting the prompts.
+    fn runner<'a>(
+        ns: &'a FakeNetworksetup,
+        prompts: &'a std::cell::Cell<usize>,
+    ) -> impl FnOnce(&[Vec<String>]) -> Result<(), String> + 'a {
+        move |commands| {
+            prompts.set(prompts.get() + 1);
+            yaak_proxy_helper::networksetup::apply(ns, commands)
+        }
+    }
+
+    fn fake() -> FakeNetworksetup {
+        FakeNetworksetup::new(vec![
+            ("Wi-Fi", setting(true, "corp-proxy", 3128), setting(false, "corp-proxy", 3129)),
+            ("Ethernet", ProxySetting::default(), ProxySetting::default()),
+        ])
     }
 
     #[test]
-    fn parses_proxy() {
-        let on = "Enabled: Yes\nServer: 127.0.0.1\nPort: 9090\nAuthenticated Proxy Enabled: 0\n";
-        assert_eq!(parse_proxy(on), setting(true, "127.0.0.1", 9090));
-        let off = "Enabled: No\nServer: \nPort: 0\nAuthenticated Proxy Enabled: 0\n";
-        assert_eq!(parse_proxy(off), setting(false, "", 0));
+    fn the_password_path_restores_what_it_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        assert!(ns.proxies().iter().all(|s| s.http.points_at(9090) && s.https.points_at(9090)));
+        assert!(load_snapshot(&path).unwrap().is_some());
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
+        assert!(!ns.proxies()[1].points_at(9090));
+        assert!(!path.exists());
+        assert_eq!(prompts.get(), 2);
     }
 
     #[test]
-    fn turning_off_touches_only_our_proxies() {
-        let services = vec![
-            ServiceProxy {
-                name: "Wi-Fi".into(),
-                http: setting(true, "127.0.0.1", 9090),
-                https: setting(true, "127.0.0.1", 9090),
-            },
-            // Someone else's proxy, and ours on another port.
-            ServiceProxy {
-                name: "Ethernet".into(),
-                http: setting(true, "corp-proxy", 9090),
-                https: setting(true, "127.0.0.1", 8080),
-            },
-        ];
-        assert!(services[0].points_at(9090) && !services[1].points_at(9090));
-        assert_eq!(
-            commands(&services, false, 9090),
-            vec![
-                vec!["-setwebproxystate", "Wi-Fi", "off"],
-                vec!["-setsecurewebproxystate", "Wi-Fi", "off"],
-            ]
-        );
-        assert_eq!(commands(&services, true, 9090).len(), 8);
+    fn a_stale_reset_after_a_crash_uses_the_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+
+        // The app crashed; the next launch resets the configured port, now another one, which
+        // leaves the snapshot alone, and then the port it saved.
+        assert_eq!(saved_port(&path), Some(9090));
+        set_scripted(&ns, runner(&ns, &prompts), false, 8080, &path).unwrap();
+        assert!(path.exists());
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn a_stale_reset_at_an_old_port_leaves_live_routing_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        // A crash left a disabled service on 9090; the new engine routes on 9191.
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        ns.set_enabled("Ethernet", false);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9191, &path).unwrap();
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert!(ns.proxies()[0].http.points_at(9191), "live routing kept");
+        assert!(!ns.proxies()[1].points_at(9090), "the stale port cleared");
+        assert!(path.exists());
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9191, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn the_password_path_restores_a_renamed_service_and_keeps_an_unplugged_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        ns.rename("Wi-Fi", "Office Wi-Fi");
+        ns.remove("Ethernet");
+
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        let wifi = &ns.proxies()[0];
+        assert_eq!((&wifi.http, &wifi.https), (&before[0].http, &before[0].https));
+        // Ethernet's settings stay saved, without counting as routing.
+        let kept = load_snapshot(&path).unwrap().unwrap();
+        assert_eq!(kept.services.len(), 1);
+        assert_eq!(kept.services[0].name, "Ethernet");
+        assert_eq!(saved_port(&path), None);
+    }
+
+    #[test]
+    fn a_partly_applied_change_keeps_its_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        // Wi-Fi is changed, then Ethernet fails.
+        *ns.failing.lock().unwrap() = Some("Ethernet".into());
+        assert!(set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).is_err());
+        assert!(ns.proxies()[0].points_at(9090));
+        assert!(path.exists());
+
+        *ns.failing.lock().unwrap() = None;
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
+    }
+
+    #[test]
+    fn turning_off_with_nothing_pointing_at_us_asks_for_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        assert_eq!(prompts.get(), 0);
+        assert!(ns.changes.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_prompt_keeps_no_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let cancel = |_: &[Vec<String>]| Err("Cancelled in the password dialog".to_string());
+        assert!(set_scripted(&ns, cancel, true, 9090, &path).is_err());
+        assert!(!path.exists());
+        assert!(ns.changes.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn turning_on_again_keeps_the_first_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let before = ns.proxies();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        // A second enable, the engine on a new port, must not save ours as the user's.
+        set_scripted(&ns, runner(&ns, &prompts), true, 9191, &path).unwrap();
+        let cancel = |_: &[Vec<String>]| Err("Cancelled in the password dialog".to_string());
+        assert!(set_scripted(&ns, cancel, true, 9191, &path).is_err());
+        assert!(path.exists(), "a cancelled re-enable keeps the original snapshot");
+        set_scripted(&ns, runner(&ns, &prompts), false, 9191, &path).unwrap();
+        assert_eq!(ns.proxies()[0], before[0]);
+    }
+
+    #[test]
+    fn a_disabled_service_pointing_at_us_is_turned_off() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SNAPSHOT_FILE);
+        let ns = fake();
+        let prompts = std::cell::Cell::new(0);
+        set_scripted(&ns, runner(&ns, &prompts), true, 9090, &path).unwrap();
+        ns.set_enabled("Ethernet", false);
+        set_scripted(&ns, runner(&ns, &prompts), false, 9090, &path).unwrap();
+        let ethernet = &ns.proxies()[1];
+        assert!(!ethernet.points_at(9090));
+        assert_eq!(ethernet.http.server, HOST);
     }
 
     #[test]

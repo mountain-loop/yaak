@@ -31,6 +31,7 @@ yaak-http = { workspace = true }
 yaak-lifecycle = { workspace = true }
 yaak-models = { workspace = true }
 yaak-proxy = { workspace = true }
+yaak-proxy-helper = { workspace = true, features = ["ts"] }
 yaak-rpc = { workspace = true }
 yaak-templates = { workspace = true }
 
@@ -53,8 +54,15 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "NSData",
     "NSDictionary",
+    "NSError",
     "NSGeometry",
     "NSString",
+] }
+objc2-service-management = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "objc2",
+    "objc2-foundation",
+    "SMAppService",
 ] }
 plist = "1.7"
 
@@ -68,3 +76,4 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 reqwest = { workspace = true }
 tempfile = "3"
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
+yaak-proxy-helper = { workspace = true, features = ["test-support"] }

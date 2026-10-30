@@ -18,6 +18,7 @@ import { FirstRun } from "./FirstRun";
 import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
 import { ProxyStatus } from "./ProxyStatus";
+import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
 import { selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
 import { TakeOverBanner } from "./TakeOverBanner";
@@ -139,6 +140,7 @@ export function ProxyLayout() {
         </div>
       </SidebarLayout>
       <SaveDialog />
+      <HelperDialog />
       <Toasts />
     </div>
   );

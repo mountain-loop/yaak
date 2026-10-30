@@ -4977,13 +4977,25 @@ dependencies = [
 
 [[package]]
 name = "objc2-security"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1f8e0ef3ab66b08c42644dcb34dba6ec0a574bbd8adbb8bdbdc7a2779731a44"
+checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
 dependencies = [
  "bitflags 2.11.0",
  "objc2 0.6.4",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-service-management"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b213642d6959cc6023ceb1217aa595eaaf09b8094ce95127c103cab611fe65e8"
+dependencies = [
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "objc2-security",
 ]
 
 [[package]]
@@ -11754,6 +11766,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-proxy-helper"
+version = "0.0.0"
+dependencies = [
+ "core-foundation 0.10.1",
+ "libc",
+ "security-framework 3.5.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
 name = "yaak-proxy-lib"
 version = "0.0.0"
 dependencies = [
@@ -11770,6 +11795,7 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit",
  "objc2-foundation 0.3.2",
+ "objc2-service-management",
  "plist",
  "r2d2",
  "r2d2_sqlite",
@@ -11789,6 +11815,7 @@ dependencies = [
  "yaak-lifecycle",
  "yaak-models",
  "yaak-proxy",
+ "yaak-proxy-helper",
  "yaak-rpc",
  "yaak-templates",
 ]

@@ -14,5 +14,11 @@ export const selectedFlowIdAtom = atom((get) => get(selectedFlowAtom)?.id ?? nul
 /** The list follows new traffic, rather than being held where it was scrolled or selected */
 export const followingAtom = atom(true);
 
+/** When the helper was last registered, so its state is read until approval shows */
+export const helperRegisteredAtAtom = atom<number | null>(null);
+
+/** The dialog that walks through allowing the helper in System Settings */
+export const helperDialogOpenAtom = atom(false);
+
 /** Stacked by default; the header's toggle switches to side by side */
 export const flowLayoutAtom = atomWithStorage<SplitLayoutLayout>("flow_layout", "vertical");
