@@ -374,11 +374,10 @@ impl ProxyCtx {
     fn backend_for(&self, helper: HelperState) -> SystemProxyBackend {
         match self.owner {
             Owner::Cli => SystemProxyBackend::Sudo,
-            // What the dialog saved only it can restore, as the helper never saw it.
-            Owner::App
-                if helper == HelperState::Enabled
-                    && macos::saved_port(&self.snapshot_path()).is_none() =>
-            {
+            // What the dialog saved only it can restore, as the helper never saw it: settings
+            // for routing it turned on, and settings parked for a service that was missing,
+            // which its next capture uses if the service is back.
+            Owner::App if helper == HelperState::Enabled && !self.snapshot_path().exists() => {
                 SystemProxyBackend::Helper
             }
             Owner::App => SystemProxyBackend::AdminPrompt,
@@ -1406,6 +1405,27 @@ define_rpc! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_the_password_prompt_parked_keep_it_over_the_helper() {
+        use yaak_proxy_helper::networksetup::{ProxySetting, ServiceProxy, Snapshot};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        assert_eq!(ctx.backend_for(HelperState::Enabled), SystemProxyBackend::Helper);
+
+        // A restore parked an unplugged adapter's settings, at port 0.
+        let corp = ProxySetting { enabled: true, server: "corp-proxy".into(), port: 3128 };
+        let parked = Snapshot {
+            services: vec![ServiceProxy::new("USB LAN", corp.clone(), corp)],
+            ..Snapshot::default()
+        };
+        std::fs::write(ctx.snapshot_path(), serde_json::to_vec(&parked).unwrap()).unwrap();
+        assert_eq!(macos::saved_port(&ctx.snapshot_path()), None, "routes nothing");
+        // Only the password prompt's capture would use them when the adapter is back.
+        assert_eq!(ctx.backend_for(HelperState::Enabled), SystemProxyBackend::AdminPrompt);
+        assert_eq!(ctx.backend_for(HelperState::NotRegistered), SystemProxyBackend::AdminPrompt);
+    }
 
     #[test]
     fn a_request_is_recorded_by_the_state_when_it_started() {
