@@ -115,17 +115,19 @@ impl Snapshot {
         self.previous_ports.retain(|p| *p != port);
         self.port = port;
         let ports = self.ports();
-        for service in services {
-            if self.get(service, services).is_some() {
-                continue;
-            }
-            self.services.push(ServiceProxy {
+        // Judged against the snapshot as it was, so an entry added here can't change how the
+        // services after it match.
+        let new: Vec<ServiceProxy> = services
+            .iter()
+            .filter(|service| self.get(service, services).is_none())
+            .map(|service| ServiceProxy {
                 name: service.name.clone(),
                 id: service.id.clone(),
                 http: service.http.owned(&ports),
                 https: service.https.owned(&ports),
-            });
-        }
+            })
+            .collect();
+        self.services.extend(new);
     }
 
     /// Every port this snapshot has pointed services at, the current one first.
@@ -134,9 +136,11 @@ impl Snapshot {
     }
 
     /// What was saved for `service`, one of `services`, the network's services now: the entry
-    /// with its name, when the ids don't disagree, or, for a service renamed since, the one
-    /// entry on its device whose name no service has any more. Services can share a device,
-    /// so the device alone never decides.
+    /// with its name, when the ids don't disagree, or, for a service renamed since, the entry
+    /// on its device whose name no service has any more. Services can share a device, so the
+    /// device decides only when it is unambiguous both ways: one such saved entry, and one
+    /// service on the device with no saved entry by name. Otherwise nothing matches, and the
+    /// saved entry is parked rather than given to the wrong service.
     fn get(&self, service: &ServiceProxy, services: &[ServiceProxy]) -> Option<&ServiceProxy> {
         let ids_agree =
             |s: &ServiceProxy| s.id.is_none() || service.id.is_none() || s.id == service.id;
@@ -144,10 +148,18 @@ impl Snapshot {
             return Some(saved);
         }
         let id = service.id.as_ref()?;
-        let mut on_device = self.services.iter().filter(|s| s.id.as_ref() == Some(id));
-        let saved = on_device.next()?;
-        let renamed = on_device.next().is_none() && !services.iter().any(|s| s.name == saved.name);
-        renamed.then_some(saved)
+        let mut orphans = self
+            .services
+            .iter()
+            .filter(|s| s.id.as_ref() == Some(id) && !services.iter().any(|c| c.name == s.name));
+        let saved = orphans.next()?;
+        let unclaimed = services
+            .iter()
+            .filter(|c| {
+                c.id.as_ref() == Some(id) && !self.services.iter().any(|s| s.name == c.name)
+            })
+            .count();
+        (orphans.next().is_none() && unclaimed == 1).then_some(saved)
     }
 
     /// What is left once this snapshot is restored over `services`: the saved entries none of
@@ -436,6 +448,13 @@ pub mod fake {
                 Some(device.into());
         }
 
+        /// Adds an enabled service on `device`.
+        pub fn add(&self, name: &str, device: &str, http: ProxySetting, https: ProxySetting) {
+            let mut proxy = ServiceProxy::new(name, http, https);
+            proxy.id = Some(device.into());
+            self.services.lock().unwrap().push(FakeService { proxy, enabled: true });
+        }
+
         /// Removes a service, as unplugging an adapter can.
         pub fn remove(&self, name: &str) {
             self.services.lock().unwrap().retain(|s| s.proxy.name != name);
@@ -607,6 +626,56 @@ mod tests {
         let (commands, _) = disable_commands(&services, Some(&snapshot), 9090);
         apply(&ns, &commands).unwrap();
         assert_eq!(ns.proxies(), before);
+        assert!(snapshot.leftover(&services).is_none());
+    }
+
+    #[test]
+    fn a_rename_plus_a_new_service_on_its_device_matches_neither() {
+        let corp = setting(true, "corp-proxy", 3128);
+        let lab = setting(true, "lab-proxy", 8888);
+        let ns = FakeNetworksetup::new(vec![("Wi-Fi", corp.clone(), corp.clone())]);
+        let mut snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+        // While routing: Wi-Fi is renamed, and a second service is added on its device.
+        ns.rename("Wi-Fi", "Office");
+        ns.add("Lab", "en0", lab.clone(), lab.clone());
+
+        // Turned on again: Lab's own settings are saved, not skipped as Wi-Fi's.
+        let services = read_services(&ns, false).unwrap();
+        snapshot.extend(&services, 9090);
+        assert!(snapshot.services.iter().any(|s| s.name == "Lab" && s.http == lab));
+        apply(&ns, &enable_commands(&services, 9090)).unwrap();
+
+        let services = read_services(&ns, true).unwrap();
+        let (commands, _) = disable_commands(&services, Some(&snapshot), 9090);
+        apply(&ns, &commands).unwrap();
+        let proxies = ns.proxies();
+        assert_eq!(proxies[1].http, lab, "Lab gets its own settings back");
+        assert!(!proxies[0].points_at(9090));
+        assert_ne!(proxies[0].http, corp, "ambiguous, so Office is not handed Wi-Fi's");
+        // Wi-Fi's saved settings are not lost.
+        let leftover = snapshot.leftover(&services).unwrap();
+        assert!(leftover.services.iter().any(|s| s.name == "Wi-Fi" && s.http == corp));
+    }
+
+    #[test]
+    fn a_rename_beside_a_duplicate_still_matches() {
+        let corp = setting(true, "corp-proxy", 3128);
+        let lab = setting(true, "lab-proxy", 8888);
+        let ns = FakeNetworksetup::new(vec![
+            ("Wi-Fi", corp.clone(), corp.clone()),
+            ("Wi-Fi Lab", lab.clone(), lab.clone()),
+        ]);
+        ns.set_device("Wi-Fi Lab", "en0");
+        let snapshot = Snapshot::capture(&read_services(&ns, false).unwrap(), 9090);
+        apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
+        ns.rename("Wi-Fi", "Office");
+
+        let services = read_services(&ns, true).unwrap();
+        let (commands, _) = disable_commands(&services, Some(&snapshot), 9090);
+        apply(&ns, &commands).unwrap();
+        assert_eq!(ns.proxies()[0].http, corp);
+        assert_eq!(ns.proxies()[1].http, lab);
         assert!(snapshot.leftover(&services).is_none());
     }
 
