@@ -8,7 +8,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc as std_mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
@@ -46,6 +46,9 @@ pub struct ProxyConfig {
     /// number and the client's address, before anything is read from it, so the client is
     /// still there to be looked up. The connection waits for it.
     pub on_accept: Option<AcceptHook>,
+    /// Offer HTTP/2 to clients in intercepted TLS, beside HTTP/1.1. Off, they all speak
+    /// HTTP/1.1, for clients that misbehave on HTTP/2. See [`ProxyHandle::set_http2`].
+    pub http2: bool,
 }
 
 /// See [`ProxyConfig::on_accept`].
@@ -59,14 +62,16 @@ impl ProxyConfig {
             capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
             upstream_root_certs: Vec::new(),
             on_accept: None,
+            http2: true,
         }
     }
 }
 
 /// Lifecycle of each proxied exchange (a flow), keyed by `id`. A flow starts with
-/// `RequestStart` and ends with exactly one `ResponseBodyComplete` or `Error`. Traffic the
-/// engine tunnels without decrypting (pinned clients, non-TLS CONNECT payloads, the frames
-/// after a `101 Switching Protocols`) produces no events.
+/// `RequestStart` and ends with exactly one `ResponseBodyComplete`, `Error` or `Cancelled`.
+/// Each HTTP/2 stream is a flow of its own. Traffic the engine tunnels without decrypting
+/// (pinned clients, non-TLS CONNECT payloads, the frames after a `101 Switching Protocols`)
+/// produces no events.
 #[derive(Debug, Clone)]
 pub enum ProxyEvent {
     /// Request headers arrived from the client.
@@ -125,7 +130,7 @@ pub enum ProxyEvent {
         /// The captured part of the frame; empty once `capture_body_limit` is reached.
         data: Bytes,
     },
-    /// The response body ended, normally or with `error` (upstream failed or client left).
+    /// The response body ended: normally, with `error` when upstream failed, or `cancelled`.
     ResponseBodyComplete {
         id: u64,
         size: u64,
@@ -134,6 +139,9 @@ pub enum ProxyEvent {
         /// Milliseconds from `started_at` to the end of the body.
         elapsed_ms: u64,
         error: Option<String>,
+        /// The client stopped reading before the body ended: it reset the stream or closed the
+        /// connection. Not an error of the engine's or the server's.
+        cancelled: bool,
     },
     /// No response: connecting to or requesting from upstream failed, and the client got a 502,
     /// or the engine refused the request (no host to send it to, or it looped back to the engine)
@@ -143,6 +151,9 @@ pub enum ProxyEvent {
         error: String,
         elapsed_ms: u64,
     },
+    /// The client gave up before the response headers arrived, by resetting the stream or
+    /// closing the connection. The request upstream is cancelled with it.
+    Cancelled { id: u64, elapsed_ms: u64 },
 }
 
 /// A running engine. Dropping it stops the listener and joins its thread.
@@ -166,6 +177,12 @@ impl ProxyHandle {
     pub fn forget_passthrough(&self) {
         self.engine.passthrough.lock().unwrap().clear();
         self.engine.handshake_failures.lock().unwrap().clear();
+    }
+
+    /// Offers HTTP/2 to clients, or stops, from the next connection on. Connections already
+    /// open keep the protocol they chose.
+    pub fn set_http2(&self, enabled: bool) {
+        self.engine.http2.store(enabled, Ordering::Relaxed);
     }
 
     /// Handshake failures counted toward passing `addr` (`host:port`) through, and whether it
@@ -206,6 +223,8 @@ pub(crate) struct Engine {
     upstream_tls_h1: Arc<ClientConfig>,
     passthrough: Mutex<HashSet<String>>,
     handshake_failures: Mutex<HashMap<String, u32>>,
+    /// Offer HTTP/2 to clients in intercepted TLS.
+    http2: AtomicBool,
     /// `Via` value marking requests whose URL the engine rebuilt from `Host`, unique to this run,
     /// so one that comes back to the engine is refused instead of forwarded again.
     via: HeaderValue,
@@ -218,6 +237,10 @@ impl Engine {
 
     fn next_flow_id(&self) -> u64 {
         self.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn offers_http2(&self) -> bool {
+        self.http2.load(Ordering::Relaxed)
     }
 
     fn is_passthrough(&self, addr: &str) -> bool {
@@ -284,6 +307,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
         passthrough: Mutex::new(HashSet::new()),
         handshake_failures: Mutex::new(HashMap::new()),
+        http2: AtomicBool::new(config.http2),
         via: via_marker(),
     });
 

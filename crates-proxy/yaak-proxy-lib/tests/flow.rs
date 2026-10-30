@@ -67,6 +67,7 @@ async fn route(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallib
             .header("content-encoding", "gzip")
             .body(Full::new(Bytes::new()))
             .unwrap(),
+        "/hang" => std::future::pending().await,
         // XML that only its body says is XML
         "/xml-as-text" => Response::builder()
             .header("content-type", "text/plain")
@@ -106,8 +107,12 @@ async fn wait_for_flow(ctx: &ProxyCtx, url: &str) -> Flow {
 #[tokio::test(flavor = "multi_thread")]
 async fn flow_is_stored_with_its_bodies() {
     let dir = tempfile::tempdir().unwrap();
-    let settings =
-        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, system_proxy_at_launch: false };
+    let settings = ProxySettings {
+        port: 0,
+        capture_body_limit: CAPTURE_LIMIT,
+        system_proxy_at_launch: false,
+        ..Default::default()
+    };
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
@@ -174,8 +179,12 @@ async fn flow_is_stored_with_its_bodies() {
 #[tokio::test(flavor = "multi_thread")]
 async fn early_response_keeps_request_totals() {
     let dir = tempfile::tempdir().unwrap();
-    let settings =
-        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, system_proxy_at_launch: false };
+    let settings = ProxySettings {
+        port: 0,
+        capture_body_limit: CAPTURE_LIMIT,
+        system_proxy_at_launch: false,
+        ..Default::default()
+    };
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
@@ -204,11 +213,84 @@ async fn rpc(ctx: &ProxyCtx, cmd: &str, payload: Value) -> Result<Value, String>
     yaak_proxy_lib::build_router().dispatch(cmd, payload, ctx).await.map_err(|e| e.message)
 }
 
+/// A request the client gives up on is stored as cancelled, not as an error.
+#[tokio::test(flavor = "multi_thread")]
+async fn cancelled_flow_is_not_an_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+
+    let (events, _event_rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    ctx.start().unwrap();
+    let port = ctx.port().unwrap();
+
+    let upstream = spawn_upstream().await;
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}")).unwrap())
+        .timeout(Duration::from_millis(300))
+        .build()
+        .unwrap();
+    let url = format!("http://{upstream}/hang");
+    assert!(client.get(&url).send().await.unwrap_err().is_timeout());
+
+    let flow = wait_for_flow(&ctx, &url).await;
+    assert!(flow.cancelled);
+    assert_eq!((flow.error, flow.status), (None, None));
+    assert!(flow.elapsed_ms.is_some());
+}
+
+/// `http1Only` is saved and reaches the running engine: the next connection from a client that
+/// offers HTTP/2 speaks HTTP/1.1, and `auto` brings HTTP/2 back.
+#[tokio::test(flavor = "multi_thread")]
+async fn http_version_setting_applies_to_new_connections() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+
+    let (events, _event_rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    ctx.start().unwrap();
+    let port = ctx.port().unwrap();
+    let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
+    // Nothing listens there, so each flow is a 502, but its client side is spoken all the same.
+    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+
+    let mut sent = 0;
+    let mut client_version = async || {
+        sent += 1;
+        // A client of its own, so a connection of its own.
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{port}")).unwrap())
+            .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
+            .build()
+            .unwrap();
+        let url = format!("https://localhost:{closed}/{sent}");
+        assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
+        wait_for_flow(&ctx, &url).await.client_http_version
+    };
+
+    assert_eq!(client_version().await, "HTTP/2");
+    let set = rpc(&ctx, "set_http_version", json!({"httpVersion": "http1Only"})).await.unwrap();
+    assert_eq!(set, json!("http1Only"));
+    assert_eq!(rpc(&ctx, "get_proxy_state", json!({})).await.unwrap()["httpVersion"], "http1Only");
+    assert_eq!(client_version().await, "HTTP/1.1");
+
+    rpc(&ctx, "set_http_version", json!({"httpVersion": "auto"})).await.unwrap();
+    assert_eq!(client_version().await, "HTTP/2");
+    let saved = ProxySettings::load(&dir.path().join("settings.json")).unwrap();
+    assert_eq!(saved.http_version, yaak_proxy_lib::settings::HttpVersion::Auto);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn body_rpcs() {
     let dir = tempfile::tempdir().unwrap();
-    let settings =
-        ProxySettings { port: 0, capture_body_limit: CAPTURE_LIMIT, system_proxy_at_launch: false };
+    let settings = ProxySettings {
+        port: 0,
+        capture_body_limit: CAPTURE_LIMIT,
+        system_proxy_at_launch: false,
+        ..Default::default()
+    };
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
@@ -225,6 +307,7 @@ async fn body_rpcs() {
             "configuredPort": 0,
             "recording": true,
             "systemProxyAtLaunch": false,
+            "httpVersion": "auto",
             "startError": null,
             "otherOwner": null,
         })

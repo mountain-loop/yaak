@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use ts_rs::TS;
 use yaak_proxy::DEFAULT_CAPTURE_BODY_LIMIT;
 
 /// `settings.json` in the proxy data directory. Missing keys take their defaults.
@@ -14,6 +15,8 @@ pub struct ProxySettings {
     pub system_proxy_at_launch: bool,
     /// Bytes of each request and response body stored per flow.
     pub capture_body_limit: usize,
+    /// The HTTP versions offered to clients in intercepted HTTPS.
+    pub http_version: HttpVersion,
 }
 
 impl Default for ProxySettings {
@@ -22,8 +25,22 @@ impl Default for ProxySettings {
             port: 9090,
             system_proxy_at_launch: true,
             capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
+            http_version: HttpVersion::Auto,
         }
     }
+}
+
+/// The HTTP versions offered to clients in intercepted HTTPS. Upstream, the engine speaks
+/// whichever the server picks either way.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub enum HttpVersion {
+    /// HTTP/2 or HTTP/1.1, as the client prefers.
+    #[default]
+    Auto,
+    /// HTTP/1.1 alone, for clients that misbehave on HTTP/2.
+    Http1Only,
 }
 
 impl ProxySettings {
@@ -70,8 +87,12 @@ mod tests {
     fn round_trip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
-        let settings =
-            ProxySettings { port: 8080, system_proxy_at_launch: false, capture_body_limit: 1024 };
+        let settings = ProxySettings {
+            port: 8080,
+            system_proxy_at_launch: false,
+            capture_body_limit: 1024,
+            http_version: HttpVersion::Http1Only,
+        };
         settings.save(&path).unwrap();
         assert_eq!(ProxySettings::load(&path).unwrap(), settings);
 
@@ -79,8 +100,23 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"port": 8080, "systemProxyAtLaunch": false, "captureBodyLimit": 1024})
+            serde_json::json!({
+                "port": 8080,
+                "systemProxyAtLaunch": false,
+                "captureBodyLimit": 1024,
+                "httpVersion": "http1Only",
+            })
         );
+    }
+
+    #[test]
+    fn http_version_defaults_to_auto() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, r#"{"port": 8888}"#).unwrap();
+        assert_eq!(ProxySettings::load(&path).unwrap().http_version, HttpVersion::Auto);
+        std::fs::write(&path, r#"{"httpVersion": "auto"}"#).unwrap();
+        assert_eq!(ProxySettings::load(&path).unwrap().http_version, HttpVersion::Auto);
     }
 
     #[test]

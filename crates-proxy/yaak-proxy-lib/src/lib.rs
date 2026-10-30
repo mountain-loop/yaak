@@ -23,7 +23,7 @@ use crate::db::ProxyQueryManager;
 use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::models::{Flow, FlowBody, FlowIden, ModelPayload, ProxyHeader, find_header};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
-use crate::settings::ProxySettings;
+use crate::settings::{HttpVersion, ProxySettings};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::{DateTime, Utc};
@@ -169,6 +169,7 @@ impl ProxyCtx {
             .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
         let mut config = ProxyConfig::new(port.unwrap_or(settings.port), Arc::new(ca));
         config.capture_body_limit = settings.capture_body_limit;
+        config.http2 = settings.http_version == HttpVersion::Auto;
         // Filled once the engine has bound, since the lookup matches sockets by its port.
         let attribution_slot: Arc<OnceLock<Attribution>> = Arc::new(OnceLock::new());
         let slot = attribution_slot.clone();
@@ -402,6 +403,20 @@ impl ProxyCtx {
         let mut settings = self.settings()?;
         settings.system_proxy_at_launch = enabled;
         settings.save(&self.settings_path())
+    }
+
+    /// The HTTP versions offered to clients, saved in `settings.json` and applied to the running
+    /// engine's next connections.
+    pub fn set_http_version(&self, version: HttpVersion) -> Result<(), String> {
+        let mut settings = self.settings()?;
+        settings.http_version = version;
+        settings.save(&self.settings_path())?;
+        if let Ok(handle) = self.handle.lock()
+            && let Some(handle) = handle.as_ref()
+        {
+            handle.set_http2(version == HttpVersion::Auto);
+        }
+        Ok(())
     }
 
     /// Intercepts again the hosts passed through after clients rejected the CA, as they no
@@ -646,6 +661,8 @@ pub struct GetProxyStateResponse {
     pub recording: bool,
     /// The system proxy turns on as the engine starts.
     pub system_proxy_at_launch: bool,
+    /// The HTTP versions offered to clients.
+    pub http_version: HttpVersion,
     /// Why the engine last failed to start, until it starts.
     pub start_error: Option<String>,
     /// Another process that owns the engine, such as the CLI daemon. While one does, this app
@@ -678,6 +695,13 @@ pub struct SetRecordingRequest {
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct SetSystemProxyAtLaunchRequest {
     pub enabled: bool,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SetHttpVersionRequest {
+    pub http_version: HttpVersion,
 }
 
 #[derive(Deserialize, TS)]
@@ -874,6 +898,7 @@ async fn get_proxy_state(
             configured_port: settings.port,
             recording: ctx.recording(),
             system_proxy_at_launch: settings.system_proxy_at_launch,
+            http_version: settings.http_version,
             start_error: ctx.start_error(),
             other_owner,
         })
@@ -892,6 +917,11 @@ fn set_system_proxy_at_launch(
 ) -> Result<bool, RpcError> {
     ctx.set_system_proxy_at_launch(req.enabled).map_err(rpc_error)?;
     Ok(req.enabled)
+}
+
+fn set_http_version(ctx: &ProxyCtx, req: SetHttpVersionRequest) -> Result<HttpVersion, RpcError> {
+    ctx.set_http_version(req.http_version).map_err(rpc_error)?;
+    Ok(req.http_version)
 }
 
 async fn take_over(ctx: ProxyCtx, _req: TakeOverRequest) -> Result<bool, RpcError> {
@@ -1218,12 +1248,27 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                     write_body_chunk(&mut f.response_body, &data);
                 }
             }
-            ProxyEvent::ResponseBodyComplete { id, size, truncated, elapsed_ms, error } => {
+            ProxyEvent::ResponseBodyComplete {
+                id,
+                size,
+                truncated,
+                elapsed_ms,
+                error,
+                cancelled,
+            } => {
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.response_size = size as i64;
                     f.flow.response_truncated = truncated;
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
                     f.flow.error = error;
+                    f.flow.cancelled = cancelled;
+                    finish_flow(&db, &events, &attribution, f);
+                }
+            }
+            ProxyEvent::Cancelled { id, elapsed_ms } => {
+                if let Some(mut f) = in_flight.remove(&id) {
+                    f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
+                    f.flow.cancelled = true;
                     finish_flow(&db, &events, &attribution, f);
                 }
             }
@@ -1306,6 +1351,7 @@ define_rpc! {
         list_flows(flows::FlowFilter) -> ListFlowsResponse,
         set_recording(SetRecordingRequest) -> bool,
         set_system_proxy_at_launch(SetSystemProxyAtLaunchRequest) -> bool,
+        set_http_version(SetHttpVersionRequest) -> HttpVersion,
     }
     async_commands {
         app_icon(AppIconRequest) -> Option<String>,
