@@ -128,7 +128,7 @@ fn set_scripted(
     }
     // Saved first, so a restore cut short is finished by the next one.
     if let Some(snapshot) = snapshot.as_mut() {
-        snapshot.mark_restoring(&commands);
+        snapshot.mark_restoring(&commands, &services);
         save_snapshot(snapshot_path, snapshot)?;
     }
     if !commands.is_empty() {

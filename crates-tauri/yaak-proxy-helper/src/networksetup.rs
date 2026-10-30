@@ -72,16 +72,18 @@ pub struct Snapshot {
     #[serde(default)]
     pub previous_ports: Vec<u16>,
     pub services: Vec<ServiceProxy>,
-    /// Proxies a restore has started putting the saved server back on, as `(service, "http"
-    /// or "https")`. Setting a server turns the proxy on, so one of these found on with its
-    /// saved server, saved as off, is a restore that stopped halfway.
+    /// Proxies a restore has started putting the saved server back on, as `(saved service,
+    /// "http" or "https")`, keyed by the saved entry's name, which a rename doesn't change.
+    /// Setting a server turns the proxy on, so one of these found on with its saved server,
+    /// saved as off, is a restore that stopped halfway.
     #[serde(default)]
     pub restoring: Vec<(String, String)>,
 }
 
 impl Snapshot {
-    /// Records the restores `commands` start, saved before running them.
-    pub fn mark_restoring(&mut self, commands: &[Vec<String>]) {
+    /// Records the restores `commands` start over `services`, saved before running them.
+    pub fn mark_restoring(&mut self, commands: &[Vec<String>], services: &[ServiceProxy]) {
+        let mut started = Vec::new();
         for args in commands {
             let proto = match args.first().map(String::as_str) {
                 Some("-setwebproxy") => "http",
@@ -89,7 +91,14 @@ impl Snapshot {
                 _ => continue,
             };
             let Some(name) = args.get(1) else { continue };
-            let entry = (name.clone(), proto.to_string());
+            let saved = services
+                .iter()
+                .find(|s| &s.name == name)
+                .and_then(|s| self.get(s, services))
+                .map_or_else(|| name.clone(), |saved| saved.name.clone());
+            started.push((saved, proto.to_string()));
+        }
+        for entry in started {
             if !self.restoring.contains(&entry) {
                 self.restoring.push(entry);
             }
@@ -290,23 +299,27 @@ pub fn restore_commands(
 ) -> Vec<Vec<String>> {
     let mut commands = Vec::new();
     for service in services {
-        let saved = snapshot.and_then(|s| s.get(service, services));
+        let saved_service = snapshot.and_then(|s| s.get(service, services));
         let proxies = [
-            (&service.http, saved.map(|s| &s.http)),
-            (&service.https, saved.map(|s| &s.https)),
+            (&service.http, saved_service.map(|s| &s.http)),
+            (&service.https, saved_service.map(|s| &s.https)),
         ];
         for (((current, saved), (set, state)), proto) in
             proxies.into_iter().zip(WEB).zip(["http", "https"])
         {
             let name = service.name.clone();
             // An earlier restore set the user's server, which turned it on, and stopped
-            // before turning it back off.
+            // before turning it back off. Marked by the saved entry, so a rename since
+            // doesn't hide it.
+            let restoring = saved_service
+                .zip(snapshot)
+                .is_some_and(|(saved, snapshot)| snapshot.is_restoring(&saved.name, proto));
             let unfinished = saved.is_some_and(|s| {
                 !s.enabled
                     && current.enabled
                     && current.server == s.server
                     && current.port == s.port
-                    && snapshot.is_some_and(|snapshot| snapshot.is_restoring(&name, proto))
+                    && restoring
             });
             if unfinished {
                 commands.push(vec![state.into(), name, "off".into()]);
@@ -842,7 +855,7 @@ mod tests {
         apply(&ns, &enable_commands(&read_services(&ns, false).unwrap(), 9090)).unwrap();
         let restore =
             restore_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), &[9090]);
-        snapshot.mark_restoring(&restore);
+        snapshot.mark_restoring(&restore, &read_services(&ns, true).unwrap());
         apply(&ns, &restore[..1]).unwrap();
         assert!(ns.proxies()[0].http.enabled);
         (ns, snapshot)
@@ -855,6 +868,18 @@ mod tests {
         let (retry, used_up) =
             disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
         assert!(used_up);
+        apply(&ns, &retry).unwrap();
+        assert_eq!(ns.proxies()[0].http, parked);
+        assert_eq!(ns.proxies()[0].https, parked);
+    }
+
+    #[test]
+    fn a_cut_short_restore_is_finished_after_a_rename() {
+        let parked = setting(false, "old-proxy", 8888);
+        let (ns, snapshot) = cut_short(&parked);
+        ns.rename("Wi-Fi", "Office Wi-Fi");
+        let (retry, _) =
+            disable_commands(&read_services(&ns, true).unwrap(), Some(&snapshot), 9090);
         apply(&ns, &retry).unwrap();
         assert_eq!(ns.proxies()[0].http, parked);
         assert_eq!(ns.proxies()[0].https, parked);

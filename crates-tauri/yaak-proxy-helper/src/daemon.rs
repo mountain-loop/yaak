@@ -124,7 +124,7 @@ impl<N: Networksetup, P: Processes> Daemon<N, P> {
         let (commands, used_up) = disable_commands(&services, snapshot, port);
         // Saved first, so a restore cut short is finished by the next one.
         if let Some(active) = state.active.as_mut() {
-            active.snapshot.mark_restoring(&commands);
+            active.snapshot.mark_restoring(&commands, &services);
             self.save(state)?;
         }
         // Kept on failure, so the next try still knows what to put back.
