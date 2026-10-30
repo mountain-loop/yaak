@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "@hono/mcp": "^0.3.2",
-    "@hono/node-server": "^2.1.4",
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "hono": "^4.13.13",
-    "zod": "^4.6.6"
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.14",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
