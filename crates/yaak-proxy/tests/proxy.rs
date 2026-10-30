@@ -111,10 +111,6 @@ async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible>
                 cookies.map(|c| c.to_str().unwrap()).collect::<Vec<_>>().join(" | "),
             ))
         }
-        "/slow" => {
-            tokio::time::sleep(SLOW).await;
-            Response::new(full("slow"))
-        }
         // Headers for this connection alone, which HTTP/2 forbids.
         "/hop" => Response::builder()
             .header(CONNECTION, "x-hop")
@@ -125,8 +121,6 @@ async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible>
         _ => Response::builder().status(StatusCode::NOT_FOUND).body(full("not found")).unwrap(),
     })
 }
-
-const SLOW: Duration = Duration::from_millis(300);
 
 /// The request body back, with the request's trailers and one of the server's own.
 async fn echo_with_trailers(req: Request<Incoming>) -> Response<TestBody> {
@@ -1077,25 +1071,49 @@ async fn concurrent_h2_streams_are_flows_of_their_own() {
 /// after another, and they are reused after.
 #[tokio::test(flavor = "multi_thread")]
 async fn concurrent_h2_streams_to_an_h1_upstream_run_at_once() {
+    const STREAMS: usize = 10;
     let h = Harness::start(1024);
     let accepts = Arc::new(AtomicUsize::new(0));
-    let upstream = spawn_upstream_with(Some(h1_only(&h.pki.server)), accepts.clone(), route).await;
+    // Each `/together` request is held until all of them are in flight at once, which they can
+    // only be if none waits for another. Counted, not timed: how long a connection takes to
+    // open varies by machine.
+    let in_flight = Arc::new(AtomicUsize::new(0));
+    let most = Arc::new(AtomicUsize::new(0));
+    let handler = {
+        let (in_flight, most) = (in_flight.clone(), most.clone());
+        move |req: Request<Incoming>| {
+            let (in_flight, most) = (in_flight.clone(), most.clone());
+            async move {
+                if req.uri().path() != "/together" {
+                    return route(req).await;
+                }
+                most.fetch_max(in_flight.fetch_add(1, Ordering::SeqCst) + 1, Ordering::SeqCst);
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+                while in_flight.load(Ordering::SeqCst) < STREAMS
+                    && tokio::time::Instant::now() < deadline
+                {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                Ok(Response::new(full("together")))
+            }
+        }
+    };
+    let upstream =
+        spawn_upstream_with(Some(h1_only(&h.pki.server)), accepts.clone(), handler).await;
     let port = upstream.port();
     let client = h.h2_client(port).await;
 
-    const STREAMS: usize = 10;
-    let started = std::time::Instant::now();
     let sent = (0..STREAMS).map(|_| {
         let mut client = client.clone();
         async move {
-            let resp = client.send_request(h2_request("GET", port, "/slow", full(""))).await;
+            let resp = client.send_request(h2_request("GET", port, "/together", full(""))).await;
             resp.unwrap().into_body().collect().await.unwrap().to_bytes()
         }
     });
     for body in futures_util::future::join_all(sent).await {
-        assert_eq!(body, "slow");
+        assert_eq!(body, "together");
     }
-    assert!(started.elapsed() < SLOW * 3, "took {:?}", started.elapsed());
+    assert_eq!(most.load(Ordering::SeqCst), STREAMS, "streams in flight upstream at once");
     assert_eq!(h.flows_events(STREAMS).len(), STREAMS);
     let opened = accepts.load(Ordering::SeqCst);
     assert!((2..=STREAMS).contains(&opened), "{opened} upstream connections");
