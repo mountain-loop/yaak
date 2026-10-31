@@ -4357,12 +4357,6 @@ checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
 name = "md5"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
-
-[[package]]
-name = "md5"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
@@ -11279,7 +11273,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "rusqlite",
  "serde_json",
  "sha2",
@@ -11318,7 +11312,7 @@ dependencies = [
  "eventsource-client",
  "http",
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "mime_guess",
  "notify",
  "openssl-sys",
@@ -11562,7 +11556,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "log 0.4.34",
- "md5 0.7.0",
+ "md5",
  "prost",
  "prost-reflect",
  "prost-types",
@@ -11724,7 +11718,7 @@ dependencies = [
  "hex",
  "keyring",
  "log 0.4.34",
- "md5 0.7.0",
+ "md5",
  "path-slash",
  "rand 0.9.5",
  "reqwest",
@@ -11977,7 +11971,7 @@ name = "yaak-window"
 version = "0.1.0"
 dependencies = [
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "rand 0.9.5",
  "serde",
  "serde_json",
@@ -11992,7 +11986,7 @@ dependencies = [
  "futures-util",
  "http",
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
