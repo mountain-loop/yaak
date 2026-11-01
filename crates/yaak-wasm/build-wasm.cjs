@@ -55,6 +55,7 @@ execSync("wasm-pack build --target bundler", {
   cwd: __dirname,
   env: {
     ...process.env,
+    CARGO_BUILD_TARGET: "wasm32-unknown-unknown",
     CC_wasm32_unknown_unknown: clang,
     AR_wasm32_unknown_unknown: fs.existsSync(ar)
       ? ar
