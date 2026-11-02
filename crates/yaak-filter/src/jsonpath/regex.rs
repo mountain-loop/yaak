@@ -158,7 +158,7 @@ impl JsRegex {
     }
 }
 
-fn capture_values<'a>(captures: &Captures<'_>, from: usize) -> Vec<JsValue<'a>> {
+fn capture_values<'a>(captures: &Captures<'_, str>, from: usize) -> Vec<JsValue<'a>> {
     (from..captures.len())
         .map(|i| captures.get(i).map_or(JsValue::Undefined, |m| JsValue::string(m.as_str())))
         .collect()
