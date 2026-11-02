@@ -3,8 +3,8 @@ use crate::ui;
 use crate::utils::http;
 use base64::Engine as _;
 use keyring::Entry;
-use rand::RngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use reqwest::Url;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -443,7 +443,7 @@ fn delete_auth_token(environment: Environment) -> CommandResult {
 
 fn random_hex(bytes: usize) -> String {
     let mut data = vec![0_u8; bytes];
-    OsRng.fill_bytes(&mut data);
+    SysRng.try_fill_bytes(&mut data).expect("OS random source failed");
     hex::encode(data)
 }
 
