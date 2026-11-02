@@ -35,3 +35,29 @@ jobs:
         run: |
           cargo build -p yaak-cli
           node plugins/importer-openapi/tests/roundtrip.mjs
+
+  test-windows:
+    name: Rust Tests (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "24"
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci
+          cache-on-failure: true
+      - name: Install Protoc for plugin-runtime
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: vp install
+      - run: npm run bootstrap
+        env:
+          YAAK_TARGET_ARCH: x64
+      - name: Run Rust Tests
+        run: cargo test --all --exclude yaak-cli --features yaak-app-client/wry

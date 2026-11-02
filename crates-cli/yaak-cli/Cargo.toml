@@ -21,7 +21,7 @@ hex = { workspace = true }
 include_dir = "0.7"
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
 log = { workspace = true }
-rand = "0.8"
+rand = "0.10"
 reqwest = { workspace = true, features = ["form"] }
 rolldown = "0.1.0"
 # Pinned exactly: rolldown_resolver takes `oxc_resolver = "^11"`, so cargo

@@ -123,8 +123,6 @@ export default function Settings({ tab, hide }: Props) {
                 <CountBadge count={settings.clientCertificates.length} />
               ) : value === TAB_PLUGINS ? (
                 <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
-              ) : value === TAB_AGENTS && settings.mcpServerEnabled ? (
-                <CountBadge count />
               ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
                 <CountBadge count />
               ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (

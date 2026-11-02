@@ -708,13 +708,13 @@ dependencies = [
 
 [[package]]
 name = "brotli"
-version = "9.0.0"
+version = "9.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8b851b75c23ca7873623d612fe49bd1989aeb03d08fb9432187eb253d3d4c6b"
+checksum = "627b7cfb0578f0eafce087a90fcd40add1231900b69e4d4de2d456260a4f5d81"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",
- "brotli-decompressor 6.0.1",
+ "brotli-decompressor 6.2.0",
 ]
 
 [[package]]
@@ -729,9 +729,9 @@ dependencies = [
 
 [[package]]
 name = "brotli-decompressor"
-version = "6.0.1"
+version = "6.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "941cd9bd4ddab83cb46fa5a2d428f1c857b24ac78cb876cf7beb710840934bd7"
+checksum = "34c6783f42c21c952ad7112b354f0ba2f10760e9decea5b1b60523d6e270faaf"
 dependencies = [
  "alloc-no-stdlib 3.0.0",
  "alloc-stdlib 0.3.0",
@@ -1189,7 +1189,7 @@ version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98fc98460ba0ad5317075d3632b8dfc45d0be8c4a49347c2a38272019717614a"
 dependencies = [
- "brotli 9.0.0",
+ "brotli 9.1.1",
  "compression-core",
  "flate2",
  "memchr",
@@ -4501,7 +4501,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
 dependencies = [
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -4988,13 +4988,25 @@ dependencies = [
 
 [[package]]
 name = "objc2-security"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1f8e0ef3ab66b08c42644dcb34dba6ec0a574bbd8adbb8bdbdc7a2779731a44"
+checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
 dependencies = [
  "bitflags 2.11.0",
  "objc2 0.6.4",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-service-management"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b213642d6959cc6023ceb1217aa595eaaf09b8094ce95127c103cab611fe65e8"
+dependencies = [
+ "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "objc2-security",
 ]
 
 [[package]]
@@ -5947,7 +5959,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d5285893bb5eb82e6aaf5d59ee909a06a16737a8970984dd7746ba9283498d6"
 dependencies = [
  "phf_shared 0.10.0",
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -5957,7 +5969,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c80231409c20246a13fddb31776fb942c38553c51e871f8cbd687a4cfb5843d"
 dependencies = [
  "phf_shared 0.11.3",
- "rand 0.8.7",
+ "rand 0.8.8",
 ]
 
 [[package]]
@@ -6521,9 +6533,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.7"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
+checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -7438,9 +7450,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "log 0.4.34",
@@ -11324,7 +11336,7 @@ dependencies = [
  "pretty_graphql",
  "r2d2",
  "r2d2_sqlite",
- "rand 0.9.5",
+ "rand 0.10.2",
  "reqwest",
  "rlimit",
  "serde",
@@ -11386,6 +11398,8 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
  "tauri-plugin-os",
  "yaak-mac-window",
  "yaak-proxy-lib",
@@ -11412,7 +11426,7 @@ dependencies = [
  "log 0.4.34",
  "oxc_resolver",
  "predicates",
- "rand 0.8.7",
+ "rand 0.10.2",
  "reqwest",
  "rmcp",
  "rolldown",
@@ -11582,7 +11596,7 @@ version = "0.1.0"
 dependencies = [
  "async-compression",
  "async-trait",
- "brotli 8.0.1",
+ "brotli 9.1.1",
  "bytes",
  "cookie",
  "flate2",
@@ -11643,7 +11657,7 @@ dependencies = [
  "csscolorparser",
  "log 0.4.34",
  "objc",
- "rand 0.9.5",
+ "rand 0.10.2",
  "tauri",
  "tauri-plugin",
 ]
@@ -11723,7 +11737,7 @@ dependencies = [
  "log 0.4.34",
  "md5 0.7.0",
  "path-slash",
- "rand 0.9.5",
+ "rand 0.10.2",
  "reqwest",
  "serde",
  "serde_json",
@@ -11763,9 +11777,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-proxy-helper"
+version = "0.0.0"
+dependencies = [
+ "core-foundation 0.10.1",
+ "libc",
+ "security-framework 3.5.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
 name = "yaak-proxy-lib"
 version = "0.0.0"
 dependencies = [
+ "base64 0.23.1",
  "bytes",
  "chrono",
  "flate2",
@@ -11773,7 +11801,13 @@ dependencies = [
  "hyper",
  "hyper-util",
  "include_dir",
+ "libc",
  "log 0.4.34",
+ "objc2 0.6.4",
+ "objc2-app-kit",
+ "objc2-foundation 0.3.2",
+ "objc2-service-management",
+ "plist",
  "r2d2",
  "r2d2_sqlite",
  "reqwest",
@@ -11784,11 +11818,17 @@ dependencies = [
  "tempfile",
  "tokio",
  "ts-rs",
+ "url",
+ "yaak-common",
  "yaak-database",
+ "yaak-filter",
  "yaak-http",
+ "yaak-lifecycle",
  "yaak-models",
  "yaak-proxy",
+ "yaak-proxy-helper",
  "yaak-rpc",
+ "yaak-templates",
 ]
 
 [[package]]
@@ -11949,7 +11989,7 @@ version = "0.1.0"
 dependencies = [
  "log 0.4.34",
  "md5 0.8.0",
- "rand 0.9.5",
+ "rand 0.10.2",
  "serde",
  "serde_json",
  "tauri",

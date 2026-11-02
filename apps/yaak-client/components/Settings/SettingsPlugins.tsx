@@ -2,13 +2,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import type { Plugin } from "@yaakapp-internal/models";
 import { patchModel, pluginsAtom } from "@yaakapp-internal/models";
 import type { PluginVersion } from "@yaakapp-internal/plugins";
+import { checkPluginUpdates, installPlugin, searchPlugins } from "@yaakapp-internal/plugins";
 import {
-  checkPluginUpdates,
-  installPlugin,
-  searchPlugins,
-  uninstallPlugin,
-} from "@yaakapp-internal/plugins";
-import {
+  Banner,
   HStack,
   Icon,
   InlineCode,
@@ -24,12 +20,11 @@ import {
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useInstallPlugin } from "../../hooks/useInstallPlugin";
-import { usePluginInfo } from "../../hooks/usePluginInfo";
+import { usePluginInfo, usePluginInfos } from "../../hooks/usePluginInfo";
 import { usePluginsKey, useRefreshPlugins } from "../../hooks/usePlugins";
-import { showConfirmDelete } from "../../lib/confirm";
-import { minPromiseMillis } from "../../lib/minPromiseMillis";
+import { usePromptUninstallPlugin } from "../../hooks/useUninstallPlugin";
 import { Button } from "../core/Button";
 import { Checkbox } from "../core/Checkbox";
 import { IconButton } from "../core/IconButton";
@@ -205,7 +200,7 @@ function PluginTableRow({
     mutationKey: ["install_plugin", name],
     mutationFn: (name: string) => installPlugin(name, null),
   });
-  const uninstall = usePromptUninstall(plugin?.id ?? null, displayName);
+  const uninstall = usePromptUninstallPlugin(plugin?.id ?? null, displayName);
   const refreshPlugins = useRefreshPlugins();
 
   return (
@@ -296,7 +291,10 @@ function PluginSearch() {
   const debouncedQuery = useDebouncedValue(query);
   const results = useQuery({
     queryKey: ["plugins", debouncedQuery],
-    queryFn: () => searchPlugins(query),
+    queryFn: async () => {
+      const { plugins } = await searchPlugins(query);
+      return { plugins: plugins.filter((p) => p.deprecated == null) };
+    },
   });
 
   return (
@@ -349,22 +347,77 @@ function InstalledPlugins({ plugins, className }: { plugins: Plugin[]; className
       </EmptyStateText>
     </div>
   ) : (
-    <Table scrollable className={className}>
-      <TableHead>
-        <TableRow>
-          <TableHeaderCell className="w-0" />
-          <TableHeaderCell>Display Name</TableHeaderCell>
-          <TableHeaderCell>Name</TableHeaderCell>
-          <TableHeaderCell>Version</TableHeaderCell>
-          <TableHeaderCell />
-        </TableRow>
-      </TableHead>
-      <tbody className="divide-y divide-surface-highlight">
-        {plugins.map((p) => (
-          <PluginTableRowForInstalledPlugin key={p.id} plugin={p} />
-        ))}
-      </tbody>
-    </Table>
+    <div className={classNames(className, "h-full grid grid-rows-[auto_minmax(0,1fr)]")}>
+      <DeprecatedPluginBanners />
+      <Table scrollable>
+        <TableHead>
+          <TableRow>
+            <TableHeaderCell className="w-0" />
+            <TableHeaderCell>Display Name</TableHeaderCell>
+            <TableHeaderCell>Name</TableHeaderCell>
+            <TableHeaderCell>Version</TableHeaderCell>
+            <TableHeaderCell />
+          </TableRow>
+        </TableHead>
+        <tbody className="divide-y divide-surface-highlight">
+          {plugins.map((p) => (
+            <PluginTableRowForInstalledPlugin key={p.id} plugin={p} />
+          ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+function DeprecatedPluginBanners() {
+  const deprecated = usePluginInfos().filter(
+    ({ plugin, info }) => plugin.source !== "bundled" && info.deprecated != null,
+  );
+  return (
+    <div className={classNames("flex flex-col gap-2", deprecated.length > 0 && "pb-3")}>
+      {deprecated.map(({ plugin, info }) => (
+        <DeprecatedPluginBanner key={plugin.id} plugin={plugin} name={info.displayName}>
+          {withInlineCode(info.deprecated ?? "")}
+        </DeprecatedPluginBanner>
+      ))}
+    </div>
+  );
+}
+
+/** Backtick spans in a package.json string, set as code. */
+function withInlineCode(text: string): ReactNode {
+  return text
+    .split("`")
+    .map((part, i) => (i % 2 === 1 ? <InlineCode key={i}>{part}</InlineCode> : part));
+}
+
+export function DeprecatedPluginBanner({
+  children,
+  name,
+  plugin,
+}: {
+  children: ReactNode;
+  name: string;
+  plugin: Plugin;
+}) {
+  const uninstall = usePromptUninstallPlugin(plugin.id, name);
+  return (
+    <Banner color="info" className="flex items-center gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="text text-text">The {name} plugin is deprecated.</div>
+        <p className="mt-1 text-sm text-text-subtle">{children}</p>
+      </div>
+      <Button
+        size="xs"
+        variant="border"
+        title="Uninstall plugin"
+        className="shrink-0"
+        isLoading={uninstall?.isPending}
+        onClick={() => uninstall?.mutate()}
+      >
+        Uninstall
+      </Button>
+    </Banner>
   );
 }
 
@@ -391,31 +444,6 @@ function BundledPlugins({ plugins }: { plugins: Plugin[] }) {
       </tbody>
     </Table>
   );
-}
-
-function usePromptUninstall(pluginId: string | null, name: string) {
-  const mut = useMutation({
-    mutationKey: ["uninstall_plugin", pluginId],
-    mutationFn: async () => {
-      if (pluginId == null) return;
-
-      const confirmed = await showConfirmDelete({
-        id: `uninstall-plugin-${pluginId}`,
-        title: "Uninstall Plugin",
-        confirmText: "Uninstall",
-        description: (
-          <>
-            Permanently uninstall <InlineCode>{name}</InlineCode>?
-          </>
-        ),
-      });
-      if (confirmed) {
-        await minPromiseMillis(uninstallPlugin(pluginId), 700);
-      }
-    },
-  });
-
-  return pluginId == null ? null : mut;
 }
 
 function usePluginUpdates() {

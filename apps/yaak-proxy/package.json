@@ -10,21 +10,23 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.2",
+    "@tanstack/react-virtual": "^3.14.17",
     "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-dialog": "^2.8.2",
+    "@tauri-apps/plugin-opener": "^2.7.1",
     "@tauri-apps/plugin-os": "^2.4.0",
-    "@yaakapp-internal/model-store": "^1.0.0",
     "@yaakapp-internal/proxy-lib": "^1.0.0",
     "@yaakapp-internal/theme": "^1.0.0",
     "@yaakapp-internal/ui": "^1.0.0",
     "classnames": "^2.5.1",
     "jotai": "^2.18.0",
-    "jotai-family": "^1.0.1",
     "motion": "^14.0.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "vkbeautify": "^0.99.3"
   },
   "devDependencies": {
-    "@rolldown/plugin-babel": "^0.2.3",
+    "@rolldown/plugin-babel": "^0.3.0",
     "@types/babel__core": "^7.20.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

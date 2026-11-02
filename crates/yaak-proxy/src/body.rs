@@ -1,5 +1,6 @@
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use std::time::Instant;
 
@@ -25,6 +26,8 @@ pub(crate) struct CaptureBody {
     captured: usize,
     size: u64,
     finished: bool,
+    /// Set when reading the body fails.
+    failed: Option<Arc<AtomicBool>>,
 }
 
 impl CaptureBody {
@@ -35,10 +38,33 @@ impl CaptureBody {
         start: Instant,
         engine: Arc<Engine>,
     ) -> Self {
-        Self { inner, direction, id, start, engine, captured: 0, size: 0, finished: false }
+        Self {
+            inner,
+            direction,
+            id,
+            start,
+            engine,
+            captured: 0,
+            size: 0,
+            finished: false,
+            failed: None,
+        }
     }
 
-    fn finish(&mut self, error: Option<String>) {
+    /// Sets `failed` if reading the body fails, as a client's upload does when it cancels.
+    pub(crate) fn flag_failure(mut self, failed: Arc<AtomicBool>) -> Self {
+        self.failed = Some(failed);
+        self
+    }
+
+    /// Every byte the body declared has arrived. An HTTP/2 stream's end can come in a frame after
+    /// its last byte, and hyper stops polling a Content-Length body once it has written that
+    /// many bytes, so the stream's end alone would call a complete body cut short.
+    fn complete(&self) -> bool {
+        self.inner.is_end_stream() || self.inner.size_hint().exact() == Some(0)
+    }
+
+    fn finish(&mut self, error: Option<String>, cancelled: bool) {
         if self.finished {
             return;
         }
@@ -55,6 +81,7 @@ impl CaptureBody {
                 truncated,
                 elapsed_ms: self.start.elapsed().as_millis() as u64,
                 error,
+                cancelled,
             },
         };
         self.engine.emit(event);
@@ -84,15 +111,18 @@ impl Body for CaptureBody {
                         Direction::Response => ProxyEvent::ResponseBodyChunk { id, len, data },
                     });
                 }
-                if self.inner.is_end_stream() {
-                    self.finish(None);
+                if self.complete() {
+                    self.finish(None, false);
                 }
             }
             Poll::Ready(Some(Err(e))) => {
+                if let Some(failed) = &self.failed {
+                    failed.store(true, Ordering::Relaxed);
+                }
                 let error = e.to_string();
-                self.finish(Some(error));
+                self.finish(Some(error), false);
             }
-            Poll::Ready(None) => self.finish(None),
+            Poll::Ready(None) => self.finish(None, false),
             Poll::Pending => {}
         }
         result
@@ -107,10 +137,11 @@ impl Body for CaptureBody {
     }
 }
 
+/// A response body dropped before its end was abandoned by the client, which reset its stream or
+/// closed the connection. Dropping the upstream body with it cancels the request there too.
 impl Drop for CaptureBody {
     fn drop(&mut self) {
-        let error = (self.direction == Direction::Response && !self.inner.is_end_stream())
-            .then(|| "Client closed the connection before the response finished".to_string());
-        self.finish(error);
+        let cancelled = self.direction == Direction::Response && !self.complete();
+        self.finish(None, cancelled);
     }
 }

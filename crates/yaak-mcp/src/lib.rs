@@ -1,5 +1,6 @@
 //! Yaak's MCP server: the tools, written once against [`McpHost`], and the
-//! transports the app (streamable HTTP) and the CLI (stdio) serve them on.
+//! transports the CLI serves them on: stdio by default, streamable HTTP with
+//! `yaak mcp --http`.
 
 pub mod http;
 mod params;

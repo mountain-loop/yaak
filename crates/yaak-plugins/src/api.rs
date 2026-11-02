@@ -109,7 +109,10 @@ pub struct PluginVersion {
     pub repository_url: Option<String>,
     pub checksum: String,
     pub readme: Option<String>,
+    #[serde(default)]
     pub yanked: bool,
+    #[serde(default)]
+    pub deprecated: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]

@@ -139,6 +139,9 @@ impl RpcEventEmitter {
 /// - `RpcSchema` — a struct with ts-rs derives for TypeScript type generation
 /// - `RpcEventSchema` — (if events declared) a struct mapping event names to payload types
 ///
+/// Commands under the optional `async_commands` block are `async fn(Ctx, Req)` handlers,
+/// wrapped with `rpc_handler_async!`.
+///
 /// The wire name for each command/event is derived from `stringify!($ident)`.
 ///
 /// # Example
@@ -162,6 +165,9 @@ macro_rules! define_rpc {
         commands {
             $( $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
         }
+        $( async_commands {
+            $( $async_handler:ident ( $async_req:ty ) -> $async_res:ty ),* $(,)?
+        } )?
         events {
             $( $evt_ident:ident ( $evt_payload:ty ) ),* $(,)?
         }
@@ -169,6 +175,7 @@ macro_rules! define_rpc {
         pub fn build_router() -> $crate::RpcRouter<$ctx> {
             let mut router = $crate::RpcRouter::new();
             $( router.register(stringify!($handler), $crate::rpc_handler!($handler)); )*
+            $( $( router.register(stringify!($async_handler), $crate::rpc_handler_async!($async_handler)); )* )?
             router
         }
 
@@ -176,6 +183,7 @@ macro_rules! define_rpc {
         #[ts(export, export_to = "gen_rpc.ts")]
         pub struct RpcSchema {
             $( pub $handler: ($req, $res), )*
+            $( $( pub $async_handler: ($async_req, $async_res), )* )?
         }
 
         #[derive(ts_rs::TS)]
@@ -191,10 +199,14 @@ macro_rules! define_rpc {
         commands {
             $( $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
         }
+        $( async_commands {
+            $( $async_handler:ident ( $async_req:ty ) -> $async_res:ty ),* $(,)?
+        } )?
     ) => {
         pub fn build_router() -> $crate::RpcRouter<$ctx> {
             let mut router = $crate::RpcRouter::new();
             $( router.register(stringify!($handler), $crate::rpc_handler!($handler)); )*
+            $( $( router.register(stringify!($async_handler), $crate::rpc_handler_async!($async_handler)); )* )?
             router
         }
 
@@ -202,6 +214,7 @@ macro_rules! define_rpc {
         #[ts(export, export_to = "gen_rpc.ts")]
         pub struct RpcSchema {
             $( pub $handler: ($req, $res), )*
+            $( $( pub $async_handler: ($async_req, $async_res), )* )?
         }
     };
 }

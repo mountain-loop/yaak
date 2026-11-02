@@ -1,11 +1,13 @@
 import classNames from "classnames";
 import * as m from "motion/react-m";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useContainerSize } from "../hooks/useContainerSize";
 import { Overlay } from "./Overlay";
 import type { ResizeHandleEvent } from "./ResizeHandle";
 import { ResizeHandle } from "./ResizeHandle";
+import type { SidebarDrag, SidebarSize } from "./resizeDrag";
+import { createSidebarDrag, sidebarGridTemplate } from "./resizeDrag";
 
 const FLOATING_BREAKPOINT = 600;
 
@@ -53,44 +55,65 @@ export function SidebarLayout({
   }, [floating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [isResizing, setIsResizing] = useState(false);
-  const startWidth = useRef<number | null>(null);
 
-  const sideWidth = hidden ? 0 : width;
+  // While dragging, the width is written straight to the DOM and only handed to the owner when the
+  // drag ends. Until the owner's props catch up with that (hiding may be saved asynchronously),
+  // keep showing what the drag ended on, so the sidebar does not flash back open.
+  const liveDrag = useRef<SidebarDrag | null>(null);
+  const [committed, setCommitted] = useState<{ from: SidebarSize; to: SidebarSize } | null>(null);
+
+  if (committed != null) {
+    const { from, to } = committed;
+    const settled = (prop: number | boolean, key: keyof SidebarSize) =>
+      prop === to[key] || prop !== from[key];
+    if (settled(hidden, "hidden") && settled(width, "width")) setCommitted(null);
+  }
+
+  const shownWidth = committed?.to.width ?? width;
+  const shownHidden = committed?.to.hidden ?? hidden;
+  const sideWidth = shownHidden ? 0 : shownWidth;
 
   const styles = useMemo<CSSProperties>(
-    () => ({
-      gridTemplate: `
-        ' ${side.gridArea} ${drag.gridArea} ${body.gridArea}' minmax(0,1fr)
-        / ${sideWidth}px   0                1fr`,
-    }),
+    () => ({ gridTemplate: sidebarGridTemplate(sideWidth) }),
     [sideWidth],
   );
 
-  const handleResizeStart = useCallback(() => {
-    startWidth.current = width;
-    setIsResizing(true);
-  }, [width]);
-
-  const handleResizeEnd = useCallback(() => {
-    setIsResizing(false);
-    startWidth.current = null;
+  const applySize = useCallback((size: SidebarSize) => {
+    if (containerRef.current == null) return;
+    containerRef.current.style.gridTemplate = sidebarGridTemplate(size.hidden ? 0 : size.width);
   }, []);
 
-  const handleResizeMove = useCallback(
-    ({ x, xStart }: ResizeHandleEvent) => {
-      if (startWidth.current == null) return;
+  // Something else re-rendering mid-drag may write the saved width back; put the live one back
+  // before it is painted.
+  useLayoutEffect(() => {
+    const size = liveDrag.current?.size;
+    if (size != null) applySize(size);
+  });
 
-      const newWidth = startWidth.current + (x - xStart);
-      if (newWidth < minWidth) {
-        onHiddenChange?.(true);
-        onWidthChange(defaultWidth);
-      } else {
-        if (hidden) onHiddenChange?.(false);
-        onWidthChange(newWidth);
-      }
-    },
-    [minWidth, hidden, onHiddenChange, onWidthChange, defaultWidth],
-  );
+  const handleResizeStart = useCallback(() => {
+    const from = { width: shownWidth, hidden: shownHidden };
+    liveDrag.current = createSidebarDrag({
+      startWidth: shownWidth,
+      minWidth,
+      defaultWidth,
+      apply: applySize,
+      commit: (to) => {
+        setCommitted({ from, to });
+        if (to.hidden !== from.hidden) onHiddenChange?.(to.hidden);
+        onWidthChange(to.width);
+      },
+    });
+    setIsResizing(true);
+  }, [shownWidth, shownHidden, minWidth, defaultWidth, applySize, onHiddenChange, onWidthChange]);
+
+  const handleResizeMove = useCallback((e: ResizeHandleEvent) => liveDrag.current?.move(e), []);
+
+  const handleResizeEnd = useCallback(() => {
+    const d = liveDrag.current;
+    liveDrag.current = null;
+    d?.end();
+    setIsResizing(false);
+  }, []);
 
   const handleReset = useCallback(() => {
     onWidthChange(defaultWidth);

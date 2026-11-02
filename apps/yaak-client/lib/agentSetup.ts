@@ -1,4 +1,6 @@
-export type AgentClient = "claude_code" | "codex" | "cursor" | "vscode" | "other";
+import type { AgentClient } from "@yaakapp-internal/rpc-schema";
+
+export type { AgentClient };
 
 export const AGENT_CLIENTS: { label: string; value: AgentClient }[] = [
   { label: "Claude Code", value: "claude_code" },
@@ -9,21 +11,34 @@ export const AGENT_CLIENTS: { label: string; value: AgentClient }[] = [
 ];
 
 export interface AgentSetup {
-  /** Where the snippet goes, as a sentence */
-  where: string;
+  /** The file the snippet goes in, as a sentence, when it is a file rather than a command */
+  where: string | null;
   snippet: string;
   language: "shell" | "json" | "text";
 }
 
-const RUN_IN_TERMINAL = "Run in a terminal.";
+/** `yaak agent install`, targeted at `client` when the installer knows it by name. */
+export function skillInstallCommand(client: AgentClient): string {
+  switch (client) {
+    case "claude_code":
+      return "yaak agent install --agent claude-code";
+    case "codex":
+      return "yaak agent install --agent codex";
+    case "cursor":
+      return "yaak agent install --agent cursor";
+    case "vscode":
+    case "other":
+      return "yaak agent install";
+  }
+}
 
 /** Setup for `yaak mcp`, which the client launches over stdio. */
 export function cliSetup(client: AgentClient): AgentSetup {
   switch (client) {
     case "claude_code":
-      return { where: RUN_IN_TERMINAL, snippet: "claude mcp add yaak -- yaak mcp", language: "shell" };
+      return { where: null, snippet: "claude mcp add -s user yaak -- yaak mcp", language: "shell" };
     case "codex":
-      return { where: RUN_IN_TERMINAL, snippet: "codex mcp add yaak -- yaak mcp", language: "shell" };
+      return { where: null, snippet: "codex mcp add yaak -- yaak mcp", language: "shell" };
     case "cursor":
       return {
         where: "Add to ~/.cursor/mcp.json.",
@@ -40,56 +55,6 @@ export function cliSetup(client: AgentClient): AgentSetup {
       return {
         where: "For clients that read an mcpServers config, like Claude Desktop and Windsurf.",
         snippet: json({ mcpServers: { yaak: { command: "yaak", args: ["mcp"] } } }),
-        language: "json",
-      };
-  }
-}
-
-/** Setup for the app's MCP server at `url`, which needs `token` as a bearer token. */
-export function appSetup(client: AgentClient, url: string, token: string): AgentSetup {
-  const authorization = `Bearer ${token}`;
-  switch (client) {
-    case "claude_code":
-      return {
-        where: RUN_IN_TERMINAL,
-        snippet: `claude mcp add --transport http yaak ${url} --header "Authorization: ${authorization}"`,
-        language: "shell",
-      };
-    case "codex":
-      return {
-        where: "Add to ~/.codex/config.toml.",
-        snippet: [
-          "[mcp_servers.yaak]",
-          `url = ${JSON.stringify(url)}`,
-          `http_headers = { "Authorization" = ${JSON.stringify(authorization)} }`,
-        ].join("\n"),
-        language: "text",
-      };
-    case "cursor":
-      return {
-        where: "Add to ~/.cursor/mcp.json.",
-        snippet: json({ mcpServers: { yaak: { url, headers: { Authorization: authorization } } } }),
-        language: "json",
-      };
-    case "vscode":
-      return {
-        where: "Add to your user mcp.json (MCP: Open User Configuration).",
-        snippet: json({
-          servers: { yaak: { type: "http", url, headers: { Authorization: authorization } } },
-        }),
-        language: "json",
-      };
-    case "other":
-      return {
-        where: "For clients that read an mcpServers config, through the mcp-remote bridge.",
-        snippet: json({
-          mcpServers: {
-            yaak: {
-              command: "npx",
-              args: ["-y", "mcp-remote", url, "--header", `Authorization: ${authorization}`],
-            },
-          },
-        }),
         language: "json",
       };
   }

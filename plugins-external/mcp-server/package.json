@@ -1,9 +1,10 @@
 {
   "name": "@yaak/mcp-server",
   "displayName": "MCP Server",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "Expose Yaak functionality via Model Context Protocol",
+  "deprecated": "Replaced by the built-in `yaak mcp` in the Yaak CLI. Install the CLI instead.",
   "repository": {
     "type": "git",
     "url": "https://github.com/mountain-loop/yaak.git",

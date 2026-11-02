@@ -313,7 +313,7 @@ export interface PlatformCapabilities {
   systemFonts: boolean;
   /** Commercial licence activation. */
   license: boolean;
-  /** Connecting local AI agents: the Yaak CLI on this machine and the app's own MCP server. */
+  /** Connecting local AI agents through the Yaak CLI on this machine. */
   agents: boolean;
 }
 
