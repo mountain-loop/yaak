@@ -12,7 +12,7 @@ dunce = "1.0.4"
 hyper-rustls = { version = "0.27.7", default-features = false, features = ["http2"] }
 hyper-util = { version = "0.1.13", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
-md5 = "0.7.0"
+md5 = "0.8.0"
 prost = "0.14.4"
 prost-reflect = { version = "0.16.5", default-features = false, features = ["serde", "derive"] }
 prost-types = "0.14.4"
