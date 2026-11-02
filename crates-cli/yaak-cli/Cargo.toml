@@ -42,7 +42,7 @@ tokio = { workspace = true, features = [
 ] }
 walkdir = "2"
 webbrowser = "1"
-zip = "7"
+zip = "9.0.5"
 yaak = { workspace = true }
 yaak-api = { workspace = true }
 yaak-common = { workspace = true }

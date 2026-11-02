@@ -850,7 +850,7 @@ mod tests {
         let mut names = HashSet::new();
         for i in 0..zip.len() {
             let file = zip.by_index(i).expect("zip entry");
-            names.insert(file.name().to_string());
+            names.insert(file.name().expect("zip entry name").to_string());
         }
 
         assert!(names.contains("README.md"));
