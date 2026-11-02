@@ -1,36 +1,70 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
-import { formatMillis, HttpMethodTagRaw, HttpStatusTagRaw, Icon } from "@yaakapp-internal/ui";
+import {
+  ContextMenu,
+  formatMillis,
+  HttpMethodTagRaw,
+  HttpStatusTagRaw,
+  Icon,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtom, useAtomValue } from "jotai";
-import type { CSSProperties, KeyboardEvent } from "react";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import type { CSSProperties, KeyboardEvent, MouseEvent, WheelEvent } from "react";
 import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { selectedFlowIdAtom } from "../lib/atoms";
+import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
+import { useFlowActions } from "../lib/flowActions";
+import { compareFlows } from "../lib/flowWindow";
 import { countNewFlows } from "../lib/follow";
-import { flowsAtom } from "../lib/store";
+import {
+  activeQueryAtom,
+  followAtom,
+  hasAppsAtom,
+  loadOlderFlowsAtom,
+  newestStartedAtAtom,
+  oldestFlowAtom,
+  searchWindowAtom,
+  shownFlowsAtom,
+} from "../lib/store";
+import { AppIcon } from "./AppIcon";
+import { SearchBar } from "./SearchBar";
 
 const ROW_HEIGHT = 24;
 const BOTTOM_PADDING = 6;
+/** Rows from the top at which older flows start loading */
+const LOAD_OLDER_ROWS = 20;
 
 interface Props {
-  flows: Flow[];
   sideBySide: boolean;
   style?: CSSProperties;
   className?: string;
 }
 
-/** Follows new traffic until a flow is selected or the list is scrolled, then holds */
-export function FlowList({ flows, sideBySide, style, className }: Props) {
-  const [selectedId, setSelectedId] = useAtom(selectedFlowIdAtom);
+/**
+ * Follows new traffic until a flow is selected or the list is scrolled, then holds. Scrolling to
+ * the top loads older flows from the database.
+ */
+export function FlowList({ sideBySide, style, className }: Props) {
+  const flows = useAtomValue(shownFlowsAtom);
+  const hasApps = useAtomValue(hasAppsAtom);
+  const [menu, setMenu] = useState<{ flow: Flow; x: number; y: number } | null>(null);
+  const flowActions = useFlowActions();
+  const selectedId = useAtomValue(selectedFlowIdAtom);
+  const setSelectedFlow = useSetAtom(selectedFlowAtom);
+  const loadOlder = useSetAtom(loadOlderFlowsAtom);
+  const oldestFlow = useAtomValue(oldestFlowAtom);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ignoreScroll = useRef(false);
-  const [following, setFollowing] = useState(true);
+  const [following, setFollowing] = useAtom(followAtom);
   const [heldAt, setHeldAt] = useState<string | null>(null);
   // The newest flow across all traffic, not just this list, so a filter change keeps the hold
-  const allFlows = useAtomValue(flowsAtom);
-  const newestStartedAt = allFlows[allFlows.length - 1]?.startedAt ?? null;
+  const newestStartedAt = useAtomValue(newestStartedAtAtom);
+  // Read by the callbacks below, which stay the same across new traffic so rows don't re-render
+  const latest = useRef({ flows, following, newestStartedAt });
+  useLayoutEffect(() => {
+    latest.current = { flows, following, newestStartedAt };
+  });
 
   const virtualizer = useVirtualizer({
     count: flows.length,
@@ -52,20 +86,37 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
   }, []);
 
   const hold = useCallback(() => {
-    if (!following) return;
+    if (!latest.current.following) return;
     setFollowing(false);
-    setHeldAt(newestStartedAt);
-  }, [following, newestStartedAt]);
+    setHeldAt(latest.current.newestStartedAt);
+  }, [setFollowing]);
 
   const follow = useCallback(() => {
     setFollowing(true);
     setHeldAt(null);
     setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [setScrollTop]);
+  }, [setFollowing, setScrollTop]);
 
   useLayoutEffect(() => {
     if (following) setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [following, flows.length, setScrollTop]);
+  }, [following, flows, setScrollTop]);
+
+  // Older flows that loaded in above push the rows down; scroll by as much, so they stay put.
+  const anchor = useRef<Flow | null>(null);
+  useLayoutEffect(() => {
+    const previous = anchor.current;
+    anchor.current = oldestFlow;
+    if (following || previous == null || oldestFlow == null) return;
+    if (compareFlows(oldestFlow, previous) >= 0) return;
+    const added = flows.findIndex((f) => compareFlows(f, previous) >= 0);
+    const el = scrollRef.current;
+    if (added > 0 && el != null) setScrollTop(el.scrollTop + added * ROW_HEIGHT);
+  }, [oldestFlow, flows, following, setScrollTop]);
+
+  const loadOlderHeld = useCallback(() => {
+    hold();
+    void loadOlder();
+  }, [hold, loadOlder]);
 
   const handleScroll = useCallback(() => {
     if (ignoreScroll.current) {
@@ -80,14 +131,23 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
       setHeldAt(null);
     } else {
       hold();
+      if (el.scrollTop < LOAD_OLDER_ROWS * ROW_HEIGHT) void loadOlder();
     }
-  }, [hold]);
+  }, [hold, loadOlder, setFollowing]);
+
+  // A list too short to scroll still loads older flows on scrolling up.
+  const handleWheel = useCallback(
+    (e: WheelEvent<HTMLDivElement>) => {
+      if (e.deltaY < 0 && e.currentTarget.scrollTop <= 0) loadOlderHeld();
+    },
+    [loadOlderHeld],
+  );
 
   const select = useCallback(
     (index: number) => {
-      const flow = flows[index];
+      const flow = latest.current.flows[index];
       if (flow == null) return;
-      setSelectedId(flow.id);
+      setSelectedFlow(flow);
       hold();
       const el = scrollRef.current;
       if (el == null) return;
@@ -97,7 +157,7 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
         setScrollTop(top + ROW_HEIGHT - el.clientHeight);
       }
     },
-    [flows, hold, setSelectedId, setScrollTop],
+    [hold, setSelectedFlow, setScrollTop],
   );
 
   const handleKeyDown = useCallback(
@@ -107,22 +167,39 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
       e.preventDefault();
       const index = flows.findIndex((f) => f.id === selectedId);
       if (index === -1) select(e.key === "ArrowDown" ? 0 : flows.length - 1);
+      else if (index === 0 && e.key === "ArrowUp") loadOlderHeld();
       else select(e.key === "ArrowDown" ? index + 1 : index - 1);
     },
-    [flows, select, selectedId],
+    [flows, loadOlderHeld, select, selectedId],
+  );
+
+  const openMenu = useCallback(
+    (index: number, e: MouseEvent) => {
+      const flow = latest.current.flows[index];
+      if (flow == null) return;
+      e.preventDefault();
+      select(index);
+      setMenu({ flow, x: e.clientX, y: e.clientY });
+    },
+    [select],
   );
 
   const newCount = following ? 0 : countNewFlows(flows, heldAt);
 
   const columns = sideBySide
-    ? "grid-cols-[0.9rem_2.6rem_minmax(0,2fr)_minmax(0,3fr)_2.4rem_3.6rem]"
-    : "grid-cols-[0.9rem_2.6rem_13rem_minmax(0,1fr)_2.4rem_5rem_4.5rem_3.8rem]";
+    ? hasApps
+      ? "grid-cols-[0.9rem_1rem_2.6rem_minmax(0,2fr)_minmax(0,3fr)_2.4rem_3.6rem]"
+      : "grid-cols-[0.9rem_2.6rem_minmax(0,2fr)_minmax(0,3fr)_2.4rem_3.6rem]"
+    : hasApps
+      ? "grid-cols-[0.9rem_8.5rem_2.6rem_13rem_minmax(0,1fr)_2.4rem_5rem_4.5rem_3.8rem]"
+      : "grid-cols-[0.9rem_2.6rem_13rem_minmax(0,1fr)_2.4rem_5rem_4.5rem_3.8rem]";
 
   return (
     <div
       style={style}
-      className={classNames(className, "grid grid-rows-[auto_minmax(0,1fr)] min-h-0 text-sm")}
+      className={classNames(className, "grid grid-rows-[auto_auto_minmax(0,1fr)] min-h-0 text-sm")}
     >
+      <SearchBar />
       <div
         className={classNames(
           columns,
@@ -131,6 +208,7 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
         )}
       >
         <span />
+        {hasApps && <span>{sideBySide ? "" : "App"}</span>}
         <span>Method</span>
         <span>Host</span>
         <span>Path</span>
@@ -146,11 +224,12 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
           aria-label="Flows"
           tabIndex={0}
           onScroll={handleScroll}
+          onWheel={handleWheel}
           onKeyDown={handleKeyDown}
           className="group/flows h-full overflow-y-auto px-1.5 outline-hidden"
         >
           {flows.length === 0 ? (
-            <p className="text-text-subtlest text-sm px-3 py-3">No traffic yet</p>
+            <EmptyList />
           ) : (
             <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
               {virtualizer.getVirtualItems().map((item) => {
@@ -164,8 +243,10 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
                     start={item.start}
                     columns={columns}
                     sideBySide={sideBySide}
+                    showApp={hasApps}
                     selected={flow.id === selectedId}
                     onSelect={select}
+                    onContextMenu={openMenu}
                   />
                 );
               })}
@@ -187,8 +268,25 @@ export function FlowList({ flows, sideBySide, style, className }: Props) {
             {newCount === 1 ? "1 new flow" : `${newCount} new flows`}
           </button>
         )}
+        <ContextMenu
+          triggerPosition={menu}
+          items={menu == null ? [] : flowActions(menu.flow)}
+          onClose={() => setMenu(null)}
+        />
       </div>
     </div>
+  );
+}
+
+/** Nothing to list, or nothing a search matches */
+function EmptyList() {
+  const query = useAtomValue(activeQueryAtom);
+  const search = useAtomValue(searchWindowAtom);
+  if (search?.loading) return null;
+  return (
+    <p className="text-text-subtlest text-sm px-3 py-3">
+      {query == null ? "No traffic yet" : "No flows match"}
+    </p>
   );
 }
 
@@ -198,8 +296,10 @@ interface RowProps {
   start: number;
   columns: string;
   sideBySide: boolean;
+  showApp: boolean;
   selected: boolean;
   onSelect: (index: number) => void;
+  onContextMenu: (index: number, e: MouseEvent) => void;
 }
 
 const FlowRow = memo(function FlowRow({
@@ -208,18 +308,25 @@ const FlowRow = memo(function FlowRow({
   start,
   columns,
   sideBySide,
+  showApp,
   selected,
   onSelect,
+  onContextMenu,
 }: RowProps) {
   const { host, path, query } = splitUrl(flow.url);
-  const failed = flow.error != null && flow.status == null;
+  const failed = flow.error != null;
+  // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
+  const noResponse = (failed || flow.cancelled) && flow.status == null;
   const type = shortContentType(flow.contentType);
 
   return (
     <div
       role="option"
       aria-selected={selected}
-      onMouseDown={() => onSelect(index)}
+      onMouseDown={(e) => {
+        if (e.button === 0) onSelect(index);
+      }}
+      onContextMenu={(e) => onContextMenu(index, e)}
       style={{ height: ROW_HEIGHT, transform: `translateY(${start}px)` }}
       className={classNames(
         columns,
@@ -231,24 +338,44 @@ const FlowRow = memo(function FlowRow({
       )}
     >
       <span className="flex items-center justify-center">
-        {failed ? (
+        {flow.savedRequestId != null ? (
+          <Icon icon="bookmark" size="xs" color="primary" title="Saved to Yaak" />
+        ) : failed ? (
           <Icon icon="circle_alert" size="xs" color="danger" />
+        ) : flow.cancelled ? (
+          <Icon icon="circle_off" size="xs" color="secondary" title="Cancelled by the app" />
         ) : flow.responseTruncated ? (
           <Icon icon="scissors" size="xs" color="notice" title="Body cut at the capture limit" />
         ) : null}
       </span>
+      {showApp && (
+        <span className="flex items-center gap-1.5" title={flow.clientPath ?? undefined}>
+          {flow.clientPath != null && <AppIcon path={flow.clientPath} />}
+          {!sideBySide && (
+            <span className="truncate text-text-subtle">
+              {flow.clientName ?? <span className="text-text-subtlest">--</span>}
+            </span>
+          )}
+        </span>
+      )}
       <HttpMethodTagRaw method={flow.method} short colored />
       <span className="text-text-subtle">{host}</span>
       <span>
         {path}
         <span className="text-text-subtlest">{query}</span>
       </span>
-      <HttpStatusTagRaw status={flow.status ?? 0} short />
+      {flow.cancelled && flow.status == null ? (
+        <span className="font-mono text-text-subtlest">--</span>
+      ) : (
+        <HttpStatusTagRaw status={flow.status ?? 0} short />
+      )}
       {!sideBySide &&
         (failed ? (
           <span className="text-danger" title={flow.error ?? undefined}>
             {flow.error}
           </span>
+        ) : flow.cancelled ? (
+          <span className="text-text-subtle">Cancelled</span>
         ) : (
           <span className="text-text-subtle">
             {type ?? <span className="text-text-subtlest">--</span>}
@@ -261,7 +388,11 @@ const FlowRow = memo(function FlowRow({
             flow.responseTruncated ? "text-notice" : "text-text-subtle",
           )}
         >
-          {failed ? <span className="text-text-subtlest">--</span> : formatSize(flow.responseSize)}
+          {noResponse ? (
+            <span className="text-text-subtlest">--</span>
+          ) : (
+            formatSize(flow.responseSize)
+          )}
         </span>
       )}
       <span className="font-mono text-right text-text-subtle">

@@ -1,0 +1,34 @@
+[package]
+name = "yaak-proxy-helper"
+version = "0.0.0"
+edition = "2024"
+authors = ["Gregory Schier"]
+publish = false
+
+# The library is the protocol and the `networksetup` logic, shared with `yaak-proxy-lib`, and
+# builds everywhere. The daemon itself is macOS only.
+[lib]
+name = "yaak_proxy_helper"
+
+[[bin]]
+name = "yaak-proxy-helper"
+path = "src/main.rs"
+
+[features]
+# TypeScript bindings for the types the proxy app shows.
+ts = ["dep:ts-rs"]
+# An in-memory `networksetup`, for tests that change the system proxy.
+test-support = []
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+libc = "0.2"
+security-framework = "3"
+
+[dev-dependencies]
+tempfile = "3"

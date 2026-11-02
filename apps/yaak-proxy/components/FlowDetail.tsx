@@ -10,6 +10,7 @@ import {
   HStack,
   HttpStatusTagRaw,
   Icon,
+  IconButton,
   SizeTag,
   type TabButtonRenderProps,
   type TabItem,
@@ -17,20 +18,15 @@ import {
   Tabs,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { atom, useAtomValue } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import type { CSSProperties } from "react";
 import { useMemo, useState } from "react";
-import { selectedFlowIdAtom } from "../lib/atoms";
+import { selectedFlowAtom } from "../lib/atoms";
 import { findHeader, mimeEssence } from "../lib/body";
+import { saveDialogFlowAtom, useFlowActions } from "../lib/flowActions";
 import { statusReason } from "../lib/statusReason";
-import { flowsAtom } from "../lib/store";
 import { EmptyState, FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowHeaders, FlowQuery, queryParams } from "./FlowHeaders";
-
-const selectedFlowAtom = atom((get) => {
-  const id = get(selectedFlowIdAtom);
-  return id == null ? null : (get(flowsAtom).find((f) => f.id === id) ?? null);
-});
 
 const TAB_RESPONSE = "response";
 const TAB_REQUEST = "request";
@@ -56,10 +52,10 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
             <div className="grid grid-cols-[auto_auto] gap-x-6 gap-y-2 text-left">
               <span>Select a flow</span>
               <Keys keys={["↑", "↓"]} />
-              <span>Start the proxy</span>
-              <Keys keys={["⌘", "⇧", "P"]} />
-              <span>Stop the proxy</span>
-              <Keys keys={["⌘", "⇧", "S"]} />
+              <span>Pause or resume recording</span>
+              <Keys keys={["⌘", "R"]} />
+              <span>Clear flows</span>
+              <Keys keys={["⌘", "K"]} />
             </div>
           </EmptyState>
         ) : (
@@ -73,9 +69,12 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
 function FlowPane({ flow }: { flow: Flow }) {
   const [pretty, setPretty] = useState(true);
   const responseBody = useFlowBody(flow, "response", flow.responseTruncated);
-  const failed = flow.error != null && flow.status == null;
+  // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
+  const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
   const mime = mimeEssence(findHeader(flow.responseHeaders, "content-type"));
   const queryCount = useMemo(() => queryParams(flow.url).length, [flow.url]);
+  const openSave = useSetAtom(saveDialogFlowAtom);
+  const flowActions = useFlowActions();
 
   const tabs = useMemo<TabItem[]>(
     () => [
@@ -128,17 +127,21 @@ function FlowPane({ flow }: { flow: Flow }) {
     <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
       <div
         className={classNames(
-          "grid grid-cols-[auto_minmax(4rem,1fr)] items-center h-sm -mb-1.5",
+          "grid grid-cols-[auto_minmax(4rem,1fr)_auto] items-center h-sm -mb-1.5",
           "cursor-default select-none whitespace-nowrap w-full px-3",
           "overflow-x-auto font-mono text-sm text-text-subtle hide-scrollbars",
         )}
       >
         <HStack space={2} className="w-full shrink-0">
-          <HttpStatusTagRaw
-            showReason
-            status={flow.status ?? 0}
-            statusReason={flow.status == null ? null : statusReason(flow.status)}
-          />
+          {flow.cancelled && flow.status == null ? (
+            <span>Cancelled</span>
+          ) : (
+            <HttpStatusTagRaw
+              showReason
+              status={flow.status ?? 0}
+              statusReason={flow.status == null ? null : statusReason(flow.status)}
+            />
+          )}
           {flow.elapsedMs != null && (
             <>
               <span>&bull;</span>
@@ -153,7 +156,7 @@ function FlowPane({ flow }: { flow: Flow }) {
               </span>
             </>
           )}
-          {!failed && (
+          {!noResponse && (
             <>
               <span>&bull;</span>
               <SizeTag contentLength={flow.responseSize} />
@@ -175,12 +178,34 @@ function FlowPane({ flow }: { flow: Flow }) {
         ) : (
           <span />
         )}
+        <HStack space={1} className="font-sans ml-3">
+          <Button
+            size="2xs"
+            variant="border"
+            color={flow.savedRequestId == null ? "default" : "primary"}
+            title={flow.savedRequestId == null ? undefined : "Saved to Yaak. Click to save again."}
+            leftSlot={<Icon icon="bookmark" size="xs" />}
+            onClick={() => openSave(flow)}
+          >
+            {flow.savedRequestId == null ? "Save to Yaak" : "Saved"}
+          </Button>
+          <Dropdown items={flowActions(flow).slice(2)}>
+            <IconButton size="xs" icon="ellipsis" iconColor="secondary" title="Copy and export" />
+          </Dropdown>
+        </HStack>
       </div>
 
       <div className="overflow-hidden flex flex-col min-h-0">
-        {failed && (
+        {flow.error != null && (
           <Banner color="danger" className="mx-3 mt-1 shrink-0 font-mono text-sm">
             {flow.error}
+          </Banner>
+        )}
+        {flow.cancelled && (
+          <Banner color="secondary" className="mx-3 mt-1 shrink-0 text-sm">
+            {flow.status == null
+              ? "The app cancelled the request before a response came back."
+              : "The app cancelled the request before the response finished."}
           </Banner>
         )}
         <Tabs
@@ -190,11 +215,16 @@ function FlowPane({ flow }: { flow: Flow }) {
           tabListClassName="mt-0.5 -mb-1.5"
         >
           <TabContent value={TAB_RESPONSE}>
-            {failed ? (
+            {noResponse ? (
               <EmptyState>
-                <div className="text-text-subtle mb-1">No response</div>
+                <div className="text-text-subtle mb-1">
+                  {flow.cancelled ? "Cancelled" : "No response"}
+                </div>
                 <div className="text-xs">
-                  The request never got a response. The Request tab has what the app sent.
+                  {flow.cancelled
+                    ? "The app cancelled the request before a response came back."
+                    : "The request never got a response."}{" "}
+                  The Request tab has what the app sent.
                 </div>
               </EmptyState>
             ) : (

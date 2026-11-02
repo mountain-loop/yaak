@@ -1,50 +1,25 @@
-import { atom } from "jotai";
-import type { ToastInstance } from "../components/Toasts";
-import { generateId } from "@yaakapp-internal/lib/generateId";
+// The toast store alone, without the components, which tests in a plain runtime can't load
+import {
+  hideToast as hideToastIn,
+  hideToastById as hideToastByIdIn,
+  type ShowToastArgs,
+  showToast as showToastIn,
+  type ToastInstance,
+} from "@yaakapp-internal/ui/toast";
 import { jotaiStore } from "./jotai";
 
-export const toastsAtom = atom<ToastInstance[]>([]);
+export { toastsAtom } from "@yaakapp-internal/ui/toast";
 
-export function showToast({
-  id,
-  timeout = 5000,
-  ...props
-}: Omit<ToastInstance, "id" | "timeout" | "uniqueKey"> & {
-  id?: ToastInstance["id"];
-  timeout?: ToastInstance["timeout"];
-}) {
-  id = id ?? generateId();
-  const uniqueKey = generateId();
-
-  const toasts = jotaiStore.get(toastsAtom);
-  const toastWithSameId = toasts.find((t) => t.id === id);
-
-  let delay = 0;
-  if (toastWithSameId) {
-    hideToast(toastWithSameId);
-    // Allow enough time for old toast to animate out
-    delay = 200;
-  }
-
-  setTimeout(() => {
-    const newToast: ToastInstance = { id, uniqueKey, timeout, ...props };
-    jotaiStore.set(toastsAtom, (prev) => [...prev, newToast]);
-  }, delay);
-
-  return id;
+export function showToast(args: ShowToastArgs) {
+  return showToastIn(jotaiStore, args);
 }
 
 export function hideToastById(id: string) {
-  const toast = jotaiStore.get(toastsAtom).find((t) => t.id === id);
-  if (toast) hideToast(toast);
+  hideToastByIdIn(jotaiStore, id);
 }
 
 export function hideToast(toHide: ToastInstance) {
-  jotaiStore.set(toastsAtom, (all) => {
-    const t = all.find((t) => t.uniqueKey === toHide.uniqueKey);
-    t?.onClose?.();
-    return all.filter((t) => t.uniqueKey !== toHide.uniqueKey);
-  });
+  hideToastIn(jotaiStore, toHide);
 }
 
 export function showErrorToast<T>({

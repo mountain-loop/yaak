@@ -12,7 +12,7 @@ export function ErrorBoundary({ name, children }: { name: string; children: Reac
   );
 }
 
-function showErrorDialog(error: unknown) {
+export function showErrorDialog(error: unknown) {
   showDialog({ id: "error-boundary", render: () => <RouteError error={error} /> });
 }
 
