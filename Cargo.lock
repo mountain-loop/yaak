@@ -2374,6 +2374,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fancy-regex"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d301f5bf187b3c295fce6468d3875037a0bccc5f6b151c63cac2f85babf21912"
+dependencies = [
+ "bit-set",
+ "regex-automata",
+ "regex-syntax 0.8.11",
+]
+
+[[package]]
 name = "fancy_constructor"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4357,12 +4368,6 @@ checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
 
 [[package]]
 name = "md5"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
-
-[[package]]
-name = "md5"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae960838283323069879657ca3de837e9f7bbb4c7bf6ea7f1b290d5e9476d2e0"
@@ -6169,7 +6174,7 @@ checksum = "a6e38320d5a8e386647f622067588bdb338c9e6e43eb32cf6f8991dd0e8f0046"
 dependencies = [
  "byteorder",
  "concurrent_lru",
- "fancy-regex",
+ "fancy-regex 0.17.0",
  "flate2",
  "nodejs-built-in-modules",
  "pathdiff",
@@ -11291,7 +11296,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "rusqlite",
  "serde_json",
  "sha2",
@@ -11330,7 +11335,7 @@ dependencies = [
  "eventsource-client",
  "http",
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "mime_guess",
  "notify",
  "openssl-sys",
@@ -11525,7 +11530,7 @@ dependencies = [
 name = "yaak-filter"
 version = "0.1.0"
 dependencies = [
- "fancy-regex",
+ "fancy-regex 0.19.2",
  "indexmap 2.14.2",
  "serde_json",
  "sxd-document",
@@ -11574,7 +11579,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "log 0.4.34",
- "md5 0.7.0",
+ "md5",
  "prost",
  "prost-reflect",
  "prost-types",
@@ -11736,7 +11741,7 @@ dependencies = [
  "hex",
  "keyring",
  "log 0.4.34",
- "md5 0.7.0",
+ "md5",
  "path-slash",
  "rand 0.10.3",
  "reqwest",
@@ -11989,7 +11994,7 @@ name = "yaak-window"
 version = "0.1.0"
 dependencies = [
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "rand 0.10.3",
  "serde",
  "serde_json",
@@ -12004,7 +12009,7 @@ dependencies = [
  "futures-util",
  "http",
  "log 0.4.34",
- "md5 0.8.0",
+ "md5",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
