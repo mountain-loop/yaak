@@ -3,7 +3,7 @@ use crate::context::CliContext;
 use crate::ui;
 use crate::utils::http;
 use keyring::Entry;
-use rand::Rng;
+use rand::RngExt;
 use rolldown::{
     BundleEvent, Bundler, BundlerOptions, ExperimentalOptions, InputItem, LogLevel, OutputFormat,
     Platform, WatchOption, Watcher, WatcherEvent,
@@ -724,9 +724,9 @@ fn random_name() -> String {
         "yak", "yarn", "year", "yell", "yoke", "yoga", "yam", "yacht", "yodel",
     ];
 
-    let mut rng = rand::thread_rng();
-    let adjective = ADJECTIVES[rng.gen_range(0..ADJECTIVES.len())];
-    let noun = NOUNS[rng.gen_range(0..NOUNS.len())];
+    let mut rng = rand::rng();
+    let adjective = ADJECTIVES[rng.random_range(0..ADJECTIVES.len())];
+    let noun = NOUNS[rng.random_range(0..NOUNS.len())];
     format!("{adjective}-{noun}")
 }
 
