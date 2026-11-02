@@ -15,7 +15,7 @@ tauri-plugin = { workspace = true, features = ["build"] }
 cocoa = "0.27.0"
 log = { workspace = true }
 objc = "0.2.7"
-rand = "0.9.0"
+rand = "0.10.2"
 csscolorparser = "0.9.0"
 
 [dependencies]
