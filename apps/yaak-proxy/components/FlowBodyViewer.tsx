@@ -63,7 +63,7 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
   const wireSize = which === "request" ? flow.requestSize : flow.responseSize;
   const wireTruncated = which === "request" ? flow.requestTruncated : flow.responseTruncated;
   // Text whatever the content type says, so a page sent with an odd one still reads.
-  const text = decodeError == null ? viewerText(bytes, truncated, mime) : null;
+  const text = decodeError == null ? viewerText(bytes, truncated, contentType) : null;
 
   let viewer: ReactNode;
   if (decodeError != null) {

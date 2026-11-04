@@ -1,4 +1,9 @@
 import { queryOptions } from "@tanstack/react-query";
+import {
+  contentTypeCharset,
+  decodeBodyText,
+  strictUtf8Text,
+} from "@yaakapp-internal/lib/decodeBodyText";
 import type { FilterLanguage, Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
 import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import vkBeautify from "vkbeautify";
@@ -35,18 +40,7 @@ export function base64ToBytes(data: string): Uint8Array<ArrayBuffer> {
  * The text of a body, or null when it isn't valid UTF-8. A truncated body may end partway
  * through a character, so up to three trailing bytes are dropped before giving up on it.
  */
-export function bytesToText(bytes: Uint8Array, truncated = false): string | null {
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  const maxTrim = truncated ? Math.min(3, bytes.length) : 0;
-  for (let trim = 0; trim <= maxTrim; trim++) {
-    try {
-      return decoder.decode(bytes.subarray(0, bytes.length - trim));
-    } catch {
-      // Try again without the last byte
-    }
-  }
-  return null;
-}
+export const bytesToText = strictUtf8Text;
 
 /** Characters looked at to tell text from binary */
 const TEXT_SAMPLE = 64 * 1024;
@@ -55,16 +49,24 @@ const TEXT_SAMPLE = 64 * 1024;
 const MAX_UNPRINTABLE = 0.1;
 
 /**
- * The body as text, whatever its content type says, or null when it is binary. Valid UTF-8 is
- * text, and so are other bytes that are nearly all printable, as Latin-1 text is, decoded with
- * a replacement character for what isn't UTF-8. Either is binary when it is full of control
- * characters, as protobuf is.
+ * The body as text, whatever its content type says, or null when it is binary. It is decoded in
+ * its content type's charset, or else as UTF-8, or windows-1252 when it isn't valid UTF-8. It is
+ * binary when it is full of control characters, as protobuf is, or, without a charset, of bytes
+ * UTF-8 can't read: windows-1252 reads every byte as something, compressed data included.
  */
-export function bodyAsText(bytes: Uint8Array, truncated = false): string | null {
-  const text = bytesToText(bytes, truncated) ?? new TextDecoder("utf-8").decode(bytes);
+export function bodyAsText(
+  bytes: Uint8Array,
+  truncated = false,
+  contentType: string | null = null,
+): string | null {
+  const text = decodeBodyText(bytes, contentType, { truncated });
+  const judged =
+    contentTypeCharset(contentType) != null
+      ? text
+      : (strictUtf8Text(bytes, truncated) ?? new TextDecoder("utf-8").decode(bytes));
   let total = 0;
   let unprintable = 0;
-  for (const char of text) {
+  for (const char of judged) {
     if (total === TEXT_SAMPLE) break;
     total++;
     const code = char.codePointAt(0) ?? 0;
@@ -78,11 +80,16 @@ export function bodyAsText(bytes: Uint8Array, truncated = false): string | null 
  * The body as the viewer reads it: text first, whatever its content type. An image is text only
  * when it is valid UTF-8, as no real one is, so one with long printable metadata stays an image.
  */
-export function viewerText(bytes: Uint8Array, truncated: boolean, mime: string): string | null {
+export function viewerText(
+  bytes: Uint8Array,
+  truncated: boolean,
+  contentType: string | null,
+): string | null {
+  const mime = mimeEssence(contentType) ?? "";
   if (mime.startsWith("image/") && !mime.startsWith("image/svg")) {
-    return bytesToText(bytes, truncated);
+    return strictUtf8Text(bytes, truncated);
   }
-  return bodyAsText(bytes, truncated);
+  return bodyAsText(bytes, truncated, contentType);
 }
 
 export async function formatText(

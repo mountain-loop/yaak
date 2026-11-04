@@ -29,10 +29,23 @@ describe("bodyAsText", () => {
     expect(bodyAsText(encode("<h1>Forbidden</h1>\n\tcafé"))).toBe("<h1>Forbidden</h1>\n\tcafé");
   });
 
-  test("reads Latin-1 text as text, with what isn't UTF-8 replaced", () => {
+  test("reads unlabeled Latin-1 text as text, as windows-1252", () => {
     const page = "<p>Accès refusé : vous n'avez pas l'autorisation d'accéder à cette page.</p>";
     const latin1 = Uint8Array.from(page, (c) => c.charCodeAt(0));
-    expect(bodyAsText(latin1)).toBe(page.replace(/[\u0080-ÿ]/g, "�"));
+    expect(bodyAsText(latin1)).toBe(page);
+  });
+
+  test("reads bytes UTF-8 can't read as binary, though windows-1252 reads every one", () => {
+    let seed = 7;
+    const random = Uint8Array.from({ length: 600 }, () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed >> 16;
+    });
+    expect(bodyAsText(random)).toBeNull();
+    // All high bytes: letters and symbols in windows-1252, none of them UTF-8
+    const high = Uint8Array.from({ length: 600 }, (_, i) => 0xa0 + (i % 96));
+    expect(bodyAsText(high)).toBeNull();
+    expect(bodyAsText(high, false, "text/plain")).toBeNull();
   });
 
   test("reads protobuf and other binary as binary, even when it is valid UTF-8", () => {
@@ -70,6 +83,26 @@ describe("viewerText", () => {
     expect(viewerText(encode("<h1>Forbidden</h1>"), false, "image/png")).toBe("<h1>Forbidden</h1>");
     expect(viewerText(encode("<svg/>"), false, "image/svg+xml")).toBe("<svg/>");
     expect(viewerText(png, false, "application/octet-stream")).not.toBeNull();
+  });
+
+  test("reads text in the charset its content type names", () => {
+    const page = "Accès refusé : vous n'avez pas l'autorisation d'accéder à cette page.";
+    const latin1 = Uint8Array.from(page, (c) => c.charCodeAt(0));
+    expect(viewerText(latin1, false, "text/html; charset=iso-8859-1")).toBe(page);
+    // "こんにちは、世界" in Shift_JIS
+    const shiftJis = new Uint8Array([
+      0x82, 0xb1, 0x82, 0xf1, 0x82, 0xc9, 0x82, 0xbf, 0x82, 0xcd, 0x81, 0x41, 0x90, 0xa2, 0x8a,
+      0x45,
+    ]);
+    expect(viewerText(shiftJis, false, "text/plain; charset=shift_jis")).toBe("こんにちは、世界");
+  });
+
+  test("reads unlabeled Latin-1 as windows-1252, and UTF-8 as UTF-8", () => {
+    const page = "Accès refusé : vous n'avez pas l'autorisation d'accéder à cette page.";
+    const latin1 = Uint8Array.from(page, (c) => c.charCodeAt(0));
+    expect(viewerText(latin1, false, "application/octet-stream")).toBe(page);
+    expect(viewerText(encode(page), false, "application/octet-stream")).toBe(page);
+    expect(viewerText(encode(page), false, "text/plain; charset=utf-8")).toBe(page);
   });
 });
 
