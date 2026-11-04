@@ -5,7 +5,6 @@ import type {
   HttpResponseEvent,
   HttpResponseHeader,
 } from "@yaakapp-internal/models";
-import { getMimeTypeFromContentType } from "./contentType";
 
 export const BODY_TYPE_NONE = null;
 export const BODY_TYPE_GRAPHQL = "graphql";
@@ -44,14 +43,6 @@ export function modelsEq(a: AnyModel, b: AnyModel) {
 
 export function getContentTypeFromHeaders(headers: HttpResponseHeader[] | null): string | null {
   return headers?.find((h) => h.name.toLowerCase() === "content-type")?.value ?? null;
-}
-
-export function getCharsetFromContentType(headers: HttpResponseHeader[]): string | null {
-  const contentType = getContentTypeFromHeaders(headers);
-  if (contentType == null) return null;
-
-  const mimeType = getMimeTypeFromContentType(contentType);
-  return mimeType.parameters.get("charset") ?? null;
 }
 
 export function isBaseEnvironment(environment: Environment): boolean {

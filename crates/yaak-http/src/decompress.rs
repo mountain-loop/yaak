@@ -168,95 +168,25 @@ pub fn streaming_decoder<R: AsyncBufRead + Unpin + Send + 'static>(
     }
 }
 
-/// Input kept, and output held back, to retry an ambiguous deflate body as raw. Past either, the
-/// body is taken to be the zlib it has decoded as so far.
-const DEFLATE_RETRY_WINDOW: usize = 64 * 1024;
-
 /// Decodes `deflate`, zlib-wrapped or raw, as its first five bytes say. When they could be
-/// either, it decodes as zlib holding the output back until the stream ends with its checksum
-/// verified, and starts over as raw if it fails first.
+/// either, it decodes both ways at once until one fails, and goes on with the other.
 struct StreamingDeflateDecoder<R> {
     state: DeflateState<R>,
-    /// Output decoded while the variant is unsure: zlib, unless decoding fails.
-    held: Option<Vec<u8>>,
-    /// Output decoded and no longer held, still to be read
-    pending: Vec<u8>,
-    pending_pos: usize,
 }
 
 enum DeflateState<R> {
-    Sniffing(Rewindable<R>),
-    Zlib(AsyncZlibDecoder<BufReader<Rewindable<R>>>),
-    Raw(AsyncDeflateDecoder<BufReader<Rewindable<R>>>),
-    /// Only while switching between the others
+    Sniffing(Replay<R>),
+    Zlib(AsyncZlibDecoder<BufReader<Replay<R>>>),
+    Raw(AsyncDeflateDecoder<BufReader<Replay<R>>>),
+    Either(EitherInflate<BufReader<Replay<R>>>),
+    /// Only while switching from sniffing to one of the others
     Switching,
 }
 
 impl<R> StreamingDeflateDecoder<R> {
     fn new(reader: R) -> Self {
-        let source = Rewindable { inner: reader, kept: Vec::new(), pos: 0, keeping: true };
-        Self {
-            state: DeflateState::Sniffing(source),
-            held: None,
-            pending: Vec::new(),
-            pending_pos: 0,
-        }
-    }
-}
-
-impl<R: AsyncRead + Unpin> StreamingDeflateDecoder<R> {
-    /// Starts over from the first byte of input as raw deflate
-    fn retry_raw(&mut self) {
-        let DeflateState::Zlib(d) = std::mem::replace(&mut self.state, DeflateState::Switching)
-        else {
-            unreachable!("only zlib is retried")
-        };
-        let mut source = d.into_inner().into_inner();
-        source.pos = 0;
-        source.forget();
-        self.held = None;
-        self.state = decoder_for(source, false);
-    }
-
-    fn source(&mut self) -> Option<&mut Rewindable<R>> {
-        match &mut self.state {
-            DeflateState::Sniffing(s) => Some(s),
-            DeflateState::Zlib(d) => Some(d.get_mut().get_mut()),
-            DeflateState::Raw(d) => Some(d.get_mut().get_mut()),
-            DeflateState::Switching => None,
-        }
-    }
-
-    fn poll_decoder(
-        &mut self,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
-        match &mut self.state {
-            DeflateState::Zlib(d) => Pin::new(d).poll_read(cx, buf),
-            DeflateState::Raw(d) => Pin::new(d).poll_read(cx, buf),
-            _ => Poll::Ready(Err(std::io::Error::other("deflate decoder is broken"))),
-        }
-    }
-
-    /// Stops holding output back, committing to zlib
-    fn release(&mut self) {
-        if let Some(held) = self.held.take() {
-            self.pending = held;
-            self.pending_pos = 0;
-        }
-        if let Some(source) = self.source() {
-            source.forget();
-        }
-    }
-}
-
-fn decoder_for<R: AsyncRead + Unpin>(source: Rewindable<R>, zlib: bool) -> DeflateState<R> {
-    let reader = BufReader::new(source);
-    if zlib {
-        DeflateState::Zlib(AsyncZlibDecoder::new(reader))
-    } else {
-        DeflateState::Raw(AsyncDeflateDecoder::new(reader))
+        let source = Replay { inner: reader, header: Vec::new(), pos: 0, sniffing: true };
+        Self { state: DeflateState::Sniffing(source) }
     }
 }
 
@@ -268,121 +198,194 @@ impl<R: AsyncRead + Unpin> AsyncRead for StreamingDeflateDecoder<R> {
     ) -> Poll<std::io::Result<()>> {
         let this = self.get_mut();
         loop {
-            if this.pending_pos < this.pending.len() {
-                let n = buf.remaining().min(this.pending.len() - this.pending_pos);
-                buf.put_slice(&this.pending[this.pending_pos..this.pending_pos + n]);
-                this.pending_pos += n;
-                if this.pending_pos == this.pending.len() {
-                    this.pending = Vec::new();
-                    this.pending_pos = 0;
-                }
-                return Poll::Ready(Ok(()));
-            }
-
-            if let DeflateState::Sniffing(source) = &mut this.state {
-                // Read until the header is in hand, or the input ends short of it.
-                while source.kept.len() < 5 {
-                    let mut header = [0u8; 5];
-                    let mut header = ReadBuf::new(&mut header[source.kept.len()..]);
-                    ready!(Pin::new(&mut *source).poll_read(cx, &mut header))?;
-                    if header.filled().is_empty() {
-                        break;
+            match &mut this.state {
+                DeflateState::Sniffing(source) => {
+                    // Read until the header is in hand, or the input ends short of it.
+                    while source.header.len() < 5 {
+                        let mut header = [0u8; 5];
+                        let mut header = ReadBuf::new(&mut header[source.header.len()..]);
+                        ready!(Pin::new(&mut *source).poll_read(cx, &mut header))?;
+                        if header.filled().is_empty() {
+                            break;
+                        }
                     }
+                    let DeflateState::Sniffing(mut source) =
+                        std::mem::replace(&mut this.state, DeflateState::Switching)
+                    else {
+                        unreachable!()
+                    };
+                    source.sniffing = false;
+                    let variant = deflate_variant(&source.header);
+                    let reader = BufReader::new(source);
+                    this.state = match variant {
+                        DeflateVariant::Zlib => DeflateState::Zlib(AsyncZlibDecoder::new(reader)),
+                        DeflateVariant::Raw => DeflateState::Raw(AsyncDeflateDecoder::new(reader)),
+                        DeflateVariant::Either => DeflateState::Either(EitherInflate::new(reader)),
+                    };
                 }
-                let DeflateState::Sniffing(mut source) =
-                    std::mem::replace(&mut this.state, DeflateState::Switching)
-                else {
-                    unreachable!()
-                };
-                source.pos = 0;
-                let variant = deflate_variant(&source.kept);
-                if variant == DeflateVariant::Either {
-                    this.held = Some(Vec::new());
-                } else {
-                    source.forget();
+                DeflateState::Zlib(d) => return Pin::new(d).poll_read(cx, buf),
+                DeflateState::Raw(d) => return Pin::new(d).poll_read(cx, buf),
+                DeflateState::Either(d) => return Pin::new(d).poll_read(cx, buf),
+                DeflateState::Switching => {
+                    return Poll::Ready(Err(std::io::Error::other("deflate decoder is broken")));
                 }
-                this.state = decoder_for(source, variant != DeflateVariant::Raw);
-                continue;
-            }
-
-            if this.held.is_none() {
-                return this.poll_decoder(cx, buf);
-            }
-
-            let mut chunk = [0u8; 8192];
-            let mut chunk = ReadBuf::new(&mut chunk);
-            match ready!(this.poll_decoder(cx, &mut chunk)) {
-                // The zlib stream ended whole, its checksum verified.
-                Ok(()) if chunk.filled().is_empty() => this.release(),
-                Ok(()) => {
-                    let held = this.held.get_or_insert_with(Vec::new);
-                    held.extend_from_slice(chunk.filled());
-                    let held_len = held.len();
-                    if held_len > DEFLATE_RETRY_WINDOW || this.source().is_some_and(|s| !s.keeping)
-                    {
-                        this.release();
-                    }
-                }
-                Err(_) if this.source().is_some_and(|s| s.keeping) => this.retry_raw(),
-                Err(e) => return Poll::Ready(Err(e)),
             }
         }
     }
 }
 
-/// Reads `inner`, keeping what it read from the start until `forget`, so that setting `pos` back
-/// to 0 reads it all again.
-struct Rewindable<R> {
+/// Reads `inner`, keeping what it read while sniffing, then reads that again before the rest.
+struct Replay<R> {
     inner: R,
-    kept: Vec<u8>,
-    /// Where reading resumes in `kept`; past its end, reading goes to `inner`.
+    header: Vec<u8>,
+    /// Where reading resumes in `header` once sniffing is over
     pos: usize,
-    /// `kept` holds every byte read so far.
-    keeping: bool,
+    sniffing: bool,
 }
 
-impl<R> Rewindable<R> {
-    fn forget(&mut self) {
-        self.keeping = false;
-        if self.pos >= self.kept.len() {
-            self.kept = Vec::new();
-            self.pos = 0;
-        }
-    }
-}
-
-impl<R: AsyncRead + Unpin> AsyncRead for Rewindable<R> {
+impl<R: AsyncRead + Unpin> AsyncRead for Replay<R> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
         let this = self.get_mut();
-        if this.pos < this.kept.len() {
-            let n = buf.remaining().min(this.kept.len() - this.pos);
-            buf.put_slice(&this.kept[this.pos..this.pos + n]);
-            this.pos += n;
-            if !this.keeping && this.pos == this.kept.len() {
-                this.forget();
-            }
+        if this.sniffing {
+            let before = buf.filled().len();
+            ready!(Pin::new(&mut this.inner).poll_read(cx, buf))?;
+            this.header.extend_from_slice(&buf.filled()[before..]);
             return Poll::Ready(Ok(()));
         }
-        let budget = DEFLATE_RETRY_WINDOW.saturating_sub(this.kept.len());
-        if this.keeping && budget == 0 {
-            // Asked for more only once the reader has used up the window
-            this.forget();
+        if this.pos < this.header.len() {
+            let n = buf.remaining().min(this.header.len() - this.pos);
+            buf.put_slice(&this.header[this.pos..this.pos + n]);
+            this.pos += n;
+            return Poll::Ready(Ok(()));
         }
-        if !this.keeping {
-            return Pin::new(&mut this.inner).poll_read(cx, buf);
+        Pin::new(&mut this.inner).poll_read(cx, buf)
+    }
+}
+
+/// Both readings of a deflate body that could be zlib or raw, fed the same input. Their output
+/// is held back while both are still valid, and the one left streams on: a wrong reading fails
+/// within a few bytes in practice, so little is held. If both end, zlib's checksum verified it.
+struct EitherInflate<B> {
+    input: B,
+    /// Zlib, then raw
+    readings: [Option<Inflate>; 2],
+    /// Why the last reading to fail failed
+    error: Option<std::io::Error>,
+}
+
+struct Inflate {
+    inflater: flate2::Decompress,
+    out: Vec<u8>,
+    /// Where reading resumes in `out`
+    pos: usize,
+    ended: bool,
+}
+
+impl<B> EitherInflate<B> {
+    fn new(input: B) -> Self {
+        let reading = |zlib| Inflate {
+            inflater: flate2::Decompress::new(zlib),
+            out: Vec::new(),
+            pos: 0,
+            ended: false,
+        };
+        Self { input, readings: [Some(reading(true)), Some(reading(false))], error: None }
+    }
+}
+
+impl Inflate {
+    /// Decodes all of `input` onto `out`, or up to the end of the stream
+    fn feed(&mut self, input: &[u8]) -> std::io::Result<()> {
+        let mut consumed = 0;
+        while !self.ended {
+            if self.out.capacity() - self.out.len() < 32 * 1024 {
+                self.out.reserve(64 * 1024);
+            }
+            let (read, written) = (self.inflater.total_in(), self.inflater.total_out());
+            let status = self
+                .inflater
+                .decompress_vec(&input[consumed..], &mut self.out, flate2::FlushDecompress::None)
+                .map_err(std::io::Error::other)?;
+            let progress = (self.inflater.total_in() - read, self.inflater.total_out() - written);
+            consumed += usize::try_from(progress.0).unwrap_or(usize::MAX).min(input.len());
+            if status == flate2::Status::StreamEnd {
+                self.ended = true;
+            } else if consumed == input.len() && self.out.len() < self.out.capacity() {
+                // All of it in, and all that it decodes to out
+                break;
+            } else if progress == (0, 0) {
+                return Err(std::io::Error::other("deflate decoding stalled"));
+            }
         }
-        // Never read past the window, so all of it is kept however the reader reads ahead.
-        let mut chunk = [0u8; 8192];
-        let len = budget.min(buf.remaining()).min(chunk.len());
-        let mut chunk = ReadBuf::new(&mut chunk[..len]);
-        ready!(Pin::new(&mut this.inner).poll_read(cx, &mut chunk))?;
-        buf.put_slice(chunk.filled());
-        this.kept.extend_from_slice(chunk.filled());
-        this.pos = this.kept.len();
+        Ok(())
+    }
+}
+
+impl<B: AsyncBufRead + Unpin> AsyncRead for EitherInflate<B> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        loop {
+            let [zlib, raw] = &mut this.readings;
+            match (zlib.as_mut(), raw.as_mut()) {
+                (None, None) => {
+                    let error = this.error.take();
+                    return Poll::Ready(Err(
+                        error.unwrap_or_else(|| std::io::Error::other("deflate decoding failed"))
+                    ));
+                }
+                // Both ended: zlib's checksum verified it.
+                (Some(z), Some(r)) if z.ended && r.ended => *raw = None,
+                (Some(only), None) | (None, Some(only)) => {
+                    if only.pos < only.out.len() {
+                        let n = buf.remaining().min(only.out.len() - only.pos);
+                        buf.put_slice(&only.out[only.pos..only.pos + n]);
+                        only.pos += n;
+                        if only.pos == only.out.len() {
+                            only.out.clear();
+                            only.pos = 0;
+                        }
+                        return Poll::Ready(Ok(()));
+                    }
+                    if only.ended {
+                        return Poll::Ready(Ok(()));
+                    }
+                    ready!(this.feed(cx))?;
+                }
+                (Some(_), Some(_)) => ready!(this.feed(cx))?,
+            }
+        }
+    }
+}
+
+impl<B: AsyncBufRead + Unpin> EitherInflate<B> {
+    /// Feeds the next input to each reading still going, dropping those that fail on it. Pending
+    /// until there is input; at its end, a reading that hasn't ended was cut short.
+    fn feed(&mut self, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        let chunk = ready!(Pin::new(&mut self.input).poll_fill_buf(cx))?;
+        let len = chunk.len();
+        for slot in &mut self.readings {
+            let Some(reading) = slot.as_mut().filter(|r| !r.ended) else {
+                continue;
+            };
+            let result = if len == 0 {
+                Err(std::io::ErrorKind::UnexpectedEof.into())
+            } else {
+                reading.feed(chunk)
+            };
+            if let Err(e) = result {
+                *slot = None;
+                self.error = Some(e);
+            }
+        }
+        Pin::new(&mut self.input).consume(len);
         Poll::Ready(Ok(()))
     }
 }
@@ -517,9 +520,9 @@ mod tests {
         assert!(decompress(data, ContentEncoding::Deflate).unwrap().data == expected);
     }
 
-    /// Ambiguous raw deflate of more than the retry window: a stored block that reads as zlib's
-    /// header and the start of a stored block of 0xffe2 bytes, then incompressible data, which
-    /// zlib reads as a block header just short of the window and fails on.
+    /// Ambiguous raw deflate of more than 64 KB: a stored block that reads as zlib's header and
+    /// the start of a stored block of 0xffe2 bytes, then incompressible data, which zlib reads
+    /// as a block header 7 + 0xffe2 bytes in and fails on.
     fn large_raw_like_zlib() -> (Vec<u8>, Vec<u8>) {
         let mut expected = b"\x1d\0xxxxxxxxxxxxxxxxxxxxxxxxxxx".to_vec();
         let mut seed = 1u32;
@@ -530,9 +533,55 @@ mod tests {
         let mut data = vec![0x08, 0x1d, 0x00, 0xe2, 0xff];
         data.extend_from_slice(&expected[..29]);
         data.extend_from_slice(&raw_deflate(&expected[29..]));
-        // Zlib's stored block ends 7 + 0xffe2 bytes in, inside the window.
-        assert!(data.len() > DEFLATE_RETRY_WINDOW);
+        assert!(data.len() > 64 * 1024);
         (data, expected)
+    }
+
+    /// Greptile's case on #812: raw deflate that zlib reads validly past 64 KB. After the first
+    /// stored block, a final stored block of 65,535 bytes, in which zlib finds a valid stored
+    /// block header at 65,513 (`00 28 00 d7 ff`) and an invalid block type only at 65,558.
+    fn raw_valid_as_zlib_past_64k() -> (Vec<u8>, Vec<u8>) {
+        let mut block: Vec<u8> = (0..65_535u32).map(|i| b'a' + (i % 26) as u8).collect();
+        let first = 5 + 29 + 5;
+        block[65_513 - first..65_518 - first].copy_from_slice(&[0x00, 0x28, 0x00, 0xd7, 0xff]);
+        block[65_558 - first] = 0x07;
+        let mut expected = b"\x1d\0xxxxxxxxxxxxxxxxxxxxxxxxxxx".to_vec();
+        let mut data = raw_deflate_like_zlib(&expected.clone().try_into().unwrap());
+        // Make the first block not the last, and follow it with the large final one.
+        data.truncate(data.len() - 5);
+        data.extend_from_slice(&[0x01, 0xff, 0xff, 0x00, 0x00]);
+        data.extend_from_slice(&block);
+        expected.extend_from_slice(&block);
+        (data, expected)
+    }
+
+    #[test]
+    fn test_decompress_deflate_raw_valid_as_zlib_past_64k() {
+        let (data, expected) = raw_valid_as_zlib_past_64k();
+        // Raw alone decodes it; zlib alone gets past 64 KB before failing.
+        let mut raw = Vec::new();
+        DeflateDecoder::new(data.as_slice()).read_to_end(&mut raw).unwrap();
+        assert!(raw == expected);
+        let mut zlib = flate2::Decompress::new(true);
+        let mut out = Vec::with_capacity(200 * 1024);
+        let failed = zlib.decompress_vec(&data, &mut out, flate2::FlushDecompress::None);
+        assert!(failed.is_err() && zlib.total_in() > 65_536, "zlib read {}", zlib.total_in());
+        assert!(decompress(data, ContentEncoding::Deflate).unwrap().data == expected);
+    }
+
+    #[tokio::test]
+    async fn streaming_deflate_decodes_raw_valid_as_zlib_past_64k() {
+        use tokio::io::AsyncReadExt;
+        let (data, expected) = raw_valid_as_zlib_past_64k();
+        for capacity in [1, 8 * 1024, 256 * 1024] {
+            let mut out = Vec::new();
+            let reader = BufReader::with_capacity(capacity, std::io::Cursor::new(data.clone()));
+            streaming_decoder(reader, ContentEncoding::Deflate)
+                .read_to_end(&mut out)
+                .await
+                .unwrap();
+            assert!(out == expected, "read {capacity} bytes at a time");
+        }
     }
 
     #[tokio::test]
@@ -572,7 +621,7 @@ mod tests {
         }
     }
 
-    /// However the reader reads ahead, the input a retry needs is kept.
+    /// However the reader reads ahead, the wrong reading is dropped and the right one kept.
     #[tokio::test]
     async fn streaming_deflate_retries_large_raw_whatever_the_chunking() {
         use tokio::io::AsyncReadExt;

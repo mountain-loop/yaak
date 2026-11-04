@@ -1,7 +1,14 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test, vi } from "vite-plus/test";
-import { bodyAsText, bodyFileName, bytesToText, flowBodyQueryOptions, viewerText } from "./body";
+import {
+  bodyAsText,
+  bodyFileName,
+  bodyImageType,
+  bytesToText,
+  flowBodyQueryOptions,
+  viewerText,
+} from "./body";
 import { rpc } from "./rpc";
 
 vi.mock("./rpc", () => ({ rpc: vi.fn() }));
@@ -81,8 +88,36 @@ describe("viewerText", () => {
 
   test("reads text sent as an image as text, and other types text first", () => {
     expect(viewerText(encode("<h1>Forbidden</h1>"), false, "image/png")).toBe("<h1>Forbidden</h1>");
+    expect(bodyImageType(encode("<h1>Forbidden</h1>"), false, "image/png")).toBeNull();
     expect(viewerText(encode("<svg/>"), false, "image/svg+xml")).toBe("<svg/>");
-    expect(viewerText(png, false, "application/octet-stream")).not.toBeNull();
+    expect(bodyImageType(encode("<svg/>"), false, "image/svg+xml")).toBeNull();
+    const bmwText = encode("BMW sells cars.\n");
+    expect(viewerText(bmwText, false, "text/plain")).toBe("BMW sells cars.\n");
+  });
+
+  // A 1×1 black 24-bit BMP: every byte below 0x80, so valid UTF-8
+  // File header, then the 40-byte DIB header, then one pixel padded to four bytes
+  // prettier-ignore
+  const bmp = new Uint8Array([
+    0x42, 0x4d, 58, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0,
+    40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0, 4, 0, 0, 0,
+    0x13, 0x0b, 0, 0, 0x13, 0x0b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0,
+  ]);
+
+  test("keeps an image that is valid UTF-8 an image", () => {
+    expect(bytesToText(bmp)).not.toBeNull();
+    expect(bodyImageType(bmp, false, "image/bmp")).toBe("image/bmp");
+    expect(viewerText(bmp, false, "image/bmp")).toBeNull();
+  });
+
+  test("previews an image by its signature whatever its content type", () => {
+    expect(bodyImageType(bmp, false, "application/octet-stream")).toBe("image/bmp");
+    expect(bodyImageType(png, false, "application/octet-stream")).toBe("image/png");
+    expect(bodyImageType(png, false, null)).toBe("image/png");
+    expect(viewerText(png, false, "application/octet-stream")).toBeNull();
+    const gif = encode("GIF89a\x01\0\x01\0");
+    expect(bodyImageType(gif, false, "text/plain")).toBe("image/gif");
   });
 
   test("reads text in the charset its content type names", () => {

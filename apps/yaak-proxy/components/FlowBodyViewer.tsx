@@ -19,12 +19,13 @@ import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  bodyAsText,
+  bodyImageType,
   filterText,
   findHeader,
   flowBodyQueryOptions,
   formatText,
   mimeEssence,
-  viewerText,
 } from "../lib/body";
 import { useSaveFlowBody } from "../lib/flowActions";
 
@@ -62,8 +63,11 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
   const mime = mimeEssence(contentType) ?? "";
   const wireSize = which === "request" ? flow.requestSize : flow.responseSize;
   const wireTruncated = which === "request" ? flow.requestTruncated : flow.responseTruncated;
-  // Text whatever the content type says, so a page sent with an odd one still reads.
-  const text = decodeError == null ? viewerText(bytes, truncated, contentType) : null;
+  // An image by its bytes or type, else text whatever the content type says, so a page sent with
+  // an odd one still reads: `viewerText`'s rule.
+  const imageType = decodeError == null ? bodyImageType(bytes, truncated, contentType) : null;
+  const text =
+    decodeError == null && imageType == null ? bodyAsText(bytes, truncated, contentType) : null;
 
   let viewer: ReactNode;
   if (decodeError != null) {
@@ -79,12 +83,10 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
         textViewerProps={{ formatText }}
       />
     );
+  } else if (imageType != null) {
+    viewer = <ImageBody bytes={bytes} mime={imageType} />;
   } else if (text == null) {
-    viewer = mime.startsWith("image/") ? (
-      <ImageBody bytes={bytes} mime={mime} />
-    ) : (
-      <BinaryBody flow={flow} which={which} bytes={bytes} />
-    );
+    viewer = <BinaryBody flow={flow} which={which} bytes={bytes} />;
   } else if (mime.startsWith("image/svg")) {
     viewer = <SvgViewer text={text} />;
   } else if (/csv|tab-separated/.test(mime) && pretty) {

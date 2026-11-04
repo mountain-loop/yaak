@@ -76,19 +76,66 @@ export function bodyAsText(
   return unprintable <= total * MAX_UNPRINTABLE ? text : null;
 }
 
+const ascii = (bytes: Uint8Array, start: number, text: string) =>
+  Array.from(text).every((c, i) => bytes[start + i] === c.charCodeAt(0));
+
+/** The image type a body's first bytes name, or null when they name none */
+export function imageSignature(bytes: Uint8Array): string | null {
+  const b = bytes;
+  if (b.length < 4) return null;
+  if (b[0] === 0x89 && ascii(b, 1, "PNG\r\n\x1a\n")) return "image/png";
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (ascii(b, 0, "GIF87a") || ascii(b, 0, "GIF89a")) return "image/gif";
+  if (ascii(b, 0, "RIFF") && ascii(b, 8, "WEBP")) return "image/webp";
+  if (ascii(b, 0, "II*\0") || ascii(b, 0, "MM\0*")) return "image/tiff";
+  if (ascii(b, 0, "\0\0\x01\0") && b.length >= 6 && (b[4] ?? 0) + (b[5] ?? 0) > 0) {
+    return "image/x-icon";
+  }
+  if (ascii(b, 4, "ftypavif") || ascii(b, 4, "ftypavis")) return "image/avif";
+  if (["heic", "heix", "mif1", "msf1"].some((brand) => ascii(b, 4, `ftyp${brand}`))) {
+    return "image/heic";
+  }
+  // "BM" alone starts plenty of text, so the reserved bytes and DIB header size must fit too.
+  const dibSize = (b[14] ?? 0) | ((b[15] ?? 0) << 8) | ((b[16] ?? 0) << 16) | ((b[17] ?? 0) << 24);
+  if (
+    ascii(b, 0, "BM") &&
+    ascii(b, 6, "\0\0\0\0") &&
+    [12, 40, 52, 56, 64, 108, 124].includes(dibSize)
+  ) {
+    return "image/bmp";
+  }
+  return null;
+}
+
 /**
- * The body as the viewer reads it: text first, whatever its content type. An image is text only
- * when it is valid UTF-8, as no real one is, so one with long printable metadata stays an image.
+ * The image type to preview a body as, or null when it isn't one: what its first bytes name,
+ * whatever its content type, or else an `image/*` content type other than SVG, unless the body
+ * is genuinely text, as an error page sent with the image's type is.
+ */
+export function bodyImageType(
+  bytes: Uint8Array,
+  truncated: boolean,
+  contentType: string | null,
+): string | null {
+  const signed = imageSignature(bytes);
+  if (signed != null) return signed;
+  const mime = mimeEssence(contentType) ?? "";
+  if (!mime.startsWith("image/") || mime.startsWith("image/svg")) return null;
+  const genuineText =
+    strictUtf8Text(bytes, truncated) != null && bodyAsText(bytes, truncated, contentType) != null;
+  return genuineText ? null : mime;
+}
+
+/**
+ * The body as the viewer reads it: text first, whatever its content type, except an image, which
+ * is never text.
  */
 export function viewerText(
   bytes: Uint8Array,
   truncated: boolean,
   contentType: string | null,
 ): string | null {
-  const mime = mimeEssence(contentType) ?? "";
-  if (mime.startsWith("image/") && !mime.startsWith("image/svg")) {
-    return strictUtf8Text(bytes, truncated);
-  }
+  if (bodyImageType(bytes, truncated, contentType) != null) return null;
   return bodyAsText(bytes, truncated, contentType);
 }
 

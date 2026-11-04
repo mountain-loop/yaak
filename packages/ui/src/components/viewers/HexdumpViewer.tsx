@@ -4,9 +4,21 @@ import { useMemo } from "react";
 import type { CodeEditorProps } from "../editor/CodeEditor";
 import { LazyCodeEditor } from "../editor/LazyCodeEditor";
 
-/** Bytes as a hexdump: offset, hex and ASCII columns, one line per 16 bytes */
+/** Hexdumps already made, by the bytes they were made of, for as long as those bytes live */
+const hexdumps = new WeakMap<Uint8Array | number[], string>();
+
+/**
+ * Bytes as a hexdump: offset, hex and ASCII columns, one line per 16 bytes. Made once for the
+ * same bytes, so a viewer and its copy action share one.
+ */
 export function hexdump(data: Uint8Array | number[]): string {
-  return data.length === 0 ? "" : hexy(data);
+  if (data.length === 0) return "";
+  let dump = hexdumps.get(data);
+  if (dump == null) {
+    dump = hexy(data);
+    hexdumps.set(data, dump);
+  }
+  return dump;
 }
 
 export interface HexdumpViewerProps {
