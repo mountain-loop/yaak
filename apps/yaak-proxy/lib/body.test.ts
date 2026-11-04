@@ -120,6 +120,17 @@ describe("viewerText", () => {
     expect(bodyImageType(gif, false, "text/plain")).toBe("image/gif");
   });
 
+  test("previews formats not every webview draws only when their content type says so", () => {
+    const tiff = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00, 0xff, 0x80]);
+    const heic = new Uint8Array([0, 0, 0, 0x18, ...encode("ftypheic"), 0, 0, 0, 0, 0xff, 0x80]);
+    for (const image of [tiff, heic]) {
+      expect(bodyImageType(image, false, "application/octet-stream")).toBeNull();
+      expect(viewerText(image, false, "application/octet-stream")).toBeNull();
+    }
+    expect(bodyImageType(tiff, false, "image/tiff")).toBe("image/tiff");
+    expect(bodyImageType(heic, false, "image/heic")).toBe("image/heic");
+  });
+
   test("reads text in the charset its content type names", () => {
     const page = "Accès refusé : vous n'avez pas l'autorisation d'accéder à cette page.";
     const latin1 = Uint8Array.from(page, (c) => c.charCodeAt(0));

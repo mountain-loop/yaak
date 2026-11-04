@@ -79,7 +79,11 @@ export function bodyAsText(
 const ascii = (bytes: Uint8Array, start: number, text: string) =>
   Array.from(text).every((c, i) => bytes[start + i] === c.charCodeAt(0));
 
-/** The image type a body's first bytes name, or null when they name none */
+/**
+ * The image type a body's first bytes name, or null when they name none. Only types every
+ * platform's webview draws, so a body sniffed as an image always previews: TIFF, HEIC and AVIF
+ * preview only when their content type says so.
+ */
 export function imageSignature(bytes: Uint8Array): string | null {
   const b = bytes;
   if (b.length < 4) return null;
@@ -87,13 +91,8 @@ export function imageSignature(bytes: Uint8Array): string | null {
   if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
   if (ascii(b, 0, "GIF87a") || ascii(b, 0, "GIF89a")) return "image/gif";
   if (ascii(b, 0, "RIFF") && ascii(b, 8, "WEBP")) return "image/webp";
-  if (ascii(b, 0, "II*\0") || ascii(b, 0, "MM\0*")) return "image/tiff";
   if (ascii(b, 0, "\0\0\x01\0") && b.length >= 6 && (b[4] ?? 0) + (b[5] ?? 0) > 0) {
     return "image/x-icon";
-  }
-  if (ascii(b, 4, "ftypavif") || ascii(b, 4, "ftypavis")) return "image/avif";
-  if (["heic", "heix", "mif1", "msf1"].some((brand) => ascii(b, 4, `ftyp${brand}`))) {
-    return "image/heic";
   }
   // "BM" alone starts plenty of text, so the reserved bytes and DIB header size must fit too.
   const dibSize = (b[14] ?? 0) | ((b[15] ?? 0) << 8) | ((b[16] ?? 0) << 16) | ((b[17] ?? 0) << 24);
