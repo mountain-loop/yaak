@@ -19,12 +19,12 @@ import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  bodyAsText,
   filterText,
   findHeader,
   flowBodyQueryOptions,
   formatText,
   mimeEssence,
+  viewerText,
 } from "../lib/body";
 import { useSaveFlowBody } from "../lib/flowActions";
 
@@ -63,7 +63,7 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
   const wireSize = which === "request" ? flow.requestSize : flow.responseSize;
   const wireTruncated = which === "request" ? flow.requestTruncated : flow.responseTruncated;
   // Text whatever the content type says, so a page sent with an odd one still reads.
-  const text = decodeError == null ? bodyAsText(bytes, truncated) : null;
+  const text = decodeError == null ? viewerText(bytes, truncated, mime) : null;
 
   let viewer: ReactNode;
   if (decodeError != null) {

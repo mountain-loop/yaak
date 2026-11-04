@@ -1,7 +1,7 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test, vi } from "vite-plus/test";
-import { bodyAsText, bodyFileName, bytesToText, flowBodyQueryOptions } from "./body";
+import { bodyAsText, bodyFileName, bytesToText, flowBodyQueryOptions, viewerText } from "./body";
 import { rpc } from "./rpc";
 
 vi.mock("./rpc", () => ({ rpc: vi.fn() }));
@@ -44,6 +44,32 @@ describe("bodyAsText", () => {
     expect(bodyAsText(protobuf)).toBeNull();
     expect(bodyAsText(new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x41, 0x42]))).toBeNull();
     expect(bodyAsText(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBeNull();
+  });
+});
+
+describe("viewerText", () => {
+  // A PNG signature, then a tEXt chunk of printable metadata far longer than the image
+  const png = new Uint8Array([
+    0x89,
+    ...encode("PNG\r\n"),
+    0x1a,
+    0x0a,
+    0x00,
+    0x00,
+    0x12,
+    0xc0,
+    ...encode(`tEXtDescription\0${"A long printable description. ".repeat(160)}`),
+  ]);
+
+  test("keeps an image with printable metadata an image", () => {
+    expect(bodyAsText(png)).not.toBeNull();
+    expect(viewerText(png, false, "image/png")).toBeNull();
+  });
+
+  test("reads text sent as an image as text, and other types text first", () => {
+    expect(viewerText(encode("<h1>Forbidden</h1>"), false, "image/png")).toBe("<h1>Forbidden</h1>");
+    expect(viewerText(encode("<svg/>"), false, "image/svg+xml")).toBe("<svg/>");
+    expect(viewerText(png, false, "application/octet-stream")).not.toBeNull();
   });
 });
 

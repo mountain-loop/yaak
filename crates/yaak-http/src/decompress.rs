@@ -93,11 +93,13 @@ fn inflate_zlib_whole(data: &[u8]) -> std::io::Result<Vec<u8>> {
     let mut inflater = flate2::Decompress::new(true);
     let mut out = Vec::new();
     loop {
+        // Always room to write, so a call that makes no progress has run out of input.
         out.reserve(64 * 1024);
         let (read, written) = (inflater.total_in(), inflater.total_out());
         let rest = &data[usize::try_from(read).unwrap_or(data.len()).min(data.len())..];
+        // Not `Finish`, which fails for good when the output outgrows its buffer.
         let status = inflater
-            .decompress_vec(rest, &mut out, flate2::FlushDecompress::Finish)
+            .decompress_vec(rest, &mut out, flate2::FlushDecompress::None)
             .map_err(std::io::Error::other)?;
         if status == flate2::Status::StreamEnd {
             return Ok(out);
@@ -365,17 +367,22 @@ impl<R: AsyncRead + Unpin> AsyncRead for Rewindable<R> {
             }
             return Poll::Ready(Ok(()));
         }
-        let before = buf.filled().len();
-        ready!(Pin::new(&mut this.inner).poll_read(cx, buf))?;
-        if this.keeping {
-            let read = &buf.filled()[before..];
-            if this.kept.len() + read.len() > DEFLATE_RETRY_WINDOW {
-                this.forget();
-            } else {
-                this.kept.extend_from_slice(read);
-                this.pos = this.kept.len();
-            }
+        let budget = DEFLATE_RETRY_WINDOW.saturating_sub(this.kept.len());
+        if this.keeping && budget == 0 {
+            // Asked for more only once the reader has used up the window
+            this.forget();
         }
+        if !this.keeping {
+            return Pin::new(&mut this.inner).poll_read(cx, buf);
+        }
+        // Never read past the window, so all of it is kept however the reader reads ahead.
+        let mut chunk = [0u8; 8192];
+        let len = budget.min(buf.remaining()).min(chunk.len());
+        let mut chunk = ReadBuf::new(&mut chunk[..len]);
+        ready!(Pin::new(&mut this.inner).poll_read(cx, &mut chunk))?;
+        buf.put_slice(chunk.filled());
+        this.kept.extend_from_slice(chunk.filled());
+        this.pos = this.kept.len();
         Poll::Ready(Ok(()))
     }
 }
@@ -460,12 +467,16 @@ mod tests {
     }
 
     /// Zlib that opens as `raw_deflate_like_zlib` does: header `08 1d`, then a stored block of
-    /// 0xffe2 bytes, which `1d 00 e2 ff` also reads as the start of, and an empty final one.
-    fn zlib_like_raw_deflate() -> (Vec<u8>, Vec<u8>) {
-        let data: Vec<u8> = (0..0xffe2u32).map(|i| (i % 251) as u8).collect();
+    /// 0xffe2 bytes, which `1d 00 e2 ff` also reads as the start of, and a final stored block of
+    /// `extra` bytes.
+    fn zlib_like_raw_deflate(extra: u16) -> (Vec<u8>, Vec<u8>) {
+        let data: Vec<u8> = (0..0xffe2 + u32::from(extra)).map(|i| (i % 251) as u8).collect();
         let mut out = vec![0x08, 0x1d, 0x00, 0xe2, 0xff, 0x1d, 0x00];
-        out.extend_from_slice(&data);
-        out.extend_from_slice(&[0x01, 0x00, 0x00, 0xff, 0xff]);
+        out.extend_from_slice(&data[..0xffe2]);
+        out.push(0x01);
+        out.extend_from_slice(&extra.to_le_bytes());
+        out.extend_from_slice(&(!extra).to_le_bytes());
+        out.extend_from_slice(&data[0xffe2..]);
         let (mut a, mut b) = (1u32, 0u32);
         for byte in &data {
             a = (a + u32::from(*byte)) % 65521;
@@ -497,8 +508,31 @@ mod tests {
         let both = *b"\x1d\0xxxxxxxxxxxxxxxxxxxxxxxxxxx";
         let result = decompress(raw_deflate_like_zlib(&both), ContentEncoding::Deflate).unwrap();
         assert_eq!(result.data, both);
-        let (zlib_like_raw, data) = zlib_like_raw_deflate();
-        assert_eq!(decompress(zlib_like_raw, ContentEncoding::Deflate).unwrap().data, data);
+        for extra in [0, 10_000] {
+            let (zlib_like_raw, data) = zlib_like_raw_deflate(extra);
+            let result = decompress(zlib_like_raw, ContentEncoding::Deflate).unwrap();
+            assert!(result.data == data, "{extra} extra bytes");
+        }
+        let (data, expected) = large_raw_like_zlib();
+        assert!(decompress(data, ContentEncoding::Deflate).unwrap().data == expected);
+    }
+
+    /// Ambiguous raw deflate of more than the retry window: a stored block that reads as zlib's
+    /// header and the start of a stored block of 0xffe2 bytes, then incompressible data, which
+    /// zlib reads as a block header just short of the window and fails on.
+    fn large_raw_like_zlib() -> (Vec<u8>, Vec<u8>) {
+        let mut expected = b"\x1d\0xxxxxxxxxxxxxxxxxxxxxxxxxxx".to_vec();
+        let mut seed = 1u32;
+        expected.extend((0..70_000).map(|_| {
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            (seed >> 16) as u8
+        }));
+        let mut data = vec![0x08, 0x1d, 0x00, 0xe2, 0xff];
+        data.extend_from_slice(&expected[..29]);
+        data.extend_from_slice(&raw_deflate(&expected[29..]));
+        // Zlib's stored block ends 7 + 0xffe2 bytes in, inside the window.
+        assert!(data.len() > DEFLATE_RETRY_WINDOW);
+        (data, expected)
     }
 
     #[tokio::test]
@@ -531,8 +565,27 @@ mod tests {
 
     #[tokio::test]
     async fn streaming_deflate_decodes_zlib_that_looks_like_raw() {
-        let (data, expected) = zlib_like_raw_deflate();
-        assert_eq!(stream_decode(data, ContentEncoding::Deflate).await.unwrap(), expected);
+        for extra in [0, 10_000] {
+            let (data, expected) = zlib_like_raw_deflate(extra);
+            let decoded = stream_decode(data, ContentEncoding::Deflate).await.unwrap();
+            assert!(decoded == expected, "{extra} extra bytes");
+        }
+    }
+
+    /// However the reader reads ahead, the input a retry needs is kept.
+    #[tokio::test]
+    async fn streaming_deflate_retries_large_raw_whatever_the_chunking() {
+        use tokio::io::AsyncReadExt;
+        let (data, expected) = large_raw_like_zlib();
+        for capacity in [1, 8 * 1024, 256 * 1024] {
+            let mut out = Vec::new();
+            let reader = BufReader::with_capacity(capacity, std::io::Cursor::new(data.clone()));
+            streaming_decoder(reader, ContentEncoding::Deflate)
+                .read_to_end(&mut out)
+                .await
+                .unwrap();
+            assert!(out == expected, "read {capacity} bytes at a time");
+        }
     }
 
     #[tokio::test]

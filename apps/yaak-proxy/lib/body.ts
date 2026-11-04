@@ -74,6 +74,17 @@ export function bodyAsText(bytes: Uint8Array, truncated = false): string | null 
   return unprintable <= total * MAX_UNPRINTABLE ? text : null;
 }
 
+/**
+ * The body as the viewer reads it: text first, whatever its content type. An image is text only
+ * when it is valid UTF-8, as no real one is, so one with long printable metadata stays an image.
+ */
+export function viewerText(bytes: Uint8Array, truncated: boolean, mime: string): string | null {
+  if (mime.startsWith("image/") && !mime.startsWith("image/svg")) {
+    return bytesToText(bytes, truncated);
+  }
+  return bodyAsText(bytes, truncated);
+}
+
 export async function formatText(
   text: string,
   language: CodeEditorProps["language"],
