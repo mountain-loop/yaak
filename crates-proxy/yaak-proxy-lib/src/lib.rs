@@ -851,12 +851,40 @@ pub struct GetFlowBodyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct GetFlowBodyResponse {
     /// The body decoded with its Content-Encoding, at most the capture limit of it, in base64.
+    /// When it fails to decode, the bytes as they were on the wire instead.
     pub data: String,
     /// The body is incomplete: cut on the wire, or decoded past the capture limit.
     pub truncated: bool,
     /// Bytes stored for the body, as they were on the wire.
     #[ts(type = "number")]
     pub stored_size: usize,
+    /// Why the body failed to decode, in which case `data` is as it was on the wire.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub decode_error: Option<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFlowBodyRequest {
+    pub flow_id: String,
+    pub which: FlowBody,
+    /// The file to write.
+    pub path: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFlowBodyResponse {
+    /// Bytes written.
+    #[ts(type = "number")]
+    pub size: usize,
+    /// What was written is incomplete, as `GetFlowBodyResponse.truncated` is.
+    pub truncated: bool,
+    /// The body failed to decode, so the file has it as it was on the wire.
+    pub raw: bool,
 }
 
 #[derive(Deserialize, TS)]
@@ -1082,16 +1110,42 @@ async fn get_flow_body(
 ) -> Result<GetFlowBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body = viewer_body(&ctx, &flow, req.which, limit).await?;
+    let body =
+        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
     Ok(GetFlowBodyResponse {
         data: BASE64.encode(&body.data),
         truncated: body.truncated,
         stored_size: body.stored_size,
+        decode_error: body.decode_error,
     })
 }
 
-/// A body for the app's viewer, which shows a body that failed to decode as its error, as it
-/// always has, rather than as what decoded before the failure.
+/// Writes a body to a file the person picked: decoded, as the viewer shows it, or as it was on
+/// the wire when it fails to decode.
+async fn save_flow_body(
+    ctx: ProxyCtx,
+    req: SaveFlowBodyRequest,
+) -> Result<SaveFlowBodyResponse, RpcError> {
+    let flow = find_flow(&ctx, &req.flow_id)?;
+    let limit = settings(&ctx)?.capture_body_limit;
+    let body =
+        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let saved = SaveFlowBodyResponse {
+        size: body.data.len(),
+        truncated: body.truncated,
+        raw: body.decode_error.is_some(),
+    };
+    let path = PathBuf::from(req.path);
+    blocking(move || {
+        std::fs::write(&path, &body.data)
+            .map_err(|e| format!("Failed to write {}: {e}", path.display()))
+    })
+    .await?;
+    Ok(saved)
+}
+
+/// A body to filter, which fails when the body failed to decode rather than filtering what
+/// decoded before the failure.
 async fn viewer_body(
     ctx: &ProxyCtx,
     flow: &Flow,
@@ -1437,6 +1491,7 @@ define_rpc! {
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
         preview_save(PreviewSaveRequest) -> SavePreview,
         save_flow(SaveFlowToYaakRequest) -> SavedFlow,
+        save_flow_body(SaveFlowBodyRequest) -> SaveFlowBodyResponse,
         system_proxy_set(SystemProxySetRequest) -> SystemProxyStatus,
         system_proxy_status(SystemProxyStatusRequest) -> SystemProxyStatus,
         take_over(TakeOverRequest) -> bool,
@@ -1511,9 +1566,25 @@ mod tests {
         writer.write(b"not a gzip stream").unwrap();
         writer.finish().unwrap();
 
+        // The viewer gets the bytes as they were on the wire, and why they didn't decode.
         let req = GetFlowBodyRequest { flow_id: "fl_bad".into(), which: FlowBody::Response };
-        let err = get_flow_body(ctx.clone(), req).await.err().unwrap();
-        assert!(err.message.starts_with("Failed to decode"), "{}", err.message);
+        let body = get_flow_body(ctx.clone(), req).await.unwrap();
+        let error = body.decode_error.unwrap();
+        assert!(error.starts_with("Failed to decode Gzip body"), "{error}");
+        assert_eq!(BASE64.decode(body.data).unwrap(), b"not a gzip stream");
+        assert!(!body.truncated);
+
+        // Saving writes those same bytes.
+        let path = dir.path().join("body.bin");
+        let req = SaveFlowBodyRequest {
+            flow_id: "fl_bad".into(),
+            which: FlowBody::Response,
+            path: path.to_string_lossy().into_owned(),
+        };
+        let saved = save_flow_body(ctx.clone(), req).await.unwrap();
+        assert_eq!((saved.size, saved.truncated, saved.raw), (17, false, true));
+        assert_eq!(std::fs::read(&path).unwrap(), b"not a gzip stream");
+
         let req = FilterBodyRequest {
             flow_id: "fl_bad".into(),
             which: FlowBody::Response,

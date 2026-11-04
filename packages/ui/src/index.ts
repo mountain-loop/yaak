@@ -90,6 +90,8 @@ export { Tree } from "./components/tree/Tree";
 export type { TreeItemProps } from "./components/tree/TreeItem";
 export { AudioViewer } from "./components/viewers/AudioViewer";
 export { CsvViewer, CsvViewerInner } from "./components/viewers/CsvViewer";
+export type { HexdumpViewerProps } from "./components/viewers/HexdumpViewer";
+export { hexdump, HexdumpViewer } from "./components/viewers/HexdumpViewer";
 export { ImageViewer } from "./components/viewers/ImageViewer";
 export { JsonAttributeTree } from "./components/viewers/JsonAttributeTree";
 export { JsonViewer } from "./components/viewers/JsonViewer";

@@ -67,6 +67,24 @@ pub async fn read_body(
     Ok(DecodedBody { data, stored_size, truncated, decode_error })
 }
 
+/// A flow's body decoded as `read_body` does, or, when it fails to decode, the bytes as they were
+/// on the wire, with `decode_error` saying why.
+pub async fn read_body_or_raw(
+    blobs: &BlobManager,
+    flow: &Flow,
+    body: FlowBody,
+    limit: usize,
+) -> Result<DecodedBody, String> {
+    let decoded = read_body(blobs, flow, body, limit).await?;
+    if decoded.decode_error.is_none() {
+        return Ok(decoded);
+    }
+    let mut data = read_raw_body(blobs, &flow.id, body)?;
+    let truncated = flow.truncated(body) || data.len() > limit;
+    data.truncate(limit);
+    Ok(DecodedBody { data, truncated, ..decoded })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,5 +144,58 @@ mod tests {
         let body = read_body(&blobs, &flow, FlowBody::Response, 8192).await.unwrap();
         assert!(body.truncated);
         assert_eq!(body.decode_error, None);
+    }
+
+    fn deflate_request(blobs: &BlobManager, id: &str, stored: &[u8]) -> Flow {
+        let mut writer = BodyChunkWriter::new(blobs.clone(), Flow::body_id(id, FlowBody::Request));
+        writer.write(stored).unwrap();
+        writer.finish().unwrap();
+        Flow {
+            id: id.into(),
+            request_size: stored.len() as i64,
+            request_headers: vec![crate::models::ProxyHeader {
+                name: "Content-Encoding".into(),
+                value: "deflate".into(),
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// Browser SDKs send `deflate` both ways: zlib-wrapped, as the spec says, and raw.
+    #[tokio::test]
+    async fn deflate_request_bodies_decode_wrapped_or_raw() {
+        use std::io::Write;
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let logs = br#"[{"message":"hello","service":"browser"}]"#;
+        let mut zlib = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        zlib.write_all(logs).unwrap();
+        let mut raw =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        raw.write_all(logs).unwrap();
+
+        for (id, stored) in [
+            ("fl_zlib", zlib.finish().unwrap()),
+            ("fl_raw", raw.finish().unwrap()),
+        ] {
+            let flow = deflate_request(&blobs, id, &stored);
+            let body = read_body(&blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+            assert_eq!(body.decode_error, None, "{id}");
+            assert_eq!((body.data.as_slice(), body.truncated), (&logs[..], false), "{id}");
+        }
+    }
+
+    #[tokio::test]
+    async fn undecodable_body_reads_as_it_was_on_the_wire() {
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let flow = deflate_request(&blobs, "fl_bad", b"\x00\x01 not deflate");
+
+        let decoded = read_body(&blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+        assert!(decoded.decode_error.is_some());
+        let raw = read_body_or_raw(&blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+        assert_eq!(raw.data, b"\x00\x01 not deflate");
+        assert!(!raw.truncated);
+        assert_eq!(raw.decode_error, decoded.decode_error);
+        let cut = read_body_or_raw(&blobs, &flow, FlowBody::Request, 4).await.unwrap();
+        assert_eq!((cut.data.as_slice(), cut.truncated), (&b"\x00\x01 n"[..], true));
     }
 }

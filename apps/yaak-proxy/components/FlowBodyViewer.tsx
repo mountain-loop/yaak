@@ -3,7 +3,10 @@ import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
 import {
   Banner,
+  Button,
   CsvViewer,
+  HexdumpViewer,
+  Icon,
   ImageViewer,
   languageFromContentType,
   LoadingIcon,
@@ -14,16 +17,16 @@ import {
 } from "@yaakapp-internal/ui";
 import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  base64ToBytes,
-  bytesToText,
+  bodyAsText,
   filterText,
   findHeader,
+  flowBodyQueryOptions,
   formatText,
   mimeEssence,
 } from "../lib/body";
-import { rpc } from "../lib/rpc";
+import { useSaveFlowBody } from "../lib/flowActions";
 
 interface Props {
   flow: Flow;
@@ -32,18 +35,7 @@ interface Props {
 }
 
 export function useFlowBody(flow: Flow, which: FlowBody, enabled = true) {
-  return useQuery({
-    enabled,
-    queryKey: ["get_flow_body", flow.id, which, flow.updatedAt],
-    queryFn: async () => {
-      const res = await rpc("get_flow_body", { flowId: flow.id, which });
-      return {
-        bytes: base64ToBytes(res.data),
-        truncated: res.truncated,
-        storedSize: res.storedSize,
-      };
-    },
-  });
+  return useQuery({ ...flowBodyQueryOptions(flow, which), enabled });
 }
 
 export function FlowBodyViewer({ flow, which, pretty }: Props) {
@@ -60,8 +52,8 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
     return <Banner color="danger">{body.error.message}</Banner>;
   }
 
-  const { bytes, truncated, storedSize } = body.data;
-  if (bytes.length === 0) {
+  const { bytes, truncated, storedSize, decodeError } = body.data;
+  if (bytes.length === 0 && decodeError == null) {
     return <EmptyState>{which === "request" ? "No request body" : "Empty"}</EmptyState>;
   }
 
@@ -70,12 +62,13 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
   const mime = mimeEssence(contentType) ?? "";
   const wireSize = which === "request" ? flow.requestSize : flow.responseSize;
   const wireTruncated = which === "request" ? flow.requestTruncated : flow.responseTruncated;
+  // Text whatever the content type says, so a page sent with an odd one still reads.
+  const text = decodeError == null ? bodyAsText(bytes, truncated) : null;
 
   let viewer: ReactNode;
-  if (mime.startsWith("image/svg")) {
-    viewer = <SvgViewer text={bytesToText(bytes, truncated) ?? ""} />;
-  } else if (mime.startsWith("image/")) {
-    viewer = <ImageBody bytes={bytes} mime={mime} />;
+  if (decodeError != null) {
+    // What failed to decode is as it was on the wire, compressed, so never text.
+    viewer = <BinaryBody flow={flow} which={which} bytes={bytes} />;
   } else if (mime.startsWith("multipart/") && pretty) {
     const boundary = contentType?.match(/;\s*boundary="?([^";]+)"?/i)?.[1] ?? "unknown";
     viewer = (
@@ -86,14 +79,19 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
         textViewerProps={{ formatText }}
       />
     );
+  } else if (text == null) {
+    viewer = mime.startsWith("image/") ? (
+      <ImageBody bytes={bytes} mime={mime} />
+    ) : (
+      <BinaryBody flow={flow} which={which} bytes={bytes} />
+    );
+  } else if (mime.startsWith("image/svg")) {
+    viewer = <SvgViewer text={text} />;
   } else if (/csv|tab-separated/.test(mime) && pretty) {
-    viewer = <CsvViewer text={bytesToText(bytes, truncated)} className="pb-2" />;
+    viewer = <CsvViewer text={text} className="pb-2" />;
   } else {
-    const text = bytesToText(bytes, truncated);
     const language = languageFromContentType(contentType, text);
-    if (text == null) {
-      viewer = <EmptyState>Binary body, {formatSize(bytes.length)}</EmptyState>;
-    } else if (language === "html" && pretty && which === "response") {
+    if (language === "html" && pretty && which === "response") {
       viewer = <WebPageViewer html={text} baseUrl={flow.url} />;
     } else {
       viewer = (
@@ -102,16 +100,60 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
     }
   }
 
-  if (!truncated) return viewer;
+  if (!truncated && decodeError == null) return viewer;
 
   return (
-    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)] gap-2">
-      <Banner color="notice" className="text-sm">
-        {wireTruncated
-          ? `Showing the first ${formatSize(storedSize)} of ${formatSize(wireSize)}, the capture limit. The app received all of it.`
-          : `Showing the first ${formatSize(bytes.length)} of the decoded body, the capture limit. The app received all of it.`}
-      </Banner>
-      <div className="min-h-0">{viewer}</div>
+    <div className="h-full grid grid-rows-[auto_auto_minmax(0,1fr)]">
+      {decodeError != null && (
+        <Banner color="danger" className="text-sm mb-2">
+          {decodeError}. Showing the body as it was on the wire.
+        </Banner>
+      )}
+      {truncated && (
+        <Banner color="notice" className="text-sm mb-2">
+          {wireTruncated || decodeError != null
+            ? `Showing the first ${formatSize(storedSize)} of ${formatSize(wireSize)}, the capture limit. The app received all of it.`
+            : `Showing the first ${formatSize(bytes.length)} of the decoded body, the capture limit. The app received all of it.`}
+        </Banner>
+      )}
+      <div className="min-h-0 row-start-3">{viewer}</div>
+    </div>
+  );
+}
+
+/** Bytes shown in the hexdump; the rest are in the saved file */
+const HEXDUMP_LIMIT = 256 * 1024;
+
+/** A body that isn't text: a hexdump, and a way to save it */
+function BinaryBody({
+  flow,
+  which,
+  bytes,
+}: {
+  flow: Flow;
+  which: FlowBody;
+  bytes: Uint8Array<ArrayBuffer>;
+}) {
+  const saveBody = useSaveFlowBody();
+  const shown = useMemo(() => bytes.subarray(0, HEXDUMP_LIMIT), [bytes]);
+
+  return (
+    <div className="h-full grid grid-rows-[auto_minmax(0,1fr)] gap-1">
+      <div className="flex items-center justify-between gap-2 text-sm text-text-subtle">
+        <span>
+          Binary body, {formatSize(bytes.length)}
+          {shown.length < bytes.length && `, first ${formatSize(shown.length)} shown`}
+        </span>
+        <Button
+          size="2xs"
+          variant="border"
+          leftSlot={<Icon icon="download" size="xs" />}
+          onClick={() => saveBody(flow, which)}
+        >
+          Save to File
+        </Button>
+      </div>
+      <HexdumpViewer data={shown} className="-mr-2 bg-surface" />
     </div>
   );
 }
