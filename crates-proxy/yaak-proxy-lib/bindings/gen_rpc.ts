@@ -313,7 +313,8 @@ export type ProxyStatePayload = { state: ProxyState, };
 
 export type ReflectGrpcHostRequest = { 
 /**
- * `host` or `host:port`; 443 when no port is given.
+ * `host` or `host:port`, over TLS on 443 unless a port is given, or either after
+ * `http://` to ask without TLS.
  */
 host: string, };
 

@@ -562,9 +562,9 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         }
         (&Method::POST, ["grpc-schemas", "reflect"]) => {
             let body: ReflectGrpcHostRequest = read_json(req).await?;
-            let host =
-                if body.host.contains(':') { body.host } else { format!("{}:443", body.host) };
-            json(&grpc::reflect(&ctx.db, &ctx.grpc, &host).await.map_err(bad_request)?)
+            let (host, plaintext) = grpc::reflection_host(&body.host);
+            let reflected = grpc::reflect(&ctx.db, &ctx.grpc, &host, plaintext).await;
+            json(&reflected.map_err(bad_request)?)
         }
         (&Method::DELETE, ["grpc-schemas", id]) => {
             json(&RemovedResponse { removed: grpc::remove(&ctx.db, &ctx.grpc, id)? })

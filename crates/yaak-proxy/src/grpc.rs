@@ -8,6 +8,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use flate2::read::{GzDecoder, ZlibDecoder};
 use hyper::header::HeaderMap;
 
+use crate::decode::Decoding;
 use crate::messages::{Capped, MessageDirection, MessageKind, StreamKind, StreamMessage};
 
 /// gRPC's compressed flag, in the first byte of each message's prefix.
@@ -52,9 +53,17 @@ pub(crate) struct GrpcParser {
     current: Option<(u8, u32, u32, Capped)>,
     limit: usize,
     broken: bool,
+    /// The body's `Content-Encoding`, which gRPC-Web may use, undone before anything else.
+    decoding: Decoding,
 }
 
 impl GrpcParser {
+    /// Reads a body sent with `content_encoding`, as a gRPC-Web one can be.
+    pub(crate) fn with_content_encoding(mut self, content_encoding: Option<&str>) -> Self {
+        self.decoding = Decoding::new(content_encoding);
+        self
+    }
+
     pub(crate) fn new(
         direction: MessageDirection,
         encoding: Option<&str>,
@@ -69,10 +78,35 @@ impl GrpcParser {
             current: None,
             limit,
             broken: false,
+            decoding: Decoding::Identity,
         }
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) -> Vec<StreamMessage> {
+        match std::mem::replace(&mut self.decoding, Decoding::Unsupported) {
+            Decoding::Identity => {
+                self.decoding = Decoding::Identity;
+                self.feed_decoded(bytes)
+            }
+            // An encoding this cannot undo leaves the frames unreadable.
+            Decoding::Unsupported => Vec::new(),
+            // A piece at a time, so a highly compressed body never expands all at once.
+            Decoding::Decoder(mut decoder) => {
+                let mut messages = Vec::new();
+                let decoded = decoder.feed(bytes, &mut |piece| {
+                    messages.extend(self.feed_decoded(piece));
+                });
+                if decoded.is_ok() {
+                    self.decoding = Decoding::Decoder(decoder);
+                }
+                messages
+            }
+        }
+    }
+
+    /// Reads bytes with any Content-Encoding undone: base64 first for gRPC-Web's text flavor,
+    /// then the frames.
+    fn feed_decoded(&mut self, bytes: &[u8]) -> Vec<StreamMessage> {
         if self.broken {
             return Vec::new();
         }

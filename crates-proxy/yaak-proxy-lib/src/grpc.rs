@@ -12,7 +12,7 @@ use chrono::NaiveDateTime;
 use rusqlite::{Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use ts_rs::TS;
@@ -67,22 +67,20 @@ pub struct DecodedGrpcMessage {
     pub note: Option<String>,
 }
 
+/// What a host's reflection answered, once it has; decodes that need it while it is being asked
+/// wait for the same answer.
+type Lookup = Arc<tokio::sync::OnceCell<Result<GrpcSchema, String>>>;
+
 /// The decoded descriptor pools, by schema id, and the hosts reflection was asked of.
 #[derive(Clone, Default)]
 pub struct GrpcState {
     protoc: Arc<Mutex<Option<GrpcConfig>>>,
     pools: Arc<Mutex<HashMap<String, DescriptorPool>>>,
-    reflected: Arc<Mutex<HashSet<String>>>,
-    plaintext_reflection: Arc<std::sync::atomic::AtomicBool>,
+    /// By `host:port`.
+    lookups: Arc<Mutex<HashMap<String, Lookup>>>,
 }
 
 impl GrpcState {
-    /// Asks for reflection without TLS, for tests against a local server.
-    #[doc(hidden)]
-    pub fn reflect_over_plaintext(&self) {
-        self.plaintext_reflection.store(true, std::sync::atomic::Ordering::Relaxed);
-    }
-
     pub fn set_protoc(&self, config: GrpcConfig) {
         if let Ok(mut protoc) = self.protoc.lock() {
             *protoc = Some(config);
@@ -235,18 +233,45 @@ pub fn remove(db: &ProxyQueryManager, state: &GrpcState, id: &str) -> Result<boo
 /// How long a server has to answer reflection, all of it.
 const REFLECTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
-/// Asks the server at `authority` (`host[:port]`) for its services by reflection, and keeps
-/// them as the host's schema. Fails when it offers none.
+/// A host to ask for reflection, as given to `reflect_grpc_host`: `host`, `host:port`, or
+/// either after `http://` or `https://`. Returns `host:port` and whether to ask without TLS;
+/// without a scheme, over TLS on 443.
+pub fn reflection_host(host: &str) -> (String, bool) {
+    let host = host.trim().trim_end_matches('/').to_ascii_lowercase();
+    let (host, plaintext) = match host.strip_prefix("http://") {
+        Some(rest) => (rest.to_string(), true),
+        None => (host.strip_prefix("https://").unwrap_or(&host).to_string(), false),
+    };
+    let has_port = host.rsplit_once(':').is_some_and(|(_, port)| port.parse::<u16>().is_ok());
+    if has_port {
+        return (host, plaintext);
+    }
+    (format!("{host}:{}", if plaintext { 80 } else { 443 }), plaintext)
+}
+
+/// Asks the server at `authority` (`host:port`) for its services by reflection, without TLS
+/// when `plaintext`, and keeps them as the host's schema, also for decodes to come. Fails when
+/// it offers none.
 pub async fn reflect(
     db: &ProxyQueryManager,
     state: &GrpcState,
     authority: &str,
+    plaintext: bool,
 ) -> Result<GrpcSchema, String> {
     let authority = authority.trim().to_ascii_lowercase();
-    if let Ok(mut reflected) = state.reflected.lock() {
-        reflected.insert(authority.clone());
+    let reflected = reflect_uncached(db, &authority, plaintext).await;
+    if let Ok(mut lookups) = state.lookups.lock() {
+        let answered = tokio::sync::OnceCell::new_with(Some(reflected.clone()));
+        lookups.insert(authority, Arc::new(answered));
     }
-    let plaintext = state.plaintext_reflection.load(std::sync::atomic::Ordering::Relaxed);
+    reflected
+}
+
+async fn reflect_uncached(
+    db: &ProxyQueryManager,
+    authority: &str,
+    plaintext: bool,
+) -> Result<GrpcSchema, String> {
     let scheme = if plaintext { "http" } else { "https" };
     let uri: hyper::Uri = format!("{scheme}://{authority}")
         .parse()
@@ -268,7 +293,7 @@ pub async fn reflect(
     if reflected.services().next().is_none() {
         return Err(format!("{authority} offers no services by reflection"));
     }
-    insert(db, &authority, GrpcSchemaSource::Reflection, &[], &reflected)
+    insert(db, authority, GrpcSchemaSource::Reflection, &[], &reflected)
 }
 
 /// Whether `pattern` covers `host` (lowercase, no port) at `authority` (`host:port`).
@@ -303,11 +328,13 @@ impl GrpcState {
 }
 
 /// The schema that defines `service` for the host at `authority`: attached protos first, the
-/// most specific pattern first, then the host's reflection, asked of the server once.
+/// most specific pattern first, then the host's reflection, asked of the server once, without
+/// TLS when `plaintext`, as the call was made.
 async fn find_schema(
     db: &ProxyQueryManager,
     state: &GrpcState,
     authority: &str,
+    plaintext: bool,
     service: &str,
 ) -> Result<(Option<(GrpcSchema, DescriptorPool)>, Option<String>), String> {
     let host = authority.rsplit_once(':').map_or(authority, |(h, _)| h);
@@ -328,19 +355,27 @@ async fn find_schema(
             return Ok((Some((schema.clone(), pool)), None));
         }
     }
-    let asked = state.reflected.lock().map(|r| r.contains(authority)).unwrap_or(true);
-    if asked || schemas.iter().any(|s| s.source == GrpcSchemaSource::Reflection) {
+    if schemas.iter().any(|s| s.source == GrpcSchemaSource::Reflection) {
         return Ok((None, Some(format!("No schema for {service} on {authority}"))));
     }
-    match reflect(db, state, authority).await {
-        Ok(schema) => {
-            let pool = state.pool(db, &schema.id)?;
-            if pool.get_service_by_name(service).is_some() {
+    // Asked once: decodes that come while it is being asked wait for the same answer.
+    let Some(lookup) =
+        state.lookups.lock().ok().map(|mut l| l.entry(authority.into()).or_default().clone())
+    else {
+        return Ok((None, Some(format!("No schema for {service} on {authority}"))));
+    };
+    let answer = lookup.get_or_init(|| reflect_uncached(db, authority, plaintext)).await.clone();
+    match answer {
+        // Unless it was removed since.
+        Ok(schema) => match state.pool(db, &schema.id) {
+            Ok(pool) if pool.get_service_by_name(service).is_some() => {
                 Ok((Some((schema, pool)), None))
-            } else {
+            }
+            Ok(_) => {
                 Ok((None, Some(format!("{authority}'s reflection does not include {service}"))))
             }
-        }
+            Err(_) => Ok((None, Some(format!("No schema for {service} on {authority}")))),
+        },
         Err(e) => Ok((None, Some(format!("No schema for {service}; reflection failed: {e}")))),
     }
 }
@@ -367,7 +402,8 @@ pub async fn decode(
     let url = url::Url::parse(&flow.url).map_err(|e| e.to_string())?;
     let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
     let authority = format!("{host}:{}", url.port_or_known_default().unwrap_or(443));
-    let (found, note) = find_schema(db, state, &authority, service).await?;
+    let plaintext = url.scheme() == "http";
+    let (found, note) = find_schema(db, state, &authority, plaintext, service).await?;
     let Some((schema, pool)) = found else {
         return Ok(schemaless(&payload, &message, note));
     };
@@ -502,6 +538,15 @@ fn read_varint(bytes: &mut &[u8]) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reflection_hosts() {
+        assert_eq!(reflection_host("api.example.com"), ("api.example.com:443".into(), false));
+        assert_eq!(reflection_host("localhost:50051"), ("localhost:50051".into(), false));
+        assert_eq!(reflection_host("http://localhost:50051"), ("localhost:50051".into(), true));
+        assert_eq!(reflection_host("http://Example.com/"), ("example.com:80".into(), true));
+        assert_eq!(reflection_host("https://example.com"), ("example.com:443".into(), false));
+    }
 
     #[test]
     fn host_patterns() {

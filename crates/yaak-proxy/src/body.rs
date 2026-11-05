@@ -38,6 +38,14 @@ impl BodyParser {
             Self::Grpc(_) => grpc::trailers_from_headers(trailers),
         }
     }
+
+    /// The body ended: messages held back for what might have followed.
+    fn finish(&mut self) -> Vec<StreamMessage> {
+        match self {
+            Self::Sse(p) => p.finish(),
+            Self::Grpc(_) => Vec::new(),
+        }
+    }
 }
 
 /// Streams a body through untouched, reporting each frame as a chunk event (with data up to
@@ -108,6 +116,11 @@ impl CaptureBody {
             return;
         }
         self.finished = true;
+        // Before the body's end, so they land while the flow is still open.
+        if let Some(parser) = self.parser.as_mut() {
+            let messages = parser.finish();
+            self.emit_messages(messages);
+        }
         let truncated = self.size > self.captured as u64;
         let event = match self.direction {
             Direction::Request if self.size == 0 => return,

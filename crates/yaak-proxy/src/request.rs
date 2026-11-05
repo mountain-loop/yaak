@@ -79,6 +79,8 @@ struct GrpcCall {
     text: bool,
     /// What the client's compressed messages are compressed with.
     encoding: Option<String>,
+    /// The request body's `Content-Encoding`, which gRPC-Web may use.
+    content_encoding: Option<String>,
 }
 
 /// Per-flow bookkeeping shared by the plain HTTP and the intercepted HTTPS paths.
@@ -139,7 +141,8 @@ impl Flow {
         if let Some((kind, text)) = grpc::detect(header_str(req.headers(), "content-type")) {
             flow.engine.emit(ProxyEvent::StreamStart { id: flow.id, kind });
             let encoding = header_str(req.headers(), "grpc-encoding").map(String::from);
-            flow.grpc = Some(GrpcCall { text, encoding });
+            let content_encoding = header_str(req.headers(), "content-encoding").map(String::from);
+            flow.grpc = Some(GrpcCall { text, encoding, content_encoding });
         }
         flow
     }
@@ -148,7 +151,9 @@ impl Flow {
         let parser = self.grpc.as_ref().map(|call| {
             let limit = self.engine.capture_body_limit;
             let encoding = call.encoding.as_deref();
-            BodyParser::Grpc(GrpcParser::new(MessageDirection::Client, encoding, call.text, limit))
+            let parser = GrpcParser::new(MessageDirection::Client, encoding, call.text, limit)
+                .with_content_encoding(call.content_encoding.as_deref());
+            BodyParser::Grpc(parser)
         });
         CaptureBody::new(body, Direction::Request, self.id, self.start, self.engine.clone())
             .flag_failure(self.upload_failed.clone())
@@ -169,12 +174,9 @@ impl Flow {
             // A gateway's own error page is no gRPC body.
             let (_, text) = grpc::detect(header_str(headers, "content-type"))?;
             let encoding = header_str(headers, "grpc-encoding");
-            return Some(BodyParser::Grpc(GrpcParser::new(
-                MessageDirection::Server,
-                encoding,
-                text,
-                limit,
-            )));
+            let parser = GrpcParser::new(MessageDirection::Server, encoding, text, limit)
+                .with_content_encoding(header_str(headers, "content-encoding"));
+            return Some(BodyParser::Grpc(parser));
         }
         let content_type = header_str(headers, "content-type").unwrap_or_default();
         let essence = content_type.split(';').next().unwrap_or_default().trim();

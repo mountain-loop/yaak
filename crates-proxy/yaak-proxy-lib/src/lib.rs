@@ -1026,7 +1026,8 @@ pub struct RemoveGrpcSchemaRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ReflectGrpcHostRequest {
-    /// `host` or `host:port`; 443 when no port is given.
+    /// `host` or `host:port`, over TLS on 443 unless a port is given, or either after
+    /// `http://` to ask without TLS.
     pub host: String,
 }
 
@@ -1086,8 +1087,8 @@ async fn reflect_grpc_host(
     ctx: ProxyCtx,
     req: ReflectGrpcHostRequest,
 ) -> Result<GrpcSchema, RpcError> {
-    let host = if req.host.contains(':') { req.host } else { format!("{}:443", req.host) };
-    grpc::reflect(&ctx.db, &ctx.grpc, &host).await.map_err(rpc_error)
+    let (host, plaintext) = grpc::reflection_host(&req.host);
+    grpc::reflect(&ctx.db, &ctx.grpc, &host, plaintext).await.map_err(rpc_error)
 }
 
 fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, RpcError> {
@@ -1414,6 +1415,16 @@ struct InFlight {
     last_write: Option<std::time::Instant>,
 }
 
+impl InFlight {
+    /// Something shown of the flow changed: one written while it streams is written again on
+    /// the stream flow interval, so it does not wait for a message to show it.
+    fn changed(&mut self) {
+        if self.persisted {
+            self.dirty = true;
+        }
+    }
+}
+
 /// A message waiting to be written, with its payload.
 struct PendingMessage {
     id: u64,
@@ -1607,6 +1618,7 @@ impl FlowSink {
                     f.flow.request_size += len as i64;
                     f.flow.request_truncated |= data.len() < len;
                     write_body_chunk(&mut f.request_body, &data);
+                    f.changed();
                 }
             }
             ProxyEvent::RequestBodyComplete { id, size, truncated } => {
@@ -1614,6 +1626,7 @@ impl FlowSink {
                     f.flow.request_size = size as i64;
                     f.flow.request_truncated = truncated;
                     finish_body(f.request_body.take());
+                    f.changed();
                 }
             }
             ProxyEvent::ResponseStart { id, status, http_version, remote_addr, elapsed_ms } => {
@@ -1622,11 +1635,13 @@ impl FlowSink {
                     f.flow.upstream_http_version = Some(http_version);
                     f.flow.remote_addr = remote_addr.map(|a| a.to_string());
                     f.flow.elapsed_headers_ms = Some(clamp_ms(elapsed_ms));
+                    f.changed();
                 }
             }
             ProxyEvent::ResponseHeader { id, name, value } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.response_headers.push(ProxyHeader { name, value });
+                    f.changed();
                 }
             }
             // Counted per chunk too, for a stream written while it is open.
@@ -1635,6 +1650,7 @@ impl FlowSink {
                     f.flow.response_size += len as i64;
                     f.flow.response_truncated |= data.len() < len;
                     write_body_chunk(&mut f.response_body, &data);
+                    f.changed();
                 }
             }
             ProxyEvent::ResponseBodyComplete {
@@ -2104,6 +2120,48 @@ mod tests {
         assert_eq!(messages::count(&ctx.db, &flow.id).unwrap(), 0);
         let blobs = ctx.blobs.connect().list_body_ids().unwrap();
         assert!(blobs.iter().all(|b| !b.starts_with(&flow.id)), "{blobs:?}");
+    }
+
+    #[test]
+    fn an_open_call_shows_its_response_before_any_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        tx.send(ProxyEvent::RequestStart {
+            id: 1,
+            started_at: SystemTime::now(),
+            method: "POST".into(),
+            url: "https://example.com/pkg.Greeter/Watch".into(),
+            http_version: "HTTP/2".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        })
+        .unwrap();
+        tx.send(ProxyEvent::StreamStart { id: 1, kind: yaak_proxy::StreamKind::Grpc }).unwrap();
+        wait_for_flow(&ctx, |f| f.stream_kind.is_some());
+        tx.send(ProxyEvent::ResponseStart {
+            id: 1,
+            status: 200,
+            http_version: "HTTP/2".into(),
+            remote_addr: None,
+            elapsed_ms: 3,
+        })
+        .unwrap();
+        tx.send(ProxyEvent::ResponseHeader {
+            id: 1,
+            name: "content-type".into(),
+            value: "application/grpc".into(),
+        })
+        .unwrap();
+        // No message yet, and the server may send none for a long while.
+        let open = wait_for_flow(&ctx, |f| f.status == Some(200));
+        assert_eq!(
+            (open.elapsed_ms, open.content_type.as_deref()),
+            (None, Some("application/grpc"))
+        );
+        drop(tx);
+        event_loop.join().unwrap();
     }
 
     #[test]

@@ -1,6 +1,7 @@
 mod body;
 mod cert;
 mod connection;
+mod decode;
 mod grpc;
 mod messages;
 mod request;

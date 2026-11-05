@@ -1042,6 +1042,7 @@ fn proto_string(value: &str) -> Vec<u8> {
 async fn greeter(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible> {
     let path = req.uri().path().to_string();
     let web = req.headers()[CONTENT_TYPE].to_str().unwrap().starts_with("application/grpc-web");
+    let gzip = req.headers().get("accept-encoding").is_some_and(|e| e == "gzip");
     let request = req.into_body().collect().await.unwrap().to_bytes();
     let request = if web { BASE64.decode(&request).unwrap() } else { request.to_vec() };
     let name = String::from_utf8_lossy(&request[7..]).into_owned();
@@ -1064,10 +1065,16 @@ async fn greeter(req: Request<Incoming>) -> Result<Response<TestBody>, Infallibl
             body.push_str(&BASE64.encode(grpc_frame(0, &proto_string(reply))));
         }
         body.push_str(&BASE64.encode(grpc_frame(0x80, b"grpc-status: 0\r\ngrpc-message: \r\n")));
-        return Ok(Response::builder()
-            .header(CONTENT_TYPE, "application/grpc-web-text")
-            .body(full(body))
-            .unwrap());
+        let resp = Response::builder().header(CONTENT_TYPE, "application/grpc-web-text");
+        // Compressed for HTTP as a whole when the client accepts it, as a CDN does.
+        if gzip {
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            std::io::Write::write_all(&mut encoder, body.as_bytes()).unwrap();
+            let body = encoder.finish().unwrap();
+            return Ok(resp.header("content-encoding", "gzip").body(full(body)).unwrap());
+        }
+        return Ok(resp.body(full(body)).unwrap());
     }
     let frames = futures_util::stream::iter(replies)
         .then(|reply| async move {
@@ -1154,28 +1161,35 @@ async fn grpc_web_text_is_recorded() {
         spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
             .await;
     let url = format!("https://localhost:{}/pkg.Greeter/StreamHellos", upstream.port());
-    let resp = h
-        .client()
-        .post(&url)
-        .header(CONTENT_TYPE, "application/grpc-web-text")
-        .body(BASE64.encode(grpc_frame(0, &proto_string("Di"))))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(resp.status(), 200);
-    resp.bytes().await.unwrap();
+    // Plain, then with the whole response gzipped for HTTP.
+    for gzip in [false, true] {
+        let mut req = h
+            .client()
+            .post(&url)
+            .header(CONTENT_TYPE, "application/grpc-web-text")
+            .body(BASE64.encode(grpc_frame(0, &proto_string("Di"))));
+        if gzip {
+            req = req.header("accept-encoding", "gzip");
+        }
+        let resp = req.send().await.unwrap();
+        assert_eq!(resp.status(), 200);
+        let encoding = resp.headers().get("content-encoding").cloned();
+        assert_eq!(encoding.is_some(), gzip, "the client gets the response as sent");
+        resp.bytes().await.unwrap();
 
-    let events = h.flow_events();
-    assert_eq!(find!(events, ProxyEvent::StreamStart { kind, .. } => *kind), StreamKind::GrpcWeb);
-    let sent = messages(&events, MessageDirection::Client);
-    assert_eq!(&sent[0].data[..], &proto_string("Di")[..]);
-    let received = messages(&events, MessageDirection::Server);
-    assert_eq!(received.len(), 4);
-    assert_eq!(&received[2].data[..], &proto_string("Hello Di #3")[..]);
-    assert_eq!(
-        received[3].kind,
-        MessageKind::GrpcTrailers { status: Some(0), message: Some(String::new()) }
-    );
+        let events = h.flow_events();
+        let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
+        assert_eq!(kind, StreamKind::GrpcWeb);
+        let sent = messages(&events, MessageDirection::Client);
+        assert_eq!(&sent[0].data[..], &proto_string("Di")[..]);
+        let received = messages(&events, MessageDirection::Server);
+        assert_eq!(received.len(), 4, "gzip: {gzip}");
+        assert_eq!(&received[2].data[..], &proto_string("Hello Di #3")[..]);
+        assert_eq!(
+            received[3].kind,
+            MessageKind::GrpcTrailers { status: Some(0), message: Some(String::new()) }
+        );
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

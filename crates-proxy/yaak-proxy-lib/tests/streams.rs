@@ -373,7 +373,7 @@ async fn grpc_schemas_come_from_the_servers_reflection() {
 
     let dir = tempfile::tempdir().unwrap();
     let (ctx, _event_rx) = start(dir.path());
-    ctx.grpc.reflect_over_plaintext();
+    // Plain HTTP, so reflection is asked without TLS, as the call was made.
     let url = format!("http://{upstream}/pkg.Greeter/SayHello");
     client(&ctx)
         .post(&url)
@@ -384,17 +384,23 @@ async fn grpc_schemas_come_from_the_servers_reflection() {
         .unwrap();
     let flow = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
 
-    // Nothing attached: the server is asked once, and its answer kept for the host.
-    let decoded =
-        rpc(&ctx, "decode_grpc_message", json!({ "flowId": flow.id, "seq": 1 })).await.unwrap();
+    // Nothing attached: the server is asked once, and its answer kept for the host. Two
+    // decodes at once both wait for that answer.
+    let request = json!({ "flowId": flow.id, "seq": 1 });
+    let (decoded, alongside) = tokio::join!(
+        rpc(&ctx, "decode_grpc_message", request.clone()),
+        rpc(&ctx, "decode_grpc_message", request)
+    );
+    let (decoded, alongside) = (decoded.unwrap(), alongside.unwrap());
     assert_eq!(decoded["messageType"], "pkg.HelloReply", "{decoded}");
+    assert_eq!(alongside["messageType"], "pkg.HelloReply", "{alongside}");
     assert_eq!(decoded["schema"]["source"], "reflection");
     assert_eq!(decoded["schema"]["hostPattern"], format!("127.0.0.1:{}", upstream.port()));
     let schemas = rpc(&ctx, "list_grpc_schemas", json!({})).await.unwrap();
     assert_eq!(schemas.as_array().unwrap().len(), 1);
 
     // Asked again on demand, it replaces the host's earlier answer.
-    let host = format!("127.0.0.1:{}", upstream.port());
+    let host = format!("http://127.0.0.1:{}", upstream.port());
     let again = rpc(&ctx, "reflect_grpc_host", json!({ "host": host })).await.unwrap();
     assert_eq!(again["services"], json!(["pkg.Greeter"]));
     let schemas = rpc(&ctx, "list_grpc_schemas", json!({})).await.unwrap();

@@ -1,29 +1,24 @@
 //! Server-sent events (the WHATWG `text/event-stream` format), read from a response body as it
 //! streams.
 
-use std::io::Write;
-
-use flate2::write::{GzDecoder, ZlibDecoder};
-
+use crate::decode::Decoding;
 use crate::messages::{Capped, MessageDirection, MessageKind, RAW_LIMIT, StreamMessage};
-
-/// The response's Content-Encoding, undone before the events are read.
-enum Decoder {
-    Identity,
-    Gzip(GzDecoder<Vec<u8>>),
-    Deflate(ZlibDecoder<Vec<u8>>),
-    /// One this cannot undo, so no events are read.
-    Unsupported,
-}
 
 const BOM: &[u8] = b"\xEF\xBB\xBF";
 /// Bytes a line may take beyond the capture limit, for its field name.
 const LINE_SLACK: usize = 64;
 
 pub(crate) struct SseParser {
-    decoder: Decoder,
+    /// The response's Content-Encoding, undone before the events are read.
+    decoding: Decoding,
     line: Capped,
-    /// The last chunk ended in a CR, so an LF starting the next ends no second line.
+    /// A chunk ended in a CR whose line is not ended yet: an LF starting the next chunk makes it
+    /// a CRLF, which stays with the event it ends.
+    pending_cr: bool,
+    /// The stream ends lines with a bare CR, so a CR ending a chunk ends its line at once, and
+    /// an LF that starts the next chunk is skipped as the end of a CRLF.
+    bare_cr: bool,
+    /// The last chunk ended in a CR read as a bare one.
     after_cr: bool,
     event: Option<String>,
     id: Option<String>,
@@ -35,24 +30,18 @@ pub(crate) struct SseParser {
     data_truncated: bool,
     /// The start of the stream read so far while it may be a byte order mark; None after.
     bom: Option<Vec<u8>>,
-    /// A field was set since the last event.
-    any_field: bool,
     raw: Capped,
     size: u64,
 }
 
 impl SseParser {
     pub(crate) fn new(content_encoding: Option<&str>, limit: usize) -> Self {
-        let decoder = match content_encoding.map(|e| e.trim().to_ascii_lowercase()).as_deref() {
-            None | Some("") | Some("identity") => Decoder::Identity,
-            Some("gzip") | Some("x-gzip") => Decoder::Gzip(GzDecoder::new(Vec::new())),
-            Some("deflate") => Decoder::Deflate(ZlibDecoder::new(Vec::new())),
-            Some(_) => Decoder::Unsupported,
-        };
         Self {
-            decoder,
+            decoding: Decoding::new(content_encoding),
             // Room for a field name before a value up to the limit.
             line: Capped::new(limit.saturating_add(LINE_SLACK)),
+            pending_cr: false,
+            bare_cr: false,
             after_cr: false,
             event: None,
             id: None,
@@ -61,26 +50,37 @@ impl SseParser {
             data_lines: 0,
             data_truncated: false,
             bom: Some(Vec::new()),
-            any_field: false,
             raw: Capped::new(RAW_LIMIT),
             size: 0,
         }
     }
 
     pub(crate) fn feed(&mut self, bytes: &[u8]) -> Vec<StreamMessage> {
-        let decoded = match &mut self.decoder {
-            Decoder::Identity => return self.read(bytes),
-            Decoder::Unsupported => return Vec::new(),
-            Decoder::Gzip(d) => d.write_all(bytes).map(|_| std::mem::take(d.get_mut())),
-            Decoder::Deflate(d) => d.write_all(bytes).map(|_| std::mem::take(d.get_mut())),
-        };
-        match decoded {
-            Ok(decoded) => self.read(&decoded),
-            Err(_) => {
-                self.decoder = Decoder::Unsupported;
-                Vec::new()
+        // Left unsupported if decoding fails: what follows cannot be read.
+        match std::mem::replace(&mut self.decoding, Decoding::Unsupported) {
+            Decoding::Identity => {
+                self.decoding = Decoding::Identity;
+                self.read(bytes)
+            }
+            Decoding::Unsupported => Vec::new(),
+            // A piece at a time, so a highly compressed body never expands all at once.
+            Decoding::Decoder(mut decoder) => {
+                let mut events = Vec::new();
+                if decoder.feed(bytes, &mut |piece| events.extend(self.read(piece))).is_ok() {
+                    self.decoding = Decoding::Decoder(decoder);
+                }
+                events
             }
         }
+    }
+
+    /// The body ended: a line ending held back for the LF that might have followed it ends its
+    /// line now.
+    pub(crate) fn finish(&mut self) -> Vec<StreamMessage> {
+        if std::mem::take(&mut self.pending_cr) {
+            return self.end_line().into_iter().collect();
+        }
+        Vec::new()
     }
 
     fn read(&mut self, mut bytes: &[u8]) -> Vec<StreamMessage> {
@@ -107,29 +107,45 @@ impl SseParser {
         while i < bytes.len() {
             let byte = bytes[i];
             i += 1;
-            // The LF of a CRLF split from its CR: the line, and maybe the event, ended with
-            // the CR.
+            // A CR that ended the last chunk: an LF now makes it a CRLF, kept with its line.
+            if std::mem::take(&mut self.pending_cr) {
+                if byte == b'\n' {
+                    self.size += 1;
+                    self.raw.push(b"\n");
+                }
+                events.extend(self.end_line());
+                if byte == b'\n' {
+                    continue;
+                }
+            }
+            // The LF of a CRLF split from a CR already read as a bare one.
             if std::mem::take(&mut self.after_cr) && byte == b'\n' {
                 continue;
             }
             self.size += 1;
             self.raw.push(&[byte]);
             match byte {
-                b'\r' | b'\n' => {
-                    // A CRLF ends one line, and stays with the event it ends.
-                    if byte == b'\r' {
-                        if bytes.get(i) == Some(&b'\n') {
-                            i += 1;
-                            self.size += 1;
-                            self.raw.push(b"\n");
-                        } else {
-                            self.after_cr = i == bytes.len();
-                        }
-                    }
-                    if let Some(event) = self.end_line() {
-                        events.push(event);
+                b'\r' if bytes.get(i) == Some(&b'\n') => {
+                    i += 1;
+                    self.size += 1;
+                    self.raw.push(b"\n");
+                    events.extend(self.end_line());
+                }
+                // Whether an LF follows is for the next chunk to say, unless the stream has
+                // shown it ends lines with bare CRs; then the line ends now, not a chunk late.
+                b'\r' if i == bytes.len() => {
+                    if self.bare_cr {
+                        self.after_cr = true;
+                        events.extend(self.end_line());
+                    } else {
+                        self.pending_cr = true;
                     }
                 }
+                b'\r' => {
+                    self.bare_cr = true;
+                    events.extend(self.end_line());
+                }
+                b'\n' => events.extend(self.end_line()),
                 _ => self.line.push(&[byte]),
             }
         }
@@ -163,32 +179,27 @@ impl SseParser {
                 self.data_lines += 1;
             }
             b"id" if !value.contains('\0') => self.id = Some(value.into_owned()),
-            b"retry" => match value.parse() {
-                Ok(retry) if value.bytes().all(|b| b.is_ascii_digit()) => self.retry = Some(retry),
-                _ => return None,
-            },
-            _ => return None,
+            b"retry" if !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()) => {
+                self.retry = value.parse().ok();
+            }
+            _ => {}
         }
-        self.any_field = true;
         None
     }
 
+    /// Ends the event at a blank line. As a browser does, only a block with a `data` line is an
+    /// event; one with only `id`, `retry` or `event` lines dispatches nothing.
     fn dispatch(&mut self) -> Option<StreamMessage> {
         let (raw, _) = self.raw.take();
         let size = std::mem::take(&mut self.size);
-        self.data_lines = 0;
-        if !std::mem::take(&mut self.any_field) {
-            self.data_truncated = false;
-            return None;
-        }
+        let (event, id, retry) = (self.event.take(), self.id.take(), self.retry.take());
         let (data, truncated) = self.data.take();
         let truncated = truncated || std::mem::take(&mut self.data_truncated);
-        let kind = MessageKind::SseEvent {
-            event: self.event.take(),
-            id: self.id.take(),
-            retry: self.retry.take(),
-            raw: String::from_utf8_lossy(&raw).into_owned(),
-        };
+        if std::mem::take(&mut self.data_lines) == 0 {
+            return None;
+        }
+        let raw = String::from_utf8_lossy(&raw).into_owned();
+        let kind = MessageKind::SseEvent { event, id, retry, raw };
         let mut message = StreamMessage::new(MessageDirection::Server, kind);
         message.size = size;
         message.data = data;
@@ -202,7 +213,9 @@ mod tests {
     use super::*;
 
     fn feed_bytewise(parser: &mut SseParser, stream: &[u8]) -> Vec<StreamMessage> {
-        stream.iter().flat_map(|b| parser.feed(&[*b])).collect()
+        let mut events: Vec<_> = stream.iter().flat_map(|b| parser.feed(&[*b])).collect();
+        events.extend(parser.finish());
+        events
     }
 
     fn raw(message: &StreamMessage) -> &str {
@@ -222,19 +235,50 @@ mod tests {
     }
 
     #[test]
-    fn crlf_stays_with_the_event_it_ends() {
+    fn crlf_stays_with_the_event_it_ends_however_it_is_split() {
         for split in [false, true] {
             let stream = b"data: a\r\n\r\ndata: b\r\n\r\n";
             let mut parser = SseParser::new(None, 1024);
             let events =
                 if split { feed_bytewise(&mut parser, stream) } else { parser.feed(stream) };
-            assert_eq!(events.len(), 2);
-            if !split {
-                assert_eq!(raw(&events[0]), "data: a\r\n\r\n");
-                assert_eq!(events[0].size, 11);
-            }
-            assert!(raw(&events[1]).starts_with("data: b"), "{:?}", raw(&events[1]));
+            assert_eq!(events.len(), 2, "split: {split}");
+            assert_eq!(raw(&events[0]), "data: a\r\n\r\n", "split: {split}");
+            assert_eq!(events[0].size, 11, "split: {split}");
+            assert_eq!(raw(&events[1]), "data: b\r\n\r\n", "split: {split}");
         }
+    }
+
+    #[test]
+    fn a_cr_ending_a_chunk_waits_for_the_next_unless_the_stream_uses_bare_crs() {
+        // A CR ending the chunk might start a CRLF, so its line waits for the next byte.
+        let mut parser = SseParser::new(None, 1024);
+        assert!(parser.feed(b"data: x\n\r").is_empty());
+        let events = parser.feed(b"\n");
+        assert_eq!(raw(&events[0]), "data: x\n\r\n");
+
+        // Bare CRs seen mid-chunk: one ending a chunk ends its event at once.
+        let mut parser = SseParser::new(None, 1024);
+        let events = parser.feed(b"data: a\r\rdata: b\r\r");
+        assert_eq!(events.len(), 2);
+        assert_eq!((&events[0].data[..], &events[1].data[..]), (&b"a"[..], &b"b"[..]));
+        // An LF after it is the rest of a CRLF, no blank line of its own.
+        let events = parser.feed(b"\ndata: c\r\r");
+        assert_eq!(events.len(), 1);
+        assert_eq!(&events[0].data[..], b"c");
+
+        // A held CR at the body's end ends its line then.
+        let mut parser = SseParser::new(None, 1024);
+        assert!(parser.feed(b"data: y\n\r").is_empty());
+        assert_eq!(&parser.finish()[0].data[..], b"y");
+    }
+
+    #[test]
+    fn only_blocks_with_data_are_events() {
+        let mut parser = SseParser::new(None, 1024);
+        let events = parser.feed(b"retry: 1500\n\nid: 7\nevent: x\n\ndata:\n\n: comment\n\n");
+        assert_eq!(events.len(), 1, "only the empty data event");
+        assert_eq!(&events[0].data[..], b"");
+        assert_eq!(raw(&events[0]), "data:\n\n");
     }
 
     #[test]
@@ -243,5 +287,20 @@ mod tests {
         let events = parser.feed(format!("data: {}\n\n", "x".repeat(100)).as_bytes());
         assert_eq!(events[0].data.len(), 16);
         assert!(events[0].truncated);
+    }
+
+    #[test]
+    fn gzip_events_are_read_as_they_decompress() {
+        use std::io::Write;
+        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(b"data: one\n\n").unwrap();
+        gz.flush().unwrap();
+        let first = gz.get_ref().len();
+        gz.write_all(b"data: two\n\n").unwrap();
+        let compressed = gz.finish().unwrap();
+        let mut parser = SseParser::new(Some("gzip"), 1024);
+        let events = parser.feed(&compressed[..first]);
+        assert_eq!(&events[0].data[..], b"one", "before the rest of the body");
+        assert_eq!(&parser.feed(&compressed[first..])[0].data[..], b"two");
     }
 }
