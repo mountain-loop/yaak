@@ -17,6 +17,7 @@ execSync("wasm-pack build --target bundler", {
   stdio: "inherit",
   env: {
     ...process.env,
+    CARGO_BUILD_TARGET: "wasm32-unknown-unknown",
     RUSTFLAGS: `--remap-path-prefix=${cargoHome}=/cargo --remap-path-prefix=${sysroot}=/rustc`,
   },
 });

@@ -12,7 +12,7 @@
     "test": "vp test --run tests"
   },
   "dependencies": {
-    "jsonpath-plus": "^11.2.0"
+    "jsonpath-plus": "^11.2.2"
   },
   "devDependencies": {
     "@types/jsonpath": "^0.2.4"

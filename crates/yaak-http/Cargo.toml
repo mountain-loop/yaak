@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "brotli", "zstd"] }
+async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "zlib", "brotli", "zstd"] }
 async-trait = "0.1"
 brotli = "9"
 bytes = "1.11.1"

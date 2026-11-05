@@ -169,6 +169,7 @@ export type GetFlowBodyRequest = { flowId: string, which: FlowBody, };
 export type GetFlowBodyResponse = { 
 /**
  * The body decoded with its Content-Encoding, at most the capture limit of it, in base64.
+ * When it fails to decode, the bytes as they were on the wire instead.
  */
 data: string, 
 /**
@@ -178,7 +179,11 @@ truncated: boolean,
 /**
  * Bytes stored for the body, as they were on the wire.
  */
-storedSize: number, };
+storedSize: number, 
+/**
+ * Why the body failed to decode, in which case `data` is as it was on the wire.
+ */
+decodeError?: string, };
 
 export type GetMessagePayloadRequest = { flowId: string, seq: number, };
 
@@ -322,7 +327,27 @@ export type RemoveGrpcSchemaRequest = { id: string, };
 
 export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, message_write: MessagePayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+
+export type SaveFlowBodyRequest = { flowId: string, which: FlowBody, 
+/**
+ * The file to write.
+ */
+path: string, };
+
+export type SaveFlowBodyResponse = { 
+/**
+ * Bytes written.
+ */
+size: number, 
+/**
+ * What was written is incomplete, as `GetFlowBodyResponse.truncated` is.
+ */
+truncated: boolean, 
+/**
+ * The body failed to decode, so the file has it as it was on the wire.
+ */
+raw: boolean, };
 
 export type SaveFlowToYaakRequest = { flowId: string, workspaceId: string, folderId?: string, 
 /**

@@ -107,6 +107,11 @@ async fn route(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible>
             req.headers().get(HOST).map_or("none", |h| h.to_str().unwrap()),
         ))),
         "/big" => Response::new(full(vec![b'x'; BIG_BODY])),
+        // No body: `Content-Length: 0`, or a stream with nothing in it, chunked on HTTP/1.1.
+        "/empty" => Response::new(full("")),
+        "/empty-stream" => {
+            Response::new(BodyExt::boxed(StreamBody::new(futures_util::stream::empty())))
+        }
         "/late-end" => late_end(5),
         // The stream ends with half the promised bytes, so the upstream resets it mid-body.
         "/cut" => late_end(10),
@@ -1850,6 +1855,64 @@ async fn h2_large_bodies_pass_flow_control() {
         assert_eq!((size, truncated, error), (LARGE as u64, true, None));
         assert_eq!(body(&events, false), (vec![b'y'; 1024], LARGE));
     }
+}
+
+/// A flow ends when its response does, not when a connection closes: the upstream answers at
+/// once and keeps its connection open, as does the client, and the flow's time is the answer's.
+#[tokio::test(flavor = "multi_thread")]
+async fn keep_alive_connections_do_not_lengthen_flows() {
+    let h = Harness::start(1024);
+    let upstreams = [
+        ("plain HTTP/1.1", spawn_upstream(None).await, false),
+        ("HTTP/1.1", spawn_upstream(Some(h1_only(&h.pki.server))).await, true),
+        ("HTTP/2", spawn_upstream(Some(h.pki.server.clone())).await, true),
+    ];
+    // Every connection stays open to the end of the test, each reused across requests.
+    let h1_client = h.client();
+    let mut h2_clients = Vec::new();
+
+    for (upstream_name, upstream, tls) in upstreams {
+        let port = upstream.port();
+        let mut h2_client = if tls { Some(h.h2_client(port).await) } else { None };
+        for path in ["/empty", "/empty-stream", "/hello"] {
+            for client_version in ["HTTP/1.1", "HTTP/2"] {
+                let case = format!("{client_version} client, {upstream_name} upstream, {path}");
+                let scheme = if tls { "https" } else { "http" };
+                let url = format!("{scheme}://localhost:{port}{path}");
+                let body = match (client_version, &mut h2_client) {
+                    ("HTTP/1.1", _) => {
+                        let resp = h1_client.post(&url).body("x=1").send().await.unwrap();
+                        resp.bytes().await.unwrap()
+                    }
+                    (_, Some(client)) => {
+                        let req = h2_request("POST", port, path, full("x=1"));
+                        let resp = client.send_request(req).await.unwrap();
+                        resp.into_body().collect().await.unwrap().to_bytes()
+                    }
+                    // HTTP/2 needs TLS here.
+                    (_, None) => continue,
+                };
+                assert_eq!(body, if path == "/hello" { "hello" } else { "" }, "{case}");
+
+                let events = h.flow_events();
+                let version =
+                    find!(events, ProxyEvent::RequestStart { http_version, .. } => http_version);
+                assert_eq!(version, client_version, "{case}");
+                let headers_ms =
+                    find!(events, ProxyEvent::ResponseStart { elapsed_ms, .. } => *elapsed_ms);
+                let (end_ms, error, cancelled) = find!(events,
+                    ProxyEvent::ResponseBodyComplete { elapsed_ms, error, cancelled, .. } =>
+                        (*elapsed_ms, error.clone(), *cancelled));
+                assert_eq!((error, cancelled), (None, false), "{case}");
+                // Generous for a slow CI runner; a flow held to the connection's close would
+                // not end at all while every connection here stays open.
+                assert!(end_ms - headers_ms < 2_000, "{case}: headers {headers_ms}, end {end_ms}");
+                assert!(end_ms < 5_000, "{case}: took {end_ms} ms");
+            }
+        }
+        h2_clients.extend(h2_client);
+    }
+    drop((h1_client, h2_clients));
 }
 
 /// With HTTP/2 off, a client that offers both gets HTTP/1.1, from the next connection on.

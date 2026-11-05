@@ -12,9 +12,9 @@ futures-util = "0.3.30"
 hex = { workspace = true }
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
 log = { workspace = true }
-md5 = "0.7.0"
+md5 = "0.8.0"
 path-slash = "0.2.1"
-rand = "0.9.0"
+rand = "0.10.2"
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -27,4 +27,4 @@ yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-models = { workspace = true }
 yaak-templates = { workspace = true }
-zip = "7"
+zip = "9.0.5"

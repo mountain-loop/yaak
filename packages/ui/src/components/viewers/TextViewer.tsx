@@ -89,6 +89,8 @@ export function TextViewer({
     ],
     queryFn: () => (filterText ?? rejectFilter)(filter.appliedFilter ?? ""),
     enabled: hasFilter && filter.appliedFilter != null,
+    // An expression that fails, fails every time, so the error shows at once.
+    retry: false,
   });
 
   const canFilter = hasFilter && (language === "json" || language === "xml" || language === "html");
@@ -195,6 +197,7 @@ export function TextViewer({
       }
       return formatText(text, language);
     },
+    retry: false,
   }).data;
   if (formattedBody == null) {
     return null;

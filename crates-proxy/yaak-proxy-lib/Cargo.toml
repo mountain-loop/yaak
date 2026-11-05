@@ -9,6 +9,7 @@ publish = false
 base64 = "0.23.1"
 bytes = "1"
 chrono = { workspace = true, features = ["serde"] }
+encoding_rs = "0.8"
 log = { workspace = true }
 http-body-util = "0.1"
 hyper = { version = "1", features = ["http1", "server"] }
