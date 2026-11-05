@@ -1,32 +1,42 @@
-import type { HttpRequest } from "@yaakapp-internal/models";
 import { useCallback, useMemo } from "react";
-import type { Pair, PairEditorProps } from "./core/PairEditor";
-import { PairEditor } from "./core/PairEditor";
+import type { Pair, PairEditorProps } from "../pairs/PairEditor";
+import { PairEditor } from "../pairs/PairEditor";
+import type { HttpFormFieldView, HttpRequestBodyView } from "./types";
 
 type Props = {
   forceUpdateKey: string;
-  request: HttpRequest;
-  onChange: (body: HttpRequest["body"]) => void;
+  /** The request's id, keeping each request's editor state apart */
+  requestId: string;
+  form: HttpFormFieldView[] | undefined;
+  onChange?: (body: HttpRequestBodyView) => void;
+  /** Show the fields without a way to change them */
+  readOnly?: boolean;
 };
 
-export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props) {
+export function FormMultipartEditor({
+  requestId,
+  form,
+  forceUpdateKey,
+  onChange,
+  readOnly,
+}: Props) {
   const pairs = useMemo<Pair[]>(
     () =>
-      (Array.isArray(request.body.form) ? request.body.form : []).map((p) => ({
+      (Array.isArray(form) ? form : []).map((p) => ({
         enabled: p.enabled,
         name: p.name,
-        value: p.file ?? p.value,
+        value: (p.file ?? p.value) as string,
         contentType: p.contentType,
         filename: p.filename,
         isFile: !!p.file,
         id: p.id,
       })),
-    [request.body.form],
+    [form],
   );
 
   const handleChange = useCallback<PairEditorProps["onChange"]>(
     (pairs) =>
-      onChange({
+      onChange?.({
         form: pairs.map((p) => ({
           enabled: p.enabled,
           name: p.name,
@@ -50,8 +60,9 @@ export function FormMultipartEditor({ request, forceUpdateKey, onChange }: Props
       allowMultilineValues
       pairs={pairs}
       onChange={handleChange}
+      readOnly={readOnly}
       forceUpdateKey={forceUpdateKey}
-      stateKey={`multipart.${request.id}`}
+      stateKey={`multipart.${requestId}`}
     />
   );
 }

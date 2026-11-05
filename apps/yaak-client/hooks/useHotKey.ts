@@ -243,6 +243,7 @@ export function useHotkeyContextValue(): HotkeyContextValue {
     () => ({
       os: platform.osType(),
       bindingFor: (action: HotkeyAction) => hotkeys[action] ?? null,
+      labelFor: (action: HotkeyAction) => hotkeyLabels[action],
       register: registerHotkey,
     }),
     [hotkeys],

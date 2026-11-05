@@ -1,6 +1,6 @@
 import classNames from "classnames";
-import type { HotkeyAction } from "../../hooks/useHotKey";
-import { useHotkeyLabel } from "../../hooks/useHotKey";
+import type { HotkeyAction } from "../hooks/useHotKey";
+import { useHotkeyLabel } from "../hooks/useHotKey";
 
 interface Props {
   action: HotkeyAction;

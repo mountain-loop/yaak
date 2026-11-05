@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Yaak Proxy, shared panes harness</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body class="text-base">
+    <!-- Dev only, served by `vp dev`; the build's only entry is index.html -->
+    <div id="root"></div>
+    <script>
+      // Outside the app there's no Tauri; the platform package still looks for its window
+      window.__TAURI_INTERNALS__ = {
+        metadata: {
+          currentWindow: { label: "harness" },
+          currentWebview: { label: "harness", windowLabel: "harness" },
+        },
+        invoke: () => Promise.reject(new Error("Not running in the app")),
+        transformCallback: () => 0,
+      };
+    </script>
+    <script type="module" src="/font-size.ts"></script>
+    <script type="module" src="/harness/main.tsx"></script>
+  </body>
+</html>
