@@ -233,10 +233,11 @@ impl McpHost for CliMcpHost {
         Ok(result.response)
     }
 
-    fn show_toast(&self, toast: ShowToastRequest) -> HostResult<()> {
-        // stdout carries the protocol
+    fn show_toast(&self, toast: ShowToastRequest) -> HostResult<bool> {
+        // The CLI has no window for it. The message goes to stderr, since stdout carries the
+        // protocol, but that is a log line, not a toast anyone is shown.
         eprintln!("[mcp] {}", toast.message);
-        Ok(())
+        Ok(false)
     }
 }
 
@@ -646,7 +647,43 @@ mod tests {
             fx.ok("delete_http_request", json!({ "id": id })).await,
             format!("Deleted: Created ({id})")
         );
-        assert_eq!(fx.json("get_http_request", json!({ "id": id })).await, Value::Null);
+        assert_eq!(
+            fx.err("get_http_request", json!({ "id": id })).await,
+            format!("HTTP request with ID {id} not found")
+        );
+        fx.finish().await;
+    }
+
+    /// QA sweep bug 6: `get_http_request` with a `wr_` ID or `rq_bogus` answered `"null"`
+    /// with `isError: false`, and `delete_http_request` on a `wr_` ID failed obscurely.
+    #[tokio::test]
+    async fn http_request_tools_reject_unknown_and_non_http_ids() {
+        let fx = Fixture::new(None).await;
+        let websocket = fx
+            .query_manager
+            .with_tx(|db| {
+                db.upsert_websocket_request(
+                    &yaak_models::models::WebsocketRequest {
+                        workspace_id: fx.workspace_id.clone(),
+                        name: "Socket".into(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Background,
+                )
+            })
+            .unwrap();
+
+        assert_eq!(
+            fx.err("get_http_request", json!({ "id": "rq_bogus" })).await,
+            "HTTP request with ID rq_bogus not found"
+        );
+        let expected = format!(
+            "{} is a WebSocket request, and these tools only work with HTTP requests. Use the Yaak app or the `yaak request` CLI commands for it.",
+            websocket.id
+        );
+        assert_eq!(fx.err("get_http_request", json!({ "id": websocket.id })).await, expected);
+        assert_eq!(fx.err("delete_http_request", json!({ "id": websocket.id })).await, expected);
+        assert!(fx.query_manager.connect().get_websocket_request(&websocket.id).is_ok());
         fx.finish().await;
     }
 
@@ -692,12 +729,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn show_toast_reports_the_message() {
+    async fn show_toast_says_the_cli_did_not_show_it() {
         let fx = Fixture::new(None).await;
         assert_eq!(
             fx.ok("show_toast", json!({ "message": "Hello", "icon": "info", "color": "success" }))
                 .await,
-            "✓ Toast shown: \"Hello\""
+            "Toast not shown: \"Hello\". This Yaak MCP server has no window to show it in."
         );
         fx.finish().await;
     }

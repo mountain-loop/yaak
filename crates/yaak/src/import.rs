@@ -194,10 +194,181 @@ pub fn plan_import_batch_resources(
     Ok(combined)
 }
 
+/// Whether the importer's IDs are real Yaak IDs rather than placeholders. Older plugin runtimes
+/// report the package name instead of the importer's display name.
+fn is_yaak_importer(importer: &str) -> bool {
+    importer == "Yaak" || importer == "@yaak/importer-yaak"
+}
+
+/// Decides which IDs an import keeps.
+///
+/// Other importers' IDs are placeholders, so their models always get fresh ones. A Yaak export
+/// carries real IDs: an ID the target workspace already has updates that model in place, an ID
+/// nobody has is kept, and only an ID that belongs to another workspace is replaced.
+struct ImportIds<'a> {
+    query_manager: &'a QueryManager,
+    keep: bool,
+    target_workspace_id: Option<String>,
+    /// Kept IDs of models the target workspace already has, with their current content
+    matched: BTreeMap<String, Value>,
+    used: BTreeSet<String>,
+    /// How many models were given new IDs because another workspace has theirs, by workspace
+    taken_elsewhere: BTreeMap<String, usize>,
+}
+
+impl<'a> ImportIds<'a> {
+    fn new(
+        query_manager: &'a QueryManager,
+        importer: &str,
+        destination: &ImportDestination,
+    ) -> Self {
+        let target_workspace_id = match destination {
+            ImportDestination::ExistingWorkspace { workspace_id, .. } => Some(workspace_id.clone()),
+            ImportDestination::NewWorkspace => None,
+        };
+        Self {
+            query_manager,
+            keep: is_yaak_importer(importer),
+            target_workspace_id,
+            matched: BTreeMap::new(),
+            used: BTreeSet::new(),
+            taken_elsewhere: BTreeMap::new(),
+        }
+    }
+
+    fn assign(
+        &mut self,
+        source_id: &str,
+        resource: ImportResourceType,
+        generate: fn() -> String,
+    ) -> Result<String> {
+        let fresh = generate();
+        if !self.keep || !has_id_prefix_of(source_id, &fresh) || self.used.contains(source_id) {
+            return Ok(fresh);
+        }
+
+        let db = self.query_manager.connect();
+        let existing = match resource {
+            ImportResourceType::Workspace => {
+                db.get_workspace(source_id).ok().map(|w| (w.id, Value::Null))
+            }
+            _ => existing_model_json(&db, resource, source_id)?.map(|current| {
+                let workspace_id =
+                    current.get("workspaceId").and_then(Value::as_str).unwrap_or_default();
+                (workspace_id.to_string(), current)
+            }),
+        };
+
+        match existing {
+            None => {}
+            Some((workspace_id, current))
+                if self.target_workspace_id.as_deref() == Some(workspace_id.as_str()) =>
+            {
+                self.matched.insert(source_id.to_string(), current);
+            }
+            Some((workspace_id, _)) => {
+                *self.taken_elsewhere.entry(workspace_id).or_default() += 1;
+                return Ok(fresh);
+            }
+        }
+        self.used.insert(source_id.to_string());
+        Ok(source_id.to_string())
+    }
+
+    fn is_matched(&self, id: &str) -> bool {
+        self.matched.contains_key(id)
+    }
+
+    fn matched_parent_model(&self, id: &str) -> Option<&str> {
+        self.matched.get(id).and_then(|m| m.get("parentModel")).and_then(Value::as_str)
+    }
+
+    fn warning(&self) -> Result<Option<ImportPlanWarning>> {
+        if self.taken_elsewhere.is_empty() {
+            return Ok(None);
+        }
+        let db = self.query_manager.connect();
+        let mut names = BTreeSet::new();
+        for workspace_id in self.taken_elsewhere.keys() {
+            names.insert(
+                db.get_workspace(workspace_id).map(|w| w.name).unwrap_or(workspace_id.clone()),
+            );
+        }
+        let count = self.taken_elsewhere.values().sum::<usize>();
+        let (noun, verb) = if count == 1 { ("resource", "exists") } else { ("resources", "exist") };
+        let names = names.iter().map(String::as_str).collect::<BTreeSet<_>>();
+        Ok(Some(ImportPlanWarning::warning(
+            "New IDs assigned",
+            format!(
+                "{count} {noun} already {verb} in {}, so the imported copies get new IDs",
+                display_list(&names)
+            ),
+        )))
+    }
+}
+
+/// Whether `id` looks like an ID of the same model as `generated`: the same prefix, then
+/// something an ID can be made of.
+fn has_id_prefix_of(id: &str, generated: &str) -> bool {
+    let Some((prefix, _)) = generated.split_once('_') else {
+        return false;
+    };
+    id.strip_prefix(prefix).and_then(|rest| rest.strip_prefix('_')).is_some_and(|rest| {
+        !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    })
+}
+
+/// Models a Yaak export shares by ID with the destination are updates of those models, so they
+/// are planned as updates (or as unchanged) rather than as new resources.
+fn classify_matched_ids(plan: &mut ImportPlan, matched: &BTreeMap<String, Value>) -> Result<()> {
+    if matched.is_empty() {
+        return Ok(());
+    }
+    let resources = &plan.resources;
+    let mut planned: BTreeMap<String, Value> = BTreeMap::new();
+    for v in &resources.environments {
+        planned.insert(v.id.clone(), serde_json::to_value(v)?);
+    }
+    for v in &resources.folders {
+        planned.insert(v.id.clone(), serde_json::to_value(v)?);
+    }
+    for v in &resources.http_requests {
+        planned.insert(v.id.clone(), serde_json::to_value(v)?);
+    }
+    for v in &resources.grpc_requests {
+        planned.insert(v.id.clone(), serde_json::to_value(v)?);
+    }
+    for v in &resources.websocket_requests {
+        planned.insert(v.id.clone(), serde_json::to_value(v)?);
+    }
+
+    for item in &mut plan.items {
+        if item.action != ImportPlanAction::Create {
+            continue;
+        }
+        let (Some(current), Some(incoming)) =
+            (matched.get(&item.model_id), planned.get(&item.model_id))
+        else {
+            continue;
+        };
+        let incoming = comparable(incoming.clone());
+        let current = comparable(current.clone());
+        if incoming == current {
+            item.action = ImportPlanAction::Unchanged;
+            item.selected = false;
+        } else {
+            item.action = ImportPlanAction::Update;
+            item.changed_fields = changed_fields(&incoming, &current);
+        }
+    }
+    Ok(())
+}
+
 /// Remap parsed importer resources into their selected destination.
 ///
-/// Every imported model gets a fresh ID. This prevents an import from accidentally updating an
-/// existing model and also makes the plan safe to inspect before it is committed.
+/// Models from other importers get fresh IDs, which keeps an import from accidentally updating an
+/// existing model. A Yaak export keeps its IDs where it can (see [`ImportIds`]). Either way the
+/// plan is safe to inspect before it is committed.
 pub fn plan_import_resources(
     query_manager: &QueryManager,
     importer: String,
@@ -213,11 +384,24 @@ pub fn plan_import_resources(
     // Source keys and merge decisions describe the document as the importer produced it, not as
     // this destination reshapes it, so keep the original around.
     let original = resources.clone();
+    let mut ids = ImportIds::new(query_manager, &importer, &destination);
+
+    // A request may name a folder the destination already has, rather than one in the document.
+    let existing_folder_ids = match &destination {
+        ImportDestination::ExistingWorkspace { workspace_id, .. } => query_manager
+            .connect()
+            .list_folders(workspace_id)?
+            .into_iter()
+            .map(|f| f.id)
+            .collect::<BTreeSet<_>>(),
+        ImportDestination::NewWorkspace => BTreeSet::new(),
+    };
 
     let source_folder_ids = resources.folders.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>();
     let mut folder_ids = BTreeMap::new();
     for folder in &resources.folders {
-        folder_ids.insert(folder.id.clone(), Folder::generate_id());
+        let id = ids.assign(&folder.id, ImportResourceType::Folder, Folder::generate_id)?;
+        folder_ids.insert(folder.id.clone(), id);
     }
 
     let mut workspace_ids = BTreeMap::new();
@@ -226,7 +410,8 @@ pub fn plan_import_resources(
         ImportDestination::NewWorkspace => {
             for source in &resources.workspaces {
                 let mut workspace = source.clone();
-                workspace.id = Workspace::generate_id();
+                workspace.id =
+                    ids.assign(&source.id, ImportResourceType::Workspace, Workspace::generate_id)?;
                 workspace_ids.insert(source.id.clone(), workspace.id.clone());
                 workspaces.push(workspace);
             }
@@ -299,6 +484,7 @@ pub fn plan_import_resources(
         Some(source_id) if source_folder_ids.contains(&source_id) => {
             folder_ids.get(&source_id).cloned()
         }
+        Some(source_id) if existing_folder_ids.contains(&source_id) => Some(source_id),
         _ => target_folder_id.clone(),
     };
 
@@ -314,40 +500,37 @@ pub fn plan_import_resources(
         .collect();
 
     let mut request_ids = BTreeMap::new();
-    let http_requests = resources
-        .http_requests
-        .into_iter()
-        .map(|mut request| {
-            let new_id = HttpRequest::generate_id();
-            request_ids.insert(request.id.clone(), new_id.clone());
-            request.id = new_id;
-            request.workspace_id = resolve_workspace_id(&request.workspace_id);
-            request.folder_id = resolve_folder_id(request.folder_id);
-            request
-        })
-        .collect();
+    let mut http_requests = Vec::new();
+    for mut request in resources.http_requests {
+        let new_id =
+            ids.assign(&request.id, ImportResourceType::HttpRequest, HttpRequest::generate_id)?;
+        request_ids.insert(request.id.clone(), new_id.clone());
+        request.id = new_id;
+        request.workspace_id = resolve_workspace_id(&request.workspace_id);
+        request.folder_id = resolve_folder_id(request.folder_id);
+        http_requests.push(request);
+    }
 
-    let grpc_requests = resources
-        .grpc_requests
-        .into_iter()
-        .map(|mut request| {
-            request.id = GrpcRequest::generate_id();
-            request.workspace_id = resolve_workspace_id(&request.workspace_id);
-            request.folder_id = resolve_folder_id(request.folder_id);
-            request
-        })
-        .collect();
+    let mut grpc_requests = Vec::new();
+    for mut request in resources.grpc_requests {
+        request.id =
+            ids.assign(&request.id, ImportResourceType::GrpcRequest, GrpcRequest::generate_id)?;
+        request.workspace_id = resolve_workspace_id(&request.workspace_id);
+        request.folder_id = resolve_folder_id(request.folder_id);
+        grpc_requests.push(request);
+    }
 
-    let websocket_requests = resources
-        .websocket_requests
-        .into_iter()
-        .map(|mut request| {
-            request.id = WebsocketRequest::generate_id();
-            request.workspace_id = resolve_workspace_id(&request.workspace_id);
-            request.folder_id = resolve_folder_id(request.folder_id);
-            request
-        })
-        .collect();
+    let mut websocket_requests = Vec::new();
+    for mut request in resources.websocket_requests {
+        request.id = ids.assign(
+            &request.id,
+            ImportResourceType::WebsocketRequest,
+            WebsocketRequest::generate_id,
+        )?;
+        request.workspace_id = resolve_workspace_id(&request.workspace_id);
+        request.folder_id = resolve_folder_id(request.folder_id);
+        websocket_requests.push(request);
+    }
 
     let importing_into_existing =
         matches!(destination, ImportDestination::ExistingWorkspace { .. });
@@ -356,61 +539,83 @@ pub fn plan_import_resources(
     let mut converted_duplicate_folder_environment = false;
     let mut base_environment_workspaces = BTreeSet::new();
     let mut folder_environment_ids = BTreeSet::new();
-    let environments = resources
-        .environments
-        .into_iter()
-        .map(|mut environment| {
-            environment.id = Environment::generate_id();
-            environment.workspace_id = resolve_workspace_id(&environment.workspace_id);
+    let mut environments = Vec::new();
+    for mut environment in resources.environments {
+        environment.id =
+            ids.assign(&environment.id, ImportResourceType::Environment, Environment::generate_id)?;
+        environment.workspace_id = resolve_workspace_id(&environment.workspace_id);
 
-            match (environment.parent_model.as_str(), environment.parent_id.clone()) {
-                ("workspace", _) if importing_into_existing => {
+        match (environment.parent_model.as_str(), environment.parent_id.clone()) {
+            // The destination's own base environment, exported and brought back
+            ("workspace", _)
+                if importing_into_existing
+                    && ids.matched_parent_model(&environment.id) == Some("workspace") =>
+            {
+                environment.parent_id = None;
+            }
+            ("workspace", _) if importing_into_existing => {
+                environment.parent_model = "environment".to_string();
+                environment.parent_id = None;
+                let source_name = environment.name.clone();
+                environment.name = format!("{} (Imported)", environment.name);
+                separated_base_environments.push((
+                    source_name,
+                    environment.name.clone(),
+                    environment.variables.len(),
+                ));
+            }
+            ("workspace", _) => {
+                environment.parent_id = None;
+                if !base_environment_workspaces.insert(environment.workspace_id.clone()) {
                     environment.parent_model = "environment".to_string();
-                    environment.parent_id = None;
-                    let source_name = environment.name.clone();
                     environment.name = format!("{} (Imported)", environment.name);
-                    separated_base_environments.push((
-                        source_name,
-                        environment.name.clone(),
-                        environment.variables.len(),
-                    ));
-                }
-                ("workspace", _) => {
-                    environment.parent_id = None;
-                    if !base_environment_workspaces.insert(environment.workspace_id.clone()) {
-                        environment.parent_model = "environment".to_string();
-                        environment.name = format!("{} (Imported)", environment.name);
-                        converted_duplicate_base_environment = true;
-                    }
-                }
-                ("folder", Some(parent_id)) if source_folder_ids.contains(&parent_id) => {
-                    environment.parent_id = folder_ids.get(&parent_id).cloned();
-                    if let Some(parent_id) = &environment.parent_id
-                        && !folder_environment_ids.insert(parent_id.clone())
-                    {
-                        environment.parent_model = "environment".to_string();
-                        environment.parent_id = None;
-                        converted_duplicate_folder_environment = true;
-                    }
-                }
-                ("folder", _) => {
-                    // Never attach an imported folder environment to an existing folder: the model
-                    // layer permits only one and would otherwise delete the destination's value.
-                    environment.parent_model = "environment".to_string();
-                    environment.parent_id = None;
-                }
-                ("environment", _) => {
-                    environment.parent_id = None;
-                }
-                _ => {
-                    environment.parent_model = "environment".to_string();
-                    environment.parent_id = None;
+                    converted_duplicate_base_environment = true;
                 }
             }
+            ("folder", Some(parent_id)) if source_folder_ids.contains(&parent_id) => {
+                environment.parent_id = folder_ids.get(&parent_id).cloned();
+                // A folder the destination already has may already have its own environment,
+                // which the model layer would delete to make room for this one.
+                let replaces_existing = match &environment.parent_id {
+                    Some(parent_id) if ids.is_matched(parent_id) => query_manager
+                        .connect()
+                        .get_environment_by_folder_id(parent_id)?
+                        .is_some_and(|e| e.id != environment.id),
+                    _ => false,
+                };
+                if let Some(parent_id) = &environment.parent_id
+                    && (replaces_existing || !folder_environment_ids.insert(parent_id.clone()))
+                {
+                    environment.parent_model = "environment".to_string();
+                    environment.parent_id = None;
+                    converted_duplicate_folder_environment = true;
+                }
+            }
+            ("folder", _) => {
+                // Never attach an imported folder environment to an existing folder: the model
+                // layer permits only one and would otherwise delete the destination's value.
+                environment.parent_model = "environment".to_string();
+                environment.parent_id = None;
+            }
+            ("environment", _) => {
+                environment.parent_id = None;
+            }
+            _ => {
+                environment.parent_model = "environment".to_string();
+                environment.parent_id = None;
+            }
+        }
 
-            environment
-        })
-        .collect();
+        // Updating in place must not turn an existing environment into another kind, such as
+        // the destination's base environment into a sub-environment, so that one is a copy.
+        if ids.is_matched(&environment.id)
+            && ids.matched_parent_model(&environment.id) != Some(environment.parent_model.as_str())
+        {
+            ids.matched.remove(&environment.id);
+            environment.id = Environment::generate_id();
+        }
+        environments.push(environment);
+    }
 
     for (source_name, imported_name, variable_count) in separated_base_environments {
         let variables = if variable_count == 1 { "variable" } else { "variables" };
@@ -430,6 +635,9 @@ pub fn plan_import_resources(
             "Folder environments separated",
             "Only the first remains attached to each folder",
         ));
+    }
+    if let Some(warning) = ids.warning()? {
+        warnings.push(warning);
     }
 
     let mut resources = BatchUpsertResult {
@@ -453,6 +661,7 @@ pub fn plan_import_resources(
         sources: Vec::new(),
     };
     merge_with_linked_source(query_manager, &mut plan, &original)?;
+    classify_matched_ids(&mut plan, &ids.matched)?;
     warn_if_imported_elsewhere(&query_manager.connect(), &mut plan)?;
     Ok(plan)
 }
@@ -3714,5 +3923,223 @@ mod tests {
         );
         let plan = replan(&query_manager, &workspace_id, imported_resources());
         assert_eq!(item_by_name(&plan, "Root Request").action, ImportPlanAction::Unchanged);
+    }
+
+    fn plan_yaak(
+        query_manager: &QueryManager,
+        destination: ImportDestination,
+        resources: ImportResources,
+    ) -> ImportPlan {
+        plan_import_resources(
+            query_manager,
+            "Yaak".to_string(),
+            destination,
+            resources,
+            None,
+            Some(ImportOrigin { origin: "/export.json".into(), label: "export.json".into() }),
+        )
+        .expect("plan Yaak import")
+    }
+
+    fn into_existing(workspace_id: &str) -> ImportDestination {
+        ImportDestination::ExistingWorkspace { workspace_id: workspace_id.into(), folder_id: None }
+    }
+
+    /// QA sweep bug 2: `yaak import req_in_existing_folder.json --workspace-id <W>`, where the
+    /// file's request names a folder that W already has.
+    #[test]
+    fn a_folder_id_naming_an_existing_folder_is_kept() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let destination = destination_workspace();
+        query_manager
+            .with_tx(|tx| {
+                tx.upsert_workspace(&destination, &UpdateSource::Import)?;
+                tx.upsert_folder(
+                    &Folder {
+                        id: "fl_existing".into(),
+                        workspace_id: destination.id.clone(),
+                        name: "Existing".into(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Import,
+                )
+            })
+            .expect("seed destination");
+
+        let request = |id: &str, folder_id: &str| HttpRequest {
+            id: id.into(),
+            model: "http_request".into(),
+            workspace_id: destination.id.clone(),
+            folder_id: Some(folder_id.into()),
+            name: id.into(),
+            ..Default::default()
+        };
+        let resources = ImportResources {
+            http_requests: vec![
+                request("rq_into_existing", "fl_existing"),
+                request("rq_dangling", "fl_missing"),
+            ],
+            ..Default::default()
+        };
+        let plan = plan_yaak(&query_manager, into_existing(&destination.id), resources);
+        let folder_of = |name: &str| {
+            plan.resources.http_requests.iter().find(|r| r.name == name).unwrap().folder_id.clone()
+        };
+        assert_eq!(folder_of("rq_into_existing").as_deref(), Some("fl_existing"));
+        assert_eq!(
+            folder_of("rq_dangling"),
+            None,
+            "an unknown folder still falls back to the root"
+        );
+        commit_import_plan(&query_manager, plan).expect("commit");
+        let stored = query_manager.connect().get_http_request("rq_into_existing").expect("stored");
+        assert_eq!(stored.folder_id.as_deref(), Some("fl_existing"));
+    }
+
+    /// QA sweep bug 3: `yaak export e.json <W>`, edit the file, then
+    /// `yaak import e.json --workspace-id <W>`.
+    #[test]
+    fn importing_a_yaak_export_into_its_own_workspace_updates_in_place() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let workspace_id = "wk_ownexport1".to_string();
+        let exported = query_manager
+            .with_tx(|tx| {
+                let source = &UpdateSource::Background;
+                let workspace = tx.upsert_workspace(
+                    &Workspace {
+                        id: workspace_id.clone(),
+                        name: "Own".into(),
+                        ..Default::default()
+                    },
+                    source,
+                )?;
+                let base = tx.ensure_base_environment(&workspace.id)?;
+                let staging = tx.upsert_environment(
+                    &Environment {
+                        workspace_id: workspace.id.clone(),
+                        name: "Staging".into(),
+                        parent_model: "environment".into(),
+                        ..Default::default()
+                    },
+                    source,
+                )?;
+                let folder = tx.upsert_folder(
+                    &Folder {
+                        workspace_id: workspace.id.clone(),
+                        name: "Folder".into(),
+                        ..Default::default()
+                    },
+                    source,
+                )?;
+                let request = tx.upsert_http_request(
+                    &HttpRequest {
+                        workspace_id: workspace.id.clone(),
+                        folder_id: Some(folder.id.clone()),
+                        name: "Request".into(),
+                        url: "https://example.com/v1".into(),
+                        ..Default::default()
+                    },
+                    source,
+                )?;
+                Ok::<_, yaak_models::error::Error>(ImportResources {
+                    workspaces: vec![workspace],
+                    environments: vec![base, staging],
+                    folders: vec![folder],
+                    http_requests: vec![request],
+                    ..Default::default()
+                })
+            })
+            .expect("seed workspace");
+
+        let mut edited = exported.clone();
+        edited.http_requests[0].url = "https://example.com/v2".into();
+        edited.environments[0].variables = vec![EnvironmentVariable {
+            enabled: true,
+            name: "host".into(),
+            value: "example.com".into(),
+            id: None,
+        }];
+
+        let plan = plan_yaak(&query_manager, into_existing(&workspace_id), edited);
+        assert!(
+            plan.items.iter().all(|i| i.action != ImportPlanAction::Create),
+            "nothing in the workspace's own export is new: {:?}",
+            plan.items
+        );
+        commit_import_plan(&query_manager, plan).expect("commit");
+
+        let db = query_manager.connect();
+        let requests = db.list_http_requests(&workspace_id).expect("list requests");
+        assert_eq!(requests.len(), 1, "no copies: {requests:?}");
+        assert_eq!(requests[0].id, exported.http_requests[0].id);
+        assert_eq!(requests[0].url, "https://example.com/v2");
+        assert_eq!(db.list_folders(&workspace_id).expect("list folders").len(), 1);
+
+        let environments = db.list_environments(&workspace_id).expect("list environments");
+        assert_eq!(environments.len(), 2, "no second base or Imported copies: {environments:?}");
+        assert!(environments.iter().all(|e| !e.name.contains("(Imported)")), "{environments:?}");
+        let base = db.get_base_environment(&workspace_id).expect("one base environment");
+        assert_eq!(base.id, exported.environments[0].id);
+        assert_eq!(base.variables.len(), 1);
+    }
+
+    /// QA sweep bug 7: `yaak import ci-export.json` into a fresh `--data-dir`, then the same
+    /// file again next to the copy it made.
+    #[test]
+    fn a_yaak_export_keeps_its_ids_where_they_are_free() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let plan = plan_yaak(&query_manager, ImportDestination::NewWorkspace, imported_resources());
+        let ids = |plan: &ImportPlan| {
+            let r = &plan.resources;
+            r.workspaces
+                .iter()
+                .map(|v| v.id.clone())
+                .chain(r.environments.iter().map(|v| v.id.clone()))
+                .chain(r.folders.iter().map(|v| v.id.clone()))
+                .chain(r.http_requests.iter().map(|v| v.id.clone()))
+                .collect::<BTreeSet<_>>()
+        };
+        let source_ids = BTreeSet::from(
+            [
+                "wk_source",
+                "ev_source_base",
+                "fl_source",
+                "rq_root",
+                "rq_nested",
+            ]
+            .map(String::from),
+        );
+        assert_eq!(ids(&plan), source_ids);
+        assert!(plan.warnings.iter().all(|w| w.title != "New IDs assigned"), "{:?}", plan.warnings);
+        commit_import_plan(&query_manager, plan).expect("commit");
+        let nested = query_manager.connect().get_http_request("rq_nested").expect("kept ID");
+        assert_eq!(nested.folder_id.as_deref(), Some("fl_source"));
+
+        // The IDs now belong to another workspace, so a second copy gets fresh ones
+        let again =
+            plan_yaak(&query_manager, ImportDestination::NewWorkspace, imported_resources());
+        assert!(ids(&again).is_disjoint(&source_ids), "{:?}", ids(&again));
+        let warning = again.warnings.iter().find(|w| w.title == "New IDs assigned").expect("warns");
+        assert_eq!(
+            warning.detail,
+            "5 resources already exist in Imported, so the imported copies get new IDs"
+        );
+
+        // Other importers' IDs are placeholders and are never kept
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let other = plan_import_resources(
+            &query_manager,
+            "OpenAPI".to_string(),
+            ImportDestination::NewWorkspace,
+            imported_resources(),
+            None,
+            None,
+        )
+        .expect("plan");
+        assert!(ids(&other).is_disjoint(&source_ids));
     }
 }

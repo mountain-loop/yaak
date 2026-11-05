@@ -289,3 +289,81 @@ fn request_send_websocket_returns_explicit_nyi_error() {
         .code(1)
         .stderr(contains("WebSocket request send is not implemented yet in yaak-cli"));
 }
+
+/// QA sweep bug 1: `request list`, `show`, `update` and `delete` were HTTP-only, so gRPC and
+/// WebSocket requests were missing from the list and failed everywhere else.
+#[test]
+fn request_commands_handle_grpc_and_websocket_requests() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+    seed_request(data_dir, "wk_test", "rq_types");
+    seed_grpc_request(data_dir, "wk_test", "gr_types");
+    seed_websocket_request(data_dir, "wk_test", "wr_types");
+
+    cli_cmd(data_dir)
+        .args(["request", "list", "wk_test"])
+        .assert()
+        .success()
+        .stdout(contains("rq_types - GET Seeded Request"))
+        .stdout(contains("gr_types - gRPC Seeded gRPC Request"))
+        .stdout(contains("wr_types - WebSocket Seeded WebSocket Request"));
+
+    cli_cmd(data_dir)
+        .args(["request", "show", "gr_types"])
+        .assert()
+        .success()
+        .stdout(contains("\"model\": \"grpc_request\""));
+    cli_cmd(data_dir)
+        .args(["request", "show", "wr_types"])
+        .assert()
+        .success()
+        .stdout(contains("\"model\": \"websocket_request\""));
+
+    cli_cmd(data_dir)
+        .args([
+            "request",
+            "update",
+            r#"{"id":"wr_types","name":"Renamed Socket"}"#,
+        ])
+        .assert()
+        .success()
+        .stdout(contains("Updated request: wr_types"));
+    cli_cmd(data_dir)
+        .args([
+            "request",
+            "update",
+            r#"{"id":"gr_types","service":"pkg.Greeter"}"#,
+        ])
+        .assert()
+        .success();
+    cli_cmd(data_dir)
+        .args([
+            "request",
+            "update",
+            r#"{"id":"gr_types","method":"GET","bodyType":"other"}"#,
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("not part of a gRPC request: bodyType"));
+    {
+        let query_manager = query_manager(data_dir);
+        let db = query_manager.connect();
+        assert_eq!(db.get_websocket_request("wr_types").unwrap().name, "Renamed Socket");
+        assert_eq!(
+            db.get_grpc_request("gr_types").unwrap().service.as_deref(),
+            Some("pkg.Greeter")
+        );
+    }
+
+    cli_cmd(data_dir).args(["request", "delete", "gr_types", "--yes"]).assert().success();
+    cli_cmd(data_dir).args(["request", "delete", "wr_types", "--yes"]).assert().success();
+    cli_cmd(data_dir)
+        .args(["request", "show", "wr_types"])
+        .assert()
+        .failure()
+        .stderr(contains("Request wr_types not found"));
+    let query_manager = query_manager(data_dir);
+    assert!(query_manager.connect().get_grpc_request("gr_types").is_err());
+    assert!(query_manager.connect().get_websocket_request("wr_types").is_err());
+}

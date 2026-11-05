@@ -49,7 +49,9 @@ pub trait McpHost: Send + Sync + 'static {
         environment_id: Option<String>,
     ) -> impl Future<Output = HostResult<HttpResponse>> + Send;
 
-    fn show_toast(&self, toast: ShowToastRequest) -> HostResult<()>;
+    /// Show `toast` to the user, returning whether it was shown. A host with no window to
+    /// show it in returns `false`, so the tool does not claim it was.
+    fn show_toast(&self, toast: ShowToastRequest) -> HostResult<bool>;
 }
 
 /// Serve the tools on stdin and stdout until the client disconnects.

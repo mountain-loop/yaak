@@ -126,6 +126,16 @@ impl<'a> ClientDb<'a> {
 impl<'a> WriteDb<'a> {
     /// The workspace's base environment, created if it does not exist.
     pub fn ensure_base_environment(&self, workspace_id: &str) -> Result<Environment> {
+        self.ensure_base_environment_with_visibility(workspace_id, false)
+    }
+
+    /// Like [`Self::ensure_base_environment`], with the visibility a newly created base
+    /// environment gets. An existing one is returned as it is.
+    pub fn ensure_base_environment_with_visibility(
+        &self,
+        workspace_id: &str,
+        public: bool,
+    ) -> Result<Environment> {
         match self.get_base_environment(workspace_id) {
             Err(MissingBaseEnvironment(_)) => {}
             other => return other,
@@ -135,6 +145,7 @@ impl<'a> WriteDb<'a> {
                 workspace_id: workspace_id.to_string(),
                 name: "Global Variables".to_string(),
                 parent_model: "workspace".to_string(),
+                public,
                 ..Default::default()
             },
             &UpdateSource::Background,

@@ -6,6 +6,7 @@ use yaak::import;
 use yaak_models::export::{self, ExportDataParams};
 use yaak_models::util::{
     BatchUpsertResult, ImportDestination, ImportOrigin, ImportPlanAction, ImportPlanItem,
+    ImportPlanWarning,
 };
 use yaak_plugins::events::{ImportRequest, ImportResources, PluginContext};
 
@@ -13,10 +14,13 @@ type CommandResult<T = ()> = std::result::Result<T, String>;
 
 pub async fn run_import(ctx: &CliContext, args: ImportArgs) -> i32 {
     match import(ctx, args).await {
-        Ok((result, items)) => {
+        Ok((result, items, warnings)) => {
             println!("Imported {}", format_counts(&result));
             if let Some(skipped) = format_skipped(&items) {
                 println!("Skipped {skipped}");
+            }
+            for warning in warnings {
+                eprintln!("Warning: {}: {}", warning.title, warning.detail);
             }
             0
         }
@@ -43,7 +47,7 @@ pub fn run_export(ctx: &CliContext, args: ExportArgs) -> i32 {
 async fn import(
     ctx: &CliContext,
     args: ImportArgs,
-) -> CommandResult<(BatchUpsertResult, Vec<ImportPlanItem>)> {
+) -> CommandResult<(BatchUpsertResult, Vec<ImportPlanItem>, Vec<ImportPlanWarning>)> {
     if let Some(workspace_id) = args.workspace_id.as_deref() {
         ctx.db()
             .get_workspace(workspace_id)
@@ -67,6 +71,15 @@ async fn import(
                 .to_string(),
         );
     }
+    // Everything would land in the one workspace, merging separate workspaces into it
+    if workspace_id.is_some() && resources.workspaces.len() > 1 {
+        return Err(format!(
+            "{} contains {} workspaces, and --workspace-id imports into a single one. Run `yaak import {}` without --workspace-id to import each as its own workspace, or export one workspace at a time.",
+            args.file.display(),
+            resources.workspaces.len(),
+            args.file.display(),
+        ));
+    }
     let destination = match workspace_id {
         Some(workspace_id) => {
             ImportDestination::ExistingWorkspace { workspace_id, folder_id: None }
@@ -83,9 +96,10 @@ async fn import(
     )
     .map_err(|e| format!("Failed to plan import: {e}"))?;
     let items = plan.items.clone();
+    let warnings = plan.warnings.clone();
     let imported = import::commit_import_plan(ctx.query_manager(), plan)
         .map_err(|e| format!("Failed to import data: {e}"))?;
-    Ok((imported, items))
+    Ok((imported, items, warnings))
 }
 
 fn file_origin(path: &std::path::Path) -> ImportOrigin {
