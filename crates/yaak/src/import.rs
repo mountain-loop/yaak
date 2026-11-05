@@ -344,29 +344,35 @@ fn break_folder_cycles(
     folders: &mut [Folder],
     existing_parents: &BTreeMap<String, Option<String>>,
 ) -> bool {
+    let mut parents = existing_parents.clone();
+    for folder in folders.iter() {
+        parents.insert(folder.id.clone(), folder.folder_id.clone());
+    }
     let mut moved = false;
-    for i in 0..folders.len() {
-        let parents = existing_parents
-            .iter()
-            .map(|(id, parent)| (id.clone(), parent.clone()))
-            .chain(folders.iter().map(|f| (f.id.clone(), f.folder_id.clone())))
-            .collect::<BTreeMap<_, _>>();
-        let start = folders[i].id.clone();
-        let mut seen = BTreeSet::new();
-        let mut next = folders[i].folder_id.clone();
-        while let Some(id) = next {
-            if id == start {
-                folders[i].folder_id = None;
-                moved = true;
-                break;
-            }
-            if !seen.insert(id.clone()) {
-                break;
-            }
-            next = parents.get(&id).cloned().flatten();
+    for folder in folders.iter_mut() {
+        if folder_cycle_from(&parents, &folder.id) {
+            folder.folder_id = None;
+            parents.insert(folder.id.clone(), None);
+            moved = true;
         }
     }
     moved
+}
+
+/// Whether following parents up from `start` comes back to it.
+fn folder_cycle_from(parents: &BTreeMap<String, Option<String>>, start: &str) -> bool {
+    let mut seen = BTreeSet::new();
+    let mut next = parents.get(start).cloned().flatten();
+    while let Some(id) = next {
+        if id == start {
+            return true;
+        }
+        if !seen.insert(id.clone()) {
+            return false;
+        }
+        next = parents.get(&id).cloned().flatten();
+    }
+    false
 }
 
 /// Models a Yaak export shares by ID with the destination are updates of those models, so they
@@ -422,6 +428,15 @@ fn classify_matched_ids(plan: &mut ImportPlan, matched: &BTreeMap<String, Value>
             item.changed_fields = changed_fields(&incoming, &current);
         }
     }
+
+    // A linked source may still map one of its old keys to a model the document now names by
+    // ID, and offer it as removed from the source. The document does have it, and the commit
+    // keeps one item per model, so that offer would cancel the update.
+    plan.items.retain(|i| {
+        !(i.action == ImportPlanAction::Delete
+            && matched.contains_key(&i.model_id)
+            && planned.contains_key(&i.model_id))
+    });
     Ok(())
 }
 
@@ -836,6 +851,35 @@ fn commit_plan_in_tx(db: &WriteDb, plan: ImportPlan) -> Result<BatchUpsertResult
     };
 
     let resources = &plan.resources;
+
+    // The planner kept the moves it planned from forming a loop, but the preview can apply some
+    // and not others: moving A under B while leaving B where it was, under A.
+    let applied_folders = resources
+        .folders
+        .iter()
+        .filter(|v| applies(&v.id) && !missing_folders.contains(&v.id))
+        .collect::<Vec<_>>();
+    if !applied_folders.is_empty() {
+        let mut parents = BTreeMap::new();
+        let workspace_ids =
+            applied_folders.iter().map(|f| f.workspace_id.as_str()).collect::<BTreeSet<_>>();
+        for workspace_id in workspace_ids {
+            for folder in db.list_folders(workspace_id)? {
+                parents.insert(folder.id, folder.folder_id);
+            }
+        }
+        for folder in &applied_folders {
+            parents.insert(folder.id.clone(), folder.folder_id.clone());
+        }
+        if let Some(folder) = applied_folders.iter().find(|f| folder_cycle_from(&parents, &f.id)) {
+            return Err(yaak_models::error::Error::GenericError(format!(
+                "This selection would put the folder {} inside itself. Import the moves of the folders around it together, or leave them all out.",
+                folder.name
+            ))
+            .into());
+        }
+    }
+
     let upserted = db.batch_upsert(
         resources.workspaces.clone(),
         resources
@@ -4260,6 +4304,116 @@ mod tests {
         assert_eq!(planned.folder_id, None, "the loop is broken at the top level");
         assert!(plan.warnings.iter().any(|w| w.title == "Folder moved to the top level"));
         commit_import_plan(&query_manager, plan).expect("commit");
+    }
+
+    /// The preview can apply one folder's move and not another's, so the commit checks the moves
+    /// it actually makes.
+    #[test]
+    fn a_selection_that_would_loop_folders_is_refused() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let destination = destination_workspace();
+        let folder = |id: &str, parent: Option<&str>| Folder {
+            id: id.into(),
+            model: "folder".into(),
+            workspace_id: destination.id.clone(),
+            name: id.into(),
+            folder_id: parent.map(String::from),
+            ..Default::default()
+        };
+        query_manager
+            .with_tx(|tx| {
+                tx.upsert_workspace(&destination, &UpdateSource::Import)?;
+                tx.upsert_folder(&folder("fl_a", None), &UpdateSource::Import)?;
+                tx.upsert_folder(&folder("fl_b", Some("fl_a")), &UpdateSource::Import)
+            })
+            .expect("seed destination");
+
+        let resources = ImportResources {
+            folders: vec![folder("fl_a", Some("fl_b")), folder("fl_b", None)],
+            ..Default::default()
+        };
+        let mut plan = plan_yaak(&query_manager, into_existing(&destination.id), resources);
+        select(&mut plan, "fl_b", false);
+        let error = commit_import_plan(&query_manager, plan).expect_err("refused");
+        assert!(error.to_string().contains("would put the folder fl_a inside itself"), "{error}");
+        let stored = query_manager.connect().get_folder("fl_a").expect("unchanged");
+        assert_eq!(stored.folder_id, None);
+    }
+
+    /// Re-importing an export of a copy into that copy, from the file the copy was first
+    /// imported from: the linked source's old key and the document's ID name the same request,
+    /// and the stale removal offer must not cancel its update.
+    #[test]
+    fn an_id_match_is_not_cancelled_by_a_stale_removal_offer() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let original = Workspace {
+            id: "wk_original".into(),
+            model: "workspace".into(),
+            name: "Original".into(),
+            ..Default::default()
+        };
+        let request = HttpRequest {
+            id: "rq_original".into(),
+            model: "http_request".into(),
+            workspace_id: original.id.clone(),
+            name: "Request".into(),
+            url: "https://example.com/v1".into(),
+            ..Default::default()
+        };
+        query_manager
+            .with_tx(|tx| {
+                tx.upsert_workspace(&original, &UpdateSource::Import)?;
+                tx.upsert_http_request(&request, &UpdateSource::Import)
+            })
+            .expect("seed original");
+        let origin = || ImportOrigin { origin: "/export.json".into(), label: "export.json".into() };
+        let keys = |ids: &[&str]| {
+            Some(ids.iter().map(|id| (id.to_string(), id.to_string())).collect::<BTreeMap<_, _>>())
+        };
+
+        let copy = plan_import_resources(
+            &query_manager,
+            "Yaak".into(),
+            ImportDestination::NewWorkspace,
+            ImportResources {
+                workspaces: vec![original.clone()],
+                http_requests: vec![request.clone()],
+                ..Default::default()
+            },
+            keys(&["wk_original", "rq_original"]),
+            Some(origin()),
+        )
+        .expect("plan copy");
+        let copy = commit_import_plan(&query_manager, copy).expect("commit copy");
+        let (copy_workspace, copy_request) = (&copy.workspaces[0], &copy.http_requests[0]);
+        assert_ne!(copy_request.id, request.id);
+
+        let plan = plan_import_resources(
+            &query_manager,
+            "Yaak".into(),
+            into_existing(&copy_workspace.id),
+            ImportResources {
+                workspaces: vec![copy_workspace.clone()],
+                http_requests: vec![HttpRequest {
+                    url: "https://example.com/v2".into(),
+                    ..copy_request.clone()
+                }],
+                ..Default::default()
+            },
+            keys(&[&copy_workspace.id, &copy_request.id]),
+            Some(origin()),
+        )
+        .expect("plan re-import");
+        assert!(
+            plan.items.iter().all(|i| i.action != ImportPlanAction::Delete),
+            "{:?}",
+            plan.items
+        );
+        commit_import_plan(&query_manager, plan).expect("commit re-import");
+        let stored = query_manager.connect().get_http_request(&copy_request.id).expect("stored");
+        assert_eq!(stored.url, "https://example.com/v2");
     }
 
     /// A Yaak export's sort priorities are the user's sidebar order, so changing only that is
