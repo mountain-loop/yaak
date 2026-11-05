@@ -53,7 +53,7 @@ function FlowPanes({ fixture }: { fixture: FlowFixture }) {
   const requestBody = useMemo(() => flowBodyFromRpc(fixture.requestBody), [fixture]);
   const responseBody = useMemo(() => flowBodyFromRpc(fixture.responseBody), [fixture]);
   const request = useMemo(() => flowRequestToView(flow, requestBody), [flow, requestBody]);
-  const response = useMemo(() => flowResponseToView(flow), [flow]);
+  const response = useMemo(() => flowResponseToView(flow, responseBody), [flow, responseBody]);
 
   const requestLoader = useMemo(
     () =>

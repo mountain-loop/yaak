@@ -74,11 +74,19 @@ function requestBodyView(
 
 /**
  * A captured response as the shared response pane shows it, or null when the request never
- * got one and didn't fail either (it's still waiting).
+ * got one and didn't fail either (it's still waiting). `body` is the response body from the
+ * engine, decoded; its size is the one the pane shows, and the wire size counts as compressed
+ * when the response had a Content-Encoding. Until it loads, the wire size stands in.
  */
-export function flowResponseToView(flow: Flow): HttpResponseView | null {
+export function flowResponseToView(
+  flow: Flow,
+  body: FlowBodyData | null = null,
+): HttpResponseView | null {
   const ended = flow.elapsedMs != null || flow.error != null || flow.cancelled;
   if (flow.status == null && !ended) return null;
+
+  const encoding = findHeader(flow.responseHeaders, "content-encoding")?.trim().toLowerCase();
+  const encoded = encoding != null && encoding !== "" && encoding !== "identity";
 
   return {
     id: flow.id,
@@ -90,8 +98,10 @@ export function flowResponseToView(flow: Flow): HttpResponseView | null {
     headers: headersToPairs(flow.responseHeaders),
     requestHeaders: headersToPairs(flow.requestHeaders),
     contentType: findHeader(flow.responseHeaders, "content-type"),
-    contentLength: flow.responseSize,
-    contentLengthCompressed: null,
+    // A body cut at the capture limit is short; unencoded, the wire size is the exact one
+    contentLength:
+      body == null || (body.truncated && !encoded) ? flow.responseSize : body.bytes.length,
+    contentLengthCompressed: encoded ? flow.responseSize : null,
     requestContentLength: flow.requestSize,
     startedAt: utcTimestamp(flow.startedAt),
     elapsedMs: flow.elapsedMs ?? 0,

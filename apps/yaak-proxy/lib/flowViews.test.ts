@@ -146,6 +146,40 @@ describe("flowResponseToView", () => {
     });
   });
 
+  test("shows a gzip response's decoded size, with its wire size as compressed", () => {
+    const gzipped: Flow = {
+      ...flow,
+      responseHeaders: [...flow.responseHeaders, { name: "Content-Encoding", value: "gzip" }],
+      responseSize: 40,
+    };
+    const decoded: FlowBodyData = {
+      bytes: new Uint8Array(120),
+      truncated: false,
+      storedSize: 40,
+    };
+    expect(flowResponseToView(gzipped, decoded)).toMatchObject({
+      contentLength: 120,
+      contentLengthCompressed: 40,
+    });
+    // Before the body loads, the wire size stands in, still marked compressed
+    expect(flowResponseToView(gzipped)).toMatchObject({
+      contentLength: 40,
+      contentLengthCompressed: 40,
+    });
+  });
+
+  test("keeps the wire size for an unencoded body cut at the capture limit", () => {
+    const cut: FlowBodyData = { bytes: new Uint8Array(5), truncated: true, storedSize: 5 };
+    expect(flowResponseToView(flow, cut)).toMatchObject({
+      contentLength: 12,
+      contentLengthCompressed: null,
+    });
+    expect(flowResponseToView(flow, bytes("hello world!"))).toMatchObject({
+      contentLength: 12,
+      contentLengthCompressed: null,
+    });
+  });
+
   test("reads the engine's zone-less timestamps as UTC", () => {
     expect(flowResponseToView({ ...flow, startedAt: "2026-11-04T22:10:00.123" })?.startedAt).toBe(
       "2026-11-04T22:10:00.123Z",

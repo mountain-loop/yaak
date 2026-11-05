@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vite-plus/test";
-import type { HostEditorProps, HostInputProps } from "../EditorHost";
+import type { HostEditorProps, HostInputProps, SelectFileProps } from "../EditorHost";
 import { EditorHostProvider } from "../EditorHost";
 import { PairEditorRow } from "../pairs/PairEditor";
 import { bodyTypeLabel } from "./HttpRequestPaneView";
@@ -40,6 +40,14 @@ function StubEditor({ defaultValue, readOnly, actions }: HostEditorProps) {
   );
 }
 
+function StubSelectFile({ filePath }: SelectFileProps) {
+  return (
+    <button type="button" data-picker>
+      {filePath}
+    </button>
+  );
+}
+
 function render(node: ReactNode) {
   return renderToStaticMarkup(
     <EditorHostProvider value={{ Input: StubInput, Editor: StubEditor }}>
@@ -62,6 +70,32 @@ describe("read-only modes", () => {
     expect(markup).toContain('data-input="value[0]" data-readonly="true"');
     expect(markup).not.toContain("More actions");
     expect(markup).toMatch(/<input[^>]*disabled/);
+  });
+
+  test("a read-only file value shows as text, not a file picker", () => {
+    const pair = {
+      id: "p1",
+      enabled: true,
+      name: "avatar",
+      value: "/Users/me/avatar.png",
+      isFile: true,
+    };
+    const host = { Input: StubInput, Editor: StubEditor, SelectFile: StubSelectFile };
+    const readOnly = renderToStaticMarkup(
+      <EditorHostProvider value={host}>
+        <PairEditorRow readOnly allowFileValues index={0} stateKey="test" pair={pair} />
+      </EditorHostProvider>,
+    );
+    expect(readOnly).not.toContain("data-picker");
+    expect(readOnly).toContain("data-file-value");
+    expect(readOnly).toContain("/Users/me/avatar.png");
+
+    const editable = renderToStaticMarkup(
+      <EditorHostProvider value={host}>
+        <PairEditorRow allowFileValues index={0} stateKey="test" pair={pair} />
+      </EditorHostProvider>,
+    );
+    expect(editable).toContain("data-picker");
   });
 
   test("an editable pair row keeps its row menu", () => {

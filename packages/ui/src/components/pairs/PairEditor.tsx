@@ -734,7 +734,16 @@ export function PairEditorRow({
           showOptionsPicker={showOptionsPicker}
         />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
-          {pair.isFile && SelectFile != null ? (
+          {pair.isFile && readOnly ? (
+            // A file value to read, not to pick: no picker and nothing to drop a file on
+            <span
+              title={pair.value}
+              data-file-value
+              className="font-mono text-xs truncate px-1.5 text-text-subtle select-text cursor-text"
+            >
+              {pair.filename || pair.value || "No file"}
+            </span>
+          ) : pair.isFile && SelectFile != null ? (
             <SelectFile
               disabled={disabled}
               inline

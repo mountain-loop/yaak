@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
@@ -12,11 +15,9 @@
     "./mimeType": "./src/lib/mimeType.ts",
     "./resolvedModelName": "./src/lib/resolvedModelName.ts",
     "./templateTags": "./src/lib/templateTags.ts",
-    "./toast": "./src/lib/toast.ts"
+    "./toast": "./src/lib/toast.ts",
+    "./useToggle": "./src/hooks/useToggle.ts"
   },
-  "sideEffects": [
-    "*.css"
-  ],
   "dependencies": {
     "jotai-family": "^1.0.1"
   }
