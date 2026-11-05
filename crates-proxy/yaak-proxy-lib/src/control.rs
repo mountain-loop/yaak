@@ -4,12 +4,17 @@
 //! time: a file whose process is gone, or whose port no longer answers, is stale and replaced.
 
 use crate::ca::{self, CaStatus};
-use crate::flows::{self, FlowFilter};
+use crate::flows::{self, BodyPreview, FlowFilter};
+use crate::grpc::{self, DecodedGrpcMessage};
 use crate::har;
 use crate::macos::SystemProxyStatus;
+use crate::messages::{self, FlowMessage, MessageKind};
 use crate::models::{FlowBody, find_header};
 use crate::save::SaveFlowRequest;
-use crate::{ProxyCtx, ProxyState, bodies};
+use crate::{
+    AddGrpcSchemaRequest, ListMessagesResponse, ProxyCtx, ProxyState, ReflectGrpcHostRequest,
+    bodies,
+};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use http_body_util::{BodyExt, Full, Limited};
@@ -238,6 +243,25 @@ pub struct ClearResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorBody {
     pub error: String,
+}
+
+/// `GET /flows/{id}/messages/{seq}`: a message with its payload, and a gRPC message decoded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageDetail {
+    pub message: FlowMessage,
+    pub payload: BodyPreview,
+    /// A gRPC message as JSON, with its schema or without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decoded: Option<DecodedGrpcMessage>,
+    /// Why a gRPC message could not be decoded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decode_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemovedResponse {
+    pub removed: bool,
 }
 
 /// Raw body headers: whether the body is cut short, at the capture limit or on the wire.
@@ -504,6 +528,47 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["flows", id, "response-body"]) => {
             raw_body(ctx, id, FlowBody::Response).await
         }
+        (&Method::GET, ["flows", id, "messages"]) => {
+            found(ctx, id)?;
+            let (after_seq, limit) = message_page(&query)?;
+            let messages = messages::list(&ctx.db, id, after_seq, limit)?;
+            let total = messages::count(&ctx.db, id)?;
+            json(&ListMessagesResponse { messages, total })
+        }
+        (&Method::GET, ["flows", id, "messages", seq]) => {
+            let flow = flows::find(&ctx.db, id)
+                .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}")))?;
+            let seq: i64 = seq.parse().map_err(|_| bad_request(format!("Invalid seq {seq:?}")))?;
+            let message = messages::find(&ctx.db, id, seq)?.ok_or_else(|| {
+                ApiError::new(StatusCode::NOT_FOUND, format!("No message {seq} in flow {id}"))
+            })?;
+            let payload = messages::payload(&ctx.db, &ctx.blobs, &message)?;
+            let (decoded, decode_error) = if message.kind == MessageKind::GrpcMessage {
+                match grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, seq).await {
+                    Ok(decoded) => (Some(decoded), None),
+                    Err(e) => (None, Some(e)),
+                }
+            } else {
+                (None, None)
+            };
+            let payload = BodyPreview::new(&payload, message.truncated);
+            json(&MessageDetail { message, payload, decoded, decode_error })
+        }
+        (&Method::GET, ["grpc-schemas"]) => json(&grpc::list(&ctx.db)?),
+        (&Method::POST, ["grpc-schemas"]) => {
+            let body: AddGrpcSchemaRequest = read_json(req).await?;
+            let added = grpc::add(&ctx.db, &ctx.grpc, &body.host_pattern, &body.proto_paths);
+            json(&added.await.map_err(bad_request)?)
+        }
+        (&Method::POST, ["grpc-schemas", "reflect"]) => {
+            let body: ReflectGrpcHostRequest = read_json(req).await?;
+            let host =
+                if body.host.contains(':') { body.host } else { format!("{}:443", body.host) };
+            json(&grpc::reflect(&ctx.db, &ctx.grpc, &host).await.map_err(bad_request)?)
+        }
+        (&Method::DELETE, ["grpc-schemas", id]) => {
+            json(&RemovedResponse { removed: grpc::remove(&ctx.db, &ctx.grpc, id)? })
+        }
         (&Method::POST, ["flows", id, "save"]) => {
             found(ctx, id)?;
             let id = id.to_string();
@@ -513,7 +578,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["har"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
             let flows = flows::list(&ctx.db, &filter)?;
-            json(&har::export(&ctx.blobs, &flows, ctx.capture_body_limit()?).await?)
+            json(&har::export(&ctx.db, &ctx.blobs, &flows, ctx.capture_body_limit()?).await?)
         }
         (&Method::GET, ["ca"]) => {
             let ca = CaStore::load_or_create(&ctx.ca_dir())
@@ -580,6 +645,27 @@ async fn raw_body(ctx: &ProxyCtx, id: &str, which: FlowBody) -> Result<ControlRe
     let mut resp = response(StatusCode::OK, content_type, body.data);
     resp.headers_mut().insert(TRUNCATED_HEADER, body.truncated.to_string().parse().unwrap());
     Ok(resp)
+}
+
+/// `after` (a seq) and `limit` from a messages query.
+fn message_page(query: &str) -> Result<(Option<i64>, Option<usize>), ApiError> {
+    let (mut after, mut limit) = (None, None);
+    for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
+        match key.as_ref() {
+            "after" => {
+                after = Some(
+                    value.parse().map_err(|_| bad_request(format!("Invalid after {value:?}")))?,
+                )
+            }
+            "limit" => {
+                limit = Some(
+                    value.parse().map_err(|_| bad_request(format!("Invalid limit {value:?}")))?,
+                )
+            }
+            _ => {}
+        }
+    }
+    Ok((after, limit))
 }
 
 fn body_limit(query: &str) -> Result<usize, ApiError> {

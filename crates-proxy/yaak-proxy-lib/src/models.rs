@@ -66,6 +66,64 @@ pub struct Flow {
     pub client_bundle_id: Option<String>,
     /// Its app bundle's path, or its executable's outside an app.
     pub client_path: Option<String>,
+    /// The flow carries a stream of messages, listed with `list_messages`. It is written as the
+    /// stream opens and again as messages land; it is open until `elapsedMs`, `error` or
+    /// `cancelled` is set.
+    pub stream_kind: Option<StreamKind>,
+    /// Messages recorded so far.
+    #[ts(type = "number")]
+    pub message_count: i64,
+    /// A gRPC call's service, from its path: `package.Service`.
+    pub grpc_service: Option<String>,
+    /// A gRPC call's method, from its path.
+    pub grpc_method: Option<String>,
+    /// A gRPC call's status, from its trailers. Not 0 is a failed call.
+    pub grpc_status: Option<i32>,
+    /// A gRPC call's `grpc-message`, decoded.
+    pub grpc_message: Option<String>,
+}
+
+/// The streaming protocol a flow carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_models.ts")]
+pub enum StreamKind {
+    Websocket,
+    Sse,
+    Grpc,
+    GrpcWeb,
+}
+
+impl StreamKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Websocket => "websocket",
+            Self::Sse => "sse",
+            Self::Grpc => "grpc",
+            Self::GrpcWeb => "grpc_web",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        [Self::Websocket, Self::Sse, Self::Grpc, Self::GrpcWeb]
+            .into_iter()
+            .find(|k| k.as_str() == s)
+    }
+
+    pub fn is_grpc(self) -> bool {
+        matches!(self, Self::Grpc | Self::GrpcWeb)
+    }
+}
+
+impl From<yaak_proxy::StreamKind> for StreamKind {
+    fn from(kind: yaak_proxy::StreamKind) -> Self {
+        match kind {
+            yaak_proxy::StreamKind::WebSocket => Self::Websocket,
+            yaak_proxy::StreamKind::Sse => Self::Sse,
+            yaak_proxy::StreamKind::Grpc => Self::Grpc,
+            yaak_proxy::StreamKind::GrpcWeb => Self::GrpcWeb,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -164,6 +222,12 @@ impl UpsertModelInfo for Flow {
             (ClientName, self.client_name.into()),
             (ClientBundleId, self.client_bundle_id.into()),
             (ClientPath, self.client_path.into()),
+            (FlowIden::StreamKind, self.stream_kind.map(|k| k.as_str()).into()),
+            (MessageCount, self.message_count.into()),
+            (GrpcService, self.grpc_service.into()),
+            (GrpcMethod, self.grpc_method.into()),
+            (GrpcStatus, self.grpc_status.into()),
+            (GrpcMessage, self.grpc_message.into()),
         ])
     }
 
@@ -193,6 +257,12 @@ impl UpsertModelInfo for Flow {
             FlowIden::ClientName,
             FlowIden::ClientBundleId,
             FlowIden::ClientPath,
+            FlowIden::StreamKind,
+            FlowIden::MessageCount,
+            FlowIden::GrpcService,
+            FlowIden::GrpcMethod,
+            FlowIden::GrpcStatus,
+            FlowIden::GrpcMessage,
         ]
     }
 
@@ -229,6 +299,13 @@ impl UpsertModelInfo for Flow {
             client_name: added_column(r, "client_name")?,
             client_bundle_id: added_column(r, "client_bundle_id")?,
             client_path: added_column(r, "client_path")?,
+            stream_kind: added_column::<String>(r, "stream_kind")?
+                .and_then(|k| StreamKind::parse(&k)),
+            message_count: added_column(r, "message_count")?.unwrap_or_default(),
+            grpc_service: added_column(r, "grpc_service")?,
+            grpc_method: added_column(r, "grpc_method")?,
+            grpc_status: added_column(r, "grpc_status")?,
+            grpc_message: added_column(r, "grpc_message")?,
         })
     }
 }

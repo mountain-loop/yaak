@@ -32,7 +32,8 @@ pub struct FlowFilter {
     /// The method, any case.
     #[ts(optional)]
     pub method: Option<String>,
-    /// A status (`404`), a class of them (`4xx`), or `error` for flows that failed.
+    /// A status (`404`), a class of them (`4xx`), or `error` for flows that failed, gRPC calls
+    /// that ended with a status other than OK among them.
     #[ts(optional)]
     pub status: Option<String>,
     /// At most this many flows, the newest.
@@ -165,7 +166,10 @@ impl FlowFilter {
         }
         match self.status.as_deref().map(str::trim) {
             None | Some("") => {}
-            Some(s) if s.eq_ignore_ascii_case("error") => sql.push_str(" AND error IS NOT NULL"),
+            // A gRPC call that ended with a status other than OK failed too.
+            Some(s) if s.eq_ignore_ascii_case("error") => {
+                sql.push_str(" AND (error IS NOT NULL OR coalesce(grpc_status, 0) != 0)")
+            }
             // A whole status or a class, not the start of one as a search term may be.
             Some(s) if s.len() == 3 => match status_condition(&s.to_ascii_lowercase(), &mut params)
             {
@@ -319,12 +323,14 @@ pub fn clear(db: &ProxyQueryManager, blobs: &BlobManager) -> Result<usize, Strin
         let mut stmt = conn.prepare("SELECT id FROM flows")?;
         let ids = stmt.query_map([], |r| r.get(0))?.collect::<Result<Vec<String>, _>>()?;
         conn.execute("DELETE FROM flows", [])?;
+        conn.execute("DELETE FROM flow_messages", [])?;
         // Only the deleted flows' bodies, so a flow still in flight keeps what it has written.
         blobs
             .with_tx(|b| {
                 for id in &ids {
                     b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
                     b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
+                    b.delete_chunks_like(&format!("{id}.msg.%"))?;
                 }
                 Ok::<_, yaak_models::error::Error>(())
             })

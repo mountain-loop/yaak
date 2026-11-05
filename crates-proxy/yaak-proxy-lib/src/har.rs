@@ -4,8 +4,12 @@
 //! at the capture limit and `_error` on a flow that failed.
 
 use crate::bodies::{self, DecodedBody};
+use crate::db::ProxyQueryManager;
 use crate::flows::{BodyEncoding, BodyPreview};
-use crate::models::{Flow, FlowBody, ProxyHeader, find_header};
+use crate::messages::{self, MessageDirection, MessageKind};
+use crate::models::{Flow, FlowBody, ProxyHeader, StreamKind, find_header};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use yaak_models::blob_manager::BlobManager;
 
@@ -40,6 +44,26 @@ pub struct HarEntry {
     pub server_ip_address: Option<String>,
     #[serde(rename = "_error", skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// A WebSocket's data messages, as Chrome's devtools export them.
+    #[serde(
+        rename = "_webSocketMessages",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub web_socket_messages: Option<Vec<HarWebSocketMessage>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HarWebSocketMessage {
+    /// `send` from the client, `receive` from the server.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// Seconds since the epoch.
+    pub time: f64,
+    /// 1 for text, 2 for binary.
+    pub opcode: u8,
+    /// The text, or a binary message in base64.
+    pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,14 +142,57 @@ pub struct HarTimings {
 }
 
 /// A HAR of `flows`, reading each body from `blobs` and keeping at most `limit` bytes of it.
-pub async fn export(blobs: &BlobManager, flows: &[Flow], limit: usize) -> Result<Har, String> {
+/// A WebSocket's messages are in its entry's `_webSocketMessages`; an event stream's events are
+/// its response body, as they came.
+pub async fn export(
+    db: &ProxyQueryManager,
+    blobs: &BlobManager,
+    flows: &[Flow],
+    limit: usize,
+) -> Result<Har, String> {
     let mut entries = Vec::with_capacity(flows.len());
     for flow in flows {
         let request = bodies::read_body(blobs, flow, FlowBody::Request, limit).await?;
         let response = bodies::read_body(blobs, flow, FlowBody::Response, limit).await?;
-        entries.push(entry(flow, &request, &response));
+        let mut entry = entry(flow, &request, &response);
+        if flow.stream_kind == Some(StreamKind::Websocket) {
+            entry.web_socket_messages = Some(websocket_messages(db, blobs, flow)?);
+        }
+        entries.push(entry);
     }
     Ok(har(entries))
+}
+
+fn websocket_messages(
+    db: &ProxyQueryManager,
+    blobs: &BlobManager,
+    flow: &Flow,
+) -> Result<Vec<HarWebSocketMessage>, String> {
+    let mut out = Vec::new();
+    for message in messages::list(db, &flow.id, None, None)? {
+        let opcode = match message.kind {
+            MessageKind::WebsocketText => 1,
+            MessageKind::WebsocketBinary => 2,
+            _ => continue,
+        };
+        let payload = messages::payload(db, blobs, &message)?;
+        let data = if opcode == 1 {
+            String::from_utf8_lossy(&payload).into_owned()
+        } else {
+            BASE64.encode(&payload)
+        };
+        out.push(HarWebSocketMessage {
+            kind: match message.direction {
+                MessageDirection::Client => "send",
+                MessageDirection::Server => "receive",
+            }
+            .into(),
+            time: message.timestamp.and_utc().timestamp_micros() as f64 / 1_000_000.0,
+            opcode,
+            data,
+        });
+    }
+    Ok(out)
 }
 
 pub fn har(entries: Vec<HarEntry>) -> Har {
@@ -186,6 +253,7 @@ pub fn entry(flow: &Flow, request_body: &DecodedBody, response_body: &DecodedBod
             .clone()
             .or_else(|| response_body.decode_error.clone())
             .or_else(|| request_body.decode_error.clone()),
+        web_socket_messages: None,
     }
 }
 
@@ -394,7 +462,9 @@ mod tests {
             ..Default::default()
         };
 
-        let har = export(&blobs, &[flow], 1024 * 1024).await.unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let har = export(&db, &blobs, &[flow], 1024 * 1024).await.unwrap();
         let entry = &har.log.entries[0];
         let text_kept = entry.response.content.text.as_deref().unwrap();
         assert!(!text_kept.is_empty() && text.starts_with(text_kept.as_bytes()));

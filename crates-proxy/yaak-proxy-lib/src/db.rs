@@ -187,7 +187,7 @@ mod tests {
             .unwrap()
             .map(|t| t.unwrap())
             .collect();
-        assert_eq!(tables, vec!["_sqlx_migrations", "flows"]);
+        assert_eq!(tables, vec!["_sqlx_migrations", "flow_messages", "flows", "grpc_schemas"]);
 
         let flow_columns = columns(&conn, "flows");
         assert!(flow_columns.contains(&"response_truncated".to_string()));
@@ -197,6 +197,12 @@ mod tests {
             "client_bundle_id",
             "client_path",
             "cancelled",
+            "stream_kind",
+            "message_count",
+            "grpc_service",
+            "grpc_method",
+            "grpc_status",
+            "grpc_message",
         ] {
             assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
         }

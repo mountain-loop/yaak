@@ -1,5 +1,6 @@
 use log::{error, info, warn};
 use tauri::Runtime;
+use tauri::path::BaseDirectory;
 use tauri::{Emitter, Manager, RunEvent, State, WebviewWindow};
 use yaak_proxy_lib::ProxyCtx;
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
@@ -48,6 +49,17 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
     });
 }
 
+/// The `yaakprotoc` and its includes in the app's resources, if the bundle has them.
+fn bundled_protoc<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<yaak_proxy_lib::GrpcConfig> {
+    let bin_name = if cfg!(windows) { "yaakprotoc.exe" } else { "yaakprotoc" };
+    let resource = |path: &str| app.path().resolve(path, BaseDirectory::Resource).ok();
+    let protoc_bin_path = resource(&format!("vendored/protoc/{bin_name}"))?;
+    let protoc_include_dir = resource("vendored/protoc/include")?;
+    protoc_bin_path
+        .is_file()
+        .then_some(yaak_proxy_lib::GrpcConfig { protoc_include_dir, protoc_bin_path })
+}
+
 #[tauri::command]
 async fn rpc(
     router: State<'_, RpcRouter<ProxyCtx>>,
@@ -69,7 +81,12 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
 
             let (emitter, event_rx) = RpcEventEmitter::new();
-            let ctx = ProxyCtx::new(&data_dir, emitter)?;
+            let mut ctx = ProxyCtx::new(&data_dir, emitter)?;
+            // Compiles protos attached for gRPC decoding when the bundle has protoc, as Yaak's
+            // does; otherwise one on PATH is used.
+            if let Some(config) = bundled_protoc(app.handle()) {
+                ctx = ctx.with_protoc(config);
+            }
             // Not while the CLI daemon owns the engine: the window offers to take it over.
             match ctx.serve_control_api() {
                 // The engine runs for as long as the app does. A failure, such as the port
