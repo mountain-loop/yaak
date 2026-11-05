@@ -1,56 +1,36 @@
 import type { HttpResponse, HttpResponseEvent } from "@yaakapp-internal/models";
 import {
-  Banner,
-  HStack,
-  Icon,
-  LoadingIcon,
-  VStack,
   CountBadge,
-  HttpResponseDurationTag,
-  HttpStatusTag,
-  SizeTag,
+  type ExtraPaneTab,
+  type HostBodyViewerArgs,
+  HttpResponsePaneView,
+  Icon,
+  type ResponseTextViewerExtras,
+  type TextFilterApi,
   Tooltip,
-  AudioViewer,
-  CsvViewer,
-  ImageViewer,
-  SvgViewer,
-  VideoViewer,
+  VStack,
 } from "@yaakapp-internal/ui";
-import classNames from "classnames";
-import type { ComponentType, CSSProperties } from "react";
-import { lazy, Suspense, useMemo } from "react";
+import type { CSSProperties } from "react";
+import { useCallback, useMemo } from "react";
 import { useCancelHttpResponse } from "../hooks/useCancelHttpResponse";
 import { useCopyHttpResponse } from "../hooks/useCopyHttpResponse";
+import { useRequestBodyLoader, useResponseBodyLoader } from "../hooks/useHttpBodyLoaders";
 import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
 import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
-import { useResponseBodyBytes, useResponseBodyText } from "../hooks/useResponseBodyText";
-import { useResponseBodyUrl } from "../hooks/useResponseBodyUrl";
+import { useRecentFilters } from "../hooks/useRecentFilters";
 import { useResponseViewMode } from "../hooks/useResponseViewMode";
 import { useSaveResponse } from "../hooks/useSaveResponse";
 import { useTimelineViewMode } from "../hooks/useTimelineViewMode";
-import { getMimeTypeFromContentType } from "../lib/contentType";
-import { getContentTypeFromHeaders, getCookieCounts } from "../lib/model_util";
-import { ConfirmLargeResponse } from "./ConfirmLargeResponse";
-import { ConfirmLargeResponseRequest } from "./ConfirmLargeResponseRequest";
-import { Button } from "./core/Button";
+import { httpResponseToView } from "../lib/httpViews";
+import { getCookieCounts } from "../lib/model_util";
+import { CopyButton } from "./CopyButton";
 import { HotkeyList } from "./core/HotkeyList";
+import { IconButton } from "./core/IconButton";
 import { PillButton } from "./core/PillButton";
-import type { TabItem } from "./core/Tabs/Tabs";
-import { TabContent, Tabs } from "./core/Tabs/Tabs";
-import { EmptyStateText } from "./EmptyStateText";
-import { ErrorBoundary } from "./ErrorBoundary";
 import { HttpResponseTimeline } from "./HttpResponseTimeline";
 import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";
-import { RequestBodyViewer } from "./RequestBodyViewer";
-import { ResponseCookies } from "./ResponseCookies";
-import { ResponseHeaders } from "./ResponseHeaders";
 import { EventStreamViewer } from "./responseViewers/EventStreamViewer";
-import { HTMLOrTextViewer } from "./responseViewers/HTMLOrTextViewer";
-import { MultipartViewer } from "./responseViewers/MultipartViewer";
-
-const PdfViewer = lazy(() =>
-  import("./responseViewers/PdfViewer").then((m) => ({ default: m.PdfViewer })),
-);
+import { RecentFiltersDropdown } from "./responseViewers/RecentFiltersDropdown";
 
 interface Props {
   style?: CSSProperties;
@@ -58,10 +38,6 @@ interface Props {
   activeRequestId: string;
 }
 
-const TAB_BODY = "body";
-const TAB_REQUEST = "request";
-const TAB_HEADERS = "headers";
-const TAB_COOKIES = "cookies";
 const TAB_TIMELINE = "timeline";
 
 export type TimelineViewMode = "timeline" | "text";
@@ -71,12 +47,11 @@ interface RedirectDropWarning {
   droppedHeaders: string[];
 }
 
+/** The shared response pane, bound to the pinned response of the active request */
 export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const { activeResponse, setPinnedResponseId, responses } = usePinnedHttpResponse(activeRequestId);
   const [viewMode, setViewMode] = useResponseViewMode(activeResponse?.requestId);
   const [timelineViewMode, setTimelineViewMode] = useTimelineViewMode();
-  const contentType = getContentTypeFromHeaders(activeResponse?.headers ?? null);
-  const mimeType = contentType == null ? null : getMimeTypeFromContentType(contentType).essence;
 
   const responseEvents = useHttpResponseEvents(activeResponse);
   const redirectDropWarning = useMemo(
@@ -89,278 +64,179 @@ export function HttpResponsePane({ style, className, activeRequestId }: Props) {
   const cookieCounts = useMemo(() => getCookieCounts(responseEvents.data), [responseEvents.data]);
   const saveResponse = useSaveResponse(activeResponse ?? null);
   const copyResponse = useCopyHttpResponse(activeResponse ?? null);
+  const cancel = useCancelHttpResponse(activeResponse?.id ?? null);
+  const body = useResponseBodyLoader(activeResponse ?? null);
+  const requestBody = useRequestBodyLoader(activeResponse ?? null);
+  const textViewer = useResponseTextViewerExtras(activeResponse ?? null);
 
-  const tabs = useMemo<TabItem[]>(
-    () => [
-      {
-        value: TAB_BODY,
-        label: "Response",
-        options: {
-          value: viewMode,
-          onChange: setViewMode,
-          items: [
-            { label: "Response", value: "pretty" },
-            ...(mimeType?.startsWith("image")
-              ? []
-              : [{ label: "Response (Raw)", shortLabel: "Raw", value: "raw" }]),
-          ],
-          itemsAfter: [
-            {
-              label: "Save to File",
-              onSelect: saveResponse.mutate,
-              leftSlot: <Icon icon="save" />,
-              hidden: activeResponse == null || !!activeResponse.error,
-              disabled: activeResponse?.state !== "closed" && (activeResponse?.status ?? 0) >= 100,
-            },
-            {
-              label: "Copy Body",
-              onSelect: copyResponse.mutate,
-              leftSlot: <Icon icon="copy" />,
-              hidden: activeResponse == null || !!activeResponse.error,
-              disabled: activeResponse?.state !== "closed" && (activeResponse?.status ?? 0) >= 100,
-            },
-          ],
-        },
-      },
-      {
-        value: TAB_REQUEST,
-        label: "Request",
-        rightSlot:
-          (activeResponse?.requestContentLength ?? 0) > 0 ? <CountBadge count={true} /> : null,
-      },
-      {
-        value: TAB_HEADERS,
-        label: "Headers",
-        rightSlot: (
-          <CountBadge
-            count={activeResponse?.requestHeaders.length ?? 0}
-            count2={activeResponse?.headers.length ?? 0}
-            showZero
-          />
-        ),
-      },
-      {
-        value: TAB_COOKIES,
-        label: "Cookies",
-        rightSlot:
-          cookieCounts.sent > 0 || cookieCounts.received > 0 ? (
-            <CountBadge count={cookieCounts.sent} count2={cookieCounts.received} showZero />
-          ) : null,
-      },
-      {
-        value: TAB_TIMELINE,
-        rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
-        options: {
-          value: timelineViewMode,
-          onChange: (v) => setTimelineViewMode((v as TimelineViewMode) ?? "timeline"),
-          items: [
-            { label: "Timeline", value: "timeline" },
-            { label: "Timeline (Text)", shortLabel: "Timeline", value: "text" },
-          ],
-        },
-      },
-    ],
-    [
-      activeResponse?.headers,
-      activeResponse,
-      activeResponse?.error,
-      activeResponse?.requestContentLength,
-      activeResponse?.requestHeaders.length,
-      activeResponse?.state,
-      activeResponse?.status,
-      cookieCounts.sent,
-      cookieCounts.received,
-      copyResponse.mutate,
-      mimeType,
-      responseEvents.data?.length,
-      saveResponse.mutate,
-      setViewMode,
-      viewMode,
-      timelineViewMode,
-      setTimelineViewMode,
-    ],
+  const responseView = useMemo(
+    () => (activeResponse == null ? null : httpResponseToView(activeResponse, responseEvents.data)),
+    [activeResponse, responseEvents.data],
   );
 
-  const cancel = useCancelHttpResponse(activeResponse?.id ?? null);
+  const extraTabs = useMemo<ExtraPaneTab[]>(
+    () =>
+      activeResponse == null
+        ? []
+        : [
+            {
+              tab: {
+                value: TAB_TIMELINE,
+                rightSlot: <CountBadge count={responseEvents.data?.length ?? 0} />,
+                options: {
+                  value: timelineViewMode,
+                  onChange: (v) => setTimelineViewMode((v as TimelineViewMode) ?? "timeline"),
+                  items: [
+                    { label: "Timeline", value: "timeline" },
+                    { label: "Timeline (Text)", shortLabel: "Timeline", value: "text" },
+                  ],
+                },
+              },
+              content: (
+                <HttpResponseTimeline response={activeResponse} viewMode={timelineViewMode} />
+              ),
+            },
+          ],
+    [activeResponse, responseEvents.data?.length, setTimelineViewMode, timelineViewMode],
+  );
+
+  const renderBodyViewer = useCallback(
+    ({ mimeType, viewMode }: HostBodyViewerArgs) =>
+      activeResponse != null && mimeType?.match(/^text\/event-stream/i) && viewMode === "pretty" ? (
+        <EventStreamViewer response={activeResponse} />
+      ) : null,
+    [activeResponse],
+  );
 
   return (
-    <div
+    <HttpResponsePaneView
       style={style}
-      className={classNames(
-        className,
-        "x-theme-responsePane",
-        "max-h-full h-full",
-        "bg-surface rounded-md border border-border-subtle overflow-hidden",
-        "relative",
-      )}
-    >
-      {activeResponse == null ? (
+      className={className}
+      response={responseView}
+      body={body}
+      requestBody={requestBody}
+      emptyState={
         <HotkeyList hotkeys={["request.send", "model.create", "sidebar.focus", "url_bar.focus"]} />
-      ) : (
-        <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
-          <HStack
-            className={classNames(
-              "text-text-subtle w-full shrink-0",
-              // Remove a bit of space because the tabs have lots too
-              "-mb-1.5",
-            )}
-          >
-            {activeResponse && (
-              <div
-                className={classNames(
-                  "grid grid-cols-[auto_minmax(4rem,1fr)_auto]",
-                  "cursor-default select-none",
-                  "whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars",
+      }
+      viewMode={viewMode === "raw" ? "raw" : "pretty"}
+      onViewModeChange={setViewMode}
+      activeTabKey={activeRequestId}
+      onSaveBody={saveResponse.mutate}
+      onCopyBody={copyResponse.mutate}
+      onCancel={cancel.mutate}
+      cookieCounts={cookieCounts}
+      extraTabs={extraTabs}
+      textViewer={textViewer}
+      renderBodyViewer={renderBodyViewer}
+      renderCopyButton={renderCopyButton}
+      statusLineCenter={
+        shouldShowRedirectDropWarning ? (
+          <Tooltip
+            tabIndex={0}
+            className="my-auto pl-3 shrink-0 max-w-full justify-self-end overflow-hidden"
+            content={
+              <VStack alignItems="start" space={1} className="text-xs">
+                <span className="font-medium text-warning">Redirect changed this request</span>
+                {redirectDropWarning.droppedBodyCount > 0 && (
+                  <span>
+                    Body dropped on {redirectDropWarning.droppedBodyCount}{" "}
+                    {redirectDropWarning.droppedBodyCount === 1 ? "redirect hop" : "redirect hops"}
+                  </span>
                 )}
-              >
-                <HStack space={2} className="w-full shrink-0">
-                  {activeResponse.state !== "closed" && <LoadingIcon size="sm" />}
-                  <HttpStatusTag showReason response={activeResponse} />
-                  <span>&bull;</span>
-                  <HttpResponseDurationTag response={activeResponse} />
-                  <span>&bull;</span>
-                  <SizeTag
-                    contentLength={activeResponse.contentLength ?? 0}
-                    contentLengthCompressed={activeResponse.contentLengthCompressed}
-                  />
-                </HStack>
-                {shouldShowRedirectDropWarning ? (
-                  <Tooltip
-                    tabIndex={0}
-                    className="my-auto pl-3 shrink-0 max-w-full justify-self-end overflow-hidden"
-                    content={
-                      <VStack alignItems="start" space={1} className="text-xs">
-                        <span className="font-medium text-warning">
-                          Redirect changed this request
-                        </span>
-                        {redirectDropWarning.droppedBodyCount > 0 && (
-                          <span>
-                            Body dropped on {redirectDropWarning.droppedBodyCount}{" "}
-                            {redirectDropWarning.droppedBodyCount === 1
-                              ? "redirect hop"
-                              : "redirect hops"}
-                          </span>
-                        )}
-                        {redirectDropWarning.droppedHeaders.length > 0 && (
-                          <span>
-                            Headers dropped:{" "}
-                            <span className="font-mono">
-                              {redirectDropWarning.droppedHeaders.join(", ")}
-                            </span>
-                          </span>
-                        )}
-                        <span className="text-text-subtle">See Timeline for details.</span>
-                      </VStack>
-                    }
-                  >
-                    <span className="inline-flex min-w-0">
-                      <PillButton
-                        color="warning"
-                        className="font-sans text-sm shrink! max-w-full"
-                        innerClassName="flex items-center"
-                        leftSlot={<Icon icon="alert_triangle" size="xs" color="warning" />}
-                      >
-                        <span className="truncate">
-                          {getRedirectWarningLabel(redirectDropWarning)}
-                        </span>
-                      </PillButton>
+                {redirectDropWarning.droppedHeaders.length > 0 && (
+                  <span>
+                    Headers dropped:{" "}
+                    <span className="font-mono">
+                      {redirectDropWarning.droppedHeaders.join(", ")}
                     </span>
-                  </Tooltip>
-                ) : (
-                  <span />
+                  </span>
                 )}
-                <div className="justify-self-end shrink-0">
-                  <RecentHttpResponsesDropdown
-                    responses={responses}
-                    activeResponse={activeResponse}
-                    onPinnedResponseId={setPinnedResponseId}
-                  />
-                </div>
-              </div>
-            )}
-          </HStack>
-
-          <div className="overflow-hidden flex flex-col min-h-0">
-            {activeResponse?.error && (
-              <Banner color="danger" className="mx-3 mt-1 shrink-0">
-                {activeResponse.error}
-              </Banner>
-            )}
-            {/* Show tabs if we have any data (headers, body, etc.) even if there's an error */}
-            <Tabs
-              tabs={tabs}
-              label="Response"
-              className="ml-3 mr-3 mb-3 min-h-0 flex-1"
-              tabListClassName="mt-0.5 -mb-1.5"
-              storageKey="http_response_tabs"
-              activeTabKey={activeRequestId}
-            >
-              <TabContent value={TAB_BODY}>
-                <ErrorBoundary name="Http Response Viewer">
-                  <Suspense>
-                    <ConfirmLargeResponse response={activeResponse}>
-                      {activeResponse.state === "initialized" ? (
-                        <EmptyStateText>
-                          <VStack space={3}>
-                            <HStack space={3}>
-                              <LoadingIcon className="text-text-subtlest" />
-                              Sending Request
-                            </HStack>
-                            <Button size="sm" variant="border" onClick={() => cancel.mutate()}>
-                              Cancel
-                            </Button>
-                          </VStack>
-                        </EmptyStateText>
-                      ) : activeResponse.state === "closed" &&
-                        (activeResponse.contentLength ?? 0) === 0 ? (
-                        <EmptyStateText>Empty</EmptyStateText>
-                      ) : mimeType?.match(/^text\/event-stream/i) && viewMode === "pretty" ? (
-                        <EventStreamViewer response={activeResponse} />
-                      ) : mimeType?.match(/^image\/svg/) ? (
-                        <HttpSvgViewer response={activeResponse} />
-                      ) : mimeType?.match(/^image/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={ImageViewer} />
-                      ) : mimeType?.match(/^audio/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={AudioViewer} />
-                      ) : mimeType?.match(/^video/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={VideoViewer} />
-                      ) : mimeType?.match(/^multipart/i) && viewMode === "pretty" ? (
-                        <HttpMultipartViewer response={activeResponse} />
-                      ) : mimeType?.match(/pdf/i) ? (
-                        <EnsureCompleteResponse response={activeResponse} Component={PdfViewer} />
-                      ) : mimeType?.match(/csv|tab-separated/i) && viewMode === "pretty" ? (
-                        <HttpCsvViewer className="pb-2" response={activeResponse} />
-                      ) : (
-                        <HTMLOrTextViewer
-                          textViewerClassName="-mr-2 bg-surface" // Pull to the right
-                          response={activeResponse}
-                          pretty={viewMode === "pretty"}
-                        />
-                      )}
-                    </ConfirmLargeResponse>
-                  </Suspense>
-                </ErrorBoundary>
-              </TabContent>
-              <TabContent value={TAB_REQUEST}>
-                <ConfirmLargeResponseRequest response={activeResponse}>
-                  <RequestBodyViewer response={activeResponse} />
-                </ConfirmLargeResponseRequest>
-              </TabContent>
-              <TabContent value={TAB_HEADERS}>
-                <ResponseHeaders response={activeResponse} />
-              </TabContent>
-              <TabContent value={TAB_COOKIES}>
-                <ResponseCookies response={activeResponse} />
-              </TabContent>
-              <TabContent value={TAB_TIMELINE}>
-                <HttpResponseTimeline response={activeResponse} viewMode={timelineViewMode} />
-              </TabContent>
-            </Tabs>
-          </div>
-        </div>
-      )}
-    </div>
+                <span className="text-text-subtle">See Timeline for details.</span>
+              </VStack>
+            }
+          >
+            <span className="inline-flex min-w-0">
+              <PillButton
+                color="warning"
+                className="font-sans text-sm shrink! max-w-full"
+                innerClassName="flex items-center"
+                leftSlot={<Icon icon="alert_triangle" size="xs" color="warning" />}
+              >
+                <span className="truncate">{getRedirectWarningLabel(redirectDropWarning)}</span>
+              </PillButton>
+            </span>
+          </Tooltip>
+        ) : null
+      }
+      statusLineRight={
+        activeResponse != null && (
+          <RecentHttpResponsesDropdown
+            responses={responses}
+            activeResponse={activeResponse}
+            onPinnedResponseId={setPinnedResponseId}
+          />
+        )
+      }
+    />
   );
+}
+
+/** The client's additions to the response text viewer: filter history, save and copy */
+function useResponseTextViewerExtras(
+  response: HttpResponse | null,
+): ResponseTextViewerExtras | undefined {
+  const filterStateKey = `response.body.${response?.requestId ?? ""}`;
+  const { recentFilters, addFilter, removeFilter, togglePin, clearFilters } =
+    useRecentFilters(filterStateKey);
+  const saveResponse = useSaveResponse(response);
+  const copyResponse = useCopyHttpResponse(response);
+  const filterLeftSlot = useCallback(
+    (filter: TextFilterApi) => (
+      <div className="py-0.5 flex">
+        <RecentFiltersDropdown
+          recentFilters={recentFilters}
+          activeFilter={filter.appliedFilter}
+          onSelect={filter.replaceFilter}
+          onRemove={removeFilter}
+          onTogglePin={togglePin}
+          onClear={clearFilters}
+        />
+      </div>
+    ),
+    [recentFilters, removeFilter, togglePin, clearFilters],
+  );
+
+  if (response == null) return undefined;
+  const actionsDisabled = response.state !== "closed" && response.status >= 100;
+  return {
+    filterStateKey,
+    onFilterApplied: addFilter,
+    filterLeftSlot,
+    footerActions: [
+      <IconButton
+        key="save"
+        size="sm"
+        icon="save"
+        title="Save response to file"
+        disabled={actionsDisabled}
+        onClick={() => saveResponse.mutate()}
+        className="border !border-border-subtle"
+      />,
+      <IconButton
+        key="copy"
+        size="sm"
+        icon="copy"
+        title="Copy response body"
+        disabled={actionsDisabled}
+        onClick={() => copyResponse.mutate()}
+        className="border !border-border-subtle"
+      />,
+    ],
+  };
+}
+
+function renderCopyButton(getText: () => Promise<string | null>) {
+  return <CopyButton color="secondary" variant="border" size="xs" text={getText} />;
 }
 
 function getRedirectDropWarning(
@@ -409,59 +285,4 @@ function getRedirectWarningLabel(warning: RedirectDropWarning): string {
     return "Dropped body";
   }
   return "Dropped headers";
-}
-
-function EnsureCompleteResponse({
-  response,
-  Component,
-}: {
-  response: HttpResponse;
-  Component: ComponentType<{ bodyUrl: string }>;
-}) {
-  // Wait until the response has been fully-downloaded before asking for it
-  const complete = response.state === "closed";
-  const bodyUrl = useResponseBodyUrl(complete ? response : null);
-
-  if (!complete || bodyUrl.isPending) {
-    return (
-      <EmptyStateText>
-        <LoadingIcon />
-      </EmptyStateText>
-    );
-  }
-
-  if (bodyUrl.error) {
-    return <Banner color="danger">{String(bodyUrl.error)}</Banner>;
-  }
-
-  if (bodyUrl.data == null) {
-    return <div>Empty response body</div>;
-  }
-
-  return <Component bodyUrl={bodyUrl.data} />;
-}
-
-function HttpSvgViewer({ response }: { response: HttpResponse }) {
-  const body = useResponseBodyText({ response, filter: null });
-
-  if (!body.data) return null;
-
-  return <SvgViewer text={body.data} />;
-}
-
-function HttpCsvViewer({ response, className }: { response: HttpResponse; className?: string }) {
-  const body = useResponseBodyText({ response, filter: null });
-
-  return <CsvViewer text={body.data ?? null} className={className} />;
-}
-
-function HttpMultipartViewer({ response }: { response: HttpResponse }) {
-  const body = useResponseBodyBytes({ response });
-
-  if (body.data == null) return null;
-
-  const contentTypeHeader = getContentTypeFromHeaders(response.headers);
-  const boundary = contentTypeHeader?.split("boundary=")[1] ?? "unknown";
-
-  return <MultipartViewer data={body.data} boundary={boundary} idPrefix={response.id} />;
 }

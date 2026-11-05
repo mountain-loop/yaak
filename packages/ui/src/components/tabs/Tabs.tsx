@@ -21,11 +21,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { useInMemoryStoredValue, type UseStoredValue } from "../../hooks/useStoredValue";
+import type { UseStoredValue } from "../../hooks/useStoredValue";
+import { type UseHostStoredValue, useEditorHost } from "../EditorHost";
 import { computeSideForDragMove } from "../../lib/dnd";
 import type { ButtonProps } from "../Button";
 import { Button } from "../Button";
 import { DropMarker } from "../DropMarker";
+import { Icon } from "../Icon";
+import type { RadioDropdownProps } from "../RadioDropdown";
+import { RadioDropdown } from "../RadioDropdown";
 
 export interface TabButtonRenderProps {
   buttonProps: Partial<ButtonProps>;
@@ -46,7 +50,16 @@ export type TabItem =
       renderButton: (props: TabButtonRenderProps) => ReactNode;
       leftSlot?: ReactNode;
       rightSlot?: ReactNode;
-    };
+    }
+  | TabOptionsItem;
+
+/** A tab whose button is also a menu of choices, labelled with the chosen one */
+export interface TabOptionsItem {
+  value: string;
+  options: Omit<RadioDropdownProps, "children">;
+  leftSlot?: ReactNode;
+  rightSlot?: ReactNode;
+}
 
 export interface TabsStorage {
   order: string[];
@@ -91,19 +104,23 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
     layout = "vertical",
     storageKey,
     activeTabKey,
-    useStoredValue = useInMemoryStoredValue,
+    useStoredValue: useStoredValueProp,
   }: TabsProps,
   forwardedRef: Ref<TabsRef>,
 ) {
   const ref = useRef<HTMLDivElement | null>(null);
   const reorderable = !!storageKey;
+  const host = useEditorHost();
 
-  // Use key-value storage for persistence if storageKey is provided
+  // Use key-value storage for persistence if storageKey is provided. Without one passed in, the
+  // host's local storage keeps it.
   // Handle migration from old format (string[]) to new format (TabsStorage)
-  const [rawStorage, setStorage] = useStoredValue<TabsStorage | string[]>(storageKey ?? null, {
-    order: [],
-    activeTabs: {},
-  });
+  const useStoredValue: UseHostStoredValue = useStoredValueProp ?? host.useStoredValue;
+  const [rawStorage, setStorage] = useStoredValue<TabsStorage | string[]>(
+    storageKey ?? null,
+    { order: [], activeTabs: {} },
+    "no_sync",
+  );
 
   // Migrate old format (string[]) to new format (TabsStorage)
   const storage: TabsStorage = Array.isArray(rawStorage)
@@ -481,6 +498,8 @@ function TabButton({
   const buttonContent =
     "renderButton" in tab ? (
       tab.renderButton({ buttonProps: btnProps, isActive })
+    ) : "options" in tab ? (
+      <TabOptionsButton tab={tab} buttonProps={btnProps} isActive={isActive} />
     ) : (
       <Button leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...btnProps}>
         {"label" in tab && tab.label ? tab.label : tab.value}
@@ -526,3 +545,40 @@ export const TabContent = memo(function TabContent({
   );
   return ErrorBoundary ? <ErrorBoundary name={`Tab ${value}`}>{content}</ErrorBoundary> : content;
 });
+
+function TabOptionsButton({
+  tab,
+  buttonProps,
+  isActive,
+}: TabButtonRenderProps & { tab: TabOptionsItem }) {
+  const { options } = tab;
+  const option = options.items.find((i) => "value" in i && i.value === options.value);
+  return (
+    <RadioDropdown
+      items={options.items}
+      itemsAfter={options.itemsAfter}
+      itemsBefore={options.itemsBefore}
+      value={options.value}
+      onChange={options.onChange}
+    >
+      <Button
+        leftSlot={tab.leftSlot}
+        rightSlot={
+          <div className="flex items-center">
+            {tab.rightSlot}
+            <Icon
+              size="sm"
+              icon="chevron_down"
+              className={classNames("ml-1", isActive ? "text-text-subtle" : "text-text-subtlest")}
+            />
+          </div>
+        }
+        {...buttonProps}
+      >
+        {option && "shortLabel" in option && option.shortLabel
+          ? option.shortLabel
+          : (option?.label ?? "Unknown")}
+      </Button>
+    </RadioDropdown>
+  );
+}
