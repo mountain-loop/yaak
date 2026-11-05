@@ -1629,8 +1629,11 @@ impl FlowSink {
                     f.flow.response_headers.push(ProxyHeader { name, value });
                 }
             }
-            ProxyEvent::ResponseBodyChunk { id, data, .. } => {
+            // Counted per chunk too, for a stream written while it is open.
+            ProxyEvent::ResponseBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
+                    f.flow.response_size += len as i64;
+                    f.flow.response_truncated |= data.len() < len;
                     write_body_chunk(&mut f.response_body, &data);
                 }
             }

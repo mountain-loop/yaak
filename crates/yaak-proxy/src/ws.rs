@@ -23,6 +23,9 @@ const OP_CLOSE: u8 = 0x8;
 const OP_PING: u8 = 0x9;
 const OP_PONG: u8 = 0xA;
 
+/// The most a control frame carries (RFC 6455 5.5).
+const MAX_CONTROL_PAYLOAD: usize = 125;
+
 /// The tail permessage-deflate strips from each compressed message (RFC 7692 7.2.2).
 const DEFLATE_TAIL: [u8; 4] = [0x00, 0x00, 0xff, 0xff];
 
@@ -332,7 +335,9 @@ impl FrameParser {
 
     fn payload(&mut self, opcode: u8, chunk: &[u8]) {
         if opcode >= OP_CLOSE {
-            self.control.extend_from_slice(chunk);
+            // At most what a control frame may carry, however long a broken one claims to be.
+            let room = MAX_CONTROL_PAYLOAD.saturating_sub(self.control.len());
+            self.control.extend_from_slice(&chunk[..chunk.len().min(room)]);
             return;
         }
         let Some(message) = self.message.as_mut() else {

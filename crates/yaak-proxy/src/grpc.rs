@@ -137,6 +137,7 @@ impl GrpcParser {
         if flag & FLAG_TRAILERS != 0 {
             let mut message = trailers_message(self.direction, &String::from_utf8_lossy(&data));
             message.size = size;
+            message.truncated = truncated;
             return message;
         }
         let mut message = StreamMessage::new(self.direction, MessageKind::GrpcMessage);

@@ -252,15 +252,19 @@ pub async fn reflect(
         .parse()
         .map_err(|e| format!("Invalid host {authority}: {e}"))?;
     // Reflection's client panics on an answer it does not expect; that ends this task alone.
-    let reflecting = tokio::spawn(async move {
-        yaak_grpc::fill_pool_from_reflection(&uri, &Default::default(), true, None, 64 << 20)
-            .await
-            .map_err(|e| e.to_string())
-    });
-    let reflected = tokio::time::timeout(REFLECTION_TIMEOUT, reflecting)
-        .await
-        .map_err(|_| format!("{authority} did not answer reflection in time"))?
-        .map_err(|_| format!("{authority} answered reflection with something unexpected"))??;
+    // Timed out inside the task, so a server that stalls leaves nothing running.
+    let timeout_error = format!("{authority} did not answer reflection in time");
+    let reflected = tokio::spawn(async move {
+        let metadata = Default::default();
+        let reflecting =
+            yaak_grpc::fill_pool_from_reflection(&uri, &metadata, true, None, 64 << 20);
+        match tokio::time::timeout(REFLECTION_TIMEOUT, reflecting).await {
+            Ok(reflected) => reflected.map_err(|e| e.to_string()),
+            Err(_) => Err(timeout_error),
+        }
+    })
+    .await
+    .map_err(|_| format!("{authority} answered reflection with something unexpected"))??;
     if reflected.services().next().is_none() {
         return Err(format!("{authority} offers no services by reflection"));
     }
