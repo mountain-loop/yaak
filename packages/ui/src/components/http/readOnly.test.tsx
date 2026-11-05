@@ -6,9 +6,15 @@ import { EditorHostProvider } from "../EditorHost";
 import { PairEditorRow } from "../pairs/PairEditor";
 import { bodyTypeLabel } from "./HttpRequestPaneView";
 import { JsonBodyEditor } from "./JsonBodyEditor";
+import { RequestBodyViewer } from "./RequestBodyViewer";
 import { RequestMethodDropdown } from "./RequestMethodDropdown";
 import { parseCookieHeaders } from "./ResponseCookies";
-import { BODY_TYPE_FORM_URLENCODED, BODY_TYPE_JSON, BODY_TYPE_OTHER } from "./types";
+import {
+  BODY_TYPE_FORM_URLENCODED,
+  BODY_TYPE_JSON,
+  BODY_TYPE_OTHER,
+  type HttpBodyLoader,
+} from "./types";
 import { UrlBar } from "./UrlBar";
 
 // Stand-ins for the host's editors that show what they were given
@@ -102,6 +108,29 @@ describe("read-only modes", () => {
 
     const editable = render(<JsonBodyEditor {...props} onChange={() => {}} />);
     expect(editable).toContain("JSON Settings");
+  });
+});
+
+describe("RequestBodyViewer", () => {
+  // A captured body that isn't valid UTF-8 has bytes but no text
+  const binary: HttpBodyLoader = {
+    useText: () => ({ data: null, isLoading: false, error: null }),
+    useBytes: () => ({ data: new Uint8Array([0x89, 0x50, 0xff]), isLoading: false, error: null }),
+    useUrl: () => ({ data: null, isLoading: false, error: null }),
+  };
+
+  test("shows a binary body instead of calling it empty", () => {
+    const markup = render(
+      <RequestBodyViewer id="b1" contentType="application/octet-stream" body={binary} />,
+    );
+    expect(markup).not.toContain("No request body");
+    expect(markup).toContain("Binary body, 3");
+  });
+
+  test("hands a binary image to the image viewer", () => {
+    const markup = render(<RequestBodyViewer id="b2" contentType="image/png" body={binary} />);
+    expect(markup).not.toContain("No request body");
+    expect(markup).not.toContain("Binary body");
   });
 });
 

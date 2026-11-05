@@ -1,3 +1,4 @@
+import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import { languageFromContentType } from "../../lib/contentType";
 import { getMimeTypeFromContentType } from "../../lib/mimeType";
 import { EmptyStateText } from "../EmptyStateText";
@@ -42,14 +43,13 @@ function RequestBodyViewerInner({ id, contentType, body }: Props) {
     return <EmptyStateText>Error loading request body: {error.message}</EmptyStateText>;
   }
 
-  const bodyText = text.data;
+  // Whether there's a body is the bytes' to say: a binary body has no text
   const bodyBytes = bytes.data;
-  if (bodyText == null || bodyText.length === 0 || bodyBytes == null) {
+  if (bodyBytes == null || bodyBytes.length === 0) {
     return <EmptyStateText>No request body</EmptyStateText>;
   }
 
   const mimeType = contentType ? getMimeTypeFromContentType(contentType).essence : null;
-  const language = languageFromContentType(contentType, bodyText);
 
   // Route to appropriate viewer based on content type
   if (mimeType?.match(/^multipart/i)) {
@@ -59,11 +59,7 @@ function RequestBodyViewerInner({ id, contentType, body }: Props) {
     return <MultipartViewer data={bodyCopy} boundary={boundary} idPrefix={`request.${id}`} />;
   }
 
-  if (mimeType?.match(/^image\/svg/i)) {
-    return <SvgViewer text={bodyText} />;
-  }
-
-  if (mimeType?.match(/^image/i)) {
+  if (mimeType?.match(/^image/i) && !mimeType.match(/^image\/svg/i)) {
     return <ImageViewer data={bodyBytes.buffer as ArrayBuffer} />;
   }
 
@@ -75,6 +71,22 @@ function RequestBodyViewerInner({ id, contentType, body }: Props) {
     return <VideoViewer data={bodyBytes} />;
   }
 
+  const appViewer = mimeType?.match(/pdf/i)
+    ? renderBodyViewer?.({ source: "request", mimeType, viewMode: "pretty", body, complete: true })
+    : null;
+
+  // The rest show text, which a body that isn't valid UTF-8 doesn't have
+  const bodyText = text.data;
+  if (bodyText == null || bodyText.length === 0) {
+    return (
+      appViewer ?? <EmptyStateText>Binary body, {formatSize(bodyBytes.length)}</EmptyStateText>
+    );
+  }
+
+  if (mimeType?.match(/^image\/svg/i)) {
+    return <SvgViewer text={bodyText} />;
+  }
+
   if (mimeType?.match(/csv|tab-separated/i)) {
     return <CsvViewer text={bodyText} />;
   }
@@ -83,10 +95,8 @@ function RequestBodyViewerInner({ id, contentType, body }: Props) {
     return <WebPageViewer html={bodyText} />;
   }
 
-  const appViewer = mimeType?.match(/pdf/i)
-    ? renderBodyViewer?.({ source: "request", mimeType, viewMode: "pretty", body, complete: true })
-    : null;
   if (appViewer != null) return appViewer;
 
+  const language = languageFromContentType(contentType, bodyText);
   return <TextViewer text={bodyText} language={language} stateKey={`request.body.${id}`} />;
 }
