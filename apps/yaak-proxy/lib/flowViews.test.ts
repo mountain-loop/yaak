@@ -50,6 +50,12 @@ const flow: Flow = {
   clientName: null,
   clientBundleId: null,
   clientPath: null,
+  streamKind: null,
+  messageCount: 0,
+  grpcService: null,
+  grpcMethod: null,
+  grpcStatus: null,
+  grpcMessage: null,
 };
 
 function bytes(text: string): FlowBodyData {
