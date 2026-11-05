@@ -5,6 +5,7 @@ use std::io::Read;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use bytes::Bytes;
 use flate2::read::{GzDecoder, ZlibDecoder};
 use hyper::header::HeaderMap;
 
@@ -167,51 +168,53 @@ impl GrpcParser {
     fn finish(&mut self) -> StreamMessage {
         let (flag, length, _, mut payload) = self.current.take().expect("a message being read");
         let (data, truncated) = payload.take();
-        let size = u64::from(length);
-        if flag & FLAG_TRAILERS != 0 {
-            let mut message = trailers_message(self.direction, &String::from_utf8_lossy(&data));
-            message.size = size;
-            message.truncated = truncated;
-            return message;
-        }
-        let mut message = StreamMessage::new(self.direction, MessageKind::GrpcMessage);
-        message.size = size;
-        message.truncated = truncated;
-        if flag & FLAG_COMPRESSED == 0 {
+        let compressed = flag & FLAG_COMPRESSED != 0;
+        let (data, truncated, error) =
+            if compressed { self.decompress(data, truncated) } else { (data, truncated, None) };
+        // gRPC-Web's trailers, read once decompressed, as they can be.
+        let mut message = if flag & FLAG_TRAILERS != 0 {
+            // Trailers that would not decompress are kept as they came, with no status read.
+            let text = if error.is_none() { String::from_utf8_lossy(&data) } else { "".into() };
+            let mut message = trailers_message(self.direction, &text);
             message.data = data;
-            return message;
-        }
-        message.compressed = true;
+            message
+        } else {
+            let mut message = StreamMessage::new(self.direction, MessageKind::GrpcMessage);
+            message.data = data;
+            message
+        };
+        message.size = u64::from(length);
+        message.truncated = truncated;
+        message.compressed = compressed;
+        message.error = error;
+        message
+    }
+
+    /// A compressed message's payload decompressed with `grpc-encoding`, whether that is cut at
+    /// the limit, and why it could not be decompressed, when it could not: then the payload as
+    /// it came.
+    fn decompress(&self, data: Bytes, truncated: bool) -> (Bytes, bool, Option<String>) {
         let mut decoded = Vec::new();
         let take = self.limit as u64 + 1;
         let result = match self.encoding.as_deref() {
             Some("gzip") => GzDecoder::new(&data[..]).take(take).read_to_end(&mut decoded),
             Some("deflate") => ZlibDecoder::new(&data[..]).take(take).read_to_end(&mut decoded),
             other => {
-                message.error = Some(format!(
-                    "Compressed with {}, not decoded",
-                    other.unwrap_or("no encoding")
-                ));
-                message.data = data;
-                return message;
+                let error =
+                    format!("Compressed with {}, not decoded", other.unwrap_or("no encoding"));
+                return (data, truncated, Some(error));
             }
         };
         match result {
             Ok(_) if !truncated => {
-                message.truncated = decoded.len() > self.limit;
+                let truncated = decoded.len() > self.limit;
                 decoded.truncate(self.limit);
-                message.data = decoded.into();
+                (decoded.into(), truncated, None)
             }
             // A payload cut at the limit cannot be decompressed whole.
-            Ok(_) | Err(_) => {
-                message.error = Some(match result {
-                    Err(e) => format!("Failed to decompress the message: {e}"),
-                    Ok(_) => "Too large to decompress".into(),
-                });
-                message.data = data;
-            }
+            Ok(_) => (data, truncated, Some("Too large to decompress".into())),
+            Err(e) => (data, truncated, Some(format!("Failed to decompress the message: {e}"))),
         }
-        message
     }
 }
 
@@ -326,5 +329,18 @@ mod tests {
             messages[1].kind,
             MessageKind::GrpcTrailers { status: Some(5), message: Some("not found".into()) }
         );
+    }
+
+    #[test]
+    fn compressed_web_trailers_are_read_once_decompressed() {
+        use flate2::write::GzEncoder;
+        use std::io::Write;
+        let mut gz = GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gz.write_all(b"grpc-status: 5\r\n").unwrap();
+        let trailers = frame(FLAG_TRAILERS | FLAG_COMPRESSED, &gz.finish().unwrap());
+        let mut parser = GrpcParser::new(MessageDirection::Server, Some("gzip"), false, 1024);
+        let messages = parser.feed(&trailers);
+        assert_eq!(messages[0].kind, MessageKind::GrpcTrailers { status: Some(5), message: None });
+        assert!(messages[0].compressed && messages[0].error.is_none());
     }
 }

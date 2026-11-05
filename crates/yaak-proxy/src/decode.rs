@@ -33,10 +33,16 @@ impl Decoding {
 
 pub(crate) struct ContentDecoder {
     decompress: Decompress,
-    /// A gzip header still to be read, as much of it as has come; None once it is read, or for
-    /// deflate, which zlib's own header covers.
+    /// gzip, which comes in members, each with a header and a trailer.
+    gzip: bool,
+    /// A gzip member's header still to be read, as much of it as has come; None while a member
+    /// is being inflated, and for deflate, which zlib's own header covers.
     gzip_header: Option<Vec<u8>>,
-    /// The compressed stream ended; anything after it (a gzip trailer) is not read.
+    /// Bytes of a gzip member's trailer (its CRC and length, not checked) still to skip.
+    trailer_left: usize,
+    /// gzip members read whole.
+    members: usize,
+    /// The compressed stream ended; anything after it is not read.
     ended: bool,
     /// Deflate's `zlib` framing, which some servers leave out.
     zlib: bool,
@@ -50,7 +56,10 @@ impl ContentDecoder {
     fn gzip() -> Self {
         Self {
             decompress: Decompress::new(false),
+            gzip: true,
             gzip_header: Some(Vec::new()),
+            trailer_left: 0,
+            members: 0,
             ended: false,
             zlib: false,
             started: false,
@@ -61,7 +70,10 @@ impl ContentDecoder {
     fn deflate() -> Self {
         Self {
             decompress: Decompress::new(true),
+            gzip: false,
             gzip_header: None,
+            trailer_left: 0,
+            members: 0,
             ended: false,
             zlib: true,
             started: false,
@@ -75,22 +87,43 @@ impl ContentDecoder {
         mut input: &[u8],
         out: &mut impl FnMut(&[u8]),
     ) -> Result<(), String> {
-        if let Some(header) = self.gzip_header.as_mut() {
-            let before = header.len();
-            header.extend_from_slice(input);
-            match gzip_header_len(header)? {
-                None => return Ok(()),
-                Some(len) => {
-                    input = &input[len - before..];
-                    self.gzip_header = None;
-                }
-            }
-        }
         if self.zlib && !self.started {
             self.unframed.extend_from_slice(input);
         }
         let mut buf = [0u8; PIECE];
-        while !input.is_empty() && !self.ended {
+        loop {
+            if self.ended {
+                return Ok(());
+            }
+            if self.trailer_left > 0 {
+                let skip = self.trailer_left.min(input.len());
+                input = &input[skip..];
+                self.trailer_left -= skip;
+                if self.trailer_left > 0 {
+                    return Ok(());
+                }
+            }
+            if let Some(header) = self.gzip_header.as_mut() {
+                if input.is_empty() {
+                    return Ok(());
+                }
+                let before = header.len();
+                header.extend_from_slice(input);
+                match gzip_header_len(header) {
+                    Ok(None) => return Ok(()),
+                    Ok(Some(len)) => {
+                        input = &input[len - before..];
+                        self.gzip_header = None;
+                    }
+                    // What follows a whole member, padding say, is not another one.
+                    Err(_) if self.members > 0 => {
+                        self.ended = true;
+                        return Ok(());
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+
             let (read_before, written_before) =
                 (self.decompress.total_in(), self.decompress.total_out());
             let status = match self.decompress.decompress(input, &mut buf, FlushDecompress::None) {
@@ -114,12 +147,22 @@ impl ContentDecoder {
                 out(&buf[..written]);
             }
             if status == Status::StreamEnd {
+                // A gzip body may hold more members, each read in turn.
+                if self.gzip {
+                    self.members += 1;
+                    self.decompress.reset(false);
+                    self.trailer_left = 8;
+                    self.gzip_header = Some(Vec::new());
+                    continue;
+                }
                 self.ended = true;
-            } else if read == 0 && written == 0 {
-                break;
+                return Ok(());
+            }
+            // A full piece may have more output behind it, even once the input is used up.
+            if (input.is_empty() && written < PIECE) || (read == 0 && written == 0) {
+                return Ok(());
             }
         }
-        Ok(())
     }
 }
 
@@ -196,6 +239,38 @@ mod tests {
             flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
         raw.write_all(&text).unwrap();
         assert_eq!(decode_bytewise("deflate", &raw.finish().unwrap()).0, text);
+    }
+
+    #[test]
+    fn output_buffered_past_a_piece_is_drained_when_the_input_runs_out() {
+        // Raw deflate inflates more than a piece from the last of its input.
+        let text: Vec<u8> =
+            b"data: ".iter().chain(&[b'x'; 40_000]).chain(b"\n\n").copied().collect();
+        let mut raw = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::best());
+        raw.write_all(&text).unwrap();
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("deflate")) else {
+            panic!()
+        };
+        let mut out = Vec::new();
+        decoder.feed(&raw.finish().unwrap(), &mut |piece| out.extend_from_slice(piece)).unwrap();
+        assert_eq!(out, text);
+    }
+
+    #[test]
+    fn every_gzip_member_is_read() {
+        let mut body = Vec::new();
+        for part in [&b"data: one\n\n"[..], b"data: two\n\n"] {
+            let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            gz.write_all(part).unwrap();
+            body.extend(gz.finish().unwrap());
+        }
+        assert_eq!(decode_bytewise("gzip", &body).0, b"data: one\n\ndata: two\n\n");
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip")) else {
+            panic!()
+        };
+        let mut out = Vec::new();
+        decoder.feed(&body, &mut |piece| out.extend_from_slice(piece)).unwrap();
+        assert_eq!(out, b"data: one\n\ndata: two\n\n", "in one chunk");
     }
 
     #[test]

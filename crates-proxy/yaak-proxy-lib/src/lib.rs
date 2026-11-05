@@ -1447,6 +1447,10 @@ const STREAM_FLOW_WRITE_INTERVAL: Duration = Duration::from_millis(250);
 /// this, so a busy WebSocket does not cost a transaction a frame.
 const MESSAGE_BATCH: usize = 256;
 
+/// How often the event loop looks for streaming flows due to be written while events keep
+/// coming.
+const DUE_CHECK_INTERVAL: Duration = Duration::from_millis(50);
+
 /// Why a stream still open when the engine stopped ended.
 const STOPPED_MID_STREAM: &str = "Yaak Proxy stopped before the stream ended";
 
@@ -1498,6 +1502,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
     use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
     let mut in_flight: HashMap<u64, InFlight> = HashMap::new();
     let mut pending: Vec<PendingMessage> = Vec::new();
+    let mut last_due_check = std::time::Instant::now();
 
     loop {
         // Messages are written once no more are waiting, or a batch is full; flows changed by
@@ -1530,16 +1535,21 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
         };
         if let ProxyEvent::Message { id, message } = event {
             record_message(&mut in_flight, &mut pending, id, &message);
-            // A stream that never lets up still has its messages and its flow written.
             if pending.len() >= MESSAGE_BATCH {
                 sink.write_messages(&mut in_flight, &mut pending);
-                sink.write_due_flows(&mut in_flight);
             }
-            continue;
+        } else {
+            // Before anything else of the flows, so a flow's messages are in before it ends.
+            sink.write_messages(&mut in_flight, &mut pending);
+            sink.handle(&mut in_flight, event);
         }
-        // Before anything else of the flows, so a flow's messages are in before it ends.
-        sink.write_messages(&mut in_flight, &mut pending);
-        sink.handle(&mut in_flight, event);
+        // Traffic that never lets up never empties the queue, so flows due to be written are
+        // looked for here too, every so often, their messages written first.
+        if last_due_check.elapsed() >= DUE_CHECK_INTERVAL {
+            last_due_check = std::time::Instant::now();
+            sink.write_messages(&mut in_flight, &mut pending);
+            sink.write_due_flows(&mut in_flight);
+        }
     }
 
     sink.write_messages(&mut in_flight, &mut pending);
@@ -2174,6 +2184,30 @@ mod tests {
         assert_eq!(messages::count(&ctx.db, &flow.id).unwrap(), 0);
         let blobs = ctx.blobs.connect().list_body_ids().unwrap();
         assert!(blobs.iter().all(|b| !b.starts_with(&flow.id)), "{blobs:?}");
+    }
+
+    #[test]
+    fn an_open_stream_is_written_while_events_never_let_up() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        open_websocket(&tx, 1, "https://example.com/socket");
+        wait_for_flow(&ctx, |f| f.stream_kind.is_some());
+
+        // A backlog of messages, each followed by another event, which costs the loop a
+        // transaction for the message before it, so its queue does not empty for a while.
+        const SENT: i64 = 10_000;
+        for _ in 0..SENT {
+            tx.send(ws_message(1, D::Client, K::WebSocketText, b"tick")).unwrap();
+            let data = bytes::Bytes::from_static(b"x");
+            tx.send(ProxyEvent::ResponseBodyChunk { id: 1, len: 1, data }).unwrap();
+        }
+        let counted = wait_for_flow(&ctx, |f| f.message_count > 0);
+        assert!(counted.message_count < SENT, "written before the backlog was through");
+        drop(tx);
+        event_loop.join().unwrap();
     }
 
     #[test]
