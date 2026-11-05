@@ -408,18 +408,9 @@ fn classify_matched_ids(plan: &mut ImportPlan, matched: &BTreeMap<String, Value>
         else {
             continue;
         };
-        // A Yaak export's sort priorities are the sidebar order the user chose, not numbering
-        // an importer made up, so a change to one is a change worth applying.
-        let with_order = |raw: &Value| {
-            let mut value = comparable(raw.clone());
-            if let (Some(object), Some(priority)) = (value.as_object_mut(), raw.get("sortPriority"))
-            {
-                object.insert("sortPriority".to_string(), priority.clone());
-            }
-            value
-        };
-        let incoming = with_order(incoming);
-        let current = with_order(current);
+        // Only Yaak exports have IDs to match, and their order is the user's
+        let incoming = comparable_for(incoming.clone(), true);
+        let current = comparable_for(current.clone(), true);
         if incoming == current {
             item.action = ImportPlanAction::Unchanged;
             item.selected = false;
@@ -1049,21 +1040,22 @@ fn record_import_plan_source(
         &UpdateSource::Import,
     )?;
 
+    let keep_order = is_yaak_importer(&source.importer);
     let mut committed: BTreeMap<&str, String> = BTreeMap::new();
     for v in &upserted.environments {
-        committed.insert(&v.id, content_hash(serde_json::to_value(v)?));
+        committed.insert(&v.id, content_hash(serde_json::to_value(v)?, keep_order));
     }
     for v in &upserted.folders {
-        committed.insert(&v.id, content_hash(serde_json::to_value(v)?));
+        committed.insert(&v.id, content_hash(serde_json::to_value(v)?, keep_order));
     }
     for v in &upserted.http_requests {
-        committed.insert(&v.id, content_hash(serde_json::to_value(v)?));
+        committed.insert(&v.id, content_hash(serde_json::to_value(v)?, keep_order));
     }
     for v in &upserted.grpc_requests {
-        committed.insert(&v.id, content_hash(serde_json::to_value(v)?));
+        committed.insert(&v.id, content_hash(serde_json::to_value(v)?, keep_order));
     }
     for v in &upserted.websocket_requests {
-        committed.insert(&v.id, content_hash(serde_json::to_value(v)?));
+        committed.insert(&v.id, content_hash(serde_json::to_value(v)?, keep_order));
     }
 
     let write_row = |model_id: &str,
@@ -1081,7 +1073,9 @@ fn record_import_plan_source(
                     ImportPlanAction::Unchanged
                     | ImportPlanAction::KeepLocal
                     | ImportPlanAction::Conflict,
-                ) => Some((Some(model_id.to_string()), Some(content_hash(incoming()?)))),
+                ) => {
+                    Some((Some(model_id.to_string()), Some(content_hash(incoming()?, keep_order))))
+                }
                 // Turned down, so remember it as not wanted rather than offering it again
                 Some(ImportPlanAction::Create | ImportPlanAction::Ignored) => Some((None, None)),
                 Some(ImportPlanAction::Delete) if item.is_some_and(|i| i.selected) => {
@@ -1213,6 +1207,7 @@ fn merge_with_linked_source(
     original: &ImportResources,
 ) -> Result<()> {
     let db = query_manager.connect();
+    let keep_order = is_yaak_importer(&plan.importer);
 
     let incoming_keys: BTreeSet<String> = plan.source_keys.values().cloned().collect();
     let linked = match (&plan.origin, &plan.destination) {
@@ -1434,8 +1429,11 @@ fn merge_with_linked_source(
                 KeyStatus::Wanted(row) => row,
             };
 
-            let incoming = comparable(serde_json::to_value(&any)?);
-            let current = comparable(current_models.get(&planned_id).cloned().unwrap_or_default());
+            let incoming = comparable_for(serde_json::to_value(&any)?, keep_order);
+            let current = comparable_for(
+                current_models.get(&planned_id).cloned().unwrap_or_default(),
+                keep_order,
+            );
             let (source_changed, local_changed) = match recorded_hash(row, &incoming) {
                 Some(hash) => {
                     (hash_comparable(&incoming) != hash, hash_comparable(&current) != hash)
@@ -1641,16 +1639,38 @@ fn strip_ids(value: Value) -> Value {
     }
 }
 
+/// [`comparable`], keeping `sortPriority` when `keep_order` is set. A Yaak export's sort
+/// priorities are the sidebar order the user chose rather than numbering an importer made up,
+/// so for Yaak imports a change of order is a change.
+fn comparable_for(value: Value, keep_order: bool) -> Value {
+    let priority = if keep_order { value.get("sortPriority").cloned() } else { None };
+    let mut value = comparable(value);
+    if let (Some(object), Some(priority)) = (value.as_object_mut(), priority) {
+        object.insert("sortPriority".to_string(), priority);
+    }
+    value
+}
+
 fn content_hash_version(value: &Value) -> &'static str {
-    // Only folder environments changed comparison semantics. Older hashes for these fall back
-    // to comparing the two sides until the next import records a hash without the derived name.
-    if value.get("parentModel").and_then(Value::as_str) == Some("folder") { "v2:" } else { "v1:" }
+    // Ordered comparisons are Yaak imports, whose older hashes left the order out; like the
+    // folder environments before them, those fall back to comparing the two sides until the
+    // next import records a hash in the new form.
+    if value.get("sortPriority").is_some() {
+        "v3:"
+    } else if value.get("parentModel").and_then(Value::as_str) == Some("folder") {
+        // Only folder environments changed comparison semantics. Older hashes for these fall
+        // back to comparing the two sides until the next import records one without the
+        // derived name.
+        "v2:"
+    } else {
+        "v1:"
+    }
 }
 
 /// Identifies a resource's content well enough to tell "changed since the last import" from
 /// "unchanged", without keeping a copy of every imported resource around.
-fn content_hash(value: Value) -> String {
-    hash_comparable(&comparable(value))
+fn content_hash(value: Value, keep_order: bool) -> String {
+    hash_comparable(&comparable_for(value, keep_order))
 }
 
 fn hash_comparable(value: &Value) -> String {
@@ -3132,7 +3152,10 @@ mod tests {
                 let current = existing_model_json(&db, resource, model_id)
                     .expect("query current model")
                     .expect("row target exists");
-                assert_eq!(row.content_hash.as_deref(), Some(content_hash(current).as_str()));
+                assert_eq!(
+                    row.content_hash.as_deref(),
+                    Some(content_hash(current, false).as_str())
+                );
             }
             source
         };
@@ -4438,16 +4461,24 @@ mod tests {
             })
             .expect("seed destination");
 
-        let resources = ImportResources {
-            http_requests: vec![HttpRequest { sort_priority: 42.0, ..request }],
-            ..Default::default()
-        };
-        let plan = plan_yaak(&query_manager, into_existing(&destination.id), resources);
-        let item = item_by_name(&plan, "Ordered");
-        assert_eq!(item.action, ImportPlanAction::Update);
-        assert_eq!(item.changed_fields, ["sortPriority"]);
-        commit_import_plan(&query_manager, plan).expect("commit");
-        let stored = query_manager.connect().get_http_request("rq_ordered").expect("stored");
-        assert_eq!(stored.sort_priority, 42.0);
+        // The first import matches by ID; the second goes through the import source the first
+        // one linked, and is compared against the hashes it recorded.
+        for (round, priority) in [(1, 42.0), (2, 7.0)] {
+            let resources = ImportResources {
+                http_requests: vec![HttpRequest { sort_priority: priority, ..request.clone() }],
+                ..Default::default()
+            };
+            let plan = plan_yaak(&query_manager, into_existing(&destination.id), resources);
+            if round == 2 {
+                let db = query_manager.connect();
+                assert_eq!(db.list_import_sources(&destination.id).expect("sources").len(), 1);
+            }
+            let item = item_by_name(&plan, "Ordered");
+            assert_eq!(item.action, ImportPlanAction::Update, "round {round}");
+            assert_eq!(item.changed_fields, ["sortPriority"], "round {round}");
+            commit_import_plan(&query_manager, plan).expect("commit");
+            let stored = query_manager.connect().get_http_request("rq_ordered").expect("stored");
+            assert_eq!(stored.sort_priority, priority, "round {round}");
+        }
     }
 }

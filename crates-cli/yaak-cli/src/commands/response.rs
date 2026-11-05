@@ -45,6 +45,14 @@ impl StoredResponse {
             StoredResponse::Websocket(c) => &c.id,
         }
     }
+
+    fn created_at(&self) -> impl Ord + use<> {
+        match self {
+            StoredResponse::Http(r) => r.created_at,
+            StoredResponse::Grpc(c) => c.created_at,
+            StoredResponse::Websocket(c) => c.created_at,
+        }
+    }
 }
 
 /// Accepts a response or connection ID, or a request ID meaning "the latest response for that
@@ -96,18 +104,49 @@ fn list_for_request(
     })
 }
 
+/// Every kind of stored response in a workspace, newest first, with `limit` applied to the
+/// merged history rather than to each kind.
+fn list_for_workspace(
+    ctx: &CliContext,
+    workspace_id: &str,
+    limit: Option<u64>,
+) -> CommandResult<Vec<StoredResponse>> {
+    let db = ctx.db();
+    let error = |e: yaak_models::error::Error| format!("Failed to list responses: {e}");
+    // Each kind comes back newest first, so the newest `limit` overall are among the newest
+    // `limit` of each kind.
+    let mut responses = db
+        .list_http_responses(workspace_id, limit)
+        .map_err(error)?
+        .into_iter()
+        .map(StoredResponse::Http)
+        .chain(
+            db.list_grpc_connections(workspace_id)
+                .map_err(error)?
+                .into_iter()
+                .map(StoredResponse::Grpc),
+        )
+        .chain(
+            db.list_websocket_connections(workspace_id)
+                .map_err(error)?
+                .into_iter()
+                .map(StoredResponse::Websocket),
+        )
+        .collect::<Vec<_>>();
+    responses.sort_by_key(|r| std::cmp::Reverse(r.created_at()));
+    if let Some(limit) = limit {
+        responses.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+    }
+    Ok(responses)
+}
+
 fn list(ctx: &CliContext, id: Option<&str>, limit: Option<u64>) -> CommandResult {
     // An explicit request ID scopes to that request; anything else lists the workspace.
     let responses = match id.map(|id| get_any_request(ctx, id)) {
         Some(Ok(request)) => list_for_request(ctx, &request, limit)?,
         _ => {
             let workspace_id = resolve_workspace_id(ctx, id, "response list")?;
-            ctx.db()
-                .list_http_responses(&workspace_id, limit)
-                .map_err(|e| format!("Failed to list responses: {e}"))?
-                .into_iter()
-                .map(StoredResponse::Http)
-                .collect()
+            list_for_workspace(ctx, &workspace_id, limit)?
         }
     };
 
@@ -249,7 +288,13 @@ fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
     let count = ctx
         .query_manager()
         .with_tx(|tx| {
-            tx.delete_all_http_responses_for_workspace(&workspace_id, &UpdateSource::Sync)
+            let source = &UpdateSource::Sync;
+            let grpc = tx.list_grpc_connections(&workspace_id)?.len();
+            let websocket = tx.list_websocket_connections(&workspace_id)?.len();
+            let http = tx.delete_all_http_responses_for_workspace(&workspace_id, source)?;
+            tx.delete_all_grpc_connections_for_workspace(&workspace_id, source)?;
+            tx.delete_all_websocket_connections_for_workspace(&workspace_id, source)?;
+            Ok::<_, yaak_models::error::Error>(http + grpc + websocket)
         })
         .map_err(|e| format!("Failed to delete responses: {e}"))?;
     println!("Deleted {count} responses for workspace {workspace_id}");

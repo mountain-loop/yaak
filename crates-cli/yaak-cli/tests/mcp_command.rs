@@ -283,7 +283,9 @@ async fn post(
         .last()
         .map(str::trim)
         .unwrap_or(text.trim());
-    (status, headers, serde_json::from_str(message).ok())
+    // A plain-text body, such as the reason for a 500, comes back as a string to show
+    let body = serde_json::from_str(message).unwrap_or_else(|_| Value::String(text.clone()));
+    (status, headers, Some(body))
 }
 
 #[tokio::test]
@@ -309,7 +311,7 @@ async fn mcp_http_requires_the_token() {
 
     let auth = Some("Bearer s3cret");
     let (status, headers, body) = post(&client, &url, auth, None, initialize).await;
-    assert_eq!(status, reqwest::StatusCode::OK);
+    assert_eq!(status, reqwest::StatusCode::OK, "initialize answered {body:?}");
     let session = headers["mcp-session-id"].to_str().unwrap().to_string();
     assert_eq!(body.unwrap()["result"]["serverInfo"]["name"], "yaak-mcp-server");
 
