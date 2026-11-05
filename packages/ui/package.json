@@ -16,6 +16,7 @@
     "*.css"
   ],
   "dependencies": {
+    "hexy": "^0.4.0",
     "jotai-family": "^1.0.1"
   }
 }

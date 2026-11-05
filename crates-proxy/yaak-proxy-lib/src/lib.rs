@@ -851,12 +851,40 @@ pub struct GetFlowBodyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct GetFlowBodyResponse {
     /// The body decoded with its Content-Encoding, at most the capture limit of it, in base64.
+    /// When it fails to decode, the bytes as they were on the wire instead.
     pub data: String,
     /// The body is incomplete: cut on the wire, or decoded past the capture limit.
     pub truncated: bool,
     /// Bytes stored for the body, as they were on the wire.
     #[ts(type = "number")]
     pub stored_size: usize,
+    /// Why the body failed to decode, in which case `data` is as it was on the wire.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub decode_error: Option<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFlowBodyRequest {
+    pub flow_id: String,
+    pub which: FlowBody,
+    /// The file to write.
+    pub path: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFlowBodyResponse {
+    /// Bytes written.
+    #[ts(type = "number")]
+    pub size: usize,
+    /// What was written is incomplete, as `GetFlowBodyResponse.truncated` is.
+    pub truncated: bool,
+    /// The body failed to decode, so the file has it as it was on the wire.
+    pub raw: bool,
 }
 
 #[derive(Deserialize, TS)]
@@ -1082,16 +1110,42 @@ async fn get_flow_body(
 ) -> Result<GetFlowBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body = viewer_body(&ctx, &flow, req.which, limit).await?;
+    let body =
+        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
     Ok(GetFlowBodyResponse {
         data: BASE64.encode(&body.data),
         truncated: body.truncated,
         stored_size: body.stored_size,
+        decode_error: body.decode_error,
     })
 }
 
-/// A body for the app's viewer, which shows a body that failed to decode as its error, as it
-/// always has, rather than as what decoded before the failure.
+/// Writes a body to a file the person picked: decoded, as the viewer shows it, or as it was on
+/// the wire when it fails to decode.
+async fn save_flow_body(
+    ctx: ProxyCtx,
+    req: SaveFlowBodyRequest,
+) -> Result<SaveFlowBodyResponse, RpcError> {
+    let flow = find_flow(&ctx, &req.flow_id)?;
+    let limit = settings(&ctx)?.capture_body_limit;
+    let body =
+        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let saved = SaveFlowBodyResponse {
+        size: body.data.len(),
+        truncated: body.truncated,
+        raw: body.decode_error.is_some(),
+    };
+    let path = PathBuf::from(req.path);
+    blocking(move || {
+        std::fs::write(&path, &body.data)
+            .map_err(|e| format!("Failed to write {}: {e}", path.display()))
+    })
+    .await?;
+    Ok(saved)
+}
+
+/// A body to filter, which fails when the body failed to decode rather than filtering what
+/// decoded before the failure.
 async fn viewer_body(
     ctx: &ProxyCtx,
     flow: &Flow,
@@ -1112,14 +1166,13 @@ async fn filter_body(
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
     let body = viewer_body(&ctx, &flow, req.which, limit).await?;
-    let text = String::from_utf8_lossy(&body.data);
+    let content_type = find_header(flow.headers(req.which), "content-type");
+    // The text the viewer shows, so the filter's results match it
+    let text = bodies::body_text(&body.data, content_type, body.truncated);
     let language = match req.language {
         Some(FilterLanguage::JsonPath) => yaak_filter::Language::JsonPath,
         Some(FilterLanguage::XPath) => yaak_filter::Language::XPath,
-        None => {
-            let content_type = find_header(flow.headers(req.which), "content-type");
-            yaak_filter::Language::for_content_type(content_type.unwrap_or_default())
-        }
+        None => yaak_filter::Language::for_content_type(content_type.unwrap_or_default()),
     };
     let result = yaak_filter::filter(language, &text, &req.expression);
     Ok(FilterBodyResponse { content: result.content, error: result.error })
@@ -1437,6 +1490,7 @@ define_rpc! {
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
         preview_save(PreviewSaveRequest) -> SavePreview,
         save_flow(SaveFlowToYaakRequest) -> SavedFlow,
+        save_flow_body(SaveFlowBodyRequest) -> SaveFlowBodyResponse,
         system_proxy_set(SystemProxySetRequest) -> SystemProxyStatus,
         system_proxy_status(SystemProxyStatusRequest) -> SystemProxyStatus,
         take_over(TakeOverRequest) -> bool,
@@ -1491,6 +1545,57 @@ mod tests {
         assert!(log.was_on_at(SystemTime::now()));
     }
 
+    /// A flow whose response is `body` under `content_type`, stored in `ctx`
+    fn flow_with_response(ctx: &ProxyCtx, id: &str, content_type: &str, body: &[u8]) {
+        let flow = Flow {
+            id: id.into(),
+            status: Some(200),
+            response_size: body.len() as i64,
+            response_headers: vec![ProxyHeader {
+                name: "Content-Type".into(),
+                value: content_type.into(),
+            }],
+            ..Default::default()
+        };
+        ctx.db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+        let mut writer =
+            BodyChunkWriter::new(ctx.blobs.clone(), Flow::body_id(id, FlowBody::Response));
+        writer.write(body).unwrap();
+        writer.finish().unwrap();
+    }
+
+    /// The filter reads the text the viewer shows: in the body's charset, not UTF-8 alone.
+    #[tokio::test]
+    async fn filter_reads_the_body_in_its_charset() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+
+        let xml = "<cities><city>Zürich</city><city>Kraków</city></cities>";
+        let utf16: Vec<u8> = xml.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        flow_with_response(&ctx, "fl_utf16", "application/xml; charset=utf-16le", &utf16);
+        let json = r#"{"items":[{"name":"Café"},{"name":"Crème brûlée"}]}"#;
+        let latin1: Vec<u8> = json.chars().map(|c| c as u8).collect();
+        flow_with_response(&ctx, "fl_latin1", "application/json; charset=iso-8859-1", &latin1);
+        flow_with_response(&ctx, "fl_unlabeled", "application/json", &latin1);
+
+        let filter = |flow_id: &str, expression: &str, language| FilterBodyRequest {
+            flow_id: flow_id.into(),
+            which: FlowBody::Response,
+            expression: expression.into(),
+            language: Some(language),
+        };
+        let xpath = filter("fl_utf16", "//city[2]", FilterLanguage::XPath);
+        let result = filter_body(ctx.clone(), xpath).await.unwrap();
+        assert_eq!((result.content.as_str(), result.error), ("<city>Kraków</city>", None));
+        for flow_id in ["fl_latin1", "fl_unlabeled"] {
+            let names = filter(flow_id, "$.items[*].name", FilterLanguage::JsonPath);
+            let result = filter_body(ctx.clone(), names).await.unwrap();
+            assert_eq!(result.error, None, "{flow_id}");
+            assert_eq!(result.content, "[\n  \"Café\",\n  \"Crème brûlée\"\n]", "{flow_id}");
+        }
+    }
+
     #[tokio::test]
     async fn the_app_still_hears_why_a_body_failed_to_decode() {
         let dir = tempfile::tempdir().unwrap();
@@ -1511,9 +1616,25 @@ mod tests {
         writer.write(b"not a gzip stream").unwrap();
         writer.finish().unwrap();
 
+        // The viewer gets the bytes as they were on the wire, and why they didn't decode.
         let req = GetFlowBodyRequest { flow_id: "fl_bad".into(), which: FlowBody::Response };
-        let err = get_flow_body(ctx.clone(), req).await.err().unwrap();
-        assert!(err.message.starts_with("Failed to decode"), "{}", err.message);
+        let body = get_flow_body(ctx.clone(), req).await.unwrap();
+        let error = body.decode_error.unwrap();
+        assert!(error.starts_with("Failed to decode Gzip body"), "{error}");
+        assert_eq!(BASE64.decode(body.data).unwrap(), b"not a gzip stream");
+        assert!(!body.truncated);
+
+        // Saving writes those same bytes.
+        let path = dir.path().join("body.bin");
+        let req = SaveFlowBodyRequest {
+            flow_id: "fl_bad".into(),
+            which: FlowBody::Response,
+            path: path.to_string_lossy().into_owned(),
+        };
+        let saved = save_flow_body(ctx.clone(), req).await.unwrap();
+        assert_eq!((saved.size, saved.truncated, saved.raw), (17, false, true));
+        assert_eq!(std::fs::read(&path).unwrap(), b"not a gzip stream");
+
         let req = FilterBodyRequest {
             flow_id: "fl_bad".into(),
             which: FlowBody::Response,

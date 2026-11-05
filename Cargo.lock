@@ -11852,6 +11852,7 @@ dependencies = [
  "base64 0.23.1",
  "bytes",
  "chrono",
+ "encoding_rs",
  "flate2",
  "http-body-util",
  "hyper",
