@@ -7,14 +7,16 @@ import type {
 } from "@yaakapp-internal/models";
 import { getMimeTypeFromContentType } from "./contentType";
 
-export const BODY_TYPE_NONE = null;
-export const BODY_TYPE_GRAPHQL = "graphql";
-export const BODY_TYPE_JSON = "application/json";
-export const BODY_TYPE_BINARY = "binary";
-export const BODY_TYPE_OTHER = "other";
-export const BODY_TYPE_FORM_URLENCODED = "application/x-www-form-urlencoded";
-export const BODY_TYPE_FORM_MULTIPART = "multipart/form-data";
-export const BODY_TYPE_XML = "text/xml";
+export {
+  BODY_TYPE_BINARY,
+  BODY_TYPE_FORM_MULTIPART,
+  BODY_TYPE_FORM_URLENCODED,
+  BODY_TYPE_GRAPHQL,
+  BODY_TYPE_JSON,
+  BODY_TYPE_NONE,
+  BODY_TYPE_OTHER,
+  BODY_TYPE_XML,
+} from "@yaakapp-internal/ui/httpTypes";
 
 export function cookieDomain(cookie: Cookie): string {
   if (cookie.domain === "NotPresent" || cookie.domain === "Empty") {

@@ -1,43 +1,45 @@
-import type { HttpRequest } from "@yaakapp-internal/models";
-import { patchModel } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { memo, useCallback, useMemo } from "react";
-import { showPrompt } from "../lib/prompt";
-import { Button } from "./core/Button";
-import type { DropdownItem } from "./core/Dropdown";
-import { HttpMethodTag, HttpMethodTagRaw } from "./core/HttpMethodTag";
-import { Icon } from "@yaakapp-internal/ui";
-import type { RadioDropdownItem } from "./core/RadioDropdown";
-import { RadioDropdown } from "./core/RadioDropdown";
+import { Button } from "../Button";
+import type { DropdownItem } from "../Dropdown";
+import { useEditorHost } from "../EditorHost";
+import { Icon } from "../Icon";
+import type { RadioDropdownItem } from "../RadioDropdown";
+import { RadioDropdown } from "../RadioDropdown";
+import { HttpMethodTagRaw } from "../tags/HttpMethodTag";
 
 type Props = {
-  request: HttpRequest;
+  method: string;
+  /** Colour the method by what it does, as the client's setting chooses */
+  colored?: boolean;
+  onChange?: (method: string) => void | Promise<void>;
+  /** Show the method without a menu to change it */
+  readOnly?: boolean;
   className?: string;
 };
 
-const radioItems: RadioDropdownItem<string>[] = [
-  "GET",
-  "PUT",
-  "POST",
-  "PATCH",
-  "DELETE",
-  "OPTIONS",
-  "QUERY",
-  "HEAD",
-].map((m) => ({
-  value: m,
-  label: <HttpMethodTagRaw method={m} />,
-}));
+const METHODS = ["GET", "PUT", "POST", "PATCH", "DELETE", "OPTIONS", "QUERY", "HEAD"];
 
 export const RequestMethodDropdown = memo(function RequestMethodDropdown({
-  request,
+  method,
+  colored,
+  onChange,
+  readOnly,
   className,
 }: Props) {
+  const { showPrompt } = useEditorHost();
+
+  const radioItems = useMemo<RadioDropdownItem<string>[]>(
+    () =>
+      METHODS.map((m) => ({ value: m, label: <HttpMethodTagRaw method={m} colored={colored} /> })),
+    [colored],
+  );
+
   const handleChange = useCallback(
     async (method: string) => {
-      await patchModel(request, { method });
+      await onChange?.(method);
     },
-    [request],
+    [onChange],
   );
 
   const itemsAfter = useMemo<DropdownItem[]>(
@@ -46,8 +48,9 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
         key: "custom",
         label: "CUSTOM",
         leftSlot: <Icon icon="sparkles" />,
+        hidden: showPrompt == null,
         onSelect: async () => {
-          const newMethod = await showPrompt({
+          const newMethod = await showPrompt?.({
             id: "custom-method",
             label: "Http Method",
             title: "Custom Method",
@@ -60,19 +63,25 @@ export const RequestMethodDropdown = memo(function RequestMethodDropdown({
         },
       },
     ],
-    [handleChange],
+    [handleChange, showPrompt],
   );
+
+  const button = (
+    <Button size="xs" className={classNames(className, "text-text-subtle hover:text")}>
+      <HttpMethodTagRaw method={method} colored={colored} />
+    </Button>
+  );
+
+  if (readOnly) return button;
 
   return (
     <RadioDropdown
-      value={request.method}
+      value={method}
       items={radioItems}
       itemsAfter={itemsAfter}
       onChange={handleChange}
     >
-      <Button size="xs" className={classNames(className, "text-text-subtle hover:text")}>
-        <HttpMethodTag request={request} noAlias />
-      </Button>
+      {button}
     </RadioDropdown>
   );
 });

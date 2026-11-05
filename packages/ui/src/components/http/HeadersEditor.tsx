@@ -1,30 +1,33 @@
-import type { HttpRequestHeader } from "@yaakapp-internal/models";
-import { HStack, CountBadge } from "@yaakapp-internal/ui";
-import { acceptLanguages } from "../lib/data/acceptLanguages";
-import { cacheControlDirectives } from "../lib/data/cacheControl";
-import { charsets } from "../lib/data/charsets";
-import { connections } from "../lib/data/connections";
-import { encodings } from "../lib/data/encodings";
-import type { HeaderValuePreset } from "../lib/data/headerValuePresets";
-import { headerNames } from "../lib/data/headerNames";
-import { mimeTypes } from "../lib/data/mimetypes";
-import { userAgents } from "../lib/data/userAgents";
-import { validateHttpHeader } from "../lib/validateHttpHeader";
-import { DetailsBanner } from "./core/DetailsBanner";
-import type { GenericCompletion, GenericCompletionConfig } from "./core/Editor/genericCompletion";
-import type { InputProps } from "./core/Input";
-import type { Pair, PairEditorProps } from "./core/PairEditor";
-import { PairEditorRow } from "./core/PairEditor";
-import { ensurePairId } from "./core/PairEditor.util";
-import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
+import { acceptLanguages } from "../../lib/data/acceptLanguages";
+import { cacheControlDirectives } from "../../lib/data/cacheControl";
+import { charsets } from "../../lib/data/charsets";
+import { connections } from "../../lib/data/connections";
+import { encodings } from "../../lib/data/encodings";
+import type { HeaderValuePreset } from "../../lib/data/headerValuePresets";
+import { headerNames } from "../../lib/data/headerNames";
+import { mimeTypes } from "../../lib/data/mimetypes";
+import { userAgents } from "../../lib/data/userAgents";
+import { validateHttpHeader } from "../../lib/validateHttpHeader";
+import { CountBadge } from "../CountBadge";
+import { DetailsBanner } from "../DetailsBanner";
+import type { GenericCompletion, GenericCompletionConfig, HostInputProps } from "../EditorHost";
+import { useEditorHost } from "../EditorHost";
+import type { Pair, PairEditorProps } from "../pairs/PairEditor";
+import { PairEditorRow } from "../pairs/PairEditor";
+import { ensurePairId } from "../pairs/PairEditor.util";
+import { PairOrBulkEditor } from "../pairs/PairOrBulkEditor";
+import { HStack } from "../Stacks";
+import type { HttpPairView } from "./types";
 
 type Props = {
   forceUpdateKey: string;
-  headers: HttpRequestHeader[];
-  inheritedHeaders?: HttpRequestHeader[];
+  headers: HttpPairView[];
+  inheritedHeaders?: HttpPairView[];
   inheritedHeadersLabel?: string;
   stateKey: string;
-  onChange: (headers: HttpRequestHeader[]) => void;
+  onChange?: PairEditorProps["onChange"];
+  /** Show the headers without a way to change them */
+  readOnly?: boolean;
   label?: string;
 };
 
@@ -33,9 +36,11 @@ export function HeadersEditor({
   headers,
   inheritedHeaders,
   inheritedHeadersLabel = "Inherited",
-  onChange,
+  onChange = ignoreChange,
+  readOnly,
   forceUpdateKey,
 }: Props) {
+  const { useDetailsBannerStoredValue } = useEditorHost();
   // Get header names defined at current level (case-insensitive)
   const currentHeaderNames = new Set(
     headers.filter((h) => h.name).map((h) => h.name.toLowerCase()),
@@ -59,6 +64,7 @@ export function HeadersEditor({
     >
       {hasInheritedHeaders && (
         <DetailsBanner
+          useStoredValue={useDetailsBannerStoredValue}
           color="secondary"
           className="text-sm"
           summary={
@@ -95,6 +101,7 @@ export function HeadersEditor({
         nameValidate={validateHttpHeader}
         onChange={onChange}
         pairs={headers}
+        readOnly={readOnly}
         preferenceName="headers"
         stateKey={stateKey}
         valueType={valueType}
@@ -125,7 +132,9 @@ const headerOptionsMap: Record<string, HeaderValuePreset[]> = {
   "x-requested-with": ["XMLHttpRequest"],
 };
 
-const valueType = (pair: Pair): InputProps["type"] => {
+function ignoreChange() {}
+
+const valueType = (pair: Pair): HostInputProps["type"] => {
   const name = pair.name.toLowerCase().trim();
   if (
     name.includes("authorization") ||

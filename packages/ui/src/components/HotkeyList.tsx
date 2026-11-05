@@ -1,7 +1,7 @@
 import classNames from "classnames";
 import type { ReactNode } from "react";
 import { Fragment } from "react";
-import type { HotkeyAction } from "../../hooks/useHotKey";
+import type { HotkeyAction } from "../hooks/useHotKey";
 import { Hotkey } from "./Hotkey";
 import { HotkeyLabel } from "./HotkeyLabel";
 

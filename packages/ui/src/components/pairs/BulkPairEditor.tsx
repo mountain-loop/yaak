@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from "react";
-import { Editor } from "./Editor/LazyEditor";
-import type { Pair, PairEditorProps, PairWithId } from "./PairEditor";
 import { generateId } from "@yaakapp-internal/lib/generateId";
+import { useCallback, useMemo } from "react";
+import { useEditorHost } from "../EditorHost";
+import type { Pair, PairEditorProps, PairWithId } from "./PairEditor";
 
 type Props = PairEditorProps;
 
@@ -12,8 +12,10 @@ export function BulkPairEditor({
   valuePlaceholder,
   forceUpdateKey,
   forcedEnvironmentId,
+  readOnly,
   stateKey,
 }: Props) {
+  const { Editor } = useEditorHost();
   const pairsText = useMemo(() => formatBulkPairs(pairs), [pairs]);
 
   const handleChange = useCallback(
@@ -33,6 +35,7 @@ export function BulkPairEditor({
       placeholder={`${namePlaceholder ?? "name"}: ${valuePlaceholder ?? "value"}`}
       defaultValue={pairsText}
       language="pairs"
+      readOnly={readOnly}
       onChange={handleChange}
     />
   );

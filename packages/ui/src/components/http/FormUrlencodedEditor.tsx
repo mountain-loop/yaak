@@ -1,29 +1,41 @@
-import type { HttpRequest } from "@yaakapp-internal/models";
 import { useCallback, useMemo } from "react";
-import type { Pair, PairEditorProps } from "./core/PairEditor";
-import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
+import type { Pair, PairEditorProps } from "../pairs/PairEditor";
+import { PairOrBulkEditor } from "../pairs/PairOrBulkEditor";
+import type { HttpFormFieldView, HttpRequestBodyView } from "./types";
 
 type Props = {
   forceUpdateKey: string;
-  request: HttpRequest;
-  onChange: (headers: HttpRequest["body"]) => void;
+  /** The request's id, keeping each request's editor state apart */
+  requestId: string;
+  form: HttpFormFieldView[] | undefined;
+  onChange?: (body: HttpRequestBodyView) => void;
+  /** Show the fields without a way to change them */
+  readOnly?: boolean;
 };
 
-export function FormUrlencodedEditor({ request, forceUpdateKey, onChange }: Props) {
+export function FormUrlencodedEditor({
+  requestId,
+  form,
+  forceUpdateKey,
+  onChange,
+  readOnly,
+}: Props) {
   const pairs = useMemo<Pair[]>(
     () =>
-      (Array.isArray(request.body.form) ? request.body.form : []).map((p) => ({
+      (Array.isArray(form) ? form : []).map((p) => ({
         enabled: !!p.enabled,
         name: p.name || "",
         value: p.value || "",
         id: p.id,
       })),
-    [request.body.form],
+    [form],
   );
 
   const handleChange = useCallback<PairEditorProps["onChange"]>(
     (pairs) =>
-      onChange({ form: pairs.map((p) => ({ enabled: p.enabled, name: p.name, value: p.value })) }),
+      onChange?.({
+        form: pairs.map((p) => ({ enabled: p.enabled, name: p.name, value: p.value })),
+      }),
     [onChange],
   );
 
@@ -39,8 +51,9 @@ export function FormUrlencodedEditor({ request, forceUpdateKey, onChange }: Prop
       valuePlaceholder="Value"
       pairs={pairs}
       onChange={handleChange}
+      readOnly={readOnly}
       forceUpdateKey={forceUpdateKey}
-      stateKey={`urlencoded.${request.id}`}
+      stateKey={`urlencoded.${requestId}`}
     />
   );
 }

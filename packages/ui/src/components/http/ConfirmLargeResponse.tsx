@@ -1,36 +1,51 @@
-import type { HttpResponse } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode, SizeTag } from "@yaakapp-internal/ui";
 import { type ReactNode, useMemo } from "react";
-import { useSaveResponse } from "../hooks/useSaveResponse";
-import { useToggle } from "../hooks/useToggle";
-import { isProbablyTextContentType } from "../lib/contentType";
-import { getContentTypeFromHeaders } from "../lib/model_util";
-import { getResponseBodyText } from "../lib/responseBody";
-import { CopyButton } from "./CopyButton";
-import { Button } from "./core/Button";
+import { useToggle } from "../../hooks/useToggle";
+import { isProbablyTextContentType } from "../../lib/mimeType";
+import { Banner } from "../Banner";
+import { Button } from "../Button";
+import { InlineCode } from "../InlineCode";
+import { HStack } from "../Stacks";
+import { SizeTag } from "../tags/SizeTag";
 
 interface Props {
   children: ReactNode;
-  response: HttpResponse;
+  /** Bytes of the body being guarded */
+  contentLength: number | null;
+  contentType: string | null;
+  /** What's being shown, in the notice: "responses" or "content" */
+  noun?: string;
+  /** The reveal button's label */
+  revealLabel?: string;
+  /** Save the body to a file, when the app can */
+  onSave?: () => void;
+  /** Read the body as text for copying, when the app can */
+  getText?: () => Promise<string | null>;
+  /** The copy button, rendered by the app so it reports the copy its own way */
+  renderCopyButton?: (getText: () => Promise<string | null>) => ReactNode;
 }
 
 const LARGE_BYTES = 2 * 1000 * 1000;
 
-export function ConfirmLargeResponse({ children, response }: Props) {
-  const { mutate: saveResponse } = useSaveResponse(response);
+/** Holds back a body big enough to slow the window down, until asked to show it */
+export function ConfirmLargeResponse({
+  children,
+  contentLength,
+  contentType,
+  noun = "responses",
+  revealLabel = "Reveal Response",
+  onSave,
+  getText,
+  renderCopyButton,
+}: Props) {
   const [showLargeResponse, toggleShowLargeResponse] = useToggle();
-  const isProbablyText = useMemo(() => {
-    const contentType = getContentTypeFromHeaders(response.headers);
-    return isProbablyTextContentType(contentType);
-  }, [response.headers]);
+  const isProbablyText = useMemo(() => isProbablyTextContentType(contentType), [contentType]);
 
-  const contentLength = response.contentLength ?? 0;
-  const isLarge = contentLength > LARGE_BYTES;
+  const isLarge = (contentLength ?? 0) > LARGE_BYTES;
   if (!showLargeResponse && isLarge) {
     return (
       <Banner color="primary" className="flex flex-col gap-3">
         <p>
-          Showing responses over{" "}
+          Showing {noun} over{" "}
           <InlineCode>
             <SizeTag contentLength={LARGE_BYTES} />
           </InlineCode>{" "}
@@ -38,19 +53,14 @@ export function ConfirmLargeResponse({ children, response }: Props) {
         </p>
         <HStack wrap space={2}>
           <Button color="primary" size="xs" onClick={toggleShowLargeResponse}>
-            Reveal Response
+            {revealLabel}
           </Button>
-          <Button color="secondary" variant="border" size="xs" onClick={() => saveResponse()}>
-            Save to File
-          </Button>
-          {isProbablyText && (
-            <CopyButton
-              color="secondary"
-              variant="border"
-              size="xs"
-              text={() => getResponseBodyText({ response, filter: null })}
-            />
+          {onSave != null && (
+            <Button color="secondary" variant="border" size="xs" onClick={onSave}>
+              Save to File
+            </Button>
           )}
+          {isProbablyText && getText != null && renderCopyButton?.(getText)}
         </HStack>
       </Banner>
     );

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import type { DropdownItem, DropdownItemSeparator, DropdownProps } from "./Dropdown";
 import { Dropdown } from "./Dropdown";
-import { Icon } from "@yaakapp-internal/ui";
+import { Icon } from "./Icon";
 
 export type RadioDropdownItem<T = string | null> =
   | {

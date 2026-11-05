@@ -1,37 +1,35 @@
-import type { HttpResponse } from "@yaakapp-internal/models";
-import { lazy, Suspense } from "react";
-import { useHttpRequestBody } from "../hooks/useHttpRequestBody";
-import { getMimeTypeFromContentType } from "../lib/contentType";
-import {
-  LoadingIcon,
-  languageFromContentType,
-  AudioViewer,
-  CsvViewer,
-  ImageViewer,
-  SvgViewer,
-  VideoViewer,
-  WebPageViewer,
-} from "@yaakapp-internal/ui";
-import { EmptyStateText } from "./EmptyStateText";
-import { MultipartViewer } from "./responseViewers/MultipartViewer";
-import { TextViewer } from "./responseViewers/TextViewer";
-
-const PdfViewer = lazy(() =>
-  import("./responseViewers/PdfViewer").then((m) => ({ default: m.PdfViewer })),
-);
+import { languageFromContentType } from "../../lib/contentType";
+import { getMimeTypeFromContentType } from "../../lib/mimeType";
+import { EmptyStateText } from "../EmptyStateText";
+import { useEditorHost } from "../EditorHost";
+import { LoadingIcon } from "../LoadingIcon";
+import { AudioViewer } from "../viewers/AudioViewer";
+import { CsvViewer } from "../viewers/CsvViewer";
+import { ImageViewer } from "../viewers/ImageViewer";
+import { SvgViewer } from "../viewers/SvgViewer";
+import { VideoViewer } from "../viewers/VideoViewer";
+import { WebPageViewer } from "../viewers/WebPageViewer";
+import type { HttpBodyLoader } from "./types";
 
 interface Props {
-  response: HttpResponse;
+  /** Identifies the body, for viewer state */
+  id: string;
+  /** The Content-Type the request was sent with */
+  contentType: string | null;
+  body: HttpBodyLoader;
 }
 
-export function RequestBodyViewer({ response }: Props) {
-  return <RequestBodyViewerInner key={response.id} response={response} />;
+/** The body a request was sent with, in the viewer its content type calls for */
+export function RequestBodyViewer({ id, contentType, body }: Props) {
+  return <RequestBodyViewerInner key={id} id={id} contentType={contentType} body={body} />;
 }
 
-function RequestBodyViewerInner({ response }: Props) {
-  const { data, isLoading, error } = useHttpRequestBody(response);
+function RequestBodyViewerInner({ id, contentType, body }: Props) {
+  const { MultipartViewer, TextViewer, renderBodyViewer } = useEditorHost();
+  const text = body.useText();
+  const bytes = body.useBytes();
 
-  if (isLoading) {
+  if (text.isLoading || bytes.isLoading) {
     return (
       <EmptyStateText>
         <LoadingIcon />
@@ -39,21 +37,17 @@ function RequestBodyViewerInner({ response }: Props) {
     );
   }
 
+  const error = text.error ?? bytes.error;
   if (error) {
     return <EmptyStateText>Error loading request body: {error.message}</EmptyStateText>;
   }
 
-  if (data?.bodyText == null || data.bodyText.length === 0) {
+  const bodyText = text.data;
+  const bodyBytes = bytes.data;
+  if (bodyText == null || bodyText.length === 0 || bodyBytes == null) {
     return <EmptyStateText>No request body</EmptyStateText>;
   }
 
-  const { bodyText, body } = data;
-
-  // Try to detect language from content-type header that was sent
-  const contentTypeHeader = response.requestHeaders.find(
-    (h) => h.name.toLowerCase() === "content-type",
-  );
-  const contentType = contentTypeHeader?.value ?? null;
   const mimeType = contentType ? getMimeTypeFromContentType(contentType).essence : null;
   const language = languageFromContentType(contentType, bodyText);
 
@@ -61,10 +55,8 @@ function RequestBodyViewerInner({ response }: Props) {
   if (mimeType?.match(/^multipart/i)) {
     const boundary = contentType?.split("boundary=")[1] ?? "unknown";
     // Create a copy because parseMultipart may detach the buffer
-    const bodyCopy = new Uint8Array(body);
-    return (
-      <MultipartViewer data={bodyCopy} boundary={boundary} idPrefix={`request.${response.id}`} />
-    );
+    const bodyCopy = new Uint8Array(bodyBytes);
+    return <MultipartViewer data={bodyCopy} boundary={boundary} idPrefix={`request.${id}`} />;
   }
 
   if (mimeType?.match(/^image\/svg/i)) {
@@ -72,15 +64,15 @@ function RequestBodyViewerInner({ response }: Props) {
   }
 
   if (mimeType?.match(/^image/i)) {
-    return <ImageViewer data={body.buffer} />;
+    return <ImageViewer data={bodyBytes.buffer as ArrayBuffer} />;
   }
 
   if (mimeType?.match(/^audio/i)) {
-    return <AudioViewer data={body} />;
+    return <AudioViewer data={bodyBytes} />;
   }
 
   if (mimeType?.match(/^video/i)) {
-    return <VideoViewer data={body} />;
+    return <VideoViewer data={bodyBytes} />;
   }
 
   if (mimeType?.match(/csv|tab-separated/i)) {
@@ -91,15 +83,10 @@ function RequestBodyViewerInner({ response }: Props) {
     return <WebPageViewer html={bodyText} />;
   }
 
-  if (mimeType?.match(/pdf/i)) {
-    return (
-      <Suspense fallback={<LoadingIcon />}>
-        <PdfViewer data={body} />
-      </Suspense>
-    );
-  }
+  const appViewer = mimeType?.match(/pdf/i)
+    ? renderBodyViewer?.({ source: "request", mimeType, viewMode: "pretty", body, complete: true })
+    : null;
+  if (appViewer != null) return appViewer;
 
-  return (
-    <TextViewer text={bodyText} language={language} stateKey={`request.body.${response.id}`} />
-  );
+  return <TextViewer text={bodyText} language={language} stateKey={`request.body.${id}`} />;
 }

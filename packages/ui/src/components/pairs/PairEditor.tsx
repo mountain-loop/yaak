@@ -11,28 +11,23 @@ import {
 } from "@dnd-kit/core";
 import classNames from "classnames";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { WrappedEnvironmentVariable } from "../../hooks/useEnvironmentVariables";
 import { useRandomKey } from "../../hooks/useRandomKey";
 import { useToggle } from "../../hooks/useToggle";
-import { showDialog } from "../../lib/dialog";
-import { computeSideForDragMove, DropMarker, languageFromContentType } from "@yaakapp-internal/ui";
-import { showPrompt } from "../../lib/prompt";
-import { SelectFile } from "../SelectFile";
-import { Button } from "./Button";
-import { Checkbox } from "./Checkbox";
-import type { DropdownItem } from "./Dropdown";
-import { Dropdown } from "./Dropdown";
-import type { EditorProps } from "./Editor/Editor";
-import type { GenericCompletionConfig } from "./Editor/genericCompletion";
-import { Editor } from "./Editor/LazyEditor";
-import { Icon } from "@yaakapp-internal/ui";
-import { IconButton } from "./IconButton";
-import type { InputHandle, InputProps } from "./Input";
-import { Input } from "./Input";
+import { computeSideForDragMove } from "../../lib/dnd";
+import { languageFromContentType } from "../../lib/contentType";
+import { Button } from "../Button";
+import { Checkbox } from "../Checkbox";
+import { DropMarker } from "../DropMarker";
+import type { DropdownItem } from "../Dropdown";
+import { Dropdown } from "../Dropdown";
+import type { GenericCompletionConfig, HostInputProps, TemplatingProps } from "../EditorHost";
+import { useEditorHost } from "../EditorHost";
+import { Icon } from "../Icon";
+import { IconButton } from "../IconButton";
+import type { InputHandle } from "../Input";
+import type { RadioDropdownItem } from "../RadioDropdown";
+import { RadioDropdown } from "../RadioDropdown";
 import { ensurePairId } from "./PairEditor.util";
-import type { RadioDropdownItem } from "./RadioDropdown";
-import { RadioDropdown } from "./RadioDropdown";
-import { platform } from "@yaakapp-internal/platform";
 
 export interface PairEditorHandle {
   /**
@@ -58,18 +53,20 @@ export type PairEditorProps = {
   nameAutocompleteFunctions?: boolean;
   nameAutocompleteVariables?: boolean;
   namePlaceholder?: string;
-  nameValidate?: InputProps["validate"];
+  nameValidate?: HostInputProps["validate"];
   noScroll?: boolean;
   onChange: (pairs: PairWithId[]) => void;
   pairs: EditablePair[];
-  stateKey: InputProps["stateKey"];
+  /** Show the pairs without a way to change them: no new row, no drag, no row menu */
+  readOnly?: boolean;
+  stateKey: HostInputProps["stateKey"];
   setRef?: (n: PairEditorHandle) => void;
   valueAutocomplete?: (name: string) => GenericCompletionConfig | undefined;
   valueAutocompleteFunctions?: boolean;
   valueAutocompleteVariables?: boolean | "environment";
   valuePlaceholder?: string;
-  valueType?: InputProps["type"] | ((pair: Pair) => InputProps["type"]);
-  valueValidate?: InputProps["validate"];
+  valueType?: HostInputProps["type"] | ((pair: Pair) => HostInputProps["type"]);
+  valueValidate?: HostInputProps["validate"];
 };
 
 export type Pair = {
@@ -134,6 +131,7 @@ function PairEditorInner({
   noScroll,
   onChange,
   pairs: originalPairs,
+  readOnly,
   stateKey,
   valueAutocomplete,
   valueAutocompleteFunctions,
@@ -190,18 +188,18 @@ function PairEditorInner({
   const initPairEditorRow = useCallback(
     (id: string, n: RowHandle | null) => {
       const isLast = id === pairs[pairs.length - 1]?.id;
-      if (isLast) return; // Never add the last pair
+      if (isLast && !readOnly) return; // Never add the last pair
 
       rowsRef.current[id] = n;
       const validHandles = Object.values(rowsRef.current).filter((v) => v != null);
 
       // Use >= because more might be added if an ID of one changes (eg. editing placeholder in URL regenerates fresh pairs every keystroke)
-      const ready = validHandles.length >= pairs.length - 1;
+      const ready = validHandles.length >= pairs.length - (readOnly ? 0 : 1);
       if (ready) {
         setRef?.(handle);
       }
     },
-    [handle, pairs, setRef],
+    [handle, pairs, readOnly, setRef],
   );
 
   // oxlint-disable-next-line react-hooks/exhaustive-deps -- Only care about forceUpdateKey
@@ -213,6 +211,13 @@ function PairEditorInner({
       if (!p) continue; // Make TS happy
       if (isPairEmpty(p)) continue;
       newPairs.push(ensurePairId(p));
+    }
+
+    // Nothing can be added, so there's no trailing row to start a new pair with
+    if (readOnly) {
+      setPairs(newPairs);
+      regenerateLocalForceUpdateKey();
+      return;
     }
 
     // When the reset holds the exact same rows (eg. renaming a URL path placeholder, which keeps
@@ -367,11 +372,12 @@ function PairEditorInner({
           {pairs.map((p, i) => {
             if (!showAll && i > MAX_INITIAL_PAIRS) return null;
 
-            const isLast = i === pairs.length - 1;
+            const isLast = !readOnly && i === pairs.length - 1;
             return (
               <Fragment key={p.id}>
                 {hoveredIndex === i && <DropMarker />}
                 <PairEditorRow
+                  readOnly={readOnly}
                   setRef={initPairEditorRow}
                   allowFileValues={allowFileValues}
                   allowMultilineValues={allowMultilineValues}
@@ -448,6 +454,7 @@ type PairEditorRowProps = {
   isLast?: boolean;
   disabled?: boolean;
   disableDrag?: boolean;
+  readOnly?: boolean;
   index: number;
   isDraggingGlobal?: boolean;
   setRef?: (id: string, n: RowHandle | null) => void;
@@ -497,6 +504,7 @@ export function PairEditorRow({
   onFocusName,
   onFocusValue,
   pair,
+  readOnly,
   stateKey,
   valueAutocomplete,
   valueAutocompleteFunctions,
@@ -506,6 +514,7 @@ export function PairEditorRow({
   valueValidate,
   setRef,
 }: PairEditorRowProps) {
+  const { Input, SelectFile, showDialog } = useEditorHost();
   const nameInputRef = useRef<InputHandle>(null);
   const valueInputRef = useRef<InputHandle>(null);
   const handle = useRef<RowHandle>({
@@ -603,7 +612,7 @@ export function PairEditorRow({
 
   const handleEditMultiLineValue = useCallback(
     () =>
-      showDialog({
+      showDialog?.({
         id: "pair-edit-multiline",
         size: "dynamic",
         title: <>Edit {pair.name}</>,
@@ -616,7 +625,7 @@ export function PairEditorRow({
           />
         ),
       }),
-    [handleChangeValueText, pair.contentType, pair.name, pair.value],
+    [handleChangeValueText, pair.contentType, pair.name, pair.value, showDialog],
   );
 
   const defaultItems = useMemo(
@@ -639,9 +648,11 @@ export function PairEditorRow({
   const { setNodeRef: setDroppableRef } = useDroppable({ id: pair.id });
 
   // Filter out the current pair name
-  const valueAutocompleteVariablesFiltered = useMemo<EditorProps["autocompleteVariables"]>(() => {
+  const valueAutocompleteVariablesFiltered = useMemo<
+    TemplatingProps["autocompleteVariables"]
+  >(() => {
     if (valueAutocompleteVariables === "environment") {
-      return (v: WrappedEnvironmentVariable): boolean => v.variable.name !== pair.name;
+      return (v): boolean => v.variable.name !== pair.name;
     }
     return valueAutocompleteVariables;
   }, [pair.name, valueAutocompleteVariables]);
@@ -671,12 +682,12 @@ export function PairEditorRow({
       <Checkbox
         hideLabel
         title={pair.enabled ? "Disable item" : "Enable item"}
-        disabled={isLast || disabled}
+        disabled={isLast || disabled || readOnly}
         checked={isLast ? false : !!pair.enabled}
         className={classNames(isLast && "opacity-disabled!")}
         onChange={handleChangeEnabled}
       />
-      {!isLast && !disableDrag ? (
+      {!isLast && !disableDrag && !readOnly ? (
         <div
           {...attributes}
           {...listeners}
@@ -703,7 +714,7 @@ export function PairEditorRow({
           stateKey={`name.${pair.id}.${stateKey}`}
           disabled={disabled}
           wrapLines={false}
-          readOnly={isDraggingGlobal}
+          readOnly={readOnly || isDraggingGlobal}
           size="sm"
           required={!isLast && !!pair.enabled && !!pair.value}
           validate={nameValidate}
@@ -723,7 +734,7 @@ export function PairEditorRow({
           showOptionsPicker={showOptionsPicker}
         />
         <div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-1 items-center">
-          {pair.isFile ? (
+          {pair.isFile && SelectFile != null ? (
             <SelectFile
               disabled={disabled}
               inline
@@ -736,7 +747,7 @@ export function PairEditorRow({
             <Button
               color="secondary"
               size="sm"
-              onClick={handleEditMultiLineValue}
+              onClick={readOnly ? undefined : handleEditMultiLineValue}
               title={pair.value}
               className="text-xs font-mono"
             >
@@ -750,7 +761,7 @@ export function PairEditorRow({
               wrapLines={false}
               size="sm"
               disabled={disabled}
-              readOnly={isDraggingGlobal}
+              readOnly={readOnly || isDraggingGlobal}
               containerClassName={classNames("bg-surface", isLast && "border-dashed")}
               validate={valueValidate}
               forcedEnvironmentId={forcedEnvironmentId}
@@ -770,7 +781,7 @@ export function PairEditorRow({
           )}
         </div>
       </div>
-      {allowFileValues ? (
+      {readOnly ? null : allowFileValues ? (
         <FileActionsDropdown
           pair={pair}
           onChangeFile={handleChangeValueFile}
@@ -819,6 +830,7 @@ function FileActionsDropdown({
   onDelete: () => void;
   editMultiLine: () => void;
 }) {
+  const { basename, showPrompt } = useEditorHost();
   const onChange = useCallback(
     (v: string) => {
       if (v === "file") onChangeFile({ filePath: "" });
@@ -839,7 +851,7 @@ function FileActionsDropdown({
         label: "Set Content-Type",
         leftSlot: <Icon icon="pencil" />,
         onSelect: async () => {
-          const contentType = await showPrompt({
+          const contentType = await showPrompt?.({
             id: "content-type",
             title: "Override Content-Type",
             label: "Content-Type",
@@ -858,8 +870,8 @@ function FileActionsDropdown({
         leftSlot: <Icon icon="file_code" />,
         onSelect: async () => {
           console.log("PAIR", pair);
-          const defaultFilename = await platform.files.basename(pair.value ?? "");
-          const filename = await showPrompt({
+          const defaultFilename = await basename(pair.value ?? "");
+          const filename = await showPrompt?.({
             id: "filename",
             title: "Override Filename",
             label: "Filename",
@@ -899,6 +911,8 @@ function FileActionsDropdown({
       onChangeFilename,
       pair.filename,
       pair,
+      basename,
+      showPrompt,
     ],
   );
 
@@ -940,6 +954,7 @@ function MultilineEditDialog({
   onChange: (value: string) => void;
   hide: () => void;
 }) {
+  const { Editor } = useEditorHost();
   const [value, setValue] = useState<string>(defaultValue);
   const language = languageFromContentType(contentType, value);
   return (

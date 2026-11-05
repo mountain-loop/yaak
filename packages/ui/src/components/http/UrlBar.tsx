@@ -1,29 +1,37 @@
-import type { HttpRequest } from "@yaakapp-internal/models";
-import type { IconProps } from "@yaakapp-internal/ui";
-import { HStack } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { FormEvent, ReactNode } from "react";
 import { memo, useCallback, useRef, useState } from "react";
-import { useHotKey } from "../hooks/useHotKey";
-import { IconButton } from "./core/IconButton";
-import type { InputHandle, InputProps } from "./core/Input";
-import { Input } from "./core/Input";
+import type { HotkeyAction } from "../../hooks/useHotKey";
+import { useFormattedHotkey, useHotKey } from "../../hooks/useHotKey";
+import type { HostInputProps } from "../EditorHost";
+import { useEditorHost } from "../EditorHost";
+import type { IconProps } from "../Icon";
+import { IconButton } from "../IconButton";
+import type { InputHandle } from "../Input";
+import { HStack } from "../Stacks";
 
-type Props = Pick<HttpRequest, "url"> & {
+export type UrlBarProps = {
+  url: string;
   className?: string;
   placeholder: string;
-  onSend: () => void;
-  onUrlChange: (url: string) => void;
+  onSend?: () => void;
+  onUrlChange?: (url: string) => void;
   onPaste?: (v: string) => void;
-  onPasteOverwrite?: InputProps["onPasteOverwrite"];
-  onCancel: () => void;
+  onPasteOverwrite?: HostInputProps["onPasteOverwrite"];
+  onCancel?: () => void;
   submitIcon?: IconProps["icon"] | null;
-  isLoading: boolean;
+  isLoading?: boolean;
   forceUpdateKey: string;
   rightSlot?: ReactNode;
   leftSlot?: ReactNode;
-  autocomplete?: InputProps["autocomplete"];
-  stateKey: InputProps["stateKey"];
+  autocomplete?: HostInputProps["autocomplete"];
+  stateKey: HostInputProps["stateKey"];
+  /** Show the URL without a way to change or send it */
+  readOnly?: boolean;
+  /** The action whose keys send, shown on the send button */
+  sendHotkeyAction?: HotkeyAction;
+  /** The action whose keys select the whole URL */
+  focusHotkeyAction?: HotkeyAction;
 };
 
 export const UrlBar = memo(function UrlBar({
@@ -40,9 +48,13 @@ export const UrlBar = memo(function UrlBar({
   autocomplete,
   leftSlot,
   rightSlot,
-  isLoading,
+  isLoading = false,
   stateKey,
-}: Props) {
+  readOnly,
+  sendHotkeyAction,
+  focusHotkeyAction,
+}: UrlBarProps) {
+  const { Input } = useEditorHost();
   const inputRef = useRef<InputHandle>(null);
   const [isFocused, setIsFocused] = useState<boolean>(false);
 
@@ -50,14 +62,15 @@ export const UrlBar = memo(function UrlBar({
     inputRef.current = h;
   }, []);
 
-  useHotKey("url_bar.focus", () => {
+  useHotKey(focusHotkeyAction ?? null, () => {
     inputRef.current?.selectAll();
   });
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (isLoading) onCancel();
-    else onSend();
+    if (readOnly) return;
+    if (isLoading) onCancel?.();
+    else onSend?.();
   };
 
   return (
@@ -81,27 +94,18 @@ export const UrlBar = memo(function UrlBar({
         onPaste={onPaste}
         onPasteOverwrite={onPasteOverwrite}
         onChange={onUrlChange}
+        readOnly={readOnly}
         defaultValue={url}
         placeholder={placeholder}
         leftSlot={leftSlot}
         rightSlot={
           <HStack space={0.5}>
             {rightSlot && <div className="py-0.5 h-full">{rightSlot}</div>}
-            {submitIcon !== null && (
+            {submitIcon !== null && !readOnly && (
               <div className="py-0.5 h-full">
-                <IconButton
-                  size="xs"
-                  iconSize="md"
-                  title="Send Request"
-                  type="submit"
-                  className="w-8 mr-0.5 h-full!"
-                  iconColor="secondary"
+                <SendButton
                   icon={isLoading ? "x" : submitIcon}
-                  hotkeyAction="request.send"
-                  onMouseDown={(e) => {
-                    // Prevent the button from taking focus
-                    e.preventDefault();
-                  }}
+                  hotkeyAction={sendHotkeyAction ?? null}
                 />
               </div>
             )}
@@ -111,3 +115,32 @@ export const UrlBar = memo(function UrlBar({
     </form>
   );
 });
+
+function SendButton({
+  icon,
+  hotkeyAction,
+}: {
+  icon: IconProps["icon"];
+  hotkeyAction: HotkeyAction | null;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const hotkeyTrigger = useFormattedHotkey(hotkeyAction)?.join("");
+  useHotKey(hotkeyAction, () => buttonRef.current?.click());
+
+  return (
+    <IconButton
+      ref={buttonRef}
+      size="xs"
+      iconSize="md"
+      title={hotkeyTrigger ? `Send Request ${hotkeyTrigger}` : "Send Request"}
+      type="submit"
+      className="w-8 mr-0.5 h-full!"
+      iconColor="secondary"
+      icon={icon}
+      onMouseDown={(e) => {
+        // Prevent the button from taking focus
+        e.preventDefault();
+      }}
+    />
+  );
+}

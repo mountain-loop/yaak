@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./editor": "./src/editor.ts",
+    "./httpTypes": "./src/components/http/types.ts",
+    "./mimeType": "./src/lib/mimeType.ts",
     "./resolvedModelName": "./src/lib/resolvedModelName.ts",
     "./templateTags": "./src/lib/templateTags.ts",
     "./toast": "./src/lib/toast.ts"

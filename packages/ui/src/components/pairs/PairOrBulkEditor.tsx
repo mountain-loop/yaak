@@ -1,7 +1,7 @@
 import classNames from "classnames";
-import { useKeyValue } from "../../hooks/useKeyValue";
+import { useEditorHost } from "../EditorHost";
+import { IconButton } from "../IconButton";
 import { BulkPairEditor } from "./BulkPairEditor";
-import { IconButton } from "./IconButton";
 import type { PairEditorProps } from "./PairEditor";
 import { PairEditor } from "./PairEditor";
 
@@ -11,11 +11,12 @@ interface Props extends PairEditorProps {
 }
 
 export function PairOrBulkEditor({ preferenceName, ...props }: Props) {
-  const { value: useBulk, set: setUseBulk } = useKeyValue<boolean>({
-    namespace: "global",
-    key: ["bulk_edit", preferenceName],
-    fallback: false,
-  });
+  const { useStoredValue } = useEditorHost();
+  const [useBulk, setUseBulk] = useStoredValue<boolean>(
+    ["bulk_edit", preferenceName],
+    false,
+    "global",
+  );
 
   return (
     <div className="relative h-full w-full group/wrapper">

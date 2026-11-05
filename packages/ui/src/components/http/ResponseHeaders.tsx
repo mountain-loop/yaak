@@ -1,53 +1,67 @@
-import type { HttpResponse } from "@yaakapp-internal/models";
-import { platform } from "@yaakapp-internal/platform";
-import { HeadersTable, KeyValueRows } from "@yaakapp-internal/ui";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { DetailsBanner, useDetailsBannerStoredValue } from "./core/DetailsBanner";
-import { IconButton } from "./core/IconButton";
-import { KeyValueRow } from "./core/KeyValueRow";
+import type { ReactElement } from "react";
+import { DetailsBanner } from "../DetailsBanner";
+import { useEditorHost } from "../EditorHost";
+import { HeadersTable } from "../HeadersTable";
+import { IconButton } from "../IconButton";
+import type { KeyValueRowProps } from "../KeyValueRow";
+import { KeyValueRow as BaseKeyValueRow, KeyValueRows } from "../KeyValueRow";
+import type { HttpResponseView } from "./types";
 
 interface Props {
-  response: HttpResponse;
+  response: HttpResponseView;
+  /** More rows for the Info section, after the standard ones, each keyed */
+  infoRows?: ReactElement[];
 }
 
-export function ResponseHeaders({ response }: Props) {
+export function ResponseHeaders({ response, infoRows }: Props) {
+  const { openUrl, useDetailsBannerStoredValue } = useEditorHost();
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
-      <DetailsBanner storageKey={`${response.requestId}.general`} summary={<h2>Info</h2>}>
+      <DetailsBanner
+        storageKey={`${response.ownerId}.general`}
+        summary={<h2>Info</h2>}
+        useStoredValue={useDetailsBannerStoredValue}
+      >
         <KeyValueRows>
-          <KeyValueRow labelColor="secondary" label="Sent">
-            <time
-              dateTime={new Date(`${response.createdAt}Z`).toISOString()}
-              title={formatDistanceToNowStrict(`${response.createdAt}Z`, { addSuffix: true })}
-            >
-              {format(`${response.createdAt}Z`, "MMM d, yyyy, h:mm:ss a O")}
-            </time>
-          </KeyValueRow>
-          <KeyValueRow labelColor="secondary" label="Request URL">
-            <div className="flex items-center gap-1">
-              <span className="select-text cursor-text">{response.url}</span>
-              <IconButton
-                iconSize="sm"
-                className="inline-block w-auto h-auto! opacity-50 hover:opacity-100"
-                icon="external_link"
-                onClick={() => platform.openUrl(response.url)}
-                title="Open in browser"
-              />
-            </div>
-          </KeyValueRow>
-          <KeyValueRow labelColor="secondary" label="Remote Address">
-            {response.remoteAddr ?? <span className="text-text-subtlest">--</span>}
-          </KeyValueRow>
-          <KeyValueRow labelColor="secondary" label="Version">
-            {response.version ?? <span className="text-text-subtlest">--</span>}
-          </KeyValueRow>
+          {[
+            <KeyValueRow key="sent" labelColor="secondary" label="Sent">
+              <time
+                dateTime={new Date(response.startedAt).toISOString()}
+                title={formatDistanceToNowStrict(response.startedAt, { addSuffix: true })}
+              >
+                {format(response.startedAt, "MMM d, yyyy, h:mm:ss a O")}
+              </time>
+            </KeyValueRow>,
+            <KeyValueRow key="url" labelColor="secondary" label="Request URL">
+              <div className="flex items-center gap-1">
+                <span className="select-text cursor-text">{response.url}</span>
+                {openUrl != null && (
+                  <IconButton
+                    iconSize="sm"
+                    className="inline-block w-auto h-auto! opacity-50 hover:opacity-100"
+                    icon="external_link"
+                    onClick={() => openUrl(response.url)}
+                    title="Open in browser"
+                  />
+                )}
+              </div>
+            </KeyValueRow>,
+            <KeyValueRow key="remote" labelColor="secondary" label="Remote Address">
+              {response.remoteAddr ?? <span className="text-text-subtlest">--</span>}
+            </KeyValueRow>,
+            <KeyValueRow key="version" labelColor="secondary" label="Version">
+              {response.version ?? <span className="text-text-subtlest">--</span>}
+            </KeyValueRow>,
+            ...(infoRows ?? []),
+          ]}
         </KeyValueRows>
       </DetailsBanner>
       <HeadersTable
         title="Request Headers"
         headers={response.requestHeaders}
         labelColor="primary"
-        storageKey={`${response.requestId}.request_headers`}
+        storageKey={`${response.ownerId}.request_headers`}
         useStoredValue={useDetailsBannerStoredValue}
       />
       <HeadersTable
@@ -55,9 +69,15 @@ export function ResponseHeaders({ response }: Props) {
         title="Response Headers"
         headers={response.headers}
         labelColor="info"
-        storageKey={`${response.requestId}.response_headers`}
+        storageKey={`${response.ownerId}.response_headers`}
         useStoredValue={useDetailsBannerStoredValue}
       />
     </div>
   );
+}
+
+/** A row that copies its value with the host's clipboard */
+export function KeyValueRow(props: Omit<KeyValueRowProps, "copy">) {
+  const { copy } = useEditorHost();
+  return <BaseKeyValueRow {...props} copy={copy} />;
 }
