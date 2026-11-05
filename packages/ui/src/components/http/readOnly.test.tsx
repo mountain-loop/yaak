@@ -5,6 +5,7 @@ import type { HostEditorProps, HostInputProps } from "../EditorHost";
 import { EditorHostProvider } from "../EditorHost";
 import { PairEditorRow } from "../pairs/PairEditor";
 import { bodyTypeLabel } from "./HttpRequestPaneView";
+import { ResponseStatusLine } from "./HttpResponsePaneView";
 import { JsonBodyEditor } from "./JsonBodyEditor";
 import { RequestBodyViewer } from "./RequestBodyViewer";
 import { HTMLOrTextViewer } from "./ResponseBodyViewer";
@@ -178,6 +179,12 @@ describe("HTMLOrTextViewer", () => {
       <HTMLOrTextViewer response={response} body={loader(new Uint8Array())} pretty />,
     );
     expect(empty).toContain("Empty response");
+  });
+
+  test("the status line keeps its height without the client's history button", () => {
+    // The client's button sets the line's height; without it, the line would hug the card's top
+    const markup = render(<ResponseStatusLine response={response} />);
+    expect(markup).toContain("min-h-[calc(var(--height-sm)+0.25rem)]");
   });
 });
 

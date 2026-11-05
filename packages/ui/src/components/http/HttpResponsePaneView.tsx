@@ -310,6 +310,9 @@ export function ResponseStatusLine({
     <div
       className={classNames(
         "grid grid-cols-[auto_minmax(4rem,1fr)_auto]",
+        // As tall as an `h-sm` button with `m-0.5` (the client's response history menu), so the
+        // status sits the same distance from the card's edge with or without one on the right
+        "min-h-[calc(var(--height-sm)+0.25rem)]",
         "cursor-default select-none",
         "whitespace-nowrap w-full pl-3 overflow-x-auto font-mono text-sm hide-scrollbars",
       )}
