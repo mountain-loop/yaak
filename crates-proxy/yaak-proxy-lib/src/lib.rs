@@ -1757,17 +1757,7 @@ impl FlowSink {
             flow.client_path = Some(app.path);
         }
         let persisted = f.persisted;
-        let written = self.db.with_tx(|ctx| {
-            if persisted && !flow_exists(ctx.conn().resolve(), &flow.id) {
-                return Ok(false);
-            }
-            let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
-            self.events.emit(
-                "model_write",
-                &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
-            );
-            Ok::<_, yaak_database::Error>(true)
-        });
+        let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, persisted));
         match written {
             Ok(true) => f.persisted = true,
             Ok(false) => f.cleared = true,
@@ -1792,25 +1782,37 @@ impl FlowSink {
             flow.client_bundle_id = app.bundle_id;
             flow.client_path = Some(app.path);
         }
-        let written = self.db.with_tx(|ctx| {
-            // A streaming flow cleared since it was last written stays cleared.
-            if f.persisted && !flow_exists(ctx.conn().resolve(), &flow.id) {
-                return Ok(false);
-            }
-            let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
-            // Sent while this holds the writer, before the commit, so a clear's event, sent after
-            // its own commit, always comes after it.
-            self.events.emit(
-                "model_write",
-                &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
-            );
-            Ok::<_, yaak_database::Error>(true)
-        });
+        let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, f.persisted));
         match written {
             Ok(true) => {}
             Ok(false) => self.forget_cleared(&id),
             Err(e) => warn!("Failed to write proxy flow: {e}"),
         }
+    }
+
+    /// Writes `flow` and tells the app. One written before, as a stream is while open, keeps
+    /// what was recorded on it since, the request it was saved as; one cleared since stays
+    /// cleared, and this returns false.
+    fn write_flow(
+        &self,
+        ctx: &yaak_database::DbContext,
+        mut flow: Flow,
+        persisted: bool,
+    ) -> Result<bool, yaak_database::Error> {
+        if persisted {
+            let Some(stored) = ctx.find_optional::<Flow>(FlowIden::Id, &flow.id) else {
+                return Ok(false);
+            };
+            flow.saved_request_id = stored.saved_request_id;
+        }
+        let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
+        // Sent while this holds the writer, before the commit, so a clear's event, sent after
+        // its own commit, always comes after it.
+        self.events.emit(
+            "model_write",
+            &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
+        );
+        Ok(true)
     }
 
     /// Deletes what a flow cleared while it streamed wrote after the clear.

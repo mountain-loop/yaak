@@ -161,12 +161,13 @@ impl Flow {
     fn response_parser(&self, resp: &Response<Incoming>) -> Option<BodyParser> {
         let limit = self.engine.capture_body_limit;
         let headers = resp.headers();
-        if let Some(call) = &self.grpc {
+        if self.grpc.is_some() {
             // A call that fails at once answers with its status in the headers, and no body.
             if let Some(message) = grpc::trailers_from_headers(headers) {
                 self.engine.emit(ProxyEvent::Message { id: self.id, message });
             }
-            let text = grpc::detect(header_str(headers, "content-type")).map_or(call.text, |g| g.1);
+            // A gateway's own error page is no gRPC body.
+            let (_, text) = grpc::detect(header_str(headers, "content-type"))?;
             let encoding = header_str(headers, "grpc-encoding");
             return Some(BodyParser::Grpc(GrpcParser::new(
                 MessageDirection::Server,

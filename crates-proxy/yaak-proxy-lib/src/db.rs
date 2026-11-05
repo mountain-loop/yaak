@@ -141,6 +141,12 @@ mod tests {
             ALTER TABLE flows DROP COLUMN client_bundle_id;
             ALTER TABLE flows DROP COLUMN client_path;
             ALTER TABLE flows DROP COLUMN cancelled;
+            ALTER TABLE flows DROP COLUMN stream_kind;
+            ALTER TABLE flows DROP COLUMN message_count;
+            ALTER TABLE flows DROP COLUMN grpc_service;
+            ALTER TABLE flows DROP COLUMN grpc_method;
+            ALTER TABLE flows DROP COLUMN grpc_status;
+            ALTER TABLE flows DROP COLUMN grpc_message;
             INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://example.com', 'GET');",
         )
         .unwrap();
@@ -152,6 +158,11 @@ mod tests {
         assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
         assert_eq!((flows[0].client_pid, flows[0].client_name.as_deref()), (None, None));
         assert!(!flows[0].cancelled);
+        assert_eq!((flows[0].stream_kind, flows[0].message_count), (None, 0));
+        // Failed flows are found without the gRPC status column too.
+        let failed =
+            crate::flows::FlowFilter { status: Some("error".into()), ..Default::default() };
+        assert_eq!(crate::flows::list(&db, &failed).unwrap().len(), 0);
     }
 
     #[test]

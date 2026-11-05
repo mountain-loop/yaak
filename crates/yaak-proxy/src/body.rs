@@ -159,7 +159,10 @@ impl Body for CaptureBody {
                     let message = parser.trailers(trailers);
                     self.emit_messages(message);
                 }
-                if self.complete() {
+                // A gRPC call's status comes in trailers after its last byte, so its body is
+                // done only at the stream's end.
+                let grpc = matches!(self.parser, Some(BodyParser::Grpc(_)));
+                if if grpc { self.inner.is_end_stream() } else { self.complete() } {
                     self.finish(None, false);
                 }
             }

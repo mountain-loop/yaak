@@ -115,7 +115,9 @@ impl FlowFilter {
     }
 
     /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters.
-    fn condition(&self) -> (String, Vec<Value>) {
+    /// `grpc` says the database has gRPC statuses: one opened read-only before its migrations
+    /// have run may not.
+    fn condition(&self, grpc: bool) -> (String, Vec<Value>) {
         let mut sql = String::from("1");
         let mut params: Vec<Value> = Vec::new();
         for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
@@ -167,9 +169,10 @@ impl FlowFilter {
         match self.status.as_deref().map(str::trim) {
             None | Some("") => {}
             // A gRPC call that ended with a status other than OK failed too.
-            Some(s) if s.eq_ignore_ascii_case("error") => {
+            Some(s) if s.eq_ignore_ascii_case("error") && grpc => {
                 sql.push_str(" AND (error IS NOT NULL OR coalesce(grpc_status, 0) != 0)")
             }
+            Some(s) if s.eq_ignore_ascii_case("error") => sql.push_str(" AND error IS NOT NULL"),
             // A whole status or a class, not the start of one as a search term may be.
             Some(s) if s.len() == 3 => match status_condition(&s.to_ascii_lowercase(), &mut params)
             {
@@ -272,8 +275,13 @@ pub fn page(
     })
 }
 
+/// The database has the gRPC status column, added by a later migration.
+fn has_grpc_status(conn: &rusqlite::Connection) -> bool {
+    conn.prepare("SELECT grpc_status FROM flows LIMIT 0").is_ok()
+}
+
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
-    let (condition, mut params) = filter.condition();
+    let (condition, mut params) = filter.condition(has_grpc_status(conn));
     let mut sql = format!("SELECT * FROM flows WHERE {condition}");
     if let Some(id) = &filter.after {
         // By rowid, which only grows as flows are written.
@@ -304,7 +312,7 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
 }
 
 fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
-    let (condition, params) = filter.condition();
+    let (condition, params) = filter.condition(has_grpc_status(conn));
     conn.query_row(
         &format!("SELECT COUNT(*) FROM flows WHERE {condition}"),
         rusqlite::params_from_iter(params),
@@ -640,7 +648,7 @@ mod tests {
         let plan: Vec<String> = db.with_conn(|c| {
             let conn = c.conn().resolve();
             let (condition, params) =
-                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition();
+                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition(true);
             let sql = format!(
                 "EXPLAIN QUERY PLAN SELECT * FROM flows WHERE {condition} \
                 ORDER BY started_at DESC, id DESC LIMIT 500"
