@@ -6,6 +6,8 @@ use flate2::{Decompress, FlushDecompress, Status};
 
 /// The most decompressed bytes handed on at once.
 const PIECE: usize = 16 * 1024;
+/// The longest gzip header waited for, its optional name, comment and extra field included.
+const MAX_GZIP_HEADER: usize = 128 * 1024;
 
 const GZIP_FHCRC: u8 = 0x02;
 const GZIP_FEXTRA: u8 = 0x04;
@@ -38,6 +40,8 @@ pub(crate) struct ContentDecoder {
     /// A gzip member's header still to be read, as much of it as has come; None while a member
     /// is being inflated, and for deflate, which zlib's own header covers.
     gzip_header: Option<Vec<u8>>,
+    /// How far the gzip header's name and comment have been searched for their ends.
+    header_scanned: [usize; 2],
     /// Bytes of a gzip member's trailer (its CRC and length, not checked) still to skip.
     trailer_left: usize,
     /// gzip members read whole.
@@ -58,6 +62,7 @@ impl ContentDecoder {
             decompress: Decompress::new(false),
             gzip: true,
             gzip_header: Some(Vec::new()),
+            header_scanned: [0; 2],
             trailer_left: 0,
             members: 0,
             ended: false,
@@ -72,6 +77,7 @@ impl ContentDecoder {
             decompress: Decompress::new(true),
             gzip: false,
             gzip_header: None,
+            header_scanned: [0; 2],
             trailer_left: 0,
             members: 0,
             ended: false,
@@ -109,11 +115,16 @@ impl ContentDecoder {
                 }
                 let before = header.len();
                 header.extend_from_slice(input);
-                match gzip_header_len(header) {
+                match gzip_header_len(header, &mut self.header_scanned) {
+                    // A name or comment that never ends is no header to wait for.
+                    Ok(None) if header.len() > MAX_GZIP_HEADER => {
+                        return Err("The gzip header is too long".into());
+                    }
                     Ok(None) => return Ok(()),
                     Ok(Some(len)) => {
                         input = &input[len - before..];
                         self.gzip_header = None;
+                        self.header_scanned = [0; 2];
                     }
                     // What follows a whole member, padding say, is not another one.
                     Err(_) if self.members > 0 => {
@@ -168,7 +179,9 @@ impl ContentDecoder {
 
 /// The length of the gzip header `bytes` starts with (RFC 1952 2.3), None while more of it is
 /// still to come.
-fn gzip_header_len(bytes: &[u8]) -> Result<Option<usize>, String> {
+/// `scanned` keeps how far the name and the comment have been searched for their ends, so a
+/// header that comes a byte at a time is not searched again from its start each time.
+fn gzip_header_len(bytes: &[u8], scanned: &mut [usize; 2]) -> Result<Option<usize>, String> {
     if bytes.len() < 10 {
         return Ok(None);
     }
@@ -183,11 +196,15 @@ fn gzip_header_len(bytes: &[u8]) -> Result<Option<usize>, String> {
         };
         len += 2 + u16::from_le_bytes([extra[0], extra[1]]) as usize;
     }
-    for flag in [GZIP_FNAME, GZIP_FCOMMENT] {
+    for (i, flag) in [GZIP_FNAME, GZIP_FCOMMENT].into_iter().enumerate() {
         if flags & flag != 0 {
-            match bytes.get(len..).and_then(|rest| rest.iter().position(|&b| b == 0)) {
-                Some(end) => len += end + 1,
-                None => return Ok(None),
+            let from = len.max(scanned[i]);
+            match bytes.get(from..).and_then(|rest| rest.iter().position(|&b| b == 0)) {
+                Some(end) => len = from + end + 1,
+                None => {
+                    scanned[i] = bytes.len().max(len);
+                    return Ok(None);
+                }
             }
         }
     }
@@ -254,6 +271,23 @@ mod tests {
         let mut out = Vec::new();
         decoder.feed(&raw.finish().unwrap(), &mut |piece| out.extend_from_slice(piece)).unwrap();
         assert_eq!(out, text);
+    }
+
+    #[test]
+    fn a_gzip_name_that_never_ends_is_refused() {
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip")) else {
+            panic!()
+        };
+        let header = [0x1f, 0x8b, 0x08, GZIP_FNAME, 0, 0, 0, 0, 0, 0];
+        decoder.feed(&header, &mut |_| {}).unwrap();
+        let mut refused = false;
+        for _ in 0..MAX_GZIP_HEADER / 512 + 1 {
+            if decoder.feed(&[b'a'; 512], &mut |_| {}).is_err() {
+                refused = true;
+                break;
+            }
+        }
+        assert!(refused);
     }
 
     #[test]

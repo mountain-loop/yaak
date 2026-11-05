@@ -1780,6 +1780,7 @@ impl FlowSink {
         }
 
         let mut orphaned = Vec::new();
+        let mut newly_cleared = Vec::new();
         let written = self.db.with_tx(|ctx| {
             let conn = ctx.conn().resolve();
             let mut checked = std::collections::HashSet::new();
@@ -1790,6 +1791,7 @@ impl FlowSink {
                 // Cleared since it was written: what comes after is not kept either.
                 if f.persisted && checked.insert(*id) && !flow_exists(conn, &f.flow.id) {
                     f.cleared = true;
+                    newly_cleared.push(*id);
                 }
                 if f.cleared {
                     orphaned.push(message.blob_id());
@@ -1807,6 +1809,20 @@ impl FlowSink {
         if !orphaned.is_empty() {
             let _ = self.blobs.with_tx(|b| orphaned.iter().try_for_each(|id| b.delete_chunks(id)));
         }
+        for id in newly_cleared {
+            if let Some(f) = in_flight.get_mut(&id) {
+                self.stop_cleared(f);
+            }
+        }
+    }
+
+    /// A stream cleared while open keeps nothing more: its bodies stop being written, and what
+    /// they wrote since the clear is deleted, as the stream may run long before it ends.
+    fn stop_cleared(&self, f: &mut InFlight) {
+        f.cleared = true;
+        f.request_body = None;
+        f.response_body = None;
+        self.forget_cleared(&f.flow.id);
     }
 
     /// Writes the streaming flows whose messages or status changed, at most once per
@@ -1842,7 +1858,7 @@ impl FlowSink {
         let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, persisted));
         match written {
             Ok(true) => f.persisted = true,
-            Ok(false) => f.cleared = true,
+            Ok(false) => self.stop_cleared(f),
             Err(e) => warn!("Failed to write proxy flow: {e}"),
         }
     }
@@ -2177,6 +2193,13 @@ mod tests {
         ctx.clear_flows().unwrap();
 
         tx.send(ws_message(1, D::Server, K::WebSocketBinary, &[7; 8192])).unwrap();
+        // A body chunk past a blob chunk's size would be written at once, were it kept.
+        let data = bytes::Bytes::from(vec![b'x'; 2 << 20]);
+        tx.send(ProxyEvent::ResponseBodyChunk { id: 1, len: data.len(), data }).unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        let blobs = ctx.blobs.connect().list_body_ids().unwrap();
+        assert!(blobs.iter().all(|b| !b.starts_with(&flow.id)), "while open: {blobs:?}");
+
         tx.send(ProxyEvent::StreamEnd { id: 1, elapsed_ms: 9, error: None }).unwrap();
         drop(tx);
         event_loop.join().unwrap();
