@@ -17,9 +17,9 @@ function body(data: string | Uint8Array): GetFlowBodyResponse {
 
 const base: Flow = {
   id: "fl_harness",
-  createdAt: "2026-11-04T22:10:00Z",
-  updatedAt: "2026-11-04T22:10:01Z",
-  startedAt: "2026-11-04T22:10:00.000Z",
+  createdAt: "2026-11-04T22:10:00",
+  updatedAt: "2026-11-04T22:10:01",
+  startedAt: "2026-11-04T22:10:00.000",
   method: "GET",
   url: "https://api.example.com/",
   clientHttpVersion: "HTTP/2",

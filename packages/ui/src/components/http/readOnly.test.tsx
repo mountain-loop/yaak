@@ -7,6 +7,7 @@ import { PairEditorRow } from "../pairs/PairEditor";
 import { bodyTypeLabel } from "./HttpRequestPaneView";
 import { JsonBodyEditor } from "./JsonBodyEditor";
 import { RequestBodyViewer } from "./RequestBodyViewer";
+import { HTMLOrTextViewer } from "./ResponseBodyViewer";
 import { RequestMethodDropdown } from "./RequestMethodDropdown";
 import { parseCookieHeaders } from "./ResponseCookies";
 import {
@@ -14,6 +15,7 @@ import {
   BODY_TYPE_JSON,
   BODY_TYPE_OTHER,
   type HttpBodyLoader,
+  type HttpResponseView,
 } from "./types";
 import { UrlBar } from "./UrlBar";
 
@@ -131,6 +133,51 @@ describe("RequestBodyViewer", () => {
     const markup = render(<RequestBodyViewer id="b2" contentType="image/png" body={binary} />);
     expect(markup).not.toContain("No request body");
     expect(markup).not.toContain("Binary body");
+  });
+});
+
+describe("HTMLOrTextViewer", () => {
+  const response = {
+    id: "rs_1",
+    ownerId: "rq_1",
+    state: "closed",
+    status: 200,
+    statusReason: "OK",
+    url: "https://yaak.app",
+    headers: [],
+    requestHeaders: [],
+    contentType: "application/octet-stream",
+    contentLength: 3,
+    contentLengthCompressed: null,
+    requestContentLength: 0,
+    startedAt: "2026-11-04T22:10:00Z",
+    elapsedMs: 1,
+    elapsedHeadersMs: 1,
+    elapsedDnsMs: 0,
+    error: null,
+    remoteAddr: null,
+    version: null,
+    cookieHeaders: { sent: [], received: [] },
+  } satisfies HttpResponseView;
+
+  function loader(bytes: Uint8Array): HttpBodyLoader {
+    return {
+      useText: () => ({ data: null, isLoading: false, error: null }),
+      useBytes: () => ({ data: bytes, isLoading: false, error: null }),
+      useUrl: () => ({ data: null, isLoading: false, error: null }),
+    };
+  }
+
+  test("tells a binary response from an empty one", () => {
+    const binary = render(
+      <HTMLOrTextViewer response={response} body={loader(new Uint8Array([0xff, 0, 1]))} pretty />,
+    );
+    expect(binary).toContain("Binary body, 3");
+
+    const empty = render(
+      <HTMLOrTextViewer response={response} body={loader(new Uint8Array())} pretty />,
+    );
+    expect(empty).toContain("Empty response");
   });
 });
 

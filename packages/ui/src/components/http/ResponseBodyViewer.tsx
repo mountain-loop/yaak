@@ -1,3 +1,4 @@
+import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { ComponentType } from "react";
 import { languageFromContentType } from "../../lib/contentType";
 import { getMimeTypeFromContentType } from "../../lib/mimeType";
@@ -109,6 +110,18 @@ export function ResponseBodyViewer({
   );
 }
 
+/** A body with no text is either empty or not valid UTF-8, which only its bytes can tell apart */
+function BinaryOrEmptyBody({ body }: { body: HttpBodyLoader }) {
+  const bytes = body.useBytes();
+  if (bytes.isLoading) return null;
+  const length = bytes.data?.length ?? 0;
+  return (
+    <EmptyStateText>
+      {length > 0 ? `Binary body, ${formatSize(length)}` : "Empty response"}
+    </EmptyStateText>
+  );
+}
+
 function EnsureCompleteResponse({
   response,
   body,
@@ -194,7 +207,7 @@ export function HTMLOrTextViewer({
     return <WebPageViewer html={rawTextBody.data ?? ""} baseUrl={response.url} />;
   }
   if (rawTextBody.data == null) {
-    return <EmptyStateText>Empty response</EmptyStateText>;
+    return <BinaryOrEmptyBody body={body} />;
   }
   return (
     <TextViewer

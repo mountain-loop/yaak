@@ -93,7 +93,7 @@ export function flowResponseToView(flow: Flow): HttpResponseView | null {
     contentLength: flow.responseSize,
     contentLengthCompressed: null,
     requestContentLength: flow.requestSize,
-    startedAt: flow.startedAt,
+    startedAt: utcTimestamp(flow.startedAt),
     elapsedMs: flow.elapsedMs ?? 0,
     elapsedHeadersMs: flow.elapsedHeadersMs ?? 0,
     elapsedDnsMs: 0,
@@ -164,6 +164,11 @@ function useObjectUrl(bytes: Uint8Array<ArrayBuffer> | null, contentType: string
     return () => URL.revokeObjectURL(next);
   }, [bytes, contentType]);
   return url;
+}
+
+/** The engine stores UTC without a zone; JavaScript would read that as local time */
+export function utcTimestamp(timestamp: string): string {
+  return /(Z|[+-]\d\d:?\d\d)$/i.test(timestamp) ? timestamp : `${timestamp}Z`;
 }
 
 function headersToPairs(headers: ProxyHeader[]): HttpPairView[] {

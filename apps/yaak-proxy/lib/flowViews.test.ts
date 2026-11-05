@@ -14,6 +14,7 @@ import {
   flowRequestToView,
   flowResponseToView,
   queryToPairs,
+  utcTimestamp,
 } from "./flowViews";
 
 const flow: Flow = {
@@ -143,6 +144,13 @@ describe("flowResponseToView", () => {
       remoteAddr: "1.2.3.4:443",
       cookieHeaders: { sent: ["a=1"], received: ["b=2; Path=/"] },
     });
+  });
+
+  test("reads the engine's zone-less timestamps as UTC", () => {
+    expect(flowResponseToView({ ...flow, startedAt: "2026-11-04T22:10:00.123" })?.startedAt).toBe(
+      "2026-11-04T22:10:00.123Z",
+    );
+    expect(utcTimestamp("2026-11-04T22:10:00+02:00")).toBe("2026-11-04T22:10:00+02:00");
   });
 
   test("is still connected while the body streams", () => {
