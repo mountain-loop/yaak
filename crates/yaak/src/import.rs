@@ -214,6 +214,9 @@ struct ImportIds<'a> {
     used: BTreeSet<String>,
     /// How many models were given new IDs because another workspace has theirs, by workspace
     taken_elsewhere: BTreeMap<String, usize>,
+    /// The folder an import goes into and its ancestors. A folder from the document keeping one
+    /// of these IDs would end up inside itself.
+    reserved: BTreeSet<String>,
 }
 
 impl<'a> ImportIds<'a> {
@@ -222,10 +225,20 @@ impl<'a> ImportIds<'a> {
         importer: &str,
         destination: &ImportDestination,
     ) -> Self {
-        let target_workspace_id = match destination {
-            ImportDestination::ExistingWorkspace { workspace_id, .. } => Some(workspace_id.clone()),
-            ImportDestination::NewWorkspace => None,
+        let (target_workspace_id, target_folder_id) = match destination {
+            ImportDestination::ExistingWorkspace { workspace_id, folder_id } => {
+                (Some(workspace_id.clone()), folder_id.clone())
+            }
+            ImportDestination::NewWorkspace => (None, None),
         };
+        let mut reserved = BTreeSet::new();
+        let mut next = target_folder_id;
+        while let Some(id) = next {
+            if !reserved.insert(id.clone()) {
+                break;
+            }
+            next = query_manager.connect().get_folder(&id).ok().and_then(|f| f.folder_id);
+        }
         Self {
             query_manager,
             keep: is_yaak_importer(importer),
@@ -233,6 +246,7 @@ impl<'a> ImportIds<'a> {
             matched: BTreeMap::new(),
             used: BTreeSet::new(),
             taken_elsewhere: BTreeMap::new(),
+            reserved,
         }
     }
 
@@ -243,7 +257,11 @@ impl<'a> ImportIds<'a> {
         generate: fn() -> String,
     ) -> Result<String> {
         let fresh = generate();
-        if !self.keep || !has_id_prefix_of(source_id, &fresh) || self.used.contains(source_id) {
+        if !self.keep
+            || !has_id_prefix_of(source_id, &fresh)
+            || self.used.contains(source_id)
+            || self.reserved.contains(source_id)
+        {
             return Ok(fresh);
         }
 
@@ -318,6 +336,39 @@ fn has_id_prefix_of(id: &str, generated: &str) -> bool {
     })
 }
 
+/// A kept folder ID can name a folder the destination already has, so the document's parents
+/// and the destination's can form a loop between them, such as a folder the document puts
+/// under a folder the destination keeps inside it. Each planned folder found in a loop moves to
+/// the top level, which cannot be part of one. Returns whether any did.
+fn break_folder_cycles(
+    folders: &mut [Folder],
+    existing_parents: &BTreeMap<String, Option<String>>,
+) -> bool {
+    let mut moved = false;
+    for i in 0..folders.len() {
+        let parents = existing_parents
+            .iter()
+            .map(|(id, parent)| (id.clone(), parent.clone()))
+            .chain(folders.iter().map(|f| (f.id.clone(), f.folder_id.clone())))
+            .collect::<BTreeMap<_, _>>();
+        let start = folders[i].id.clone();
+        let mut seen = BTreeSet::new();
+        let mut next = folders[i].folder_id.clone();
+        while let Some(id) = next {
+            if id == start {
+                folders[i].folder_id = None;
+                moved = true;
+                break;
+            }
+            if !seen.insert(id.clone()) {
+                break;
+            }
+            next = parents.get(&id).cloned().flatten();
+        }
+    }
+    moved
+}
+
 /// Models a Yaak export shares by ID with the destination are updates of those models, so they
 /// are planned as updates (or as unchanged) rather than as new resources.
 fn classify_matched_ids(plan: &mut ImportPlan, matched: &BTreeMap<String, Value>) -> Result<()> {
@@ -351,8 +402,18 @@ fn classify_matched_ids(plan: &mut ImportPlan, matched: &BTreeMap<String, Value>
         else {
             continue;
         };
-        let incoming = comparable(incoming.clone());
-        let current = comparable(current.clone());
+        // A Yaak export's sort priorities are the sidebar order the user chose, not numbering
+        // an importer made up, so a change to one is a change worth applying.
+        let with_order = |raw: &Value| {
+            let mut value = comparable(raw.clone());
+            if let (Some(object), Some(priority)) = (value.as_object_mut(), raw.get("sortPriority"))
+            {
+                object.insert("sortPriority".to_string(), priority.clone());
+            }
+            value
+        };
+        let incoming = with_order(incoming);
+        let current = with_order(current);
         if incoming == current {
             item.action = ImportPlanAction::Unchanged;
             item.selected = false;
@@ -387,14 +448,14 @@ pub fn plan_import_resources(
     let mut ids = ImportIds::new(query_manager, &importer, &destination);
 
     // A request may name a folder the destination already has, rather than one in the document.
-    let existing_folder_ids = match &destination {
+    let existing_folder_parents = match &destination {
         ImportDestination::ExistingWorkspace { workspace_id, .. } => query_manager
             .connect()
             .list_folders(workspace_id)?
             .into_iter()
-            .map(|f| f.id)
-            .collect::<BTreeSet<_>>(),
-        ImportDestination::NewWorkspace => BTreeSet::new(),
+            .map(|f| (f.id, f.folder_id))
+            .collect::<BTreeMap<_, _>>(),
+        ImportDestination::NewWorkspace => BTreeMap::new(),
     };
 
     let source_folder_ids = resources.folders.iter().map(|v| v.id.clone()).collect::<BTreeSet<_>>();
@@ -484,11 +545,11 @@ pub fn plan_import_resources(
         Some(source_id) if source_folder_ids.contains(&source_id) => {
             folder_ids.get(&source_id).cloned()
         }
-        Some(source_id) if existing_folder_ids.contains(&source_id) => Some(source_id),
+        Some(source_id) if existing_folder_parents.contains_key(&source_id) => Some(source_id),
         _ => target_folder_id.clone(),
     };
 
-    let folders = resources
+    let mut folders: Vec<Folder> = resources
         .folders
         .into_iter()
         .map(|mut folder| {
@@ -498,6 +559,12 @@ pub fn plan_import_resources(
             folder
         })
         .collect();
+    if break_folder_cycles(&mut folders, &existing_folder_parents) {
+        warnings.push(ImportPlanWarning::warning(
+            "Folder moved to the top level",
+            "Its new place would have put it inside itself",
+        ));
+    }
 
     let mut request_ids = BTreeMap::new();
     let mut http_requests = Vec::new();
@@ -4141,5 +4208,92 @@ mod tests {
         )
         .expect("plan");
         assert!(ids(&other).is_disjoint(&source_ids));
+    }
+
+    /// Keeping IDs must not let an import put a folder inside itself: neither when the import
+    /// goes into a folder the document also contains, nor when the document's parents and the
+    /// destination's form a loop.
+    #[test]
+    fn kept_folder_ids_never_form_a_cycle() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let destination = destination_workspace();
+        let folder = |id: &str, parent: Option<&str>| Folder {
+            id: id.into(),
+            model: "folder".into(),
+            workspace_id: destination.id.clone(),
+            name: id.into(),
+            folder_id: parent.map(String::from),
+            ..Default::default()
+        };
+        query_manager
+            .with_tx(|tx| {
+                tx.upsert_workspace(&destination, &UpdateSource::Import)?;
+                tx.upsert_folder(&folder("fl_outer", None), &UpdateSource::Import)?;
+                tx.upsert_folder(&folder("fl_inner", Some("fl_outer")), &UpdateSource::Import)
+            })
+            .expect("seed destination");
+
+        // Into fl_outer, with fl_outer itself in the document
+        let resources =
+            ImportResources { folders: vec![folder("fl_outer", None)], ..Default::default() };
+        let plan = plan_yaak(
+            &query_manager,
+            ImportDestination::ExistingWorkspace {
+                workspace_id: destination.id.clone(),
+                folder_id: Some("fl_outer".into()),
+            },
+            resources,
+        );
+        let planned = &plan.resources.folders[0];
+        assert_ne!(planned.id, "fl_outer");
+        assert_eq!(planned.folder_id.as_deref(), Some("fl_outer"));
+
+        // The document puts fl_outer under fl_inner, which the destination keeps in fl_outer
+        let resources = ImportResources {
+            folders: vec![folder("fl_outer", Some("fl_inner"))],
+            ..Default::default()
+        };
+        let plan = plan_yaak(&query_manager, into_existing(&destination.id), resources);
+        let planned = &plan.resources.folders[0];
+        assert_eq!(planned.id, "fl_outer");
+        assert_eq!(planned.folder_id, None, "the loop is broken at the top level");
+        assert!(plan.warnings.iter().any(|w| w.title == "Folder moved to the top level"));
+        commit_import_plan(&query_manager, plan).expect("commit");
+    }
+
+    /// A Yaak export's sort priorities are the user's sidebar order, so changing only that is
+    /// an update, not an unchanged resource.
+    #[test]
+    fn a_sort_priority_change_in_a_yaak_export_is_applied() {
+        let (query_manager, _blob_manager, _rx) =
+            yaak_models::init_in_memory().expect("initialize database");
+        let destination = destination_workspace();
+        let request = HttpRequest {
+            id: "rq_ordered".into(),
+            model: "http_request".into(),
+            workspace_id: destination.id.clone(),
+            name: "Ordered".into(),
+            sort_priority: 1.0,
+            ..Default::default()
+        };
+        query_manager
+            .with_tx(|tx| {
+                tx.upsert_workspace(&destination, &UpdateSource::Import)?;
+                tx.upsert_http_request(&request, &UpdateSource::Import)
+            })
+            .expect("seed destination");
+
+        let resources = ImportResources {
+            http_requests: vec![HttpRequest { sort_priority: 42.0, ..request }],
+            ..Default::default()
+        };
+        let plan = plan_yaak(&query_manager, into_existing(&destination.id), resources);
+        let item = item_by_name(&plan, "Ordered");
+        assert_eq!(item.action, ImportPlanAction::Update);
+        assert_eq!(item.changed_fields, ["sortPriority"]);
+        commit_import_plan(&query_manager, plan).expect("commit");
+        let stored = query_manager.connect().get_http_request("rq_ordered").expect("stored");
+        assert_eq!(stored.sort_priority, 42.0);
     }
 }
