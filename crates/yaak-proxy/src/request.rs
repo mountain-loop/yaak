@@ -183,7 +183,7 @@ impl Flow {
         }
         self.engine.emit(ProxyEvent::StreamStart { id: self.id, kind: StreamKind::Sse });
         let encoding = header_str(headers, "content-encoding");
-        Some(BodyParser::Sse(SseParser::new(encoding, limit)))
+        Some(BodyParser::Sse(Box::new(SseParser::new(encoding, limit))))
     }
 
     fn respond_head(&mut self, resp: &Response<Incoming>, remote_addr: Option<SocketAddr>) {

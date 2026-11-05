@@ -20,7 +20,7 @@ pub(crate) enum Direction {
 
 /// Reads a streaming body's messages as the body passes.
 pub(crate) enum BodyParser {
-    Sse(SseParser),
+    Sse(Box<SseParser>),
     Grpc(GrpcParser),
 }
 
