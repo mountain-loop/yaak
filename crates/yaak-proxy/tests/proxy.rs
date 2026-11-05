@@ -39,6 +39,17 @@ use yaak_proxy::{
 
 const BIG_BODY: usize = 64 * 1024;
 
+/// The longest a streaming test may run: one that hangs fails with a message instead of
+/// holding CI until its job is cancelled.
+const STREAM_TEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+async fn within<T>(test: impl Future<Output = T>) -> T {
+    match tokio::time::timeout(STREAM_TEST_TIMEOUT, test).await {
+        Ok(result) => result,
+        Err(_) => panic!("the test did not finish within {STREAM_TEST_TIMEOUT:?}"),
+    }
+}
+
 macro_rules! find {
     ($events:expr, $pat:pat => $out:expr) => {
         $events
@@ -693,62 +704,67 @@ async fn bodies_over_the_cap_are_truncated_but_delivered() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn websocket_upgrade_passes_through() {
-    let h = Harness::start(1024);
-    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
-    let port = upstream.port();
+    within(async {
+        let h = Harness::start(1024);
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let port = upstream.port();
 
-    let tcp = h.connect_tunnel(port).await;
-    let tls = TlsConnector::from(h.tls_client_config())
-        .connect(ServerName::try_from("localhost").unwrap(), tcp)
-        .await
-        .unwrap();
+        let tcp = h.connect_tunnel(port).await;
+        let tls = TlsConnector::from(h.tls_client_config())
+            .connect(ServerName::try_from("localhost").unwrap(), tcp)
+            .await
+            .unwrap();
 
-    let url = format!("wss://localhost:{port}/ws");
-    let (mut ws, _) = tokio_tungstenite::client_async(url.as_str(), tls).await.unwrap();
-    ws.send(Message::text("hello")).await.unwrap();
-    assert_eq!(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str(), "hello");
-    ws.send(Message::binary(vec![0u8, 1, 2, 255])).await.unwrap();
-    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), &[0u8, 1, 2, 255]);
-    ws.send(Message::Ping(Bytes::from_static(b"p"))).await.unwrap();
-    assert!(matches!(ws.next().await.unwrap().unwrap(), Message::Pong(p) if p.as_ref() == b"p"));
-    ws.close(Some(CloseFrame { code: CloseCode::Normal, reason: "bye".into() })).await.unwrap();
-    while let Some(Ok(_)) = ws.next().await {}
-
-    let events = h.flow_events();
-    let req_url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
-    assert_eq!(req_url, format!("https://localhost:{port}/ws"));
-    let (status, version) = find!(events,
-        ProxyEvent::ResponseStart { status, http_version, .. } => (*status, http_version.clone()));
-    assert_eq!((status, version.as_str()), (101, "HTTP/1.1"));
-    let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
-    assert_eq!(kind, StreamKind::WebSocket);
-    // The flow ends with the close handshake, not with the 101.
-    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseBodyComplete { .. })));
-    let error = find!(events, ProxyEvent::StreamEnd { error, .. } => error.clone());
-    assert_eq!(error, None);
-
-    for direction in [MessageDirection::Client, MessageDirection::Server] {
-        let sent = messages(&events, direction);
-        let expected_control = match direction {
-            MessageDirection::Client => MessageKind::WebSocketPing,
-            MessageDirection::Server => MessageKind::WebSocketPong,
-        };
-        let close = MessageKind::WebSocketClose { code: Some(1000), reason: "bye".into() };
-        let kinds: Vec<_> = sent.iter().map(|m| m.kind.clone()).collect();
-        assert_eq!(
-            kinds,
-            vec![
-                MessageKind::WebSocketText,
-                MessageKind::WebSocketBinary,
-                expected_control,
-                close
-            ],
-            "{direction:?}"
+        let url = format!("wss://localhost:{port}/ws");
+        let (mut ws, _) = tokio_tungstenite::client_async(url.as_str(), tls).await.unwrap();
+        ws.send(Message::text("hello")).await.unwrap();
+        assert_eq!(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str(), "hello");
+        ws.send(Message::binary(vec![0u8, 1, 2, 255])).await.unwrap();
+        assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), &[0u8, 1, 2, 255]);
+        ws.send(Message::Ping(Bytes::from_static(b"p"))).await.unwrap();
+        assert!(
+            matches!(ws.next().await.unwrap().unwrap(), Message::Pong(p) if p.as_ref() == b"p")
         );
-        assert_eq!(&sent[0].data[..], b"hello");
-        assert_eq!(&sent[1].data[..], &[0u8, 1, 2, 255]);
-        assert_eq!(&sent[2].data[..], b"p");
-    }
+        ws.close(Some(CloseFrame { code: CloseCode::Normal, reason: "bye".into() })).await.unwrap();
+        while let Some(Ok(_)) = ws.next().await {}
+
+        let events = h.flow_events();
+        let req_url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
+        assert_eq!(req_url, format!("https://localhost:{port}/ws"));
+        let (status, version) = find!(events,
+        ProxyEvent::ResponseStart { status, http_version, .. } => (*status, http_version.clone()));
+        assert_eq!((status, version.as_str()), (101, "HTTP/1.1"));
+        let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
+        assert_eq!(kind, StreamKind::WebSocket);
+        // The flow ends with the close handshake, not with the 101.
+        assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseBodyComplete { .. })));
+        let error = find!(events, ProxyEvent::StreamEnd { error, .. } => error.clone());
+        assert_eq!(error, None);
+
+        for direction in [MessageDirection::Client, MessageDirection::Server] {
+            let sent = messages(&events, direction);
+            let expected_control = match direction {
+                MessageDirection::Client => MessageKind::WebSocketPing,
+                MessageDirection::Server => MessageKind::WebSocketPong,
+            };
+            let close = MessageKind::WebSocketClose { code: Some(1000), reason: "bye".into() };
+            let kinds: Vec<_> = sent.iter().map(|m| m.kind.clone()).collect();
+            assert_eq!(
+                kinds,
+                vec![
+                    MessageKind::WebSocketText,
+                    MessageKind::WebSocketBinary,
+                    expected_control,
+                    close
+                ],
+                "{direction:?}"
+            );
+            assert_eq!(&sent[0].data[..], b"hello");
+            assert_eq!(&sent[1].data[..], &[0u8, 1, 2, 255]);
+            assert_eq!(&sent[2].data[..], b"p");
+        }
+    })
+    .await
 }
 
 /// The messages a flow recorded from one side, in order.
@@ -830,6 +846,7 @@ fn raw_websocket_echo(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn websocket_frames_pass_byte_for_byte() {
+    within(async {
     let h = Harness::start(1024 * 1024);
     let received = Arc::new(std::sync::Mutex::new(Vec::new()));
     let handler = {
@@ -877,6 +894,8 @@ async fn websocket_frames_pass_byte_for_byte() {
     for piece in wire.chunks(7) {
         tls.write_all(piece).await.unwrap();
     }
+    // TLS may hold the last records back until flushed.
+    tls.flush().await.unwrap();
     let mut echoed = vec![0u8; wire.len()];
     tls.read_exact(&mut echoed).await.unwrap();
     assert_eq!(echoed, wire, "the client gets back exactly what the server sent");
@@ -908,6 +927,8 @@ async fn websocket_frames_pass_byte_for_byte() {
     }
     let error = find!(events, ProxyEvent::StreamEnd { error, .. } => error.clone());
     assert_eq!(error, None, "ended by the close frames");
+    })
+    .await
 }
 
 /// Round trips over a WebSocket through the proxy, in microseconds, sorted.
@@ -939,23 +960,26 @@ async fn websocket_round_trips(websocket_capture: bool, n: usize) -> Vec<u128> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn websocket_capture_adds_no_measurable_latency() {
-    const N: usize = 2000;
-    let blind = websocket_round_trips(false, N).await;
-    let captured = websocket_round_trips(true, N).await;
-    let pct = |t: &[u128], p: usize| t[(t.len() * p / 100).min(t.len() - 1)];
-    eprintln!(
-        "WebSocket round trip through the proxy, {N} x 256 B text, microseconds: \
+    within(async {
+        const N: usize = 2000;
+        let blind = websocket_round_trips(false, N).await;
+        let captured = websocket_round_trips(true, N).await;
+        let pct = |t: &[u128], p: usize| t[(t.len() * p / 100).min(t.len() - 1)];
+        eprintln!(
+            "WebSocket round trip through the proxy, {N} x 256 B text, microseconds: \
         blind splice p50 {} p90 {} p99 {}; captured p50 {} p90 {} p99 {}",
-        pct(&blind, 50),
-        pct(&blind, 90),
-        pct(&blind, 99),
-        pct(&captured, 50),
-        pct(&captured, 90),
-        pct(&captured, 99),
-    );
-    // Generous, so a busy machine does not fail it: within a millisecond of the blind splice at
-    // the median.
-    assert!(pct(&captured, 50) < pct(&blind, 50) + 1000);
+            pct(&blind, 50),
+            pct(&blind, 90),
+            pct(&blind, 99),
+            pct(&captured, 50),
+            pct(&captured, 90),
+            pct(&captured, 99),
+        );
+        // Generous, so a busy machine does not fail it: within a millisecond of the blind splice at
+        // the median.
+        assert!(pct(&captured, 50) < pct(&blind, 50) + 1000);
+    })
+    .await
 }
 
 /// An event stream whose chunks the test sends one at a time.
@@ -983,48 +1007,51 @@ fn next_stream_message(h: &Harness) -> StreamMessage {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn server_sent_events_are_recorded_as_they_arrive() {
-    let h = Harness::start(1024);
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let rx = Arc::new(std::sync::Mutex::new(Some(rx)));
-    let handler = move |_req| {
-        let rx = rx.lock().unwrap().take().unwrap();
-        async move { Ok::<_, Infallible>(event_stream(rx)) }
-    };
-    let upstream =
-        spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), handler)
-            .await;
-    let url = format!("https://localhost:{}/events", upstream.port());
-    let mut resp = h.client().get(&url).send().await.unwrap();
+    within(async {
+        let h = Harness::start(1024);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let rx = Arc::new(std::sync::Mutex::new(Some(rx)));
+        let handler = move |_req| {
+            let rx = rx.lock().unwrap().take().unwrap();
+            async move { Ok::<_, Infallible>(event_stream(rx)) }
+        };
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), handler)
+                .await;
+        let url = format!("https://localhost:{}/events", upstream.port());
+        let mut resp = h.client().get(&url).send().await.unwrap();
 
-    tx.send("event: greet\nid: 1\ndata: hello\n").unwrap();
-    tx.send("data: world\n\n").unwrap();
-    // Recorded while the stream is still open.
-    let first = next_stream_message(&h);
-    assert_eq!(&first.data[..], b"hello\nworld");
-    assert_eq!(
-        first.kind,
-        MessageKind::SseEvent {
-            event: Some("greet".into()),
-            id: Some("1".into()),
-            retry: None,
-            raw: "event: greet\nid: 1\ndata: hello\ndata: world\n\n".into(),
+        tx.send("event: greet\nid: 1\ndata: hello\n").unwrap();
+        tx.send("data: world\n\n").unwrap();
+        // Recorded while the stream is still open.
+        let first = next_stream_message(&h);
+        assert_eq!(&first.data[..], b"hello\nworld");
+        assert_eq!(
+            first.kind,
+            MessageKind::SseEvent {
+                event: Some("greet".into()),
+                id: Some("1".into()),
+                retry: None,
+                raw: "event: greet\nid: 1\ndata: hello\ndata: world\n\n".into(),
+            }
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        tx.send(": a comment\r\nretry: 1500\r\ndata: two\r\n\r\n").unwrap();
+        let second = next_stream_message(&h);
+        assert_eq!(&second.data[..], b"two");
+        assert!(matches!(second.kind, MessageKind::SseEvent { retry: Some(1500), .. }));
+        drop(tx);
+
+        let mut body = Vec::new();
+        while let Some(chunk) = resp.chunk().await.unwrap() {
+            body.extend_from_slice(&chunk);
         }
-    );
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    tx.send(": a comment\r\nretry: 1500\r\ndata: two\r\n\r\n").unwrap();
-    let second = next_stream_message(&h);
-    assert_eq!(&second.data[..], b"two");
-    assert!(matches!(second.kind, MessageKind::SseEvent { retry: Some(1500), .. }));
-    drop(tx);
-
-    let mut body = Vec::new();
-    while let Some(chunk) = resp.chunk().await.unwrap() {
-        body.extend_from_slice(&chunk);
-    }
-    assert!(body.ends_with(b"data: two\r\n\r\n"), "the client gets the stream unchanged");
-    let events = h.flow_events();
-    let error = find!(events, ProxyEvent::ResponseBodyComplete { error, .. } => error.clone());
-    assert_eq!(error, None);
+        assert!(body.ends_with(b"data: two\r\n\r\n"), "the client gets the stream unchanged");
+        let events = h.flow_events();
+        let error = find!(events, ProxyEvent::ResponseBodyComplete { error, .. } => error.clone());
+        assert_eq!(error, None);
+    })
+    .await
 }
 
 /// A gRPC message on the wire: its five-byte prefix, then `payload`.
@@ -1047,7 +1074,9 @@ fn proto_string(value: &str) -> Vec<u8> {
 async fn greeter(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible> {
     let path = req.uri().path().to_string();
     let web = req.headers()[CONTENT_TYPE].to_str().unwrap().starts_with("application/grpc-web");
-    let gzip = req.headers().get("accept-encoding").is_some_and(|e| e == "gzip");
+    // Asked for by a header of the test's own: clients built with gzip support ask for it on
+    // every request.
+    let gzip = req.headers().contains_key("x-test-gzip");
     let request = req.into_body().collect().await.unwrap().to_bytes();
     let request = if web { BASE64.decode(&request).unwrap() } else { request.to_vec() };
     let name = String::from_utf8_lossy(&request[7..]).into_owned();
@@ -1119,82 +1148,90 @@ async fn grpc_call(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn grpc_messages_and_status_are_recorded() {
-    let h = Harness::start(1024);
-    let upstream =
-        spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
-            .await;
-    let port = upstream.port();
-    let mut sender = h.h2_client(port).await;
+    within(async {
+        let h = Harness::start(1024);
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
+                .await;
+        let port = upstream.port();
+        let mut sender = h.h2_client(port).await;
 
-    let (body, trailers, _) = grpc_call(&mut sender, port, "SayHello", "Ada").await;
-    assert_eq!(body, grpc_frame(0, &proto_string("Hello Ada")));
-    assert_eq!(trailers.unwrap()["grpc-status"], "0", "trailers pass through");
-    let events = h.flow_events();
-    assert_eq!(find!(events, ProxyEvent::StreamStart { kind, .. } => *kind), StreamKind::Grpc);
-    let sent = messages(&events, MessageDirection::Client);
-    assert_eq!(sent.len(), 1);
-    assert_eq!((&sent[0].data[..], sent[0].size), (&proto_string("Ada")[..], 5));
-    let received = messages(&events, MessageDirection::Server);
-    assert_eq!(received.len(), 2);
-    assert_eq!(&received[0].data[..], &proto_string("Hello Ada")[..]);
-    assert_eq!(received[1].kind, MessageKind::GrpcTrailers { status: Some(0), message: None });
+        let (body, trailers, _) = grpc_call(&mut sender, port, "SayHello", "Ada").await;
+        assert_eq!(body, grpc_frame(0, &proto_string("Hello Ada")));
+        assert_eq!(trailers.unwrap()["grpc-status"], "0", "trailers pass through");
+        let events = h.flow_events();
+        assert_eq!(find!(events, ProxyEvent::StreamStart { kind, .. } => *kind), StreamKind::Grpc);
+        let sent = messages(&events, MessageDirection::Client);
+        assert_eq!(sent.len(), 1);
+        assert_eq!((&sent[0].data[..], sent[0].size), (&proto_string("Ada")[..], 5));
+        let received = messages(&events, MessageDirection::Server);
+        assert_eq!(received.len(), 2);
+        assert_eq!(&received[0].data[..], &proto_string("Hello Ada")[..]);
+        assert_eq!(received[1].kind, MessageKind::GrpcTrailers { status: Some(0), message: None });
 
-    let (_, _, _) = grpc_call(&mut sender, port, "StreamHellos", "Bo").await;
-    let events = h.flow_events();
-    let received = messages(&events, MessageDirection::Server);
-    let replies: Vec<_> = received.iter().map(|m| m.data.clone()).collect();
-    assert_eq!(replies.len(), 4);
-    for (i, reply) in replies[..3].iter().enumerate() {
-        assert_eq!(&reply[..], &proto_string(&format!("Hello Bo #{}", i + 1))[..]);
-    }
+        let (_, _, _) = grpc_call(&mut sender, port, "StreamHellos", "Bo").await;
+        let events = h.flow_events();
+        let received = messages(&events, MessageDirection::Server);
+        let replies: Vec<_> = received.iter().map(|m| m.data.clone()).collect();
+        assert_eq!(replies.len(), 4);
+        for (i, reply) in replies[..3].iter().enumerate() {
+            assert_eq!(&reply[..], &proto_string(&format!("Hello Bo #{}", i + 1))[..]);
+        }
 
-    let (body, _, headers) = grpc_call(&mut sender, port, "Fail", "Cy").await;
-    assert!(body.is_empty());
-    assert_eq!(headers["grpc-status"], "5");
-    let events = h.flow_events();
-    let received = messages(&events, MessageDirection::Server);
-    assert_eq!(
-        received[0].kind,
-        MessageKind::GrpcTrailers { status: Some(5), message: Some("no such greeter".into()) }
-    );
+        let (body, _, headers) = grpc_call(&mut sender, port, "Fail", "Cy").await;
+        assert!(body.is_empty());
+        assert_eq!(headers["grpc-status"], "5");
+        let events = h.flow_events();
+        let received = messages(&events, MessageDirection::Server);
+        assert_eq!(
+            received[0].kind,
+            MessageKind::GrpcTrailers { status: Some(5), message: Some("no such greeter".into()) }
+        );
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn grpc_web_text_is_recorded() {
-    let h = Harness::start(1024);
-    let upstream =
-        spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
-            .await;
-    let url = format!("https://localhost:{}/pkg.Greeter/StreamHellos", upstream.port());
-    // Plain, then with the whole response gzipped for HTTP.
-    for gzip in [false, true] {
-        let mut req = h
-            .client()
-            .post(&url)
-            .header(CONTENT_TYPE, "application/grpc-web-text")
-            .body(BASE64.encode(grpc_frame(0, &proto_string("Di"))));
-        if gzip {
-            req = req.header("accept-encoding", "gzip");
-        }
-        let resp = req.send().await.unwrap();
-        assert_eq!(resp.status(), 200);
-        let encoding = resp.headers().get("content-encoding").cloned();
-        assert_eq!(encoding.is_some(), gzip, "the client gets the response as sent");
-        resp.bytes().await.unwrap();
+    within(async {
+        let h = Harness::start(1024);
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
+                .await;
+        let url = format!("https://localhost:{}/pkg.Greeter/StreamHellos", upstream.port());
+        // Plain, then with the whole response gzipped for HTTP.
+        for gzip in [false, true] {
+            let mut req = h
+                .client()
+                .post(&url)
+                .header(CONTENT_TYPE, "application/grpc-web-text")
+                .body(BASE64.encode(grpc_frame(0, &proto_string("Di"))));
+            if gzip {
+                req = req.header("x-test-gzip", "1");
+            }
+            let resp = req.send().await.unwrap();
+            assert_eq!(resp.status(), 200);
+            resp.bytes().await.unwrap();
 
-        let events = h.flow_events();
-        let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
-        assert_eq!(kind, StreamKind::GrpcWeb);
-        let sent = messages(&events, MessageDirection::Client);
-        assert_eq!(&sent[0].data[..], &proto_string("Di")[..]);
-        let received = messages(&events, MessageDirection::Server);
-        assert_eq!(received.len(), 4, "gzip: {gzip}");
-        assert_eq!(&received[2].data[..], &proto_string("Hello Di #3")[..]);
-        assert_eq!(
-            received[3].kind,
-            MessageKind::GrpcTrailers { status: Some(0), message: Some(String::new()) }
-        );
-    }
+            let events = h.flow_events();
+            // As the server sent it: a client with gzip support may undo it before the test sees it.
+            let encoding =
+                headers(&events, false).into_iter().find(|(n, _)| n == "content-encoding");
+            assert_eq!(encoding.is_some(), gzip, "the response passed compressed");
+            let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
+            assert_eq!(kind, StreamKind::GrpcWeb);
+            let sent = messages(&events, MessageDirection::Client);
+            assert_eq!(&sent[0].data[..], &proto_string("Di")[..]);
+            let received = messages(&events, MessageDirection::Server);
+            assert_eq!(received.len(), 4, "gzip: {gzip}");
+            assert_eq!(&received[2].data[..], &proto_string("Hello Di #3")[..]);
+            assert_eq!(
+                received[3].kind,
+                MessageKind::GrpcTrailers { status: Some(0), message: Some(String::new()) }
+            );
+        }
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]

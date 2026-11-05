@@ -35,6 +35,17 @@ message HelloRequest { string name = 1; }
 message HelloReply { string message = 1; int32 count = 2; }
 "#;
 
+/// The longest a test here may run: one that hangs fails with a message instead of holding CI
+/// until its job is cancelled.
+const TEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+async fn within<T>(test: impl Future<Output = T>) -> T {
+    match tokio::time::timeout(TEST_TIMEOUT, test).await {
+        Ok(result) => result,
+        Err(_) => panic!("the test did not finish within {TEST_TIMEOUT:?}"),
+    }
+}
+
 fn full(data: impl Into<Bytes>) -> TestBody {
     Full::new(data.into()).map_err(|never| match never {}).boxed_unsync()
 }
@@ -201,208 +212,226 @@ async fn wait_for(ctx: &ProxyCtx, url: &str, check: impl Fn(&Flow) -> bool) -> F
 
 #[tokio::test(flavor = "multi_thread")]
 async fn server_sent_events_are_stored_while_the_stream_is_open() {
-    let dir = tempfile::tempdir().unwrap();
-    let (ctx, event_rx) = start(dir.path());
-    let upstream = spawn_upstream(None).await;
-    let url = format!("http://{upstream}/events");
-    let reading = tokio::spawn({
-        let client = client(&ctx);
-        let url = url.clone();
-        async move { client.get(&url).send().await.unwrap().text().await.unwrap() }
-    });
+    within(async {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, event_rx) = start(dir.path());
+        let upstream = spawn_upstream(None).await;
+        let url = format!("http://{upstream}/events");
+        let reading = tokio::spawn({
+            let client = client(&ctx);
+            let url = url.clone();
+            async move { client.get(&url).send().await.unwrap().text().await.unwrap() }
+        });
 
-    // The flow is in the database with its first event while the second is still to come.
-    let open = wait_for(&ctx, &url, |f| f.message_count == 1).await;
-    assert_eq!(open.stream_kind.map(|k| k.as_str()), Some("sse"));
-    assert_eq!(open.elapsed_ms, None, "still streaming");
-    let listed = rpc(&ctx, "list_messages", json!({ "flowId": open.id })).await.unwrap();
-    assert_eq!(listed["total"], 1);
-    let first = &listed["messages"][0];
-    assert_eq!(
-        (first["kind"].as_str(), first["direction"].as_str()),
-        (Some("sse_event"), Some("server"))
-    );
-    assert_eq!(first["preview"], "first");
-    assert_eq!(
-        first["meta"],
-        json!({ "event": "tick", "eventId": "1", "raw": "event: tick\nid: 1\ndata: first\n\n" })
-    );
+        // The flow is in the database with its first event while the second is still to come.
+        let open = wait_for(&ctx, &url, |f| f.message_count == 1).await;
+        assert_eq!(open.stream_kind.map(|k| k.as_str()), Some("sse"));
+        assert_eq!(open.elapsed_ms, None, "still streaming");
+        let listed = rpc(&ctx, "list_messages", json!({ "flowId": open.id })).await.unwrap();
+        assert_eq!(listed["total"], 1);
+        let first = &listed["messages"][0];
+        assert_eq!(
+            (first["kind"].as_str(), first["direction"].as_str()),
+            (Some("sse_event"), Some("server"))
+        );
+        assert_eq!(first["preview"], "first");
+        assert_eq!(
+            first["meta"],
+            json!({ "event": "tick", "eventId": "1", "raw": "event: tick\nid: 1\ndata: first\n\n" })
+        );
 
-    assert_eq!(reading.await.unwrap(), "event: tick\nid: 1\ndata: first\n\ndata: second\n\n");
-    let ended = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
-    assert_eq!((ended.message_count, ended.error), (2, None));
-    let after =
-        rpc(&ctx, "list_messages", json!({ "flowId": ended.id, "afterSeq": 0 })).await.unwrap();
-    assert_eq!(after["messages"].as_array().unwrap().len(), 1);
-    let payload =
-        rpc(&ctx, "get_message_payload", json!({ "flowId": ended.id, "seq": 1 })).await.unwrap();
-    assert_eq!(payload["data"], "c2Vjb25k", "\"second\" in base64");
+        assert_eq!(reading.await.unwrap(), "event: tick\nid: 1\ndata: first\n\ndata: second\n\n");
+        let ended = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
+        assert_eq!((ended.message_count, ended.error), (2, None));
+        let after =
+            rpc(&ctx, "list_messages", json!({ "flowId": ended.id, "afterSeq": 0 })).await.unwrap();
+        assert_eq!(after["messages"].as_array().unwrap().len(), 1);
+        let payload = rpc(&ctx, "get_message_payload", json!({ "flowId": ended.id, "seq": 1 }))
+            .await
+            .unwrap();
+        assert_eq!(payload["data"], "c2Vjb25k", "\"second\" in base64");
 
-    // The app heard of the open flow, of each message, and of the end.
-    let events: Vec<_> = event_rx.try_iter().map(|e| e.event).collect();
-    let writes = |name: &str| events.iter().filter(|e| **e == name).count();
-    assert_eq!(writes("message_write"), 2, "{events:?}");
-    assert!(writes("model_write") >= 2, "{events:?}");
+        // The app heard of the open flow, of each message, and of the end.
+        let events: Vec<_> = event_rx.try_iter().map(|e| e.event).collect();
+        let writes = |name: &str| events.iter().filter(|e| **e == name).count();
+        assert_eq!(writes("message_write"), 2, "{events:?}");
+        assert!(writes("model_write") >= 2, "{events:?}");
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn grpc_web_calls_are_stored_and_decoded() {
-    let dir = tempfile::tempdir().unwrap();
-    let (ctx, _event_rx) = start(dir.path());
-    let upstream = spawn_upstream(None).await;
-    let client = client(&ctx);
+    within(async {
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _event_rx) = start(dir.path());
+        let upstream = spawn_upstream(None).await;
+        let client = client(&ctx);
 
-    let url = format!("http://{upstream}/pkg.Greeter/SayHello");
-    let body = client
-        .post(&url)
-        .header("content-type", "application/grpc-web+proto")
-        .body(grpc_frame(0, &proto("Ada", None)))
-        .send()
-        .await
-        .unwrap()
-        .bytes()
-        .await
-        .unwrap();
-    assert!(body.starts_with(&grpc_frame(0, &proto("Hello Ada", Some(3)))));
-    let flow = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
-    assert_eq!(flow.stream_kind.map(|k| k.as_str()), Some("grpc_web"));
-    assert_eq!(
-        (flow.grpc_service.as_deref(), flow.grpc_method.as_deref()),
-        (Some("pkg.Greeter"), Some("SayHello"))
-    );
-    assert_eq!((flow.grpc_status, flow.message_count), (Some(0), 3));
-
-    let failing = format!("http://{upstream}/pkg.Greeter/Missing");
-    client
-        .post(&failing)
-        .header("content-type", "application/grpc-web+proto")
-        .body(grpc_frame(0, &proto("Bo", None)))
-        .send()
-        .await
-        .unwrap();
-    let failed = wait_for(&ctx, &failing, |f| f.elapsed_ms.is_some()).await;
-    assert_eq!((failed.grpc_status, failed.grpc_message.as_deref()), (Some(12), Some("not here")));
-    let errors = rpc(&ctx, "list_flows", json!({ "status": "error" })).await.unwrap();
-    let ids: Vec<_> = errors["flows"].as_array().unwrap().iter().map(|f| f["id"].clone()).collect();
-    assert_eq!(ids, vec![json!(failed.id)], "a non-zero status is a failed call");
-
-    // No schema, and reflection against the server fails: decoded by wire type alone.
-    let decode = json!({ "flowId": flow.id, "seq": 1 });
-    let schemaless = rpc(&ctx, "decode_grpc_message", decode.clone()).await.unwrap();
-    assert_eq!(schemaless["messageType"], Value::Null);
-    assert!(schemaless["note"].as_str().unwrap().contains("reflection failed"), "{schemaless}");
-    let fields: Value = serde_json::from_str(schemaless["json"].as_str().unwrap()).unwrap();
-    assert_eq!(fields[0]["string"], "Hello Ada");
-    assert_eq!(fields[1], json!({ "field": 2, "wireType": "varint", "value": 3 }));
-
-    // With the proto attached to the host, by name.
-    let protos = tempfile::tempdir().unwrap();
-    let added = rpc(
-        &ctx,
-        "add_grpc_schema",
-        json!({ "hostPattern": "127.0.0.1", "protoPaths": [proto_file(protos.path())] }),
-    )
-    .await
-    .unwrap();
-    assert_eq!(added["services"], json!(["pkg.Greeter"]));
-    assert_eq!(added["source"], "files");
-    let decoded = rpc(&ctx, "decode_grpc_message", decode.clone()).await.unwrap();
-    assert_eq!(decoded["messageType"], "pkg.HelloReply");
-    let message: Value = serde_json::from_str(decoded["json"].as_str().unwrap()).unwrap();
-    assert_eq!(message, json!({ "message": "Hello Ada", "count": 3 }));
-    let request = json!({ "flowId": flow.id, "seq": 0 });
-    let decoded = rpc(&ctx, "decode_grpc_message", request).await.unwrap();
-    assert_eq!(decoded["messageType"], "pkg.HelloRequest");
-    let trailers = json!({ "flowId": flow.id, "seq": 2 });
-    assert!(rpc(&ctx, "decode_grpc_message", trailers).await.is_err(), "trailers are no message");
-
-    // The control API returns the same, and lists the messages.
-    ctx.serve_control_api().unwrap();
-    let info = ctx.control_info().unwrap();
-    let api = reqwest::Client::new();
-    let get = |path: String| {
-        api.get(format!("{}{path}", info.base_url())).bearer_auth(&info.token).send()
-    };
-    let listed: Value = get(format!("/flows/{}/messages?after=0&limit=1", flow.id))
-        .await
-        .unwrap()
-        .json()
-        .await
-        .unwrap();
-    assert_eq!(
-        (listed["total"].as_i64(), listed["messages"][0]["seq"].as_i64()),
-        (Some(3), Some(1))
-    );
-    let detail: Value =
-        get(format!("/flows/{}/messages/1", flow.id)).await.unwrap().json().await.unwrap();
-    assert_eq!(detail["decoded"]["messageType"], "pkg.HelloReply");
-    assert_eq!(detail["payload"]["encoding"], "utf8");
-    let schemas: Value = get("/grpc-schemas".into()).await.unwrap().json().await.unwrap();
-    assert_eq!(schemas.as_array().unwrap().len(), 1);
-
-    let removed = rpc(&ctx, "remove_grpc_schema", json!({ "id": added["id"] })).await.unwrap();
-    assert_eq!(removed, true);
-    let after = rpc(&ctx, "decode_grpc_message", decode).await.unwrap();
-    assert_eq!(after["messageType"], Value::Null);
-
-    // Clearing removes the messages with their flows.
-    rpc(&ctx, "clear_flows", json!({})).await.unwrap();
-    assert!(rpc(&ctx, "list_messages", json!({ "flowId": flow.id })).await.is_err());
-    let left: i64 = ctx.db.with_conn(|c| {
-        c.conn()
-            .resolve()
-            .query_row("SELECT COUNT(*) FROM flow_messages", [], |r| r.get(0))
+        let url = format!("http://{upstream}/pkg.Greeter/SayHello");
+        let body = client
+            .post(&url)
+            .header("content-type", "application/grpc-web+proto")
+            .body(grpc_frame(0, &proto("Ada", None)))
+            .send()
+            .await
             .unwrap()
-    });
-    assert_eq!(left, 0);
-    ctx.stop_control_api();
+            .bytes()
+            .await
+            .unwrap();
+        assert!(body.starts_with(&grpc_frame(0, &proto("Hello Ada", Some(3)))));
+        let flow = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
+        assert_eq!(flow.stream_kind.map(|k| k.as_str()), Some("grpc_web"));
+        assert_eq!(
+            (flow.grpc_service.as_deref(), flow.grpc_method.as_deref()),
+            (Some("pkg.Greeter"), Some("SayHello"))
+        );
+        assert_eq!((flow.grpc_status, flow.message_count), (Some(0), 3));
+
+        let failing = format!("http://{upstream}/pkg.Greeter/Missing");
+        client
+            .post(&failing)
+            .header("content-type", "application/grpc-web+proto")
+            .body(grpc_frame(0, &proto("Bo", None)))
+            .send()
+            .await
+            .unwrap();
+        let failed = wait_for(&ctx, &failing, |f| f.elapsed_ms.is_some()).await;
+        assert_eq!(
+            (failed.grpc_status, failed.grpc_message.as_deref()),
+            (Some(12), Some("not here"))
+        );
+        let errors = rpc(&ctx, "list_flows", json!({ "status": "error" })).await.unwrap();
+        let ids: Vec<_> =
+            errors["flows"].as_array().unwrap().iter().map(|f| f["id"].clone()).collect();
+        assert_eq!(ids, vec![json!(failed.id)], "a non-zero status is a failed call");
+
+        // No schema, and reflection against the server fails: decoded by wire type alone.
+        let decode = json!({ "flowId": flow.id, "seq": 1 });
+        let schemaless = rpc(&ctx, "decode_grpc_message", decode.clone()).await.unwrap();
+        assert_eq!(schemaless["messageType"], Value::Null);
+        assert!(schemaless["note"].as_str().unwrap().contains("reflection failed"), "{schemaless}");
+        let fields: Value = serde_json::from_str(schemaless["json"].as_str().unwrap()).unwrap();
+        assert_eq!(fields[0]["string"], "Hello Ada");
+        assert_eq!(fields[1], json!({ "field": 2, "wireType": "varint", "value": 3 }));
+
+        // With the proto attached to the host, by name.
+        let protos = tempfile::tempdir().unwrap();
+        let added = rpc(
+            &ctx,
+            "add_grpc_schema",
+            json!({ "hostPattern": "127.0.0.1", "protoPaths": [proto_file(protos.path())] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(added["services"], json!(["pkg.Greeter"]));
+        assert_eq!(added["source"], "files");
+        let decoded = rpc(&ctx, "decode_grpc_message", decode.clone()).await.unwrap();
+        assert_eq!(decoded["messageType"], "pkg.HelloReply");
+        let message: Value = serde_json::from_str(decoded["json"].as_str().unwrap()).unwrap();
+        assert_eq!(message, json!({ "message": "Hello Ada", "count": 3 }));
+        let request = json!({ "flowId": flow.id, "seq": 0 });
+        let decoded = rpc(&ctx, "decode_grpc_message", request).await.unwrap();
+        assert_eq!(decoded["messageType"], "pkg.HelloRequest");
+        let trailers = json!({ "flowId": flow.id, "seq": 2 });
+        assert!(
+            rpc(&ctx, "decode_grpc_message", trailers).await.is_err(),
+            "trailers are no message"
+        );
+
+        // The control API returns the same, and lists the messages.
+        ctx.serve_control_api().unwrap();
+        let info = ctx.control_info().unwrap();
+        let api = reqwest::Client::new();
+        let get = |path: String| {
+            api.get(format!("{}{path}", info.base_url())).bearer_auth(&info.token).send()
+        };
+        let listed: Value = get(format!("/flows/{}/messages?after=0&limit=1", flow.id))
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(
+            (listed["total"].as_i64(), listed["messages"][0]["seq"].as_i64()),
+            (Some(3), Some(1))
+        );
+        let detail: Value =
+            get(format!("/flows/{}/messages/1", flow.id)).await.unwrap().json().await.unwrap();
+        assert_eq!(detail["decoded"]["messageType"], "pkg.HelloReply");
+        assert_eq!(detail["payload"]["encoding"], "utf8");
+        let schemas: Value = get("/grpc-schemas".into()).await.unwrap().json().await.unwrap();
+        assert_eq!(schemas.as_array().unwrap().len(), 1);
+
+        let removed = rpc(&ctx, "remove_grpc_schema", json!({ "id": added["id"] })).await.unwrap();
+        assert_eq!(removed, true);
+        let after = rpc(&ctx, "decode_grpc_message", decode).await.unwrap();
+        assert_eq!(after["messageType"], Value::Null);
+
+        // Clearing removes the messages with their flows.
+        rpc(&ctx, "clear_flows", json!({})).await.unwrap();
+        assert!(rpc(&ctx, "list_messages", json!({ "flowId": flow.id })).await.is_err());
+        let left: i64 = ctx.db.with_conn(|c| {
+            c.conn()
+                .resolve()
+                .query_row("SELECT COUNT(*) FROM flow_messages", [], |r| r.get(0))
+                .unwrap()
+        });
+        assert_eq!(left, 0);
+        ctx.stop_control_api();
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn grpc_schemas_come_from_the_servers_reflection() {
-    let protos = tempfile::tempdir().unwrap();
-    let pool = yaak_grpc::fill_pool_from_files(&protoc(), &vec![proto_file(protos.path()).into()])
-        .await
-        .unwrap();
-    let descriptors = pool.encode_to_vec();
-    let reflection = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(&descriptors)
-        .build_v1()
-        .unwrap();
-    let upstream = spawn_upstream(Some(reflection_service(reflection))).await;
+    within(async {
+        let protos = tempfile::tempdir().unwrap();
+        let pool =
+            yaak_grpc::fill_pool_from_files(&protoc(), &vec![proto_file(protos.path()).into()])
+                .await
+                .unwrap();
+        let descriptors = pool.encode_to_vec();
+        let reflection = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(&descriptors)
+            .build_v1()
+            .unwrap();
+        let upstream = spawn_upstream(Some(reflection_service(reflection))).await;
 
-    let dir = tempfile::tempdir().unwrap();
-    let (ctx, _event_rx) = start(dir.path());
-    // Plain HTTP, so reflection is asked without TLS, as the call was made.
-    let url = format!("http://{upstream}/pkg.Greeter/SayHello");
-    client(&ctx)
-        .post(&url)
-        .header("content-type", "application/grpc-web+proto")
-        .body(grpc_frame(0, &proto("Cy", None)))
-        .send()
-        .await
-        .unwrap();
-    let flow = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
+        let dir = tempfile::tempdir().unwrap();
+        let (ctx, _event_rx) = start(dir.path());
+        // Plain HTTP, so reflection is asked without TLS, as the call was made.
+        let url = format!("http://{upstream}/pkg.Greeter/SayHello");
+        client(&ctx)
+            .post(&url)
+            .header("content-type", "application/grpc-web+proto")
+            .body(grpc_frame(0, &proto("Cy", None)))
+            .send()
+            .await
+            .unwrap();
+        let flow = wait_for(&ctx, &url, |f| f.elapsed_ms.is_some()).await;
 
-    // Nothing attached: the server is asked once, and its answer kept for the host. Two
-    // decodes at once both wait for that answer.
-    let request = json!({ "flowId": flow.id, "seq": 1 });
-    let (decoded, alongside) = tokio::join!(
-        rpc(&ctx, "decode_grpc_message", request.clone()),
-        rpc(&ctx, "decode_grpc_message", request)
-    );
-    let (decoded, alongside) = (decoded.unwrap(), alongside.unwrap());
-    assert_eq!(decoded["messageType"], "pkg.HelloReply", "{decoded}");
-    assert_eq!(alongside["messageType"], "pkg.HelloReply", "{alongside}");
-    assert_eq!(decoded["schema"]["source"], "reflection");
-    assert_eq!(decoded["schema"]["hostPattern"], format!("127.0.0.1:{}", upstream.port()));
-    let schemas = rpc(&ctx, "list_grpc_schemas", json!({})).await.unwrap();
-    assert_eq!(schemas.as_array().unwrap().len(), 1);
+        // Nothing attached: the server is asked once, and its answer kept for the host. Two
+        // decodes at once both wait for that answer.
+        let request = json!({ "flowId": flow.id, "seq": 1 });
+        let (decoded, alongside) = tokio::join!(
+            rpc(&ctx, "decode_grpc_message", request.clone()),
+            rpc(&ctx, "decode_grpc_message", request)
+        );
+        let (decoded, alongside) = (decoded.unwrap(), alongside.unwrap());
+        assert_eq!(decoded["messageType"], "pkg.HelloReply", "{decoded}");
+        assert_eq!(alongside["messageType"], "pkg.HelloReply", "{alongside}");
+        assert_eq!(decoded["schema"]["source"], "reflection");
+        assert_eq!(decoded["schema"]["hostPattern"], format!("127.0.0.1:{}", upstream.port()));
+        let schemas = rpc(&ctx, "list_grpc_schemas", json!({})).await.unwrap();
+        assert_eq!(schemas.as_array().unwrap().len(), 1);
 
-    // Asked again on demand, it replaces the host's earlier answer.
-    let host = format!("http://127.0.0.1:{}", upstream.port());
-    let again = rpc(&ctx, "reflect_grpc_host", json!({ "host": host })).await.unwrap();
-    assert_eq!(again["services"], json!(["pkg.Greeter"]));
-    let schemas = rpc(&ctx, "list_grpc_schemas", json!({})).await.unwrap();
-    assert_eq!(schemas.as_array().unwrap().len(), 1);
+        // Asked again on demand, it replaces the host's earlier answer.
+        let host = format!("http://127.0.0.1:{}", upstream.port());
+        let again = rpc(&ctx, "reflect_grpc_host", json!({ "host": host })).await.unwrap();
+        assert_eq!(again["services"], json!(["pkg.Greeter"]));
+        let schemas = rpc(&ctx, "list_grpc_schemas", json!({})).await.unwrap();
+        assert_eq!(schemas.as_array().unwrap().len(), 1);
+    })
+    .await
 }
