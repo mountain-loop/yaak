@@ -1,21 +1,21 @@
-import type { AnyModel } from "@yaakapp-internal/models";
-import { patchModel } from "@yaakapp-internal/models";
-import { Icon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { ReactNode } from "react";
-import { CopyIconButton } from "../CopyIconButton";
-import { Checkbox } from "./Checkbox";
-import { IconButton, type IconButtonProps } from "./IconButton";
-import { PlainInput } from "./PlainInput";
-import type { RadioDropdownItem } from "./RadioDropdown";
-import { Select } from "./Select";
-import { SelectFile } from "../SelectFile";
+import { Checkbox } from "../Checkbox";
+import { CopyIconButton as BaseCopyIconButton, type CopyIconButtonProps } from "../CopyIconButton";
+import { useEditorHost } from "../EditorHost";
+import { Icon } from "../Icon";
+import { IconButton, type IconButtonProps } from "../IconButton";
+import { PlainInput } from "../PlainInput";
+import type { RadioDropdownItem } from "../RadioDropdown";
+import { Select } from "../Select";
 
-type ModelKeyOfValue<T, V> = {
-  [K in keyof T]-?: T[K] extends V ? K : never;
-}[keyof T];
+/** Copies through the host, quietly, as the rows' values do */
+function CopyIconButton(props: Omit<CopyIconButtonProps, "copy">) {
+  const host = useEditorHost();
+  return <BaseCopyIconButton {...props} copy={host.copy} />;
+}
 
-type SettingRowBaseProps = {
+export type SettingRowBaseProps = {
   className?: string;
   controlClassName?: string;
   description?: ReactNode;
@@ -255,23 +255,6 @@ export function SettingRowBoolean({
   );
 }
 
-export function ModelSettingRowBoolean<M extends AnyModel, K extends ModelKeyOfValue<M, boolean>>({
-  model,
-  modelKey,
-  ...props
-}: {
-  model: M;
-  modelKey: K;
-} & Omit<Parameters<typeof SettingRowBoolean>[0], "checked" | "onChange">) {
-  return (
-    <SettingRowBoolean
-      checked={model[modelKey] as boolean}
-      onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
-      {...props}
-    />
-  );
-}
-
 export function SettingRowNumber({
   inputClassName,
   inputWidthClassName = "w-48!",
@@ -316,24 +299,6 @@ export function SettingRowNumber({
   );
 }
 
-export function ModelSettingRowNumber<M extends AnyModel, K extends ModelKeyOfValue<M, number>>({
-  model,
-  modelKey,
-  ...props
-}: {
-  model: M;
-  modelKey: K;
-} & Omit<Parameters<typeof SettingRowNumber>[0], "name" | "onChange" | "value">) {
-  return (
-    <SettingRowNumber
-      name={String(modelKey)}
-      value={model[modelKey] as number}
-      onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
-      {...props}
-    />
-  );
-}
-
 export function SettingRowText({
   inputClassName,
   inputWidthClassName = "w-80!",
@@ -373,69 +338,6 @@ export function SettingRowText({
       />
     </SettingRow>
   );
-}
-
-export function ModelSettingRowText<M extends AnyModel, K extends ModelKeyOfValue<M, string>>({
-  model,
-  modelKey,
-  ...props
-}: {
-  model: M;
-  modelKey: K;
-} & Omit<Parameters<typeof SettingRowText>[0], "name" | "onChange" | "value">) {
-  return (
-    <SettingRowText
-      name={String(modelKey)}
-      value={model[modelKey] as string}
-      onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
-      {...props}
-    />
-  );
-}
-
-export function SettingRowFile({
-  buttonClassName,
-  controlClassName = "min-w-0 max-w-[min(32rem,45vw)]",
-  directory,
-  filePath,
-  nameOverride,
-  noun,
-  onChange,
-  size = "xs",
-  title,
-  ...props
-}: {
-  buttonClassName?: string;
-  directory?: boolean;
-  filePath: string | null;
-  nameOverride?: string | null;
-  noun?: string;
-  onChange: (filePath: string | null) => void | Promise<void>;
-  size?: Parameters<typeof SelectFile>[0]["size"];
-} & SettingRowBaseProps) {
-  return (
-    <SettingRow title={title} controlClassName={controlClassName} {...props}>
-      <SelectFile
-        directory={directory}
-        inline
-        hideLabel
-        label={typeof title === "string" ? title : noun}
-        size={size}
-        noun={noun}
-        nameOverride={nameOverride}
-        filePath={filePath}
-        className={buttonClassName}
-        onChange={({ filePath }) => onChange(filePath)}
-      />
-    </SettingRow>
-  );
-}
-
-export function SettingRowDirectory({
-  noun = "Directory",
-  ...props
-}: Omit<Parameters<typeof SettingRowFile>[0], "directory">) {
-  return <SettingRowFile directory noun={noun} {...props} />;
 }
 
 export function SettingRowSelect<T extends string>({
@@ -502,50 +404,6 @@ export function SettingSelectControl<T extends string>({
       disabled={disabled}
       onChange={onChange}
       options={options}
-    />
-  );
-}
-
-export function ModelSettingSelectControl<
-  M extends AnyModel,
-  K extends ModelKeyOfValue<M, string>,
-  V extends M[K] & string,
->({
-  model,
-  modelKey,
-  ...props
-}: {
-  model: M;
-  modelKey: K;
-} & Omit<Parameters<typeof SettingSelectControl<V>>[0], "name" | "onChange" | "value">) {
-  return (
-    <SettingSelectControl
-      name={String(modelKey)}
-      value={model[modelKey] as V}
-      onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
-      {...props}
-    />
-  );
-}
-
-export function ModelSettingRowSelect<
-  M extends AnyModel,
-  K extends ModelKeyOfValue<M, string>,
-  V extends M[K] & string,
->({
-  model,
-  modelKey,
-  ...props
-}: {
-  model: M;
-  modelKey: K;
-} & Omit<Parameters<typeof SettingRowSelect<V>>[0], "name" | "onChange" | "value">) {
-  return (
-    <SettingRowSelect
-      name={String(modelKey)}
-      value={model[modelKey] as V}
-      onChange={(value) => patchModel(model, { [modelKey]: value } as Partial<M>)}
-      {...props}
     />
   );
 }

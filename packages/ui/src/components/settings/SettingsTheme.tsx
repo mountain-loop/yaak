@@ -1,22 +1,14 @@
-import { patchModel, settingsAtom } from "@yaakapp-internal/models";
-import { Heading, HStack, Icon, type IconProps, VStack } from "@yaakapp-internal/ui";
-import { useAtomValue } from "jotai";
-import { lazy, Suspense } from "react";
-import { activeWorkspaceAtom } from "../../hooks/useActiveWorkspace";
-import { useResolvedAppearance } from "../../hooks/useResolvedAppearance";
-import { useResolvedTheme } from "../../hooks/useResolvedTheme";
-import type { ButtonProps } from "../core/Button";
-import { IconButton } from "../core/IconButton";
-import { Link } from "../core/Link";
-import type { SelectProps } from "../core/Select";
-import {
-  ModelSettingRowSelect,
-  SettingRowSelect,
-  SettingsList,
-  SettingsSection,
-} from "../core/SettingRow";
-
-const Editor = lazy(() => import("../core/Editor/Editor").then((m) => ({ default: m.Editor })));
+import { Suspense } from "react";
+import type { ButtonProps } from "../Button";
+import { useEditorHost } from "../EditorHost";
+import { ExternalLink } from "../ExternalLink";
+import { Heading } from "../Heading";
+import { Icon, type IconProps } from "../Icon";
+import { IconButton } from "../IconButton";
+import type { SelectProps } from "../Select";
+import { HStack, VStack } from "../Stacks";
+import { SettingRowSelect, SettingsList, SettingsSection } from "./SettingRow";
+import type { SettingsCallbacks, SettingsView } from "./types";
 
 const buttonColors: ButtonProps["color"][] = [
   "primary",
@@ -47,24 +39,27 @@ const icons: IconProps["icon"][] = [
   "send_horizontal",
 ];
 
-export function SettingsTheme() {
-  const workspace = useAtomValue(activeWorkspaceAtom);
-  const settings = useAtomValue(settingsAtom);
-  const appearance = useResolvedAppearance();
-  const activeTheme = useResolvedTheme();
+export interface SettingsThemeProps {
+  view: SettingsView;
+  callbacks: SettingsCallbacks;
+}
 
-  if (settings == null || workspace == null || activeTheme.data == null) {
+export function SettingsTheme({ view, callbacks }: SettingsThemeProps) {
+  const { Editor } = useEditorHost();
+  const { app, values, themes } = view;
+
+  if (themes == null) {
     return null;
   }
 
-  const lightThemes: SelectProps<string>["options"] = activeTheme.data.themes
+  const lightThemes: SelectProps<string>["options"] = themes.themes
     .filter((theme) => !theme.dark)
     .map((theme) => ({
       label: theme.label,
       value: theme.id,
     }));
 
-  const darkThemes: SelectProps<string>["options"] = activeTheme.data.themes
+  const darkThemes: SelectProps<string>["options"] = themes.themes
     .filter((theme) => theme.dark)
     .map((theme) => ({
       label: theme.label,
@@ -76,43 +71,48 @@ export function SettingsTheme() {
       <div className="mb-3">
         <Heading>Theme</Heading>
         <p className="text-text-subtle">
-          Make Yaak your own by selecting a theme, or{" "}
-          <Link href="https://yaak.app/docs/plugin-development/plugins-quick-start">
+          {/* One text node, so the name kerns with the words around it */}
+          {`Make ${app.name} your own by selecting a theme, or`}{" "}
+          <ExternalLink
+            href="https://yaak.app/docs/plugin-development/plugins-quick-start"
+            onOpen={callbacks.onOpenUrl}
+          >
             Create Your Own
-          </Link>
+          </ExternalLink>
         </p>
       </div>
       <SettingsList className="space-y-8">
         <SettingsSection title="Theme">
-          <ModelSettingRowSelect
-            model={settings}
-            modelKey="appearance"
+          <SettingRowSelect
+            name="appearance"
             title="Appearance"
-            description="Choose whether Yaak follows your system appearance or uses a fixed mode."
+            description={`Choose whether ${app.name} follows your system appearance or uses a fixed mode.`}
+            value={values.appearance}
+            onChange={(appearance) => callbacks.onChange({ appearance })}
             options={[
               { label: "Automatic", value: "system" },
               { label: "Light", value: "light" },
               { label: "Dark", value: "dark" },
             ]}
           />
-          {(settings.appearance === "system" || settings.appearance === "light") && (
+          {(values.appearance === "system" || values.appearance === "light") && (
             <SettingRowSelect
               name="lightTheme"
               title="Light theme"
-              description="Theme used when Yaak is in light mode."
-              value={activeTheme.data.light.id}
+              description={`Theme used when ${app.name} is in light mode.`}
+              value={themes.light.id}
               options={lightThemes}
-              onChange={(themeLight) => patchModel(settings, { themeLight })}
+              onChange={(themeLight) => callbacks.onChange({ themeLight })}
             />
           )}
-          {(settings.appearance === "system" || settings.appearance === "dark") && (
+          {(values.appearance === "system" || values.appearance === "dark") && (
             <SettingRowSelect
               name="darkTheme"
               title="Dark theme"
-              description="Theme used when Yaak is in dark mode."
-              value={activeTheme.data.dark.id}
+              description={`Theme used when ${app.name} is in dark mode.`}
+              value={themes.dark.id}
               options={darkThemes}
-              onChange={(themeDark) => patchModel(settings, { themeDark })}
+              onChange={(themeDark) => callbacks.onChange({ themeDark })}
             />
           )}
         </SettingsSection>
@@ -123,8 +123,8 @@ export function SettingsTheme() {
             className="mt-4 w-full bg-surface p-3 border border-dashed border-border-subtle rounded-sm overflow-x-auto"
           >
             <HStack className="text" space={1.5}>
-              <Icon icon={appearance === "dark" ? "moon" : "sun"} />
-              <strong>{activeTheme.data.active.label}</strong>
+              <Icon icon={themes.resolvedAppearance === "dark" ? "moon" : "sun"} />
+              <strong>{themes.active.label}</strong>
               <em>(preview)</em>
             </HStack>
             <HStack space={1.5} className="w-full">

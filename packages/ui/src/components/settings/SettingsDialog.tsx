@@ -1,68 +1,61 @@
-import { platform } from "@yaakapp-internal/platform";
-import { useLicense } from "@yaakapp-internal/license";
-import { pluginsAtom, settingsAtom } from "@yaakapp-internal/models";
-import { HeaderSize, HStack, Icon, CountBadge } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue } from "jotai";
-import { useKeyPressEvent } from "react-use";
-import { appInfo } from "../../lib/appInfo";
-import { capitalize } from "../../lib/capitalize";
-import { TabContent, type TabItem, Tabs } from "../core/Tabs/Tabs";
-import { SettingsAgents } from "./SettingsAgents";
-import { SettingsCertificates } from "./SettingsCertificates";
-import { SettingsGeneral } from "./SettingsGeneral";
-import { SettingsHotkeys } from "./SettingsHotkeys";
-import { SettingsInterface } from "./SettingsInterface";
-import { SettingsLicense } from "./SettingsLicense";
-import { SettingsPlugins } from "./SettingsPlugins";
-import { SettingsProxy } from "./SettingsProxy";
-import { SettingsTheme } from "./SettingsTheme";
+import type { ReactNode } from "react";
+import { useEditorHost } from "../EditorHost";
+import { HeaderSize } from "../HeaderSize";
+import { Icon, type IconProps } from "../Icon";
+import { HStack } from "../Stacks";
+import { TabContent, type TabItem, Tabs } from "../tabs/Tabs";
 
-interface Props {
-  tab?: SettingsTabWithSubtab | null;
-  /** Set when Settings is in a dialog rather than owning a window. */
-  hide?: () => void;
+export const SETTINGS_TAB_GENERAL = "general";
+export const SETTINGS_TAB_THEME = "theme";
+export const SETTINGS_TAB_INTERFACE = "interface";
+export const SETTINGS_TAB_LICENSE = "license";
+
+/** A tab in the settings rail, with what it shows */
+export interface SettingsTabDef {
+  value: string;
+  label: string;
+  icon: IconProps["icon"];
+  hidden?: boolean;
+  /** A count or dot beside the label */
+  rightSlot?: ReactNode;
+  content: ReactNode;
+  /** Replaces the scrolling, padded default, for tabs that lay themselves out */
+  contentClassName?: string;
 }
 
-const TAB_GENERAL = "general";
-const TAB_INTERFACE = "interface";
-const TAB_THEME = "theme";
-const TAB_SHORTCUTS = "shortcuts";
-const TAB_PROXY = "proxy";
-const TAB_CERTIFICATES = "certificates";
-const TAB_PLUGINS = "plugins";
-const TAB_AGENTS = "agents";
-const TAB_LICENSE = "license";
-const tabs = [
-  TAB_GENERAL,
-  TAB_THEME,
-  TAB_INTERFACE,
-  TAB_SHORTCUTS,
-  TAB_PLUGINS,
-  TAB_AGENTS,
-  TAB_CERTIFICATES,
-  TAB_PROXY,
-  TAB_LICENSE,
-] as const;
-export type SettingsTab = (typeof tabs)[number];
-export type SettingsTabWithSubtab = SettingsTab | `${SettingsTab}:${string}`;
+/** What the window's own title bar needs, when settings is a window rather than a dialog */
+export interface SettingsTitlebar {
+  osType: string;
+  hideWindowControls: boolean;
+  useNativeTitlebar: boolean;
+  interfaceScale: number;
+}
 
-export default function Settings({ tab, hide }: Props) {
-  // Parse tab and subtab (e.g., "plugins:installed")
-  const [mainTab, subtab] = tab?.split(":") ?? [];
-  const settings = useAtomValue(settingsAtom);
-  const plugins = useAtomValue(pluginsAtom);
-  const licenseCheck = useLicense();
+export interface SettingsDialogProps {
+  tabs: SettingsTabDef[];
+  defaultTab?: string;
+  /** The window's title bar; null in a dialog, which has its own frame */
+  titlebar: SettingsTitlebar | null;
+  title?: string;
+}
 
-  // Close settings window on escape. In a dialog, the dialog handles Escape itself.
-  // TODO: Could this be put in a better place? Eg. in Rust key listener when creating the window
-  useKeyPressEvent("Escape", async () => {
-    if (hide == null) await platform.window.close();
-  });
+const DEFAULT_CONTENT_CLASS = "overflow-y-auto h-full px-6 py-4!";
 
+/**
+ * Yaak's settings: a title bar, the tabs down the left with their icons, and the active tab's
+ * content. Each app passes the tabs it has, shared ones and its own, in the order it wants.
+ */
+export function SettingsDialog({
+  tabs,
+  defaultTab,
+  titlebar,
+  title = "Settings",
+}: SettingsDialogProps) {
+  const { ErrorBoundary } = useEditorHost();
   return (
     <div className={classNames("grid grid-rows-[auto_minmax(0,1fr)] h-full")}>
-      {hide ? (
+      {titlebar == null ? (
         <span />
       ) : (
         <HeaderSize
@@ -71,93 +64,46 @@ export default function Settings({ tab, hide }: Props) {
           onlyXWindowControl
           size="md"
           className="x-theme-appHeader bg-surface text-text-subtle flex items-center justify-center border-b border-border-subtle text-sm font-semibold"
-          osType={platform.osType()}
-          hideWindowControls={settings.hideWindowControls}
-          useNativeTitlebar={settings.useNativeTitlebar}
-          interfaceScale={settings.interfaceScale}
+          osType={titlebar.osType}
+          hideWindowControls={titlebar.hideWindowControls}
+          useNativeTitlebar={titlebar.useNativeTitlebar}
+          interfaceScale={titlebar.interfaceScale}
         >
           <HStack
             space={2}
             justifyContent="center"
             className="w-full h-full grid grid-cols-[1fr_auto] pointer-events-none"
           >
-            <div className={classNames(platform.osType() === "macos" ? "text-center" : "pl-2")}>Settings</div>
+            <div className={classNames(titlebar.osType === "macos" ? "text-center" : "pl-2")}>
+              {title}
+            </div>
           </HStack>
         </HeaderSize>
       )}
       <Tabs
         layout="horizontal"
-        defaultValue={mainTab}
+        defaultValue={defaultTab}
         addBorders
         tabListClassName="min-w-40 bg-surface x-theme-sidebar border-r border-border pl-3"
-        label="Settings"
-        tabs={tabs.map(
-          (value): TabItem => ({
-            value,
-            label: capitalize(value),
-            hidden:
-              (!appInfo.featureLicense && value === TAB_LICENSE) ||
-              (!platform.capabilities.agents && value === TAB_AGENTS),
-            leftSlot:
-              value === TAB_GENERAL ? (
-                <Icon icon="settings" className="text-secondary" />
-              ) : value === TAB_THEME ? (
-                <Icon icon="palette" className="text-secondary" />
-              ) : value === TAB_INTERFACE ? (
-                <Icon icon="columns_2" className="text-secondary" />
-              ) : value === TAB_SHORTCUTS ? (
-                <Icon icon="keyboard" className="text-secondary" />
-              ) : value === TAB_CERTIFICATES ? (
-                <Icon icon="shield_check" className="text-secondary" />
-              ) : value === TAB_PROXY ? (
-                <Icon icon="wifi" className="text-secondary" />
-              ) : value === TAB_PLUGINS ? (
-                <Icon icon="puzzle" className="text-secondary" />
-              ) : value === TAB_AGENTS ? (
-                <Icon icon="sparkles" className="text-secondary" />
-              ) : value === TAB_LICENSE ? (
-                <Icon icon="key_round" className="text-secondary" />
-              ) : null,
-            rightSlot:
-              value === TAB_CERTIFICATES ? (
-                <CountBadge count={settings.clientCertificates.length} />
-              ) : value === TAB_PLUGINS ? (
-                <CountBadge count={plugins.filter((p) => p.source !== "bundled").length} />
-              ) : value === TAB_PROXY && settings.proxy?.type === "enabled" ? (
-                <CountBadge count />
-              ) : value === TAB_LICENSE && licenseCheck.check.data?.status === "personal_use" ? (
-                <CountBadge count color="notice" />
-              ) : null,
-          }),
-        )}
+        label={title}
+        tabs={tabs.map((tab): TabItem => ({
+          value: tab.value,
+          label: tab.label,
+          hidden: tab.hidden,
+          leftSlot: <Icon icon={tab.icon} className="text-secondary" />,
+          rightSlot: tab.rightSlot ?? null,
+        }))}
       >
-        <TabContent value={TAB_GENERAL} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsGeneral />
-        </TabContent>
-        <TabContent value={TAB_INTERFACE} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsInterface />
-        </TabContent>
-        <TabContent value={TAB_THEME} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsTheme />
-        </TabContent>
-        <TabContent value={TAB_SHORTCUTS} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsHotkeys />
-        </TabContent>
-        <TabContent value={TAB_PLUGINS} className="h-full grid grid-rows-1">
-          <SettingsPlugins defaultSubtab={mainTab === TAB_PLUGINS ? subtab : undefined} />
-        </TabContent>
-        <TabContent value={TAB_AGENTS} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsAgents />
-        </TabContent>
-        <TabContent value={TAB_PROXY} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsProxy />
-        </TabContent>
-        <TabContent value={TAB_CERTIFICATES} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsCertificates />
-        </TabContent>
-        <TabContent value={TAB_LICENSE} className="overflow-y-auto h-full px-6 py-4!">
-          <SettingsLicense />
-        </TabContent>
+        {tabs.map((tab) => (
+          <TabContent
+            key={tab.value}
+            value={tab.value}
+            className={tab.contentClassName ?? DEFAULT_CONTENT_CLASS}
+            ErrorBoundary={ErrorBoundary}
+          >
+            {tab.content}
+          </TabContent>
+        ))}
       </Tabs>
     </div>
   );
