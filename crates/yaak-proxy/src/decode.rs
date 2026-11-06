@@ -23,11 +23,13 @@ pub(crate) enum Decoding {
 }
 
 impl Decoding {
-    pub(crate) fn new(content_encoding: Option<&str>) -> Self {
+    /// `limit` bounds what decoding may hold on to: the input of a deflate body kept until it
+    /// shows whether it is zlib-framed.
+    pub(crate) fn new(content_encoding: Option<&str>, limit: usize) -> Self {
         match content_encoding.map(|e| e.trim().to_ascii_lowercase()).as_deref() {
             None | Some("") | Some("identity") => Self::Identity,
-            Some("gzip") | Some("x-gzip") => Self::Decoder(Box::new(ContentDecoder::gzip())),
-            Some("deflate") => Self::Decoder(Box::new(ContentDecoder::deflate())),
+            Some("gzip") | Some("x-gzip") => Self::Decoder(Box::new(ContentDecoder::gzip(limit))),
+            Some("deflate") => Self::Decoder(Box::new(ContentDecoder::deflate(limit))),
             Some(_) => Self::Unsupported,
         }
     }
@@ -54,10 +56,13 @@ pub(crate) struct ContentDecoder {
     started: bool,
     /// The input until the first output, while it may yet turn out not to be zlib-framed.
     unframed: Vec<u8>,
+    /// The most input kept in `unframed`: a body that has given no output by then is not
+    /// decoded further.
+    unframed_limit: usize,
 }
 
 impl ContentDecoder {
-    fn gzip() -> Self {
+    fn gzip(limit: usize) -> Self {
         Self {
             decompress: Decompress::new(false),
             gzip: true,
@@ -69,10 +74,11 @@ impl ContentDecoder {
             zlib: false,
             started: false,
             unframed: Vec::new(),
+            unframed_limit: limit,
         }
     }
 
-    fn deflate() -> Self {
+    fn deflate(limit: usize) -> Self {
         Self {
             decompress: Decompress::new(true),
             gzip: false,
@@ -84,6 +90,7 @@ impl ContentDecoder {
             zlib: true,
             started: false,
             unframed: Vec::new(),
+            unframed_limit: limit,
         }
     }
 
@@ -95,6 +102,11 @@ impl ContentDecoder {
     ) -> Result<(), String> {
         if self.zlib && !self.started {
             self.unframed.extend_from_slice(input);
+            // Empty deflate blocks can go on without end; what is kept for them cannot.
+            if self.unframed.len() > self.unframed_limit {
+                self.unframed = Vec::new();
+                return Err("No output from the deflate body within the capture limit".into());
+            }
         }
         let mut buf = [0u8; PIECE];
         loop {
@@ -217,10 +229,12 @@ fn gzip_header_len(bytes: &[u8], scanned: &mut [usize; 2]) -> Result<Option<usiz
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_LIMIT: usize = 1 << 20;
     use std::io::Write;
 
     fn decode_bytewise(encoding: &str, compressed: &[u8]) -> (Vec<u8>, usize) {
-        let Decoding::Decoder(mut decoder) = Decoding::new(Some(encoding)) else {
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some(encoding), TEST_LIMIT) else {
             panic!("no decoder for {encoding}");
         };
         let (mut out, mut largest) = (Vec::new(), 0);
@@ -265,7 +279,7 @@ mod tests {
             b"data: ".iter().chain(&[b'x'; 40_000]).chain(b"\n\n").copied().collect();
         let mut raw = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::best());
         raw.write_all(&text).unwrap();
-        let Decoding::Decoder(mut decoder) = Decoding::new(Some("deflate")) else {
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("deflate"), TEST_LIMIT) else {
             panic!()
         };
         let mut out = Vec::new();
@@ -275,7 +289,7 @@ mod tests {
 
     #[test]
     fn a_gzip_name_that_never_ends_is_refused() {
-        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip")) else {
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip"), TEST_LIMIT) else {
             panic!()
         };
         let header = [0x1f, 0x8b, 0x08, GZIP_FNAME, 0, 0, 0, 0, 0, 0];
@@ -291,6 +305,25 @@ mod tests {
     }
 
     #[test]
+    fn deflate_without_output_is_not_kept_past_the_limit() {
+        // A zlib header, then empty stored blocks: valid deflate that never produces a byte.
+        let empty_block = [0x00, 0x00, 0x00, 0xff, 0xff];
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("deflate"), 1024) else {
+            panic!()
+        };
+        decoder.feed(&[0x78, 0x9c], &mut |_| {}).unwrap();
+        let mut result = Ok(());
+        for _ in 0..1024 {
+            result = decoder.feed(&empty_block, &mut |_| {});
+            if result.is_err() {
+                break;
+            }
+        }
+        assert!(result.is_err(), "stopped once past the limit");
+        assert!(decoder.unframed.len() <= 1024);
+    }
+
+    #[test]
     fn every_gzip_member_is_read() {
         let mut body = Vec::new();
         for part in [&b"data: one\n\n"[..], b"data: two\n\n"] {
@@ -299,7 +332,7 @@ mod tests {
             body.extend(gz.finish().unwrap());
         }
         assert_eq!(decode_bytewise("gzip", &body).0, b"data: one\n\ndata: two\n\n");
-        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip")) else {
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip"), TEST_LIMIT) else {
             panic!()
         };
         let mut out = Vec::new();
@@ -312,7 +345,7 @@ mod tests {
         let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
         gz.write_all(&vec![b'a'; 4 << 20]).unwrap();
         let compressed = gz.finish().unwrap();
-        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip")) else {
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("gzip"), TEST_LIMIT) else {
             panic!()
         };
         let (mut total, mut largest) = (0, 0);

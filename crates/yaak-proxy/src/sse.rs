@@ -37,7 +37,7 @@ pub(crate) struct SseParser {
 impl SseParser {
     pub(crate) fn new(content_encoding: Option<&str>, limit: usize) -> Self {
         Self {
-            decoding: Decoding::new(content_encoding),
+            decoding: Decoding::new(content_encoding, limit),
             // Room for a field name before a value up to the limit.
             line: Capped::new(limit.saturating_add(LINE_SLACK)),
             pending_cr: false,

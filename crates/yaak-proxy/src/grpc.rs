@@ -61,7 +61,7 @@ pub(crate) struct GrpcParser {
 impl GrpcParser {
     /// Reads a body sent with `content_encoding`, as a gRPC-Web one can be.
     pub(crate) fn with_content_encoding(mut self, content_encoding: Option<&str>) -> Self {
-        self.decoding = Decoding::new(content_encoding);
+        self.decoding = Decoding::new(content_encoding, self.limit);
         self
     }
 
