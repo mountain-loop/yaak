@@ -1,5 +1,6 @@
 import type { HttpResponse, HttpResponseEvent } from "@yaakapp-internal/models";
 import {
+  EmptyStateText,
   Banner,
   HStack,
   Icon,
@@ -37,7 +38,6 @@ import { HotkeyList } from "./core/HotkeyList";
 import { PillButton } from "./core/PillButton";
 import type { TabItem } from "./core/Tabs/Tabs";
 import { TabContent, Tabs } from "./core/Tabs/Tabs";
-import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { HttpResponseTimeline } from "./HttpResponseTimeline";
 import { RecentHttpResponsesDropdown } from "./RecentHttpResponsesDropdown";

@@ -23,6 +23,10 @@ pub struct ProxyHeader {
 #[enum_def(table_name = "flows")]
 pub struct Flow {
     pub id: String,
+    /// The flow's short handle, `#1429`: its rowid, which grows as flows are written and is kept
+    /// across updates. Zero when read without it.
+    #[ts(type = "number")]
+    pub number: i64,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub started_at: NaiveDateTime,
@@ -66,6 +70,9 @@ pub struct Flow {
     pub client_bundle_id: Option<String>,
     /// Its app bundle's path, or its executable's outside an app.
     pub client_path: Option<String>,
+    /// The working directory of a process outside an app, whose folder names it: `node` in
+    /// `fieldwork`.
+    pub client_cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -164,6 +171,7 @@ impl UpsertModelInfo for Flow {
             (ClientName, self.client_name.into()),
             (ClientBundleId, self.client_bundle_id.into()),
             (ClientPath, self.client_path.into()),
+            (ClientCwd, self.client_cwd.into()),
         ])
     }
 
@@ -193,6 +201,7 @@ impl UpsertModelInfo for Flow {
             FlowIden::ClientName,
             FlowIden::ClientBundleId,
             FlowIden::ClientPath,
+            FlowIden::ClientCwd,
         ]
     }
 
@@ -204,6 +213,7 @@ impl UpsertModelInfo for Flow {
         let response_headers: String = r.get("response_headers")?;
         Ok(Self {
             id: r.get("id")?,
+            number: added_column(r, "rowid")?.unwrap_or_default(),
             created_at: r.get("created_at")?,
             updated_at: r.get("updated_at")?,
             started_at: r.get("started_at")?,
@@ -229,6 +239,7 @@ impl UpsertModelInfo for Flow {
             client_name: added_column(r, "client_name")?,
             client_bundle_id: added_column(r, "client_bundle_id")?,
             client_path: added_column(r, "client_path")?,
+            client_cwd: added_column(r, "client_cwd")?,
         })
     }
 }

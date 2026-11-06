@@ -1,5 +1,6 @@
 import type { GrpcEvent, GrpcRequest } from "@yaakapp-internal/models";
 import {
+  EmptyStateText,
   HStack,
   Icon,
   type IconProps,
@@ -23,7 +24,6 @@ import { EventDetailHeader, EventViewer } from "./core/EventViewer";
 import { EventViewerRow } from "./core/EventViewerRow";
 import { HotkeyList } from "./core/HotkeyList";
 import { KeyValueRow } from "./core/KeyValueRow";
-import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { RecentGrpcConnectionsDropdown } from "./RecentGrpcConnectionsDropdown";
 

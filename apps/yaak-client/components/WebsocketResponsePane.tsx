@@ -1,5 +1,6 @@
 import type { WebsocketEvent, WebsocketRequest } from "@yaakapp-internal/models";
 import {
+  EmptyStateText,
   HStack,
   Icon,
   LoadingIcon,
@@ -23,7 +24,6 @@ import { type EventDetailAction, EventDetailHeader, EventViewer } from "./core/E
 import { EventViewerRow } from "./core/EventViewerRow";
 import { HotkeyList } from "./core/HotkeyList";
 import { WebsocketStatusTag } from "./core/WebsocketStatusTag";
-import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { RecentWebsocketConnectionsDropdown } from "./RecentWebsocketConnectionsDropdown";
 

@@ -1,11 +1,12 @@
 import type { ExportHarRequest, Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
 import type { DropdownItem } from "@yaakapp-internal/ui";
 import { save } from "@tauri-apps/plugin-dialog";
-import { atom, useSetAtom } from "jotai";
+import { atom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback } from "react";
 import { base64ToBytes } from "./body";
 import { curlBodyText, toCurl } from "./curl";
 import { rpc } from "./rpc";
+import { activeQueryAtom } from "./store";
 import { useShowToast } from "./toast";
 
 /** The flow the save dialog is open for */
@@ -32,6 +33,35 @@ export async function exportHar(
   });
   if (path == null) return null;
   return rpc("export_har", { ...req, path });
+}
+
+/**
+ * Exporting every flow the list covers as HAR, all of them or the search's, for the list's menus:
+ * it acts on flows, so it lives where they are chosen.
+ */
+export function useExportShownHar(): () => DropdownItem {
+  const showToast = useShowToast();
+  const query = useAtomValue(activeQueryAtom);
+  return useCallback(
+    () => ({
+      label: query == null ? "Export All Flows as HAR" : "Export Matching Flows as HAR",
+      icon: "download",
+      onSelect: async () => {
+        try {
+          const written = await exportHar(query == null ? {} : { filter: query }, "flows.har");
+          if (written != null) {
+            showToast({
+              message:
+                written === 1 ? "Exported 1 flow as HAR" : `Exported ${written} flows as HAR`,
+            });
+          }
+        } catch (err) {
+          showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
+        }
+      },
+    }),
+    [query, showToast],
+  );
 }
 
 /** What a flow's context menu and the detail pane's menu offer */

@@ -42,7 +42,11 @@ bundleId: string | null,
 /**
  * The outermost `.app` bundle's path, or the executable's path when there is no bundle.
  */
-path: string, };
+path: string, 
+/**
+ * The working directory of a process outside an app, as it was when first looked up.
+ */
+cwd: string | null, };
 
 export type DropReason = "hop_by_hop" | "set_by_sending" | "body_decoded";
 
@@ -87,14 +91,21 @@ q?: string,
 host?: string, 
 /**
  * Only flows under one of these hosts or paths, as the app's sidebar names them:
- * `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host.
+ * `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host. A host
+ * written `*.github.com` is a site: `github.com` and every host below it.
  */
 under?: Array<string>, 
 /**
- * Only flows from one of these apps, by bundle id, or by path for a process outside an
- * app bundle.
+ * Only flows from one of these apps: by bundle id, by path for a process outside an app
+ * bundle, by name in any case (`slack`), or, for a process outside an app, by the folder
+ * it ran in (`fieldwork`).
  */
 app?: Array<string>, 
+/**
+ * Only flows from macOS's own daemons (true), or none of them (false), as [`is_system`]
+ * tells them by their executable.
+ */
+system?: boolean, 
 /**
  * The method, any case.
  */

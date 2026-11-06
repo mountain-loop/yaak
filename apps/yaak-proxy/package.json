@@ -23,6 +23,7 @@
     "motion": "^14.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tldts": "^7.4.19",
     "vkbeautify": "^0.99.3"
   },
   "devDependencies": {

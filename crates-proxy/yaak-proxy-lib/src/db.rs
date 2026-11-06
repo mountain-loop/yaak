@@ -77,14 +77,26 @@ pub fn open_blobs_read_only(path: &Path) -> Result<BlobManager> {
     Ok(BlobManager::new(readers.clone(), readers))
 }
 
-/// `sidebar_path(url)`, the app sidebar's place for a URL, for filtering by its nodes.
+/// The functions filters use: `sidebar_path(url)`, the app sidebar's place for a URL, and
+/// `under_site(url, site)`, for filtering by its nodes; `folder_name(dir)`, for naming a program
+/// by its folder; and `is_system(bundle_id, path)`, for macOS's own daemons.
 fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
-    conn.create_scalar_function(
-        "sidebar_path",
-        1,
-        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
-        |ctx| Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?)),
-    )
+    let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+    conn.create_scalar_function("sidebar_path", 1, flags, |ctx| {
+        Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?))
+    })?;
+    conn.create_scalar_function("under_site", 2, flags, |ctx| {
+        Ok(crate::flows::under_site(&ctx.get::<String>(0)?, &ctx.get::<String>(1)?))
+    })?;
+    conn.create_scalar_function("folder_name", 1, flags, |ctx| {
+        let dir = ctx.get::<Option<String>>(0)?;
+        Ok(crate::flows::folder_name(dir.as_deref()).map(str::to_string))
+    })?;
+    conn.create_scalar_function("is_system", 2, flags, |ctx| {
+        let bundle_id = ctx.get::<Option<String>>(0)?;
+        let path = ctx.get::<Option<String>>(1)?;
+        Ok(crate::flows::is_system(bundle_id.as_deref(), path.as_deref()))
+    })
 }
 
 fn read_only_pool(path: &Path) -> Result<SqlitePool> {
@@ -187,7 +199,7 @@ mod tests {
             .unwrap()
             .map(|t| t.unwrap())
             .collect();
-        assert_eq!(tables, vec!["_sqlx_migrations", "flows"]);
+        assert_eq!(tables, vec!["_sqlx_migrations", "flow_clear_mark", "flows"]);
 
         let flow_columns = columns(&conn, "flows");
         assert!(flow_columns.contains(&"response_truncated".to_string()));
@@ -196,6 +208,7 @@ mod tests {
             "client_name",
             "client_bundle_id",
             "client_path",
+            "client_cwd",
             "cancelled",
         ] {
             assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");

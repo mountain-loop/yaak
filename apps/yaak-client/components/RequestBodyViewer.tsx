@@ -3,6 +3,7 @@ import { lazy, Suspense } from "react";
 import { useHttpRequestBody } from "../hooks/useHttpRequestBody";
 import { getMimeTypeFromContentType } from "../lib/contentType";
 import {
+  EmptyStateText,
   LoadingIcon,
   languageFromContentType,
   AudioViewer,
@@ -12,7 +13,6 @@ import {
   VideoViewer,
   WebPageViewer,
 } from "@yaakapp-internal/ui";
-import { EmptyStateText } from "./EmptyStateText";
 import { MultipartViewer } from "./responseViewers/MultipartViewer";
 import { TextViewer } from "./responseViewers/TextViewer";
 

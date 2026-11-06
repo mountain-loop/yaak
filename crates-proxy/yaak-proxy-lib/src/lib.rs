@@ -36,7 +36,7 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource, UpsertModelInfo};
@@ -67,6 +67,9 @@ pub struct ProxyCtx {
     system_proxy_on: Arc<AtomicBool>,
     /// Why the engine last failed to start, until it starts.
     start_error: Arc<Mutex<Option<String>>>,
+    /// Cleared flows are being deleted in the background. Held while the deleter decides it is
+    /// done, so a clear either sees it running or starts another.
+    deleting_cleared: Arc<Mutex<bool>>,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -91,10 +94,21 @@ impl ProxyCtx {
             recording: Arc::new(Mutex::new(RecordingLog::default())),
             system_proxy_on: Arc::new(AtomicBool::new(false)),
             start_error: Arc::new(Mutex::new(None)),
+            deleting_cleared: Arc::new(Mutex::new(false)),
             db,
             blobs,
             events,
-        })
+        }
+        // A clear the last run did not finish deleting.
+        .with_cleared_deleting())
+    }
+
+    fn with_cleared_deleting(self) -> Self {
+        let pending = self.db.with_conn(|c| flows::clear_mark(c.conn().resolve())) > 0;
+        if pending {
+            self.delete_cleared();
+        }
+        self
     }
 
     /// The process this runs in, which decides how the system proxy gets admin rights.
@@ -564,7 +578,7 @@ impl ProxyCtx {
         self.db
             .with_tx(|tx| {
                 // Cleared while saving: recording it would bring the flow back without bodies.
-                if tx.find_optional::<Flow>(FlowIden::Id, flow_id).is_none() {
+                if flows::find_in(tx.conn().resolve(), flow_id).is_none() {
                     return Ok(());
                 }
                 let (flow, created) = tx.upsert(&flow, &UpdateSource::Background)?;
@@ -579,14 +593,68 @@ impl ProxyCtx {
         Ok(saved)
     }
 
-    /// Deletes every flow and its bodies, and tells the app so its list empties. Returns how
-    /// many there were.
+    /// Clears every flow at once and tells the app so its list empties, then deletes them and
+    /// their bodies in the background. Returns how many there were.
     pub fn clear_flows(&self) -> Result<usize, String> {
-        let cleared = flows::clear(&self.db, &self.blobs)?;
+        let cleared = flows::clear(&self.db)?;
         // After the commit, so the app reloads what is left. Flows written before the clear sent
         // their events before it began.
         self.events.emit("flows_cleared", &FlowsClearedPayload {});
+        self.delete_cleared();
         Ok(cleared)
+    }
+
+    /// Deletes cleared flows on a background thread, a batch per transaction, unless one is
+    /// already doing so. Yields the writer between batches, so new flows are written meanwhile.
+    fn delete_cleared(&self) {
+        if !claim(&self.deleting_cleared) {
+            return;
+        }
+        let (db, blobs, running) =
+            (self.db.clone(), self.blobs.clone(), self.deleting_cleared.clone());
+        let spawned = std::thread::Builder::new().name("proxy-clear".into()).spawn(move || {
+            lower_thread_priority();
+            loop {
+                match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH) {
+                    Ok(false) => std::thread::sleep(DELETE_PAUSE),
+                    Ok(true) => {
+                        *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
+                        // A clear since the last batch saw this running and left its flows to
+                        // it, so they are deleted here unless another thread has taken over.
+                        let mark = db.with_conn(|c| flows::clear_mark(c.conn().resolve()));
+                        if mark == 0 || !claim(&running) {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("{e}");
+                        *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
+                        return;
+                    }
+                }
+            }
+        });
+        if let Err(e) = spawned {
+            warn!("Failed to start deleting cleared flows: {e}");
+            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        }
+    }
+}
+
+/// Sets `flag`, returning false when it was already set.
+fn claim(flag: &Mutex<bool>) -> bool {
+    let mut set = flag.lock().unwrap_or_else(PoisonError::into_inner);
+    !std::mem::replace(&mut *set, true)
+}
+
+/// How long deleting cleared flows rests between batches, leaving the database to new flows.
+const DELETE_PAUSE: Duration = Duration::from_millis(5);
+
+/// Runs the calling thread at background priority, where the platform has one.
+fn lower_thread_priority() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_BACKGROUND, 0);
     }
 }
 
@@ -1394,6 +1462,7 @@ fn finish_flow(
         flow.client_name = Some(app.name);
         flow.client_bundle_id = app.bundle_id;
         flow.client_path = Some(app.path);
+        flow.client_cwd = app.cwd;
     }
     let written = db.with_tx(|ctx| {
         let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;

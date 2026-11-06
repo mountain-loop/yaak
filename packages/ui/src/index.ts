@@ -12,6 +12,7 @@ export { DetailsBanner } from "./components/DetailsBanner";
 export type { DialogFooterAction, DialogProps } from "./components/Dialog";
 export { Dialog, DialogFooter } from "./components/Dialog";
 export { DropMarker } from "./components/DropMarker";
+export { EmptyStateText } from "./components/EmptyStateText";
 export type {
   ContextMenuProps,
   DropdownItem,

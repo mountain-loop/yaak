@@ -1,6 +1,15 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test } from "vite-plus/test";
-import { matchesQuery, searchTerms, selectionQuery, sidebarPath } from "./search";
+import {
+  appKeyOf,
+  formatFieldFilter,
+  isSystemFlow,
+  matchesQuery,
+  parseSearch,
+  sidebarPath,
+  siteOf,
+  tokenize,
+} from "./search";
 
 function flow(url: string, extra: Partial<Flow> = {}): Flow {
   return {
@@ -93,6 +102,37 @@ describe("matchesQuery", () => {
     expect(from(["/Applications/Google Chrome.app"])).toEqual([]);
   });
 
+  test("keeps flows from an app by name, or a program by the folder it ran in", () => {
+    // The flows `filters_by_app_name_folder_site_and_system` in `flows.rs` checks.
+    const slack = flow("https://edgeapi.slack.com/cache", {
+      clientName: "Slack",
+      clientBundleId: "com.tinyspeck.slackmacgap",
+      clientPath: "/Applications/Slack.app",
+    });
+    const node = flow("https://api.github.com:443/repos", {
+      clientName: "node",
+      clientPath: "/opt/homebrew/bin/node",
+      clientCwd: "/Users/me/src/fieldwork",
+    });
+    const daemon = flow("https://github.com/login", {
+      clientName: "nsurlsessiond",
+      clientPath: "/usr/libexec/nsurlsessiond",
+      clientCwd: "/",
+    });
+    const none = flow("http://notgithub.com/");
+    const flows = [slack, node, daemon, none];
+    const where = (query: Parameters<typeof matchesQuery>[1]) =>
+      flows.filter((f) => matchesQuery(f, query));
+    expect(where({ app: ["slack"] })).toEqual([slack]);
+    expect(where({ app: ["Fieldwork"] })).toEqual([node]);
+    expect(where({ app: ["/opt/homebrew/bin/node"] })).toEqual([node]);
+    expect(where({ under: ["*.github.com"] })).toEqual([node, daemon]);
+    expect(where({ under: ["api.github.com"] })).toEqual([node]);
+    expect(where({ system: true })).toEqual([daemon]);
+    expect(where({ system: false })).toEqual([slack, node, none]);
+    expect(flows.map(appKeyOf)).toEqual(["Slack", "fieldwork", "nsurlsessiond", null]);
+  });
+
   test("combines terms with the sidebar's selection", () => {
     expect(matchesQuery(stripe, { q: "post", under: ["api.stripe.com"] })).toBe(true);
     expect(matchesQuery(stripe, { q: "post", under: ["api.github.com"] })).toBe(false);
@@ -118,26 +158,80 @@ describe("sidebarPath", () => {
   });
 });
 
-describe("selectionQuery", () => {
-  test("is null for nothing selected or a node holding every flow", () => {
-    expect(selectionQuery([])).toBeNull();
-    expect(selectionQuery(["root"])).toBeNull();
-    expect(selectionQuery(["domain:a.com", "domains"])).toBeNull();
-    expect(selectionQuery(["apps"])).toBeNull();
+describe("parseSearch", () => {
+  test("is null for text that narrows nothing", () => {
+    expect(parseSearch("")).toBeNull();
+    expect(parseSearch("   ")).toBeNull();
+    expect(parseSearch("OR")).toBeNull();
   });
 
-  test("splits hosts and paths from apps", () => {
-    expect(selectionQuery(["domain:a.com", "path:b.com/v1", "app:com.apple.Safari"])).toEqual({
-      under: ["a.com", "b.com/v1"],
-      app: ["com.apple.Safari"],
+  test("keeps free words as terms, trimmed and collapsed", () => {
+    expect(parseSearch("  stripe   post ")).toEqual({ q: "stripe post" });
+  });
+
+  test("reads apps, hosts and the paths below them", () => {
+    expect(parseSearch('@app:"Google Chrome" OR @app:Slack card')).toEqual({
+      q: "card",
+      app: ["Google Chrome", "Slack"],
     });
-    expect(selectionQuery(["app:/usr/bin/curl"])).toEqual({ app: ["/usr/bin/curl"] });
+    expect(parseSearch("@app:fieldwork @host:api.stripe.com @path:/v1/payment_intents")).toEqual({
+      app: ["fieldwork"],
+      under: ["api.stripe.com/v1/payment_intents"],
+    });
+    expect(parseSearch("@host:*.github.com")).toEqual({ under: ["*.github.com"] });
+    expect(parseSearch("@host:github.com @path:/mountain-loop/yaak/*")).toEqual({
+      under: ["github.com/mountain-loop/yaak"],
+    });
+    // A path with no host matches anywhere in the URL.
+    expect(parseSearch("@path:/v1")).toEqual({ q: "/v1" });
+  });
+
+  test("keeps or drops System, which hiding it drops unless the text asks", () => {
+    expect(parseSearch("@is:system")).toEqual({ system: true });
+    expect(parseSearch("-@is:system stripe")).toEqual({ q: "stripe", system: false });
+    expect(parseSearch("", true)).toEqual({ system: false });
+    expect(parseSearch("@is:system", true)).toEqual({ system: true });
+  });
+
+  test("round-trips what the sidebar writes", () => {
+    const text = [
+      formatFieldFilter("app", "Google Chrome"),
+      formatFieldFilter("host", "api.x.com"),
+    ].join(" ");
+    expect(text).toBe('@app:"Google Chrome" @host:api.x.com');
+    expect(tokenize(text)).toEqual([
+      { field: "app", value: "Google Chrome", negated: false },
+      { field: "host", value: "api.x.com", negated: false },
+    ]);
   });
 });
 
-describe("searchTerms", () => {
-  test("trims and collapses the box's text, or is null without any", () => {
-    expect(searchTerms("  stripe   post ")).toBe("stripe post");
-    expect(searchTerms("   ")).toBeNull();
+describe("isSystemFlow", () => {
+  // The cases `tells_system_daemons_apart` in `flows.rs` checks, so the two agree.
+  test("is a daemon outside an app, under the system's folders or by name", () => {
+    const sys = (clientPath: string | null, clientBundleId: string | null = null) =>
+      isSystemFlow({ clientPath, clientBundleId });
+    expect(sys("/usr/libexec/nsurlsessiond")).toBe(true);
+    expect(sys("/System/Library/PrivateFrameworks/X.framework/geod")).toBe(true);
+    expect(sys("/somewhere/else/trustd")).toBe(true);
+    expect(sys("/usr/bin/curl")).toBe(false);
+    expect(sys("/opt/homebrew/bin/node")).toBe(false);
+    expect(sys("/System/Applications/Music.app", "com.apple.Music")).toBe(false);
+    expect(
+      sys(
+        "/System/Library/Frameworks/WebKit.framework/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking",
+      ),
+    ).toBe(false);
+    expect(sys(null)).toBe(false);
+  });
+});
+
+describe("siteOf", () => {
+  test("is the registrable domain, or the host itself without one", () => {
+    expect(siteOf("api.github.com")).toBe("github.com");
+    expect(siteOf("www.example.co.uk")).toBe("example.co.uk");
+    expect(siteOf("api.stripe.com:8443")).toBe("stripe.com");
+    expect(siteOf("localhost:3000")).toBe("localhost");
+    expect(siteOf("149.154.175.50")).toBe("149.154.175.50");
   });
 });

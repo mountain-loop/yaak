@@ -1,12 +1,11 @@
 import { useGitFileDiffForCommit, useGitLog, useGitMutations } from "@yaakapp-internal/git";
 import type { GitCommit } from "@yaakapp-internal/git";
-import { SplitLayout } from "@yaakapp-internal/ui";
+import { EmptyStateText, SplitLayout } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { sync } from "../../init/sync";
 import { showConfirm } from "../../lib/confirm";
-import { EmptyStateText } from "../EmptyStateText";
 import { Button } from "../core/Button";
 import { DiffViewer } from "../core/Editor/DiffViewer";
 import { useGitCallbacks } from "./callbacks";

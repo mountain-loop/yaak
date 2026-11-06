@@ -3,9 +3,18 @@ import type { TreeNode } from "@yaakapp-internal/ui";
 /** Flags by node id, as the tree reads them: true is collapsed, and a missing id is open */
 export type CollapsedMap = Record<string, boolean>;
 
-/** Domains and paths start collapsed; the rest, the Domains folder, starts open as before */
+/**
+ * Every app's tree, and every site, host and path, starts collapsed, as does System; Apps and
+ * Domains start open.
+ */
 export function startsCollapsed(id: string): boolean {
-  return id.startsWith("domain:") || id.startsWith("path:");
+  return (
+    id === "system" ||
+    id.startsWith("app:") ||
+    id.startsWith("site:") ||
+    id.startsWith("host:") ||
+    id.startsWith("path:")
+  );
 }
 
 /**

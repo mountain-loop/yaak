@@ -1,6 +1,6 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { useQueryClient } from "@tanstack/react-query";
-import { languageFromContentType, type TextFilterApi, WebPageViewer } from "@yaakapp-internal/ui";
+import { EmptyStateText, languageFromContentType, type TextFilterApi, WebPageViewer } from "@yaakapp-internal/ui";
 import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import { useCallback } from "react";
 import { useCopyHttpResponse } from "../../hooks/useCopyHttpResponse";
@@ -9,7 +9,6 @@ import { responseBodyTextQuery, useResponseBodyText } from "../../hooks/useRespo
 import { useSaveResponse } from "../../hooks/useSaveResponse";
 import { getContentTypeFromHeaders } from "../../lib/model_util";
 import { IconButton } from "../core/IconButton";
-import { EmptyStateText } from "../EmptyStateText";
 import { RecentFiltersDropdown } from "./RecentFiltersDropdown";
 import { TextViewer } from "./TextViewer";
 

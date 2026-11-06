@@ -1,31 +1,15 @@
-import type { Flow } from "@yaakapp-internal/proxy-lib";
-import type { TreeNode } from "@yaakapp-internal/ui";
-import { selectedIdsFamily, Tree } from "@yaakapp-internal/ui";
-import { atom, useAtomValue } from "jotai";
+import { Icon, IconButton, Tree } from "@yaakapp-internal/ui";
+import classNames from "classnames";
+import { atom, useAtom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useCallback } from "react";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
-import { appKeyOf, appNodeId, sidebarPath } from "../lib/search";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
-import { flowsAtom, flowTotalAtom } from "../lib/store";
+import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
+import { hideSystemAtom, sidebarTreeAtom } from "../lib/store";
 import { AppIcon } from "./AppIcon";
 
-/** A node in the sidebar tree: a domain, a path segment, or an app. */
-export type SidebarItem = {
-  id: string;
-  label: string;
-  /** Flows held under this node; for the Domains folder, every flow in the database */
-  count: number;
-  /** An app's path, for its icon */
-  appPath?: string;
-};
-
-const sidebarTreeAtom = atom<TreeNode<SidebarItem>>((get) => {
-  const exchanges = get(flowsAtom);
-  return buildTree(exchanges, get(flowTotalAtom));
-});
-
-/** The domains and paths the user expanded, by node id, kept across launches */
+/** The apps, sites, hosts and paths the user expanded, by node id, kept across launches */
 const expandedAtom = atomWithStorage<Record<string, boolean>>("sidebar_expanded", {}, undefined, {
   getOnInit: true,
 });
@@ -33,7 +17,7 @@ const expandedAtom = atomWithStorage<Record<string, boolean>>("sidebar_expanded"
 /** The other nodes' collapsed flags, for this launch, as before */
 const otherCollapsedAtom = atom<CollapsedMap>({});
 
-/** Domains and paths collapsed until the user expands them, for the tree */
+/** Every app's tree, site, host and path, and System, collapsed until the user expands them */
 const collapsedAtom = atom(
   (get) =>
     collapsedMap(folderIds(get(sidebarTreeAtom)), get(expandedAtom), get(otherCollapsedAtom)),
@@ -46,196 +30,83 @@ const collapsedAtom = atom(
   },
 );
 
-/** The selected sidebar node's name, for the header */
-export const selectedSidebarLabelAtom = atom((get) => {
-  const selectedId = get(selectedIdsFamily(SIDEBAR_TREE_ID))[0];
-  if (selectedId?.startsWith("domain:")) return selectedId.slice("domain:".length);
-  if (selectedId?.startsWith("path:")) return selectedId.slice("path:".length);
-  if (selectedId?.startsWith("app:")) {
-    const apps = get(sidebarTreeAtom).children?.find((c) => c.item.id === "apps");
-    return apps?.children?.find((c) => c.item.id === selectedId)?.item.label ?? "All traffic";
-  }
-  return "All traffic";
-});
-
-const nodeIdsByFlow = new WeakMap<Flow, string[]>();
-
-/**
- * The ids of the nodes a flow sits under, its domain first and then each path segment's, parsed
- * once per flow rather than on every change to the list.
- */
-function nodeIdsOf(ex: Flow): string[] {
-  let ids = nodeIdsByFlow.get(ex);
-  if (ids != null) return ids;
-  // By the rules the database filters by, so a node shows the flows it counts.
-  const path = sidebarPath(ex.url);
-  const schemeless = !ex.url.includes("://");
-  const [hostname = "", ...segments] = schemeless ? [path] : path.split("/");
-  ids = [`domain:${hostname}`];
-  let node = `path:${hostname}`;
-  for (const seg of segments) {
-    node += `/${seg}`;
-    ids.push(node);
-  }
-  nodeIdsByFlow.set(ex, ids);
-  return ids;
-}
-
-const collator = new Intl.Collator();
-
-/**
- * Build a domain → path-segment trie from a flat list of exchanges.
- *
- * Example: Given URLs
- *   GET https://api.example.com/v1/users
- *   GET https://api.example.com/v1/users/123
- *   POST https://api.example.com/v1/orders
- *
- * Produces:
- *   api.example.com
- *     /v1
- *       /users
- *         /123
- *       /orders
- */
-function buildTree(exchanges: Flow[], total: number): TreeNode<SidebarItem> {
-  const root: SidebarItem = { id: "root", label: "All Traffic", count: 0 };
-  const rootNode: TreeNode<SidebarItem> = {
-    item: root,
-    parent: null,
-    depth: 0,
-    children: [],
-    draggable: false,
-  };
-
-  // Intermediate trie structure for building
-  type TrieNode = {
-    id: string;
-    label: string;
-    count: number;
-    children: Map<string, TrieNode>;
-  };
-
-  const domainMap = new Map<string, TrieNode>();
-
-  for (const ex of exchanges) {
-    const ids = nodeIdsOf(ex);
-    let current: TrieNode | undefined;
-    for (const id of ids) {
-      const siblings = current == null ? domainMap : current.children;
-      let node = siblings.get(id);
-      if (node == null) {
-        // The domain, or the path's last segment
-        const label = current == null ? id.slice("domain:".length) : id.slice(id.lastIndexOf("/"));
-        node = { id, label, count: 0, children: new Map() };
-        siblings.set(id, node);
-      }
-      node.count++;
-      current = node;
-    }
-  }
-
-  // Convert trie to TreeNode structure
-  function toTreeNode(
-    trie: TrieNode,
-    parent: TreeNode<SidebarItem>,
-    depth: number,
-  ): TreeNode<SidebarItem> {
-    const node: TreeNode<SidebarItem> = {
-      item: {
-        id: trie.id,
-        label: trie.label,
-        count: trie.count,
-      },
-      parent,
-      depth,
-      children: [],
-      draggable: false,
-    };
-    const sortedChildren = [...trie.children.values()].sort((a, b) =>
-      collator.compare(a.label, b.label),
-    );
-    for (const child of sortedChildren) {
-      node.children?.push(toTreeNode(child, node, depth + 1));
-    }
-    return node;
-  }
-
-  // Add a "Domains" folder between root and domain nodes
-  const domainsFolder: TreeNode<SidebarItem> = {
-    item: { id: "domains", label: "Domains", count: total },
-    parent: rootNode,
-    depth: 1,
-    children: [],
-    draggable: false,
-  };
-
-  const sortedDomains = [...domainMap.values()].sort((a, b) => collator.compare(a.label, b.label));
-  for (const domain of sortedDomains) {
-    domainsFolder.children?.push(toTreeNode(domain, domainsFolder, 2));
-  }
-
-  // The apps flows came from, where the platform can tell; none on others, so no group.
-  const apps = new Map<string, SidebarItem>();
-  for (const ex of exchanges) {
-    const key = appKeyOf(ex);
-    if (key == null) continue;
-    const id = appNodeId(key);
-    const app = apps.get(id);
-    if (app == null) {
-      apps.set(id, { id, label: ex.clientName ?? key, count: 1, appPath: ex.clientPath ?? key });
-    } else {
-      app.count++;
-    }
-  }
-  if (apps.size > 0) {
-    const appsFolder: TreeNode<SidebarItem> = {
-      item: { id: "apps", label: "Apps", count: 0 },
-      parent: rootNode,
-      depth: 1,
-      children: [],
-      draggable: false,
-    };
-    const sortedApps = [...apps.values()].sort((a, b) => collator.compare(a.label, b.label));
-    for (const item of sortedApps) {
-      appsFolder.children?.push({ item, parent: appsFolder, depth: 2, draggable: false });
-    }
-    rootNode.children?.push(appsFolder);
-  }
-
-  rootNode.children?.push(domainsFolder);
-
-  return rootNode;
+function Count({ item }: { item: SidebarItem }) {
+  const text = item.countLabel ?? (item.count > 0 ? item.count.toLocaleString() : null);
+  if (text == null && item.kind !== "all") return null;
+  return (
+    <span className="ml-auto pl-2 text-text-subtlest text-2xs tabular-nums shrink-0">
+      {text ?? "0"}
+    </span>
+  );
 }
 
 function ItemInner({ item }: { item: SidebarItem }) {
-  const count = item.count;
+  if (item.kind === "group") {
+    return (
+      <div className="flex items-center gap-2 w-full min-w-0 text-xs text-text-subtlest">
+        <span className="truncate">{item.label}</span>
+        <Count item={item} />
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
+      {item.kind === "all" && <Icon icon="layers" size="sm" className="text-text-subtle" />}
       {item.appPath != null && <AppIcon path={item.appPath} />}
       <span className="truncate">{item.label}</span>
-      {count > 0 && <span className="ml-auto text-text-subtlest text-2xs shrink-0">{count}</span>}
+      {item.sublabel != null && (
+        <span className="truncate text-xs text-text-subtlest">{item.sublabel}</span>
+      )}
+      <Count item={item} />
     </div>
+  );
+}
+
+/** Beside the row's button rather than in it, since it is a button of its own */
+function ItemRightSlot({ item }: { item: SidebarItem }) {
+  return item.id === SYSTEM_ID ? <HideSystemToggle /> : <span aria-hidden />;
+}
+
+/** The eye on System's row, which leaves its daemons out of All traffic */
+function HideSystemToggle() {
+  const [hidden, setHidden] = useAtom(hideSystemAtom);
+  return (
+    <IconButton
+      size="2xs"
+      icon={hidden ? "eye_closed" : "eye"}
+      iconColor="secondary"
+      title={hidden ? "Show System in All traffic" : "Hide System from All traffic"}
+      className={classNames(
+        "!h-4 !w-4 mr-1",
+        !hidden && "opacity-0 [.tree-item:hover_&]:opacity-100 focus-visible:opacity-100",
+      )}
+      onClick={(e) => {
+        e.stopPropagation();
+        setHidden(!hidden);
+      }}
+    />
   );
 }
 
 export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
-
-  const getItemKey = useCallback((item: SidebarItem) => `${item.id}:${item.count}`, []);
-  const treeId = SIDEBAR_TREE_ID;
+  const getItemKey = useCallback(
+    (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}`,
+    [],
+  );
 
   return (
     // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows
-    // in view rather than every domain and path.
+    // in view rather than every site, host and path.
     <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle">
       <Tree
-        treeId={treeId}
+        treeId={SIDEBAR_TREE_ID}
         collapsedAtom={collapsedAtom}
         className="px-2 pt-2 pb-10"
         root={tree}
         getItemKey={getItemKey}
         ItemInner={ItemInner}
+        ItemRightSlot={ItemRightSlot}
       />
     </aside>
   );

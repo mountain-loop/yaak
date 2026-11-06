@@ -16,6 +16,7 @@ import { showDialog } from "../lib/dialog";
 import { jotaiStore } from "../lib/jotai";
 import { cookieDomain } from "../lib/model_util";
 import {
+  EmptyStateText,
   Icon,
   SplitLayout,
   Table,
@@ -32,7 +33,6 @@ import { Checkbox } from "./core/Checkbox";
 import classNames from "classnames";
 import { EventDetailHeader } from "./core/EventViewer";
 import { KeyValueRow } from "./core/KeyValueRow";
-import { EmptyStateText } from "./EmptyStateText";
 import { PlainInput } from "./core/PlainInput";
 import { Select } from "./core/Select";
 import { showAlert } from "../lib/alert";
