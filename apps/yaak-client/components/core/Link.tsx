@@ -3,7 +3,7 @@ import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import type { HTMLAttributes } from "react";
 import { appInfo } from "../../lib/appInfo";
-import { ExternalLink } from "@yaakapp-internal/ui";
+import { ExternalLink, isYaakUrl } from "@yaakapp-internal/ui";
 
 interface Props extends HTMLAttributes<HTMLAnchorElement> {
   href: string;
@@ -12,7 +12,7 @@ interface Props extends HTMLAttributes<HTMLAnchorElement> {
 
 /** Tags a link to yaak.app with which app it came from */
 export function withYaakRef(href: string): string {
-  if (!href.startsWith("https://yaak.app")) return href;
+  if (!isYaakUrl(href)) return href;
   const url = new URL(href);
   url.searchParams.set("ref", appInfo.identifier);
   return url.toString();

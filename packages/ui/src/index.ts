@@ -259,6 +259,7 @@ export { languageFromContent, languageFromContentType } from "./lib/contentType"
 export { getMimeTypeFromContentType, isJSON, isProbablyTextContentType } from "./lib/mimeType";
 export { textLikelyContainsJsonComments } from "./lib/jsonComments";
 export { validateHttpHeader } from "./lib/validateHttpHeader";
+export { isYaakUrl } from "./lib/yaakUrl";
 export { computeSideForDragMove } from "./lib/dnd";
 export { docFingerprint } from "./lib/docFingerprint";
 export { getNodeText } from "./lib/getNodeText";

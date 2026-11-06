@@ -1,6 +1,7 @@
 import classNames from "classnames";
 import type { HTMLAttributes } from "react";
 import { useEditorHost } from "./EditorHost";
+import { isYaakUrl } from "../lib/yaakUrl";
 import { Icon } from "./Icon";
 
 export interface ExternalLinkProps extends HTMLAttributes<HTMLAnchorElement> {
@@ -21,7 +22,7 @@ export function ExternalLink({
 }: ExternalLinkProps) {
   const host = useEditorHost();
   const open = onOpen ?? host.openUrl;
-  const isYaakLink = href.startsWith("https://yaak.app");
+  const isYaakLink = isYaakUrl(href);
 
   return (
     // eslint-disable-next-line react/jsx-no-target-blank
