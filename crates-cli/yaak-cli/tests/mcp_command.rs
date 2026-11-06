@@ -223,6 +223,47 @@ async fn mcp_send_settings_reach_template_functions() {
     assert!(child.wait().await.unwrap().success());
 }
 
+/// QA sweep bug 6: the CLI has no window, so `show_toast` prints the toast to stderr (stdout is
+/// the protocol channel) the way the CLI prints plugin toasts, and reports it as shown.
+#[tokio::test]
+async fn mcp_show_toast_prints_the_message_to_stderr() {
+    use tokio::io::AsyncReadExt;
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let data_dir = temp_dir.path();
+    seed_workspace(data_dir, "wk_test");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_yaak"))
+        .arg("--data-dir")
+        .arg(data_dir)
+        .arg("mcp")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+    let io = (child.stdout.take().unwrap(), child.stdin.take().unwrap());
+    let client = ().serve(io).await.unwrap();
+
+    let arguments = json!({ "message": "Build finished" });
+    let Value::Object(arguments) = arguments else {
+        unreachable!()
+    };
+    let result = client
+        .call_tool(CallToolRequestParams::new("show_toast").with_arguments(arguments))
+        .await
+        .unwrap();
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    assert_eq!(result.content[0].as_text().unwrap().text, "✓ Toast shown: \"Build finished\"");
+
+    client.cancel().await.unwrap();
+    child.kill().await.unwrap();
+    let mut output = String::new();
+    stderr.read_to_string(&mut output).await.unwrap();
+    assert!(output.lines().any(|l| l == "[mcp] Build finished"), "stderr: {output}");
+}
+
 /// Spawns `yaak mcp --http` with `args` and returns the child, the URL it
 /// printed, and the token it printed or was given.
 async fn spawn_http(data_dir: &std::path::Path, args: &[&str]) -> (tokio::process::Child, String, String) {
@@ -283,7 +324,9 @@ async fn post(
         .last()
         .map(str::trim)
         .unwrap_or(text.trim());
-    (status, headers, serde_json::from_str(message).ok())
+    // A plain-text body, such as the reason for a 500, comes back as a string to show
+    let body = serde_json::from_str(message).unwrap_or_else(|_| Value::String(text.clone()));
+    (status, headers, Some(body))
 }
 
 #[tokio::test]
@@ -309,7 +352,7 @@ async fn mcp_http_requires_the_token() {
 
     let auth = Some("Bearer s3cret");
     let (status, headers, body) = post(&client, &url, auth, None, initialize).await;
-    assert_eq!(status, reqwest::StatusCode::OK);
+    assert_eq!(status, reqwest::StatusCode::OK, "initialize answered {body:?}");
     let session = headers["mcp-session-id"].to_str().unwrap().to_string();
     assert_eq!(body.unwrap()["result"]["serverInfo"]["name"], "yaak-mcp-server");
 

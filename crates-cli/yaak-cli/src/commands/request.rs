@@ -67,18 +67,48 @@ pub async fn run(
     }
 }
 
+/// Find a request of any type, with an error that names the ID rather than a table.
+pub(crate) fn get_any_request(ctx: &CliContext, request_id: &str) -> CommandResult<AnyRequest> {
+    let db = ctx.db();
+    if let Ok(request) = db.get_http_request(request_id) {
+        return Ok(AnyRequest::HttpRequest(request));
+    }
+    if let Ok(request) = db.get_grpc_request(request_id) {
+        return Ok(AnyRequest::GrpcRequest(request));
+    }
+    if let Ok(request) = db.get_websocket_request(request_id) {
+        return Ok(AnyRequest::WebsocketRequest(request));
+    }
+    Err(format!("Request {request_id} not found"))
+}
+
 fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let workspace_id = resolve_workspace_id(ctx, workspace_id, "request list")?;
-    let requests = ctx
-        .db()
+    let db = ctx.db();
+    let http = db
         .list_http_requests(&workspace_id)
-        .map_err(|e| format!("Failed to list requests: {e}"))?;
-    if requests.is_empty() {
+        .map_err(|e| format!("Failed to list HTTP requests: {e}"))?;
+    let grpc = db
+        .list_grpc_requests(&workspace_id)
+        .map_err(|e| format!("Failed to list gRPC requests: {e}"))?;
+    let websocket = db
+        .list_websocket_requests(&workspace_id)
+        .map_err(|e| format!("Failed to list WebSocket requests: {e}"))?;
+
+    if http.is_empty() && grpc.is_empty() && websocket.is_empty() {
         println!("No requests found in workspace {}", workspace_id);
-    } else {
-        for request in requests {
-            println!("{} - {} {}", request.id, request.method, request.name);
-        }
+        return Ok(());
+    }
+    // HTTP lines keep their `<id> - <method> <name>` shape; the other types put their type
+    // where the method would be, since they have no method of that kind.
+    for request in http {
+        println!("{} - {} {}", request.id, request.method, request.name);
+    }
+    for request in grpc {
+        println!("{} - gRPC {}", request.id, request.name);
+    }
+    for request in websocket {
+        println!("{} - WebSocket {}", request.id, request.name);
     }
     Ok(())
 }
@@ -112,20 +142,65 @@ async fn schema(ctx: &CliContext, request_type: RequestSchemaType, pretty: bool)
 /// HttpRequest with its unknown fields dropped, quietly producing a broken request
 /// (the gRPC method name lands in `method`, and `service` disappears).
 fn reject_non_http_payload(payload: &Value, context: &str) -> CommandResult {
-    let Some(object) = payload.as_object() else {
-        return Ok(());
-    };
-
-    if let Some(model) = object.get("model").and_then(Value::as_str)
+    if let Some(model) = payload.get("model").and_then(Value::as_str)
         && !model.is_empty()
         && model != "http_request"
     {
         return Err(format!(
-            "{context} only supports HTTP requests, but the payload has \"model\": \"{model}\". The CLI cannot work with {model} requests yet; use the Yaak app instead."
+            "{context} only supports HTTP requests, but the payload has \"model\": \"{model}\". The CLI cannot create {model} requests yet; use the Yaak app instead."
         ));
     }
 
-    let known: std::collections::BTreeSet<String> = serde_json::to_value(schema_for!(HttpRequest))
+    reject_unknown_fields::<HttpRequest>(payload, context, "an HTTP request", "http").map_err(
+        |error| {
+            format!("{error} If this is a gRPC or WebSocket request, the CLI cannot create it yet.")
+        },
+    )
+}
+
+/// An update is a merge patch onto the stored request, so it must use that request's
+/// model and fields. Anything else would be dropped silently on save.
+fn reject_mismatched_update(payload: &Value, request: &AnyRequest) -> CommandResult {
+    let (model, noun, schema_type) = match request {
+        AnyRequest::HttpRequest(_) => ("http_request", "an HTTP request", "http"),
+        AnyRequest::GrpcRequest(_) => ("grpc_request", "a gRPC request", "grpc"),
+        AnyRequest::WebsocketRequest(_) => {
+            ("websocket_request", "a WebSocket request", "websocket")
+        }
+    };
+    let context = "request update";
+    if let Some(given) = payload.get("model").and_then(Value::as_str)
+        && !given.is_empty()
+        && given != model
+    {
+        return Err(format!(
+            "{context} cannot change a request's type: the stored request is {noun} (\"{model}\"), but the payload has \"model\": \"{given}\"."
+        ));
+    }
+    match request {
+        AnyRequest::HttpRequest(_) => {
+            reject_unknown_fields::<HttpRequest>(payload, context, noun, schema_type)
+        }
+        AnyRequest::GrpcRequest(_) => {
+            reject_unknown_fields::<GrpcRequest>(payload, context, noun, schema_type)
+        }
+        AnyRequest::WebsocketRequest(_) => {
+            reject_unknown_fields::<WebsocketRequest>(payload, context, noun, schema_type)
+        }
+    }
+}
+
+fn reject_unknown_fields<T: schemars::JsonSchema>(
+    payload: &Value,
+    context: &str,
+    noun: &str,
+    schema_type: &str,
+) -> CommandResult {
+    let Some(object) = payload.as_object() else {
+        return Ok(());
+    };
+
+    let known: std::collections::BTreeSet<String> = serde_json::to_value(schema_for!(T))
         .ok()
         .and_then(|schema| schema.get("properties").and_then(Value::as_object).cloned())
         .map(|properties| properties.keys().cloned().collect())
@@ -140,7 +215,7 @@ fn reject_non_http_payload(payload: &Value, context: &str) -> CommandResult {
 
     if !unknown.is_empty() {
         return Err(format!(
-            "{context} got fields that are not part of an HTTP request: {}. If this is a gRPC or WebSocket request, the CLI cannot work with it yet. Run `yaak request schema http` for the valid fields.",
+            "{context} got fields that are not part of {noun}: {}. Run `yaak request schema {schema_type}` for the valid fields.",
             unknown.join(", ")
         ));
     }
@@ -454,43 +529,67 @@ fn create(
 fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) -> CommandResult {
     let patch = parse_required_json(json, json_input, "request update")?;
     let id = require_id(&patch, "request update")?;
-    reject_non_http_payload(&patch, "request update")?;
 
-    let existing = ctx
-        .db()
-        .get_http_request(&id)
-        .map_err(|e| format!("Failed to get request for update: {e}"))?;
-    let updated = apply_merge_patch(&existing, &patch, &id, "request update")?;
+    let existing =
+        get_any_request(ctx, &id).map_err(|e| format!("Failed to get request for update: {e}"))?;
+    reject_mismatched_update(&patch, &existing)?;
 
-    let saved = ctx
-        .query_manager()
-        .with_tx(|tx| tx.upsert_http_request(&updated, &UpdateSource::Sync))
-        .map_err(|e| format!("Failed to update request: {e}"))?;
+    let context = "request update";
+    let source = &UpdateSource::Sync;
+    let saved_id = match existing {
+        AnyRequest::HttpRequest(existing) => {
+            let updated = apply_merge_patch(&existing, &patch, &id, context)?;
+            ctx.query_manager().with_tx(|tx| tx.upsert_http_request(&updated, source)).map(|r| r.id)
+        }
+        AnyRequest::GrpcRequest(existing) => {
+            let updated = apply_merge_patch(&existing, &patch, &id, context)?;
+            ctx.query_manager().with_tx(|tx| tx.upsert_grpc_request(&updated, source)).map(|r| r.id)
+        }
+        AnyRequest::WebsocketRequest(existing) => {
+            let updated = apply_merge_patch(&existing, &patch, &id, context)?;
+            ctx.query_manager()
+                .with_tx(|tx| tx.upsert_websocket_request(&updated, source))
+                .map(|r| r.id)
+        }
+    }
+    .map_err(|e| format!("Failed to update request: {e}"))?;
 
-    println!("Updated request: {}", saved.id);
+    println!("Updated request: {saved_id}");
     Ok(())
 }
 
 fn show(ctx: &CliContext, request_id: &str) -> CommandResult {
-    let request =
-        ctx.db().get_http_request(request_id).map_err(|e| format!("Failed to get request: {e}"))?;
-    let output = serde_json::to_string_pretty(&request)
-        .map_err(|e| format!("Failed to serialize request: {e}"))?;
+    let request = get_any_request(ctx, request_id)?;
+    let output = match &request {
+        AnyRequest::HttpRequest(r) => serde_json::to_string_pretty(r),
+        AnyRequest::GrpcRequest(r) => serde_json::to_string_pretty(r),
+        AnyRequest::WebsocketRequest(r) => serde_json::to_string_pretty(r),
+    }
+    .map_err(|e| format!("Failed to serialize request: {e}"))?;
     println!("{output}");
     Ok(())
 }
 
 fn delete(ctx: &CliContext, request_id: &str, yes: bool) -> CommandResult {
+    // Resolved before asking, so an unknown ID fails without a prompt
+    let request = get_any_request(ctx, request_id)?;
     if !yes && !confirm_delete("request", request_id) {
         println!("Aborted");
         return Ok(());
     }
 
-    let deleted = ctx
+    let source = &UpdateSource::Sync;
+    let deleted_id = ctx
         .query_manager()
-        .with_tx(|tx| tx.delete_http_request_by_id(request_id, &UpdateSource::Sync))
+        .with_tx(|tx| match &request {
+            AnyRequest::HttpRequest(r) => tx.delete_http_request_by_id(&r.id, source).map(|r| r.id),
+            AnyRequest::GrpcRequest(r) => tx.delete_grpc_request_by_id(&r.id, source).map(|r| r.id),
+            AnyRequest::WebsocketRequest(r) => {
+                tx.delete_websocket_request_by_id(&r.id, source).map(|r| r.id)
+            }
+        })
         .map_err(|e| format!("Failed to delete request: {e}"))?;
-    println!("Deleted request: {}", deleted.id);
+    println!("Deleted request: {deleted_id}");
     Ok(())
 }
 
@@ -503,7 +602,7 @@ pub async fn send_request_by_id(
     verbose: bool,
 ) -> Result<(), String> {
     let request =
-        ctx.db().get_any_request(request_id).map_err(|e| format!("Failed to get request: {e}"))?;
+        get_any_request(ctx, request_id).map_err(|e| format!("Failed to get request: {e}"))?;
     match request {
         AnyRequest::HttpRequest(http_request) => {
             send_http_request_by_id(

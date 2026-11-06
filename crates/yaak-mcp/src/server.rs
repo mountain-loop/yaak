@@ -66,6 +66,27 @@ impl<H: McpHost> YaakMcpServer<H> {
         ))
     }
 
+    /// The HTTP request `id` names, or an error that says why there is none. These tools
+    /// handle HTTP requests only, so a gRPC or WebSocket ID is named as such.
+    fn require_http_request(&self, id: &str) -> HostResult<HttpRequest> {
+        if let Some(request) = self.host.get_http_request(id)? {
+            return Ok(request);
+        }
+        let other_type = if id.starts_with("gr_") {
+            Some("a gRPC request")
+        } else if id.starts_with("wr_") {
+            Some("a WebSocket request")
+        } else {
+            None
+        };
+        Err(match other_type {
+            Some(kind) => format!(
+                "{id} is {kind}, and these tools only work with HTTP requests. Use the Yaak app or the `yaak request` CLI commands for it."
+            ),
+            None => format!("HTTP request with ID {id} not found"),
+        })
+    }
+
     fn find_folder(&self, workspace_id: &str, id: &str) -> HostResult<Option<Folder>> {
         Ok(self.host.list_folders(workspace_id)?.into_iter().find(|f| f.id == id))
     }
@@ -124,7 +145,7 @@ impl<H: McpHost> YaakMcpServer<H> {
         Parameters(p): Parameters<GetHttpRequestParams>,
     ) -> ToolResult {
         self.resolve_workspace(p.workspace_id.as_deref())?;
-        to_json(&self.host.get_http_request(&p.id)?)
+        to_json(&self.require_http_request(&p.id)?)
     }
 
     #[tool(
@@ -137,10 +158,7 @@ impl<H: McpHost> YaakMcpServer<H> {
         Parameters(p): Parameters<SendHttpRequestParams>,
     ) -> ToolResult {
         let workspace = self.resolve_workspace(p.workspace_id.as_deref())?;
-        let request = self
-            .host
-            .get_http_request(&p.id)?
-            .ok_or_else(|| format!("HTTP request with ID {} not found", p.id))?;
+        let request = self.require_http_request(&p.id)?;
         let response =
             self.host.send_http_request(&workspace.id, request, p.environment_id).await?;
 
@@ -182,10 +200,7 @@ impl<H: McpHost> YaakMcpServer<H> {
         Parameters(p): Parameters<UpdateHttpRequestParams>,
     ) -> ToolResult {
         self.resolve_workspace(p.workspace_id.as_deref())?;
-        let existing = self
-            .host
-            .get_http_request(&p.id)?
-            .ok_or_else(|| format!("HTTP request with ID {} not found", p.id))?;
+        let existing = self.require_http_request(&p.id)?;
         let request: HttpRequest = merge(&existing, given_fields(&p))?;
         to_json(&self.host.upsert_http_request(&request)?)
     }
@@ -199,6 +214,8 @@ impl<H: McpHost> YaakMcpServer<H> {
         &self,
         Parameters(p): Parameters<DeleteHttpRequestParams>,
     ) -> ToolResult {
+        // Checked first so a gRPC or WebSocket ID gets an answer, not a missing-row error
+        self.require_http_request(&p.id)?;
         let request = self.host.delete_http_request(&p.id)?;
         Ok(format!("Deleted: {} ({})", request.name, request.id))
     }
