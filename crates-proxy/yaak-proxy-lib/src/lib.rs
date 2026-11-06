@@ -75,6 +75,9 @@ pub struct ProxyCtx {
     /// Cleared flows are being deleted in the background. Held while the deleter decides it is
     /// done, so a clear either sees it running or starts another.
     deleting_cleared: Arc<Mutex<bool>>,
+    /// This context's name as the one deleting cleared flows, which the database leases to one
+    /// process at a time.
+    cleaner_id: String,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -102,6 +105,7 @@ impl ProxyCtx {
             system_proxy_on: Arc::new(AtomicBool::new(false)),
             start_error: Arc::new(Mutex::new(None)),
             deleting_cleared: Arc::new(Mutex::new(false)),
+            cleaner_id: yaak_database::generate_prefixed_id("cln"),
             db,
             blobs,
             events,
@@ -642,23 +646,29 @@ impl ProxyCtx {
         if !claim(&self.deleting_cleared) {
             return;
         }
-        let (db, blobs, running) =
-            (self.db.clone(), self.blobs.clone(), self.deleting_cleared.clone());
+        let (db, blobs, running, cleaner) = (
+            self.db.clone(),
+            self.blobs.clone(),
+            self.deleting_cleared.clone(),
+            self.cleaner_id.clone(),
+        );
         let spawned = std::thread::Builder::new().name("proxy-clear".into()).spawn(move || {
             lower_thread_priority();
             let mut retry = DELETE_PAUSE;
             loop {
-                match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH) {
-                    Ok(false) => {
+                match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH, &cleaner) {
+                    Ok(flows::Cleaned::More) => {
                         retry = DELETE_PAUSE;
                         std::thread::sleep(DELETE_PAUSE);
                     }
-                    Ok(true) => {
+                    // Another process, the app or the CLI, is deleting them; checked again now
+                    // and then, in case it stops before it is done.
+                    Ok(flows::Cleaned::Elsewhere) => std::thread::sleep(CLEANER_WAIT),
+                    Ok(flows::Cleaned::Done) => {
                         *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
                         // A clear since the last batch saw this running and left its flows to
                         // it, so they are deleted here unless another thread has taken over.
-                        let mark = db.with_conn(|c| flows::clear_mark(c.conn().resolve()));
-                        if mark == 0 || !claim(&running) {
+                        if flows::clear_mark_in(&db) == 0 || !claim(&running) {
                             return;
                         }
                     }
@@ -690,6 +700,9 @@ const DELETE_PAUSE: Duration = Duration::from_millis(5);
 
 /// The longest deleting cleared flows waits before trying a failed batch again.
 const DELETE_RETRY_MAX: Duration = Duration::from_secs(5);
+
+/// How often a process checks on cleared flows another process is deleting.
+const CLEANER_WAIT: Duration = Duration::from_secs(15);
 
 /// Runs the calling thread below the app's own work, where the platform has priorities: macOS's
 /// utility class, not background, whose disk throttling can stall a delete for as long as the

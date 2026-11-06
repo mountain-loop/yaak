@@ -142,6 +142,13 @@ app?: Array<string>,
  */
 system?: boolean, 
 /**
+ * Only flows one of these groups covers, each judged on its own: several sidebar rows
+ * selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
+ * pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
+ * carried by a query string.
+ */
+any?: Array<FlowFilter>, 
+/**
  * The method, any case.
  */
 method?: string, 

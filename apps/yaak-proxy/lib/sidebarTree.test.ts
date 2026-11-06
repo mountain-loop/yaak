@@ -104,6 +104,22 @@ describe("buildSidebarTree", () => {
 });
 
 describe("selection and the search text", () => {
+  test("selects rows under different apps as groups of their own", () => {
+    const items = itemsById(buildSidebarTree(flows, 4));
+    const pick = (id: string) => items.get(id) as SidebarItem;
+    const text = selectionText([
+      pick("app:fieldwork|host:api.github.com"),
+      pick("app:Slack|site:slack.com"),
+    ]);
+    expect(text).toBe("@app:fieldwork @host:api.github.com OR @app:Slack @host:*.slack.com");
+    expect(parseSearch(text)).toEqual({
+      any: [
+        { app: ["fieldwork"], under: ["api.github.com"] },
+        { app: ["Slack"], under: ["*.slack.com"] },
+      ],
+    });
+  });
+
   test("writes the selected rows' queries, OR'd, or nothing for All traffic", () => {
     const a = { query: "@app:Slack" } as SidebarItem;
     const b = { query: "@host:*.github.com" } as SidebarItem;

@@ -35,6 +35,12 @@ pub struct FlowFilter {
     /// tells them by their executable.
     #[ts(optional)]
     pub system: Option<bool>,
+    /// Only flows one of these groups covers, each judged on its own: several sidebar rows
+    /// selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
+    /// pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
+    /// carried by a query string.
+    #[ts(optional)]
+    pub any: Option<Vec<FlowFilter>>,
     /// The method, any case.
     #[ts(optional)]
     pub method: Option<String>,
@@ -125,6 +131,7 @@ impl FlowFilter {
             || self.under.is_some()
             || self.app.is_some()
             || self.system.is_some()
+            || self.any.as_ref().is_some_and(|groups| groups.iter().any(FlowFilter::narrows))
     }
 
     /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters,
@@ -201,6 +208,16 @@ impl FlowFilter {
             Some(true) => sql.push_str(" AND is_system(client_bundle_id, client_path)"),
             Some(false) => sql.push_str(" AND NOT is_system(client_bundle_id, client_path)"),
             None => {}
+        }
+        // Each group whole, then any of them.
+        if let Some(groups) = self.any.as_ref().filter(|g| !g.is_empty()) {
+            let mut any = Vec::new();
+            for group in groups {
+                let (condition, group_params) = group.condition(has_cwd, grpc);
+                any.push(format!("({condition})"));
+                params.extend(group_params);
+            }
+            sql.push_str(&format!(" AND ({})", any.join(" OR ")));
         }
         if let Some(method) = self.method.as_deref().filter(|m| !m.is_empty()) {
             sql.push_str(" AND lower(method) = ?");
@@ -478,34 +495,44 @@ pub fn clear(db: &ProxyQueryManager) -> Result<usize, String> {
 /// waits long behind it.
 pub const DELETE_BATCH: usize = 500;
 
-/// Deletes up to `batch` cleared flows, their messages and their bodies. Once none are left,
-/// removes the mark in the same transaction as the last of them, so a clear that raised it
-/// meanwhile is never lost. True when it is done.
+/// How long a cleaner may go without a batch before another process takes the deleting over.
+const CLEANER_LEASE_MS: i64 = 30_000;
+
+/// What a batch of deleting cleared flows left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cleaned {
+    /// More cleared flows wait.
+    More,
+    /// None are left, and the mark is gone.
+    Done,
+    /// Another process holds the lease and is deleting them.
+    Elsewhere,
+}
+
+/// Deletes up to `batch` cleared flows, their messages and their bodies, as `cleaner`, the
+/// process's name for itself. Once none are left, removes the mark in the same transaction as
+/// the last of them, so a clear that raised it meanwhile is never lost.
 ///
-/// The bodies go first, in their own transaction, and the rows after, so when deleting the
-/// bodies fails the flows stay, to be deleted again. The two writers are never held together: a
-/// flow being written holds the bodies' while it waits for the flows', and the other order would
-/// stall them both. Cleared flows are not written again, so the rows read stay as they were.
+/// One process deletes at a time, the one holding the mark's lease, which each batch renews:
+/// the app and the CLI share the database, and two cleaners could otherwise race. The bodies go
+/// first, in their own transaction, and the rows after, so when deleting the bodies fails the
+/// flows stay, to be deleted again. The two writers are never held together: a flow being
+/// written holds the bodies' while it waits for the flows', and the other order would stall them
+/// both.
 pub fn delete_cleared(
     db: &ProxyQueryManager,
     blobs: &BlobManager,
     batch: usize,
-) -> Result<bool, String> {
+    cleaner: &str,
+) -> Result<Cleaned, String> {
     let fail = |e: String| format!("Failed to delete cleared flows: {e}");
-    let rows = db
-        .with_conn(|c| {
-            let conn = c.conn().resolve();
-            let mark = clear_mark(conn);
-            let mut stmt = conn
-                .prepare("SELECT rowid, id FROM flows WHERE rowid <= ? ORDER BY rowid LIMIT ?")?;
-            let rows = stmt
-                .query_map([mark, batch as i64], |r| {
-                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            Ok::<_, rusqlite::Error>(rows)
-        })
-        .map_err(|e| fail(e.to_string()))?;
+    if clear_mark_in(db) == 0 {
+        return Ok(Cleaned::Done);
+    }
+    if !take_lease(db, cleaner).map_err(|e| fail(e.to_string()))? {
+        return Ok(Cleaned::Elsewhere);
+    }
+    let rows = read_cleared(db, batch).map_err(|e| fail(e.to_string()))?;
     // Their bodies and their messages' payloads, by flow, so a flow still in flight keeps what
     // it has written.
     if !rows.is_empty() {
@@ -520,31 +547,84 @@ pub fn delete_cleared(
             })
             .map_err(|e| fail(format!("flow bodies: {e}")))?;
     }
+    delete_rows(db, &rows, cleaner).map_err(|e| fail(e.to_string()))
+}
+
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
+/// Takes or renews the lease on deleting cleared flows for `cleaner`. False while another
+/// process holds it, or when nothing is cleared.
+fn take_lease(db: &ProxyQueryManager, cleaner: &str) -> Result<bool, yaak_database::Error> {
+    db.with_tx(|c| {
+        let now = now_ms();
+        let taken = c.conn().resolve().execute(
+            "UPDATE flow_clear_mark SET cleaner = ?1, cleaner_at = ?2 WHERE id = 1 \
+            AND (cleaner IS NULL OR cleaner = ?1 OR cleaner_at IS NULL OR cleaner_at < ?3)",
+            rusqlite::params![cleaner, now, now - CLEANER_LEASE_MS],
+        )?;
+        Ok(taken == 1)
+    })
+}
+
+/// The next `batch` cleared flows, by rowid and id.
+fn read_cleared(db: &ProxyQueryManager, batch: usize) -> rusqlite::Result<Vec<(i64, String)>> {
+    db.with_conn(|c| {
+        let conn = c.conn().resolve();
+        let mut stmt =
+            conn.prepare("SELECT rowid, id FROM flows WHERE rowid <= ? ORDER BY rowid LIMIT ?")?;
+        stmt.query_map([clear_mark(conn), batch as i64], |r| Ok((r.get(0)?, r.get(1)?)))?.collect()
+    })
+}
+
+/// Deletes `rows`, read a moment ago, and their messages, while `cleaner` still holds the lease
+/// and only those still under the mark with the same id: read since, the mark may be gone and a
+/// new flow have the rowid again. Drops the mark once nothing is left under it.
+fn delete_rows(
+    db: &ProxyQueryManager,
+    rows: &[(i64, String)],
+    cleaner: &str,
+) -> Result<Cleaned, yaak_database::Error> {
     db.with_tx(|c| {
         let conn = c.conn().resolve();
-        let mut delete = conn.prepare("DELETE FROM flows WHERE rowid = ?")?;
-        let mut delete_messages = conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
-        for (rowid, id) in &rows {
-            delete.execute([rowid])?;
-            delete_messages.execute([id])?;
+        let held: Option<Option<String>> = conn
+            .query_row("SELECT cleaner FROM flow_clear_mark WHERE id = 1", [], |r| r.get(0))
+            .ok();
+        match held {
+            // The mark went meanwhile: a rowid read may be a new flow's now.
+            None => return Ok(Cleaned::Done),
+            Some(held) if held.as_deref() != Some(cleaner) => return Ok(Cleaned::Elsewhere),
+            Some(_) => {}
         }
-        // Read again here, in case a clear raised it since. With none left under it, it goes
-        // in this transaction, since an empty table hands out rowids from 1 again and a new
-        // flow would fall under it.
         let mark = clear_mark(conn);
-        if mark == 0 {
-            return Ok(true);
+        let mut delete =
+            conn.prepare("DELETE FROM flows WHERE rowid = ? AND id = ? AND rowid <= ?")?;
+        let mut delete_messages = conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
+        for (rowid, id) in rows {
+            if delete.execute(rusqlite::params![rowid, id, mark])? > 0 {
+                delete_messages.execute([id])?;
+            }
         }
+        // With none left under it, the mark goes in this transaction, since an empty table
+        // hands out rowids from 1 again and a new flow would fall under it.
         let left: bool =
             conn.query_row("SELECT EXISTS (SELECT 1 FROM flows WHERE rowid <= ?)", [mark], |r| {
                 r.get(0)
             })?;
-        if !left {
+        if left {
+            conn.execute("UPDATE flow_clear_mark SET cleaner_at = ? WHERE id = 1", [now_ms()])?;
+            Ok(Cleaned::More)
+        } else {
             conn.execute("DELETE FROM flow_clear_mark WHERE id = 1", [])?;
+            Ok(Cleaned::Done)
         }
-        Ok::<_, yaak_database::Error>(!left)
     })
-    .map_err(|e| fail(e.to_string()))
+}
+
+/// [`clear_mark`], read from `db`.
+pub fn clear_mark_in(db: &ProxyQueryManager) -> i64 {
+    db.with_conn(|c| clear_mark(c.conn().resolve()))
 }
 
 /// A flow by id, with its number. None once it is cleared, though its row may not be deleted
@@ -999,13 +1079,13 @@ mod tests {
 
         // Bodies that fail to delete keep their flows, to delete again.
         let read_only = crate::db::open_blobs_read_only(&dir.path().join("blobs.sqlite")).unwrap();
-        assert!(delete_cleared(&db, &read_only, 2).is_err());
+        assert!(delete_cleared(&db, &read_only, 2, "cln_a").is_err());
         assert_eq!(rows(), 4);
 
         // In batches, the mark going with the last of them.
-        assert_eq!(delete_cleared(&db, &blobs, 2), Ok(false));
+        assert_eq!(delete_cleared(&db, &blobs, 2, "cln_a"), Ok(Cleaned::More));
         assert_eq!(rows(), 2);
-        assert_eq!(delete_cleared(&db, &blobs, 2), Ok(true));
+        assert_eq!(delete_cleared(&db, &blobs, 2, "cln_a"), Ok(Cleaned::Done));
         assert_eq!(rows(), 1);
         assert_eq!(db.with_conn(|c| clear_mark(c.conn().resolve())), 0);
         assert_eq!(ids(&FlowFilter::default()), vec!["fl_d"]);
@@ -1022,14 +1102,66 @@ mod tests {
 
         assert_eq!(clear(&db).unwrap(), 1);
         assert_eq!(clear(&db).unwrap(), 0);
-        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH), Ok(true));
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH, "cln_a"), Ok(Cleaned::Done));
         assert_eq!(rows(), 0);
 
         // An empty table numbers from 1 again, which no stale mark may hide.
         write_flow("fl_e");
         assert_eq!(ids(&FlowFilter::default()), vec!["fl_e"]);
-        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH), Ok(true));
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH, "cln_a"), Ok(Cleaned::Done));
         assert_eq!(rows(), 1);
+    }
+
+    #[test]
+    fn one_cleaner_at_a_time_and_never_a_reused_rowid() {
+        use yaak_database::UpdateSource;
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let blobs = yaak_models::init_blob_store(dir.path().join("blobs.sqlite")).unwrap();
+        let write_flow = |id: &str| {
+            let flow = Flow { id: id.into(), ..Default::default() };
+            db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap().0
+        };
+        let rows = || -> Vec<String> {
+            db.with_conn(|c| {
+                let conn = c.conn().resolve();
+                let mut stmt = conn.prepare("SELECT id FROM flows ORDER BY rowid").unwrap();
+                stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+            })
+        };
+        for id in ["fl_a", "fl_b", "fl_c"] {
+            write_flow(id);
+        }
+        assert_eq!(clear(&db).unwrap(), 3);
+
+        // The app takes the lease; the CLI, sharing the database, leaves the deleting to it.
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_app"), Ok(Cleaned::More));
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_cli"), Ok(Cleaned::Elsewhere));
+        assert_eq!(rows(), vec!["fl_b", "fl_c"]);
+
+        // A lease gone stale passes to the next cleaner.
+        let exec = |sql: &str| {
+            db.with_tx(|c| Ok::<_, yaak_database::Error>(c.conn().resolve().execute(sql, [])?))
+                .unwrap()
+        };
+        exec("UPDATE flow_clear_mark SET cleaner_at = 0");
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_cli"), Ok(Cleaned::More));
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_app"), Ok(Cleaned::Elsewhere));
+
+        // A batch read before the last one finished: by then the mark is gone, the table empty,
+        // and a new flow has the same rowid as the one read. It is not deleted.
+        let stale = read_cleared(&db, DELETE_BATCH).unwrap();
+        assert_eq!(stale.iter().map(|(_, id)| id.as_str()).collect::<Vec<_>>(), vec!["fl_c"]);
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH, "cln_cli"), Ok(Cleaned::Done));
+        exec(&format!("INSERT INTO flows (rowid, id) VALUES ({}, 'fl_new')", stale[0].0));
+        assert_eq!(delete_rows(&db, &stale, "cln_cli").unwrap(), Cleaned::Done);
+        assert_eq!(rows(), vec!["fl_new"]);
+
+        // Under a new mark, the same rowid with another id is not the flow read either.
+        assert_eq!(clear(&db).unwrap(), 1);
+        exec("UPDATE flow_clear_mark SET cleaner = 'cln_cli'");
+        assert_eq!(delete_rows(&db, &stale, "cln_cli").unwrap(), Cleaned::More);
+        assert_eq!(rows(), vec!["fl_new"]);
     }
 
     #[test]
@@ -1105,6 +1237,38 @@ mod tests {
         let system = |s| FlowFilter { system: Some(s), ..Default::default() };
         assert_eq!(ids(system(true)), vec!["fl_daemon"]);
         assert_eq!(ids(system(false)), vec!["fl_node", "fl_none", "fl_slack"]);
+
+        // Groups, as two sidebar rows under different apps write them, each judged whole:
+        // flattened, the apps and hosts would pair across rows and match both flows.
+        let group = |a: &str, n: &str| FlowFilter {
+            app: Some(vec![a.into()]),
+            under: Some(vec![n.into()]),
+            ..Default::default()
+        };
+        let crossed = FlowFilter {
+            any: Some(vec![
+                group("fieldwork", "github.com"),
+                group("nsurlsessiond", "api.github.com"),
+            ]),
+            ..Default::default()
+        };
+        assert_eq!(ids(crossed.clone()), Vec::<String>::new());
+        assert_eq!(page(&db, &crossed).unwrap().2, Some(0));
+        let flattened = FlowFilter {
+            app: Some(vec!["fieldwork".into(), "nsurlsessiond".into()]),
+            under: Some(vec!["github.com".into(), "api.github.com".into()]),
+            ..Default::default()
+        };
+        assert_eq!(ids(flattened), vec!["fl_daemon", "fl_node"]);
+        let either = FlowFilter {
+            any: Some(vec![
+                group("fieldwork", "api.github.com"),
+                FlowFilter { app: Some(vec!["slack".into()]), ..Default::default() },
+            ]),
+            q: Some("https".into()),
+            ..Default::default()
+        };
+        assert_eq!(ids(either), vec!["fl_node", "fl_slack"]);
     }
 
     #[test]

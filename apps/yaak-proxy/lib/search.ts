@@ -5,7 +5,7 @@ import { getDomain } from "tldts";
  * A search over every flow in the database: the search box's terms, its field terms, and
  * whether System's flows are hidden, as `list_flows` takes them.
  */
-export type FlowQuery = Pick<FlowFilter, "q" | "under" | "app" | "system">;
+export type FlowQuery = Pick<FlowFilter, "q" | "under" | "app" | "system" | "any">;
 
 /** A word of the search box: a free term, or `@field:value`, maybe negated with `-` */
 export interface SearchToken {
@@ -16,20 +16,32 @@ export interface SearchToken {
 
 /**
  * The search box's words. Values may be quoted, `@app:"Google Chrome"`; `OR` and `AND` between
- * words are dropped, since the terms of one field match any of their values and the rest must all
- * match.
+ * words are dropped here, and [`clausesOf`] splits on `OR`.
  */
 export function tokenize(text: string): SearchToken[] {
-  const tokens: SearchToken[] = [];
+  return clausesOf(text).flat();
+}
+
+/**
+ * The search box's words in the clauses `OR` separates, each a group of terms that must all
+ * match: `@app:Slack @host:a.com OR @app:Chrome @host:b.com` is two. `AND` is dropped, since
+ * terms side by side must all match anyway.
+ */
+export function clausesOf(text: string): SearchToken[][] {
+  const clauses: SearchToken[][] = [[]];
   const re = /(-)?(?:@([a-z]+):)?(?:"([^"]*)"?|(\S+))/gi;
   for (const m of text.matchAll(re)) {
     const [, minus, field, quoted, bare] = m;
     const value = quoted ?? bare ?? "";
-    if (field == null && (value === "OR" || value === "AND")) continue;
+    if (field == null && minus == null && quoted == null && value === "OR") {
+      clauses.push([]);
+      continue;
+    }
+    if (field == null && minus == null && quoted == null && value === "AND") continue;
     if (field == null && value === "" && quoted == null) continue;
-    tokens.push({ field: field?.toLowerCase() ?? null, value, negated: minus != null });
+    clauses.at(-1)?.push({ field: field?.toLowerCase() ?? null, value, negated: minus != null });
   }
-  return tokens;
+  return clauses.filter((c) => c.length > 0);
 }
 
 /** `@field:value`, quoting a value with spaces or quotes in it */
@@ -39,19 +51,33 @@ export function formatFieldFilter(field: string, value: string, negated = false)
 }
 
 /**
- * The search box's text as a query, or null when it narrows nothing. `@app` terms match any of
- * their apps; `@host` terms any of their hosts, each with the `@path` terms below it; `@is:system`
- * keeps only macOS's daemons and `-@is:system` drops them, as hiding System does when the text
- * says neither. Other words match the URL, the method, the status or the type, as before.
+ * The search box's text as a query, or null when it narrows nothing. Clauses `OR` separates are
+ * groups, each judged whole, so two sidebar rows under different apps match what each does and
+ * not every pairing of their apps and hosts. Within a clause, `@app` terms match any of their
+ * apps; `@host` terms any of their hosts, each with the `@path` terms after it; `@is:system`
+ * keeps only macOS's daemons and `-@is:system` drops them, as hiding System does when the
+ * clause says neither. Other words match the URL, the method, the status or the type.
  */
 export function parseSearch(text: string, hideSystem = false): FlowQuery | null {
+  const clauses = clausesOf(text);
+  if (clauses.length <= 1) return parseClause(clauses[0] ?? [], hideSystem);
+  const any: FlowQuery[] = [];
+  for (const clause of clauses) {
+    const group = parseClause(clause, hideSystem);
+    // A clause that narrows nothing takes in every flow, so the whole does too.
+    if (group == null) return hideSystem ? { system: false } : null;
+    any.push(group);
+  }
+  return { any };
+}
+
+function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | null {
   const words: string[] = [];
   const apps: string[] = [];
-  // Each host with the paths written after it, so `@host:a.com @path:/x OR @host:b.com
-  // @path:/y` is those two places and not every pairing of them.
+  // Each host with the paths written after it.
   const hosts: { host: string; paths: string[] }[] = [];
   let system: boolean | undefined = hideSystem ? false : undefined;
-  for (const t of tokenize(text)) {
+  for (const t of tokens) {
     if (t.field === "app" && !t.negated && t.value !== "") apps.push(t.value);
     else if (t.field === "host" && !t.negated && t.value !== "") {
       hosts.push({ host: t.value.replace(/\/+$/, ""), paths: [] });
@@ -141,6 +167,10 @@ export function matchesQuery(flow: Flow, query: FlowQuery): boolean {
   if (query.under != null && !query.under.some((node) => isUnder(flow.url, node))) return false;
   if (query.app != null && !query.app.some((app) => matchesApp(flow, app))) return false;
   if (query.system != null && isSystemFlow(flow) !== query.system) return false;
+  // One of the groups, each judged whole, as the database judges them.
+  if (query.any != null && query.any.length > 0) {
+    return query.any.some((group) => matchesQuery(flow, group));
+  }
   return true;
 }
 

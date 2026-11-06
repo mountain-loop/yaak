@@ -170,7 +170,7 @@ describe("parseSearch", () => {
   });
 
   test("reads apps, hosts and the paths below them", () => {
-    expect(parseSearch('@app:"Google Chrome" OR @app:Slack card')).toEqual({
+    expect(parseSearch('@app:"Google Chrome" @app:Slack card')).toEqual({
       q: "card",
       app: ["Google Chrome", "Slack"],
     });
@@ -184,13 +184,41 @@ describe("parseSearch", () => {
     });
     // A path with no host matches anywhere in the URL.
     expect(parseSearch("@path:/v1")).toEqual({ q: "/v1" });
-    // Each path stays with the host before it, as two selected sidebar paths write them.
-    expect(parseSearch("@host:a.com @path:/x OR @host:b.com @path:/y")).toEqual({
+    // Each path stays with the host before it.
+    expect(parseSearch("@host:a.com @path:/x @host:b.com @path:/y")).toEqual({
       under: ["a.com/x", "b.com/y"],
     });
-    expect(parseSearch("@host:a.com OR @host:b.com @path:/y")).toEqual({
-      under: ["a.com", "b.com/y"],
+  });
+
+  test("keeps each clause OR separates as a group of its own", () => {
+    // Two selected sidebar rows under different apps: Slack on a.com, or Chrome on b.com.
+    const text = "@app:Slack @host:a.com OR @app:Chrome @host:b.com";
+    const query = parseSearch(text);
+    expect(query).toEqual({
+      any: [
+        { app: ["Slack"], under: ["a.com"] },
+        { app: ["Chrome"], under: ["b.com"] },
+      ],
     });
+    const on = (clientName: string, host: string) =>
+      flow(`https://${host}/x`, { clientName, clientBundleId: `app.${clientName}` });
+    const match = (f: Flow) => query != null && matchesQuery(f, query);
+    expect(match(on("Slack", "a.com"))).toBe(true);
+    expect(match(on("Chrome", "b.com"))).toBe(true);
+    // Not every pairing of the two rows' apps and hosts.
+    expect(match(on("Slack", "b.com"))).toBe(false);
+    expect(match(on("Chrome", "a.com"))).toBe(false);
+
+    // Words bind to their clause, and hiding System applies to each group that does not ask.
+    expect(parseSearch("@host:a.com OR @is:system @app:trustd", true)).toEqual({
+      any: [
+        { under: ["a.com"], system: false },
+        { app: ["trustd"], system: true },
+      ],
+    });
+    // A clause that narrows nothing takes in every flow.
+    expect(parseSearch("@app:Slack OR")).toEqual({ app: ["Slack"] });
+    expect(parseSearch("@app:Slack OR -@foo:bar")).toBeNull();
   });
 
   test("keeps or drops System, which hiding it drops unless the text asks", () => {

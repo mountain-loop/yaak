@@ -334,7 +334,10 @@ mod tests {
         assert_eq!((listed[0].id.as_str(), listed[0].message_count), ("fl_ws", 2));
         assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 1);
         assert_eq!(crate::flows::clear(&db).unwrap(), 1);
-        assert_eq!(crate::flows::delete_cleared(&db, &blobs, 500), Ok(true));
+        assert_eq!(
+            crate::flows::delete_cleared(&db, &blobs, 500, "cln_test"),
+            Ok(crate::flows::Cleaned::Done)
+        );
         assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 0);
     }
 }
