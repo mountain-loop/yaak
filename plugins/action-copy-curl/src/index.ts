@@ -44,7 +44,7 @@ export async function convertToCurl(request: Partial<HttpRequest>) {
   }
 
   // Add API key authentication
-  if (request.authenticationType === "apikey") {
+  if (request.authenticationType === "apikey" && request.authentication?.disabled !== true) {
     if (request.authentication?.location === "query") {
       const sep = finalUrl.includes("?") ? "&" : "?";
       finalUrl = [
