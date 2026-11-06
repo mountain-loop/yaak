@@ -1449,9 +1449,10 @@ async fn plain_http_bare_path_without_host_is_a_bad_request() {
     assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseStart { .. })));
 }
 
-/// A request whose connection upstream is routed back into the proxy, as happened to Telegram's
-/// while the system proxy was on, arrives again with a bare path. Sending that on would loop
-/// forever.
+/// A request whose connection upstream is routed back into the proxy, as Private Relay does with
+/// port 80 while the system proxy is on, arrives again with the engine's `Via` mark. Sending
+/// that on would loop forever. It is refused without a flow of its own, so the loop shows as the
+/// client's request answered with a 508.
 #[tokio::test(flavor = "multi_thread")]
 async fn plain_http_request_looped_back_to_the_proxy_stops() {
     let h = Harness::start(1024);
@@ -1462,8 +1463,33 @@ async fn plain_http_request_looped_back_to_the_proxy_stops() {
     assert_eq!(resp.text().await.unwrap(), "request looped back to Yaak Proxy");
 
     let events = h.flow_events();
-    let error = find!(events, ProxyEvent::Error { error, .. } => error.clone());
-    assert_eq!(error, "request looped back to Yaak Proxy");
+    let starts: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            ProxyEvent::RequestStart { url, .. } => Some(url.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(starts, [url]);
+    assert_eq!(find!(events, ProxyEvent::ResponseStart { status, .. } => *status), 508);
+    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::Error { .. })));
+    let (body, _) = body(&events, false);
+    assert_eq!(body, b"request looped back to Yaak Proxy");
+}
+
+/// The same loop from a client that sends a bare path, as Telegram did.
+#[tokio::test(flavor = "multi_thread")]
+async fn bare_path_request_looped_back_to_the_proxy_stops() {
+    let h = Harness::start(1024);
+    let host = format!("127.0.0.1:{}", h.proxy.port);
+
+    let resp = h.send_as_written(telegram_request(Some(&host), "/api", &[0xefu8; 44])).await;
+    assert_eq!(resp.status(), 508);
+
+    let events = h.flow_events();
+    let flows: HashSet<u64> = events.iter().map(flow_id).collect();
+    assert_eq!(flows.len(), 1, "{events:?}");
+    assert_eq!(find!(events, ProxyEvent::ResponseStart { status, .. } => *status), 508);
 }
 
 // -- HTTP/2 clients --

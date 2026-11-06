@@ -11878,13 +11878,16 @@ name = "yaak-proxy"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "block2 0.6.1",
  "bytes",
+ "dispatch2",
  "flate2",
  "futures-util",
  "http",
  "http-body-util",
  "hyper",
  "hyper-util",
+ "libc",
  "log 0.4.34",
  "pem",
  "rcgen",
@@ -11896,6 +11899,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+ "tower-service",
 ]
 
 [[package]]
