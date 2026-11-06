@@ -143,6 +143,28 @@ describe("parseMultipart", () => {
     expect(parts.map((p) => text(p.body))).toEqual(["x\r\n--bb\r\nstill x"]);
   });
 
+  test("takes a line for a delimiter only when the whole line is one", () => {
+    const body = [
+      "--b",
+      "",
+      "x",
+      "--b-suffix",
+      "--b--suffix",
+      "still x",
+      "--b  ",
+      "",
+      "y",
+      "--b-- ",
+      "epilogue",
+    ].join("\r\n");
+    const { parts, complete } = parseMultipart(bytes(body), "b");
+    expect(complete).toBe(true);
+    expect(parts.map((p) => text(p.body))).toEqual([
+      "x\r\n--b-suffix\r\n--b--suffix\r\nstill x",
+      "y",
+    ]);
+  });
+
   test("reads quoted and extended disposition parameters", () => {
     const body = [
       "--b",

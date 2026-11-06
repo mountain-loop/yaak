@@ -6,7 +6,7 @@ import {
   GMAIL_BATCH_BOUNDARY,
   GMAIL_BATCH_CONTENT_TYPE,
 } from "../../lib/multipart.fixtures";
-import { MultipartViewer } from "./MultipartViewer";
+import { MAX_MULTIPART_DEPTH, MultipartViewer } from "./MultipartViewer";
 
 // Stand-ins that show which viewer a part went to, without the editor or the tab machinery
 vi.mock("./TextViewer", () => ({
@@ -82,6 +82,26 @@ describe("MultipartViewer", () => {
     expect(markup).toContain('data-viewer="text"');
     expect(markup).toContain(">deep</pre>");
     expect(markup).not.toContain("--inner");
+  });
+
+  test("shows multipart nested past the limit raw, with a note", () => {
+    // Six levels, each a multipart part holding the next, the innermost a text part
+    let body = ["--l6", "Content-Type: text/plain", "", "innermost", "--l6--"].join("\r\n");
+    for (let level = 5; level >= 1; level--) {
+      body = [
+        `--l${level}`,
+        `Content-Type: multipart/mixed; boundary=l${level + 1}`,
+        "",
+        body,
+        `--l${level}--`,
+      ].join("\r\n");
+    }
+    const markup = renderToStaticMarkup(<MultipartViewer data={bytes(body)} boundary="l1" />);
+    expect(markup).toContain(`nested more than ${MAX_MULTIPART_DEPTH} levels deep`);
+    // Level five is shown as its raw text, so its own delimiters are still in it
+    expect(markup).toContain('data-viewer="text" data-language="text"');
+    expect(markup).toContain("--l5");
+    expect(markup).not.toContain(">innermost</pre>");
   });
 
   test("shows a binary part as a hexdump", () => {

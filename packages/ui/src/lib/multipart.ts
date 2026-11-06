@@ -172,10 +172,18 @@ function matchesAt(data: Uint8Array, needle: Uint8Array, at: number): boolean {
   return true;
 }
 
+/**
+ * Whether the rest of the line after a boundary completes a delimiter: an optional `--` for the
+ * closing one, optional transport padding, then a line break or the end of the data. So with
+ * boundary `b`, neither `--b-suffix` nor `--b--suffix` is a delimiter.
+ */
 function endsDelimiter(data: Uint8Array, at: number): boolean {
-  if (at >= data.length) return true;
-  const b = data[at];
-  return b === DASH || b === CR || b === LF || b === SPACE || b === TAB;
+  let pos = at;
+  if (data[pos] === DASH && data[pos + 1] === DASH) pos += 2;
+  while (data[pos] === SPACE || data[pos] === TAB) pos++;
+  if (pos >= data.length) return true;
+  if (data[pos] === LF) return true;
+  return data[pos] === CR && (pos + 1 >= data.length || data[pos + 1] === LF);
 }
 
 /** The start of the line break before `at` (CRLF or LF), or `at` when there is none */

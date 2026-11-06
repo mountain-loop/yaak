@@ -37,14 +37,27 @@ export interface MultipartViewerProps {
   ErrorBoundary?: TabContentProps["ErrorBoundary"];
 }
 
-type ViewerOptions = Pick<MultipartViewerProps, "renderPdf" | "textViewerProps" | "ErrorBoundary">;
+/** How many multipart levels show as tabs; a part nested deeper shows raw, with a note */
+export const MAX_MULTIPART_DEPTH = 4;
 
-export function MultipartViewer({
+type ViewerOptions = Pick<
+  MultipartViewerProps,
+  "renderPdf" | "textViewerProps" | "ErrorBoundary"
+> & {
+  /** The multipart levels shown so far, this one included */
+  depth: number;
+};
+
+export function MultipartViewer(props: MultipartViewerProps) {
+  return <MultipartParts {...props} depth={1} />;
+}
+
+function MultipartParts({
   data,
   boundary,
   idPrefix = "multipart",
   ...options
-}: MultipartViewerProps) {
+}: MultipartViewerProps & { depth: number }) {
   // Parsed once per bytes and boundary, however often this renders
   const parseResult = useMemo<
     { result: MultipartParseResult; error: null } | { result: null; error: string }
@@ -174,9 +187,7 @@ function PartBody({
   body,
   contentType,
   idPrefix,
-  renderPdf,
-  textViewerProps,
-  ErrorBoundary,
+  ...options
 }: {
   body: Uint8Array;
   contentType: string | null;
@@ -184,31 +195,67 @@ function PartBody({
 } & ViewerOptions) {
   const mediaType = contentType?.split(";")[0]?.trim().toLowerCase() || null;
 
-  const { content, detectedLanguage, binary } = useMemo(() => {
-    const content = new TextDecoder().decode(body);
-    const detectedLanguage = languageFromContentType(contentType, content);
-    const binary = isBinaryPart(mediaType, body);
-    return { content, detectedLanguage, binary };
-  }, [body, contentType, mediaType]);
-
   if (body.length === 0) {
     return <div className="text-text-subtlest text-sm italic pt-1">Empty</div>;
   }
 
-  if (mediaType?.startsWith("multipart/")) {
-    const nestedBoundary = boundaryFromContentType(contentType);
-    if (nestedBoundary != null) {
+  const nestedBoundary = mediaType?.startsWith("multipart/")
+    ? boundaryFromContentType(contentType)
+    : null;
+  if (nestedBoundary != null) {
+    if (options.depth < MAX_MULTIPART_DEPTH) {
+      // The nested body is a view into the outer one's bytes, parsed only when shown
       return (
-        <MultipartViewer
+        <MultipartParts
+          {...options}
           data={body}
           boundary={nestedBoundary}
           idPrefix={idPrefix}
-          renderPdf={renderPdf}
-          textViewerProps={textViewerProps}
-          ErrorBoundary={ErrorBoundary}
+          depth={options.depth + 1}
         />
       );
     }
+    return (
+      <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
+        <Banner color="info" className="mb-2 mr-3 text-sm">
+          Multipart nested more than {MAX_MULTIPART_DEPTH} levels deep; shown raw.
+        </Banner>
+        <LeafBody body={body} contentType={null} mediaType={null} raw {...options} />
+      </div>
+    );
+  }
+
+  return <LeafBody body={body} contentType={contentType} mediaType={mediaType} {...options} />;
+}
+
+/** A body that isn't multipart, decoded only here, where a viewer needs its text */
+function LeafBody({
+  body,
+  contentType,
+  mediaType,
+  raw,
+  renderPdf,
+  textViewerProps,
+}: {
+  body: Uint8Array;
+  contentType: string | null;
+  mediaType: string | null;
+  /** Text or a hexdump, whatever the content type says */
+  raw?: boolean;
+} & ViewerOptions) {
+  const { content, detectedLanguage, binary } = useMemo(() => {
+    const binary = isBinaryPart(mediaType, body);
+    const content = new TextDecoder().decode(body);
+    const detectedLanguage = raw ? "text" : languageFromContentType(contentType, content);
+    return { content, detectedLanguage, binary };
+  }, [body, contentType, mediaType, raw]);
+
+  if (raw) {
+    return binary ? (
+      <HexdumpViewer data={body} renderEditor={textViewerProps?.renderEditor} />
+    ) : (
+      <TextViewer {...textViewerProps} text={content} language="text" stateKey={null} />
+    );
   }
 
   if (mediaType?.match(/^image\/svg/i)) {
