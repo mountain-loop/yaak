@@ -16,7 +16,8 @@ pub struct ProxyHeader {
     pub value: String,
 }
 
-/// One proxied request and its response. The bodies are in `blobs.sqlite`, not the row.
+/// One proxied request and its response. The bodies are in `blobs.sqlite`, not the row; a
+/// stream's are its messages, and read back from them (`bodies::from_messages`).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
@@ -44,9 +45,11 @@ pub struct Flow {
     /// Bytes of the response body on the wire, captured or not.
     #[ts(type = "number")]
     pub response_size: i64,
-    /// Only the first `capture_body_limit` bytes of the body are stored.
+    /// Only the first `capture_body_limit` bytes of the body are stored. For a body that is a
+    /// stream's messages, a message was cut at the limit.
     pub request_truncated: bool,
-    /// Only the first `capture_body_limit` bytes of the body are stored.
+    /// Only the first `capture_body_limit` bytes of the body are stored. For a body that is a
+    /// stream's messages, a message was cut at the limit.
     pub response_truncated: bool,
     /// Milliseconds from `started_at` to the response headers.
     pub elapsed_headers_ms: Option<i32>,

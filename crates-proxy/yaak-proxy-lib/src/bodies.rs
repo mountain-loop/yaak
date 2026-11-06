@@ -1,8 +1,32 @@
-use crate::models::{Flow, FlowBody, find_header};
+use crate::db::ProxyQueryManager;
+use crate::messages::{self, FlowMessage, MessageDirection, MessageKind};
+use crate::models::{Flow, FlowBody, StreamKind, find_header};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use std::io::Cursor;
 use tokio::io::AsyncReadExt;
 use yaak_http::decompress::{ContentEncoding, streaming_decoder};
 use yaak_models::blob_manager::BlobManager;
+
+/// What a WebSocket's response body reads as: it has none.
+pub const WEBSOCKET_BODY_NOTE: &str =
+    "A WebSocket has no body after its 101 response. Its frames are its messages.";
+
+/// Whether a flow's body is its stream's messages rather than bytes stored on their own: an
+/// event stream's response, a gRPC call's request, and its response when the server answered
+/// in gRPC (a gateway's error page is a body like any other), and a WebSocket's response. Such a
+/// body is not written to `blobs.sqlite`; reading it puts it back together from the messages.
+pub fn from_messages(flow: &Flow, which: FlowBody) -> bool {
+    match (flow.stream_kind, which) {
+        (None, _) => false,
+        (Some(StreamKind::Websocket | StreamKind::Sse), FlowBody::Request) => false,
+        (Some(StreamKind::Websocket | StreamKind::Sse), FlowBody::Response) => true,
+        (Some(StreamKind::Grpc | StreamKind::GrpcWeb), FlowBody::Request) => true,
+        (Some(StreamKind::Grpc | StreamKind::GrpcWeb), FlowBody::Response) => {
+            yaak_proxy::detect_grpc(find_header(&flow.response_headers, "content-type")).is_some()
+        }
+    }
+}
 
 /// A flow's body as stored: the bytes on the wire, up to the capture limit.
 pub fn read_raw_body(
@@ -25,16 +49,29 @@ pub struct DecodedBody {
     pub truncated: bool,
     /// Why decoding stopped before the end of the stored bytes.
     pub decode_error: Option<String>,
+    /// What to know about the body beyond its bytes, as that a WebSocket has none.
+    pub note: Option<String>,
+}
+
+impl DecodedBody {
+    pub fn new(data: Vec<u8>, truncated: bool) -> Self {
+        Self { stored_size: data.len(), data, truncated, decode_error: None, note: None }
+    }
 }
 
 /// A flow's body decoded with its Content-Encoding, at most `limit` bytes of it. A body that
-/// fails to decode, as one cut short does, keeps what decoded before the failure.
+/// fails to decode, as one cut short does, keeps what decoded before the failure. A body that is
+/// a stream's messages is put back together from them, decoded as they are.
 pub async fn read_body(
+    db: &ProxyQueryManager,
     blobs: &BlobManager,
     flow: &Flow,
     body: FlowBody,
     limit: usize,
 ) -> Result<DecodedBody, String> {
+    if from_messages(flow, body) {
+        return message_body(db, blobs, flow, body, limit);
+    }
     let raw = read_raw_body(blobs, &flow.id, body)?;
     let stored_size = raw.len();
     // A response that failed or was cancelled after its headers ended short on the wire.
@@ -49,7 +86,7 @@ pub async fn read_body(
         let truncated = wire_truncated || raw.len() > limit;
         let mut data = raw;
         data.truncate(limit);
-        return Ok(DecodedBody { data, stored_size, truncated, decode_error: None });
+        return Ok(DecodedBody { data, stored_size, truncated, decode_error: None, note: None });
     }
 
     // One byte past the limit tells a body that fills it from one that overflows it.
@@ -64,7 +101,115 @@ pub async fn read_body(
     };
     let truncated = wire_truncated || decode_error.is_some() || data.len() > limit;
     data.truncate(limit);
-    Ok(DecodedBody { data, stored_size, truncated, decode_error })
+    Ok(DecodedBody { data, stored_size, truncated, decode_error, note: None })
+}
+
+/// A body that is its stream's messages, as it was on the wire once decoded: an event stream's
+/// events as they came, comments within an event included, and a gRPC call's messages framed
+/// again (uncompressed, so flagged as such), with a gRPC-Web response's trailers frame, in base64
+/// for `grpc-web-text`. Blocks of an event stream that were not events, as a keep-alive comment
+/// alone is, are not kept, so are not in it.
+fn message_body(
+    db: &ProxyQueryManager,
+    blobs: &BlobManager,
+    flow: &Flow,
+    which: FlowBody,
+    limit: usize,
+) -> Result<DecodedBody, String> {
+    let Some(kind) = flow.stream_kind else {
+        return Ok(DecodedBody::new(Vec::new(), false));
+    };
+    if kind == StreamKind::Websocket {
+        return Ok(DecodedBody {
+            note: Some(WEBSOCKET_BODY_NOTE.into()),
+            ..DecodedBody::new(Vec::new(), false)
+        });
+    }
+    let direction = match which {
+        FlowBody::Request => MessageDirection::Client,
+        FlowBody::Response => MessageDirection::Server,
+    };
+    let content_type = find_header(flow.headers(which), "content-type");
+    let base64_text = yaak_proxy::detect_grpc(content_type).is_some_and(|(_, text)| text);
+    // The status of a trailers-only response came in its headers, not a frame of its body.
+    let trailers_in_body = kind == StreamKind::GrpcWeb
+        && which == FlowBody::Response
+        && find_header(&flow.response_headers, "grpc-status").is_none();
+    // Enough to fill the limit, after base64 makes it a third longer.
+    let room = if base64_text { limit / 3 * 4 + 4 } else { limit };
+
+    let mut out = Vec::new();
+    let mut truncated = false;
+    for message in messages::list(db, &flow.id, None, None)? {
+        if out.len() > room {
+            truncated = true;
+            break;
+        }
+        if message.direction != direction {
+            continue;
+        }
+        match message.kind {
+            MessageKind::SseEvent => {
+                let payload = messages::payload(db, blobs, &message)?;
+                out.extend_from_slice(&sse_event_lines(&message, &payload));
+            }
+            MessageKind::GrpcMessage => {
+                let payload = messages::payload(db, blobs, &message)?;
+                // A payload that failed to decompress is kept as it came, still compressed.
+                let flag = u8::from(message.compressed && message.error.is_some());
+                grpc_frame(&mut out, flag, &payload);
+            }
+            MessageKind::GrpcTrailers if trailers_in_body => {
+                let payload = messages::payload(db, blobs, &message)?;
+                grpc_frame(&mut out, 0x80, &payload);
+            }
+            _ => continue,
+        }
+        truncated |= message.truncated;
+    }
+    if base64_text {
+        out = BASE64.encode(&out).into_bytes();
+    }
+    let stored_size = out.len();
+    truncated |= out.len() > limit;
+    out.truncate(limit);
+    Ok(DecodedBody { data: out, stored_size, truncated, decode_error: None, note: None })
+}
+
+/// An event's lines as they came. Its raw lines are kept up to [`yaak_proxy::RAW_LIMIT`]; an
+/// event longer than that is written again from its fields, as `event`, `id`, `retry` and a
+/// `data` line for each line of its data.
+fn sse_event_lines(message: &FlowMessage, payload: &[u8]) -> Vec<u8> {
+    if let Some(raw) = &message.meta.raw
+        && i64::try_from(raw.len()).is_ok_and(|len| len == message.size)
+    {
+        return raw.as_bytes().to_vec();
+    }
+    let mut out = Vec::new();
+    let meta = &message.meta;
+    if let Some(event) = &meta.event {
+        out.extend_from_slice(format!("event: {event}\n").as_bytes());
+    }
+    if let Some(id) = &meta.event_id {
+        out.extend_from_slice(format!("id: {id}\n").as_bytes());
+    }
+    if let Some(retry) = meta.retry {
+        out.extend_from_slice(format!("retry: {retry}\n").as_bytes());
+    }
+    for line in payload.split(|b| *b == b'\n') {
+        out.extend_from_slice(b"data: ");
+        out.extend_from_slice(line);
+        out.push(b'\n');
+    }
+    out.push(b'\n');
+    out
+}
+
+/// Appends a gRPC length-prefixed message: its flag byte, its length, and its bytes.
+fn grpc_frame(out: &mut Vec<u8>, flag: u8, payload: &[u8]) {
+    out.push(flag);
+    out.extend_from_slice(&u32::try_from(payload.len()).unwrap_or(u32::MAX).to_be_bytes());
+    out.extend_from_slice(payload);
 }
 
 /// A body's text as the app's viewer reads it, as `decodeBodyText` in `@yaakapp-internal/lib`
@@ -107,12 +252,13 @@ fn strict_utf8(data: &[u8], truncated: bool) -> Option<String> {
 /// A flow's body decoded as `read_body` does, or, when it fails to decode, the bytes as they were
 /// on the wire, with `decode_error` saying why.
 pub async fn read_body_or_raw(
+    db: &ProxyQueryManager,
     blobs: &BlobManager,
     flow: &Flow,
     body: FlowBody,
     limit: usize,
 ) -> Result<DecodedBody, String> {
-    let decoded = read_body(blobs, flow, body, limit).await?;
+    let decoded = read_body(db, blobs, flow, body, limit).await?;
     if decoded.decode_error.is_none() {
         return Ok(decoded);
     }
@@ -127,9 +273,16 @@ mod tests {
     use super::*;
     use yaak_models::blob_manager::BodyChunkWriter;
 
+    fn proxy_db() -> (tempfile::TempDir, ProxyQueryManager) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        (dir, db)
+    }
+
     #[tokio::test]
     async fn response_failed_after_its_headers_is_truncated() {
         let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
         let mut writer =
             BodyChunkWriter::new(blobs.clone(), Flow::body_id("fl_cut", FlowBody::Response));
         writer.write(b"{\"rows\": [").unwrap();
@@ -141,18 +294,20 @@ mod tests {
             ..Default::default()
         };
 
-        let body = read_body(&blobs, &cut, FlowBody::Response, 1024).await.unwrap();
+        let body = read_body(&db, &blobs, &cut, FlowBody::Response, 1024).await.unwrap();
         assert_eq!((body.data.as_slice(), body.truncated), (&b"{\"rows\": ["[..], true));
         // The request went out whole; the error is the response's.
-        let request = read_body(&blobs, &cut, FlowBody::Request, 1024).await.unwrap();
+        let request = read_body(&db, &blobs, &cut, FlowBody::Request, 1024).await.unwrap();
         assert!(!request.truncated);
         // With no headers there was never a response body to cut.
         let refused = Flow { status: None, ..cut.clone() };
-        assert!(!read_body(&blobs, &refused, FlowBody::Response, 1024).await.unwrap().truncated);
+        assert!(
+            !read_body(&db, &blobs, &refused, FlowBody::Response, 1024).await.unwrap().truncated
+        );
 
         // The client cancelling partway through cuts it short the same way.
         let cancelled = Flow { error: None, cancelled: true, ..cut };
-        let body = read_body(&blobs, &cancelled, FlowBody::Response, 1024).await.unwrap();
+        let body = read_body(&db, &blobs, &cancelled, FlowBody::Response, 1024).await.unwrap();
         assert_eq!((body.data.as_slice(), body.truncated), (&b"{\"rows\": ["[..], true));
     }
 
@@ -160,6 +315,7 @@ mod tests {
     async fn cancelled_gzip_response_keeps_what_decoded() {
         use std::io::Write;
         let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
         let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
         gzip.write_all(&[b'z'; 4096]).unwrap();
         let gzip = gzip.finish().unwrap();
@@ -178,7 +334,7 @@ mod tests {
             ..Default::default()
         };
 
-        let body = read_body(&blobs, &flow, FlowBody::Response, 8192).await.unwrap();
+        let body = read_body(&db, &blobs, &flow, FlowBody::Response, 8192).await.unwrap();
         assert!(body.truncated);
         assert_eq!(body.decode_error, None);
     }
@@ -240,6 +396,7 @@ mod tests {
     async fn deflate_request_bodies_decode_wrapped_or_raw() {
         use std::io::Write;
         let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
         let logs = br#"[{"message":"hello","service":"browser"}]"#;
         let mut zlib = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         zlib.write_all(logs).unwrap();
@@ -252,7 +409,7 @@ mod tests {
             ("fl_raw", raw.finish().unwrap()),
         ] {
             let flow = deflate_request(&blobs, id, &stored);
-            let body = read_body(&blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+            let body = read_body(&db, &blobs, &flow, FlowBody::Request, 1024).await.unwrap();
             assert_eq!(body.decode_error, None, "{id}");
             assert_eq!((body.data.as_slice(), body.truncated), (&logs[..], false), "{id}");
         }
@@ -261,15 +418,159 @@ mod tests {
     #[tokio::test]
     async fn undecodable_body_reads_as_it_was_on_the_wire() {
         let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
         let flow = deflate_request(&blobs, "fl_bad", b"\x00\x01 not deflate");
 
-        let decoded = read_body(&blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+        let decoded = read_body(&db, &blobs, &flow, FlowBody::Request, 1024).await.unwrap();
         assert!(decoded.decode_error.is_some());
-        let raw = read_body_or_raw(&blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+        let raw = read_body_or_raw(&db, &blobs, &flow, FlowBody::Request, 1024).await.unwrap();
         assert_eq!(raw.data, b"\x00\x01 not deflate");
         assert!(!raw.truncated);
         assert_eq!(raw.decode_error, decoded.decode_error);
-        let cut = read_body_or_raw(&blobs, &flow, FlowBody::Request, 4).await.unwrap();
+        let cut = read_body_or_raw(&db, &blobs, &flow, FlowBody::Request, 4).await.unwrap();
         assert_eq!((cut.data.as_slice(), cut.truncated), (&b"\x00\x01 n"[..], true));
+    }
+
+    /// Stores `messages` for `flow_id` as the event loop does, payloads inline.
+    fn store_messages(
+        db: &ProxyQueryManager,
+        flow_id: &str,
+        messages: &[yaak_proxy::StreamMessage],
+    ) {
+        db.with_conn(|c| {
+            for (seq, message) in messages.iter().enumerate() {
+                let row = FlowMessage::from_engine(flow_id, seq as i64, message);
+                messages::insert(c.conn().resolve(), &row, Some(&message.data)).unwrap();
+            }
+        });
+    }
+
+    fn stream_message(
+        direction: yaak_proxy::MessageDirection,
+        kind: yaak_proxy::MessageKind,
+        size: u64,
+        data: &[u8],
+    ) -> yaak_proxy::StreamMessage {
+        yaak_proxy::StreamMessage {
+            direction,
+            kind,
+            at: std::time::SystemTime::now(),
+            size,
+            data: bytes::Bytes::copy_from_slice(data),
+            truncated: false,
+            compressed: false,
+            error: None,
+        }
+    }
+
+    /// An event's raw lines are kept up to a limit; past it, the event is written again from its
+    /// fields. Either way, nothing of the body was stored on its own.
+    #[tokio::test]
+    async fn event_stream_body_is_its_events() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
+        let short = ": hello\nevent: tick\ndata: one\n\n";
+        let long_data = format!("{}\n{}", "a".repeat(3000), "b".repeat(3000));
+        let long_size = format!(
+            "event: big\nid: 7\ndata: {}\ndata: {}\n\n",
+            "a".repeat(3000),
+            "b".repeat(3000)
+        )
+        .len();
+        let sse = |event: &str, id: Option<&str>, raw: &str| K::SseEvent {
+            event: Some(event.into()),
+            id: id.map(String::from),
+            retry: None,
+            raw: raw.into(),
+        };
+        store_messages(
+            &db,
+            "fl_sse",
+            &[
+                stream_message(D::Server, sse("tick", None, short), short.len() as u64, b"one"),
+                stream_message(
+                    D::Server,
+                    sse("big", Some("7"), &"x".repeat(yaak_proxy::RAW_LIMIT)),
+                    long_size as u64,
+                    long_data.as_bytes(),
+                ),
+            ],
+        );
+        let flow = Flow {
+            id: "fl_sse".into(),
+            stream_kind: Some(StreamKind::Sse),
+            response_headers: vec![crate::models::ProxyHeader {
+                name: "Content-Encoding".into(),
+                value: "gzip".into(),
+            }],
+            ..Default::default()
+        };
+
+        let body = read_body(&db, &blobs, &flow, FlowBody::Response, 1 << 20).await.unwrap();
+        let expected = format!(
+            "{short}event: big\nid: 7\ndata: {}\ndata: {}\n\n",
+            "a".repeat(3000),
+            "b".repeat(3000)
+        );
+        // Decoded already: the Content-Encoding was undone before the events were read.
+        assert_eq!(String::from_utf8(body.data).unwrap(), expected);
+        assert_eq!((body.truncated, body.decode_error, body.note), (false, None, None));
+        // The request is no stream, and reads from the blob store as any other.
+        assert!(!from_messages(&flow, FlowBody::Request));
+        let cut = read_body(&db, &blobs, &flow, FlowBody::Response, 10).await.unwrap();
+        assert_eq!((cut.data.as_slice(), cut.truncated), (&short.as_bytes()[..10], true));
+    }
+
+    #[tokio::test]
+    async fn grpc_web_text_body_is_its_frames_in_base64() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
+        let trailers = K::GrpcTrailers { status: Some(0), message: None };
+        store_messages(
+            &db,
+            "fl_web",
+            &[
+                stream_message(D::Client, K::GrpcMessage, 2, b"\x08\x01"),
+                stream_message(D::Server, K::GrpcMessage, 2, b"\x08\x02"),
+                stream_message(D::Server, trailers, 16, b"grpc-status: 0\r\n"),
+            ],
+        );
+        let header = |name: &str, value: &str| crate::models::ProxyHeader {
+            name: name.into(),
+            value: value.into(),
+        };
+        let flow = Flow {
+            id: "fl_web".into(),
+            stream_kind: Some(StreamKind::GrpcWeb),
+            request_headers: vec![header("content-type", "application/grpc-web-text")],
+            response_headers: vec![header("content-type", "application/grpc-web-text+proto")],
+            ..Default::default()
+        };
+
+        let request = read_body(&db, &blobs, &flow, FlowBody::Request, 1024).await.unwrap();
+        assert_eq!(request.data, BASE64.encode(b"\x00\x00\x00\x00\x02\x08\x01").as_bytes());
+        let response = read_body(&db, &blobs, &flow, FlowBody::Response, 1024).await.unwrap();
+        let mut frames = b"\x00\x00\x00\x00\x02\x08\x02\x80\x00\x00\x00\x10".to_vec();
+        frames.extend_from_slice(b"grpc-status: 0\r\n");
+        assert_eq!(response.data, BASE64.encode(&frames).as_bytes());
+
+        // A trailers-only answer's status came in its headers, not a frame.
+        let trailers_only = Flow {
+            response_headers: vec![
+                header("content-type", "application/grpc-web"),
+                header("grpc-status", "0"),
+            ],
+            ..flow.clone()
+        };
+        let response =
+            read_body(&db, &blobs, &trailers_only, FlowBody::Response, 1024).await.unwrap();
+        assert_eq!(response.data, b"\x00\x00\x00\x00\x02\x08\x02");
+
+        // A gateway's error page in place of a gRPC answer is a body like any other.
+        let gateway = Flow { response_headers: vec![header("content-type", "text/html")], ..flow };
+        assert!(!from_messages(&gateway, FlowBody::Response));
+        assert!(from_messages(&gateway, FlowBody::Request));
     }
 }

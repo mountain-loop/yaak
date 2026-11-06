@@ -589,7 +589,8 @@ impl ProxyCtx {
     ) -> Result<SaveFlowResponse, String> {
         let flow = flows::get(&self.db, flow_id)?;
         let limit = self.capture_body_limit()?;
-        let body = bodies::read_body(&self.blobs, &flow, FlowBody::Request, limit).await?;
+        let body =
+            bodies::read_body(&self.db, &self.blobs, &flow, FlowBody::Request, limit).await?;
         let saved = ClientDb::open(&self.client_data_dir)?.save(&flow, &body, req)?;
 
         let flow = Flow { saved_request_id: Some(saved.request.id.clone()), ..flow };
@@ -894,6 +895,10 @@ pub struct GetFlowBodyResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub decode_error: Option<String>,
+    /// What to know about the body beyond its bytes, as that a WebSocket has none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
 }
 
 #[derive(Deserialize, TS)]
@@ -1029,6 +1034,10 @@ pub struct DecodeGrpcMessageRequest {
     pub flow_id: String,
     #[ts(type = "number")]
     pub seq: i64,
+    /// Decode without a schema even when one is found.
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub schemaless: bool,
 }
 
 #[derive(Deserialize, TS)]
@@ -1093,7 +1102,9 @@ async fn decode_grpc_message(
     req: DecodeGrpcMessageRequest,
 ) -> Result<DecodedGrpcMessage, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
-    grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, req.seq).await.map_err(rpc_error)
+    grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, req.seq, req.schemaless)
+        .await
+        .map_err(rpc_error)
 }
 
 fn list_grpc_schemas(
@@ -1204,8 +1215,9 @@ async fn list_workspaces(
 async fn preview_save(ctx: ProxyCtx, req: PreviewSaveRequest) -> Result<SavePreview, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body =
-        bodies::read_body(&ctx.blobs, &flow, FlowBody::Request, limit).await.map_err(rpc_error)?;
+    let body = bodies::read_body(&ctx.db, &ctx.blobs, &flow, FlowBody::Request, limit)
+        .await
+        .map_err(rpc_error)?;
     let conversion = convert::flow_to_request(&flow, &body);
     let request = conversion.request;
     let body = request.body_type.as_deref().map(|body_type| match body_type {
@@ -1280,13 +1292,15 @@ async fn get_flow_body(
 ) -> Result<GetFlowBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body =
-        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let body = bodies::read_body_or_raw(&ctx.db, &ctx.blobs, &flow, req.which, limit)
+        .await
+        .map_err(rpc_error)?;
     Ok(GetFlowBodyResponse {
         data: BASE64.encode(&body.data),
         truncated: body.truncated,
         stored_size: body.stored_size,
         decode_error: body.decode_error,
+        note: body.note,
     })
 }
 
@@ -1298,8 +1312,13 @@ async fn save_flow_body(
 ) -> Result<SaveFlowBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body =
-        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let body = bodies::read_body_or_raw(&ctx.db, &ctx.blobs, &flow, req.which, limit)
+        .await
+        .map_err(rpc_error)?;
+    // Nothing to save; an empty file would say the body was empty.
+    if let Some(note) = body.note.filter(|_| body.data.is_empty()) {
+        return Err(rpc_error(note));
+    }
     let saved = SaveFlowBodyResponse {
         size: body.data.len(),
         truncated: body.truncated,
@@ -1322,7 +1341,8 @@ async fn viewer_body(
     which: FlowBody,
     limit: usize,
 ) -> Result<bodies::DecodedBody, RpcError> {
-    let body = bodies::read_body(&ctx.blobs, flow, which, limit).await.map_err(rpc_error)?;
+    let body =
+        bodies::read_body(&ctx.db, &ctx.blobs, flow, which, limit).await.map_err(rpc_error)?;
     match body.decode_error {
         Some(e) => Err(rpc_error(e)),
         None => Ok(body),
@@ -1473,6 +1493,16 @@ struct InFlight {
 }
 
 impl InFlight {
+    /// Stops writing the bodies its stream's messages carry, which are read back from them.
+    fn drop_message_bodies(&mut self) {
+        if bodies::from_messages(&self.flow, FlowBody::Request) {
+            self.request_body = None;
+        }
+        if bodies::from_messages(&self.flow, FlowBody::Response) {
+            self.response_body = None;
+        }
+    }
+
     /// Something shown of the flow changed: one written while it streams is written again on
     /// the stream flow interval, so it does not wait for a message to show it.
     fn changed(&mut self) {
@@ -1587,6 +1617,22 @@ fn record_message(
         f.flow.grpc_status = *status;
         f.flow.grpc_message = message.clone();
     }
+    // A body read back from its messages is cut where they are.
+    if message.truncated {
+        match message.direction {
+            yaak_proxy::MessageDirection::Client
+                if bodies::from_messages(&f.flow, FlowBody::Request) =>
+            {
+                f.flow.request_truncated = true
+            }
+            yaak_proxy::MessageDirection::Server
+                if bodies::from_messages(&f.flow, FlowBody::Response) =>
+            {
+                f.flow.response_truncated = true
+            }
+            _ => {}
+        }
+    }
     let seq = f.next_seq;
     f.next_seq += 1;
     f.flow.message_count += 1;
@@ -1656,6 +1702,10 @@ impl FlowSink {
                         f.flow.grpc_service = Some(service.to_string());
                         f.flow.grpc_method = Some(method.to_string());
                     }
+                    // Its messages are the record of the bodies they carry, which are not
+                    // written again on their own. A gRPC response's body is known to be messages
+                    // once its headers are, at its first chunk.
+                    f.drop_message_bodies();
                     // Shown while it streams, rather than only once it ends.
                     self.write_stream_flow(f);
                 }
@@ -1679,7 +1729,9 @@ impl FlowSink {
             ProxyEvent::RequestBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.request_size += len as i64;
-                    f.flow.request_truncated |= data.len() < len;
+                    if !bodies::from_messages(&f.flow, FlowBody::Request) {
+                        f.flow.request_truncated |= data.len() < len;
+                    }
                     write_body_chunk(&mut f.request_body, &data);
                     f.changed();
                 }
@@ -1687,7 +1739,9 @@ impl FlowSink {
             ProxyEvent::RequestBodyComplete { id, size, truncated } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.request_size = size as i64;
-                    f.flow.request_truncated = truncated;
+                    if !bodies::from_messages(&f.flow, FlowBody::Request) {
+                        f.flow.request_truncated = truncated;
+                    }
                     finish_body(f.request_body.take());
                     f.changed();
                 }
@@ -1711,7 +1765,10 @@ impl FlowSink {
             ProxyEvent::ResponseBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.response_size += len as i64;
-                    f.flow.response_truncated |= data.len() < len;
+                    f.drop_message_bodies();
+                    if !bodies::from_messages(&f.flow, FlowBody::Response) {
+                        f.flow.response_truncated |= data.len() < len;
+                    }
                     write_body_chunk(&mut f.response_body, &data);
                     f.changed();
                 }
@@ -1726,7 +1783,9 @@ impl FlowSink {
             } => {
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.response_size = size as i64;
-                    f.flow.response_truncated = truncated;
+                    if !bodies::from_messages(&f.flow, FlowBody::Response) {
+                        f.flow.response_truncated = truncated;
+                    }
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
                     f.flow.error = error;
                     f.flow.cancelled = cancelled;
@@ -2115,6 +2174,99 @@ mod tests {
         }
     }
 
+    /// A gRPC call's bodies are its messages: neither is written to the blob store, and each
+    /// reads back framed again, cut where a message was cut.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn grpc_bodies_are_read_back_from_their_messages() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        let send = |event| tx.send(event).unwrap();
+        send(ProxyEvent::RequestStart {
+            id: 1,
+            started_at: SystemTime::now(),
+            method: "POST".into(),
+            url: "https://api.example.com/pkg.Greeter/SayHello".into(),
+            http_version: "HTTP/2.0".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        });
+        send(ProxyEvent::RequestHeader {
+            id: 1,
+            name: "content-type".into(),
+            value: "application/grpc".into(),
+        });
+        send(ProxyEvent::StreamStart { id: 1, kind: yaak_proxy::StreamKind::Grpc });
+        let request = b"\x00\x00\x00\x00\x05\x0a\x03Ada";
+        send(ProxyEvent::RequestBodyChunk {
+            id: 1,
+            len: request.len(),
+            data: bytes::Bytes::from_static(request),
+        });
+        send(ws_message(1, D::Client, K::GrpcMessage, b"\x0a\x03Ada"));
+        send(ProxyEvent::RequestBodyComplete {
+            id: 1,
+            size: request.len() as u64,
+            truncated: false,
+        });
+        send(ProxyEvent::ResponseStart {
+            id: 1,
+            status: 200,
+            http_version: "HTTP/2.0".into(),
+            remote_addr: None,
+            elapsed_ms: 1,
+        });
+        send(ProxyEvent::ResponseHeader {
+            id: 1,
+            name: "content-type".into(),
+            value: "application/grpc+proto".into(),
+        });
+        // Over the capture limit on the wire: the body stored only the limit's worth before.
+        let response = b"\x00\x00\x00\x00\x0b\x0a\x09Hello Ada";
+        send(ProxyEvent::ResponseBodyChunk {
+            id: 1,
+            len: response.len(),
+            data: bytes::Bytes::from_static(&response[..4]),
+        });
+        let mut cut = ws_message(1, D::Server, K::GrpcMessage, b"\x0a\x09Hel");
+        if let ProxyEvent::Message { message, .. } = &mut cut {
+            message.truncated = true;
+        }
+        send(cut);
+        let trailers = K::GrpcTrailers { status: Some(0), message: None };
+        send(ws_message(1, D::Server, trailers, b"grpc-status: 0\r\n"));
+        send(ProxyEvent::ResponseBodyComplete {
+            id: 1,
+            size: response.len() as u64,
+            truncated: true,
+            elapsed_ms: 5,
+            error: None,
+            cancelled: false,
+        });
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let flow = flows::list(&ctx.db, &Default::default()).unwrap().remove(0);
+        assert_eq!((flow.message_count, flow.grpc_status), (3, Some(0)));
+        assert_eq!((flow.request_size, flow.response_size), (10, 16), "sizes on the wire");
+        assert_eq!((flow.request_truncated, flow.response_truncated), (false, true));
+        let blobs = ctx.blobs.connect();
+        assert!(!blobs.body_exists(&Flow::body_id(&flow.id, FlowBody::Request)).unwrap());
+        assert!(!blobs.body_exists(&Flow::body_id(&flow.id, FlowBody::Response)).unwrap());
+
+        let read = |which| bodies::read_body(&ctx.db, &ctx.blobs, &flow, which, 1 << 20);
+        let request_body = read(FlowBody::Request).await.unwrap();
+        assert_eq!((request_body.data.as_slice(), request_body.truncated), (&request[..], false));
+        // HTTP/2 trailers are no part of the body.
+        let response_body = read(FlowBody::Response).await.unwrap();
+        assert_eq!(response_body.data, b"\x00\x00\x00\x00\x05\x0a\x09Hel");
+        assert!(response_body.truncated);
+        let har = har::export(&ctx.db, &ctx.blobs, &[flow], 1 << 20).await.unwrap();
+        assert_eq!(har.log.entries[0].response.content.size, 10);
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn websocket_messages_are_stored_and_exported() {
         use yaak_proxy::{MessageDirection as D, MessageKind as K};
@@ -2172,6 +2324,11 @@ mod tests {
             (Some("receive"), Some(2))
         );
         assert_eq!(sent[1]["data"], BASE64.encode(&big));
+        // No body after the 101, and it says why.
+        let body = bodies::read_body(&ctx.db, &ctx.blobs, &flow, FlowBody::Response, 1 << 20)
+            .await
+            .unwrap();
+        assert_eq!((body.data.len(), body.note.as_deref()), (0, Some(bodies::WEBSOCKET_BODY_NOTE)));
 
         let names: Vec<_> = event_rx.try_iter().map(|e| e.event).collect();
         assert_eq!(names.iter().filter(|n| **n == "message_write").count(), 3, "{names:?}");

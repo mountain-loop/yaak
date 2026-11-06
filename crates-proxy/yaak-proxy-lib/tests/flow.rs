@@ -151,12 +151,14 @@ async fn flow_is_stored_with_its_bodies() {
 
     assert_eq!(read_raw_body(&ctx.blobs, &flow.id, FlowBody::Request).unwrap(), b"hello proxy");
     assert_eq!(read_raw_body(&ctx.blobs, &flow.id, FlowBody::Response).unwrap(), compressed);
-    let decoded = read_body(&ctx.blobs, &flow, FlowBody::Response, CAPTURE_LIMIT).await.unwrap();
+    let decoded =
+        read_body(&ctx.db, &ctx.blobs, &flow, FlowBody::Response, CAPTURE_LIMIT).await.unwrap();
     let expected = DecodedBody {
         data: b"hello proxy".to_vec(),
         stored_size: compressed.len(),
         truncated: false,
         decode_error: None,
+        note: None,
     };
     assert_eq!(decoded, expected);
 

@@ -19,7 +19,7 @@ const FLAG_TRAILERS: u8 = 0x80;
 const PREFIX_LEN: usize = 5;
 
 /// The gRPC flavor a request's `Content-Type` names, and whether it is gRPC-Web's base64 one.
-pub(crate) fn detect(content_type: Option<&str>) -> Option<(StreamKind, bool)> {
+pub fn detect(content_type: Option<&str>) -> Option<(StreamKind, bool)> {
     let content_type = content_type?.trim().to_ascii_lowercase();
     let essence = content_type.split(';').next().unwrap_or_default().trim();
     if let Some(rest) = essence.strip_prefix("application/grpc-web") {

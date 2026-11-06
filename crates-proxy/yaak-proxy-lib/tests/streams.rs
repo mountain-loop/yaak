@@ -7,6 +7,8 @@ use std::net::SocketAddr;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use bytes::Bytes;
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Full, StreamBody};
@@ -17,7 +19,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use yaak_proxy_lib::models::Flow;
+use yaak_proxy_lib::bodies::read_raw_body;
+use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::settings::ProxySettings;
 use yaak_proxy_lib::{GrpcConfig, ProxyCtx};
 use yaak_rpc::RpcEventEmitter;
@@ -149,6 +152,11 @@ async fn route(
                 .body(full(out))
                 .unwrap()
         }
+        "/pkg.Down/Call" => Response::builder()
+            .status(502)
+            .header("content-type", "text/plain")
+            .body(full("upstream down"))
+            .unwrap(),
         _ => Response::builder()
             .header("content-type", "application/grpc-web+proto")
             .body(full(grpc_frame(0x80, b"grpc-status: 12\r\ngrpc-message: not%20here\r\n")))
@@ -251,6 +259,29 @@ async fn server_sent_events_are_stored_while_the_stream_is_open() {
             .unwrap();
         assert_eq!(payload["data"], "c2Vjb25k", "\"second\" in base64");
 
+        // The events are the body's record: nothing of it went to the blob store, and it reads
+        // back as the client read it.
+        assert!(read_raw_body(&ctx.blobs, &ended.id, FlowBody::Response).unwrap().is_empty());
+        let body = rpc(&ctx, "get_flow_body", json!({ "flowId": ended.id, "which": "response" }))
+            .await
+            .unwrap();
+        let sent = "event: tick\nid: 1\ndata: first\n\ndata: second\n\n";
+        assert_eq!(body["data"], BASE64.encode(sent));
+        assert_eq!(
+            (body["truncated"].as_bool(), body["storedSize"].as_u64()),
+            (Some(false), Some(sent.len() as u64))
+        );
+        let path = dir.path().join("events.txt");
+        let saved = rpc(
+            &ctx,
+            "save_flow_body",
+            json!({ "flowId": ended.id, "which": "response", "path": path }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(saved["raw"], false);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), sent);
+
         // The app heard of the open flow, of each message, and of the end.
         let events: Vec<_> = event_rx.try_iter().map(|e| e.event).collect();
         let writes = |name: &str| events.iter().filter(|e| **e == name).count();
@@ -287,6 +318,20 @@ async fn grpc_web_calls_are_stored_and_decoded() {
             (Some("pkg.Greeter"), Some("SayHello"))
         );
         assert_eq!((flow.grpc_status, flow.message_count), (Some(0), 3));
+        // Both bodies are the call's messages, read back framed as they were sent.
+        for (which, side) in [
+            (FlowBody::Request, "request"),
+            (FlowBody::Response, "response"),
+        ] {
+            assert!(read_raw_body(&ctx.blobs, &flow.id, which).unwrap().is_empty(), "{side}");
+        }
+        let read =
+            |which: &str| rpc(&ctx, "get_flow_body", json!({ "flowId": flow.id, "which": which }));
+        assert_eq!(
+            read("request").await.unwrap()["data"],
+            BASE64.encode(grpc_frame(0, &proto("Ada", None)))
+        );
+        assert_eq!(read("response").await.unwrap()["data"], BASE64.encode(&body));
 
         let failing = format!("http://{upstream}/pkg.Greeter/Missing");
         client
@@ -305,6 +350,25 @@ async fn grpc_web_calls_are_stored_and_decoded() {
         let ids: Vec<_> =
             errors["flows"].as_array().unwrap().iter().map(|f| f["id"].clone()).collect();
         assert_eq!(ids, vec![json!(failed.id)], "a non-zero status is a failed call");
+
+        // A gateway that answers with its own page: that body is stored as any other.
+        let gateway = format!("http://{upstream}/pkg.Down/Call");
+        client
+            .post(&gateway)
+            .header("content-type", "application/grpc-web+proto")
+            .body(grpc_frame(0, &proto("Cy", None)))
+            .send()
+            .await
+            .unwrap();
+        let down = wait_for(&ctx, &gateway, |f| f.elapsed_ms.is_some()).await;
+        assert_eq!(
+            read_raw_body(&ctx.blobs, &down.id, FlowBody::Response).unwrap(),
+            b"upstream down"
+        );
+        let page = rpc(&ctx, "get_flow_body", json!({ "flowId": down.id, "which": "response" }))
+            .await
+            .unwrap();
+        assert_eq!(page["data"], BASE64.encode("upstream down"));
 
         // No schema, and reflection against the server fails: decoded by wire type alone.
         let decode = json!({ "flowId": flow.id, "seq": 1 });
@@ -365,6 +429,15 @@ async fn grpc_web_calls_are_stored_and_decoded() {
 
         let removed = rpc(&ctx, "remove_grpc_schema", json!({ "id": added["id"] })).await.unwrap();
         assert_eq!(removed, true);
+        // Asked for schemaless, it is, with the schema there.
+        let mut forced = decode.clone();
+        forced["schemaless"] = json!(true);
+        let without = rpc(&ctx, "decode_grpc_message", forced).await.unwrap();
+        assert_eq!(without["messageType"], Value::Null);
+        let response_body: Bytes =
+            get(format!("/flows/{}/response-body", flow.id)).await.unwrap().bytes().await.unwrap();
+        assert_eq!(response_body, body, "the control API reads it back the same");
+
         let after = rpc(&ctx, "decode_grpc_message", decode).await.unwrap();
         assert_eq!(after["messageType"], Value::Null);
 
