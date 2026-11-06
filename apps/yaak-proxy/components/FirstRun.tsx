@@ -1,4 +1,4 @@
-import { Button, Icon, LoadingIcon } from "@yaakapp-internal/ui";
+import { Button, Icon, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
@@ -54,8 +54,8 @@ export function FirstRun() {
       <div className="w-full max-w-[40rem]">
         <div className="text-xl font-semibold mb-1.5">Set up Yaak Proxy</div>
         <div className="text-text-subtle text-sm leading-relaxed mb-4">
-          Three steps, once. Afterwards every app on this Mac sends its traffic here, and HTTPS
-          reads as plain text.
+          Three steps, once. Then every app on this Mac sends its traffic here, and HTTPS reads as
+          plain text.
         </div>
         <div className="rounded-lg border border-border-subtle bg-surface divide-y divide-border-subtle">
           <Step
@@ -79,7 +79,7 @@ export function FirstRun() {
                   color={trustState === "fail" ? "default" : "primary"}
                   onClick={() => trust.mutate({})}
                 >
-                  {trustState === "fail" ? "Try again" : "Trust certificate"}
+                  {trustState === "fail" ? "Try Again" : "Trust Certificate"}
                 </Button>
               ) : null
             }
@@ -104,7 +104,7 @@ export function FirstRun() {
                     color={systemState === "fail" ? "default" : "primary"}
                     onClick={() => setSystemProxy.mutate({ enabled: true })}
                   >
-                    {systemState === "fail" ? "Try again" : "Turn on"}
+                    {systemState === "fail" ? "Try Again" : "Turn On"}
                   </Button>
                 ) : null
               }
@@ -139,7 +139,7 @@ export function FirstRun() {
                   color="primary"
                   onClick={() => execute.mutate({ scope: "global", action: "recording_toggle" })}
                 >
-                  Resume recording
+                  Resume Recording
                 </Button>
               ) : null
             }
@@ -154,8 +154,12 @@ export function FirstRun() {
             leftSlot={<Icon icon="square_terminal" size="sm" />}
             onClick={() => void copyEnvironment()}
           >
-            Copy environment
+            Copy Environment
           </Button>
+        </div>
+        <div className="mt-2 text-sm text-text-subtle">
+          Working with an agent? <InlineCode>yaak mcp</InlineCode> gives it the proxy's flows and
+          actions.
         </div>
       </div>
     </div>

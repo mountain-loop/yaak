@@ -1,30 +1,36 @@
 import { Icon, IconButton, PlainInput } from "@yaakapp-internal/ui";
-import { useAtomValue, useSetAtom } from "jotai";
-import { memo, useEffect, useRef, useState } from "react";
-import { exportHar } from "../lib/flowActions";
-import { searchTerms } from "../lib/search";
-import { activeQueryAtom, searchTermsAtom } from "../lib/store";
-import { useShowToast } from "../lib/toast";
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
+import { memo, type RefObject, useEffect, useRef } from "react";
+import {
+  allTrafficTotalAtom,
+  searchTermsAtom,
+  searchTextAtom,
+  searchTextVersionAtom,
+  searchWindowAtom,
+  setSearchTextAtom,
+  shownTotalAtom,
+} from "../lib/store";
 
 /** How long typing settles before the search runs */
 const SEARCH_DEBOUNCE_MS = 200;
 
 /**
- * Searches every flow in the database by URL, method, status and content type, within the
- * sidebar's selection. ⌘F focuses it and Escape clears it.
+ * The header's search over every flow in the database, by URL, method, status and content type,
+ * and the `@app`, `@host` and `@path` terms the sidebar writes. Its placeholder counts the flows;
+ * a search's matches show inside it. ⌘F focuses it and Escape clears it.
  */
 export const SearchBar = memo(function SearchBar() {
-  const [text, setText] = useState("");
+  const [text, setText] = useAtom(searchTextAtom);
   const setTerms = useSetAtom(searchTermsAtom);
-  const query = useAtomValue(activeQueryAtom);
-  const showToast = useShowToast();
+  const setSearchText = useSetAtom(setSearchTextAtom);
+  const version = useAtomValue(searchTextVersionAtom);
+  // Read, not subscribed: `PlaceholderCount` keeps it current without re-rendering the field.
+  const total = useStore().get(allTrafficTotalAtom);
   // PlainInput hands back its <input> as the ref
   const inputRef = useRef<HTMLInputElement>(null);
-  // Bumped to empty the field, which only takes a value from outside when this changes
-  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setTerms(searchTerms(text)), SEARCH_DEBOUNCE_MS);
+    const timer = setTimeout(() => setTerms(text), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [text, setTerms]);
 
@@ -40,72 +46,84 @@ export const SearchBar = memo(function SearchBar() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  // The field is replaced to empty it, so focus moves to the new one.
+  // The field is replaced to take a value from outside, so focus moves to the new one.
   const clear = () => {
-    setText("");
-    setTerms(null);
-    setResetKey((k) => k + 1);
+    setSearchText("");
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   return (
-    <div className="flex items-center gap-1.5 px-3 pb-1.5">
-      <div className="flex-1 min-w-0">
-        <PlainInput
-          ref={inputRef}
-          label="Search flows"
-          hideLabel
-          size="xs"
-          placeholder="Search flows by URL, method, status or type"
-          defaultValue={text}
-          forceUpdateKey={String(resetKey)}
-          onChange={setText}
-          onKeyDownCapture={(e) => {
-            if (e.key === "Escape" && text !== "") {
-              e.stopPropagation();
-              clear();
-            }
-          }}
-          leftSlot={
-            <Icon icon="search" size="sm" className="ml-2 mr-2.5 self-center text-text-subtlest" />
-          }
-          rightSlot={
-            text === "" ? (
-              <kbd className="self-center mr-2 px-1 rounded-sm border border-border-subtle font-sans text-2xs text-text-subtlest">
-                ⌘F
-              </kbd>
-            ) : (
-              <IconButton
-                size="xs"
-                icon="x"
-                title="Clear search"
-                iconColor="secondary"
-                className="self-center"
-                onClick={clear}
-              />
-            )
-          }
-        />
-      </div>
-      <IconButton
-        size="xs"
-        icon="download"
-        iconColor="secondary"
-        title={query == null ? "Export every flow as HAR" : "Export the flows shown as HAR"}
-        onClick={async () => {
-          try {
-            const written = await exportHar(query == null ? {} : { filter: query }, "flows.har");
-            if (written != null) {
-              showToast({
-                message:
-                  written === 1 ? "Exported 1 flow as HAR" : `Exported ${written} flows as HAR`,
-              });
-            }
-          } catch (err) {
-            showToast({ message: `Failed to export HAR: ${String(err)}`, color: "danger" });
-          }
-        }}
-      />
-    </div>
+    <PlainInput
+      ref={inputRef}
+      label="Search flows"
+      hideLabel
+      size="sm"
+      className="font-mono text-xs"
+      placeholder={placeholderFor(total)}
+      defaultValue={text}
+      forceUpdateKey={String(version)}
+      onChange={setText}
+      onKeyDownCapture={(e) => {
+        if (e.key === "Escape" && text !== "") {
+          e.stopPropagation();
+          clear();
+        }
+      }}
+      leftSlot={
+        <>
+          <Icon icon="search" size="sm" className="ml-2 mr-1 self-center text-text-subtlest" />
+          <PlaceholderCount inputRef={inputRef} />
+        </>
+      }
+      rightSlot={
+        text === "" ? (
+          <kbd className="self-center mr-2 px-1 rounded-sm border border-border-subtle font-sans text-2xs text-text-subtlest">
+            ⌘F
+          </kbd>
+        ) : (
+          <div className="flex items-center gap-1 self-center">
+            <MatchCount />
+            <IconButton
+              size="xs"
+              icon="x"
+              title="Clear search"
+              iconColor="secondary"
+              onClick={clear}
+            />
+          </div>
+        )
+      }
+    />
   );
 });
+
+/**
+ * Keeps the placeholder's count current as flows arrive, alone, so new traffic re-renders this
+ * and not the whole field
+ */
+function PlaceholderCount({ inputRef }: { inputRef: RefObject<HTMLInputElement | null> }) {
+  const total = useAtomValue(allTrafficTotalAtom);
+  useEffect(() => {
+    if (inputRef.current != null) inputRef.current.placeholder = placeholderFor(total);
+  }, [inputRef, total]);
+  return null;
+}
+
+/** "Search 4,102 flows", the title and count that sat in the header's middle */
+function placeholderFor(total: number): string {
+  if (total === 0) return "Search flows";
+  return `Search ${total.toLocaleString()} ${total === 1 ? "flow" : "flows"}`;
+}
+
+/** A search's matches of all traffic, "12 of 4,102", inside the field before its x */
+function MatchCount() {
+  const matches = useAtomValue(shownTotalAtom);
+  const total = useAtomValue(allTrafficTotalAtom);
+  const search = useAtomValue(searchWindowAtom);
+  if (search == null || search.loading) return null;
+  return (
+    <span className="font-mono text-2xs text-text-subtlest tabular-nums whitespace-nowrap">
+      {matches.toLocaleString()} of {total.toLocaleString()}
+    </span>
+  );
+}

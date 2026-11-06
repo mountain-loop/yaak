@@ -1,2 +1,3 @@
-// Hardcode font size for now. In the future, this could be configurable.
-document.documentElement.style.fontSize = "14px";
+// Yaak's default interface size, so the two apps read as one family. Later from the shared
+// Interface settings.
+document.documentElement.style.fontSize = "15px";

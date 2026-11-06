@@ -1,12 +1,16 @@
 import { Dropdown, type DropdownItem, IconButton } from "@yaakapp-internal/ui";
-import { useAtomValue } from "jotai";
-import { useRpcMutation } from "../hooks/useRpcMutation";
-import { flowTotalAtom } from "../lib/store";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useState } from "react";
+import { clearFlowsAtom, flowTotalAtom } from "../lib/store";
 
-/** Deletes every flow, once confirmed in its menu, which its hotkey opens too */
+/**
+ * Clears every flow, once confirmed in its menu, which its hotkey opens too. The list empties at
+ * once; the flows are deleted in the background.
+ */
 export function ClearFlowsButton() {
   const total = useAtomValue(flowTotalAtom);
-  const clear = useRpcMutation("clear_flows");
+  const clear = useSetAtom(clearFlowsAtom);
+  const [error, setError] = useState<string | null>(null);
 
   const items: DropdownItem[] = [
     {
@@ -14,11 +18,11 @@ export function ClearFlowsButton() {
       label: (
         <div className="px-1.5 py-1 max-w-[17rem]">
           <div className="text-sm text-text">
-            {total === 1 ? "Clear 1 flow?" : `Clear all ${total} flows?`}
+            {total === 1 ? "Clear 1 flow?" : `Clear all ${total.toLocaleString()} flows?`}
           </div>
           <div className="text-xs text-text-subtle mt-0.5">
-            {clear.error != null ? (
-              <span className="text-danger">{clear.error.message}</span>
+            {error != null ? (
+              <span className="text-danger">{error}</span>
             ) : (
               "They are deleted from disk with their bodies, for good."
             )}
@@ -31,7 +35,13 @@ export function ClearFlowsButton() {
       label: "Clear",
       icon: "trash",
       color: "danger",
-      onSelect: () => clear.mutate({}),
+      onSelect: () => {
+        setError(null);
+        clear().catch((err: unknown) => {
+          const message = (err as { message?: unknown } | null)?.message;
+          setError(typeof message === "string" ? message : String(err));
+        });
+      },
     },
   ];
 

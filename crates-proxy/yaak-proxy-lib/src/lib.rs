@@ -27,7 +27,7 @@ use crate::grpc::{DecodedGrpcMessage, GrpcSchema, GrpcState};
 use crate::helper::HelperState;
 use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::messages::FlowMessage;
-use crate::models::{Flow, FlowBody, FlowIden, ModelPayload, ProxyHeader, StreamKind, find_header};
+use crate::models::{Flow, FlowBody, ModelPayload, ProxyHeader, StreamKind, find_header};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
 use crate::settings::{HttpVersion, ProxySettings};
 use base64::Engine;
@@ -40,7 +40,7 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource, UpsertModelInfo};
@@ -72,6 +72,12 @@ pub struct ProxyCtx {
     system_proxy_on: Arc<AtomicBool>,
     /// Why the engine last failed to start, until it starts.
     start_error: Arc<Mutex<Option<String>>>,
+    /// Cleared flows are being deleted in the background. Held while the deleter decides it is
+    /// done, so a clear either sees it running or starts another.
+    deleting_cleared: Arc<Mutex<bool>>,
+    /// This context's name as the one deleting cleared flows, which the database leases to one
+    /// process at a time.
+    cleaner_id: String,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -98,11 +104,23 @@ impl ProxyCtx {
             recording: Arc::new(Mutex::new(RecordingLog::default())),
             system_proxy_on: Arc::new(AtomicBool::new(false)),
             start_error: Arc::new(Mutex::new(None)),
+            deleting_cleared: Arc::new(Mutex::new(false)),
+            cleaner_id: yaak_database::generate_prefixed_id("cln"),
             db,
             blobs,
             events,
             grpc: GrpcState::default(),
-        })
+        }
+        // A clear the last run did not finish deleting.
+        .with_cleared_deleting())
+    }
+
+    fn with_cleared_deleting(self) -> Self {
+        let pending = self.db.with_conn(|c| flows::clear_mark(c.conn().resolve())) > 0;
+        if pending {
+            self.delete_cleared();
+        }
+        self
     }
 
     /// The protoc that compiles `.proto` files attached for gRPC decoding, as the app bundles
@@ -596,7 +614,7 @@ impl ProxyCtx {
         self.db
             .with_tx(|tx| {
                 // Cleared while saving: recording it would bring the flow back without bodies.
-                if tx.find_optional::<Flow>(FlowIden::Id, flow_id).is_none() {
+                if flows::find_in(tx.conn().resolve(), flow_id).is_none() {
                     return Ok(());
                 }
                 let (flow, created) = tx.upsert(&flow, &UpdateSource::Background)?;
@@ -611,14 +629,88 @@ impl ProxyCtx {
         Ok(saved)
     }
 
-    /// Deletes every flow and its bodies, and tells the app so its list empties. Returns how
-    /// many there were.
+    /// Clears every flow at once and tells the app so its list empties, then deletes them and
+    /// their bodies in the background. Returns how many there were.
     pub fn clear_flows(&self) -> Result<usize, String> {
-        let cleared = flows::clear(&self.db, &self.blobs)?;
+        let cleared = flows::clear(&self.db)?;
         // After the commit, so the app reloads what is left. Flows written before the clear sent
         // their events before it began.
         self.events.emit("flows_cleared", &FlowsClearedPayload {});
+        self.delete_cleared();
         Ok(cleared)
+    }
+
+    /// Deletes cleared flows on a background thread, a batch per transaction, unless one is
+    /// already doing so. Yields the writer between batches, so new flows are written meanwhile.
+    fn delete_cleared(&self) {
+        if !claim(&self.deleting_cleared) {
+            return;
+        }
+        let (db, blobs, running, cleaner) = (
+            self.db.clone(),
+            self.blobs.clone(),
+            self.deleting_cleared.clone(),
+            self.cleaner_id.clone(),
+        );
+        let spawned = std::thread::Builder::new().name("proxy-clear".into()).spawn(move || {
+            lower_thread_priority();
+            let mut retry = DELETE_PAUSE;
+            loop {
+                match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH, &cleaner) {
+                    Ok(flows::Cleaned::More) => {
+                        retry = DELETE_PAUSE;
+                        std::thread::sleep(DELETE_PAUSE);
+                    }
+                    // Another process, the app or the CLI, is deleting them; checked again now
+                    // and then, in case it stops before it is done.
+                    Ok(flows::Cleaned::Elsewhere) => std::thread::sleep(CLEANER_WAIT),
+                    Ok(flows::Cleaned::Done) => {
+                        *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
+                        // A clear since the last batch saw this running and left its flows to
+                        // it, so they are deleted here unless another thread has taken over.
+                        if flows::clear_mark_in(&db) == 0 || !claim(&running) {
+                            return;
+                        }
+                    }
+                    // A busy database, most likely: tried again, waiting longer each time, so a
+                    // clear is never left half done until the next launch.
+                    Err(e) => {
+                        warn!("{e}");
+                        std::thread::sleep(retry);
+                        retry = (retry * 4).min(DELETE_RETRY_MAX);
+                    }
+                }
+            }
+        });
+        if let Err(e) = spawned {
+            warn!("Failed to start deleting cleared flows: {e}");
+            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        }
+    }
+}
+
+/// Sets `flag`, returning false when it was already set.
+fn claim(flag: &Mutex<bool>) -> bool {
+    let mut set = flag.lock().unwrap_or_else(PoisonError::into_inner);
+    !std::mem::replace(&mut *set, true)
+}
+
+/// How long deleting cleared flows rests between batches, leaving the database to new flows.
+const DELETE_PAUSE: Duration = Duration::from_millis(5);
+
+/// The longest deleting cleared flows waits before trying a failed batch again.
+const DELETE_RETRY_MAX: Duration = Duration::from_secs(5);
+
+/// How often a process checks on cleared flows another process is deleting.
+const CLEANER_WAIT: Duration = Duration::from_secs(15);
+
+/// Runs the calling thread below the app's own work, where the platform has priorities: macOS's
+/// utility class, not background, whose disk throttling can stall a delete for as long as the
+/// Mac is busy.
+fn lower_thread_priority() {
+    #[cfg(target_os = "macos")]
+    unsafe {
+        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_UTILITY, 0);
     }
 }
 
@@ -1399,8 +1491,10 @@ fn settings(ctx: &ProxyCtx) -> Result<ProxySettings, RpcError> {
     ctx.settings().map_err(rpc_error)
 }
 
+/// A flow by id, with its number; not one that is cleared, though its row may wait to be
+/// deleted.
 fn find_flow(ctx: &ProxyCtx, flow_id: &str) -> Result<Flow, RpcError> {
-    ctx.db.with_conn(|db| db.find_one::<Flow>(FlowIden::Id, flow_id)).map_err(rpc_error)
+    flows::get(&ctx.db, flow_id).map_err(rpc_error)
 }
 
 fn rpc_error(e: impl ToString) -> RpcError {
@@ -1853,6 +1947,7 @@ impl FlowSink {
             flow.client_name = Some(app.name);
             flow.client_bundle_id = app.bundle_id;
             flow.client_path = Some(app.path);
+            flow.client_cwd = app.cwd;
         }
         let persisted = f.persisted;
         let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, persisted));
@@ -1879,6 +1974,7 @@ impl FlowSink {
             flow.client_name = Some(app.name);
             flow.client_bundle_id = app.bundle_id;
             flow.client_path = Some(app.path);
+            flow.client_cwd = app.cwd;
         }
         let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, f.persisted));
         match written {
@@ -1898,7 +1994,8 @@ impl FlowSink {
         persisted: bool,
     ) -> Result<bool, yaak_database::Error> {
         if persisted {
-            let Some(stored) = ctx.find_optional::<Flow>(FlowIden::Id, &flow.id) else {
+            // Not one cleared since, whose row may wait to be deleted.
+            let Some(stored) = flows::find_in(ctx.conn().resolve(), &flow.id) else {
                 return Ok(false);
             };
             flow.saved_request_id = stored.saved_request_id;
@@ -1926,8 +2023,14 @@ impl FlowSink {
     }
 }
 
+/// The flow is stored and not cleared: a cleared one's row may wait to be deleted.
 fn flow_exists(conn: &rusqlite::Connection, flow_id: &str) -> bool {
-    conn.query_row("SELECT 1 FROM flows WHERE id = ?1", [flow_id], |_| Ok(())).is_ok()
+    conn.query_row(
+        "SELECT 1 FROM flows WHERE id = ?1 AND rowid > ?2",
+        rusqlite::params![flow_id, flows::clear_mark(conn)],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 fn clamp_ms(ms: u64) -> i32 {
@@ -2176,8 +2279,28 @@ mod tests {
         let names: Vec<_> = event_rx.try_iter().map(|e| e.event).collect();
         assert_eq!(names.iter().filter(|n| **n == "message_write").count(), 3, "{names:?}");
 
+        // Gone from listings at once, and with its messages and their payloads once the
+        // background delete has run.
         ctx.clear_flows().unwrap();
+        assert_eq!(flows::count(&ctx.db).unwrap(), 0);
+        wait_for_cleared(&ctx);
         assert!(!ctx.blobs.connect().body_exists(&stored[1].blob_id()).unwrap());
+        let left: i64 = ctx.db.with_conn(|c| {
+            c.conn()
+                .resolve()
+                .query_row("SELECT count(*) FROM flow_messages", [], |r| r.get(0))
+                .unwrap()
+        });
+        assert_eq!(left, 0);
+    }
+
+    /// Waits for the background delete a clear starts to finish.
+    fn wait_for_cleared(ctx: &ProxyCtx) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while ctx.db.with_conn(|c| flows::clear_mark(c.conn().resolve())) > 0 {
+            assert!(std::time::Instant::now() < deadline, "cleared flows were not deleted");
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     #[test]
@@ -2203,6 +2326,9 @@ mod tests {
         tx.send(ProxyEvent::StreamEnd { id: 1, elapsed_ms: 9, error: None }).unwrap();
         drop(tx);
         event_loop.join().unwrap();
+        assert_eq!(flows::count(&ctx.db).unwrap(), 0, "not brought back by its end");
+        // The messages written before the clear go with the background delete.
+        wait_for_cleared(&ctx);
         assert_eq!(flows::count(&ctx.db).unwrap(), 0, "not brought back by its end");
         assert_eq!(messages::count(&ctx.db, &flow.id).unwrap(), 0);
         let blobs = ctx.blobs.connect().list_body_ids().unwrap();

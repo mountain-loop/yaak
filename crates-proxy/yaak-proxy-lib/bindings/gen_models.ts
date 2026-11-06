@@ -4,7 +4,12 @@ import type { ModelChangeEvent } from "./ModelChangeEvent";
 /**
  * One proxied request and its response. The bodies are in `blobs.sqlite`, not the row.
  */
-export type Flow = { id: string, createdAt: string, updatedAt: string, startedAt: string, method: string, url: string, 
+export type Flow = { id: string, 
+/**
+ * The flow's short handle, `#1429`: its rowid, which grows as flows are written and is kept
+ * across updates. Zero when read without it.
+ */
+number: number, createdAt: string, updatedAt: string, startedAt: string, method: string, url: string, 
 /**
  * Version spoken by the client.
  */
@@ -66,6 +71,11 @@ clientBundleId: string | null,
  * Its app bundle's path, or its executable's outside an app.
  */
 clientPath: string | null, 
+/**
+ * The working directory of a process outside an app, whose folder names it: `node` in
+ * `fieldwork`.
+ */
+clientCwd: string | null, 
 /**
  * The flow carries a stream of messages, listed with `list_messages`. It is written as the
  * stream opens and again as messages land; it is open until `elapsedMs`, `error` or

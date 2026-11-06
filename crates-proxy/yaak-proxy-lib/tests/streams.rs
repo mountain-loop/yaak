@@ -371,6 +371,12 @@ async fn grpc_web_calls_are_stored_and_decoded() {
         // Clearing removes the messages with their flows.
         rpc(&ctx, "clear_flows", json!({})).await.unwrap();
         assert!(rpc(&ctx, "list_messages", json!({ "flowId": flow.id })).await.is_err());
+        // The rows go with the background delete the clear starts.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while ctx.db.with_conn(|c| yaak_proxy_lib::flows::clear_mark(c.conn().resolve())) > 0 {
+            assert!(Instant::now() < deadline, "cleared flows were not deleted");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         let left: i64 = ctx.db.with_conn(|c| {
             c.conn()
                 .resolve()

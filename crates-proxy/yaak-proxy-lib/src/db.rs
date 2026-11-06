@@ -77,14 +77,26 @@ pub fn open_blobs_read_only(path: &Path) -> Result<BlobManager> {
     Ok(BlobManager::new(readers.clone(), readers))
 }
 
-/// `sidebar_path(url)`, the app sidebar's place for a URL, for filtering by its nodes.
+/// The functions filters use: `sidebar_path(url)`, the app sidebar's place for a URL, and
+/// `under_site(url, site)`, for filtering by its nodes; `folder_name(dir)`, for naming a program
+/// by its folder; and `is_system(bundle_id, path)`, for macOS's own daemons.
 fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
-    conn.create_scalar_function(
-        "sidebar_path",
-        1,
-        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
-        |ctx| Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?)),
-    )
+    let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
+    conn.create_scalar_function("sidebar_path", 1, flags, |ctx| {
+        Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?))
+    })?;
+    conn.create_scalar_function("under_site", 2, flags, |ctx| {
+        Ok(crate::flows::under_site(&ctx.get::<String>(0)?, &ctx.get::<String>(1)?))
+    })?;
+    conn.create_scalar_function("folder_name", 1, flags, |ctx| {
+        let dir = ctx.get::<Option<String>>(0)?;
+        Ok(crate::flows::folder_name(dir.as_deref()).map(str::to_string))
+    })?;
+    conn.create_scalar_function("is_system", 2, flags, |ctx| {
+        let bundle_id = ctx.get::<Option<String>>(0)?;
+        let path = ctx.get::<Option<String>>(1)?;
+        Ok(crate::flows::is_system(bundle_id.as_deref(), path.as_deref()))
+    })
 }
 
 fn read_only_pool(path: &Path) -> Result<SqlitePool> {
@@ -163,6 +175,26 @@ mod tests {
         let failed =
             crate::flows::FlowFilter { status: Some("error".into()), ..Default::default() };
         assert_eq!(crate::flows::list(&db, &failed).unwrap().len(), 0);
+
+        // Filters by app work without the folder column, and count without the clear mark.
+        drop(db);
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE flows ADD COLUMN client_name TEXT;
+            ALTER TABLE flows ADD COLUMN client_bundle_id TEXT;
+            ALTER TABLE flows ADD COLUMN client_path TEXT;
+            ALTER TABLE flows DROP COLUMN client_cwd;
+            DROP TABLE flow_clear_mark;
+            UPDATE flows SET client_name = 'curl', client_path = '/usr/bin/curl';",
+        )
+        .unwrap();
+        drop(conn);
+        let db = ProxyQueryManager::open_read_only(&path).unwrap();
+        let filter =
+            crate::flows::FlowFilter { app: Some(vec!["curl".into()]), ..Default::default() };
+        let (page, total, matching) = crate::flows::page(&db, &filter).unwrap();
+        assert_eq!((page.len(), total, matching), (1, 1, Some(1)));
+        assert_eq!(page[0].number, 1);
     }
 
     #[test]
@@ -198,7 +230,16 @@ mod tests {
             .unwrap()
             .map(|t| t.unwrap())
             .collect();
-        assert_eq!(tables, vec!["_sqlx_migrations", "flow_messages", "flows", "grpc_schemas"]);
+        assert_eq!(
+            tables,
+            vec![
+                "_sqlx_migrations",
+                "flow_clear_mark",
+                "flow_messages",
+                "flows",
+                "grpc_schemas"
+            ]
+        );
 
         let flow_columns = columns(&conn, "flows");
         assert!(flow_columns.contains(&"response_truncated".to_string()));
@@ -207,6 +248,7 @@ mod tests {
             "client_name",
             "client_bundle_id",
             "client_path",
+            "client_cwd",
             "cancelled",
             "stream_kind",
             "message_count",
@@ -229,5 +271,75 @@ mod tests {
 
         let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert_eq!(journal_mode, "wal");
+    }
+
+    #[test]
+    fn takes_the_folder_and_clear_mark_after_the_messages_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("proxy.db");
+
+        // As a build with every migration up to the messages one left it, with a stream in it.
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE _sqlx_migrations (
+                version TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );",
+        )
+        .unwrap();
+        let mut files: Vec<_> = MIGRATIONS
+            .files()
+            .map(|f| (f.path().to_string_lossy().into_owned(), f.contents_utf8().unwrap()))
+            .filter(|(name, _)| name.as_str() < "00000007")
+            .collect();
+        files.sort();
+        assert_eq!(files.len(), 6);
+        for (name, sql) in files {
+            conn.execute_batch(sql).unwrap();
+            conn.execute(
+                "INSERT INTO _sqlx_migrations (version, description) VALUES (?, ?)",
+                [&name[..8], &name],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO flows (id, url, method, stream_kind, message_count, client_path)
+                VALUES ('fl_ws', 'wss://example.com/socket', 'GET', 'websocket', 2, '/bin/node');
+            INSERT INTO flow_messages (id, flow_id, seq, direction, kind, timestamp)
+                VALUES ('fm_1', 'fl_ws', 1, 'client', 'text', CURRENT_TIMESTAMP);",
+        )
+        .unwrap();
+        drop(conn);
+
+        drop(ProxyQueryManager::new(&path).unwrap());
+
+        let conn = Connection::open(&path).unwrap();
+        assert!(columns(&conn, "flows").contains(&"client_cwd".to_string()));
+        let applied: Vec<String> = conn
+            .prepare("SELECT version FROM _sqlx_migrations ORDER BY version")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|v| v.unwrap())
+            .collect();
+        assert_eq!(&applied[applied.len() - 2..], ["00000007", "00000008"]);
+        let mark_columns = columns(&conn, "flow_clear_mark");
+        assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
+        drop(conn);
+
+        // The stream and its messages come through, and clearing then deleting takes both.
+        let db = ProxyQueryManager::new(&path).unwrap();
+        let blobs = yaak_models::init_blob_store(dir.path().join("blobs.sqlite")).unwrap();
+        let listed = crate::flows::list(&db, &Default::default()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!((listed[0].id.as_str(), listed[0].message_count), ("fl_ws", 2));
+        assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 1);
+        assert_eq!(crate::flows::clear(&db).unwrap(), 1);
+        assert_eq!(
+            crate::flows::delete_cleared(&db, &blobs, 500, "cln_test"),
+            Ok(crate::flows::Cleaned::Done)
+        );
+        assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 0);
     }
 }

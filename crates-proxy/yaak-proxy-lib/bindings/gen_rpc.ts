@@ -52,7 +52,11 @@ bundleId: string | null,
 /**
  * The outermost `.app` bundle's path, or the executable's path when there is no bundle.
  */
-path: string, };
+path: string, 
+/**
+ * The working directory of a process outside an app, as it was when first looked up.
+ */
+cwd: string | null, };
 
 export type DecodeGrpcMessageRequest = { flowId: string, seq: number, };
 
@@ -122,14 +126,28 @@ q?: string,
 host?: string, 
 /**
  * Only flows under one of these hosts or paths, as the app's sidebar names them:
- * `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host.
+ * `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host. A host
+ * written `*.github.com` is a site: `github.com` and every host below it.
  */
 under?: Array<string>, 
 /**
- * Only flows from one of these apps, by bundle id, or by path for a process outside an
- * app bundle.
+ * Only flows from one of these apps: by bundle id, by path for a process outside an app
+ * bundle, by name in any case (`slack`), or, for a process outside an app, by the folder
+ * it ran in (`fieldwork`).
  */
 app?: Array<string>, 
+/**
+ * Only flows from macOS's own daemons (true), or none of them (false), as [`is_system`]
+ * tells them by their executable.
+ */
+system?: boolean, 
+/**
+ * Only flows one of these groups covers, each judged on its own: several sidebar rows
+ * selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
+ * pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
+ * carried by a query string.
+ */
+any?: Array<FlowFilter>, 
 /**
  * The method, any case.
  */

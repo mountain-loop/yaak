@@ -6,7 +6,7 @@ import { type ReactNode, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ProxyLayout } from "./components/ProxyLayout";
 import { useHotkeyContextValue } from "./lib/hotkeys";
-import { syncFlows, syncProxyState } from "./lib/store";
+import { syncFlows, syncProxyState, syncSidebarSelection } from "./lib/store";
 import "./main.css";
 
 const queryClient = new QueryClient();
@@ -14,6 +14,7 @@ const jotaiStore = createStore();
 
 syncProxyState(jotaiStore);
 syncFlows(jotaiStore);
+syncSidebarSelection(jotaiStore);
 
 function Hotkeys({ children }: { children: ReactNode }) {
   return <HotkeyProvider value={useHotkeyContextValue()}>{children}</HotkeyProvider>;
