@@ -3,15 +3,42 @@ import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import type { HTMLAttributes } from "react";
 import { appInfo } from "../../lib/appInfo";
-import { Icon } from "@yaakapp-internal/ui";
+import { ExternalLink, isYaakUrl } from "@yaakapp-internal/ui";
 
 interface Props extends HTMLAttributes<HTMLAnchorElement> {
   href: string;
   noUnderline?: boolean;
 }
 
+/** Tags a link to yaak.app with which app it came from */
+export function withYaakRef(href: string): string {
+  if (!isYaakUrl(href)) return href;
+  const url = new URL(href);
+  url.searchParams.set("ref", appInfo.identifier);
+  return url.toString();
+}
+
+/** Opens a link outside the app, tagged as `Link` tags it */
+export function openExternalUrl(href: string) {
+  void platform.openUrl(withYaakRef(href));
+}
+
 export function Link({ href, children, noUnderline, className, ...other }: Props) {
   const isExternal = href.match(/^https?:\/\//);
+
+  if (isExternal) {
+    return (
+      <ExternalLink
+        href={withYaakRef(href)}
+        noUnderline={noUnderline}
+        onOpen={openExternalUrl}
+        className={className}
+        {...other}
+      >
+        {children}
+      </ExternalLink>
+    );
+  }
 
   className = classNames(
     className,
@@ -19,37 +46,6 @@ export function Link({ href, children, noUnderline, className, ...other }: Props
     "inline-flex items-center hover:underline group",
     !noUnderline && "underline",
   );
-
-  if (isExternal) {
-    const isYaakLink = href.startsWith("https://yaak.app");
-    let finalHref = href;
-    if (isYaakLink) {
-      const url = new URL(href);
-      url.searchParams.set("ref", appInfo.identifier);
-      finalHref = url.toString();
-    }
-    return (
-      // eslint-disable-next-line react/jsx-no-target-blank
-      <a
-        href={finalHref}
-        target="_blank"
-        rel={isYaakLink ? undefined : "noopener noreferrer"}
-        onClick={(e) => {
-          e.preventDefault();
-          void platform.openUrl(finalHref);
-        }}
-        className={className}
-        {...other}
-      >
-        <span className="pr-5">{children}</span>
-        <Icon
-          className="inline absolute right-0.5 top-[0.3em] opacity-70 group-hover:opacity-100"
-          size="xs"
-          icon="external_link"
-        />
-      </a>
-    );
-  }
 
   return (
     <RouterLink to={href} className={className} {...other}>
