@@ -21,7 +21,7 @@ interface Props {
  * existed have no version and stay quiet forever.
  */
 export function RequestVersionDropdown({ response }: Props) {
-  const { data: comparison } = useRequestVersion(response.versionId, response.requestId);
+  const comparison = useRequestVersion(response.versionId, response.requestId);
   if (comparison == null || !comparison.differs) {
     return null;
   }
