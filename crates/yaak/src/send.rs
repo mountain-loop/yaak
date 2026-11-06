@@ -27,7 +27,6 @@ use yaak_models::models::{
     HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
     ProxySettingAuth, ResolvedHttpRequestSettings,
 };
-use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::render_http_request;
 use yaak_models::util::{UpdateSource, generate_prefixed_id};
@@ -437,28 +436,24 @@ pub fn resolve_send_inputs(
             client_certificates: settings.client_certificates,
         },
         cookie_store: cookies.map(CookieStore::from_cookies),
-        // Captured here rather than deeper in the send because this is the last place that
-        // still holds the *stored* request: further down it has been resolved against its
-        // folder and workspace and then rendered, and neither of those is what a restore
-        // should put back. Every host reaches sending through this function — the desktop,
-        // the CLI, plugin-triggered sends — so every response gets a version without each
-        // of them remembering to ask for one.
-        version_id: snapshot_request_for_send(query_manager, request),
+        // Every host reaches sending through this function — the desktop, the CLI,
+        // plugin-triggered sends — so every response gets a version without each of them
+        // remembering to ask for one. The version is of the stored row, not of `request`:
+        // what a send holds may already be resolved or rendered (a plugin can send a
+        // request it rendered itself), and neither is what a restore should put back.
+        version_id: snapshot_request_for_send(query_manager, &request.id),
     })
 }
 
-/// Capture the request in its own transaction. Like the snapshot itself, a failure
-/// to get the write connection is not worth failing the send over.
-fn snapshot_request_for_send(
-    query_manager: &QueryManager,
-    request: &HttpRequest,
-) -> Option<String> {
+/// Capture the stored request in its own transaction. Like the snapshot itself, a
+/// failure to get the write connection is not worth failing the send over.
+fn snapshot_request_for_send(query_manager: &QueryManager, request_id: &str) -> Option<String> {
+    // An unsaved request has nothing to version; don't take the writer for it
+    if request_id.is_empty() {
+        return None;
+    }
     query_manager
-        .with_tx(|tx| {
-            Ok::<_, yaak_models::error::Error>(
-                tx.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
-            )
-        })
+        .with_tx(|tx| Ok::<_, yaak_models::error::Error>(tx.snapshot_request_for_send(request_id)))
         .unwrap_or_else(|err| {
             warn!("Failed to snapshot request before send: {err}");
             None
@@ -1534,6 +1529,70 @@ mod tests {
             })
             .expect("Failed to edit request");
         assert!(!db.request_matches_version(&version).expect("Failed to compare"));
+    }
+
+    /// A plugin can send a request it has already rendered. The version must
+    /// still be of the stored row, templates and all, or a restore would write
+    /// literal values (secrets included) over what the user typed.
+    #[tokio::test]
+    async fn a_send_of_a_rendered_request_versions_the_stored_templates() {
+        let (query_manager, blob_manager, temp_dir) = seed_send_storage();
+        let header = |value: &str| yaak_models::models::HttpRequestHeader {
+            name: "Authorization".to_string(),
+            value: value.to_string(),
+            ..Default::default()
+        };
+        let stored = query_manager
+            .with_tx(|tx| {
+                tx.upsert_http_request(
+                    &HttpRequest {
+                        workspace_id: "wk_test".to_string(),
+                        url: "${[ base_url ]}/test".to_string(),
+                        headers: vec![header("Bearer ${[ token ]}")],
+                        ..Default::default()
+                    },
+                    &UpdateSource::Sync,
+                )
+            })
+            .expect("Failed to seed request");
+
+        let rendered = HttpRequest {
+            url: "http://localhost/test".to_string(),
+            headers: vec![header("Bearer s3cret")],
+            ..stored.clone()
+        };
+        let response = stored_send(&query_manager, &blob_manager, temp_dir.path(), &rendered).await;
+
+        let version_id = response.version_id.expect("a stored request must record a version");
+        let version =
+            query_manager.connect().get_model_version(&version_id).expect("Failed to load version");
+        assert_eq!(version.document.get("url").unwrap(), "${[ base_url ]}/test");
+        let headers = version.document.get("headers").unwrap().to_string();
+        assert!(headers.contains("Bearer ${[ token ]}"), "headers were {headers}");
+        assert!(!headers.contains("s3cret"), "a rendered secret reached version history");
+        assert!(
+            query_manager.connect().request_matches_version(&version).unwrap(),
+            "an untouched request must not look changed",
+        );
+    }
+
+    /// A request with an id but no stored row has nothing to version, and
+    /// resolving its send must not fail for it.
+    #[test]
+    fn resolving_a_send_of_an_unstored_request_records_no_version() {
+        let (query_manager, _blob_manager, _temp_dir) = seed_send_storage();
+        let transient = HttpRequest {
+            id: "rq_not_stored".to_string(),
+            workspace_id: "wk_test".to_string(),
+            url: "http://localhost/test".to_string(),
+            ..Default::default()
+        };
+
+        let inputs = resolve_send_inputs(&query_manager, &transient, None, None)
+            .expect("Failed to resolve send inputs");
+
+        assert_eq!(inputs.version_id, None);
+        assert!(query_manager.connect().list_model_versions("rq_not_stored").unwrap().is_empty());
     }
 
     async fn stored_send(
