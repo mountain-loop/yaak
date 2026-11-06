@@ -17,6 +17,7 @@ use hyper::http::request::Parts;
 use hyper::http::uri::{Authority, PathAndQuery, Scheme};
 use hyper::upgrade::OnUpgrade;
 use hyper::{Method, Request, Response, StatusCode, Uri};
+#[cfg(not(target_os = "macos"))]
 use hyper_util::client::legacy::connect::HttpInfo;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use log::{debug, info, warn};
@@ -215,35 +216,60 @@ pub(crate) async fn handle_request(
         return Ok(handle_connect(req, client, engine));
     }
 
+    // A request the engine sent that was routed back to it, as iCloud Private Relay does with
+    // port 80 while the system proxy is on: forwarding it again would loop forever. It is the
+    // engine's own copy of a flow already recorded, which gets this answer, so it records none.
+    if carries_via(&req, &engine) {
+        debug!("Refused {} {}: it looped back to Yaak Proxy", req.method(), req.uri());
+        return Ok(Response::builder()
+            .status(StatusCode::LOOP_DETECTED)
+            .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+            .body(text_body("request looped back to Yaak Proxy"))
+            .unwrap());
+    }
+
     // Some clients send a bare path (`POST /api`) as they would to the server itself.
     let from_host = req.uri().authority().is_none();
-    let rejected = if from_host { url_from_host(&mut req, &engine).err() } else { None };
+    let rejected = if from_host { url_from_host(&mut req).err() } else { None };
     let flow = Flow::begin(engine.clone(), client, &req, req.uri().to_string());
     if let Some((status, error)) = rejected {
         return Ok(flow.reject(status, error));
     }
-    if from_host {
-        req.headers_mut().append(VIA, engine.via.clone());
-    }
+    req.headers_mut().append(VIA, engine.via.clone());
 
     let (parts, body) = req.into_parts();
     let outgoing = Request::from_parts(parts, flow.capture_request(body));
     Ok(match engine.http_client.request(outgoing).await {
         Ok(resp) => {
-            let remote_addr = resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr());
+            let remote_addr = plain_remote_addr(&resp);
             flow.respond(resp, remote_addr)
         }
         Err(e) => flow.fail(error_chain(&e)),
     })
 }
 
+/// The address `Engine::http_client` connected to for `resp`.
+fn plain_remote_addr(resp: &Response<Incoming>) -> Option<SocketAddr> {
+    #[cfg(target_os = "macos")]
+    return resp.extensions().get::<crate::nw::RemoteAddr>().map(|a| a.0);
+    #[cfg(not(target_os = "macos"))]
+    resp.extensions().get::<HttpInfo>().map(|i| i.remote_addr())
+}
+
+/// Whether `req` carries this engine's `Via` mark, which it adds to every plain-HTTP request it
+/// forwards.
+fn carries_via(req: &Request<Incoming>, engine: &Engine) -> bool {
+    let via = engine.via.to_str().unwrap_or_default();
+    req.headers()
+        .get_all(VIA)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .any(|v| v.split(',').any(|hop| hop.trim() == via))
+}
+
 /// Gives a bare-path request the `http://` URL its `Host` names. Fails when there is no usable
-/// `Host`, or when the request carries this engine's `Via` mark: then it is one the engine sent
-/// that was routed back to it, and forwarding it again would loop forever.
-fn url_from_host(
-    req: &mut Request<Incoming>,
-    engine: &Engine,
-) -> Result<(), (StatusCode, &'static str)> {
+/// `Host`.
+fn url_from_host(req: &mut Request<Incoming>) -> Result<(), (StatusCode, &'static str)> {
     let Some(host) = req.headers().get(HOST) else {
         return Err((StatusCode::BAD_REQUEST, "no host in request"));
     };
@@ -258,17 +284,6 @@ fn url_from_host(
     }
     *req.uri_mut() =
         Uri::from_parts(parts).map_err(|_| (StatusCode::BAD_REQUEST, "invalid host in request"))?;
-
-    let via = engine.via.to_str().unwrap_or_default();
-    let looped = req
-        .headers()
-        .get_all(VIA)
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .any(|v| v.split(',').any(|hop| hop.trim() == via));
-    if looped {
-        return Err((StatusCode::LOOP_DETECTED, "request looped back to Yaak Proxy"));
-    }
     Ok(())
 }
 

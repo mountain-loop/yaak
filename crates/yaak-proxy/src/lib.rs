@@ -1,6 +1,8 @@
 mod body;
 mod cert;
 mod connection;
+#[cfg(target_os = "macos")]
+mod nw;
 mod request;
 mod tunnel;
 
@@ -16,6 +18,7 @@ use std::time::SystemTime;
 use bytes::Bytes;
 use http::HeaderValue;
 use hyper_util::client::legacy::Client;
+#[cfg(not(target_os = "macos"))]
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use rustls::ClientConfig;
@@ -218,15 +221,15 @@ pub(crate) struct Engine {
     events: std_mpsc::Sender<ProxyEvent>,
     next_id: AtomicU64,
     next_connection: AtomicU64,
-    http_client: Client<HttpConnector, BoxBody>,
+    http_client: HttpClient,
     upstream_tls: Arc<ClientConfig>,
     upstream_tls_h1: Arc<ClientConfig>,
     passthrough: Mutex<HashSet<String>>,
     handshake_failures: Mutex<HashMap<String, u32>>,
     /// Offer HTTP/2 to clients in intercepted TLS.
     http2: AtomicBool,
-    /// `Via` value marking requests whose URL the engine rebuilt from `Host`, unique to this run,
-    /// so one that comes back to the engine is refused instead of forwarded again.
+    /// `Via` value marking the plain-HTTP requests the engine forwards, unique to this run, so one
+    /// that comes back to the engine is refused instead of forwarded again.
     via: HeaderValue,
 }
 
@@ -280,6 +283,21 @@ fn upstream_tls_config(
     Ok(Arc::new(config))
 }
 
+/// Sends plain HTTP upstream. On macOS it connects through Network.framework, so Private Relay
+/// can't route the engine's own port-80 connections back into the engine (see [`nw`]).
+#[cfg(target_os = "macos")]
+type HttpClient = Client<nw::Connector, BoxBody>;
+#[cfg(not(target_os = "macos"))]
+type HttpClient = Client<HttpConnector, BoxBody>;
+
+fn http_client() -> HttpClient {
+    let builder = Client::builder(TokioExecutor::new());
+    #[cfg(target_os = "macos")]
+    return builder.build(nw::Connector);
+    #[cfg(not(target_os = "macos"))]
+    builder.build_http()
+}
+
 fn via_marker() -> HeaderValue {
     let run = RandomState::new().build_hasher().finish();
     HeaderValue::try_from(format!("1.1 yaak-proxy-{run:016x}")).unwrap()
@@ -302,7 +320,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         events: event_tx,
         next_id: AtomicU64::new(1),
         next_connection: AtomicU64::new(1),
-        http_client: Client::builder(TokioExecutor::new()).build_http(),
+        http_client: http_client(),
         upstream_tls: upstream_tls_config(&roots, &[b"h2", b"http/1.1"])?,
         upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
         passthrough: Mutex::new(HashSet::new()),
