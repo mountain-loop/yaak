@@ -184,6 +184,13 @@ describe("parseSearch", () => {
     });
     // A path with no host matches anywhere in the URL.
     expect(parseSearch("@path:/v1")).toEqual({ q: "/v1" });
+    // Each path stays with the host before it, as two selected sidebar paths write them.
+    expect(parseSearch("@host:a.com @path:/x OR @host:b.com @path:/y")).toEqual({
+      under: ["a.com/x", "b.com/y"],
+    });
+    expect(parseSearch("@host:a.com OR @host:b.com @path:/y")).toEqual({
+      under: ["a.com", "b.com/y"],
+    });
   });
 
   test("keeps or drops System, which hiding it drops unless the text asks", () => {

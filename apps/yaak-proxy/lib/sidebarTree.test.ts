@@ -88,6 +88,12 @@ describe("buildSidebarTree", () => {
     );
     expect(query("site:github.com")).toBe("@host:*.github.com");
     expect(query("system")).toBe("@is:system");
+    // A daemon's rows show its flows while System is hidden from All traffic.
+    expect(query("app:trustd")).toBe("@is:system @app:trustd");
+    expect(query("app:trustd|host:ocsp.apple.com")).toBe(
+      "@is:system @app:trustd @host:ocsp.apple.com",
+    );
+    expect(parseSearch(query("app:trustd") ?? "", true)?.system).toBe(true);
     // What each writes, read back, covers the flows the row counts.
     for (const item of items.values()) {
       const parsed = parseSearch(item.query);

@@ -85,14 +85,24 @@ function placeOf(flow: Flow): Place {
       query: `${hostQuery} ${formatFieldFilter("path", p)}`,
     });
   }
-  const appQuery = app == null ? "" : formatFieldFilter("app", app);
+  const system = isSystemFlow(flow);
+  const appQuery = app == null ? "" : appQueryFor(app, system);
   const appRows =
     app == null
       ? []
       : rows.map((r) => ({ ...r, id: `app:${app}|${r.id}`, query: `${appQuery} ${r.query}` }));
-  place = { app, system: isSystemFlow(flow), rows, appRows };
+  place = { app, system, rows, appRows };
   places.set(flow, place);
   return place;
+}
+
+/**
+ * What an app's row writes. A daemon's says `@is:system` too, so selecting it shows its flows
+ * while System is hidden from All traffic.
+ */
+function appQueryFor(app: string, system: boolean): string {
+  const query = formatFieldFilter("app", app);
+  return system ? `${formatFieldFilter("is", "system")} ${query}` : query;
 }
 
 /** A node being built, its children by id */
@@ -183,7 +193,7 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
         kind: "app",
         label: flow.clientName ?? place.app,
         count: 0,
-        query: formatFieldFilter("app", place.app),
+        query: appQueryFor(place.app, place.system),
       };
       if (folder != null) item.sublabel = folder;
       if (flow.clientPath != null) item.appPath = flow.clientPath;

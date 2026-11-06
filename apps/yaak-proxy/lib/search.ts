@@ -47,26 +47,32 @@ export function formatFieldFilter(field: string, value: string, negated = false)
 export function parseSearch(text: string, hideSystem = false): FlowQuery | null {
   const words: string[] = [];
   const apps: string[] = [];
-  const hosts: string[] = [];
-  const paths: string[] = [];
+  // Each host with the paths written after it, so `@host:a.com @path:/x OR @host:b.com
+  // @path:/y` is those two places and not every pairing of them.
+  const hosts: { host: string; paths: string[] }[] = [];
   let system: boolean | undefined = hideSystem ? false : undefined;
   for (const t of tokenize(text)) {
     if (t.field === "app" && !t.negated && t.value !== "") apps.push(t.value);
-    else if (t.field === "host" && !t.negated && t.value !== "") hosts.push(t.value);
-    else if (t.field === "path" && !t.negated && t.value !== "") paths.push(t.value);
-    else if (t.field === "is" && t.value.toLowerCase() === "system") system = !t.negated;
+    else if (t.field === "host" && !t.negated && t.value !== "") {
+      hosts.push({ host: t.value.replace(/\/+$/, ""), paths: [] });
+    } else if (t.field === "path" && !t.negated && t.value !== "") {
+      const path = t.value.replace(/\/?\*$/, "").replace(/^\/+/, "");
+      const host = hosts.at(-1);
+      // A path with no host to sit under matches anywhere in the URL.
+      if (host == null) {
+        if (path !== "") words.push(`/${path}`);
+      } else {
+        host.paths.push(path);
+      }
+    } else if (t.field === "is" && t.value.toLowerCase() === "system") system = !t.negated;
     else if (t.field == null && !t.negated) words.push(t.value);
     // Fields and exclusions the query language will add are ignored until it lands.
   }
   const under: string[] = [];
-  const trimmedPaths = paths.map((p) => p.replace(/\/?\*$/, "").replace(/^\/+/, ""));
-  for (const host of hosts) {
-    const h = host.replace(/\/+$/, "");
-    if (trimmedPaths.length === 0 || h.startsWith("*.")) under.push(h);
-    else for (const p of trimmedPaths) under.push(p === "" ? h : `${h}/${p}`);
+  for (const { host, paths } of hosts) {
+    if (paths.length === 0 || host.startsWith("*.")) under.push(host);
+    else for (const p of paths) under.push(p === "" ? host : `${host}/${p}`);
   }
-  // A path with no host to sit under matches anywhere in the URL.
-  if (hosts.length === 0) words.push(...trimmedPaths.filter((p) => p !== "").map((p) => `/${p}`));
   const q = words.join(" ").trim();
   const query: FlowQuery = {
     ...(q === "" ? {} : { q }),

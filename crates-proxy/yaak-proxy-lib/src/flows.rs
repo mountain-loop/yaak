@@ -285,7 +285,13 @@ pub fn folder_name(path: Option<&str>) -> Option<&str> {
 }
 
 /// Where macOS keeps its own daemons and tools.
-const SYSTEM_DIRS: &[&str] = &["/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/"];
+const SYSTEM_DIRS: &[&str] = &[
+    "/System/",
+    "/usr/libexec/",
+    "/usr/sbin/",
+    "/sbin/",
+    "/Library/Apple/",
+];
 
 /// Daemons that are macOS's own wherever they run from.
 const SYSTEM_PROGRAMS: &[&str] = &[
@@ -363,8 +369,8 @@ pub fn page(
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
     let (condition, mut params) = filter.condition();
     // The rowid, for the flow's number.
-    let mut sql = format!("SELECT rowid, * FROM flows WHERE {condition} AND rowid > ?");
-    params.push(clear_mark(conn).into());
+    let mut sql = format!("SELECT rowid, * FROM flows WHERE {condition}");
+    push_clear_mark(conn, &mut sql, &mut params);
     if let Some(id) = &filter.after {
         // By rowid, which only grows as flows are written.
         let rowid: i64 = conn
@@ -395,14 +401,21 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
 
 fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
     let (condition, mut params) = filter.condition();
-    params.push(clear_mark(conn).into());
-    conn.query_row(
-        &format!("SELECT COUNT(*) FROM flows WHERE {condition} AND rowid > ?"),
-        rusqlite::params_from_iter(params),
-        |r| r.get::<_, i64>(0),
-    )
-    .map(|n| n as usize)
-    .map_err(|e| e.to_string())
+    let mut sql = format!("SELECT COUNT(*) FROM flows WHERE {condition}");
+    push_clear_mark(conn, &mut sql, &mut params);
+    conn.query_row(&sql, rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0))
+        .map(|n| n as usize)
+        .map_err(|e| e.to_string())
+}
+
+/// Leaves out cleared flows, when a clear is pending; otherwise adds nothing, so SQLite keeps its
+/// cheapest plan.
+fn push_clear_mark(conn: &rusqlite::Connection, sql: &mut String, params: &mut Vec<Value>) {
+    let mark = clear_mark(conn);
+    if mark > 0 {
+        sql.push_str(" AND rowid > ?");
+        params.push(mark.into());
+    }
 }
 
 /// The rowid at or below which flows are cleared, or 0 when none are waiting to be deleted. 0
@@ -455,7 +468,8 @@ pub fn delete_cleared(
         if mark == 0 {
             return Ok(true);
         }
-        let mut stmt = conn.prepare("SELECT rowid, id FROM flows WHERE rowid <= ? LIMIT ?")?;
+        let mut stmt =
+            conn.prepare("SELECT rowid, id FROM flows WHERE rowid <= ? ORDER BY rowid LIMIT ?")?;
         let rows = stmt
             .query_map([mark, batch as i64], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -475,6 +489,14 @@ pub fn delete_cleared(
         let mut delete = conn.prepare("DELETE FROM flows WHERE rowid = ?")?;
         for (rowid, _) in &rows {
             delete.execute([rowid])?;
+        }
+        // The last of them: the mark goes in the same transaction, since an empty table hands
+        // out rowids from 1 again and a new flow would fall under it.
+        let left: i64 =
+            conn.query_row("SELECT count(*) FROM flows WHERE rowid <= ?", [mark], |r| r.get(0))?;
+        if left == 0 {
+            conn.execute("DELETE FROM flow_clear_mark WHERE id = 1", [])?;
+            return Ok(true);
         }
         Ok::<_, yaak_database::Error>(false)
     })
@@ -506,11 +528,14 @@ pub fn count(db: &ProxyQueryManager) -> Result<usize, String> {
 }
 
 fn count_in(conn: &rusqlite::Connection) -> Result<usize, String> {
-    conn.query_row("SELECT COUNT(*) FROM flows WHERE rowid > ?", [clear_mark(conn)], |r| {
-        r.get::<_, i64>(0)
-    })
-        .map(|n| n as usize)
-        .map_err(|e| e.to_string())
+    // Without a clear pending, SQLite counts over its smallest index rather than the table.
+    let mark = clear_mark(conn);
+    let count = if mark == 0 {
+        conn.query_row("SELECT COUNT(*) FROM flows", [], |r| r.get::<_, i64>(0))
+    } else {
+        conn.query_row("SELECT COUNT(*) FROM flows WHERE rowid > ?", [mark], |r| r.get(0))
+    };
+    count.map(|n| n as usize).map_err(|e| e.to_string())
 }
 
 /// A body in JSON: text when it is UTF-8, base64 when it is not.
@@ -933,12 +958,11 @@ mod tests {
         assert!(delete_cleared(&db, &read_only, 2).is_err());
         assert_eq!(rows(), 4);
 
-        // In batches, then the mark goes once nothing is left under it.
+        // In batches, the mark going with the last of them.
         assert_eq!(delete_cleared(&db, &blobs, 2), Ok(false));
         assert_eq!(rows(), 2);
-        assert_eq!(delete_cleared(&db, &blobs, 2), Ok(false));
-        assert_eq!(rows(), 1);
         assert_eq!(delete_cleared(&db, &blobs, 2), Ok(true));
+        assert_eq!(rows(), 1);
         assert_eq!(db.with_conn(|c| clear_mark(c.conn().resolve())), 0);
         assert_eq!(ids(&FlowFilter::default()), vec!["fl_d"]);
         let mut body_ids = blobs.connect().list_body_ids().unwrap();
@@ -954,9 +978,14 @@ mod tests {
 
         assert_eq!(clear(&db).unwrap(), 1);
         assert_eq!(clear(&db).unwrap(), 0);
-        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH), Ok(false));
         assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH), Ok(true));
         assert_eq!(rows(), 0);
+
+        // An empty table numbers from 1 again, which no stale mark may hide.
+        write_flow("fl_e");
+        assert_eq!(ids(&FlowFilter::default()), vec!["fl_e"]);
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH), Ok(true));
+        assert_eq!(rows(), 1);
     }
 
     #[test]
@@ -1006,7 +1035,11 @@ mod tests {
                 client_cwd: Some("/".into()),
                 ..Default::default()
             },
-            Flow { id: "fl_none".into(), url: "http://notgithub.com/".into(), ..Default::default() },
+            Flow {
+                id: "fl_none".into(),
+                url: "http://notgithub.com/".into(),
+                ..Default::default()
+            },
         ];
         for flow in &flows {
             db.with_tx(|tx| tx.upsert(flow, &UpdateSource::Background)).unwrap();
@@ -1041,7 +1074,9 @@ mod tests {
         assert!(!is_system(Some("com.apple.Music"), Some("/System/Applications/Music.app")));
         assert!(!is_system(
             None,
-            Some("/System/Library/Frameworks/WebKit.framework/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking")
+            Some(
+                "/System/Library/Frameworks/WebKit.framework/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking"
+            )
         ));
         assert!(!is_system(None, None));
         assert_eq!(folder_name(Some("/Users/me/src/fieldwork/")), Some("fieldwork"));
