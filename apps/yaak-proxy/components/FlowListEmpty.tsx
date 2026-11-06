@@ -3,7 +3,7 @@ import classNames from "classnames";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
-import { clausesOf, formatFieldFilter, parseSearch, type SearchToken } from "../lib/search";
+import { parseSearch, widerQueries } from "../lib/search";
 import {
   hideSystemAtom,
   pausedAtAtom,
@@ -113,29 +113,6 @@ function NoResults({ text }: { text: string }) {
       </div>
     </EmptyStateText>
   );
-}
-
-/** The text with each of its terms left out in turn, without repeats */
-export function widerQueries(text: string): string[] {
-  const format = (t: SearchToken) =>
-    t.field == null
-      ? `${t.negated ? "-" : ""}${/\s/.test(t.value) ? `"${t.value}"` : t.value}`
-      : formatFieldFilter(t.field, t.value, t.negated);
-  // Groups `OR` separates are wider apart, each alone; mixing their terms would match neither.
-  const clauses = clausesOf(text);
-  if (clauses.length > 1) return clauses.map((c) => c.map(format).join(" "));
-  const words = (clauses[0] ?? []).map(format);
-  if (words.length <= 1) return [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (let i = 0; i < words.length; i++) {
-    const candidate = words.filter((_, j) => j !== i).join(" ");
-    if (!seen.has(candidate)) {
-      seen.add(candidate);
-      out.push(candidate);
-    }
-  }
-  return out;
 }
 
 function timeOf(ms: number): string {

@@ -109,6 +109,29 @@ function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | nu
   return Object.keys(query).length === 0 ? null : query;
 }
 
+/**
+ * Wider searches for one that matched nothing: the text with each of its terms left out in turn,
+ * without repeats. With groups `OR` separates, a term is left out of one group at a time and
+ * the groups kept, since each group alone is narrower still; a group left with nothing would
+ * take in every flow, so it is not offered.
+ */
+export function widerQueries(text: string): string[] {
+  const format = (t: SearchToken) =>
+    t.field == null
+      ? `${t.negated ? "-" : ""}${/\s/.test(t.value) ? `"${t.value}"` : t.value}`
+      : formatFieldFilter(t.field, t.value, t.negated);
+  const clauses = clausesOf(text).map((c) => c.map(format));
+  const out = new Set<string>();
+  clauses.forEach((clause, i) => {
+    if (clause.length <= 1) return;
+    clause.forEach((_, j) => {
+      const wider = clauses.map((c, k) => (k === i ? c.filter((_, l) => l !== j) : c));
+      out.add(wider.map((c) => c.join(" ")).join(" OR "));
+    });
+  });
+  return [...out];
+}
+
 /** The folder a program outside an app ran in, which names it better than its executable */
 export function folderOf(flow: Pick<Flow, "clientBundleId" | "clientCwd">): string | null {
   if (flow.clientBundleId != null || flow.clientCwd == null) return null;

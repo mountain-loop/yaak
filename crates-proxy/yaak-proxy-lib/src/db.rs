@@ -323,7 +323,9 @@ mod tests {
             .unwrap()
             .map(|v| v.unwrap())
             .collect();
-        assert_eq!(applied.last().map(String::as_str), Some("00000007"));
+        assert_eq!(&applied[applied.len() - 2..], ["00000007", "00000008"]);
+        let mark_columns = columns(&conn, "flow_clear_mark");
+        assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
         drop(conn);
 
         // The stream and its messages come through, and clearing then deleting takes both.

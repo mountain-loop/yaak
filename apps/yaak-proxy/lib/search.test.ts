@@ -9,6 +9,7 @@ import {
   sidebarPath,
   siteOf,
   tokenize,
+  widerQueries,
 } from "./search";
 
 function flow(url: string, extra: Partial<Flow> = {}): Flow {
@@ -237,6 +238,32 @@ describe("parseSearch", () => {
     expect(tokenize(text)).toEqual([
       { field: "app", value: "Google Chrome", negated: false },
       { field: "host", value: "api.x.com", negated: false },
+    ]);
+  });
+});
+
+describe("widerQueries", () => {
+  test("leaves out each term in turn", () => {
+    expect(widerQueries('@app:Slack @status:5xx "card declined"')).toEqual([
+      '@status:5xx "card declined"',
+      '@app:Slack "card declined"',
+      "@app:Slack @status:5xx",
+    ]);
+    expect(widerQueries("@app:Slack")).toEqual([]);
+  });
+
+  test("widens one OR group at a time, keeping the groups", () => {
+    const text = "@app:Slack @host:absent.com OR @app:Chrome @host:absent.com";
+    expect(widerQueries(text)).toEqual([
+      "@host:absent.com OR @app:Chrome @host:absent.com",
+      "@app:Slack OR @app:Chrome @host:absent.com",
+      "@app:Slack @host:absent.com OR @host:absent.com",
+      "@app:Slack @host:absent.com OR @app:Chrome",
+    ]);
+    // A group of one term is not emptied, which would take in every flow.
+    expect(widerQueries("@app:Slack OR @app:Chrome @host:b.com")).toEqual([
+      "@app:Slack OR @host:b.com",
+      "@app:Slack OR @app:Chrome",
     ]);
   });
 });
