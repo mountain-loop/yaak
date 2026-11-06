@@ -486,9 +486,15 @@ export function syncSidebarSelection(store: Store) {
   const selectedAtom = selectedIdsFamily(SIDEBAR_TREE_ID);
   let syncing = false;
 
+  // The tree writes its selection again as it renders, the same rows in a new array; only a
+  // change of rows is the person selecting.
+  let lastRows = store.get(selectedAtom).join("\n");
   store.sub(selectedAtom, () => {
-    if (syncing) return;
     const ids = store.get(selectedAtom);
+    const key = ids.join("\n");
+    if (key === lastRows) return;
+    lastRows = key;
+    if (syncing) return;
     // Group headings are not filters.
     const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID);
     if (rows.length === 0) return;

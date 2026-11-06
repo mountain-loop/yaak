@@ -126,8 +126,21 @@ impl FlowFilter {
             || self.system.is_some()
     }
 
-    /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters.
-    fn condition(&self) -> (String, Vec<Value>) {
+    /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters,
+    /// for the database `conn` reads, which may be from before the folder column, when read
+    /// without migrating.
+    fn condition_in(&self, conn: &rusqlite::Connection) -> (String, Vec<Value>) {
+        let has_cwd = conn
+            .query_row(
+                "SELECT EXISTS (SELECT 1 FROM pragma_table_info('flows') WHERE name = 'client_cwd')",
+                [],
+                |r| r.get::<_, bool>(0),
+            )
+            .unwrap_or(false);
+        self.condition_with(has_cwd)
+    }
+
+    fn condition_with(&self, has_cwd: bool) -> (String, Vec<Value>) {
         let mut sql = String::from("1");
         let mut params: Vec<Value> = Vec::new();
         for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
@@ -176,12 +189,17 @@ impl FlowFilter {
             let marks = vec!["?"; apps.len()].join(", ");
             sql.push_str(&format!(
                 " AND (coalesce(client_bundle_id, client_path) IN ({marks}) \
-                OR lower(client_name) IN ({marks}) \
-                OR (client_bundle_id IS NULL AND lower(folder_name(client_cwd)) IN ({marks})))"
+                OR lower(client_name) IN ({marks})"
             ));
             params.extend(apps.iter().map(|a| a.clone().into()));
             params.extend(apps.iter().map(|a| a.to_lowercase().into()));
-            params.extend(apps.iter().map(|a| a.to_lowercase().into()));
+            if has_cwd {
+                sql.push_str(&format!(
+                    " OR (client_bundle_id IS NULL AND lower(folder_name(client_cwd)) IN ({marks}))"
+                ));
+                params.extend(apps.iter().map(|a| a.to_lowercase().into()));
+            }
+            sql.push(')');
         }
         match self.system {
             Some(true) => sql.push_str(" AND is_system(client_bundle_id, client_path)"),
@@ -367,7 +385,7 @@ pub fn page(
 }
 
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
-    let (condition, mut params) = filter.condition();
+    let (condition, mut params) = filter.condition_in(conn);
     // The rowid, for the flow's number.
     let mut sql = format!("SELECT rowid, * FROM flows WHERE {condition}");
     push_clear_mark(conn, &mut sql, &mut params);
@@ -400,7 +418,7 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
 }
 
 fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
-    let (condition, mut params) = filter.condition();
+    let (condition, mut params) = filter.condition_in(conn);
     let mut sql = format!("SELECT COUNT(*) FROM flows WHERE {condition}");
     push_clear_mark(conn, &mut sql, &mut params);
     conn.query_row(&sql, rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0))
@@ -492,9 +510,11 @@ pub fn delete_cleared(
         }
         // The last of them: the mark goes in the same transaction, since an empty table hands
         // out rowids from 1 again and a new flow would fall under it.
-        let left: i64 =
-            conn.query_row("SELECT count(*) FROM flows WHERE rowid <= ?", [mark], |r| r.get(0))?;
-        if left == 0 {
+        let left: bool =
+            conn.query_row("SELECT EXISTS (SELECT 1 FROM flows WHERE rowid <= ?)", [mark], |r| {
+                r.get(0)
+            })?;
+        if !left {
             conn.execute("DELETE FROM flow_clear_mark WHERE id = 1", [])?;
             return Ok(true);
         }
@@ -820,7 +840,7 @@ mod tests {
         let plan: Vec<String> = db.with_conn(|c| {
             let conn = c.conn().resolve();
             let (condition, params) =
-                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition();
+                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition_in(conn);
             let sql = format!(
                 "EXPLAIN QUERY PLAN SELECT * FROM flows WHERE {condition} \
                 ORDER BY started_at DESC, id DESC LIMIT 500"

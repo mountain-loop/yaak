@@ -164,6 +164,26 @@ mod tests {
         assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
         assert_eq!((flows[0].client_pid, flows[0].client_name.as_deref()), (None, None));
         assert!(!flows[0].cancelled);
+
+        // Filters by app work without the folder column, and count without the clear mark.
+        drop(db);
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE flows ADD COLUMN client_name TEXT;
+            ALTER TABLE flows ADD COLUMN client_bundle_id TEXT;
+            ALTER TABLE flows ADD COLUMN client_path TEXT;
+            ALTER TABLE flows DROP COLUMN client_cwd;
+            DROP TABLE flow_clear_mark;
+            UPDATE flows SET client_name = 'curl', client_path = '/usr/bin/curl';",
+        )
+        .unwrap();
+        drop(conn);
+        let db = ProxyQueryManager::open_read_only(&path).unwrap();
+        let filter =
+            crate::flows::FlowFilter { app: Some(vec!["curl".into()]), ..Default::default() };
+        let (page, total, matching) = crate::flows::page(&db, &filter).unwrap();
+        assert_eq!((page.len(), total, matching), (1, 1, Some(1)));
+        assert_eq!(page[0].number, 1);
     }
 
     #[test]
