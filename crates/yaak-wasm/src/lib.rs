@@ -379,7 +379,7 @@ fn dispatch(
                 .queries
                 .with_tx(|tx| tx.restore_request_version(&req.version_id, source))
                 .map_err(js_error)?;
-            to_json(restored.id().to_string())
+            to_json(AnyModel::from(restored))
         }
 
         "models_get_settings" => to_json(host.queries.connect().get_settings()),

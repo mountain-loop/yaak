@@ -1043,7 +1043,7 @@ macro_rules! with_commands {
     models_duplicate(ModelsDuplicateReq) -> String,
     models_snapshot_request(ModelsSnapshotRequestReq) -> ModelVersion,
     models_request_version(ModelsRequestVersionReq) -> RequestVersionComparison,
-    models_restore_request_version(ModelsRestoreRequestVersionReq) -> String,
+    models_restore_request_version(ModelsRestoreRequestVersionReq) -> AnyModel,
     models_websocket_events(ModelsWebsocketEventsReq) -> Vec<WebsocketEvent>,
     models_grpc_events(ModelsGrpcEventsReq) -> Vec<GrpcEvent>,
     models_get_settings(ModelsGetSettingsReq) -> Settings,

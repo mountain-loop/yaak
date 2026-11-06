@@ -1,6 +1,6 @@
 use crate::client_db::ClientDb;
 use crate::error::Result;
-use crate::models::{GrpcRequest, HttpRequest, WebsocketRequest};
+use crate::models::{AnyModel, GrpcRequest, HttpRequest, WebsocketRequest};
 use serde_json::Value;
 
 pub enum AnyRequest {
@@ -36,6 +36,12 @@ impl AnyRequest {
 
     pub fn to_value(&self) -> Result<Value> {
         Ok(with_request!(self, |request| serde_json::to_value(request)?))
+    }
+}
+
+impl From<AnyRequest> for AnyModel {
+    fn from(request: AnyRequest) -> Self {
+        with_request!(request, |request| request.into())
     }
 }
 

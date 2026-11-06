@@ -73,15 +73,16 @@ pub async fn models_request_version<H: Host>(
     Ok(RequestVersionComparison { version, current_document, differs })
 }
 
-/// Returns the id of the request that was restored.
+/// Returns the restored request, so the frontend can put it in its store
+/// without waiting for the change event to come back around.
 pub async fn models_restore_request_version<H: Host>(
     host: H,
     req: ModelsRestoreRequestVersionReq,
-) -> Result<String> {
+) -> Result<AnyModel> {
     let source = host.update_source();
     let restored =
         host.query_manager().with_tx(|tx| tx.restore_request_version(&req.version_id, &source))?;
-    Ok(restored.id().to_string())
+    Ok(restored.into())
 }
 
 pub async fn models_websocket_events<H: Host>(

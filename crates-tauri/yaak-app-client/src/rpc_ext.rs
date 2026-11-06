@@ -36,7 +36,7 @@ use yaak_grpc::ServiceDefinition;
 use yaak_grpc::manager::GrpcHandle;
 use yaak_models::blob_manager::BlobManager;
 use yaak_models::models::{
-    GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
+    AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequest, HttpRequestHeader, HttpResponse,
     HttpResponseEvent, ImportSource, ModelVersion, Plugin, RequestVersionComparison, Settings,
     WebsocketConnection, WebsocketEvent, WorkspaceMeta,
 };
@@ -888,7 +888,7 @@ async fn models_request_version<R: Runtime>(
 async fn models_restore_request_version<R: Runtime>(
     ctx: ClientCtx<R>,
     req: ModelsRestoreRequestVersionReq,
-) -> Result<String> {
+) -> Result<AnyModel> {
     Ok(yaak_commands::models::models_restore_request_version(ctx, req).await?)
 }
 
