@@ -1,7 +1,7 @@
 use crate::cli::McpArgs;
 use crate::context::{CliContext, CliExecutionContext};
 use crate::plugin_events::SendContexts;
-use rand::Rng;
+use rand::RngExt;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -76,7 +76,7 @@ async fn serve_http(host: CliMcpHost, port: u16, token: Option<String>) -> Resul
 }
 
 fn generate_token() -> String {
-    hex::encode(rand::thread_rng().r#gen::<[u8; 32]>())
+    hex::encode(rand::rng().random::<[u8; 32]>())
 }
 
 /// Every workspace in the database is "open", and the global `--environment`

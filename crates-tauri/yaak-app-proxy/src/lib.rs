@@ -1,5 +1,6 @@
 use log::{error, info, warn};
 use tauri::Runtime;
+use tauri::path::BaseDirectory;
 use tauri::{Emitter, Manager, RunEvent, State, WebviewWindow};
 use yaak_proxy_lib::ProxyCtx;
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
@@ -48,6 +49,24 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) {
     });
 }
 
+/// Where `tauri.bundle.conf.json` puts the `yaakprotoc` that Yaak's vendor script fetches, in
+/// the app's resources.
+const PROTOC_DIR: &str = "vendored/protoc";
+/// Where it puts protoc's include files.
+const PROTOC_INCLUDE_DIR: &str = "vendored/protoc/include";
+
+/// The `yaakprotoc` and its includes in the app's resources, if the bundle has them, as a
+/// packaged app's does; a development build has none.
+fn bundled_protoc<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<yaak_proxy_lib::GrpcConfig> {
+    let bin_name = if cfg!(windows) { "yaakprotoc.exe" } else { "yaakprotoc" };
+    let resource = |path: &str| app.path().resolve(path, BaseDirectory::Resource).ok();
+    let protoc_bin_path = resource(&format!("{PROTOC_DIR}/{bin_name}"))?;
+    let protoc_include_dir = resource(PROTOC_INCLUDE_DIR)?;
+    protoc_bin_path
+        .is_file()
+        .then_some(yaak_proxy_lib::GrpcConfig { protoc_include_dir, protoc_bin_path })
+}
+
 #[tauri::command]
 async fn rpc(
     router: State<'_, RpcRouter<ProxyCtx>>,
@@ -69,7 +88,12 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
 
             let (emitter, event_rx) = RpcEventEmitter::new();
-            let ctx = ProxyCtx::new(&data_dir, emitter)?;
+            let mut ctx = ProxyCtx::new(&data_dir, emitter)?;
+            // Compiles protos attached for gRPC decoding when the bundle has protoc, as Yaak's
+            // does; otherwise one on PATH is used.
+            if let Some(config) = bundled_protoc(app.handle()) {
+                ctx = ctx.with_protoc(config);
+            }
             // Not while the CLI daemon owns the engine: the window offers to take it over.
             match ctx.serve_control_api() {
                 // The engine runs for as long as the app does. A failure, such as the port
@@ -126,4 +150,24 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The bundle puts protoc, and its includes, where the app looks for them.
+    #[test]
+    fn the_bundle_ships_protoc_where_the_app_looks() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.bundle.conf.json")).unwrap();
+        let resources = config["bundle"]["resources"].as_object().unwrap();
+        let target = |source: &str| resources.get(source).and_then(|t| t.as_str());
+        assert_eq!(
+            target("../yaak-app-client/vendored/protoc/yaakprotoc*")
+                .map(|t| t.trim_end_matches('/')),
+            Some(PROTOC_DIR)
+        );
+        assert_eq!(target("../yaak-app-client/vendored/protoc/include"), Some(PROTOC_INCLUDE_DIR));
+    }
 }

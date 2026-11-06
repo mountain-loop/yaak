@@ -23,6 +23,85 @@ export type {
 } from "./components/Dropdown";
 export { ContextMenu, Dropdown } from "./components/Dropdown";
 export { LazyCodeEditor } from "./components/editor/LazyCodeEditor";
+export type {
+  EditorHost,
+  GenericCompletion,
+  GenericCompletionConfig,
+  HostBodyViewerArgs,
+  HostDialogArgs,
+  HostEditorLanguage,
+  HostEditorProps,
+  HostInputProps,
+  HostPromptArgs,
+  SelectFileProps,
+  StoredValueNamespace,
+  TemplateVariableRef,
+  TemplatingProps,
+  UseHostStoredValue,
+} from "./components/EditorHost";
+export { EditorHostProvider, useEditorHost } from "./components/EditorHost";
+export { EmptyStateText } from "./components/EmptyStateText";
+export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
+export { FormMultipartEditor } from "./components/http/FormMultipartEditor";
+export { FormUrlencodedEditor } from "./components/http/FormUrlencodedEditor";
+export { HeadersEditor } from "./components/http/HeadersEditor";
+export type { HttpRequestPaneViewProps } from "./components/http/HttpRequestPaneView";
+export {
+  bodyTypeLabel,
+  HttpRequestPaneView,
+  REQUEST_TAB_AUTH,
+  REQUEST_TAB_BODY,
+  REQUEST_TAB_HEADERS,
+  REQUEST_TAB_PARAMS,
+  RequestBodyEditor,
+} from "./components/http/HttpRequestPaneView";
+export type { ExtraPaneTab, HttpResponsePaneViewProps } from "./components/http/HttpResponsePaneView";
+export {
+  HttpResponsePaneView,
+  RESPONSE_TAB_BODY,
+  RESPONSE_TAB_COOKIES,
+  RESPONSE_TAB_HEADERS,
+  RESPONSE_TAB_REQUEST,
+  ResponseStatusLine,
+} from "./components/http/HttpResponsePaneView";
+export { JsonBodyEditor } from "./components/http/JsonBodyEditor";
+export { RequestBodyViewer } from "./components/http/RequestBodyViewer";
+export { RequestMethodDropdown } from "./components/http/RequestMethodDropdown";
+export type {
+  ResponseTextViewerExtras,
+  ResponseViewMode,
+} from "./components/http/ResponseBodyViewer";
+export { HTMLOrTextViewer, ResponseBodyViewer } from "./components/http/ResponseBodyViewer";
+export { parseCookieHeaders, ResponseCookies } from "./components/http/ResponseCookies";
+export { ResponseHeaders } from "./components/http/ResponseHeaders";
+export * from "./components/http/types";
+export type { UrlBarProps } from "./components/http/UrlBar";
+export { UrlBar } from "./components/http/UrlBar";
+export { UrlParametersEditor } from "./components/http/UrlParametersEditor";
+export { HotkeyLabel } from "./components/HotkeyLabel";
+export { HotkeyList } from "./components/HotkeyList";
+export {
+  formatBulkPairLine,
+  formatBulkPairs,
+  parseBulkPairLine,
+  parseBulkPairs,
+} from "./components/pairs/BulkPairEditor";
+export type {
+  EditablePair,
+  Pair,
+  PairEditorHandle,
+  PairEditorProps,
+  PairWithId,
+} from "./components/pairs/PairEditor";
+export { PairEditor, PairEditorRow } from "./components/pairs/PairEditor";
+export { ensurePairId } from "./components/pairs/PairEditor.util";
+export { PairOrBulkEditor } from "./components/pairs/PairOrBulkEditor";
+export { PillButton } from "./components/PillButton";
+export type {
+  RadioDropdownItem,
+  RadioDropdownProps,
+} from "./components/RadioDropdown";
+export { RadioDropdown } from "./components/RadioDropdown";
 export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
 export { ErrorBoundary } from "./components/ErrorBoundary";
 export { FormattedError } from "./components/FormattedError";
@@ -78,7 +157,11 @@ export type { ToastProps } from "./components/Toast";
 export { Toast } from "./components/Toast";
 export { Toasts } from "./components/Toasts";
 export { HttpMethodTag, HttpMethodTagRaw } from "./components/tags/HttpMethodTag";
-export { formatMillis, HttpResponseDurationTag } from "./components/tags/HttpResponseDurationTag";
+export {
+  formatMillis,
+  HttpResponseDurationTag,
+  HttpResponseDurationTagRaw,
+} from "./components/tags/HttpResponseDurationTag";
 export { HttpStatusTag, HttpStatusTagRaw } from "./components/tags/HttpStatusTag";
 export { SizeTag } from "./components/tags/SizeTag";
 export type { TooltipProps } from "./components/Tooltip";
@@ -90,6 +173,8 @@ export { Tree } from "./components/tree/Tree";
 export type { TreeItemProps } from "./components/tree/TreeItem";
 export { AudioViewer } from "./components/viewers/AudioViewer";
 export { CsvViewer, CsvViewerInner } from "./components/viewers/CsvViewer";
+export type { HexdumpViewerProps } from "./components/viewers/HexdumpViewer";
+export { hexdump, HexdumpViewer } from "./components/viewers/HexdumpViewer";
 export { ImageViewer } from "./components/viewers/ImageViewer";
 export { JsonAttributeTree } from "./components/viewers/JsonAttributeTree";
 export { JsonViewer } from "./components/viewers/JsonViewer";
@@ -111,7 +196,13 @@ export type {
   HotkeyActionRegistry,
   HotkeyContextValue,
 } from "./hooks/useHotKey";
-export { formatHotkey, HotkeyProvider, useFormattedHotkey, useHotKey } from "./hooks/useHotKey";
+export {
+  formatHotkey,
+  HotkeyProvider,
+  useFormattedHotkey,
+  useHotKey,
+  useHotkeyLabel,
+} from "./hooks/useHotKey";
 export { useIsFullscreen } from "./hooks/useIsFullscreen";
 export { useRandomKey } from "./hooks/useRandomKey";
 export { usePortal } from "./hooks/usePortal";
@@ -121,9 +212,13 @@ export { useInMemoryStoredValue } from "./hooks/useStoredValue";
 export type { TextFilterApi } from "./hooks/useTextFilter";
 export { useTextFilter } from "./hooks/useTextFilter";
 export { useTimedBoolean } from "./hooks/useTimedBoolean";
+export { useToggle } from "./hooks/useToggle";
 export { clamp } from "./lib/clamp";
 export { HEADER_SIZE_LG, HEADER_SIZE_MD, WINDOW_CONTROLS_WIDTH } from "./lib/constants";
 export { languageFromContent, languageFromContentType } from "./lib/contentType";
+export { getMimeTypeFromContentType, isJSON, isProbablyTextContentType } from "./lib/mimeType";
+export { textLikelyContainsJsonComments } from "./lib/jsonComments";
+export { validateHttpHeader } from "./lib/validateHttpHeader";
 export { computeSideForDragMove } from "./lib/dnd";
 export { docFingerprint } from "./lib/docFingerprint";
 export { getNodeText } from "./lib/getNodeText";

@@ -6,23 +6,51 @@ interface Props {
 }
 
 export function HttpResponseDurationTag({ response }: Props) {
+  return (
+    <HttpResponseDurationTagRaw
+      closed={response.state === "closed"}
+      startedAt={`${response.createdAt}Z`}
+      elapsedMs={response.elapsed}
+      elapsedHeadersMs={response.elapsedHeaders}
+      elapsedDnsMs={response.elapsedDns}
+    />
+  );
+}
+
+interface RawProps {
+  /** Whether the response has ended; until then the time counts up from `startedAt` */
+  closed: boolean;
+  /** When the request started, as an ISO 8601 string with its zone */
+  startedAt: string;
+  elapsedMs: number;
+  elapsedHeadersMs: number;
+  elapsedDnsMs: number;
+}
+
+export function HttpResponseDurationTagRaw({
+  closed,
+  startedAt,
+  elapsedMs,
+  elapsedHeadersMs,
+  elapsedDnsMs,
+}: RawProps) {
   const [fallbackElapsed, setFallbackElapsed] = useState<number>(0);
   const timeout = useRef<ReturnType<typeof setInterval>>(undefined);
 
   // Calculate the duration of the response for use when the response hasn't finished yet
   useEffect(() => {
     clearInterval(timeout.current);
-    if (response.state === "closed") return;
+    if (closed) return;
     timeout.current = setInterval(() => {
-      setFallbackElapsed(Date.now() - new Date(`${response.createdAt}Z`).getTime());
+      setFallbackElapsed(Date.now() - new Date(startedAt).getTime());
     }, 100);
     return () => clearInterval(timeout.current);
-  }, [response.createdAt, response.state]);
+  }, [startedAt, closed]);
 
-  const dnsValue = response.elapsedDns > 0 ? formatMillis(response.elapsedDns) : "--";
-  const title = `DNS: ${dnsValue}\nHEADER: ${formatMillis(response.elapsedHeaders)}\nTOTAL: ${formatMillis(response.elapsed)}`;
+  const dnsValue = elapsedDnsMs > 0 ? formatMillis(elapsedDnsMs) : "--";
+  const title = `DNS: ${dnsValue}\nHEADER: ${formatMillis(elapsedHeadersMs)}\nTOTAL: ${formatMillis(elapsedMs)}`;
 
-  const elapsed = response.state === "closed" ? response.elapsed : fallbackElapsed;
+  const elapsed = closed ? elapsedMs : fallbackElapsed;
 
   return (
     <span className="font-mono" title={title}>

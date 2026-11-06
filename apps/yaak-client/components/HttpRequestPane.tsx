@@ -1,9 +1,16 @@
 import type { HttpRequest } from "@yaakapp-internal/models";
 import { getModel, patchModel, patchModelDebounced } from "@yaakapp-internal/models";
 import type { GenericCompletionOption } from "@yaakapp-internal/plugins";
-import classNames from "classnames";
+import {
+  CountBadge,
+  type EditablePair,
+  type ExtraPaneTab,
+  HttpRequestPaneView,
+  InlineCode,
+  languageFromContentType,
+} from "@yaakapp-internal/ui";
 import { atom, useAtomValue } from "jotai";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { importCurl, looksLikeCurl } from "../commands/importCurl";
 import { allRequestUrlsAtom } from "../hooks/useAllRequests";
@@ -15,8 +22,8 @@ import { usePinnedHttpResponse } from "../hooks/usePinnedHttpResponse";
 import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
 import { useRequestUpdateKey } from "../hooks/useRequestUpdateKey";
 import { useSendAnyHttpRequest } from "../hooks/useSendAnyHttpRequest";
-import { derivePathPlaceholderPairs, renamePathPlaceholder } from "../lib/pathPlaceholders";
-import { convertRequestBody } from "../lib/requestBodyConversion";
+import { fireAndForget } from "../lib/fireAndForget";
+import { httpRequestToView } from "../lib/httpViews";
 import {
   BODY_TYPE_BINARY,
   BODY_TYPE_FORM_MULTIPART,
@@ -28,28 +35,22 @@ import {
   BODY_TYPE_XML,
   getContentTypeFromHeaders,
 } from "../lib/model_util";
+import { derivePathPlaceholderPairs, renamePathPlaceholder } from "../lib/pathPlaceholders";
 import { prepareImportQuerystring } from "../lib/prepareImportQuerystring";
+import { convertRequestBody } from "../lib/requestBodyConversion";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { showToast } from "../lib/toast";
 import { BinaryFileEditor } from "./BinaryFileEditor";
 import { ConfirmLargeRequestBody } from "./ConfirmLargeRequestBody";
 import type { GenericCompletionConfig } from "./core/Editor/genericCompletion";
 import { getUrlCompletionConfig } from "./core/Editor/url/completion";
-import { Editor } from "./core/Editor/LazyEditor";
-import { InlineCode, languageFromContentType, CountBadge } from "@yaakapp-internal/ui";
 import { PlainInput } from "./core/PlainInput";
 import type { TabItem, TabsRef } from "./core/Tabs/Tabs";
-import { setActiveTab, TabContent, Tabs } from "./core/Tabs/Tabs";
-import { EmptyStateText } from "./EmptyStateText";
-import { FormMultipartEditor } from "./FormMultipartEditor";
-import { FormUrlencodedEditor } from "./FormUrlencodedEditor";
-import { HeadersEditor } from "./HeadersEditor";
+import { setActiveTab } from "./core/Tabs/Tabs";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";
-import { JsonBodyEditor } from "./JsonBodyEditor";
 import { MarkdownEditor } from "./MarkdownEditor";
-import { RequestMethodDropdown } from "./RequestMethodDropdown";
 import { countOverriddenSettings, ModelSettingsEditor } from "./ModelSettingsEditor";
-import { UrlBar } from "./UrlBar";
+import { RequestMethodDropdown } from "./RequestMethodDropdown";
 import { UrlParametersEditor } from "./UrlParameterEditor";
 import { generateId } from "@yaakapp-internal/lib/generateId";
 
@@ -165,9 +166,9 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
 
   const hasDescription = activeRequest.description.trim().length > 0;
 
-  const tabs = useMemo<TabItem[]>(
-    () => [
-      {
+  const bodyTab = useMemo<TabItem>(
+    () =>
+      ({
         value: TAB_BODY,
         rightSlot: numParams > 0 ? <CountBadge count={numParams} /> : null,
         options: {
@@ -244,36 +245,8 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
             }
           },
         },
-      },
-      {
-        value: TAB_PARAMS,
-        rightSlot: <CountBadge count={urlParameterPairs.length} />,
-        label: "Params",
-      },
-      ...headersTab,
-      ...authTab,
-      {
-        value: TAB_SETTINGS,
-        label: "Settings",
-        rightSlot: <CountBadge count={numSettingsOverrides} />,
-      },
-      {
-        value: TAB_DESCRIPTION,
-        label: "Info",
-        rightSlot: hasDescription && <CountBadge count={true} />,
-      },
-    ],
-    [
-      activeRequest,
-      authTab,
-      contentType,
-      handleContentTypeChange,
-      hasDescription,
-      headersTab,
-      numParams,
-      numSettingsOverrides,
-      urlParameterPairs.length,
-    ],
+      }) satisfies TabItem,
+    [activeRequest, contentType, handleContentTypeChange, numParams],
   );
 
   const { mutate: sendRequest } = useSendAnyHttpRequest();
@@ -335,154 +308,152 @@ export function HttpRequestPane({ style, fullHeight, className, activeRequest }:
     [activeRequest],
   );
 
-  return (
-    <div
-      style={style}
-      className={classNames(className, "h-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1")}
-    >
-      {activeRequest && (
-        <>
-          <UrlBar
-            stateKey={`url.${activeRequest.id}`}
-            key={forceUpdateKey + urlKey}
-            url={activeRequest.url}
-            placeholder="https://example.com"
-            onPasteOverwrite={handlePaste}
-            autocomplete={autocomplete}
-            onSend={handleSend}
-            onCancel={cancelResponse}
-            onUrlChange={handleUrlChange}
-            leftSlot={
-              <div className="py-0.5">
-                <RequestMethodDropdown request={activeRequest} className="ml-0.5 h-full!" />
-              </div>
-            }
-            forceUpdateKey={updateKey}
-            isLoading={activeResponse != null && activeResponse.state !== "closed"}
+  const handleJsonOrBodyTextChange = useCallback(
+    (text: string, bodyType: string | null) => {
+      // JSON writes at once, as its editor always has; other text debounces
+      if (bodyType === BODY_TYPE_JSON) {
+        return patchModel(activeRequest, { body: { ...activeRequest.body, text } });
+      }
+      return handleBodyTextChange(text);
+    },
+    [activeRequest, handleBodyTextChange],
+  );
+
+  const handleSendJsonCommentsChange = useCallback(
+    (sendJsonComments: boolean) => {
+      const newBody = { ...activeRequest.body };
+      if (sendJsonComments) {
+        newBody.sendJsonComments = true;
+      } else {
+        delete newBody.sendJsonComments;
+      }
+      fireAndForget(patchModel(activeRequest, { body: newBody }));
+    },
+    [activeRequest],
+  );
+
+  const requestView = useMemo(() => httpRequestToView(activeRequest), [activeRequest]);
+
+  const extraTabs = useMemo<ExtraPaneTab[]>(
+    () => [
+      {
+        tab: {
+          value: TAB_SETTINGS,
+          label: "Settings",
+          rightSlot: <CountBadge count={numSettingsOverrides} />,
+        },
+        content: <ModelSettingsEditor model={activeRequest} />,
+      },
+      {
+        tab: {
+          value: TAB_DESCRIPTION,
+          label: "Info",
+          rightSlot: hasDescription && <CountBadge count={true} />,
+        },
+        content: (
+          <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
+            <PlainInput
+              label="Request Name"
+              hideLabel
+              forceUpdateKey={updateKey}
+              defaultValue={activeRequest.name}
+              className="font-sans text-xl! px-0!"
+              containerClassName="border-0"
+              placeholder={resolvedModelName(activeRequest)}
+              onChange={(name) => patchModel(activeRequest, { name })}
+            />
+            <MarkdownEditor
+              name="request-description"
+              placeholder="Request description"
+              defaultValue={activeRequest.description}
+              stateKey={`description.${activeRequest.id}`}
+              forceUpdateKey={updateKey}
+              onChange={(description) => patchModel(activeRequest, { description })}
+            />
+          </div>
+        ),
+      },
+    ],
+    [activeRequest, hasDescription, numSettingsOverrides, updateKey],
+  );
+
+  const renderBody = useCallback(
+    (sharedEditor: ReactNode) => (
+      <ConfirmLargeRequestBody request={activeRequest}>
+        {activeRequest.bodyType === BODY_TYPE_GRAPHQL ? (
+          <Suspense>
+            <GraphQLEditor
+              forceUpdateKey={forceUpdateKey}
+              baseRequest={activeRequest}
+              request={activeRequest}
+              onChange={handleBodyChange}
+            />
+          </Suspense>
+        ) : activeRequest.bodyType === BODY_TYPE_BINARY ? (
+          <BinaryFileEditor
+            requestId={activeRequest.id}
+            contentType={contentType}
+            body={activeRequest.body}
+            onChange={(body) => patchModelDebounced(activeRequest, { body })}
+            onChangeContentType={handleContentTypeChange}
           />
-          <Tabs
-            ref={tabsRef}
-            label="Request"
-            tabs={tabs}
-            tabListClassName="mt-1 -mb-1.5"
-            storageKey={TABS_STORAGE_KEY}
-            activeTabKey={activeRequestId}
-          >
-            <TabContent value={TAB_AUTH}>
-              <HttpAuthenticationEditor model={activeRequest} />
-            </TabContent>
-            <TabContent value={TAB_HEADERS}>
-              <HeadersEditor
-                inheritedHeaders={inheritedHeaders}
-                forceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
-                headers={activeRequest.headers}
-                stateKey={`headers.${activeRequest.id}`}
-                onChange={(headers) => patchModelDebounced(activeRequest, { headers })}
-              />
-            </TabContent>
-            <TabContent value={TAB_PARAMS}>
-              <UrlParametersEditor
-                stateKey={`params.${activeRequest.id}`}
-                forceUpdateKey={forceUpdateKey + urlParametersKey}
-                pairs={urlParameterPairs}
-                onChange={(urlParameters) => patchModelDebounced(activeRequest, { urlParameters })}
-              />
-            </TabContent>
-            <TabContent value={TAB_SETTINGS}>
-              <ModelSettingsEditor model={activeRequest} />
-            </TabContent>
-            <TabContent value={TAB_BODY}>
-              <ConfirmLargeRequestBody request={activeRequest}>
-                {activeRequest.bodyType === BODY_TYPE_JSON ? (
-                  <JsonBodyEditor
-                    forceUpdateKey={forceUpdateKey}
-                    heightMode={fullHeight ? "full" : "auto"}
-                    request={activeRequest}
-                  />
-                ) : activeRequest.bodyType === BODY_TYPE_XML ? (
-                  <Editor
-                    forceUpdateKey={forceUpdateKey}
-                    autocompleteFunctions
-                    autocompleteVariables
-                    placeholder="..."
-                    heightMode={fullHeight ? "full" : "auto"}
-                    defaultValue={`${activeRequest.body?.text ?? ""}`}
-                    language="xml"
-                    onChange={handleBodyTextChange}
-                    stateKey={`xml.${activeRequest.id}`}
-                  />
-                ) : activeRequest.bodyType === BODY_TYPE_GRAPHQL ? (
-                  <Suspense>
-                    <GraphQLEditor
-                      forceUpdateKey={forceUpdateKey}
-                      baseRequest={activeRequest}
-                      request={activeRequest}
-                      onChange={handleBodyChange}
-                    />
-                  </Suspense>
-                ) : activeRequest.bodyType === BODY_TYPE_FORM_URLENCODED ? (
-                  <FormUrlencodedEditor
-                    forceUpdateKey={forceUpdateKey}
-                    request={activeRequest}
-                    onChange={handleBodyChange}
-                  />
-                ) : activeRequest.bodyType === BODY_TYPE_FORM_MULTIPART ? (
-                  <FormMultipartEditor
-                    forceUpdateKey={forceUpdateKey}
-                    request={activeRequest}
-                    onChange={handleBodyChange}
-                  />
-                ) : activeRequest.bodyType === BODY_TYPE_BINARY ? (
-                  <BinaryFileEditor
-                    requestId={activeRequest.id}
-                    contentType={contentType}
-                    body={activeRequest.body}
-                    onChange={(body) => patchModelDebounced(activeRequest, { body })}
-                    onChangeContentType={handleContentTypeChange}
-                  />
-                ) : typeof activeRequest.bodyType === "string" ? (
-                  <Editor
-                    forceUpdateKey={forceUpdateKey}
-                    autocompleteFunctions
-                    autocompleteVariables
-                    language={languageFromContentType(contentType)}
-                    placeholder="..."
-                    heightMode={fullHeight ? "full" : "auto"}
-                    defaultValue={`${activeRequest.body?.text ?? ""}`}
-                    onChange={handleBodyTextChange}
-                    stateKey={`other.${activeRequest.id}`}
-                  />
-                ) : (
-                  <EmptyStateText>No Body</EmptyStateText>
-                )}
-              </ConfirmLargeRequestBody>
-            </TabContent>
-            <TabContent value={TAB_DESCRIPTION}>
-              <div className="grid grid-rows-[auto_minmax(0,1fr)] h-full">
-                <PlainInput
-                  label="Request Name"
-                  hideLabel
-                  forceUpdateKey={updateKey}
-                  defaultValue={activeRequest.name}
-                  className="font-sans text-xl! px-0!"
-                  containerClassName="border-0"
-                  placeholder={resolvedModelName(activeRequest)}
-                  onChange={(name) => patchModel(activeRequest, { name })}
-                />
-                <MarkdownEditor
-                  name="request-description"
-                  placeholder="Request description"
-                  defaultValue={activeRequest.description}
-                  stateKey={`description.${activeRequest.id}`}
-                  forceUpdateKey={updateKey}
-                  onChange={(description) => patchModel(activeRequest, { description })}
-                />
-              </div>
-            </TabContent>
-          </Tabs>
-        </>
-      )}
-    </div>
+        ) : (
+          sharedEditor
+        )}
+      </ConfirmLargeRequestBody>
+    ),
+    [activeRequest, contentType, forceUpdateKey, handleBodyChange, handleContentTypeChange],
+  );
+
+  const renderUrlParameters = useCallback(
+    (pairs: EditablePair[]) => (
+      <UrlParametersEditor
+        stateKey={`params.${activeRequest.id}`}
+        forceUpdateKey={forceUpdateKey + urlParametersKey}
+        pairs={pairs}
+        onChange={(urlParameters) => patchModelDebounced(activeRequest, { urlParameters })}
+      />
+    ),
+    [activeRequest, forceUpdateKey, urlParametersKey],
+  );
+
+  return (
+    <HttpRequestPaneView
+      editable
+      style={style}
+      className={className}
+      fullHeight={fullHeight}
+      request={requestView}
+      tabsRef={tabsRef}
+      tabsStorageKey={TABS_STORAGE_KEY}
+      forceUpdateKey={forceUpdateKey}
+      urlBarKey={forceUpdateKey + urlKey}
+      urlForceUpdateKey={updateKey}
+      urlAutocomplete={autocomplete}
+      onUrlChange={handleUrlChange}
+      onUrlPasteOverwrite={handlePaste}
+      onSend={handleSend}
+      onCancel={cancelResponse}
+      isSending={activeResponse != null && activeResponse.state !== "closed"}
+      sendHotkeyAction="request.send"
+      focusHotkeyAction="url_bar.focus"
+      methodSlot={<RequestMethodDropdown request={activeRequest} className="ml-0.5 h-full!" />}
+      bodyTab={bodyTab}
+      renderBody={renderBody}
+      onBodyChange={handleBodyChange}
+      onBodyTextChange={handleJsonOrBodyTextChange}
+      onSendJsonCommentsChange={handleSendJsonCommentsChange}
+      jsonNoticeStorageKey={activeRequest.workspaceId}
+      urlParameterPairs={urlParameterPairs}
+      renderUrlParameters={renderUrlParameters}
+      headersTabs={headersTab}
+      inheritedHeaders={inheritedHeaders}
+      headersForceUpdateKey={`${forceUpdateHeaderEditorKey}::${forceUpdateKey}`}
+      onHeadersChange={(headers) => patchModelDebounced(activeRequest, { headers })}
+      authTabs={authTab}
+      authContent={<HttpAuthenticationEditor model={activeRequest} />}
+      extraTabs={extraTabs}
+    />
   );
 }
 

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vite-plus/test";
-import type { HotkeyAction } from "../../hooks/useHotKey";
+import type { HotkeyAction } from "../hooks/useHotKey";
 import { HotkeyList } from "./HotkeyList";
 
 vi.mock("./Hotkey", () => ({

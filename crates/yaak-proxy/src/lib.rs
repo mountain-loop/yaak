@@ -1,10 +1,15 @@
 mod body;
 mod cert;
 mod connection;
+mod decode;
+mod grpc;
+mod messages;
 #[cfg(target_os = "macos")]
 mod nw;
 mod request;
+mod sse;
 mod tunnel;
+mod ws;
 
 use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
@@ -27,6 +32,8 @@ use tokio::net::TcpListener;
 
 pub use cert::CaStore;
 use connection::handle_connection;
+pub use grpc::service_and_method;
+pub use messages::{MessageDirection, MessageKind, RAW_LIMIT, StreamKind, StreamMessage};
 use request::BoxBody;
 
 const PASSTHROUGH_AFTER_FAILURES: u32 = 2;
@@ -52,6 +59,9 @@ pub struct ProxyConfig {
     /// Offer HTTP/2 to clients in intercepted TLS, beside HTTP/1.1. Off, they all speak
     /// HTTP/1.1, for clients that misbehave on HTTP/2. See [`ProxyHandle::set_http2`].
     pub http2: bool,
+    /// Record WebSocket frames as messages. Off, upgraded connections are spliced blind, as
+    /// other upgrades are.
+    pub websocket_capture: bool,
 }
 
 /// See [`ProxyConfig::on_accept`].
@@ -66,15 +76,17 @@ impl ProxyConfig {
             upstream_root_certs: Vec::new(),
             on_accept: None,
             http2: true,
+            websocket_capture: true,
         }
     }
 }
 
 /// Lifecycle of each proxied exchange (a flow), keyed by `id`. A flow starts with
-/// `RequestStart` and ends with exactly one `ResponseBodyComplete`, `Error` or `Cancelled`.
-/// Each HTTP/2 stream is a flow of its own. Traffic the engine tunnels without decrypting
-/// (pinned clients, non-TLS CONNECT payloads, the frames after a `101 Switching Protocols`)
-/// produces no events.
+/// `RequestStart` and ends with exactly one `ResponseBodyComplete`, `StreamEnd`, `Error` or
+/// `Cancelled`. Each HTTP/2 stream is a flow of its own. A streaming flow (WebSocket,
+/// server-sent events, gRPC) has a `StreamStart` and then a `Message` for each message as it
+/// passes. Traffic the engine tunnels without decrypting (pinned clients, non-TLS CONNECT
+/// payloads, upgrades to protocols other than WebSocket) produces no events.
 #[derive(Debug, Clone)]
 pub enum ProxyEvent {
     /// Request headers arrived from the client.
@@ -157,6 +169,18 @@ pub enum ProxyEvent {
     /// The client gave up before the response headers arrived, by resetting the stream or
     /// closing the connection. The request upstream is cancelled with it.
     Cancelled { id: u64, elapsed_ms: u64 },
+    /// The flow carries a stream of messages: from its request headers for gRPC, its response
+    /// headers for server-sent events, its `101` for a WebSocket.
+    StreamStart { id: u64, kind: StreamKind },
+    /// A message of a streaming flow passed through.
+    Message { id: u64, message: StreamMessage },
+    /// A WebSocket ended: both sides sent a close frame, or the connection ended, with `error`
+    /// when it failed. Its flow ends here, as the `101` has no body to complete.
+    StreamEnd {
+        id: u64,
+        elapsed_ms: u64,
+        error: Option<String>,
+    },
 }
 
 /// A running engine. Dropping it stops the listener and joins its thread.
@@ -228,6 +252,7 @@ pub(crate) struct Engine {
     handshake_failures: Mutex<HashMap<String, u32>>,
     /// Offer HTTP/2 to clients in intercepted TLS.
     http2: AtomicBool,
+    websocket_capture: bool,
     /// `Via` value marking the plain-HTTP requests the engine forwards, unique to this run, so one
     /// that comes back to the engine is refused instead of forwarded again.
     via: HeaderValue,
@@ -326,6 +351,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         passthrough: Mutex::new(HashSet::new()),
         handshake_failures: Mutex::new(HashMap::new()),
         http2: AtomicBool::new(config.http2),
+        websocket_capture: config.websocket_capture,
         via: via_marker(),
     });
 

@@ -11,8 +11,16 @@ pub mod manager;
 mod reflection;
 mod transport;
 
+pub use manager::GrpcConfig;
+pub use prost_reflect;
+pub use reflection::{fill_pool_from_files, fill_pool_from_reflection};
 pub use tonic::Code;
 pub use tonic::metadata::*;
+
+/// A message as pretty JSON, its default fields included, as Yaak shows gRPC messages.
+pub fn message_to_json(msg: &DynamicMessage) -> Result<String, String> {
+    serialize_dynamic_message_json(msg)
+}
 
 pub fn serialize_options() -> SerializeOptions {
     SerializeOptions::new().skip_default_fields(false)

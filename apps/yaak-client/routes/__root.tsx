@@ -6,6 +6,7 @@ import classNames from "classnames";
 import { Provider as JotaiProvider } from "jotai";
 import { LazyMotion, MotionConfig } from "motion/react";
 import { lazy, type ReactNode, Suspense } from "react";
+import { ClientEditorHost } from "../components/ClientEditorHost";
 import { GlobalHooks } from "../components/GlobalHooks";
 import RouteError from "../components/RouteError";
 import { useHotkeyContextValue } from "../hooks/useHotKey";
@@ -30,17 +31,19 @@ function RouteComponent() {
     <JotaiProvider store={jotaiStore}>
       <QueryClientProvider client={queryClient}>
         <Hotkeys>
-          <LazyMotion strict features={motionFeatures}>
-            <MotionConfig transition={{ duration: 0.1 }}>
-              <Suspense>
-                <Toasts />
-                <Dialogs />
-                <ContextMenus />
-              </Suspense>
-              <Layout />
-              <GlobalHooks />
-            </MotionConfig>
-          </LazyMotion>
+          <ClientEditorHost>
+            <LazyMotion strict features={motionFeatures}>
+              <MotionConfig transition={{ duration: 0.1 }}>
+                <Suspense>
+                  <Toasts />
+                  <Dialogs />
+                  <ContextMenus />
+                </Suspense>
+                <Layout />
+                <GlobalHooks />
+              </MotionConfig>
+            </LazyMotion>
+          </ClientEditorHost>
         </Hotkeys>
       </QueryClientProvider>
     </JotaiProvider>
