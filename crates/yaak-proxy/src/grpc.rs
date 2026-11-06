@@ -165,6 +165,24 @@ impl GrpcParser {
         messages
     }
 
+    /// The body ended: a message it ended partway through, as much of it as came, cut short and
+    /// as it came (not decompressed), so its bytes are still recorded. A prefix alone, with none
+    /// of a message's bytes yet, carries nothing to keep.
+    pub(crate) fn end(&mut self) -> Option<StreamMessage> {
+        let (flag, length, remaining, mut payload) = self.current.take()?;
+        let (data, _) = payload.take();
+        let mut message = StreamMessage::new(self.direction, MessageKind::GrpcMessage);
+        message.data = data;
+        message.size = u64::from(length);
+        message.truncated = true;
+        message.compressed = flag & FLAG_COMPRESSED != 0;
+        message.error = Some(format!(
+            "The body ended partway through this message, {} of its {length} bytes in",
+            length - remaining
+        ));
+        Some(message)
+    }
+
     fn finish(&mut self) -> StreamMessage {
         let (flag, length, _, mut payload) = self.current.take().expect("a message being read");
         let (data, truncated) = payload.take();
@@ -281,6 +299,24 @@ mod tests {
         out.extend((payload.len() as u32).to_be_bytes());
         out.extend(payload);
         out
+    }
+
+    /// A body that ends partway through a message keeps what came of it, cut short.
+    #[test]
+    fn a_message_cut_off_by_the_end_is_kept() {
+        let mut parser = GrpcParser::new(MessageDirection::Server, None, false, 1024);
+        let mut stream = frame(0, b"whole");
+        stream.extend(&frame(0, b"half of it")[..8]);
+        let messages = parser.feed(&stream);
+        assert_eq!(messages.len(), 1);
+        let cut = parser.end().expect("the unfinished message");
+        assert_eq!((&cut.data[..], cut.size, cut.truncated), (&b"hal"[..], 10, true));
+        assert!(cut.error.as_deref().unwrap().contains("3 of its 10 bytes"));
+        // Nothing unfinished: nothing more.
+        assert!(parser.end().is_none());
+        // A prefix alone carries none of a message's bytes.
+        parser.feed(&[0, 0]);
+        assert!(parser.end().is_none());
     }
 
     #[test]

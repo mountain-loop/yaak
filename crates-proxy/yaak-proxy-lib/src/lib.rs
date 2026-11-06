@@ -1504,6 +1504,16 @@ impl InFlight {
         }
     }
 
+    /// Its bytes on the wire are its record: it is no stream's messages, or an encoded one still
+    /// kept until its messages decode. Their cut at the capture limit is then the body's.
+    fn keeps_bytes(&self, which: FlowBody) -> bool {
+        let writing = match which {
+            FlowBody::Request => self.request_body.is_some(),
+            FlowBody::Response => self.response_body.is_some(),
+        };
+        writing || !bodies::from_messages(&self.flow, which)
+    }
+
     fn body_writer(&mut self, which: FlowBody) -> &mut Option<BodyChunkWriter> {
         match which {
             FlowBody::Request => &mut self.request_body,
@@ -1737,7 +1747,7 @@ impl FlowSink {
             ProxyEvent::RequestBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.request_size += len as i64;
-                    if !bodies::from_messages(&f.flow, FlowBody::Request) {
+                    if f.keeps_bytes(FlowBody::Request) {
                         f.flow.request_truncated |= data.len() < len;
                     }
                     write_body_chunk(&mut f.request_body, &data);
@@ -1747,7 +1757,7 @@ impl FlowSink {
             ProxyEvent::RequestBodyComplete { id, size, truncated } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.request_size = size as i64;
-                    if !bodies::from_messages(&f.flow, FlowBody::Request) {
+                    if f.keeps_bytes(FlowBody::Request) {
                         f.flow.request_truncated = truncated;
                     }
                     finish_body(f.request_body.take());
@@ -1774,7 +1784,7 @@ impl FlowSink {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.response_size += len as i64;
                     f.drop_message_bodies();
-                    if !bodies::from_messages(&f.flow, FlowBody::Response) {
+                    if f.keeps_bytes(FlowBody::Response) {
                         f.flow.response_truncated |= data.len() < len;
                     }
                     write_body_chunk(&mut f.response_body, &data);
@@ -1791,7 +1801,7 @@ impl FlowSink {
             } => {
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.response_size = size as i64;
-                    if !bodies::from_messages(&f.flow, FlowBody::Response) {
+                    if f.keeps_bytes(FlowBody::Response) {
                         f.flow.response_truncated = truncated;
                     }
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
@@ -1857,7 +1867,16 @@ impl FlowSink {
                 messages::MessageDirection::Client => FlowBody::Request,
                 messages::MessageDirection::Server => FlowBody::Response,
             };
-            if bodies::from_messages(&f.flow, which) && f.body_writer(which).take().is_some() {
+            // Only a message read from the body's bytes shows they decode; a status from the
+            // headers or HTTP/2 trailers does not.
+            let from_body = matches!(
+                message.kind,
+                messages::MessageKind::SseEvent | messages::MessageKind::GrpcMessage
+            );
+            if from_body
+                && bodies::from_messages(&f.flow, which)
+                && f.body_writer(which).take().is_some()
+            {
                 decoded_bodies.push(Flow::body_id(&f.flow.id, which));
             }
         }
@@ -2271,6 +2290,7 @@ mod tests {
         let mut cut = ws_message(1, D::Server, K::GrpcMessage, b"\x0a\x09Hel");
         if let ProxyEvent::Message { message, .. } = &mut cut {
             message.truncated = true;
+            message.size = 11;
         }
         send(cut);
         let trailers = K::GrpcTrailers { status: Some(0), message: None };
@@ -2299,7 +2319,8 @@ mod tests {
         assert_eq!((request_body.data.as_slice(), request_body.truncated), (&request[..], false));
         // HTTP/2 trailers are no part of the body.
         let response_body = read(FlowBody::Response).await.unwrap();
-        assert_eq!(response_body.data, b"\x00\x00\x00\x00\x05\x0a\x09Hel");
+        // Framed with the length it was sent with, so it reads back as it was on the wire, cut.
+        assert_eq!(response_body.data, b"\x00\x00\x00\x00\x0b\x0a\x09Hel");
         assert!(response_body.truncated);
         let har = har::export(&ctx.db, &ctx.blobs, &[flow], 1 << 20).await.unwrap();
         assert_eq!(har.log.entries[0].response.content.size, 10);
@@ -2382,6 +2403,85 @@ mod tests {
         let body = read(&undecoded).await.unwrap();
         assert_eq!(body.data, b"\x1f\x8b not really gzip");
         assert!(body.decode_error.is_some());
+    }
+
+    /// An encoded gRPC call whose bytes never decode keeps them, both ways: a status from its
+    /// trailers is no sign they did, and their cut at the capture limit is the body's.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn encoded_grpc_bodies_that_never_decode_keep_their_bytes_and_cut() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        let send = |event| tx.send(event).unwrap();
+        let header = |name: &str, value: &str| (name.to_string(), value.to_string());
+        send(ProxyEvent::RequestStart {
+            id: 1,
+            started_at: SystemTime::now(),
+            method: "POST".into(),
+            url: "https://api.example.com/pkg.Greeter/SayHello".into(),
+            http_version: "HTTP/2.0".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        });
+        for (name, value) in [
+            header("content-type", "application/grpc"),
+            header("content-encoding", "gzip"),
+        ] {
+            send(ProxyEvent::RequestHeader { id: 1, name, value });
+        }
+        send(ProxyEvent::StreamStart { id: 1, kind: yaak_proxy::StreamKind::Grpc });
+        // Cut at the capture limit: 4 of 30 bytes kept.
+        send(ProxyEvent::RequestBodyChunk {
+            id: 1,
+            len: 30,
+            data: bytes::Bytes::from_static(b"junk"),
+        });
+        send(ProxyEvent::RequestBodyComplete { id: 1, size: 30, truncated: true });
+        send(ProxyEvent::ResponseStart {
+            id: 1,
+            status: 200,
+            http_version: "HTTP/2.0".into(),
+            remote_addr: None,
+            elapsed_ms: 1,
+        });
+        for (name, value) in [
+            header("content-type", "application/grpc"),
+            header("content-encoding", "gzip"),
+        ] {
+            send(ProxyEvent::ResponseHeader { id: 1, name, value });
+        }
+        send(ProxyEvent::ResponseBodyChunk {
+            id: 1,
+            len: 40,
+            data: bytes::Bytes::from_static(b"\x1f\x8bnope"),
+        });
+        // The status came in the HTTP/2 trailers, not from the body's bytes.
+        let trailers = K::GrpcTrailers { status: Some(0), message: None };
+        send(ws_message(1, D::Server, trailers, b"grpc-status: 0\r\n"));
+        send(ProxyEvent::ResponseBodyComplete {
+            id: 1,
+            size: 40,
+            truncated: true,
+            elapsed_ms: 5,
+            error: None,
+            cancelled: false,
+        });
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let flow = flows::list(&ctx.db, &Default::default()).unwrap().remove(0);
+        assert_eq!((flow.request_truncated, flow.response_truncated), (true, true));
+        for (which, kept) in [
+            (FlowBody::Request, &b"junk"[..]),
+            (FlowBody::Response, b"\x1f\x8bnope"),
+        ] {
+            // The bytes are kept, and read as a cut body is: what decoded of them, cut short.
+            assert_eq!(bodies::read_raw_body(&ctx.blobs, &flow.id, which).unwrap(), kept);
+            let body = bodies::read_body(&ctx.db, &ctx.blobs, &flow, which, 1024).await.unwrap();
+            assert!(body.truncated, "{which:?}");
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]

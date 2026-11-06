@@ -178,14 +178,11 @@ fn message_body(
                 }
                 MessageKind::GrpcMessage => {
                     let payload = messages::payload(db, blobs, &message)?;
-                    // A payload that failed to decompress is kept as it came, still compressed.
-                    let flag = u8::from(message.compressed && message.error.is_some());
-                    grpc_frame(&mut out, flag, &payload);
+                    grpc_frame(&mut out, 0, &message, &payload);
                 }
                 MessageKind::GrpcTrailers if trailers_in_body => {
                     let payload = messages::payload(db, blobs, &message)?;
-                    let compressed = u8::from(message.compressed && message.error.is_some());
-                    grpc_frame(&mut out, 0x80 | compressed, &payload);
+                    grpc_frame(&mut out, 0x80, &message, &payload);
                 }
                 _ => continue,
             }
@@ -234,9 +231,19 @@ fn sse_event_lines(message: &FlowMessage, payload: &[u8]) -> Vec<u8> {
 }
 
 /// Appends a gRPC length-prefixed message: its flag byte, its length, and its bytes.
-fn grpc_frame(out: &mut Vec<u8>, flag: u8, payload: &[u8]) {
+/// A message decompressed is framed again uncompressed, at its decompressed length. One kept as
+/// it came (never compressed, or failing to decompress) keeps its flag and the length it was
+/// sent with, so one cut short (at the capture limit, or by the body ending partway through it)
+/// reads back as it was on the wire, cut.
+fn grpc_frame(out: &mut Vec<u8>, flag: u8, message: &FlowMessage, payload: &[u8]) {
+    let as_sent = !message.compressed || message.error.is_some();
+    let (flag, length) = if as_sent {
+        (flag | u8::from(message.compressed), usize::try_from(message.size).unwrap_or(usize::MAX))
+    } else {
+        (flag, payload.len())
+    };
     out.push(flag);
-    out.extend_from_slice(&u32::try_from(payload.len()).unwrap_or(u32::MAX).to_be_bytes());
+    out.extend_from_slice(&u32::try_from(length).unwrap_or(u32::MAX).to_be_bytes());
     out.extend_from_slice(payload);
 }
 

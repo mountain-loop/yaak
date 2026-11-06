@@ -152,6 +152,25 @@ async fn route(
                 .body(full(out))
                 .unwrap()
         }
+        // A whole reply, then half of one, and the connection gives out.
+        "/pkg.Greeter/Cut" => {
+            let mut first = grpc_frame(0, &proto("whole", None));
+            first.extend(&grpc_frame(0, &proto("half of it", None))[..9]);
+            let frames = futures_util::stream::unfold(Some(first), |first| async move {
+                match first {
+                    Some(first) => Some((Ok::<_, BoxError>(Frame::data(Bytes::from(first))), None)),
+                    // After the bytes have gone out
+                    None => {
+                        tokio::time::sleep(Duration::from_millis(200)).await;
+                        Some((Err("connection reset".into()), None))
+                    }
+                }
+            });
+            Response::builder()
+                .header("content-type", "application/grpc-web+proto")
+                .body(StreamBody::new(frames).boxed_unsync())
+                .unwrap()
+        }
         "/pkg.Down/Call" => Response::builder()
             .status(502)
             .header("content-type", "text/plain")
@@ -369,6 +388,34 @@ async fn grpc_web_calls_are_stored_and_decoded() {
             .await
             .unwrap();
         assert_eq!(page["data"], BASE64.encode("upstream down"));
+
+        // A connection that gives out partway through a message: what came of it is kept.
+        let cut_url = format!("http://{upstream}/pkg.Greeter/Cut");
+        let sent = client
+            .post(&cut_url)
+            .header("content-type", "application/grpc-web+proto")
+            .body(grpc_frame(0, &proto("Di", None)))
+            .send()
+            .await;
+        if let Ok(resp) = sent {
+            let _ = resp.bytes().await;
+        }
+        let cut = wait_for(&ctx, &cut_url, |f| f.elapsed_ms.is_some() || f.error.is_some()).await;
+        let cut = wait_for(&ctx, &cut_url, |f| f.id == cut.id && f.message_count == 3).await;
+        let listed = rpc(&ctx, "list_messages", json!({ "flowId": cut.id })).await.unwrap();
+        let last = &listed["messages"][2];
+        assert_eq!((last["truncated"].as_bool(), last["size"].as_i64()), (Some(true), Some(12)));
+        let cut_body = rpc(&ctx, "get_flow_body", json!({ "flowId": cut.id, "which": "response" }))
+            .await
+            .unwrap();
+        let mut cut_sent = grpc_frame(0, &proto("whole", None));
+        cut_sent.extend(&grpc_frame(0, &proto("half of it", None))[..9]);
+        assert_eq!(
+            cut_body["data"],
+            BASE64.encode(&cut_sent),
+            "every byte that came, framed as it was"
+        );
+        assert_eq!(cut_body["truncated"], true);
 
         // No schema, and reflection against the server fails: decoded by wire type alone.
         let decode = json!({ "flowId": flow.id, "seq": 1 });
