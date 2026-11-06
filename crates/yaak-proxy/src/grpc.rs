@@ -171,11 +171,18 @@ impl GrpcParser {
     pub(crate) fn end(&mut self) -> Option<StreamMessage> {
         let (flag, length, remaining, mut payload) = self.current.take()?;
         let (data, _) = payload.take();
-        let mut message = StreamMessage::new(self.direction, MessageKind::GrpcMessage);
+        let compressed = flag & FLAG_COMPRESSED != 0;
+        // A gRPC-Web trailers frame stays one, its status read from what came when it can be.
+        let mut message = if flag & FLAG_TRAILERS != 0 {
+            let text = if compressed { "".into() } else { String::from_utf8_lossy(&data) };
+            trailers_message(self.direction, &text)
+        } else {
+            StreamMessage::new(self.direction, MessageKind::GrpcMessage)
+        };
         message.data = data;
         message.size = u64::from(length);
         message.truncated = true;
-        message.compressed = flag & FLAG_COMPRESSED != 0;
+        message.compressed = compressed;
         message.error = Some(format!(
             "The body ended partway through this message, {} of its {length} bytes in",
             length - remaining
@@ -314,6 +321,12 @@ mod tests {
         assert!(cut.error.as_deref().unwrap().contains("3 of its 10 bytes"));
         // Nothing unfinished: nothing more.
         assert!(parser.end().is_none());
+        // A trailers frame cut short is still a trailers frame.
+        let mut parser = GrpcParser::new(MessageDirection::Server, None, false, 1024);
+        parser.feed(&frame(FLAG_TRAILERS, b"grpc-status: 0\r\n")[..12]);
+        let cut = parser.end().expect("the unfinished trailers");
+        assert!(matches!(cut.kind, MessageKind::GrpcTrailers { .. }));
+        assert_eq!((&cut.data[..], cut.truncated), (&b"grpc-st"[..], true));
         // A prefix alone carries none of a message's bytes.
         parser.feed(&[0, 0]);
         assert!(parser.end().is_none());

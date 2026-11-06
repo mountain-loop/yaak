@@ -1494,31 +1494,19 @@ struct InFlight {
 
 impl InFlight {
     /// Stops writing the bodies its stream's messages carry, which are read back from them.
-    /// One whose bytes come encoded is kept until its first message shows they decode, as a
-    /// body that fails to has only its bytes to show.
     fn drop_message_bodies(&mut self) {
-        for which in [FlowBody::Request, FlowBody::Response] {
-            if bodies::from_messages(&self.flow, which) && !encoded(&self.flow, which) {
-                *self.body_writer(which) = None;
-            }
+        if bodies::from_messages(&self.flow, FlowBody::Request) {
+            self.request_body = None;
+        }
+        if bodies::from_messages(&self.flow, FlowBody::Response) {
+            self.response_body = None;
         }
     }
 
-    /// Its bytes on the wire are its record: it is no stream's messages, or an encoded one still
-    /// kept until its messages decode. Their cut at the capture limit is then the body's.
+    /// Its bytes on the wire are its record, as for any body that isn't a stream's messages, an
+    /// encoded one included. Their cut at the capture limit is then the body's.
     fn keeps_bytes(&self, which: FlowBody) -> bool {
-        let writing = match which {
-            FlowBody::Request => self.request_body.is_some(),
-            FlowBody::Response => self.response_body.is_some(),
-        };
-        writing || !bodies::from_messages(&self.flow, which)
-    }
-
-    fn body_writer(&mut self, which: FlowBody) -> &mut Option<BodyChunkWriter> {
-        match which {
-            FlowBody::Request => &mut self.request_body,
-            FlowBody::Response => &mut self.response_body,
-        }
+        !bodies::from_messages(&self.flow, which)
     }
 
     /// Something shown of the flow changed: one written while it streams is written again on
@@ -1856,39 +1844,6 @@ impl FlowSink {
             rows.push((id, message, inline));
         }
 
-        // An encoded body's messages decoded: they are its record now, and the bytes kept until
-        // they did are not kept.
-        let mut decoded_bodies = Vec::new();
-        for (id, message, _) in &rows {
-            let Some(f) = in_flight.get_mut(id) else {
-                continue;
-            };
-            let which = match message.direction {
-                messages::MessageDirection::Client => FlowBody::Request,
-                messages::MessageDirection::Server => FlowBody::Response,
-            };
-            // Only a message read from the body's bytes shows they decode; a status from the
-            // headers or HTTP/2 trailers does not.
-            let from_body = matches!(
-                message.kind,
-                messages::MessageKind::SseEvent | messages::MessageKind::GrpcMessage
-            );
-            if from_body
-                && bodies::from_messages(&f.flow, which)
-                && f.body_writer(which).take().is_some()
-            {
-                decoded_bodies.push(Flow::body_id(&f.flow.id, which));
-            }
-        }
-        if !decoded_bodies.is_empty() {
-            let deleted = self
-                .blobs
-                .with_tx(|b| decoded_bodies.iter().try_for_each(|id| b.delete_chunks(id)));
-            if let Err(e) = deleted {
-                warn!("Failed to delete a stream's body bytes: {e}");
-            }
-        }
-
         let mut orphaned = Vec::new();
         let mut newly_cleared = Vec::new();
         let written = self.db.with_tx(|ctx| {
@@ -2034,12 +1989,6 @@ impl FlowSink {
             warn!("Failed to delete a cleared flow's bodies: {e}");
         }
     }
-}
-
-/// The body names a Content-Encoding.
-fn encoded(flow: &Flow, which: FlowBody) -> bool {
-    find_header(flow.headers(which), "content-encoding")
-        .is_some_and(|e| !e.trim().is_empty() && !e.trim().eq_ignore_ascii_case("identity"))
 }
 
 fn flow_exists(conn: &rusqlite::Connection, flow_id: &str) -> bool {
@@ -2326,19 +2275,30 @@ mod tests {
         assert_eq!(har.log.entries[0].response.content.size, 10);
     }
 
-    /// A gzipped event stream keeps its bytes until an event shows they decode; one whose bytes
-    /// never do keeps them, so its body still reads, with why it didn't decode.
+    /// A gzipped event stream keeps its bytes as well as its events: they read back through the
+    /// body's decoder, so one that decodes reads as its events did, and one that doesn't keeps
+    /// its bytes and says why.
     #[tokio::test(flavor = "multi_thread")]
-    async fn encoded_event_streams_keep_their_bytes_until_they_decode() {
+    async fn encoded_event_streams_keep_their_bytes() {
+        use std::io::Write;
         use yaak_proxy::{MessageDirection as D, MessageKind as K};
         let dir = tempfile::tempdir().unwrap();
         let (events, _event_rx) = RpcEventEmitter::new();
         let ctx = ProxyCtx::new(dir.path(), events).unwrap();
         let (tx, event_loop) = event_loop(&ctx);
-        for (id, url) in [
-            (1, "https://a.example.com/events"),
-            (2, "https://b.example.com/events"),
-        ] {
+        let raw = "data: hi\n\n".to_string();
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gzip.write_all(raw.as_bytes()).unwrap();
+        let gzip = bytes::Bytes::from(gzip.finish().unwrap());
+        let bodies = [
+            (1, "https://a.example.com/events", gzip),
+            (
+                2,
+                "https://b.example.com/events",
+                bytes::Bytes::from_static(b"\x1f\x8b not really gzip"),
+            ),
+        ];
+        for (id, url, data) in bodies.clone() {
             tx.send(ProxyEvent::RequestStart {
                 id,
                 started_at: SystemTime::now(),
@@ -2365,21 +2325,19 @@ mod tests {
                 tx.send(ProxyEvent::ResponseHeader { id, name, value }).unwrap();
             }
             tx.send(ProxyEvent::StreamStart { id, kind: yaak_proxy::StreamKind::Sse }).unwrap();
-            let data = bytes::Bytes::from_static(b"\x1f\x8b not really gzip");
             tx.send(ProxyEvent::ResponseBodyChunk { id, len: data.len(), data }).unwrap();
         }
         // The first one's bytes decoded into an event; the second's never did.
-        let raw = "data: hi\n\n".to_string();
         let event = K::SseEvent { event: None, id: None, retry: None, raw: raw.clone() };
         let mut message = ws_message(1, D::Server, event, b"hi");
         if let ProxyEvent::Message { message, .. } = &mut message {
             message.size = raw.len() as u64;
         }
         tx.send(message).unwrap();
-        for id in [1, 2] {
+        for (id, _, data) in bodies.clone() {
             tx.send(ProxyEvent::ResponseBodyComplete {
                 id,
-                size: 20,
+                size: data.len() as u64,
                 truncated: false,
                 elapsed_ms: 5,
                 error: None,
@@ -2393,20 +2351,16 @@ mod tests {
         let flows = flows::list(&ctx.db, &Default::default()).unwrap();
         let flow = |host: &str| flows.iter().find(|f| f.url.contains(host)).unwrap().clone();
         let (decoded, undecoded) = (flow("a.example"), flow("b.example"));
-        let blobs = ctx.blobs.connect();
-        assert!(!blobs.body_exists(&Flow::body_id(&decoded.id, FlowBody::Response)).unwrap());
-        assert!(blobs.body_exists(&Flow::body_id(&undecoded.id, FlowBody::Response)).unwrap());
-
+        assert_eq!(decoded.message_count, 1);
         let read =
             |flow| bodies::read_body_or_raw(&ctx.db, &ctx.blobs, flow, FlowBody::Response, 1024);
-        assert_eq!(read(&decoded).await.unwrap().data, raw.as_bytes());
+        let body = read(&decoded).await.unwrap();
+        assert_eq!((body.data.as_slice(), body.decode_error), (raw.as_bytes(), None));
         let body = read(&undecoded).await.unwrap();
         assert_eq!(body.data, b"\x1f\x8b not really gzip");
         assert!(body.decode_error.is_some());
     }
 
-    /// An encoded gRPC call whose bytes never decode keeps them, both ways: a status from its
-    /// trailers is no sign they did, and their cut at the capture limit is the body's.
     #[tokio::test(flavor = "multi_thread")]
     async fn encoded_grpc_bodies_that_never_decode_keep_their_bytes_and_cut() {
         use yaak_proxy::{MessageDirection as D, MessageKind as K};

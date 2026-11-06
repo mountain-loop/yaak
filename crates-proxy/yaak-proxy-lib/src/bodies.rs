@@ -19,10 +19,14 @@ pub const WEBSOCKET_BODY_NOTE: &str =
 /// event stream's response, a gRPC call's request, and its response when the server answered
 /// in gRPC (a gateway's error page is a body like any other), and a WebSocket's response. Such a
 /// body is not written to `blobs.sqlite`; reading it puts it back together from the messages.
+///
+/// A body with a Content-Encoding keeps its bytes instead: the messages are read from it decoded,
+/// but only its bytes can say whether they decoded whole (gzip's checksum, an encoding the
+/// stream's reader can't undo), and they read back through the body's decoder as any other.
 pub fn from_messages(flow: &Flow, which: FlowBody) -> bool {
-    // A body in an encoding the stream's reader can't undo has no messages; it keeps its bytes.
-    let encoding = find_header(flow.headers(which), "content-encoding");
-    if flow.stream_kind != Some(StreamKind::Websocket) && !yaak_proxy::decodes_stream(encoding) {
+    let encoding = find_header(flow.headers(which), "content-encoding").map(str::trim);
+    let encoded = encoding.is_some_and(|e| !e.is_empty() && !e.eq_ignore_ascii_case("identity"));
+    if encoded && flow.stream_kind != Some(StreamKind::Websocket) {
         return false;
     }
     match (flow.stream_kind, which) {
@@ -77,9 +81,7 @@ pub async fn read_body(
     body: FlowBody,
     limit: usize,
 ) -> Result<DecodedBody, String> {
-    // An encoded stream whose bytes never decoded into messages kept its bytes instead.
-    let stored = blobs.connect().body_exists(&Flow::body_id(&flow.id, body)).unwrap_or(false);
-    if from_messages(flow, body) && !stored {
+    if from_messages(flow, body) {
         return message_body(db, blobs, flow, body, limit);
     }
     let raw = read_raw_body(blobs, &flow.id, body)?;
@@ -532,15 +534,8 @@ mod tests {
                 ),
             ],
         );
-        let flow = Flow {
-            id: "fl_sse".into(),
-            stream_kind: Some(StreamKind::Sse),
-            response_headers: vec![crate::models::ProxyHeader {
-                name: "Content-Encoding".into(),
-                value: "gzip".into(),
-            }],
-            ..Default::default()
-        };
+        let flow =
+            Flow { id: "fl_sse".into(), stream_kind: Some(StreamKind::Sse), ..Default::default() };
 
         let body = read_body(&db, &blobs, &flow, FlowBody::Response, 1 << 20).await.unwrap();
         let expected = format!(
@@ -548,7 +543,6 @@ mod tests {
             "a".repeat(3000),
             "b".repeat(3000)
         );
-        // Decoded already: the Content-Encoding was undone before the events were read.
         assert_eq!(String::from_utf8(body.data).unwrap(), expected);
         assert_eq!((body.truncated, body.decode_error, body.note), (false, None, None));
         // The request is no stream, and reads from the blob store as any other.
@@ -565,15 +559,17 @@ mod tests {
                 .truncated
         );
 
-        // In an encoding the stream's reader can't undo, there are no events: the bytes stay.
-        let brotli = Flow {
-            response_headers: vec![crate::models::ProxyHeader {
-                name: "Content-Encoding".into(),
-                value: "br".into(),
-            }],
-            ..flow
-        };
-        assert!(!from_messages(&brotli, FlowBody::Response));
+        // With a Content-Encoding, the bytes are its record, whatever the encoding.
+        for encoding in ["gzip", "br"] {
+            let encoded = Flow {
+                response_headers: vec![crate::models::ProxyHeader {
+                    name: "Content-Encoding".into(),
+                    value: encoding.into(),
+                }],
+                ..flow.clone()
+            };
+            assert!(!from_messages(&encoded, FlowBody::Response), "{encoding}");
+        }
     }
 
     #[tokio::test]

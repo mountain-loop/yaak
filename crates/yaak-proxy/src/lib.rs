@@ -32,7 +32,6 @@ use tokio::net::TcpListener;
 
 pub use cert::CaStore;
 use connection::handle_connection;
-pub use decode::decodes_stream;
 pub use grpc::{detect as detect_grpc, service_and_method};
 pub use messages::{MessageDirection, MessageKind, RAW_LIMIT, StreamKind, StreamMessage};
 use request::BoxBody;
