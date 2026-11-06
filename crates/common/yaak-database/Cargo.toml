@@ -24,5 +24,5 @@ r2d2_sqlite = { version = "0.32" }
 # nanoid pulls getrandom, which needs to be told how to reach the browser's
 # CSPRNG on wasm32-unknown-unknown. Native targets are unaffected.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
+getrandom = { version = "0.4.3", features = ["wasm_js"] }
 uuid = { version = "1", features = ["js"] }
