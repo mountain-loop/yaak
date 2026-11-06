@@ -1,4 +1,5 @@
 use crate::client_db::{ClientDb, WriteDb};
+use crate::content::content_hash;
 use crate::error::Result;
 use crate::models::{
     GrpcRequest, HttpRequest, ModelVersion, ModelVersionIden, ModelVersionReason, UpsertModelInfo,
@@ -6,7 +7,6 @@ use crate::models::{
 };
 use crate::queries::any_request::AnyRequest;
 use crate::util::UpdateSource;
-use crate::content::content_hash;
 use crate::versions::{apply_version_document, version_document};
 use log::warn;
 use sea_query::{Expr, ExprTrait, Query, SqliteQueryBuilder};
@@ -139,18 +139,24 @@ impl<'a> WriteDb<'a> {
 
         let restored = apply_version_document(&live.to_value()?, &version.document);
         Ok(match live {
-            AnyRequest::HttpRequest(_) => AnyRequest::HttpRequest(
-                self.upsert_http_request(&serde_json::from_value::<HttpRequest>(restored)?, source)?,
-            ),
-            AnyRequest::GrpcRequest(_) => AnyRequest::GrpcRequest(
-                self.upsert_grpc_request(&serde_json::from_value::<GrpcRequest>(restored)?, source)?,
-            ),
-            AnyRequest::WebsocketRequest(_) => AnyRequest::WebsocketRequest(
-                self.upsert_websocket_request(
+            AnyRequest::HttpRequest(_) => {
+                AnyRequest::HttpRequest(self.upsert_http_request(
+                    &serde_json::from_value::<HttpRequest>(restored)?,
+                    source,
+                )?)
+            }
+            AnyRequest::GrpcRequest(_) => {
+                AnyRequest::GrpcRequest(self.upsert_grpc_request(
+                    &serde_json::from_value::<GrpcRequest>(restored)?,
+                    source,
+                )?)
+            }
+            AnyRequest::WebsocketRequest(_) => {
+                AnyRequest::WebsocketRequest(self.upsert_websocket_request(
                     &serde_json::from_value::<WebsocketRequest>(restored)?,
                     source,
-                )?,
-            ),
+                )?)
+            }
         })
     }
 
@@ -213,7 +219,10 @@ mod tests {
 
     fn seed(db: &WriteDb) -> (Workspace, HttpRequest) {
         let workspace = db
-            .upsert_workspace(&Workspace { name: "Versions".to_string(), ..Default::default() }, &source())
+            .upsert_workspace(
+                &Workspace { name: "Versions".to_string(), ..Default::default() },
+                &source(),
+            )
             .expect("Failed to upsert workspace");
         let request = db
             .upsert_http_request(
@@ -298,7 +307,10 @@ mod tests {
             };
 
             let request = db
-                .upsert_http_request(&HttpRequest { headers: vec![header(None)], ..request }, &source())
+                .upsert_http_request(
+                    &HttpRequest { headers: vec![header(None)], ..request },
+                    &source(),
+                )
                 .unwrap();
             let first = snapshot(db, &request.id, ModelVersionReason::Send);
 

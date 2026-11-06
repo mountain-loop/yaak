@@ -100,8 +100,11 @@ mod tests {
         let resorted = HttpRequest { sort_priority: 99.5, ..request() };
         assert_eq!(hash_of(&resorted), base, "sort priority");
 
-        let touched =
-            HttpRequest { updated_at: Utc::now().naive_utc(), created_at: Utc::now().naive_utc(), ..request() };
+        let touched = HttpRequest {
+            updated_at: Utc::now().naive_utc(),
+            created_at: Utc::now().naive_utc(),
+            ..request()
+        };
         assert_eq!(hash_of(&touched), base, "timestamps");
 
         let renamed_id = HttpRequest { id: "rq_2".to_string(), ..request() };
@@ -120,8 +123,7 @@ mod tests {
         let base = version_document(&request()).unwrap();
         let moved =
             version_document(&HttpRequest { folder_id: Some("fl_2".into()), ..request() }).unwrap();
-        let resorted =
-            version_document(&HttpRequest { sort_priority: 99.5, ..request() }).unwrap();
+        let resorted = version_document(&HttpRequest { sort_priority: 99.5, ..request() }).unwrap();
 
         assert_eq!(moved, base);
         assert_eq!(resorted, base);
@@ -131,7 +133,10 @@ mod tests {
     fn editable_content_changes_the_hash() {
         let base = hash_of(&request());
 
-        assert_ne!(hash_of(&HttpRequest { url: "https://example.com/users/2".into(), ..request() }), base);
+        assert_ne!(
+            hash_of(&HttpRequest { url: "https://example.com/users/2".into(), ..request() }),
+            base
+        );
         assert_ne!(hash_of(&HttpRequest { method: "POST".into(), ..request() }), base);
         assert_ne!(hash_of(&HttpRequest { name: "Get other user".into(), ..request() }), base);
         assert_ne!(hash_of(&HttpRequest { description: "Notes".into(), ..request() }), base);
@@ -141,9 +146,6 @@ mod tests {
             base
         );
     }
-
-
-
 
     #[test]
     fn applying_a_document_keeps_the_live_model_identity() {

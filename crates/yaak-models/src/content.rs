@@ -130,12 +130,14 @@ mod tests {
 
     #[test]
     fn key_order_does_not_change_the_hash_when_nested() {
-        let a: Value =
-            serde_json::from_str(r#"{"body":{"text":"x","type":"json"},"headers":[{"a":1,"b":2}]}"#)
-                .unwrap();
-        let b: Value =
-            serde_json::from_str(r#"{"headers":[{"b":2,"a":1}],"body":{"type":"json","text":"x"}}"#)
-                .unwrap();
+        let a: Value = serde_json::from_str(
+            r#"{"body":{"text":"x","type":"json"},"headers":[{"a":1,"b":2}]}"#,
+        )
+        .unwrap();
+        let b: Value = serde_json::from_str(
+            r#"{"headers":[{"b":2,"a":1}],"body":{"type":"json","text":"x"}}"#,
+        )
+        .unwrap();
         assert_eq!(content_hash(&a).unwrap(), content_hash(&b).unwrap());
     }
 

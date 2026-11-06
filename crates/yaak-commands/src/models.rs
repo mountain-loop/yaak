@@ -7,8 +7,8 @@ use yaak_models::models::{
     AnyModel, GraphQlIntrospection, GrpcEvent, HttpRequestHeader, ModelVersion,
     RequestVersionComparison, Settings, WebsocketEvent, WorkspaceMeta,
 };
-use yaak_models::versions::version_document;
 use yaak_models::queries::workspaces::default_headers;
+use yaak_models::versions::version_document;
 use yaak_rpc_schema::*;
 
 pub async fn models_upsert<H: Host>(host: H, req: ModelsUpsertReq) -> Result<String> {
@@ -57,9 +57,7 @@ pub async fn models_snapshot_request<H: Host>(
     host: H,
     req: ModelsSnapshotRequestReq,
 ) -> Result<ModelVersion> {
-    Ok(host
-        .query_manager()
-        .with_tx(|tx| tx.snapshot_request_by_id(&req.request_id, req.reason))?)
+    Ok(host.query_manager().with_tx(|tx| tx.snapshot_request_by_id(&req.request_id, req.reason))?)
 }
 
 /// A version and the live request side by side, for the diff and for deciding
@@ -81,9 +79,8 @@ pub async fn models_restore_request_version<H: Host>(
     req: ModelsRestoreRequestVersionReq,
 ) -> Result<String> {
     let source = host.update_source();
-    let restored = host
-        .query_manager()
-        .with_tx(|tx| tx.restore_request_version(&req.version_id, &source))?;
+    let restored =
+        host.query_manager().with_tx(|tx| tx.restore_request_version(&req.version_id, &source))?;
     Ok(restored.id().to_string())
 }
 

@@ -24,8 +24,8 @@ use yaak_http::types::{
 use yaak_models::blob_manager::{BODY_CHUNK_SIZE, BlobManager, BodyChunk, BodyChunkWriter};
 use yaak_models::models::{
     ClientCertificate, Cookie, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
-    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState,
-    ProxySetting, ProxySettingAuth, ResolvedHttpRequestSettings,
+    HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState, ProxySetting,
+    ProxySettingAuth, ResolvedHttpRequestSettings,
 };
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
@@ -1512,7 +1512,11 @@ mod tests {
         let second = stored_send(&query_manager, &blob_manager, temp_dir.path(), &request).await;
 
         let version_id = first.version_id.clone().expect("a stored send must record a version");
-        assert_eq!(second.version_id, Some(version_id.clone()), "an unchanged request is one version");
+        assert_eq!(
+            second.version_id,
+            Some(version_id.clone()),
+            "an unchanged request is one version"
+        );
 
         let db = query_manager.connect();
         let version = db.get_model_version(&version_id).expect("Failed to load version");
