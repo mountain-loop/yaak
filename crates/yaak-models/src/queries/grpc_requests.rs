@@ -146,6 +146,8 @@ impl<'a> WriteDb<'a> {
         grpc_request: &GrpcRequest,
         source: &UpdateSource,
     ) -> Result<GrpcRequest> {
-        self.upsert(grpc_request, source)
+        let request = self.upsert(grpc_request, source)?;
+        self.move_model_versions_to_workspace(&request.id, &request.workspace_id)?;
+        Ok(request)
     }
 }

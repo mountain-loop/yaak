@@ -178,7 +178,9 @@ impl<'a> WriteDb<'a> {
         http_request: &HttpRequest,
         source: &UpdateSource,
     ) -> Result<HttpRequest> {
-        self.upsert(http_request, source)
+        let request = self.upsert(http_request, source)?;
+        self.move_model_versions_to_workspace(&request.id, &request.workspace_id)?;
+        Ok(request)
     }
 }
 

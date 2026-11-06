@@ -189,6 +189,23 @@ impl<'a> WriteDb<'a> {
         self.delete_many_untracked::<ModelVersion>(ModelVersionIden::ModelId, model_id)
     }
 
+    /// Keep a request's versions in the workspace the request is in.
+    ///
+    /// A workspace delete removes its versions by workspace, so a request moved
+    /// to another workspace must take its history with it, or deleting the old
+    /// workspace would delete versions that responses in the new one point at.
+    /// Called on every request write; when nothing moved it changes no rows.
+    pub(crate) fn move_model_versions_to_workspace(
+        &self,
+        model_id: &str,
+        workspace_id: &str,
+    ) -> Result<usize> {
+        Ok(self.conn().execute(
+            "UPDATE model_versions SET workspace_id = ?2 WHERE model_id = ?1 AND workspace_id != ?2",
+            rusqlite::params![model_id, workspace_id],
+        )?)
+    }
+
     /// Drop the versions a request no longer needs.
     ///
     /// A version referenced by a response outlives retention entirely — the
@@ -549,6 +566,62 @@ mod tests {
 
             db.delete_http_request_by_id(&request.id, &source()).unwrap();
             assert!(db.list_model_versions(&request.id).unwrap().is_empty());
+        });
+    }
+
+    #[test]
+    fn deleting_a_workspace_deletes_its_requests_versions() {
+        with_db(|db, blobs| {
+            let (workspace, request) = seed(db);
+            make_versions(db, &request, 2);
+
+            db.delete_workspace(&workspace, &source(), blobs).unwrap();
+            assert!(db.list_model_versions(&request.id).unwrap().is_empty());
+        });
+    }
+
+    /// A moved request takes its history along: deleting the workspace it
+    /// left must not delete versions its responses in the new one point at.
+    #[test]
+    fn a_moved_request_keeps_its_versions_when_its_old_workspace_is_deleted() {
+        with_db(|db, blobs| {
+            let (old_workspace, request) = seed(db);
+            let version = snapshot(db, &request.id, ModelVersionReason::Send);
+
+            let new_workspace = db
+                .upsert_workspace(
+                    &Workspace { name: "Elsewhere".to_string(), ..Default::default() },
+                    &source(),
+                )
+                .unwrap();
+            let moved = db
+                .upsert_http_request(
+                    &HttpRequest { workspace_id: new_workspace.id.clone(), ..request.clone() },
+                    &source(),
+                )
+                .unwrap();
+
+            // Moving changes no content, so a send from the new workspace
+            // reuses the version, and a response there points at it
+            let sent = snapshot(db, &moved.id, ModelVersionReason::Send);
+            assert_eq!(sent.id, version.id);
+            db.upsert_http_response(
+                &HttpResponse {
+                    request_id: moved.id.clone(),
+                    workspace_id: new_workspace.id.clone(),
+                    version_id: Some(version.id.clone()),
+                    ..Default::default()
+                },
+                &source(),
+                blobs,
+            )
+            .unwrap();
+
+            db.delete_workspace(&old_workspace, &source(), blobs).unwrap();
+
+            let survived = db.get_model_version(&version.id).expect("the version must survive");
+            assert_eq!(survived.workspace_id, new_workspace.id);
+            assert!(db.request_matches_version(&survived).unwrap());
         });
     }
 }
