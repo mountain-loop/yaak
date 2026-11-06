@@ -1,0 +1,55 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    ignore:
+      # Build tooling majors are opted into, not queued. These never reach a
+      # user, so the cost of being a release behind is low and the cost of a
+      # surprise is a broken build. Note this also suppresses security PRs for
+      # these, so Dependabot alerts are the backstop.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite-plugin-*"
+        update-types: ["version-update:semver-major"]
+      # 0.8 dropped stateExtensions and updateSchema from the package root and
+      # exposes no subpath to reach them, which GrpcEditor needs. Unpin once
+      # that editor moves to the jsonSchema helper.
+      - dependency-name: codemirror-json-schema
+    groups:
+      npm-production:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      npm-development:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    ignore:
+      # Held at 11.10.0 to pin what rolldown_resolver ("^11") resolves to; it
+      # does not build against 11.11. See crates-cli/yaak-cli/Cargo.toml.
+      - dependency-name: oxc_resolver
+    groups:
+      cargo:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

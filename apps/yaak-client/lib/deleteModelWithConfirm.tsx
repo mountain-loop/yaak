@@ -3,7 +3,7 @@ import { deleteModel, modelTypeLabel } from "@yaakapp-internal/models";
 import { InlineCode } from "@yaakapp-internal/ui";
 import { Prose } from "../components/Prose";
 import { showConfirmDelete } from "./confirm";
-import { pluralizeCount } from "./pluralize";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 import { resolvedModelName } from "./resolvedModelName";
 
 export async function deleteModelWithConfirm(

@@ -1,6 +1,5 @@
 import { EditorState } from "@codemirror/state";
 import { jsonc } from "@shopify/lang-jsonc";
-import { text } from "./text/extension";
 import { twig } from "./twig/extension";
 import { describe, expect, test } from "vite-plus/test";
 import {
@@ -11,6 +10,7 @@ import {
   MAX_VISIBLE_LINE_CHARS,
 } from "./largeValues";
 import type { SniffedValue } from "./sniffValue";
+import { text } from "@yaakapp-internal/ui/editor";
 
 const BIG = "A".repeat(1_000_000);
 

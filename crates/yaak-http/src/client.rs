@@ -10,8 +10,14 @@ use yaak_tls::{
 
 pub const HTTP2_MAX_RESPONSE_HEADER_LIST_SIZE: u32 = 1024 * 1024;
 
+/// hyper caps HTTP/1 responses at 100 headers, which real servers exceed.
+/// https://yaak.app/feedback/posts/when-response-headers-exceed-a-certain-count-hyper-throws-error
+pub const HTTP1_MAX_RESPONSE_HEADERS: usize = 1024;
+
 fn client_builder() -> ClientBuilder {
-    Client::builder().http2_max_header_list_size(HTTP2_MAX_RESPONSE_HEADER_LIST_SIZE)
+    Client::builder()
+        .http2_max_header_list_size(HTTP2_MAX_RESPONSE_HEADER_LIST_SIZE)
+        .http1_max_headers(HTTP1_MAX_RESPONSE_HEADERS)
 }
 
 #[derive(Clone)]
@@ -397,5 +403,102 @@ UFNAXPsoutUompC1Z57bKA6OKM2hRANCAATCYYKhzgHEaRaGsYVjJSoXvoroL8qe
             passphrase: None,
         };
         assert!(build_native_tls_identity(Some(empty)).unwrap().is_none());
+    }
+}
+
+#[cfg(test)]
+mod header_limit_tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// Accepts one connection and replies with a response head of exactly
+    /// `total_headers` fields. The trailing `Content-Length` is one of them,
+    /// because hyper counts every field against its limit.
+    async fn serve_response_with_header_count(total_headers: usize) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+
+            // Read the request head so the client is not writing into a closed socket
+            let mut buf = [0u8; 4096];
+            loop {
+                let n = socket.read(&mut buf).await.unwrap();
+                if n == 0 || buf[..n].windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+
+            let mut response = String::from("HTTP/1.1 200 OK\r\n");
+            for i in 0..total_headers - 1 {
+                response.push_str(&format!("X-Test-{i}: value-{i}\r\n"));
+            }
+            response.push_str("Content-Length: 0\r\n\r\n");
+
+            // A response the client rejects mid-parse closes the socket under
+            // us, so a failed write here is an expected outcome, not a fault
+            let _ = socket.write_all(response.as_bytes()).await;
+            let _ = socket.flush().await;
+        });
+
+        format!("http://{addr}/")
+    }
+
+    fn options() -> HttpConnectionOptions {
+        HttpConnectionOptions {
+            id: "test".to_string(),
+            validate_certificates: true,
+            http_version: HttpVersion::Http1,
+            proxy: HttpConnectionProxySetting::Disabled,
+            client_certificate: None,
+            dns_overrides: Vec::new(),
+            address_filter: None,
+        }
+    }
+
+    /// hyper defaults to 100 header fields per HTTP/1 response and fails the
+    /// whole request past that, which is what users hit in the field.
+    #[tokio::test]
+    async fn responses_with_more_than_100_headers_are_accepted() {
+        let url = serve_response_with_header_count(150).await;
+        let (client, _resolver) = options().build_client().unwrap();
+
+        let response = client
+            .inner()
+            .get(&url)
+            .send()
+            .await
+            .expect("request with 150 response headers should succeed");
+
+        assert_eq!(response.status(), 200);
+        assert_eq!(response.headers().len(), 150);
+        for i in 0..149 {
+            assert_eq!(
+                response.headers().get(format!("x-test-{i}")).unwrap(),
+                format!("value-{i}").as_str(),
+            );
+        }
+    }
+
+    /// Pins both sides of the boundary. The sizes are written out rather than
+    /// derived from `HTTP1_MAX_RESPONSE_HEADERS`, so retuning the limit trips
+    /// this test instead of silently moving with it.
+    #[tokio::test]
+    async fn the_limit_is_exactly_1024_header_fields() {
+        let (client, _resolver) = options().build_client().unwrap();
+
+        let at_limit = serve_response_with_header_count(1024).await;
+        let response = client
+            .inner()
+            .get(&at_limit)
+            .send()
+            .await
+            .expect("a response with 1024 header fields should succeed");
+        assert_eq!(response.headers().len(), 1024);
+
+        let over_limit = serve_response_with_header_count(1025).await;
+        assert!(client.inner().get(&over_limit).send().await.is_err());
     }
 }

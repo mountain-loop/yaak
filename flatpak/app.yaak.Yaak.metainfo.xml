@@ -29,7 +29,7 @@
       <li>Git-friendly plain-text project storage</li>
       <li>Environment variables and template functions</li>
       <li>Request chaining and dynamic values</li>
-      <li>OAuth 2.0, Bearer, Basic, API Key, AWS, JWT, and NTLM authentication</li>
+      <li>OAuth 2.0, Bearer, Basic, Digest, API Key, AWS, JWT, and NTLM authentication</li>
       <li>Import from cURL, Postman, Insomnia, and OpenAPI</li>
       <li>Extensible plugin system</li>
     </ul>

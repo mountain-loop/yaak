@@ -49,8 +49,11 @@ fn schema(pretty: bool) -> CommandResult {
 fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let workspace_id = resolve_workspace_id(ctx, workspace_id, "environment list")?;
     let environments = ctx
-        .db()
-        .list_environments_ensure_base(&workspace_id)
+        .query_manager()
+        .with_tx(|tx| {
+            tx.ensure_base_environment(&workspace_id)?;
+            tx.list_environments(&workspace_id)
+        })
         .map_err(|e| format!("Failed to list environments: {e}"))?;
 
     if environments.is_empty() {
@@ -111,8 +114,8 @@ fn create(
         }
 
         let created = ctx
-            .db()
-            .upsert_environment(&environment, &UpdateSource::Sync)
+            .query_manager()
+            .with_tx(|tx| tx.upsert_environment(&environment, &UpdateSource::Sync))
             .map_err(|e| format!("Failed to create environment: {e}"))?;
 
         println!("Created environment: {}", created.id);
@@ -133,8 +136,8 @@ fn create(
     };
 
     let created = ctx
-        .db()
-        .upsert_environment(&environment, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_environment(&environment, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to create environment: {e}"))?;
 
     println!("Created environment: {}", created.id);
@@ -152,8 +155,8 @@ fn update(ctx: &CliContext, json: Option<String>, json_input: Option<String>) ->
     let updated = apply_merge_patch(&existing, &patch, &id, "environment update")?;
 
     let saved = ctx
-        .db()
-        .upsert_environment(&updated, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.upsert_environment(&updated, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to update environment: {e}"))?;
 
     println!("Updated environment: {}", saved.id);
@@ -167,8 +170,8 @@ fn delete(ctx: &CliContext, environment_id: &str, yes: bool) -> CommandResult {
     }
 
     let deleted = ctx
-        .db()
-        .delete_environment_by_id(environment_id, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| tx.delete_environment_by_id(environment_id, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to delete environment: {e}"))?;
 
     println!("Deleted environment: {}", deleted.id);

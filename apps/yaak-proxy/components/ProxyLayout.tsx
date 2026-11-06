@@ -1,17 +1,32 @@
-import { HeaderSize, IconButton, SidebarLayout, SplitLayout } from "@yaakapp-internal/ui";
+import {
+  HeaderSize,
+  IconButton,
+  SidebarLayout,
+  SplitLayout,
+  type SplitLayoutLayout,
+  Toasts,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useState } from "react";
 import { useLocalStorage } from "react-use";
-import { useRpcQueryWithEvent } from "../hooks/useRpcQueryWithEvent";
+import { flowLayoutAtom } from "../lib/atoms";
+import { searchWindowAtom, showFirstRunAtom, shownTotalAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
-import { ActionIconButton } from "./ActionIconButton";
-import { ExchangesTable } from "./ExchangesTable";
-import { filteredExchangesAtom, Sidebar } from "./Sidebar";
+import { ClearFlowsButton } from "./ClearFlowsButton";
+import { FirstRun } from "./FirstRun";
+import { FlowDetail } from "./FlowDetail";
+import { FlowList } from "./FlowList";
+import { ProxyStatus } from "./ProxyStatus";
+import { HelperDialog } from "./HelperDialog";
+import { SaveDialog } from "./SaveDialog";
+import { selectedSidebarLabelAtom, Sidebar } from "./Sidebar";
+import { TakeOverBanner } from "./TakeOverBanner";
 
 export function ProxyLayout() {
   const os = getOsType();
-  const exchanges = useAtomValue(filteredExchangesAtom);
+  const title = useAtomValue(selectedSidebarLabelAtom);
+  const [flowLayout, setFlowLayout] = useAtom(flowLayoutAtom);
   const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
   const [sidebarHidden, setSidebarHidden] = useLocalStorage("sidebar_hidden", false);
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useLocalStorage(
@@ -19,14 +34,12 @@ export function ProxyLayout() {
     true,
   );
   const [floating, setFloating] = useState(false);
-  const { data: proxyState } = useRpcQueryWithEvent("get_proxy_state", {}, "proxy_state_changed");
-  const isRunning = proxyState?.state === "running";
   const isHidden = floating ? (floatingSidebarHidden ?? true) : (sidebarHidden ?? false);
 
   return (
     <div
       className={classNames(
-        "h-full w-full grid grid-rows-[auto_1fr]",
+        "h-full w-full grid grid-rows-[auto_minmax(0,1fr)]",
         os === "linux" && "border border-border-subtle",
       )}
     >
@@ -57,29 +70,24 @@ export function ProxyLayout() {
           </div>
           <div
             data-tauri-drag-region
-            className="pointer-events-none flex items-center text-sm px-2"
+            className="pointer-events-none flex items-center justify-center gap-2 text-sm px-2 min-w-0"
           >
-            Yaak Proxy
+            <span className="truncate">{title}</span>
+            <FlowCount />
           </div>
-          <div className="flex items-center gap-1 pr-1 pointer-events-auto">
-            {isRunning ? (
-              <>
-                <span className="text-2xs text-success">Running :9090</span>
-                <ActionIconButton
-                  action={{ scope: "global", action: "proxy_stop" }}
-                  icon="circle_stop"
-                  iconColor="secondary"
-                  size="sm"
-                />
-              </>
-            ) : (
-              <ActionIconButton
-                action={{ scope: "global", action: "proxy_start" }}
-                icon="circle_play"
-                iconColor="secondary"
-                size="sm"
-              />
-            )}
+          <div className="flex items-center gap-1 pr-1">
+            <ProxyStatus />
+            <ClearFlowsButton />
+            <IconButton
+              className="pointer-events-auto"
+              icon={flowLayout === "horizontal" ? "columns_2" : "rows_2"}
+              title={`Change to ${flowLayout === "horizontal" ? "vertical" : "horizontal"} layout`}
+              size="sm"
+              iconColor="secondary"
+              onClick={() =>
+                setFlowLayout((prev) => (prev === "horizontal" ? "vertical" : "horizontal"))
+              }
+            />
           </div>
         </div>
       </HeaderSize>
@@ -124,23 +132,46 @@ export function ProxyLayout() {
           )
         }
       >
-        <SplitLayout
-          storageKey="proxy_detail"
-          layout="vertical"
-          defaultRatio={0.4}
-          firstSlot={({ style }) => (
-            <ExchangesTable exchanges={exchanges} style={style} className="overflow-auto" />
-          )}
-          secondSlot={({ style }) => (
-            <div
-              style={style}
-              className="p-3 text-text-subtlest text-sm border-t border-border-subtle"
-            >
-              Select a request to view details
-            </div>
-          )}
-        />
+        <div className="h-full flex flex-col min-h-0">
+          <TakeOverBanner />
+          <div className="flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)]">
+            <FlowsOrFirstRun flowLayout={flowLayout} />
+          </div>
+        </div>
       </SidebarLayout>
+      <SaveDialog />
+      <HelperDialog />
+      <Toasts />
     </div>
+  );
+}
+
+/** Its own component, so new traffic re-renders the count rather than the whole layout */
+function FlowCount() {
+  const count = useAtomValue(shownTotalAtom);
+  const searching = useAtomValue(searchWindowAtom) != null;
+  const noun = searching ? (count === 1 ? "match" : "matches") : count === 1 ? "flow" : "flows";
+  return <span className="text-text-subtlest shrink-0">{`${count} ${noun}`}</span>;
+}
+
+/**
+ * The flow list above the detail pane, or, while the database has no flows at all, the first-run
+ * card across the whole area: it is the empty state until traffic replaces it.
+ */
+function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
+  if (useAtomValue(showFirstRunAtom)) return <FirstRun />;
+  return (
+    <SplitLayout
+      storageKey="proxy_detail"
+      className="gap-1"
+      layout={flowLayout}
+      defaultRatio={0.55}
+      firstSlot={({ style, orientation }) => (
+        <FlowList sideBySide={orientation === "horizontal"} style={style} className="pt-1" />
+      )}
+      secondSlot={({ style, orientation }) => (
+        <FlowDetail style={style} sideBySide={orientation === "horizontal"} />
+      )}
+    />
   );
 }

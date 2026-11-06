@@ -2,13 +2,13 @@
 import type { PartialImportResources } from "@yaakapp/api";
 import {
   convertId,
-  convertTemplateSyntax,
   createSourceKeys,
   importHeaders,
   importHttpBodyAndHeaders,
   isJSObject,
   type SourceKeys,
 } from "./common";
+import { convertTemplateSyntax } from "./templates";
 
 export function convertInsomniaV5(parsed: any) {
   // Assert parsed is object
@@ -80,7 +80,10 @@ export function convertInsomniaV5(parsed: any) {
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
 
-  return { resources: convertTemplateSyntax(resources), sourceKeys: keys.all() };
+  return {
+    resources: convertTemplateSyntax(resources, new Set(resources.httpRequests.map((r) => r.id))),
+    sourceKeys: keys.all(),
+  };
 }
 
 function importHttpRequest(

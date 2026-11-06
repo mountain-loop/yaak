@@ -43,7 +43,7 @@ pub enum Error {
     PluginErr(String),
 
     #[error("zip error: {0}")]
-    ZipError(#[from] zip_extract::ZipExtractError),
+    ZipError(#[from] zip::result::ZipError),
 
     #[error("Client not initialized error")]
     ClientNotInitializedErr,

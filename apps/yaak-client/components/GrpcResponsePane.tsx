@@ -1,5 +1,13 @@
 import type { GrpcEvent, GrpcRequest } from "@yaakapp-internal/models";
-import { HStack, Icon, type IconProps, LoadingIcon, VStack } from "@yaakapp-internal/ui";
+import {
+  HStack,
+  Icon,
+  type IconProps,
+  LoadingIcon,
+  VStack,
+  useStateWithDeps,
+  KeyValueRows,
+} from "@yaakapp-internal/ui";
 import { useAtomValue, useSetAtom } from "jotai";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -9,13 +17,12 @@ import {
   pinnedGrpcConnectionIdAtom,
   useGrpcEvents,
 } from "../hooks/usePinnedGrpcConnection";
-import { useStateWithDeps } from "../hooks/useStateWithDeps";
 import { Button } from "./core/Button";
 import { Editor } from "./core/Editor/LazyEditor";
 import { EventDetailHeader, EventViewer } from "./core/EventViewer";
 import { EventViewerRow } from "./core/EventViewerRow";
 import { HotkeyList } from "./core/HotkeyList";
-import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { KeyValueRow } from "./core/KeyValueRow";
 import { EmptyStateText } from "./EmptyStateText";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { RecentGrpcConnectionsDropdown } from "./RecentGrpcConnectionsDropdown";

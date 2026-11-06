@@ -61,13 +61,30 @@ async fn rpc(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_os::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(yaak_mac_window::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("no app data dir");
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
 
             let (emitter, event_rx) = RpcEventEmitter::new();
-            app.manage(ProxyCtx::new(&data_dir.join("proxy.db"), emitter));
+            let ctx = ProxyCtx::new(&data_dir, emitter)?;
+            // Not while the CLI daemon owns the engine: the window offers to take it over.
+            match ctx.serve_control_api() {
+                // The engine runs for as long as the app does. A failure, such as the port
+                // being taken, is kept for the window to show.
+                Ok(()) => {
+                    let ctx = ctx.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = ctx.start() {
+                            warn!("Failed to start the proxy: {e}");
+                        }
+                    });
+                }
+                Err(e) => warn!("Not serving the proxy control API: {e}"),
+            }
+            app.manage(ctx);
             app.manage(yaak_proxy_lib::build_router());
 
             // Drain RPC events and forward as Tauri events
@@ -86,6 +103,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building yaak proxy tauri application")
         .run(|app_handle, event| {
+            if let RunEvent::Exit = event {
+                // Never leave the Mac pointed at a proxy that is gone.
+                let ctx = app_handle.state::<ProxyCtx>();
+                ctx.shutdown();
+                ctx.stop_control_api();
+                return;
+            }
             if let RunEvent::Ready = event {
                 let config = CreateWindowConfig {
                     url: "/",

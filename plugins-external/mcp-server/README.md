@@ -2,6 +2,10 @@
 
 Exposes Yaak's functionality via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/).
 
+**Deprecated.** The Yaak CLI serves the same tools with `yaak mcp`, with the app open or
+closed. Install the CLI (`npm install -g @yaakapp/cli`), point your agent at `yaak mcp`, then
+uninstall this plugin. Settings > Agents in Yaak has the command for each agent.
+
 ## Setup
 
 Add this to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
@@ -10,14 +14,14 @@ Add this to your Claude Desktop config (`~/Library/Application Support/Claude/cl
 {
   "mcpServers": {
     "yaak": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "http://127.0.0.1:64343/mcp"]
+      "command": "yaak",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-Restart Claude Desktop and make sure Yaak is running.
+Restart Claude Desktop.
 
 ## Available Tools
 
@@ -33,3 +37,26 @@ Restart Claude Desktop and make sure Yaak is running.
 - `get_environment_id` - Get the current environment ID
 - `copy_to_clipboard` - Copy text to the system clipboard
 - `show_toast` - Show a toast notification in Yaak
+
+## Environment Selection
+
+`send_http_request` accepts an optional `environmentId` for that execution. It overrides the
+active environment without changing the selection in Yaak. Omitting it uses the host's
+active environment, as before.
+
+The ID must identify a base or sub-environment in the request's workspace. An empty,
+unknown, foreign-workspace, or folder environment ID returns an error before sending.
+Use the base environment ID to run with global variables only. Folder variables still
+apply according to the request's folder hierarchy.
+
+```json
+{
+  "id": "rq_example",
+  "workspaceId": "wk_example",
+  "environmentId": "ev_staging"
+}
+```
+
+This requires a Yaak host with support for the `environmentId` plugin API field;
+older hosts ignore it. `get_environment_id` reports the active selection, not the
+override used by a previous send.

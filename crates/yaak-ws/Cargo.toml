@@ -14,7 +14,7 @@ url = "2"
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time", "test-util", "rt"] }
-tokio-tungstenite = { version = "0.26.2", default-features = false, features = [
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = [
   "rustls-tls-native-roots",
   "connect",
 ] }

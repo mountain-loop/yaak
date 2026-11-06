@@ -11,10 +11,12 @@ members = [
   "crates/yaak-core",
   "crates/yaak-common",
   "crates/yaak-crypto",
+  "crates/yaak-filter",
   "crates/yaak-git",
   "crates/yaak-grpc",
   "crates/yaak-http",
   "crates/yaak-lifecycle",
+  "crates/yaak-mcp",
   "crates/yaak-models",
   "crates/yaak-plugins",
   "crates/yaak-sse",
@@ -29,6 +31,7 @@ members = [
   "crates-proxy/yaak-proxy-lib",
   # Server crates (the browser tier's hosted send executor)
   "crates-server/yaak-web",
+  "crates-server/yaak-playground",
   # CLI crates
   "crates-cli/yaak-cli",
   # Tauri-specific crates
@@ -37,6 +40,7 @@ members = [
   "crates-tauri/yaak-fonts",
   "crates-tauri/yaak-license",
   "crates-tauri/yaak-mac-window",
+  "crates-tauri/yaak-proxy-helper",
   "crates-tauri/yaak-system-appearance",
   "crates-tauri/yaak-tauri-utils",
   "crates-tauri/yaak-window",
@@ -47,9 +51,16 @@ chrono = "0.4.42"
 hex = "0.4.3"
 keyring = "3.6.3"
 log = "0.4.29"
-reqwest = "0.12.20"
+reqwest = { version = "0.13.5", default-features = false, features = [
+  # reqwest 0.13 switched `default-tls` from native-tls to rustls; keep the
+  # rest of the old default set and stay on native-tls.
+  "charset",
+  "http2",
+  "system-proxy",
+  "native-tls",
+] }
 rustls = { version = "0.23.34", default-features = false }
-rustls-platform-verifier = "0.6.2"
+rustls-platform-verifier = "0.7.1"
 schemars = { version = "0.8.22", features = ["chrono"] }
 serde = "1.0.228"
 serde_json = "1.0.145"
@@ -77,10 +88,12 @@ yaak = { path = "crates/yaak" }
 yaak-commands = { path = "crates/yaak-commands" }
 yaak-common = { path = "crates/yaak-common" }
 yaak-crypto = { path = "crates/yaak-crypto" }
+yaak-filter = { path = "crates/yaak-filter" }
 yaak-git = { path = "crates/yaak-git" }
 yaak-grpc = { path = "crates/yaak-grpc" }
 yaak-http = { path = "crates/yaak-http" }
 yaak-lifecycle = { path = "crates/yaak-lifecycle" }
+yaak-mcp = { path = "crates/yaak-mcp" }
 yaak-models = { path = "crates/yaak-models" }
 yaak-plugins = { path = "crates/yaak-plugins" }
 yaak-sse = { path = "crates/yaak-sse" }
@@ -98,6 +111,7 @@ yaak-proxy-lib = { path = "crates-proxy/yaak-proxy-lib" }
 yaak-fonts = { path = "crates-tauri/yaak-fonts" }
 yaak-license = { path = "crates-tauri/yaak-license" }
 yaak-mac-window = { path = "crates-tauri/yaak-mac-window" }
+yaak-proxy-helper = { path = "crates-tauri/yaak-proxy-helper" }
 yaak-system-appearance = { path = "crates-tauri/yaak-system-appearance" }
 yaak-tauri-utils = { path = "crates-tauri/yaak-tauri-utils" }
 yaak-window = { path = "crates-tauri/yaak-window" }

@@ -4,8 +4,9 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "Yaak",
     description: "Yaak official format",
-    onImport(_ctx, args) {
-      return migrateImport(args.text);
+    onImportSource(_ctx, { source }) {
+      if (source.type !== "text") return null;
+      return migrateImport(source.text);
     },
   },
 };

@@ -10,7 +10,7 @@ use log::debug;
 use std::collections::BTreeMap;
 use tokio_stream::StreamExt;
 use tonic::Request;
-use tonic::body::BoxBody;
+use tonic::body::Body;
 use tonic::transport::Uri;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
 use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
@@ -22,7 +22,7 @@ use tonic_reflection::pb::v1::{ExtensionRequest, FileDescriptorResponse};
 use tonic_reflection::pb::{v1, v1alpha};
 use yaak_tls::ClientCertificateConfig;
 
-pub struct AutoReflectionClient<T = Client<HttpsConnector<HttpConnector>, BoxBody>> {
+pub struct AutoReflectionClient<T = Client<HttpsConnector<HttpConnector>, Body>> {
     use_v1alpha: bool,
     client_v1: v1::server_reflection_client::ServerReflectionClient<T>,
     client_v1alpha: v1alpha::server_reflection_client::ServerReflectionClient<T>,

@@ -1,12 +1,11 @@
 import type { HttpRequest } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode } from "@yaakapp-internal/ui";
+import { Banner, HStack, InlineCode, SizeTag } from "@yaakapp-internal/ui";
 import type { ReactNode } from "react";
 import { useToggle } from "../hooks/useToggle";
 import { showConfirm } from "../lib/confirm";
 import { Button } from "./core/Button";
 import { Link } from "./core/Link";
-import { SizeTag } from "./core/SizeTag";
 
 interface Props {
   children: ReactNode;

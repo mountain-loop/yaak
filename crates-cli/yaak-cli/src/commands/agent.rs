@@ -184,6 +184,14 @@ fn installed_version(dir: &Path) -> Option<String> {
         .filter(|v| !v.is_empty() && v != VERSION_PLACEHOLDER)
 }
 
+/// A skill installed by a plugin manager or `npx skills add` keeps the unstamped
+/// placeholder; that manager owns its updates, so it is not ours to call stale.
+fn is_plugin_managed(dir: &Path) -> bool {
+    fs::read_to_string(dir.join("SKILL.md"))
+        .map(|text| text.contains(VERSION_PLACEHOLDER))
+        .unwrap_or(false)
+}
+
 /// Health summary appended to root `--help`, so an agent can notice in one command
 /// that an upgraded CLI has left the installed skill behind. Silent when nothing is
 /// installed anywhere, to avoid nagging users who do not use agent tooling.
@@ -195,7 +203,7 @@ pub fn help_section() -> Option<String> {
     let mut installed = 0usize;
     for target in &targets {
         let dir = target.skills_dir.join(SKILL_NAME);
-        if !dir.join("SKILL.md").exists() {
+        if !dir.join("SKILL.md").exists() || is_plugin_managed(&dir) {
             continue;
         }
         installed += 1;

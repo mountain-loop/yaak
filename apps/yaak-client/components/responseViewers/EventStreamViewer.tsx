@@ -1,6 +1,6 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { extractSseValueAtPath, type ServerSentEvent } from "@yaakapp-internal/sse";
-import { HStack, Icon, InlineCode, SplitLayout, VStack } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, SplitLayout, VStack, IconTooltip } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useMemo, useState } from "react";
@@ -23,7 +23,6 @@ import { Editor } from "../core/Editor/LazyEditor";
 import { EventDetailHeader, EventViewer } from "../core/EventViewer";
 import { EventViewerRow } from "../core/EventViewerRow";
 import { IconButton } from "../core/IconButton";
-import { IconTooltip } from "../core/IconTooltip";
 import { Input } from "../core/Input";
 import { Select } from "../core/Select";
 

@@ -7,10 +7,10 @@ import { useAtomValue } from "jotai";
 import { showAlert } from "../lib/alert";
 import { showConfirmDelete } from "../lib/confirm";
 import { jotaiStore } from "../lib/jotai";
-import { pluralizeCount } from "../lib/pluralize";
 import { rpc } from "../lib/rpc";
 import { activeWorkspaceIdAtom } from "./useActiveWorkspace";
 import { useFastMutation } from "./useFastMutation";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 export function useDeleteSendHistory() {
   const httpResponses = useAtomValue(httpResponsesAtom);

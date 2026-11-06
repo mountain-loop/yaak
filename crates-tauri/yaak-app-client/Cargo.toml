@@ -28,7 +28,7 @@ openssl-sys = { version = "0.9.105", features = ["vendored"] } # For Ubuntu inst
 rlimit = "0.11" # Raise the launchd 256 open-file soft limit at startup
 
 [dependencies]
-base64 = "0.22.1" # For writing values the editor only ever held encoded
+base64 = "0.23.1" # For writing values the editor only ever held encoded
 charset = "0.1.5"
 chrono = { workspace = true, features = ["serde"] }
 cookie = "0.18.1"
@@ -41,14 +41,15 @@ pretty_graphql = "0.2"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.32"
 mime_guess = "2.0.5"
-rand = "0.9.0"
+rand = "0.10.2"
 reqwest = { workspace = true, features = [
   "multipart",
   "gzip",
   "brotli",
   "deflate",
   "json",
-  "rustls-tls-manual-roots-no-provider",
+  "query",
+  "rustls-no-provider",
   "socks",
   "http2",
 ] }
@@ -68,7 +69,7 @@ tauri-plugin-updater = "2.10.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tokio-stream = "0.1.17"
-tokio-tungstenite = { version = "0.26.2", default-features = false }
+tokio-tungstenite = { version = "0.30.0", default-features = false }
 url = "2"
 tokio-util = { version = "0.7", features = ["codec"] }
 ts-rs = { workspace = true }
@@ -82,6 +83,7 @@ yaak-core = { workspace = true }
 yaak = { workspace = true }
 yaak-commands = { workspace = true }
 yaak-crypto = { workspace = true }
+yaak-filter = { workspace = true }
 yaak-fonts = { workspace = true }
 yaak-git = { workspace = true }
 yaak-grpc = { workspace = true }
@@ -89,6 +91,7 @@ yaak-http = { workspace = true }
 yaak-license = { workspace = true, optional = true }
 yaak-mac-window = { workspace = true }
 yaak-lifecycle = { workspace = true }
+yaak-mcp = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-sse = { workspace = true }

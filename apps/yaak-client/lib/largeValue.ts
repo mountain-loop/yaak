@@ -6,7 +6,6 @@ import type { SniffedValue } from "../components/core/Editor/sniffValue";
 import { isEncodedRun } from "../components/core/Editor/sniffValue";
 import { copyToClipboard } from "./copy";
 import { fireAndForget } from "./fireAndForget";
-import { rpc } from "./rpc";
 import { showToast } from "./toast";
 import { platform } from "@yaakapp-internal/platform";
 
@@ -212,35 +211,26 @@ export function copyImage(text: string, sniffed: SniffedValue, fallback: string)
     });
 }
 
-/** Base64 of a byte array, in chunks so a few megabytes don't blow the argument limit. */
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
-
 /**
  * Writes a collapsed value to a file the user picks.
  *
- * A value that is already base64 goes straight to the backend as-is — decoding it here only to
+ * A value that is already base64 is handed over as base64. These are the values
+ * the editor collapsed for being large, so decoding one here only for a host to
  * encode it again would walk megabytes twice for nothing.
  */
 export async function saveValue(text: string, sniffed: SniffedValue | null, name: string) {
   const ext = sniffed == null ? "txt" : (mime.getExtension(sniffed.mime) ?? "bin");
-  const filepath = await platform.dialog.save({ defaultPath: `${name}.${ext}`, title: "Save Value" });
-  if (filepath == null) {
+  const content =
+    sniffed == null
+      ? new TextEncoder().encode(text)
+      : sniffed.encoding === "base64"
+        ? { base64: normalizeBase64(payloadOf(text, sniffed)) }
+        : decodeValue(text, sniffed);
+
+  const savedTo = await platform.files.save(`${name}.${ext}`, content);
+  if (savedTo == null) {
     return; // Cancelled
   }
 
-  const data =
-    sniffed == null
-      ? toBase64(new TextEncoder().encode(text))
-      : sniffed.encoding === "base64"
-        ? normalizeBase64(payloadOf(text, sniffed))
-        : toBase64(decodeValue(text, sniffed));
-
-  await rpc("cmd_save_base64_to_binary", { filepath, data });
-  showToast({ message: `Saved to ${filepath}` });
+  showToast({ message: `Saved to ${savedTo}` });
 }

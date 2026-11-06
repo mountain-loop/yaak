@@ -74,11 +74,11 @@ fn git_log_inner(dir: &Path, rela_path: Option<&Path>) -> crate::error::Result<V
             Some(GitCommit {
                 oid: oid.to_string(),
                 author: GitAuthor {
-                    name: author.name().map(|s| s.to_string()),
-                    email: author.email().map(|s| s.to_string()),
+                    name: author.name().ok().map(|s| s.to_string()),
+                    email: author.email().ok().map(|s| s.to_string()),
                 },
                 when: convert_git_time_to_date(author.when()),
-                message: commit.message().map(|m| m.to_string()),
+                message: commit.message().ok().map(|m| m.to_string()),
             })
         })
         .collect();

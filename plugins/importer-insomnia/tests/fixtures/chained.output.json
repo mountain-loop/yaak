@@ -1,0 +1,85 @@
+{
+  "resources": {
+    "environments": [
+      {
+        "id": "GENERATE_ID::env_base",
+        "workspaceId": "GENERATE_ID::wrk_chained",
+        "public": true,
+        "parentModel": "workspace",
+        "parentId": null,
+        "model": "environment",
+        "name": "Base",
+        "variables": [
+          {
+            "enabled": true,
+            "name": "host",
+            "value": "https://example.com"
+          }
+        ]
+      }
+    ],
+    "folders": [],
+    "grpcRequests": [],
+    "httpRequests": [
+      {
+        "id": "GENERATE_ID::req_query",
+        "workspaceId": "GENERATE_ID::wrk_chained",
+        "folderId": null,
+        "model": "http_request",
+        "name": "GraphQL",
+        "url": "${[ host ]}/graphql",
+        "urlParameters": [],
+        "body": {
+          "query": "query Get($id: ID!) { node(id: $id) { id } }",
+          "variables": "{\"id\":\"123\"}",
+          "operationName": "Get"
+        },
+        "bodyType": "graphql",
+        "headers": [
+          {
+            "enabled": true,
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "method": "POST",
+        "authenticationType": "bearer",
+        "authentication": {
+          "token": "${[ response.body.path(request=b64'R0VORVJBVEVfSUQ6OnJlcV9sb2dpbg', behavior='ttl', ttl='60', path=b64'JC50b2tlbg', result='first') ]}"
+        }
+      },
+      {
+        "id": "GENERATE_ID::req_login",
+        "workspaceId": "GENERATE_ID::wrk_chained",
+        "folderId": null,
+        "model": "http_request",
+        "name": "Login",
+        "url": "${[ host ]}/login",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "headers": [],
+        "method": "POST",
+        "authenticationType": null,
+        "authentication": {}
+      }
+    ],
+    "websocketRequests": [],
+    "workspaces": [
+      {
+        "id": "GENERATE_ID::wrk_chained",
+        "model": "workspace",
+        "name": "Chained GraphQL",
+        "headers": [],
+        "authenticationType": null,
+        "authentication": {}
+      }
+    ]
+  },
+  "sourceKeys": {
+    "GENERATE_ID::wrk_chained": "wrk_chained",
+    "GENERATE_ID::env_base": "env_base",
+    "GENERATE_ID::req_query": "req_query",
+    "GENERATE_ID::req_login": "req_login"
+  }
+}

@@ -130,8 +130,8 @@
           },
           {
             "enabled": true,
-            "name": "${[ApiHeaderName ]}",
-            "value": "${[ApiKey ]}"
+            "name": "${[ ApiHeaderName ]}",
+            "value": "${[ ApiKey ]}"
           }
         ],
         "id": "GENERATE_ID::req_d72fff2a6b104b91a2ebe9de9edd2785",
@@ -139,7 +139,7 @@
         "model": "http_request",
         "name": "New Request",
         "sortPriority": -1736781406672,
-        "url": "${[BASE_URL ]}/foo/:id",
+        "url": "${[ BASE_URL ]}/foo/:id",
         "urlParameters": [
           {
             "name": "query",

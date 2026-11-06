@@ -11,6 +11,7 @@
  */
 
 import type { Unsubscribe } from "../types";
+import { randomId } from "./ids";
 import { type FromWorker, type ToWorker, WORKER_NAME } from "./protocol";
 
 /**
@@ -45,7 +46,7 @@ export class WorkerConnection {
    * and two tabs claiming one identity would each drop the other's writes as
    * echoes.
    */
-  readonly label = `tab_${crypto.randomUUID().slice(0, 8)}`;
+  readonly label = `tab_${randomId(4)}`;
 
   /** True once the worker has said anything at all. */
   private heard = false;

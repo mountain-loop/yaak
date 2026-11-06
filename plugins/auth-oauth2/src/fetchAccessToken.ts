@@ -1,4 +1,6 @@
 import type { Context, HttpRequest, HttpUrlParameter } from "@yaakapp/api";
+import type { CustomRequestParams } from "./customParams";
+import { mergeFormParams, mergeHeaders } from "./customParams";
 import type { AccessTokenRawResponse } from "./store";
 
 export async function fetchAccessToken(
@@ -10,9 +12,10 @@ export async function fetchAccessToken(
     scope: string | null;
     audience: string | null;
     params: HttpUrlParameter[];
+    custom?: CustomRequestParams;
   } & ({ clientAssertion: string } | { clientSecret: string; credentialsInBody: boolean }),
 ): Promise<AccessTokenRawResponse> {
-  const { clientId, grantType, accessTokenUrl, scope, audience, params } = args;
+  const { clientId, grantType, accessTokenUrl, scope, audience, params, custom } = args;
   console.log("[oauth2] Getting access token", accessTokenUrl);
   const httpRequest: Partial<HttpRequest> = {
     method: "POST",
@@ -59,6 +62,12 @@ export async function fetchAccessToken(
   } else {
     const value = `Basic ${Buffer.from(`${clientId}:${args.clientSecret}`).toString("base64")}`;
     httpRequest.headers?.push({ name: "Authorization", value });
+  }
+
+  // Merged last so custom entries override the credential headers and params above
+  if (custom) {
+    httpRequest.headers = mergeHeaders(httpRequest.headers ?? [], custom.headers);
+    httpRequest.body = { form: mergeFormParams(httpRequest.body?.form ?? [], custom.body) };
   }
 
   httpRequest.authenticationType = "none"; // Don't inherit workspace auth

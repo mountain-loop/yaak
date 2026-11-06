@@ -12,10 +12,11 @@ use yaak_models::queries::workspaces::default_headers;
 use yaak_rpc_schema::*;
 
 pub async fn models_upsert<H: Host>(host: H, req: ModelsUpsertReq) -> Result<String> {
-    let db = host.db();
     let blobs = host.blob_manager();
     let source = host.update_source();
-    Ok(yaak_models::models_ops::upsert_model(&db, blobs, req.model, &source)?)
+    Ok(host
+        .query_manager()
+        .with_tx(|tx| yaak_models::models_ops::upsert_model(tx, blobs, req.model, &source))?)
 }
 
 /// Deletes cascade — a workspace can hold thousands of requests — and run in a
@@ -56,7 +57,9 @@ pub async fn models_snapshot_request<H: Host>(
     host: H,
     req: ModelsSnapshotRequestReq,
 ) -> Result<ModelVersion> {
-    Ok(host.db().snapshot_request_by_id(&req.request_id, req.reason)?)
+    Ok(host
+        .query_manager()
+        .with_tx(|tx| tx.snapshot_request_by_id(&req.request_id, req.reason))?)
 }
 
 /// A version and the live request side by side, for the diff and for deciding
@@ -78,7 +81,9 @@ pub async fn models_restore_request_version<H: Host>(
     req: ModelsRestoreRequestVersionReq,
 ) -> Result<String> {
     let source = host.update_source();
-    let restored = host.db().restore_request_version(&req.version_id, &source)?;
+    let restored = host
+        .query_manager()
+        .with_tx(|tx| tx.restore_request_version(&req.version_id, &source))?;
     Ok(restored.id().to_string())
 }
 
@@ -112,12 +117,9 @@ pub async fn models_upsert_graphql_introspection<H: Host>(
     req: ModelsUpsertGraphqlIntrospectionReq,
 ) -> Result<GraphQlIntrospection> {
     let source = host.update_source();
-    Ok(host.db().upsert_graphql_introspection(
-        &req.workspace_id,
-        &req.request_id,
-        req.content,
-        &source,
-    )?)
+    Ok(host.query_manager().with_tx(|tx| {
+        tx.upsert_graphql_introspection(&req.workspace_id, &req.request_id, req.content, &source)
+    })?)
 }
 
 /// Everything the frontend's model store needs to boot, as one JSON string.
@@ -149,9 +151,16 @@ pub async fn models_workspace_models<H: PluginHost>(
 
     // Add the workspace children
     if let Some(wid) = req.workspace_id.as_deref() {
+        // Opening a workspace is where the rows it is assumed to have get created
+        host.query_manager().with_tx(|tx| {
+            tx.ensure_base_environment(wid)?;
+            tx.ensure_default_cookie_jar(wid)?;
+            tx.ensure_workspace_meta(wid)?;
+            Ok::<(), yaak_models::error::Error>(())
+        })?;
         let db = host.db();
         l.append(&mut db.list_cookie_jars(wid)?.into_iter().map(Into::into).collect());
-        l.append(&mut db.list_environments_ensure_base(wid)?.into_iter().map(Into::into).collect());
+        l.append(&mut db.list_environments(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_folders(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_grpc_connections(wid)?.into_iter().map(Into::into).collect());
         l.append(&mut db.list_grpc_requests(wid)?.into_iter().map(Into::into).collect());
@@ -169,23 +178,26 @@ pub async fn cmd_get_workspace_meta<H: Host>(
     host: H,
     req: CmdGetWorkspaceMetaReq,
 ) -> Result<WorkspaceMeta> {
-    let db = host.db();
-    let workspace = db.get_workspace(&req.workspace_id)?;
-    Ok(db.get_or_create_workspace_meta(&workspace.id)?)
+    let workspace = host.db().get_workspace(&req.workspace_id)?;
+    Ok(host.query_manager().with_tx(|tx| tx.ensure_workspace_meta(&workspace.id))?)
 }
 
 pub async fn cmd_delete_all_grpc_connections<H: Host>(
     host: H,
     req: CmdDeleteAllGrpcConnectionsReq,
 ) -> Result<()> {
-    Ok(host.db().delete_all_grpc_connections_for_request(&req.request_id, &host.update_source())?)
+    Ok(host.query_manager().with_tx(|tx| {
+        tx.delete_all_grpc_connections_for_request(&req.request_id, &host.update_source())
+    })?)
 }
 
 pub async fn cmd_delete_all_http_responses<H: Host>(
     host: H,
     req: CmdDeleteAllHttpResponsesReq,
 ) -> Result<()> {
-    host.db().delete_all_http_responses_for_request(&req.request_id, &host.update_source())?;
+    host.query_manager().with_tx(|tx| {
+        tx.delete_all_http_responses_for_request(&req.request_id, &host.update_source())
+    })?;
     Ok(())
 }
 
@@ -193,9 +205,9 @@ pub async fn cmd_ws_delete_connections<H: Host>(
     host: H,
     req: CmdWsDeleteConnectionsReq,
 ) -> Result<()> {
-    Ok(host
-        .db()
-        .delete_all_websocket_connections_for_request(&req.request_id, &host.update_source())?)
+    Ok(host.query_manager().with_tx(|tx| {
+        tx.delete_all_websocket_connections_for_request(&req.request_id, &host.update_source())
+    })?)
 }
 
 pub async fn cmd_delete_send_history<H: Host>(host: H, req: CmdDeleteSendHistoryReq) -> Result<()> {

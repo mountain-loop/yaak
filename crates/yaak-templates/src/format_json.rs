@@ -1,3 +1,5 @@
+use crate::tag_scan::TagStrings;
+
 enum FormatState {
     TemplateTag,
     String,
@@ -7,6 +9,7 @@ enum FormatState {
 /// Formats JSON that might contain template tags (skipped entirely)
 pub fn format_json(text: &str, tab: &str) -> String {
     let mut chars = text.chars().peekable();
+    let mut tag_strings = TagStrings::default();
 
     let mut new_json = "".to_string();
     let mut depth = 0;
@@ -43,15 +46,22 @@ pub fn format_json(text: &str, tab: &str) -> String {
         }
         // Close Template tag states
         if let FormatState::TemplateTag = state {
+            // A quoted argument is allowed to contain `]}`, so skip over strings whole
+            if current_char == '\'' {
+                new_json.push(current_char);
+                if let Some(rest) = tag_strings.take(&mut chars) {
+                    new_json.push_str(&rest);
+                }
+                continue;
+            }
             if rest_of_chars.take(2).collect::<String>() == "]}" {
                 state = FormatState::None;
                 new_json.push_str("]}");
                 chars.next(); // Skip the second closing bracket
                 continue;
-            } else {
-                new_json.push(current_char);
-                continue;
             }
+            new_json.push(current_char);
+            continue;
         }
 
         if rest_of_chars.take(3).collect::<String>() == "${[" {
@@ -309,6 +319,33 @@ mod tests {
             r#"
 {
   "foo": ${[ fn("hello", "world") ]}
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_skip_template_tags_with_quoted_brackets() {
+        // The `]}` inside the quotes must not end the tag, or the rest gets re-indented
+        assert_eq!(
+            format_json(r#"{"foo":${[ fn(a='x]}y') ]} }"#, "  "),
+            r#"
+{
+  "foo": ${[ fn(a='x]}y') ]}
+}
+"#
+            .trim()
+        );
+    }
+
+    #[test]
+    fn test_skip_template_tags_with_escaped_quote() {
+        assert_eq!(
+            format_json(r#"{"foo":${[ fn(a='it\'s ]}') ]} }"#, "  "),
+            r#"
+{
+  "foo": ${[ fn(a='it\'s ]}') ]}
 }
 "#
             .trim()

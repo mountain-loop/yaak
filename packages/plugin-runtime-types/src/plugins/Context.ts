@@ -1,4 +1,5 @@
 import type {
+  FilterResponse,
   FindHttpResponsesRequest,
   FindHttpResponsesResponse,
   FormInput,
@@ -225,6 +226,16 @@ export interface Context {
   };
   templates: {
     render<T extends JsonValue>(args: TemplateRenderRequest & { data: T }): Promise<T>;
+  };
+  /**
+   * Query text the way the response filter box does. A query or document
+   * that can't be read comes back as `error`, with empty `content`.
+   */
+  filter: {
+    /** RFC 9535 JSONPath. Every match, as a pretty-printed JSON array. */
+    jsonPath(text: string, query: string): Promise<FilterResponse>;
+    /** XPath 1.0. Matched nodes as XML, one per line, or a scalar result as text. */
+    xPath(text: string, query: string): Promise<FilterResponse>;
   };
   plugin: {
     reload(): void;

@@ -1,4 +1,4 @@
-import type { GitStatusEntry } from "@yaakapp-internal/git";
+import type { GitStatus, GitStatusEntry } from "@yaakapp-internal/git";
 import { useGit } from "@yaakapp-internal/git";
 import type {
   Environment,
@@ -9,8 +9,7 @@ import type {
   Workspace,
 } from "@yaakapp-internal/models";
 import { Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
-import classNames from "classnames";
-import { useCallback, useMemo, useState } from "react";
+import { type ComponentProps, useCallback, useMemo, useState } from "react";
 import { modelToYaml } from "../../lib/diffYaml";
 import { trackFeatureUsage } from "../../lib/featureFeedback";
 import { resolvedModelName } from "../../lib/resolvedModelName";
@@ -19,6 +18,7 @@ import { showErrorToast } from "../../lib/toast";
 import { sync } from "../../init/sync";
 import { CommercialUseBanner } from "../CommercialUseBanner";
 import { Button } from "../core/Button";
+import { Chip } from "../core/Chip";
 import type { CheckboxProps } from "../core/Checkbox";
 import { Checkbox } from "../core/Checkbox";
 import type { CheckboxTreeNode } from "../core/CheckboxTree";
@@ -333,16 +333,7 @@ function CommitTreeRow({ node }: { node: CommitTreeNode }) {
       )}
       <div className="truncate flex-1">{resolvedModelName(node.model)}</div>
       {node.status.status !== "current" && (
-        <InlineCode
-          className={classNames(
-            "py-0 bg-transparent w-24 text-center shrink-0",
-            node.status.status === "modified" && "text-info",
-            node.status.status === "untracked" && "text-success",
-            node.status.status === "removed" && "text-danger",
-          )}
-        >
-          {node.status.status}
-        </InlineCode>
+        <Chip color={statusColor(node.status.status)}>{node.status.status}</Chip>
       )}
     </>
   );
@@ -376,16 +367,9 @@ function ExternalTreeNode({
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-1 w-full items-center">
           <Icon color="secondary" icon="file_code" />
           <div className="truncate">{displayPath}</div>
-          <InlineCode
-            className={classNames(
-              "py-0 ml-auto bg-transparent w-24 text-center",
-              entry.status === "modified" && "text-info",
-              entry.status === "untracked" && "text-success",
-              entry.status === "removed" && "text-danger",
-            )}
-          >
+          <Chip className="ml-auto" color={statusColor(entry.status)}>
             {entry.status}
-          </InlineCode>
+          </Chip>
         </div>
       }
     />
@@ -478,4 +462,21 @@ function DiffPanel({
       <DiffViewer original={prevYaml ?? ""} modified={nextYaml ?? ""} className="flex-1 min-h-0" />
     </div>
   );
+}
+
+function statusColor(status: GitStatus): ComponentProps<typeof Chip>["color"] {
+  switch (status) {
+    case "modified":
+      return "info";
+    case "untracked":
+      return "success";
+    case "removed":
+      return "danger";
+    case "conflict":
+      return "warning";
+    case "current":
+    case "renamed":
+    case "type_change":
+      return "default";
+  }
 }

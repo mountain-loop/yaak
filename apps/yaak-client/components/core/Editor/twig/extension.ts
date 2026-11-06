@@ -5,11 +5,11 @@ import { parseMixed } from "@lezer/common";
 import type { WrappedEnvironmentVariable } from "../../../../hooks/useEnvironmentVariables";
 import type { GenericCompletionConfig } from "../genericCompletion";
 import { genericCompletion } from "../genericCompletion";
-import { textLanguage } from "../text/extension";
 import type { TwigCompletionOption } from "./completion";
 import { twigCompletion } from "./completion";
 import { templateTagsPlugin } from "./templateTags";
 import { parser as twigParser } from "./twig";
+import { textLanguage } from "@yaakapp-internal/ui/editor";
 
 export function twig({
   base,

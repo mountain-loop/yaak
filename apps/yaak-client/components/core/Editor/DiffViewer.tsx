@@ -5,7 +5,8 @@ import { EditorView } from "@codemirror/view";
 import classNames from "classnames";
 import { useEffect, useRef } from "react";
 import "./DiffViewer.css";
-import { readonlyExtensions, syntaxHighlightStyle } from "./extensions";
+import { syntaxHighlightStyle } from "@yaakapp-internal/ui/editor";
+import { readonlyExtensions } from "./extensions";
 
 interface Props {
   /** Original/previous version (left side) */

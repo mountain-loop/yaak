@@ -9,14 +9,13 @@ use crate::events::{
     CallHttpAuthenticationRequest, CallHttpAuthenticationResponse, CallHttpRequestActionRequest,
     CallTemplateFunctionArgs, CallTemplateFunctionRequest, CallTemplateFunctionResponse,
     CallWebsocketRequestActionRequest, CallWorkspaceActionRequest, EmptyPayload, ErrorResponse,
-    FilterRequest, FilterResponse, GetFolderActionsResponse, GetGrpcRequestActionsResponse,
-    GetHttpAuthenticationConfigRequest, GetHttpAuthenticationConfigResponse,
-    GetHttpAuthenticationSummaryResponse, GetHttpRequestActionsResponse,
-    GetTemplateFunctionConfigRequest, GetTemplateFunctionConfigResponse,
-    GetTemplateFunctionSummaryResponse, GetThemesRequest, GetThemesResponse,
-    GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse, ImportRequest, ImportResponse,
-    InternalEvent, InternalEventPayload, JsonPrimitive, PluginContext, RenderPurpose,
-    ShowToastRequest,
+    GetFolderActionsResponse, GetGrpcRequestActionsResponse, GetHttpAuthenticationConfigRequest,
+    GetHttpAuthenticationConfigResponse, GetHttpAuthenticationSummaryResponse,
+    GetHttpRequestActionsResponse, GetTemplateFunctionConfigRequest,
+    GetTemplateFunctionConfigResponse, GetTemplateFunctionSummaryResponse, GetThemesRequest,
+    GetThemesResponse, GetWebsocketRequestActionsResponse, GetWorkspaceActionsResponse,
+    ImportRequest, ImportResponse, InternalEvent, InternalEventPayload, JsonPrimitive,
+    PluginContext, RenderPurpose, ShowToastRequest,
 };
 use crate::native_template_functions::{template_function_keyring, template_function_secure};
 use crate::nodejs::start_nodejs_plugin_runtime;
@@ -187,9 +186,7 @@ impl PluginManager {
         }
 
         let bundled_dirs = plugin_manager.list_bundled_plugin_dirs().await?;
-        // Scope the db connection so the future stays Send across the await below
-        let plugins = {
-            let db = query_manager.connect();
+        let plugins = query_manager.with_tx(|db| {
             for dir in &bundled_dirs {
                 if db.get_plugin_by_directory(dir).is_none() {
                     db.upsert_plugin(
@@ -204,8 +201,8 @@ impl PluginManager {
                     )?;
                 }
             }
-            db.list_plugins()?
-        };
+            db.list_plugins()
+        })?;
 
         let init_errors = plugin_manager.initialize_all_plugins(plugins, plugin_context).await;
         if !init_errors.is_empty() {
@@ -1094,17 +1091,31 @@ impl PluginManager {
         plugin_context: &PluginContext,
         content: &str,
     ) -> Result<ImportResponse> {
+        self.import_input(plugin_context, &ImportRequest::from_text(content)).await
+    }
+
+    pub async fn import_input(
+        &self,
+        plugin_context: &PluginContext,
+        input: &ImportRequest,
+    ) -> Result<ImportResponse> {
         let reply_events = self
             .send_and_wait(
                 plugin_context,
-                &InternalEventPayload::ImportRequest(ImportRequest {
-                    content: content.to_string(),
-                }),
+                &InternalEventPayload::ImportRequest(input.clone()),
                 Duration::from_secs(60),
             )
             .await?;
 
         // TODO: Don't just return the first valid response
+        let errors = reply_events
+            .iter()
+            .filter_map(|e| match &e.payload {
+                InternalEventPayload::ErrorResponse(error) => Some(error.error.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
         let result = reply_events.into_iter().find_map(|e| match e {
             InternalEvent {
                 plugin_name,
@@ -1122,48 +1133,9 @@ impl PluginManager {
         });
 
         match result {
-            None => Err(PluginErr("No importers found for file contents".to_string())),
+            None if !errors.is_empty() => Err(PluginErr(errors)),
+            None => Err(PluginErr("No importers found for this input".to_string())),
             Some(resp) => Ok(resp),
-        }
-    }
-
-    pub async fn filter_data(
-        &self,
-        plugin_context: &PluginContext,
-        filter: &str,
-        content: &str,
-        content_type: &str,
-    ) -> Result<FilterResponse> {
-        let ct = content_type.to_lowercase();
-        let plugin_name = if ct.contains("xml") || ct.contains("html") {
-            "@yaak/filter-xpath"
-        } else {
-            "@yaak/filter-jsonpath"
-        };
-
-        let plugin = self
-            .get_plugin_by_name(plugin_name)
-            .await
-            .ok_or(PluginNotFoundErr(plugin_name.to_string()))?;
-
-        let event = self
-            .send_to_plugin_and_wait(
-                plugin_context,
-                &plugin,
-                &InternalEventPayload::FilterRequest(FilterRequest {
-                    filter: filter.to_string(),
-                    content: content.to_string(),
-                }),
-                Duration::from_secs(5),
-            )
-            .await?;
-
-        match event.payload {
-            InternalEventPayload::FilterResponse(resp) => Ok(resp),
-            InternalEventPayload::EmptyResponse(_) => {
-                Err(PluginErr("Filter returned empty".to_string()))
-            }
-            e => Err(PluginErr(format!("Export returned invalid event {:?}", e))),
         }
     }
 }
@@ -1194,8 +1166,9 @@ fn prefer_plugin(candidate: &Plugin, existing: &Plugin) -> bool {
 /// whose directory isn't in this list are filtered out by `resolve_plugins_for_runtime`.
 ///
 /// `exporter-curl` was renamed to `action-copy-curl` in 19ffcd18, which is why affected
-/// installs show "Copy as cURL" twice.
-const REMOVED_BUNDLED_PLUGIN_DIRS: &[&str] = &["exporter-curl"];
+/// installs show "Copy as cURL" twice. `filter-jsonpath` and `filter-xpath` moved into
+/// the `yaak-filter` crate.
+const REMOVED_BUNDLED_PLUGIN_DIRS: &[&str] = &["exporter-curl", "filter-jsonpath", "filter-xpath"];
 
 /// Whether a plugin directory path is one of the known-removed bundled plugins.
 fn is_removed_bundled_plugin_dir(dir: &str) -> bool {
@@ -1243,6 +1216,8 @@ mod tests {
             r"C:\Users\me\AppData\Local\Yaak\vendored\plugins\exporter-curl"
         ));
         assert!(is_removed_bundled_plugin_dir("vendored/plugins/exporter-curl/"));
+        assert!(is_removed_bundled_plugin_dir("vendored/plugins/filter-jsonpath"));
+        assert!(is_removed_bundled_plugin_dir("vendored/plugins/filter-xpath"));
     }
 
     #[test]

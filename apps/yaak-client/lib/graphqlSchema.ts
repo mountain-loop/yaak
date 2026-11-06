@@ -1,4 +1,5 @@
 import type { GraphQLSchema, IntrospectionQuery } from "graphql";
+import { errorMessage } from "./errorMessage";
 import { buildClientSchema, buildSchema, introspectionFromSchema } from "graphql";
 
 // Accepts either a GraphQL introspection JSON ({ data: { __schema } } or
@@ -44,8 +45,4 @@ export function tryBuildIntrospectionFromFile(
       error: `Could not parse file as introspection JSON or GraphQL SDL: ${errorMessage(e)}`,
     };
   }
-}
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }

@@ -165,6 +165,8 @@ pub fn app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>>
                         "Generate Theme CSS",
                     )
                     .build(app_handle)?,
+                    &MenuItemBuilder::with_id("dev.show_home".to_string(), "Show Home Screen")
+                        .build(app_handle)?,
                 ],
             )?,
         ],

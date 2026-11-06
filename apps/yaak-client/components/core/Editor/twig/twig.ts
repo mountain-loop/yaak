@@ -4,17 +4,24 @@ import { highlight } from "./highlight";
 export const parser = LRParser.deserialize({
   version: 14,
   states:
-    "!^QQOPOOOOOO'#C_'#C_OYOQO'#C^OOOO'#Cc'#CcQQOPOOOOOO'#Cd'#CdO_OQO,58xOOOO-E6a-E6aOOOO-E6b-E6bOOOO1G.d1G.d",
-  stateData: "g~OUROYPO~OSTO~OSTOTXO~O",
-  goto: "nXPPY^PPPbhTROSTQOSQSORVSQUQRWU",
-  nodeNames: "⚠ Template Tag TagOpen TagContent TagClose Text",
-  maxTerm: 10,
+    "!^QQOPOOOOOO'#C_'#C_OYOQO'#C^OOOO'#Cd'#CdQQOPOOOOOO'#Ce'#CeObOQO,58xOOOO-E6b-E6bOOOO-E6c-E6cOOOO1G.d1G.d",
+  stateData: "m~OVROZPO~OSTOTTO~OSTOTTOUXO~O",
+  goto: "oYPPZ_PPPPciTROSTQOSQSORVSQUQRWU",
+  nodeNames: "⚠ Template Tag TagOpen TagContent TagString TagClose Text",
+  maxTerm: 11,
   propSources: [highlight],
   skippedNodes: [0],
   repeatNodeCount: 2,
   tokenData:
-    "#{~RTOtbtu!zu;'Sb;'S;=`!o<%lOb~gTU~Otbtuvu;'Sb;'S;=`!o<%lOb~yVO#ob#o#p!`#p;'Sb;'S;=`!o<%l~b~Ob~~!u~!cSO!}b#O;'Sb;'S;=`!o<%lOb~!rP;=`<%lb~!zOU~~!}VO#ob#o#p#d#p;'Sb;'S;=`!o<%l~b~Ob~~!u~#gTO!}b!}#O#v#O;'Sb;'S;=`!o<%lOb~#{OY~",
-  tokenizers: [1, new LocalTokenGroup("b~RP#P#QU~XP#q#r[~aOT~~", 17, 4)],
+    "#{~RTOtbtu!zu;'Sb;'S;=`!o<%lOb~gTV~Otbtuvu;'Sb;'S;=`!o<%lOb~yVO#ob#o#p!`#p;'Sb;'S;=`!o<%l~b~Ob~~!u~!cSO!}b#O;'Sb;'S;=`!o<%lOb~!rP;=`<%lb~!zOV~~!}VO#ob#o#p#d#p;'Sb;'S;=`!o<%l~b~Ob~~!u~#gTO!}b!}#O#v#O;'Sb;'S;=`!o<%lOb~#{OZ~",
+  tokenizers: [
+    1,
+    new LocalTokenGroup(
+      "#R~RQwxX#P#Q!u~[VOwXwxqx#OX#O#Pv#P;'SX;'S;=`!o<%lOX~vOT~~yRO;'SX;'S;=`!S;=`OX~!VWOwXwxqx#OX#O#Pv#P;'SX;'S;=`!o;=`<%lX<%lOX~!rP;=`<%lX~!xP#q#r!{~#QOU~~",
+      94,
+      4,
+    ),
+  ],
   topRules: { Template: [0, 1] },
   tokenPrec: 0,
 });

@@ -2,12 +2,12 @@
 import type { PartialImportResources } from "@yaakapp/api";
 import {
   convertId,
-  convertTemplateSyntax,
   createSourceKeys,
   importHttpBodyAndHeaders,
   isJSObject,
   type SourceKeys,
 } from "./common";
+import { convertTemplateSyntax } from "./templates";
 
 export function convertInsomniaV4(parsed: any) {
   if (!Array.isArray(parsed.resources)) return null;
@@ -68,7 +68,10 @@ export function convertInsomniaV4(parsed: any) {
   resources.environments = resources.environments.filter(Boolean);
   resources.workspaces = resources.workspaces.filter(Boolean);
 
-  return { resources: convertTemplateSyntax(resources), sourceKeys: keys.all() };
+  return {
+    resources: convertTemplateSyntax(resources, new Set(resources.httpRequests.map((r) => r.id))),
+    sourceKeys: keys.all(),
+  };
 }
 
 function importHttpRequest(
@@ -78,12 +81,12 @@ function importHttpRequest(
 ): PartialImportResources["httpRequests"][0] {
   let authenticationType: string | null = null;
   let authentication = {};
-  if (r.authentication.type === "bearer") {
+  if (r.authentication?.type === "bearer") {
     authenticationType = "bearer";
     authentication = {
       token: r.authentication.token,
     };
-  } else if (r.authentication.type === "basic") {
+  } else if (r.authentication?.type === "basic") {
     authenticationType = "basic";
     authentication = {
       username: r.authentication.username,

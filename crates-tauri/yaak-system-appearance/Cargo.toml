@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [target.'cfg(target_os = "linux")'.dependencies]
-dark-light = "2.0.0"
+dark-light = "3.0.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 dispatch2 = "0.3.0"

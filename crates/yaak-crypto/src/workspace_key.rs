@@ -2,7 +2,7 @@ use crate::encryption::{decrypt_data, encrypt_data};
 use crate::error::Error::InvalidHumanKey;
 use crate::error::Result;
 use base32::Alphabet;
-use chacha20poly1305::aead::{Key, KeyInit, OsRng};
+use chacha20poly1305::aead::{Generate, Key};
 use chacha20poly1305::{KeySizeUser, XChaCha20Poly1305};
 
 #[derive(Debug, Clone)]
@@ -39,7 +39,9 @@ impl WorkspaceKey {
     }
 
     pub(crate) fn from_raw_key(key: &[u8]) -> Self {
-        Self { key: Key::<XChaCha20Poly1305>::clone_from_slice(key) }
+        Self {
+            key: Key::<XChaCha20Poly1305>::try_from(key).expect("workspace key must be 32 bytes"),
+        }
     }
 
     pub(crate) fn raw_key(&self) -> &[u8] {
@@ -47,7 +49,7 @@ impl WorkspaceKey {
     }
 
     pub(crate) fn create() -> Result<Self> {
-        let key = XChaCha20Poly1305::generate_key(OsRng);
+        let key = Key::<XChaCha20Poly1305>::generate();
         Ok(Self::from_raw_key(key.as_slice()))
     }
 

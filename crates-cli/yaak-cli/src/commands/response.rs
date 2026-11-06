@@ -118,8 +118,8 @@ fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
             return Ok(());
         }
         let count = ctx
-            .db()
-            .delete_all_http_responses_for_request(id, &UpdateSource::Sync)
+            .query_manager()
+            .with_tx(|tx| tx.delete_all_http_responses_for_request(id, &UpdateSource::Sync))
             .map_err(|e| format!("Failed to delete responses: {e}"))?;
         println!("Deleted {count} responses for request {id}");
         return Ok(());
@@ -131,8 +131,10 @@ fn delete(ctx: &CliContext, id: &str, yes: bool) -> CommandResult {
         return Ok(());
     }
     let count = ctx
-        .db()
-        .delete_all_http_responses_for_workspace(&workspace_id, &UpdateSource::Sync)
+        .query_manager()
+        .with_tx(|tx| {
+            tx.delete_all_http_responses_for_workspace(&workspace_id, &UpdateSource::Sync)
+        })
         .map_err(|e| format!("Failed to delete responses: {e}"))?;
     println!("Deleted {count} responses for workspace {workspace_id}");
     Ok(())

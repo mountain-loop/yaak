@@ -9,7 +9,7 @@ use crate::guard::{DestinationPolicy, GuardedSender};
 use crate::wire::{Frame, SendRequest};
 use base64::Engine;
 use bytes::Bytes;
-use log::{info, warn};
+use log::{debug, warn};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -344,7 +344,8 @@ async fn write_frame(frames: &FrameSender, frame: &Frame) -> Result<(), ()> {
     let mut line = match serde_json::to_vec(frame) {
         Ok(v) => v,
         Err(e) => {
-            warn!("Failed to serialize frame: {e}");
+            warn!("Failed to serialize response frame");
+            debug!("Frame serialization error: {e}");
             return Err(());
         }
     };
@@ -352,7 +353,7 @@ async fn write_frame(frames: &FrameSender, frame: &Frame) -> Result<(), ()> {
     frames.send(Ok(Bytes::from(line))).await.map_err(|_| ())
 }
 
-/// Log a finished send at info: destination, outcome, and how long, never the content.
+/// Request diagnostics are opt-in, including destinations and completion timing.
 pub fn log_outcome(description: &str, started: Instant, outcome: &str) {
-    info!("{description} -> {outcome} in {:?}", started.elapsed());
+    debug!("{description} -> {outcome} in {:?}", started.elapsed());
 }

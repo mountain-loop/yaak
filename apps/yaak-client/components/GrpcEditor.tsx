@@ -20,13 +20,13 @@ import { showConfirm } from "../lib/confirm";
 import { showDialog } from "../lib/dialog";
 import type { JsonSchema } from "../lib/jsonSchemaExample";
 import { buildExampleFromSchema } from "../lib/jsonSchemaExample";
-import { pluralizeCount } from "../lib/pluralize";
 import { queryClient } from "../lib/queryClient";
 import { Button } from "./core/Button";
 import { Dropdown } from "./core/Dropdown";
 import type { EditorProps } from "./core/Editor/Editor";
 import { Editor } from "./core/Editor/LazyEditor";
 import { GrpcProtoSelectionDialog } from "./GrpcProtoSelectionDialog";
+import { pluralizeCount } from "@yaakapp-internal/lib/pluralize";
 
 type Props = Pick<EditorProps, "heightMode" | "onChange" | "className" | "forceUpdateKey"> & {
   services: ReflectResponseService[] | null;
@@ -239,6 +239,7 @@ export function GrpcEditor({
                 showDialog({
                   title: "Configure Schema",
                   size: "md",
+                  className: "h-[30rem]",
                   id: "grpc-configure-schema",
                   render: ({ hide }) => <GrpcProtoSelectionDialog onDone={hide} />,
                 });

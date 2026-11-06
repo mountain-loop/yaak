@@ -16,16 +16,16 @@ import type { Frame } from "@yaakapp-internal/web";
  * (`yaak-web --serve`), and then a send is a request to a path on the
  * page's own origin — no CORS, and nothing for a self-hoster to configure.
  *
- * `VITE_YAAK_WEB_URL` overrides it at build time, for a deployment that
- * keeps the two apart. The dev server is one of those: it serves the app on its
- * own origin and knows nothing about `/v1`, so a dev build falls back to a server
- * running locally (`cargo run -p yaak-web`).
+ * `VITE_YAAK_WEB_URL` overrides it at build time, for a deployment that keeps the
+ * two apart. Nothing else needs to: the dev server passes `/v1` through to
+ * `yaak-web` (see the client's vite config), so a dev build and a production
+ * build are both talking to their own origin, and neither has an address to
+ * learn. A tab opened from another machine therefore works unchanged.
  */
 export function serverBaseUrl(): string {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
   const configured = env?.VITE_YAAK_WEB_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  return env?.DEV ? "http://127.0.0.1:9227" : "";
+  return configured ? configured.replace(/\/+$/, "") : "";
 }
 
 export function serverSendUrl(): string {

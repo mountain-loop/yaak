@@ -16,8 +16,7 @@ use std::time::{Duration, Instant};
 use tauri::path::BaseDirectory;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{
-    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent,
-    is_dev,
+    AppHandle, Emitter, Manager, RunEvent, Runtime, State, WebviewWindow, WindowEvent, is_dev,
 };
 use tokio::sync::Mutex;
 use ts_rs::TS;
@@ -28,10 +27,10 @@ use yaak_plugins::api::{
     PluginNameVersion, PluginSearchResponse, PluginUpdatesResponse, check_plugin_updates,
     search_plugins,
 };
+use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::events::{Color, PluginContext, ShowToastRequest};
 use yaak_plugins::install::{delete_and_uninstall, download_and_install};
 use yaak_plugins::manager::PluginManager;
-use yaak_plugins::error::Error::PluginErr;
 use yaak_plugins::plugin_meta::get_plugin_meta;
 
 static EXITING: AtomicBool = AtomicBool::new(false);
@@ -203,16 +202,18 @@ pub async fn cmd_plugins_install_from_directory<R: Runtime>(
     // Resolve the manager before writing the row so startup's plugin snapshot
     // can't include it and boot it a second time
     let plugin_manager = Arc::new(plugin_manager(&window).await?);
-    let plugin = window.db().upsert_plugin(
-        &Plugin {
-            directory: directory.into(),
-            url: None,
-            enabled: true,
-            source: PluginSource::Filesystem,
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-    )?;
+    let plugin = window.with_tx(|tx| {
+        tx.upsert_plugin(
+            &Plugin {
+                directory: directory.into(),
+                url: None,
+                enabled: true,
+                source: PluginSource::Filesystem,
+                ..Default::default()
+            },
+            &UpdateSource::from_window_label(window.label()),
+        )
+    })?;
 
     plugin_manager.add_plugin(&window.plugin_context(), &plugin).await?;
 
@@ -355,9 +356,11 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     ),
                 )
                 .await
-                .unwrap_or_else(|_| Err(yaak_plugins::error::Error::PluginErr(
-                    "Timed out starting the plugin runtime".to_string(),
-                )));
+                .unwrap_or_else(|_| {
+                    Err(yaak_plugins::error::Error::PluginErr(
+                        "Timed out starting the plugin runtime".to_string(),
+                    ))
+                });
 
                 let manager = match result {
                     Ok(manager) => manager,

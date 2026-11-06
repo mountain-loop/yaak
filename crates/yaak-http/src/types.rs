@@ -181,7 +181,11 @@ fn strip_query_params(url: &str, names: &[&str]) -> String {
 }
 
 fn build_url(r: &HttpRequest) -> String {
-    let (url_string, params) = apply_path_placeholders(&ensure_proto(&r.url), &r.url_parameters);
+    // Trim stray whitespace: a leading space breaks scheme
+    // detection in `ensure_proto` (IdnaError); a trailing space becomes `/path%20` -> 404.
+    let trimmed_url = r.url.trim();
+    let (url_string, params) =
+        apply_path_placeholders(&ensure_proto(trimmed_url), &r.url_parameters);
     let mut url = append_query_params(
         &url_string,
         params
@@ -815,6 +819,64 @@ mod tests {
 
         let result = build_url(&r);
         assert_eq!(result, "https://example.com/api?foo=bar#section");
+    }
+
+    #[test]
+    fn test_build_url_trims_leading_whitespace() {
+        // A leading space must not break scheme detection (it used to produce
+        // `http:// https://...`, which fails to parse with an IdnaError).
+        let r = HttpRequest {
+            url: " https://example.com/api".to_string(),
+            url_parameters: vec![],
+            ..Default::default()
+        };
+
+        let result = build_url(&r);
+        assert_eq!(result, "https://example.com/api");
+    }
+
+    #[test]
+    fn test_build_url_trims_trailing_whitespace() {
+        let r = HttpRequest {
+            url: "https://example.com/api ".to_string(),
+            url_parameters: vec![],
+            ..Default::default()
+        };
+
+        let result = build_url(&r);
+        assert_eq!(result, "https://example.com/api");
+    }
+
+    #[test]
+    fn test_build_url_trims_whitespace_with_params() {
+        // A trailing space must not end up percent-encoded in the path once query
+        // parameters are appended (e.g. `/api%20?foo=bar`, which 404s).
+        let r = HttpRequest {
+            url: " https://example.com/api ".to_string(),
+            url_parameters: vec![HttpUrlParameter {
+                enabled: true,
+                name: "foo".to_string(),
+                value: "bar".to_string(),
+                id: None,
+            }],
+            ..Default::default()
+        };
+
+        let result = build_url(&r);
+        assert_eq!(result, "https://example.com/api?foo=bar");
+    }
+
+    #[test]
+    fn test_build_url_trims_whitespace_without_scheme() {
+        let r = HttpRequest {
+            url: "  example.com/api\t".to_string(),
+            url_parameters: vec![],
+            ..Default::default()
+        };
+
+        let result = build_url(&r);
+        // ensure_proto defaults to http:// for regular domains
+        assert_eq!(result, "http://example.com/api");
     }
 
     #[test]

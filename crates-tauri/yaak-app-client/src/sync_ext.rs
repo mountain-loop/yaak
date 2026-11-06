@@ -12,8 +12,8 @@ use tokio::sync::watch;
 use yaak_rpc_schema::WatchResult;
 use yaak_sync::error::Error::InvalidSyncDirectory;
 use yaak_sync::sync::{
-    FsCandidate, SyncOp, apply_sync_ops, apply_sync_state_ops, compute_sync_ops, get_db_candidates,
-    get_fs_candidates,
+    FsCandidate, SyncOp, apply_db_sync_ops, apply_fs_sync_ops, apply_sync_ops,
+    apply_sync_state_ops, compute_sync_ops, get_db_candidates, get_fs_candidates,
 };
 use yaak_sync::watch::{WatchEvent, watch_directory};
 
@@ -29,7 +29,7 @@ pub(crate) async fn cmd_sync_calculate<R: Runtime>(
     let db = app_handle.db();
     let version = app_handle.package_info().version.to_string();
     let db_candidates = get_db_candidates(&db, &version, workspace_id, sync_dir)?;
-    let fs_candidates = get_fs_candidates(sync_dir)?
+    let fs_candidates = get_fs_candidates(sync_dir, &db_candidates)?
         .into_iter()
         // Only keep items in the same workspace
         .filter(|fs| fs.model.workspace_id() == workspace_id)
@@ -39,7 +39,7 @@ pub(crate) async fn cmd_sync_calculate<R: Runtime>(
 
 pub(crate) async fn cmd_sync_calculate_fs(dir: &Path) -> Result<Vec<SyncOp>> {
     let db_candidates = Vec::new();
-    let fs_candidates = get_fs_candidates(dir)?;
+    let fs_candidates = get_fs_candidates(dir, &db_candidates)?;
     Ok(compute_sync_ops(db_candidates, fs_candidates))
 }
 
@@ -48,12 +48,29 @@ pub(crate) async fn cmd_sync_apply<R: Runtime>(
     sync_ops: Vec<SyncOp>,
     sync_dir: &Path,
     workspace_id: &str,
-) -> Result<()> {
-    let db = app_handle.db();
+    fs_only: bool,
+) -> Result<bool> {
     let blobs = app_handle.blob_manager();
-    let sync_state_ops = apply_sync_ops(&db, &blobs, workspace_id, sync_dir, sync_ops)?;
-    apply_sync_state_ops(&db, workspace_id, sync_dir, sync_state_ops)?;
-    Ok(())
+    if !fs_only || sync_ops.iter().any(|op| !matches!(op, SyncOp::DbCreate { .. })) {
+        let version = app_handle.package_info().version.to_string();
+        return Ok(apply_sync_ops(
+            &app_handle.db_manager(),
+            &blobs,
+            &version,
+            workspace_id,
+            sync_dir,
+            sync_ops,
+        )?);
+    }
+
+    // Opening a sync directory imports its files without existing DB sync state.
+    // Files first, so the write transaction never waits on the filesystem
+    let pending = apply_fs_sync_ops(workspace_id, sync_dir, sync_ops)?;
+    app_handle.db_manager().with_tx(|tx| {
+        let sync_state_ops = apply_db_sync_ops(tx, &blobs, workspace_id, sync_dir, pending)?;
+        apply_sync_state_ops(tx, workspace_id, sync_dir, sync_state_ops)?;
+        Ok(true)
+    })
 }
 
 pub(crate) async fn sync_watch<R, F>(

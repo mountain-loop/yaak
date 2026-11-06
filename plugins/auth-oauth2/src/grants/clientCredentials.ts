@@ -1,6 +1,8 @@
 import { createPrivateKey, randomUUID } from "node:crypto";
 import type { Context } from "@yaakapp/api";
 import jwt, { type Algorithm } from "jsonwebtoken";
+import type { CustomParams } from "../customParams";
+import { NO_CUSTOM_PARAMS } from "../customParams";
 import { fetchAccessToken } from "../fetchAccessToken";
 import type { TokenStoreArgs } from "../store";
 import { getToken, storeToken } from "../store";
@@ -109,6 +111,7 @@ export async function getClientCredentials(
     clientAssertionSecretBase64,
     clientCredentialsMethod,
     clientAssertionAlgorithm,
+    customParams = NO_CUSTOM_PARAMS,
   }: {
     accessTokenUrl: string;
     clientId: string;
@@ -120,6 +123,7 @@ export async function getClientCredentials(
     clientAssertionSecretBase64: boolean;
     clientCredentialsMethod: string;
     clientAssertionAlgorithm: string;
+    customParams?: CustomParams;
   },
 ) {
   const tokenArgs: TokenStoreArgs = {
@@ -143,6 +147,7 @@ export async function getClientCredentials(
     clientId,
     scope,
     params: [],
+    custom: customParams.token,
   };
 
   const fetchParams: Parameters<typeof fetchAccessToken>[1] =

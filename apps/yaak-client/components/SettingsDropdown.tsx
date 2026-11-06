@@ -82,10 +82,9 @@ export function SettingsDropdown() {
         },
         {
           label: "Install CLI",
-          hidden: appInfo.cliVersion != null,
+          hidden: appInfo.cliVersion != null || !platform.capabilities.agents,
           leftSlot: <Icon icon="square_terminal" />,
-          rightSlot: <Icon icon="external_link" color="secondary" />,
-          onSelect: () => platform.openUrl("https://yaak.app/docs/cli"),
+          onSelect: () => openSettings.mutate("agents"),
         },
         {
           label: "Feedback",

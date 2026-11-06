@@ -22,5 +22,6 @@
     "@yaakapp/cli-linux-x64": "0.0.1",
     "@yaakapp/cli-win32-arm64": "0.0.1",
     "@yaakapp/cli-win32-x64": "0.0.1"
-  }
+  },
+  "mcpName": "io.github.mountain-loop/yaak"
 }

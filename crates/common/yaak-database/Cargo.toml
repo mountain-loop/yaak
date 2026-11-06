@@ -8,7 +8,7 @@ publish = false
 chrono = { version = "0.4.38", features = ["serde"] }
 include_dir = "0.7"
 log = { workspace = true }
-nanoid = "0.4.0"
+nanoid = "0.5.0"
 rusqlite = { version = "0.38", features = ["bundled", "chrono"] }
 sea-query-rusqlite = { version = "0.8.0", features = ["with-chrono"] }
 sea-query = { version = "1.0", features = ["with-chrono", "attr"] }
@@ -24,5 +24,5 @@ r2d2_sqlite = { version = "0.32" }
 # nanoid pulls getrandom, which needs to be told how to reach the browser's
 # CSPRNG on wasm32-unknown-unknown. Native targets are unaffected.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
 uuid = { version = "1", features = ["js"] }

@@ -1,0 +1,67 @@
+{
+  "info": {
+    "_postman_id": "5c0ffee0-dyn0-4var-9abc-000000000001",
+    "name": "Dynamic Variables",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Dynamic Variables",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Request-Id",
+            "value": "{{$guid}}"
+          },
+          {
+            "key": "X-Correlation-Id",
+            "value": "{{$randomUUID}}"
+          },
+          {
+            "key": "X-Sent-At",
+            "value": "{{$timestamp}}"
+          },
+          {
+            "key": "X-Sent-At-Iso",
+            "value": "{{$isoTimestamp}}"
+          },
+          {
+            "key": "X-Spaced",
+            "value": "{{  $guid  }}"
+          },
+          {
+            "key": "X-Faker",
+            "value": "{{$randomFirstName}}"
+          },
+          {
+            "key": "X-Plain",
+            "value": "{{base_url}}"
+          }
+        ],
+        "url": {
+          "raw": "https://yaak.app/x/echo?n={{$randomInt}}",
+          "protocol": "https",
+          "host": ["yaak", "app"],
+          "path": ["x", "echo"],
+          "query": [
+            {
+              "key": "n",
+              "value": "{{$randomInt}}"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"{{$guid}}\",\n  \"at\": {{$timestamp}},\n  \"mixed\": \"{{$guid}}/{{base_url}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { platform } from "@yaakapp-internal/platform";
-import { HStack } from "@yaakapp-internal/ui";
+import { HStack, IconTooltip, Label } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import mime from "mime";
 import type { ReactNode } from "react";
@@ -7,8 +7,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ButtonProps } from "./core/Button";
 import { Button } from "./core/Button";
 import { IconButton } from "./core/IconButton";
-import { IconTooltip } from "./core/IconTooltip";
-import { Label } from "./core/Label";
 
 type Props = Omit<ButtonProps, "type"> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;

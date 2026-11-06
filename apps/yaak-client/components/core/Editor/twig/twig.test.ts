@@ -23,6 +23,10 @@ function hasError(input: string): boolean {
   return getNodeNames(input).includes("⚠");
 }
 
+function countTags(input: string): number {
+  return getNodeNames(input).filter((n) => n === "Tag").length;
+}
+
 describe("twig grammar", () => {
   describe("${[var]} format (valid template tags)", () => {
     test("parses simple variable as Tag", () => {
@@ -80,6 +84,50 @@ describe("twig grammar", () => {
       const json = '{"key": "${[value]}"}';
       expect(hasTag(json)).toBe(true);
       expect(hasError(json)).toBe(false);
+    });
+  });
+
+  describe("quoted strings inside tags", () => {
+    test("keeps a quoted `]}` inside the tag", () => {
+      const input = "${[ fn(a='x]}y') ]}";
+      expect(countTags(input)).toBe(1);
+      expect(hasError(input)).toBe(false);
+    });
+
+    test("keeps an escaped quote inside the string", () => {
+      const input = "${[ fn(a='it\\'s ]}') ]}";
+      expect(countTags(input)).toBe(1);
+      expect(hasError(input)).toBe(false);
+    });
+
+    test("parses a b64 string as one Tag", () => {
+      const input = "${[ b64'Zm9v' ]}";
+      expect(countTags(input)).toBe(1);
+      expect(hasError(input)).toBe(false);
+    });
+
+    test("closes at the first `]}` when a quote is left unterminated", () => {
+      // Half-typed strings must not swallow the rest of the document
+      const input = "${[ fn(a='unterminated ]} after";
+      expect(countTags(input)).toBe(1);
+      expect(hasError(input)).toBe(false);
+      const tag = parser.parse(input).topNode.getChild("Tag");
+      expect(input.slice(tag?.from ?? 0, tag?.to ?? 0)).toBe("${[ fn(a='unterminated ]}");
+    });
+
+    test("handles two tags with quoted `]}` in the same string", () => {
+      const input = "${[ a(x='1]}') ]} and ${[ b(y='2]}') ]}";
+      expect(countTags(input)).toBe(2);
+      expect(hasError(input)).toBe(false);
+    });
+
+    test("keeps JSON around a tag with a quoted `]}` intact", () => {
+      const tag = "${[ fn(a='x]}y') ]}";
+      const json = '{"a": "' + tag + '"}';
+      expect(countTags(json)).toBe(1);
+      expect(hasError(json)).toBe(false);
+      const node = parser.parse(json).topNode.getChild("Tag");
+      expect(json.slice(node?.from ?? 0, node?.to ?? 0)).toBe(tag);
     });
   });
 

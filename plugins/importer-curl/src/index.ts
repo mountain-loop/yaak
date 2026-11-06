@@ -4,6 +4,7 @@ import type {
   Folder,
   HttpRequest,
   HttpUrlParameter,
+  ImportSource,
   PluginDefinition,
   Workspace,
 } from "@yaakapp/api";
@@ -86,9 +87,10 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "cURL",
     description: "Import cURL commands",
-    onImport(_ctx: Context, args: { text: string }) {
+    onImportSource(_ctx: Context, { source }: { source: ImportSource }) {
+      if (source.type !== "text") return null;
       // oxlint-disable-next-line no-explicit-any
-      return convertCurl(args.text) as any;
+      return convertCurl(source.text) as any;
     },
   },
 };
@@ -98,8 +100,12 @@ export const plugin: PluginDefinition = {
  * Handles line continuations, semicolons, and newline-separated curl commands.
  */
 function splitCommands(rawData: string): string[] {
-  // Join line continuations (backslash-newline, and backslash-CRLF for Windows)
-  const joined = rawData.replace(/\\\r?\n/g, " ");
+  // Join line continuations (backslash-newline, and backslash-CRLF for
+  // Windows). Trailing spaces or tabs after the backslash are common when a
+  // command is copied from a terminal or a doc, and the shell treats
+  // "\ <newline>" as an escaped space rather than a continuation, so accept
+  // them here to keep the pasted command in one piece.
+  const joined = rawData.replace(/\\[ \t]*\r?\n/g, " ");
 
   // Count consecutive backslashes immediately before position i.
   // An even count means the quote at i is NOT escaped; odd means it IS escaped.

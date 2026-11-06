@@ -40,10 +40,11 @@ pub async fn git_pull(dir: &Path) -> Result<PullResult> {
         let repo = open_repo(dir)?;
         let branch_name = get_current_branch_name(&repo)?;
         let remote = get_default_remote_in_repo(&repo)?;
-        let remote_name =
-            remote.name().ok_or(GenericError("Failed to get remote name".to_string()))?.to_string();
-        let remote_url =
-            remote.url().ok_or(GenericError("Failed to get remote url".to_string()))?.to_string();
+        let remote_name = remote
+            .name()?
+            .ok_or(GenericError("Failed to get remote name".to_string()))?
+            .to_string();
+        let remote_url = remote.url()?.to_string();
         (branch_name, remote_name, remote_url)
     };
 

@@ -33,6 +33,9 @@ pub enum Error {
     #[error("No base environment for {0}")]
     MissingBaseEnvironment(String),
 
+    #[error("Invalid environment selection: {0}")]
+    InvalidEnvironment(String),
+
     #[error("Multiple base environments for {0}. Delete duplicates before continuing.")]
     MultipleBaseEnvironments(String),
 

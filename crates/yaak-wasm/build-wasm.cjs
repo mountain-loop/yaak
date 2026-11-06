@@ -55,25 +55,16 @@ execSync("wasm-pack build --target bundler", {
   cwd: __dirname,
   env: {
     ...process.env,
+    CARGO_BUILD_TARGET: "wasm32-unknown-unknown",
     CC_wasm32_unknown_unknown: clang,
-    AR_wasm32_unknown_unknown: fs.existsSync(ar) ? ar : (process.env.AR_wasm32_unknown_unknown ?? ""),
+    AR_wasm32_unknown_unknown: fs.existsSync(ar)
+      ? ar
+      : (process.env.AR_wasm32_unknown_unknown ?? ""),
     RUSTFLAGS: `--remap-path-prefix=${cargoHome}=/cargo --remap-path-prefix=${sysroot}=/rustc`,
   },
 });
 
-// Rewrite the generated entry to use Vite's ?init import style instead of
-// the ES Module Integration style that wasm-pack generates, which Vite/rolldown
-// does not support in production builds.
-const entry = path.join(__dirname, "pkg", "yaak_web.js");
-fs.writeFileSync(
-  entry,
-  [
-    'import init from "./yaak_web_bg.wasm?init";',
-    'export * from "./yaak_web_bg.js";',
-    'import * as bg from "./yaak_web_bg.js";',
-    'const instance = await init({ "./yaak_web_bg.js": bg });',
-    "bg.__wbg_set_wasm(instance.exports);",
-    "instance.exports.__wbindgen_start();",
-    "",
-  ].join("\n"),
-);
+// No post-processing: wasm-pack's own entry (pkg/yaak_wasm.js) is what the app
+// imports, and `vite-plugin-wasm` handles its ES Module Integration form in both
+// dev and production builds. A rewrite used to live here for a Vite that could
+// not, and it outlived both that Vite and the crate name it hardcoded.

@@ -1,4 +1,5 @@
 import { Link as RouterLink } from "@tanstack/react-router";
+import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import type { HTMLAttributes } from "react";
 import { appInfo } from "../../lib/appInfo";
@@ -33,7 +34,10 @@ export function Link({ href, children, noUnderline, className, ...other }: Props
         href={finalHref}
         target="_blank"
         rel={isYaakLink ? undefined : "noopener noreferrer"}
-        onClick={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.preventDefault();
+          void platform.openUrl(finalHref);
+        }}
         className={className}
         {...other}
       >

@@ -1,0 +1,88 @@
+{
+  "users": [
+    { "id": 1, "name": "Ada Lovelace", "username": "ada", "email": "ada@example.com" },
+    { "id": 2, "name": "Grace Hopper", "username": "grace", "email": "grace@example.com" },
+    { "id": 3, "name": "Alan Turing", "username": "alan", "email": "alan@example.com" },
+    { "id": 4, "name": "Katherine Johnson", "username": "katherine", "email": "katherine@example.com" },
+    { "id": 5, "name": "Margaret Hamilton", "username": "margaret", "email": "margaret@example.com" }
+  ],
+  "posts": [
+    {
+      "id": 1,
+      "userId": 1,
+      "title": "Notes on the Analytical Engine",
+      "body": "Requests are just messages. The trick is knowing exactly what you sent."
+    },
+    {
+      "id": 2,
+      "userId": 1,
+      "title": "Why I keep my variables in environments",
+      "body": "Switching from staging to production should be one click, not a find and replace."
+    },
+    {
+      "id": 3,
+      "userId": 2,
+      "title": "Easier to ask forgiveness than permission",
+      "body": "Unless the API returns a 403. Then it's time to check your token."
+    },
+    {
+      "id": 4,
+      "userId": 2,
+      "title": "Debugging the first bug",
+      "body": "The Timeline tab shows every redirect, header, and byte. No moths required."
+    },
+    {
+      "id": 5,
+      "userId": 3,
+      "title": "Can machines send requests?",
+      "body": "This one just did. Look through the response headers to see what came back."
+    },
+    {
+      "id": 6,
+      "userId": 3,
+      "title": "On computable status codes",
+      "body": "2xx is good news, 4xx usually means the request needs fixing, and 5xx usually means the server does."
+    },
+    {
+      "id": 7,
+      "userId": 4,
+      "title": "Checking the math on pagination",
+      "body": "Add a limit query parameter to get fewer results back."
+    },
+    {
+      "id": 8,
+      "userId": 4,
+      "title": "Plotting a course between requests",
+      "body": "Pull a value out of one response and send it in the next. That's all chaining is."
+    },
+    {
+      "id": 9,
+      "userId": 5,
+      "title": "Error handling saved the landing",
+      "body": "An API that returns clear errors is an API you can build on."
+    },
+    {
+      "id": 10,
+      "userId": 5,
+      "title": "Logging in, then everything else",
+      "body": "Get a token from one request and use it for the rest. Set it once on a folder and every request inside inherits it."
+    }
+  ],
+  "todos": [
+    { "id": 1, "userId": 1, "title": "Send your first request", "completed": true },
+    { "id": 2, "userId": 1, "title": "Create an environment", "completed": false },
+    { "id": 3, "userId": 1, "title": "Switch to a sub-environment", "completed": false },
+    { "id": 4, "userId": 2, "title": "Import an OpenAPI spec", "completed": true },
+    { "id": 5, "userId": 2, "title": "Add a header to a folder", "completed": false },
+    { "id": 6, "userId": 2, "title": "Read the response timeline", "completed": true },
+    { "id": 7, "userId": 3, "title": "Chain a value from another response", "completed": false },
+    { "id": 8, "userId": 3, "title": "Log in and use the token", "completed": false },
+    { "id": 9, "userId": 3, "title": "Copy a request as curl", "completed": true },
+    { "id": 10, "userId": 4, "title": "Sync a workspace to a folder", "completed": false },
+    { "id": 11, "userId": 4, "title": "Commit the workspace to Git", "completed": false },
+    { "id": 12, "userId": 4, "title": "Encrypt a secret", "completed": false },
+    { "id": 13, "userId": 5, "title": "Create a post", "completed": false },
+    { "id": 14, "userId": 5, "title": "Delete the post you created", "completed": false },
+    { "id": 15, "userId": 5, "title": "Delete the example workspace", "completed": false }
+  ]
+}

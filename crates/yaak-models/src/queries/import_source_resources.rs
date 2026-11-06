@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{ImportSourceResource, ImportSourceResourceIden};
 use sea_query::ExprTrait;
@@ -20,7 +20,9 @@ impl<'a> ClientDb<'a> {
         let items = stmt.query_map(&*params.as_params(), |row| row.try_into())?;
         Ok(items.filter_map(|v| v.ok()).collect())
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn upsert_import_source_resource(
         &self,
         resource: &ImportSourceResource,
@@ -34,7 +36,7 @@ impl<'a> ClientDb<'a> {
                 ImportSourceResourceIden::SourceKey,
                 ImportSourceResourceIden::ModelType,
                 ImportSourceResourceIden::ModelId,
-                ImportSourceResourceIden::Snapshot,
+                ImportSourceResourceIden::ContentHash,
             ])
             .values_panic([
                 CurrentTimestamp.into(),
@@ -42,8 +44,8 @@ impl<'a> ClientDb<'a> {
                 resource.import_source_id.as_str().into(),
                 resource.source_key.as_str().into(),
                 resource.model_type.as_str().into(),
-                resource.model_id.as_str().into(),
-                resource.snapshot.as_str().into(),
+                resource.model_id.clone().into(),
+                resource.content_hash.clone().into(),
             ])
             .on_conflict(
                 OnConflict::columns([
@@ -54,7 +56,7 @@ impl<'a> ClientDb<'a> {
                     ImportSourceResourceIden::UpdatedAt,
                     ImportSourceResourceIden::ModelType,
                     ImportSourceResourceIden::ModelId,
-                    ImportSourceResourceIden::Snapshot,
+                    ImportSourceResourceIden::ContentHash,
                 ])
                 .to_owned(),
             )

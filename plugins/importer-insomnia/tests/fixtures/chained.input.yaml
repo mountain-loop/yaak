@@ -1,0 +1,29 @@
+# Synthetic regression based on the migration cases described by
+# https://github.com/w33ble/insomnia-yaak-converter (no customer data).
+type: collection.insomnia.rest/5.0
+name: Chained GraphQL
+meta:
+  id: wrk_chained
+environments:
+  name: Base
+  meta:
+    id: env_base
+  data:
+    host: https://example.com
+collection:
+  - name: GraphQL
+    meta:
+      id: req_query
+    method: POST
+    url: "{{ _['host'] }}/graphql"
+    authentication:
+      type: bearer
+      token: "{% response 'body', 'req_login', 'b64::JC50b2tlbg==::nonce', 'when-expired', 60 %}"
+    body:
+      mimeType: application/graphql
+      text: '{"query":"query Get($id: ID!) { node(id: $id) { id } }","variables":"{\"id\":\"123\"}","operationName":"Get"}'
+  - name: Login
+    meta:
+      id: req_login
+    method: POST
+    url: "{{ _.host }}/login"

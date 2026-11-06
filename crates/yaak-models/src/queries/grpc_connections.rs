@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{GrpcConnection, GrpcConnectionIden, GrpcConnectionState};
 use crate::queries::MAX_HISTORY_ITEMS;
@@ -13,6 +13,20 @@ impl<'a> ClientDb<'a> {
         self.find_one(GrpcConnectionIden::Id, id)
     }
 
+    pub fn list_grpc_connections_for_request(
+        &self,
+        request_id: &str,
+        limit: Option<u64>,
+    ) -> Result<Vec<GrpcConnection>> {
+        self.find_many(GrpcConnectionIden::RequestId, request_id, limit)
+    }
+
+    pub fn list_grpc_connections(&self, workspace_id: &str) -> Result<Vec<GrpcConnection>> {
+        self.find_many(GrpcConnectionIden::WorkspaceId, workspace_id, None)
+    }
+}
+
+impl<'a> WriteDb<'a> {
     pub fn delete_all_grpc_connections_for_request(
         &self,
         request_id: &str,
@@ -51,18 +65,6 @@ impl<'a> ClientDb<'a> {
     ) -> Result<GrpcConnection> {
         let grpc_connection = self.get_grpc_connection(id)?;
         self.delete_grpc_connection(&grpc_connection, source)
-    }
-
-    pub fn list_grpc_connections_for_request(
-        &self,
-        request_id: &str,
-        limit: Option<u64>,
-    ) -> Result<Vec<GrpcConnection>> {
-        self.find_many(GrpcConnectionIden::RequestId, request_id, limit)
-    }
-
-    pub fn list_grpc_connections(&self, workspace_id: &str) -> Result<Vec<GrpcConnection>> {
-        self.find_many(GrpcConnectionIden::WorkspaceId, workspace_id, None)
     }
 
     pub fn cancel_pending_grpc_connections(&self) -> Result<()> {

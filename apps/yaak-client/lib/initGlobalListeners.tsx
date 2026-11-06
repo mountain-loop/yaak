@@ -21,7 +21,7 @@ import { ButtonInfiniteLoading } from "../components/core/ButtonInfiniteLoading"
 import { platform } from "@yaakapp-internal/platform";
 import { updateAvailableAtom } from "./atoms";
 import { stringToColor } from "./color";
-import { generateId } from "./generateId";
+import { generateId } from "@yaakapp-internal/lib/generateId";
 import { jotaiStore } from "./jotai";
 import { showPrompt } from "./prompt";
 import { showPromptForm } from "./prompt-form";

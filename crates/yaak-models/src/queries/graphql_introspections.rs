@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{GraphQlIntrospection, GraphQlIntrospectionIden};
 use crate::util::UpdateSource;
@@ -11,7 +11,9 @@ impl<'a> ClientDb<'a> {
     pub fn get_graphql_introspection(&self, request_id: &str) -> Option<GraphQlIntrospection> {
         self.find_optional(GraphQlIntrospectionIden::RequestId, request_id)
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn upsert_graphql_introspection(
         &self,
         workspace_id: &str,

@@ -51,6 +51,8 @@ Direct username/password authentication.
 - **Token Persistence**: Stores tokens between sessions
 - **Flexible Configuration**: Supports custom authorization and token endpoints
 - **Scope Management**: Configure required OAuth scopes for your API
+- **Custom Parameters**: Add headers and params to the authorization, token, and refresh
+  requests, replacing generated entries of the same name
 - **Error Handling**: Comprehensive error handling and user feedback
 
 ## Usage

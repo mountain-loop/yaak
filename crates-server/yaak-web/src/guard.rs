@@ -11,7 +11,7 @@
 //! resolves every hop.
 
 use async_trait::async_trait;
-use log::warn;
+use log::debug;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -186,7 +186,7 @@ impl<S: HttpSender> HttpSender for GuardedSender<S> {
         event_tx: mpsc::Sender<HttpResponseEvent>,
     ) -> yaak_http::error::Result<HttpResponse> {
         if let Err(reason) = self.policy.check_url(&request.url) {
-            warn!("Refused {} {}: {reason}", request.method, request.url);
+            debug!("Refused {} {}: {reason}", request.method, request.url);
             return Err(yaak_http::error::Error::RequestError(reason));
         }
         self.inner.send(request, event_tx).await

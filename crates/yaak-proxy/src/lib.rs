@@ -1,104 +1,196 @@
-pub mod body;
-pub mod cert;
+mod body;
+mod cert;
 mod connection;
 mod request;
+mod tunnel;
 
+use std::collections::hash_map::RandomState;
+use std::collections::{HashMap, HashSet};
+use std::hash::{BuildHasher, Hasher};
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc as std_mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
-use cert::CertificateAuthority;
+use bytes::Bytes;
+use http::HeaderValue;
+use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
+use hyper_util::rt::TokioExecutor;
+use rustls::ClientConfig;
+use rustls::pki_types::CertificateDer;
 use tokio::net::TcpListener;
 
+pub use cert::CaStore;
 use connection::handle_connection;
+use request::BoxBody;
 
-static REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+const PASSTHROUGH_AFTER_FAILURES: u32 = 2;
 
-/// Granular events emitted during request/response lifecycle.
-/// Each event carries a request `id` so consumers can correlate events.
+/// Default for [`ProxyConfig::capture_body_limit`]: 10 MB.
+pub const DEFAULT_CAPTURE_BODY_LIMIT: usize = 10 * 1024 * 1024;
+
+/// Settings for one run of the engine.
+pub struct ProxyConfig {
+    /// Port to listen on at 127.0.0.1; 0 picks a free one (see [`ProxyHandle::port`]).
+    pub port: u16,
+    /// Signs the per-host certificates presented to clients.
+    pub ca: Arc<CaStore>,
+    /// Bytes of each request and response body carried in chunk events. The rest still
+    /// streams through, counted but not captured.
+    pub capture_body_limit: usize,
+    /// Roots trusted for upstream TLS in addition to the platform's.
+    pub upstream_root_certs: Vec<CertificateDer<'static>>,
+    /// Runs on a blocking thread as each client connection is accepted, with the connection's
+    /// number and the client's address, before anything is read from it, so the client is
+    /// still there to be looked up. The connection waits for it.
+    pub on_accept: Option<AcceptHook>,
+    /// Offer HTTP/2 to clients in intercepted TLS, beside HTTP/1.1. Off, they all speak
+    /// HTTP/1.1, for clients that misbehave on HTTP/2. See [`ProxyHandle::set_http2`].
+    pub http2: bool,
+}
+
+/// See [`ProxyConfig::on_accept`].
+pub type AcceptHook = Arc<dyn Fn(u64, SocketAddr) + Send + Sync>;
+
+impl ProxyConfig {
+    pub fn new(port: u16, ca: Arc<CaStore>) -> Self {
+        Self {
+            port,
+            ca,
+            capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
+            upstream_root_certs: Vec::new(),
+            on_accept: None,
+            http2: true,
+        }
+    }
+}
+
+/// Lifecycle of each proxied exchange (a flow), keyed by `id`. A flow starts with
+/// `RequestStart` and ends with exactly one `ResponseBodyComplete`, `Error` or `Cancelled`.
+/// Each HTTP/2 stream is a flow of its own. Traffic the engine tunnels without decrypting
+/// (pinned clients, non-TLS CONNECT payloads, the frames after a `101 Switching Protocols`)
+/// produces no events.
 #[derive(Debug, Clone)]
 pub enum ProxyEvent {
-    /// A new request has been received from the client.
+    /// Request headers arrived from the client.
     RequestStart {
         id: u64,
+        started_at: SystemTime,
         method: String,
         url: String,
+        /// Version spoken by the client.
         http_version: String,
+        /// The client connection the request came on, numbered from 1 for each run.
+        connection: u64,
+        /// The client's end of that connection, to find the app that opened it.
+        client_addr: SocketAddr,
     },
-    /// A request header sent to the upstream server.
     RequestHeader {
         id: u64,
         name: String,
         value: String,
     },
-    /// The full request body (buffered before forwarding).
-    RequestBody { id: u64, body: Vec<u8> },
-    /// Response headers received from upstream.
+    /// A frame of the request body was forwarded upstream.
+    RequestBodyChunk {
+        id: u64,
+        /// Bytes in the frame.
+        len: usize,
+        /// The captured part of the frame; empty once `capture_body_limit` is reached.
+        data: Bytes,
+    },
+    /// The request body finished streaming upstream. Not sent when the request has no body.
+    RequestBodyComplete {
+        id: u64,
+        size: u64,
+        /// Whether `size` exceeded `capture_body_limit`.
+        truncated: bool,
+    },
+    /// Response headers arrived from upstream.
     ResponseStart {
         id: u64,
         status: u16,
+        /// Version spoken with the upstream server.
         http_version: String,
+        remote_addr: Option<SocketAddr>,
+        /// Milliseconds from `started_at` to the response headers.
         elapsed_ms: u64,
     },
-    /// A response header received from the upstream server.
     ResponseHeader {
         id: u64,
         name: String,
         value: String,
     },
-    /// A chunk of the response body was received (emitted per-frame).
-    ResponseBodyChunk { id: u64, bytes: usize },
-    /// The response body stream has completed.
+    /// A frame of the response body was forwarded to the client.
+    ResponseBodyChunk {
+        id: u64,
+        /// Bytes in the frame.
+        len: usize,
+        /// The captured part of the frame; empty once `capture_body_limit` is reached.
+        data: Bytes,
+    },
+    /// The response body ended: normally, with `error` when upstream failed, or `cancelled`.
     ResponseBodyComplete {
         id: u64,
-        body: Option<Vec<u8>>,
         size: u64,
+        /// Whether `size` exceeded `capture_body_limit`.
+        truncated: bool,
+        /// Milliseconds from `started_at` to the end of the body.
+        elapsed_ms: u64,
+        error: Option<String>,
+        /// The client stopped reading before the body ended: it reset the stream or closed the
+        /// connection. Not an error of the engine's or the server's.
+        cancelled: bool,
+    },
+    /// No response: connecting to or requesting from upstream failed, and the client got a 502,
+    /// or the engine refused the request (no host to send it to, or it looped back to the engine)
+    /// with a 4xx or 5xx of its own.
+    Error {
+        id: u64,
+        error: String,
         elapsed_ms: u64,
     },
-    /// The upstream request failed.
-    Error { id: u64, error: String },
+    /// The client gave up before the response headers arrived, by resetting the stream or
+    /// closing the connection. The request upstream is cancelled with it.
+    Cancelled { id: u64, elapsed_ms: u64 },
 }
 
-/// Accumulated view of a proxied request, built from `ProxyEvent`s.
-#[derive(Debug, Clone)]
-pub struct CapturedRequest {
-    pub id: u64,
-    pub method: String,
-    pub url: String,
-    pub status: Option<u16>,
-    pub elapsed_ms: Option<u64>,
-    pub http_version: String,
-    pub remote_http_version: Option<String>,
-    pub request_headers: Vec<(String, String)>,
-    pub request_body: Option<Vec<u8>>,
-    pub response_headers: Vec<(String, String)>,
-    pub response_body: Option<Vec<u8>>,
-    pub response_body_size: u64,
-    pub state: RequestState,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum RequestState {
-    Sending,
-    Receiving,
-    Complete,
-    Error,
-}
-
+/// A running engine. Dropping it stops the listener and joins its thread.
 pub struct ProxyHandle {
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     thread_handle: Option<std::thread::JoinHandle<()>>,
     event_rx: Option<std_mpsc::Receiver<ProxyEvent>>,
+    engine: Arc<Engine>,
+    /// The bound port.
     pub port: u16,
-    pub ca_pem: String,
 }
 
 impl ProxyHandle {
     /// Take the event receiver. Can only be called once — returns `None` after the first call.
     pub fn take_event_rx(&mut self) -> Option<std_mpsc::Receiver<ProxyEvent>> {
         self.event_rx.take()
+    }
+
+    /// Forgets the hosts passed through after clients rejected the CA, so they are intercepted
+    /// again, as once the CA is trusted.
+    pub fn forget_passthrough(&self) {
+        self.engine.passthrough.lock().unwrap().clear();
+        self.engine.handshake_failures.lock().unwrap().clear();
+    }
+
+    /// Offers HTTP/2 to clients, or stops, from the next connection on. Connections already
+    /// open keep the protocol they chose.
+    pub fn set_http2(&self, enabled: bool) {
+        self.engine.http2.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Handshake failures counted toward passing `addr` (`host:port`) through, and whether it
+    /// already is. For tests that must wait for the engine to record a failure.
+    #[doc(hidden)]
+    pub fn handshake_state(&self, addr: &str) -> (u32, bool) {
+        let failures = self.engine.handshake_failures.lock().unwrap().get(addr).copied();
+        (failures.unwrap_or_default(), self.engine.is_passthrough(addr))
     }
 }
 
@@ -113,12 +205,115 @@ impl Drop for ProxyHandle {
     }
 }
 
-pub fn start_proxy(port: u16) -> Result<ProxyHandle, String> {
-    let ca = CertificateAuthority::new().map_err(|e| format!("Failed to create CA: {e}"))?;
-    let ca_pem = ca.ca_pem();
-    let ca = Arc::new(ca);
+/// The client connection a request came on.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ClientConn {
+    connection: u64,
+    addr: SocketAddr,
+}
+
+pub(crate) struct Engine {
+    ca: Arc<CaStore>,
+    capture_body_limit: usize,
+    events: std_mpsc::Sender<ProxyEvent>,
+    next_id: AtomicU64,
+    next_connection: AtomicU64,
+    http_client: Client<HttpConnector, BoxBody>,
+    upstream_tls: Arc<ClientConfig>,
+    upstream_tls_h1: Arc<ClientConfig>,
+    passthrough: Mutex<HashSet<String>>,
+    handshake_failures: Mutex<HashMap<String, u32>>,
+    /// Offer HTTP/2 to clients in intercepted TLS.
+    http2: AtomicBool,
+    /// `Via` value marking requests whose URL the engine rebuilt from `Host`, unique to this run,
+    /// so one that comes back to the engine is refused instead of forwarded again.
+    via: HeaderValue,
+}
+
+impl Engine {
+    fn emit(&self, event: ProxyEvent) {
+        let _ = self.events.send(event);
+    }
+
+    fn next_flow_id(&self) -> u64 {
+        self.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn offers_http2(&self) -> bool {
+        self.http2.load(Ordering::Relaxed)
+    }
+
+    fn is_passthrough(&self, addr: &str) -> bool {
+        self.passthrough.lock().unwrap().contains(addr)
+    }
+
+    /// Returns whether `addr` is now passed through. macOS and Windows clients reject the CA with
+    /// a bare hang-up, indistinguishable from an abandoned connection, so those need two in a row.
+    fn record_handshake_failure(&self, addr: &str, certificate_rejected: bool) -> bool {
+        let mut failures = self.handshake_failures.lock().unwrap();
+        let count = failures.entry(addr.to_string()).or_default();
+        *count += 1;
+        if !certificate_rejected && *count < PASSTHROUGH_AFTER_FAILURES {
+            return false;
+        }
+        failures.remove(addr);
+        self.passthrough.lock().unwrap().insert(addr.to_string());
+        true
+    }
+
+    fn record_handshake_success(&self, addr: &str) {
+        self.handshake_failures.lock().unwrap().remove(addr);
+    }
+}
+
+fn upstream_tls_config(
+    roots: &rustls::RootCertStore,
+    alpn: &[&[u8]],
+) -> Result<Arc<ClientConfig>, String> {
+    let mut config =
+        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .map_err(|e| e.to_string())?
+            .with_root_certificates(roots.clone())
+            .with_no_client_auth();
+    config.alpn_protocols = alpn.iter().map(|p| p.to_vec()).collect();
+    Ok(Arc::new(config))
+}
+
+fn via_marker() -> HeaderValue {
+    let run = RandomState::new().build_hasher().finish();
+    HeaderValue::try_from(format!("1.1 yaak-proxy-{run:016x}")).unwrap()
+}
+
+/// Starts the engine on its own thread and Tokio runtime, returning once the port is bound.
+pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in rustls_native_certs::load_native_certs().certs {
+        let _ = roots.add(cert);
+    }
+    for cert in config.upstream_root_certs {
+        roots.add(cert).map_err(|e| format!("Invalid upstream root certificate: {e}"))?;
+    }
 
     let (event_tx, event_rx) = std_mpsc::channel();
+    let engine = Arc::new(Engine {
+        ca: config.ca,
+        capture_body_limit: config.capture_body_limit,
+        events: event_tx,
+        next_id: AtomicU64::new(1),
+        next_connection: AtomicU64::new(1),
+        http_client: Client::builder(TokioExecutor::new()).build_http(),
+        upstream_tls: upstream_tls_config(&roots, &[b"h2", b"http/1.1"])?,
+        upstream_tls_h1: upstream_tls_config(&roots, &[b"http/1.1"])?,
+        passthrough: Mutex::new(HashSet::new()),
+        handshake_failures: Mutex::new(HashMap::new()),
+        http2: AtomicBool::new(config.http2),
+        via: via_marker(),
+    });
+
+    let port = config.port;
+    let on_accept = config.on_accept;
+    let handle_engine = engine.clone();
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
     let (ready_tx, ready_rx) = std_mpsc::channel();
 
@@ -132,50 +327,53 @@ pub fn start_proxy(port: u16) -> Result<ProxyHandle, String> {
         };
 
         rt.block_on(async move {
-            let addr = SocketAddr::from(([127, 0, 0, 1], port));
-            let listener = match TcpListener::bind(addr).await {
+            let listener = match TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port))).await {
                 Ok(l) => l,
                 Err(e) => {
-                    let _ = ready_tx.send(Err(format!("Failed to bind: {e}")));
+                    let _ = ready_tx.send(Err(format!("Failed to bind port {port}: {e}")));
                     return;
                 }
             };
-
-            let bound_port = listener.local_addr().unwrap().port();
-            let _ = ready_tx.send(Ok(bound_port));
+            let bound = listener.local_addr().map(|a| a.port()).map_err(|e| e.to_string());
+            let _ = ready_tx.send(bound);
+            log::info!("Proxy listening on {:?}", listener.local_addr());
 
             let mut shutdown_rx = shutdown_rx;
             loop {
                 tokio::select! {
-                    result = listener.accept() => {
-                        match result {
-                            Ok((stream, _addr)) => {
-                                let tx = event_tx.clone();
-                                let ca = ca.clone();
-                                tokio::spawn(async move {
-                                    if let Err(e) = handle_connection(stream, tx, ca).await {
-                                        eprintln!("Connection error: {e}");
-                                    }
-                                });
-                            }
-                            Err(e) => eprintln!("Accept error: {e}"),
+                    result = listener.accept() => match result {
+                        Ok((stream, addr)) => {
+                            let engine = engine.clone();
+                            let client = ClientConn {
+                                connection: engine.next_connection.fetch_add(1, Ordering::Relaxed),
+                                addr,
+                            };
+                            let on_accept = on_accept.clone();
+                            tokio::spawn(async move {
+                                if let Some(hook) = on_accept {
+                                    let (connection, addr) = (client.connection, client.addr);
+                                    let _ = tokio::task::spawn_blocking(move || hook(connection, addr)).await;
+                                }
+                                if let Err(e) = handle_connection(stream, client, engine).await {
+                                    log::debug!("Client connection error: {e}");
+                                }
+                            });
                         }
-                    }
-                    _ = &mut shutdown_rx => {
-                        break;
-                    }
+                        Err(e) => log::warn!("Accept error: {e}"),
+                    },
+                    _ = &mut shutdown_rx => break,
                 }
             }
         });
     });
 
     match ready_rx.recv() {
-        Ok(Ok(bound_port)) => Ok(ProxyHandle {
+        Ok(Ok(port)) => Ok(ProxyHandle {
             shutdown_tx: Some(shutdown_tx),
             thread_handle: Some(thread_handle),
             event_rx: Some(event_rx),
-            port: bound_port,
-            ca_pem,
+            engine: handle_engine,
+            port,
         }),
         Ok(Err(e)) => Err(e),
         Err(_) => Err("Proxy thread died before binding".into()),

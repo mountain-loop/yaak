@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1
+# The playground API behind yaak.run. See crates-server/yaak-playground/README.md.
+
+FROM rust:1-bookworm AS build
+WORKDIR /app
+COPY . .
+RUN cargo build --release -p yaak-playground
+
+FROM debian:bookworm-slim
+COPY --from=build /app/target/release/yaak-playground /usr/local/bin/yaak-playground
+ENV HOST=0.0.0.0
+ENV PORT=8080
+EXPOSE 8080
+USER nobody
+CMD ["yaak-playground"]

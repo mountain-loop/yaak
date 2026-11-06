@@ -27,7 +27,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::body::BoxBody;
+use tonic::body::Body;
 use tonic::metadata::{MetadataKey, MetadataValue};
 use tonic::transport::Uri;
 use tonic::{IntoRequest, IntoStreamingRequest, Request, Response, Status, Streaming};
@@ -36,7 +36,7 @@ use yaak_tls::ClientCertificateConfig;
 #[derive(Clone)]
 pub struct GrpcConnection {
     pool: Arc<RwLock<DescriptorPool>>,
-    conn: Client<HttpsConnector<HttpConnector>, BoxBody>,
+    conn: Client<HttpsConnector<HttpConnector>, Body>,
     pub uri: Uri,
     use_reflection: bool,
     max_message_size: usize,
@@ -338,10 +338,10 @@ impl GrpcConnection {
 }
 
 fn grpc_client(
-    conn: Client<HttpsConnector<HttpConnector>, BoxBody>,
+    conn: Client<HttpsConnector<HttpConnector>, Body>,
     uri: Uri,
     max_message_size: usize,
-) -> tonic::client::Grpc<Client<HttpsConnector<HttpConnector>, BoxBody>> {
+) -> tonic::client::Grpc<Client<HttpsConnector<HttpConnector>, Body>> {
     tonic::client::Grpc::with_origin(conn, uri)
         .max_decoding_message_size(max_message_size)
         .max_encoding_message_size(max_message_size)

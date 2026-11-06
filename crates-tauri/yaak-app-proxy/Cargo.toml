@@ -14,12 +14,14 @@ tauri-build = { version = "2.6.1", features = [] }
 
 [features]
 default = ["wry"]
-wry = ["tauri/wry", "tauri/x11", "tauri/dbus"]
+wry = ["tauri/wry", "tauri/x11", "tauri/dbus", "tauri-plugin-dialog/gtk3"]
 
 [dependencies]
 log = { workspace = true }
 serde_json = { workspace = true }
 tauri = { workspace = true, features = ["devtools"] }
+tauri-plugin-dialog = { workspace = true }
+tauri-plugin-opener = "2.5.4"
 tauri-plugin-os = "2.3.2"
 yaak-mac-window = { workspace = true }
 yaak-proxy-lib = { workspace = true }

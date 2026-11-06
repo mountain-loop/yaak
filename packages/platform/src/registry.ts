@@ -34,6 +34,9 @@ function host(): Platform {
  * and cannot be made to wait.
  */
 export const platform: Platform = {
+  get httpProxyUrl() {
+    return host().httpProxyUrl;
+  },
   get capabilities() {
     return host().capabilities;
   },

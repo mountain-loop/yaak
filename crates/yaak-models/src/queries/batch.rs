@@ -1,10 +1,10 @@
-use crate::client_db::ClientDb;
+use crate::client_db::WriteDb;
 use crate::error::Result;
 use crate::models::{Environment, Folder, GrpcRequest, HttpRequest, WebsocketRequest, Workspace};
 use crate::util::{BatchUpsertResult, UpdateSource};
 use log::info;
 
-impl<'a> ClientDb<'a> {
+impl<'a> WriteDb<'a> {
     pub fn batch_upsert(
         &self,
         workspaces: Vec<Workspace>,

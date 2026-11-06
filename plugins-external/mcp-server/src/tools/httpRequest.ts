@@ -69,18 +69,24 @@ export function registerHttpRequestTools(server: McpServer, ctx: McpServerContex
       description: "Send an HTTP request and get the response",
       inputSchema: {
         id: z.string().describe("The HTTP request ID to send"),
-        environmentId: z.string().optional().describe("Optional environment ID to use"),
+        environmentId: z
+          .string()
+          .optional()
+          .describe("Environment ID for this send only; defaults to the active environment"),
         workspaceId: workspaceIdSchema,
       },
     },
-    async ({ id, workspaceId }) => {
+    async ({ id, workspaceId, environmentId }) => {
       const workspaceCtx = await getWorkspaceContext(ctx, workspaceId);
       const httpRequest = await workspaceCtx.yaak.httpRequest.getById({ id });
       if (httpRequest == null) {
         throw new Error(`HTTP request with ID ${id} not found`);
       }
 
-      const { httpResponse: response } = await workspaceCtx.yaak.httpRequest.send({ httpRequest });
+      const { httpResponse: response } = await workspaceCtx.yaak.httpRequest.send({
+        httpRequest,
+        environmentId,
+      });
 
       return {
         content: [

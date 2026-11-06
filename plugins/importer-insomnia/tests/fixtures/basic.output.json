@@ -112,7 +112,7 @@
         "method": "GET",
         "model": "http_request",
         "name": "New Request",
-        "url": "${[BASE_URL ]}/foo/:id",
+        "url": "${[ BASE_URL ]}/foo/:id",
         "urlParameters": [
           {
             "name": "query",

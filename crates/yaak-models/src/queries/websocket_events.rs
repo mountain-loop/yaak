@@ -1,4 +1,4 @@
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::error::Result;
 use crate::models::{WebsocketEvent, WebsocketEventIden};
 use crate::util::UpdateSource;
@@ -11,7 +11,9 @@ impl<'a> ClientDb<'a> {
     pub fn list_websocket_events(&self, connection_id: &str) -> Result<Vec<WebsocketEvent>> {
         self.find_many(WebsocketEventIden::ConnectionId, connection_id, None)
     }
+}
 
+impl<'a> WriteDb<'a> {
     pub fn upsert_websocket_event(
         &self,
         websocket_event: &WebsocketEvent,

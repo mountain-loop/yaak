@@ -123,6 +123,66 @@ describe("importer-postman", () => {
     expect(keyOf(before, before?.resources.workspaces[0]?.id)).toBe("collection:collection-id");
   });
 
+  test("Falls back to the default OAuth 1 signature method for unrecognized ones", () => {
+    const result = convertPostman(
+      JSON.stringify({
+        info: {
+          name: "OAuth 1 Signature",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        item: [
+          {
+            name: "Request",
+            request: {
+              method: "GET",
+              url: "https://yaak.app",
+              auth: {
+                type: "oauth1",
+                oauth1: [{ key: "signatureMethod", value: "HMAC-SHA384" }],
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result?.resources.httpRequests).toEqual([
+      expect.objectContaining({
+        authenticationType: "oauth1",
+        authentication: { signatureMethod: "HMAC-SHA1" },
+      }),
+    ]);
+  });
+
+  test("Leaves {{constructor}} alone instead of reaching Object.prototype", () => {
+    const result = convertPostman(
+      JSON.stringify({
+        info: {
+          name: "Prototype Key",
+          schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        item: [
+          {
+            name: "Request",
+            request: {
+              method: "GET",
+              url: "https://yaak.app",
+              header: [
+                { key: "X-A", value: "{{constructor}}" },
+                { key: "X-B", value: "{{toString}}" },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(result?.resources.httpRequests[0]?.headers).toEqual([
+      { name: "X-A", value: "${[constructor]}", enabled: true },
+      { name: "X-B", value: "${[toString]}", enabled: true },
+    ]);
+  });
+
   test("Omits keys for items the collection never identified", () => {
     const result = convertPostman(
       JSON.stringify({

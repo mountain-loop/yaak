@@ -118,6 +118,7 @@ impl Host for TestHost {
 #[tokio::test(flavor = "multi_thread")]
 async fn writes_carry_the_client_id() {
     let host = TestHost::new();
+    host.drain_writes(); // the rows startup creates
 
     let workspace = Workspace { name: "From a test".to_string(), ..Default::default() };
     let id = models_upsert(host.clone(), ModelsUpsertReq { model: AnyModel::Workspace(workspace) })
@@ -406,21 +407,23 @@ async fn a_single_threaded_host_can_implement_the_trait() {
     // shared code; only the callback came from the host. Rendering a real
     // variable is what proves the chain was resolved rather than skipped.
     let environment = host
-        .db()
-        .upsert_environment(
-            &Environment {
-                workspace_id: id.clone(),
-                name: "Test env".to_string(),
-                variables: vec![EnvironmentVariable {
-                    enabled: true,
-                    name: "greeting".to_string(),
-                    value: "hello".to_string(),
-                    id: None,
-                }],
-                ..Default::default()
-            },
-            &host.update_source(),
-        )
+        .query_manager()
+        .with_tx(|tx| {
+            tx.upsert_environment(
+                &Environment {
+                    workspace_id: id.clone(),
+                    name: "Test env".to_string(),
+                    variables: vec![EnvironmentVariable {
+                        enabled: true,
+                        name: "greeting".to_string(),
+                        value: "hello".to_string(),
+                        id: None,
+                    }],
+                    ..Default::default()
+                },
+                &host.update_source(),
+            )
+        })
         .expect("seed environment");
 
     let rendered = cmd_render_template(
@@ -459,30 +462,33 @@ async fn auth_values_are_rendered_before_the_host_sees_them() {
     };
 
     let workspace = host
-        .db()
-        .upsert_workspace(
-            &Workspace { name: "Auth".to_string(), ..Default::default() },
-            &host.update_source(),
-        )
+        .query_manager()
+        .with_tx(|tx| {
+            tx.upsert_workspace(
+                &Workspace { name: "Auth".to_string(), ..Default::default() },
+                &host.update_source(),
+            )
+        })
         .expect("workspace");
-    host.db()
-        .upsert_environment(
-            &Environment {
-                workspace_id: workspace.id.clone(),
-                name: "Env".to_string(),
-                variables: vec![EnvironmentVariable {
-                    enabled: true,
-                    name: "token".to_string(),
-                    value: "s3cret".to_string(),
-                    id: None,
-                }],
-                ..Default::default()
-            },
-            &host.update_source(),
-        )
+    host.query_manager()
+        .with_tx(|tx| {
+            tx.upsert_environment(
+                &Environment {
+                    workspace_id: workspace.id.clone(),
+                    name: "Env".to_string(),
+                    variables: vec![EnvironmentVariable {
+                        enabled: true,
+                        name: "token".to_string(),
+                        value: "s3cret".to_string(),
+                        id: None,
+                    }],
+                    ..Default::default()
+                },
+                &host.update_source(),
+            )
+        })
         .expect("environment");
-    let environment =
-        host.db().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
+    let environment = host.db().list_environments(&workspace.id).expect("list").remove(0);
 
     let mut values = HashMap::new();
     values.insert("password".to_string(), JsonPrimitive::String("${[ token ]}".to_string()));
@@ -521,30 +527,33 @@ async fn template_function_values_are_rendered_before_the_host_sees_them() {
     };
 
     let workspace = host
-        .db()
-        .upsert_workspace(
-            &Workspace { name: "Functions".to_string(), ..Default::default() },
-            &host.update_source(),
-        )
+        .query_manager()
+        .with_tx(|tx| {
+            tx.upsert_workspace(
+                &Workspace { name: "Functions".to_string(), ..Default::default() },
+                &host.update_source(),
+            )
+        })
         .expect("workspace");
-    host.db()
-        .upsert_environment(
-            &Environment {
-                workspace_id: workspace.id.clone(),
-                name: "Env".to_string(),
-                variables: vec![EnvironmentVariable {
-                    enabled: true,
-                    name: "1PASSWORD_TOKEN".to_string(),
-                    value: "ops_abc123".to_string(),
-                    id: None,
-                }],
-                ..Default::default()
-            },
-            &host.update_source(),
-        )
+    host.query_manager()
+        .with_tx(|tx| {
+            tx.upsert_environment(
+                &Environment {
+                    workspace_id: workspace.id.clone(),
+                    name: "Env".to_string(),
+                    variables: vec![EnvironmentVariable {
+                        enabled: true,
+                        name: "1PASSWORD_TOKEN".to_string(),
+                        value: "ops_abc123".to_string(),
+                        id: None,
+                    }],
+                    ..Default::default()
+                },
+                &host.update_source(),
+            )
+        })
         .expect("environment");
-    let environment =
-        host.db().list_environments_ensure_base(&workspace.id).expect("list").remove(0);
+    let environment = host.db().list_environments(&workspace.id).expect("list").remove(0);
 
     let mut values = HashMap::new();
     values.insert("token".to_string(), JsonPrimitive::String("${[1PASSWORD_TOKEN]}".to_string()));

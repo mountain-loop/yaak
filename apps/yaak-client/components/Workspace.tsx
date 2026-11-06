@@ -40,6 +40,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { FolderLayout } from "./FolderLayout";
 import { GrpcConnectionLayout } from "./GrpcConnectionLayout";
 import { HttpRequestLayout } from "./HttpRequestLayout";
+import { RedirectToLatestWorkspace } from "./RedirectToLatestWorkspace";
 import Sidebar from "./Sidebar";
 import { SidebarActions } from "./SidebarActions";
 import { WebsocketRequestLayout } from "./WebsocketRequestLayout";
@@ -66,9 +67,8 @@ export function Workspace() {
     return { background };
   }, [activeEnvironment?.color]);
 
-  // We're loading still
   if (workspaces.length === 0) {
-    return null;
+    return <RedirectToLatestWorkspace />;
   }
 
   const header = (

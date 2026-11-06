@@ -10,10 +10,10 @@ path = "src/main.rs"
 
 [dependencies]
 arboard = "3"
-base64 = "0.22"
+base64 = "0.23"
 clap = { version = "4", features = ["derive"] }
 console = "0.15"
-dirs = "6"
+dirs = "7"
 env_logger = "0.11"
 futures = "0.3"
 inquire = { version = "0.7", features = ["editor"] }
@@ -21,9 +21,12 @@ hex = { workspace = true }
 include_dir = "0.7"
 keyring = { workspace = true, features = ["apple-native", "windows-native", "sync-secret-service"] }
 log = { workspace = true }
-rand = "0.8"
-reqwest = { workspace = true }
+rand = "0.10"
+reqwest = { workspace = true, features = ["form"] }
 rolldown = "0.1.0"
+# Pinned exactly: rolldown_resolver takes `oxc_resolver = "^11"`, so cargo
+# drifts it forward and breaks on 11.11 (TsconfigOptions became
+# TsconfigDiscovery). This dep exists only to hold that resolution.
 oxc_resolver = "=11.10.0"
 schemars = { workspace = true }
 serde = { workspace = true }
@@ -39,18 +42,21 @@ tokio = { workspace = true, features = [
 ] }
 walkdir = "2"
 webbrowser = "1"
-zip = "4"
+zip = "9.0.5"
 yaak = { workspace = true }
 yaak-api = { workspace = true }
+yaak-common = { workspace = true }
 yaak-core = { workspace = true }
 yaak-crypto = { workspace = true }
 yaak-http = { workspace = true }
 yaak-lifecycle = { workspace = true }
+yaak-mcp = { workspace = true }
 yaak-models = { workspace = true }
 yaak-plugins = { workspace = true }
 yaak-templates = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2"
+rmcp = { version = "3.5.1", default-features = false, features = ["client"] }
 predicates = "3"
 tempfile = "3"

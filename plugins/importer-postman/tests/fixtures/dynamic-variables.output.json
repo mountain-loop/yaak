@@ -1,0 +1,95 @@
+{
+  "resources": {
+    "workspaces": [
+      {
+        "model": "workspace",
+        "id": "GENERATE_ID::WORKSPACE_1",
+        "name": "Dynamic Variables",
+        "authenticationType": null,
+        "authentication": {}
+      }
+    ],
+    "environments": [
+      {
+        "model": "environment",
+        "id": "GENERATE_ID::ENVIRONMENT_1",
+        "name": "Global Variables",
+        "workspaceId": "GENERATE_ID::WORKSPACE_1",
+        "parentModel": "workspace",
+        "parentId": null,
+        "variables": []
+      }
+    ],
+    "httpRequests": [
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_15",
+        "workspaceId": "GENERATE_ID::WORKSPACE_1",
+        "folderId": null,
+        "name": "Dynamic Variables",
+        "method": "POST",
+        "url": "https://yaak.app/x/echo",
+        "urlParameters": [
+          {
+            "name": "n",
+            "value": "${[random.range(min='0',max='1000',decimals='0')]}",
+            "enabled": true
+          }
+        ],
+        "body": {
+          "text": "{\n  \"id\": \"${[uuid.v4()]}\",\n  \"at\": ${[timestamp.unix()]},\n  \"mixed\": \"${[uuid.v4()]}/${[base_url]}\"\n}"
+        },
+        "bodyType": "application/json",
+        "sortPriority": 0,
+        "headers": [
+          {
+            "name": "X-Request-Id",
+            "value": "${[uuid.v4()]}",
+            "enabled": true
+          },
+          {
+            "name": "X-Correlation-Id",
+            "value": "${[uuid.v4()]}",
+            "enabled": true
+          },
+          {
+            "name": "X-Sent-At",
+            "value": "${[timestamp.unix()]}",
+            "enabled": true
+          },
+          {
+            "name": "X-Sent-At-Iso",
+            "value": "${[timestamp.iso8601()]}",
+            "enabled": true
+          },
+          {
+            "name": "X-Spaced",
+            "value": "${[uuid.v4()]}",
+            "enabled": true
+          },
+          {
+            "name": "X-Faker",
+            "value": "${[$randomFirstName]}",
+            "enabled": true
+          },
+          {
+            "name": "X-Plain",
+            "value": "${[base_url]}",
+            "enabled": true
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json",
+            "enabled": true
+          }
+        ],
+        "authenticationType": null,
+        "authentication": {}
+      }
+    ],
+    "folders": []
+  },
+  "sourceKeys": {
+    "GENERATE_ID::WORKSPACE_1": "collection:5c0ffee0-dyn0-4var-9abc-000000000001"
+  }
+}

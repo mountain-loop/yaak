@@ -1,5 +1,6 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { flushAllModelWrites } from "@yaakapp-internal/models";
+import { confirmWebProxy } from "../lib/confirmWebProxy";
 import { rpc } from "../lib/rpc";
 import { getActiveCookieJar } from "./useActiveCookieJar";
 import { getActiveEnvironment } from "./useActiveEnvironment";
@@ -7,6 +8,10 @@ import { createFastMutation, useFastMutation } from "./useFastMutation";
 
 async function sendAnyHttpRequestById(id: string | null): Promise<HttpResponse | null> {
   if (id == null) {
+    return null;
+  }
+
+  if (!(await confirmWebProxy())) {
     return null;
   }
 

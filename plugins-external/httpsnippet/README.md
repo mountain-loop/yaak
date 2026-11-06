@@ -14,28 +14,35 @@ remembered for next time.
 
 ## Supported Languages
 
-Each language supports one or more libraries:
+Each language supports one or more libraries, listed in the order they appear in the
+dialog:
 
-| Language    | Libraries                            |
-| ----------- | ------------------------------------ |
-| C           | libcurl                              |
-| Clojure     | clj-http                             |
-| C#          | HttpClient, RestSharp                |
-| Go          | Native                               |
-| HTTP        | HTTP/1.1                             |
-| Java        | AsyncHttp, NetHttp, OkHttp, Unirest  |
-| JavaScript  | Axios, fetch, jQuery, XHR            |
-| Kotlin      | OkHttp                               |
-| Node.js     | Axios, fetch, HTTP, Request, Unirest |
-| Objective-C | NSURLSession                         |
-| OCaml       | CoHTTP                               |
-| PHP         | cURL, Guzzle, HTTP v1, HTTP v2       |
-| PowerShell  | Invoke-WebRequest, RestMethod        |
-| Python      | http.client, Requests                |
-| R           | httr                                 |
-| Ruby        | Native                               |
-| Shell       | cURL, HTTPie, Wget                   |
-| Swift       | URLSession                           |
+| Language    | Libraries                                 |
+| ----------- | ----------------------------------------- |
+| Agent       | Agent Prompt                              |
+| C           | Libcurl                                   |
+| Clojure     | clj-http                                  |
+| Crystal     | http::client                              |
+| C#          | HttpClient, RestSharp                     |
+| Go          | NewRequest                                |
+| HTTP        | HTTP/1.1                                  |
+| Java        | AsyncHttp, java.net.http, OkHttp, Unirest |
+| JavaScript  | XMLHttpRequest, Axios, fetch, jQuery      |
+| Kotlin      | OkHttp                                    |
+| Node.js     | HTTP, Axios, fetch                        |
+| Objective-C | NSURLSession                              |
+| OCaml       | CoHTTP                                    |
+| PHP         | cURL, Guzzle, HTTP v1, HTTP v2            |
+| Powershell  | Invoke-WebRequest, Invoke-RestMethod      |
+| Python      | Requests                                  |
+| R           | httr                                      |
+| Ruby        | net::http, faraday                        |
+| Rust        | reqwest                                   |
+| Shell       | cURL, HTTPie, Wget                        |
+| Swift       | URLSession                                |
+
+The **Agent** target produces a prompt describing the request rather than code, for handing
+to an AI coding agent.
 
 ## Features
 

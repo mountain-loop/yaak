@@ -1,7 +1,8 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { IconButton } from "./core/IconButton";
-import { KeyValueRow, KeyValueRows } from "./core/KeyValueRow";
+import { KeyValueRow } from "./core/KeyValueRow";
 import { platform } from "@yaakapp-internal/platform";
+import { KeyValueRows } from "@yaakapp-internal/ui";
 
 interface Props {
   response: HttpResponse;

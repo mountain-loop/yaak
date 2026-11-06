@@ -12,9 +12,12 @@ notify = "8.0.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.34"
-sha1 = "0.10.6"
+sha1 = "0.11.0"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "sync", "macros", "rt"] }
 ts-rs = { workspace = true, features = ["chrono-impl", "serde-json-impl"] }
 yaak-models = { workspace = true }
 serde_path_to_error = "0.1.20"
+
+[dev-dependencies]
+tempfile = "3"

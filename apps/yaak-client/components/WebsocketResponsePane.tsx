@@ -1,6 +1,14 @@
 import type { WebsocketEvent, WebsocketRequest } from "@yaakapp-internal/models";
-import { HStack, Icon, LoadingIcon, VStack } from "@yaakapp-internal/ui";
-import { hexy } from "hexy";
+import {
+  HStack,
+  hexdump,
+  HexdumpViewer,
+  Icon,
+  LoadingIcon,
+  VStack,
+  useStateWithDeps,
+  languageFromContentType,
+} from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useMemo, useState } from "react";
 import { useFormatText } from "../hooks/useFormatText";
@@ -10,10 +18,9 @@ import {
   setPinnedWebsocketConnectionId,
   useWebsocketEvents,
 } from "../hooks/usePinnedWebsocketConnection";
-import { useStateWithDeps } from "../hooks/useStateWithDeps";
-import { languageFromContentType } from "../lib/contentType";
 import { Button } from "./core/Button";
 import { Editor } from "./core/Editor/LazyEditor";
+import { renderEditor } from "./core/Editor/renderEditor";
 import { type EventDetailAction, EventDetailHeader, EventViewer } from "./core/EventViewer";
 import { EventViewerRow } from "./core/EventViewerRow";
 import { HotkeyList } from "./core/HotkeyList";
@@ -117,10 +124,10 @@ function WebsocketEventRow({
     messageType === "error"
       ? "alert_triangle"
       : messageType === "close" || messageType === "open"
-      ? "info"
-      : isServer
-        ? "arrow_big_down_dash"
-        : "arrow_big_up_dash";
+        ? "info"
+        : isServer
+          ? "arrow_big_down_dash"
+          : "arrow_big_up_dash";
 
   const content =
     messageType === "close" ? (
@@ -167,7 +174,7 @@ function WebsocketEventDetail({
 }) {
   const message = useMemo(() => {
     if (hexDump) {
-      return event.message ? hexy(event.message) : "";
+      return event.message ? hexdump(event.message) : "";
     }
     return event.message ? new TextDecoder("utf-8").decode(Uint8Array.from(event.message)) : "";
   }, [event.message, hexDump]);
@@ -227,6 +234,8 @@ function WebsocketEventDetail({
         </VStack>
       ) : event.message.length === 0 ? (
         <EmptyStateText>No Content</EmptyStateText>
+      ) : hexDump ? (
+        <HexdumpViewer data={event.message} renderEditor={renderEditor} />
       ) : (
         <Editor
           language={language}

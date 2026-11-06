@@ -45,14 +45,35 @@ pub enum Val {
     Null,
 }
 
+/// Strings are printed as plain single-quoted values whenever they can survive a round-trip
+/// through both the parser and the client's editor. A quoted `]}` is fine — the editor's
+/// grammar and regexes skip over quoted strings — but newlines and other control characters
+/// don't belong in a single-line tag, so those fall back to base64.
+fn requires_b64(text: &str) -> bool {
+    text.chars().any(char::is_control)
+}
+
+/// Escape the only two characters the parser treats specially inside a single-quoted string.
+fn escape_str(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 impl Display for Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             Val::Str { text } => {
-                if text.chars().all(|c| c.is_alphanumeric() || c == ' ' || c == '_' || c == '_') {
-                    format!("'{}'", text)
-                } else {
+                if requires_b64(text) {
                     format!("b64'{}'", BASE64_URL_SAFE_NO_PAD.encode(text))
+                } else {
+                    format!("'{}'", escape_str(text))
                 }
             }
             Val::Var { name } => name.to_string(),
@@ -835,10 +856,64 @@ mod tests {
 
     #[test]
     fn token_display_complex_str() -> Result<()> {
-        assert_eq!(
-            Val::Str { text: "Hello 'You'".to_string() }.to_string(),
-            "b64'SGVsbG8gJ1lvdSc'"
-        );
+        assert_eq!(Val::Str { text: "Hello 'You'".to_string() }.to_string(), r#"'Hello \'You\''"#);
+
+        Ok(())
+    }
+
+    #[test]
+    fn token_display_str_plain() -> Result<()> {
+        // Strings the parser can read back verbatim print in plain quotes
+        assert_eq!(Val::Str { text: "X-Api-Key".to_string() }.to_string(), "'X-Api-Key'");
+        assert_eq!(Val::Str { text: "$.token".to_string() }.to_string(), "'$.token'");
+        assert_eq!(Val::Str { text: "it's".to_string() }.to_string(), r#"'it\'s'"#);
+        assert_eq!(Val::Str { text: r"back\slash".to_string() }.to_string(), r"'back\\slash'");
+        assert_eq!(Val::Str { text: r#"{"a":1}"#.to_string() }.to_string(), r#"'{"a":1}'"#);
+        assert_eq!(Val::Str { text: "héllo".to_string() }.to_string(), "'héllo'");
+
+        // Quoting is enough to keep `]}` from closing the tag early in the client editor
+        assert_eq!(Val::Str { text: "a]}b".to_string() }.to_string(), "'a]}b'");
+
+        Ok(())
+    }
+
+    #[test]
+    fn token_display_str_b64_fallback() -> Result<()> {
+        // Control characters don't belong in a single-line tag
+        assert_eq!(Val::Str { text: "line\nbreak".to_string() }.to_string(), "b64'bGluZQpicmVhaw'");
+        assert_eq!(Val::Str { text: "line\rbreak".to_string() }.to_string(), "b64'bGluZQ1icmVhaw'");
+        assert_eq!(Val::Str { text: "tab\there".to_string() }.to_string(), "b64'dGFiCWhlcmU'");
+
+        Ok(())
+    }
+
+    #[test]
+    fn token_str_round_trip() -> Result<()> {
+        let cases = [
+            "X-Api-Key",
+            "$.token",
+            "hello world",
+            "it's",
+            r"back\slash",
+            r#"{"a":1}"#,
+            "a]}b",
+            "line\nbreak",
+            "héllo",
+            r"trailing\",
+            "'",
+            "",
+        ];
+
+        for text in cases {
+            let val = Val::Str { text: text.to_string() };
+            let template = Token::Tag { val: val.clone() }.to_string();
+            let tokens = Parser::new(&template).parse()?;
+            assert_eq!(
+                tokens.tokens,
+                vec![Token::Tag { val: val.clone() }, Token::Eof],
+                "failed to round-trip {text:?} (printed as {template})"
+            );
+        }
 
         Ok(())
     }
@@ -879,7 +954,7 @@ mod tests {
                 }
             }
             .to_string(),
-            r#"${[ foo(arg=b64'diAneCc', arg2=my_var) ]}"#
+            r#"${[ foo(arg='v \'x\'', arg2=my_var) ]}"#
         );
 
         Ok(())

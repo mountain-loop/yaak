@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Context } from "@yaakapp/api";
 import { getRedirectUrlViaExternalBrowser } from "../callbackServer";
+import type { CustomParams } from "../customParams";
+import { applyQueryParams, NO_CUSTOM_PARAMS } from "../customParams";
 import { fetchAccessToken } from "../fetchAccessToken";
 import { getOrRefreshAccessToken } from "../getOrRefreshAccessToken";
 import type { AccessToken, TokenStoreArgs } from "../store";
@@ -36,6 +38,7 @@ export async function getAuthorizationCode(
     pkce,
     tokenName,
     externalBrowser,
+    customParams = NO_CUSTOM_PARAMS,
   }: {
     authorizationUrl: string;
     accessTokenUrl: string;
@@ -52,6 +55,7 @@ export async function getAuthorizationCode(
     } | null;
     tokenName: "access_token" | "id_token";
     externalBrowser?: ExternalBrowserOptions;
+    customParams?: CustomParams;
   },
 ): Promise<AccessToken> {
   const tokenArgs: TokenStoreArgs = {
@@ -68,6 +72,7 @@ export async function getAuthorizationCode(
     clientSecret,
     credentialsInBody,
     tokenName,
+    custom: customParams.refresh,
   });
   if (token != null) {
     return token;
@@ -91,6 +96,10 @@ export async function getAuthorizationCode(
     );
     authorizationUrl.searchParams.set("code_challenge_method", pkce.challengeMethod);
   }
+
+  // Applied before redirect_uri, which belongs to the callback flow rather than
+  // to the user: overriding it would send the code somewhere nothing listens
+  applyQueryParams(authorizationUrl, customParams.authorizationQuery);
 
   let code: string;
   let actualRedirectUri: string | null = redirectUri;
@@ -130,6 +139,7 @@ export async function getAuthorizationCode(
       ...(pkce ? [{ name: "code_verifier", value: pkce.codeVerifier }] : []),
       ...(actualRedirectUri ? [{ name: "redirect_uri", value: actualRedirectUri }] : []),
     ],
+    custom: customParams.token,
   });
 
   return storeToken(ctx, tokenArgs, response, tokenName);

@@ -659,12 +659,12 @@
             },
             {
               "key": "value",
-              "value": "value",
+              "value": "secret-123",
               "type": "string"
             },
             {
               "key": "key",
-              "value": "key",
+              "value": "X-API-Key",
               "type": "string"
             }
           ]
@@ -738,6 +738,254 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "Digest",
+      "request": {
+        "auth": {
+          "type": "digest",
+          "digest": [
+            {
+              "key": "algorithm",
+              "value": "MD5",
+              "type": "string"
+            },
+            {
+              "key": "username",
+              "value": "digest-user",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "digest-pass",
+              "type": "string"
+            },
+            {
+              "key": "realm",
+              "value": "testrealm@yaak.app",
+              "type": "string"
+            },
+            {
+              "key": "nonce",
+              "value": "dcd98b7102dd2f0e8b11d0f600bfb0c093",
+              "type": "string"
+            },
+            {
+              "key": "nonceCount",
+              "value": "00000001",
+              "type": "string"
+            },
+            {
+              "key": "clientNonce",
+              "value": "0a4f113b",
+              "type": "string"
+            },
+            {
+              "key": "opaque",
+              "value": "5ccc069c403ebaf9f0171e9517f40e41",
+              "type": "string"
+            },
+            {
+              "key": "qop",
+              "value": "auth",
+              "type": "string"
+            },
+            {
+              "key": "disableRetryRequest",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://yaak.app/x/echo",
+          "protocol": "https",
+          "host": ["yaak", "app"],
+          "path": ["x", "echo"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "NTLM",
+      "request": {
+        "auth": {
+          "type": "ntlm",
+          "ntlm": [
+            {
+              "key": "username",
+              "value": "ntlm-user",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "ntlm-pass",
+              "type": "string"
+            },
+            {
+              "key": "domain",
+              "value": "CORP",
+              "type": "string"
+            },
+            {
+              "key": "workstation",
+              "value": "WORKSTATION-01",
+              "type": "string"
+            },
+            {
+              "key": "disableRetryRequest",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://yaak.app/x/echo",
+          "protocol": "https",
+          "host": ["yaak", "app"],
+          "path": ["x", "echo"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "OAuth 1",
+      "request": {
+        "auth": {
+          "type": "oauth1",
+          "oauth1": [
+            {
+              "key": "consumerKey",
+              "value": "consumer-key",
+              "type": "string"
+            },
+            {
+              "key": "consumerSecret",
+              "value": "consumer-secret",
+              "type": "string"
+            },
+            {
+              "key": "token",
+              "value": "access-token",
+              "type": "string"
+            },
+            {
+              "key": "tokenSecret",
+              "value": "token-secret",
+              "type": "string"
+            },
+            {
+              "key": "signatureMethod",
+              "value": "HMAC-SHA256",
+              "type": "string"
+            },
+            {
+              "key": "timestamp",
+              "value": "1700000000",
+              "type": "string"
+            },
+            {
+              "key": "nonce",
+              "value": "9e6dfada256c",
+              "type": "string"
+            },
+            {
+              "key": "version",
+              "value": "1.0",
+              "type": "string"
+            },
+            {
+              "key": "realm",
+              "value": "yaak.app",
+              "type": "string"
+            },
+            {
+              "key": "callback",
+              "value": "https://yaak.app/x/callback",
+              "type": "string"
+            },
+            {
+              "key": "verifier",
+              "value": "verifier-123",
+              "type": "string"
+            },
+            {
+              "key": "addParamsToHeader",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "key": "addEmptyParamsToSign",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "key": "includeBodyHash",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://yaak.app/x/echo",
+          "protocol": "https",
+          "host": ["yaak", "app"],
+          "path": ["x", "echo"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Folder With Auth",
+      "item": [
+        {
+          "name": "Folder Child Inherit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://yaak.app/x/echo",
+              "protocol": "https",
+              "host": ["yaak", "app"],
+              "path": ["x", "echo"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Folder Child No Auth",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "https://yaak.app/x/echo",
+              "protocol": "https",
+              "host": ["yaak", "app"],
+              "path": ["x", "echo"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "folder-token",
+            "type": "string"
+          }
+        ]
+      }
     }
   ],
   "auth": {

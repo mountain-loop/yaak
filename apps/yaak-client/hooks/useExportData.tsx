@@ -23,7 +23,6 @@ export function useExportData() {
         id: "export-data",
         title: "Export Data",
         size: "md",
-        noPadding: true,
         render: ({ hide }) => (
           <ExportDataDialog
             onHide={hide}

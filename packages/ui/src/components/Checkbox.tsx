@@ -1,0 +1,74 @@
+import classNames from "classnames";
+import type { ReactNode } from "react";
+import { Icon } from "./Icon";
+import { IconTooltip } from "./IconTooltip";
+import { HStack } from "./Stacks";
+
+export interface CheckboxProps {
+  checked: boolean | "indeterminate";
+  title: ReactNode;
+  onChange: (checked: boolean) => void;
+  className?: string;
+  disabled?: boolean;
+  inputWrapperClassName?: string;
+  hideLabel?: boolean;
+  fullWidth?: boolean;
+  help?: ReactNode;
+  size?: "sm" | "md";
+}
+
+export function Checkbox({
+  checked,
+  onChange,
+  className,
+  inputWrapperClassName,
+  disabled,
+  title,
+  hideLabel,
+  fullWidth,
+  help,
+  size = "sm",
+}: CheckboxProps) {
+  return (
+    <HStack
+      as="label"
+      alignItems="center"
+      space={2}
+      className={classNames(className, "text-text mr-auto")}
+    >
+      <div className={classNames(inputWrapperClassName, "x-theme-input", "relative flex mr-0.5")}>
+        <input
+          aria-hidden
+          className={classNames(
+            "appearance-none shrink-0 border border-border",
+            size === "sm" && "w-4 h-4",
+            size === "md" && "w-5 h-5",
+            "rounded-sm outline-hidden ring-0",
+            !disabled && "hocus:border-border-focus hocus:bg-focus/[5%]",
+            disabled && "border-dotted",
+          )}
+          type="checkbox"
+          disabled={disabled}
+          onChange={() => {
+            onChange(checked === "indeterminate" ? true : !checked);
+          }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Icon
+            size={size}
+            className={classNames(disabled && "opacity-disabled")}
+            icon={checked === "indeterminate" ? "minus" : checked ? "check" : "empty"}
+          />
+        </div>
+      </div>
+      {!hideLabel && (
+        <div
+          className={classNames("text-sm", fullWidth && "w-full", disabled && "opacity-disabled")}
+        >
+          {title}
+        </div>
+      )}
+      {help && <IconTooltip content={help} />}
+    </HStack>
+  );
+}

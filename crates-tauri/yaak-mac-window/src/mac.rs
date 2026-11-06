@@ -147,7 +147,7 @@ pub fn setup_traffic_light_positioner<R: Runtime>(window: &Window<R>) {
     use cocoa::delegate;
     use cocoa::foundation::NSUInteger;
     use objc::runtime::{Object, Sel};
-    use rand::Rng;
+    use rand::RngExt;
     use rand::distr::Alphanumeric;
     use std::ffi::c_void;
 

@@ -1,0 +1,136 @@
+# Synthetic bundled export following Bruno's OpenCollection 1.0.0 exporter.
+opencollection: 1.0.0
+info:
+  name: Example API
+request:
+  auth:
+    type: bearer
+    token: "{{token}}"
+  headers:
+    - name: X-Collection
+      value: "{{client}}"
+  variables:
+    - name: host
+      value: https://example.com
+    - name: client
+      value: yaak
+config:
+  environments:
+    - name: Development
+      extends: Shared
+      variables:
+        - name: host
+          value: https://dev.example.com
+        - name: token
+          secret: true
+        - name: disabled
+          value: ignored
+          disabled: true
+    - name: Shared
+      color: "#123456"
+      variables:
+        - name: count
+          value:
+            type: number
+            data: "42"
+items:
+  - info:
+      name: Users
+      type: folder
+      seq: 2
+    request:
+      auth: inherit
+      variables:
+        - name: userId
+          value: "123"
+    items:
+      - info:
+          name: Get User
+          type: http
+          seq: 3
+          description: Fetch one user
+        http:
+          method: GET
+          url: "{{host}}/users/:id?expand=profile&keep=1#details"
+          auth: inherit
+          params:
+            - name: id
+              value: "{{userId}}"
+              type: path
+            - name: expand
+              value: profile
+              type: query
+            - name: inactive
+              value: "true"
+              type: query
+              disabled: true
+          headers:
+            - name: X-Disabled
+              value: ignored
+              disabled: true
+        settings:
+          timeout: 2000
+          followRedirects: false
+      - info:
+          name: GraphQL
+          type: graphql
+          seq: 1
+        graphql:
+          method: POST
+          url: "{{host}}/graphql"
+          auth:
+            type: basic
+            username: "{{client}}"
+            password: example
+          body:
+            query: "query Get($id: ID!) { node(id: $id) { id } }"
+            variables: '{"id":"{{userId}}"}'
+  - info:
+      name: Public
+      type: http
+      seq: 1
+    http:
+      method: GET
+      url: "{{host}}/status"
+  - info:
+      name: Upload
+      type: http
+    http:
+      method: POST
+      url: "{{host}}/upload"
+      body:
+        type: multipart-form
+        data:
+          - name: label
+            type: text
+            value: "{{client}}"
+          - name: files
+            type: file
+            value: [./first.txt, ./second.txt]
+            contentType: text/plain
+  - info:
+      name: Hello RPC
+      type: grpc
+    grpc:
+      url: localhost:50051
+      method: /example.Greeter/SayHello
+      message: '{"name":"{{client}}"}'
+      metadata:
+        - name: authorization
+          value: "Bearer {{token}}"
+  - info:
+      name: Events
+      type: websocket
+    websocket:
+      url: wss://example.com/events
+      auth: inherit
+      message:
+        type: json
+        data: '{"subscribe":"{{client}}"}'
+docs:
+  type: text/markdown
+  content: Synthetic migration fixture.
+bundled: true
+extensions:
+  bruno:
+    exportedUsing: Bruno/3.0.0

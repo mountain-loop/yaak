@@ -10,10 +10,12 @@ use yaak_database::SqlitePool;
 
 pub mod blob_manager;
 pub mod client_db;
+mod connection_or_tx;
 pub mod content;
 pub mod cookies;
-mod connection_or_tx;
 pub mod error;
+pub mod example;
+pub mod export;
 pub mod migrate;
 pub mod models;
 pub mod models_ops;
@@ -66,6 +68,17 @@ mod open {
             .map_err(|e| Error::Database(e.to_string()))
     }
 
+    /// `(readers, writer)` over one file: a pool of `max_size` readers and a
+    /// pool of exactly one writer.
+    pub fn file_pools(
+        path: impl Into<PathBuf>,
+        max_size: u32,
+        min_idle: u32,
+    ) -> Result<(SqlitePool, SqlitePool)> {
+        let path: PathBuf = path.into();
+        Ok((file_pool(&path, max_size, min_idle)?, file_pool(&path, 1, 1)?))
+    }
+
     pub fn memory_pool() -> Result<SqlitePool> {
         let manager = SqliteConnectionManager::memory().with_init(|c| init_connection(c));
         // In-memory DB doesn't support multiple connections
@@ -92,6 +105,16 @@ mod open {
         Ok(SqlitePool::single(conn))
     }
 
+    /// One connection is all a browser VFS allows, so it reads and writes.
+    pub fn file_pools(
+        path: impl Into<PathBuf>,
+        max_size: u32,
+        min_idle: u32,
+    ) -> Result<(SqlitePool, SqlitePool)> {
+        let pool = file_pool(path, max_size, min_idle)?;
+        Ok((pool.clone(), pool))
+    }
+
     pub fn memory_pool() -> Result<SqlitePool> {
         let conn = Connection::open_in_memory()?;
         init_connection(&conn)?;
@@ -110,27 +133,40 @@ pub fn init_standalone(
     let db_path = db_path.as_ref();
     let blob_path = blob_path.as_ref();
 
-    // Main database pool. Sized for concurrent in-flight queries, not concurrent app
-    // features — connections are held per-statement, so even heavy fan-out (e.g. many
-    // gRPC streams) only needs a handful at once. Keep max_size modest: WAL connections
-    // hold ~3 file descriptors each, and macOS GUI apps get a 256 fd soft limit.
+    // Each database gets a reader pool and a one-connection writer pool; see
+    // `QueryManager` for why. Reader pools are sized for concurrent in-flight
+    // queries, not concurrent app features — connections are held per-statement,
+    // so even heavy fan-out (e.g. many gRPC streams) only needs a handful at once.
+    // Keep them modest: WAL connections hold ~3 file descriptors each, and macOS
+    // GUI apps get a 256 fd soft limit.
     info!("Initializing app database {db_path:?}");
-    let pool = open::file_pool(db_path, 20, 2)?;
-    migrate_db(&pool)?;
+    let (readers, writer) = open::file_pools(db_path, 20, 2)?;
+    migrate_db(&writer)?;
 
-    info!("Initializing blobs database {blob_path:?}");
-    let blob_pool = open::file_pool(blob_path, 10, 1)?;
-    migrate_blob_db(&blob_pool)?;
+    let blob_manager = init_blob_store(blob_path)?;
 
     let (tx, rx) = mpsc::channel();
-    let query_manager = QueryManager::new(pool, tx);
-    let blob_manager = BlobManager::new(blob_pool);
+    let query_manager = QueryManager::new(readers, writer, tx);
+    bootstrap(&query_manager)?;
 
     Ok((query_manager, blob_manager, rx))
 }
 
+/// Open (creating and migrating as needed) a blobs database on its own, for a process that
+/// stores bodies without the app database.
+pub fn init_blob_store(blob_path: impl AsRef<Path>) -> Result<BlobManager> {
+    let blob_path = blob_path.as_ref();
+    info!("Initializing blobs database {blob_path:?}");
+    let (blob_readers, blob_writer) = open::file_pools(blob_path, 10, 1)?;
+    migrate_blob_db(&blob_writer)?;
+    Ok(BlobManager::new(blob_readers, blob_writer))
+}
+
 /// Initialize the database managers with in-memory SQLite databases.
 /// Useful for testing and CI environments.
+///
+/// An in-memory database is private to its connection, so the one connection
+/// is both the reader pool and the writer.
 pub fn init_in_memory() -> Result<(QueryManager, BlobManager, mpsc::Receiver<ModelPayload>)> {
     let pool = open::memory_pool()?;
     migrate_db(&pool)?;
@@ -139,8 +175,18 @@ pub fn init_in_memory() -> Result<(QueryManager, BlobManager, mpsc::Receiver<Mod
     migrate_blob_db(&blob_pool)?;
 
     let (tx, rx) = mpsc::channel();
-    let query_manager = QueryManager::new(pool, tx);
-    let blob_manager = BlobManager::new(blob_pool);
+    let query_manager = QueryManager::new(pool.clone(), pool, tx);
+    let blob_manager = BlobManager::new(blob_pool.clone(), blob_pool);
+    bootstrap(&query_manager)?;
 
     Ok((query_manager, blob_manager, rx))
+}
+
+/// The rows every client assumes exist. Workspaces are not among them: a fresh
+/// install has none, and the client shows onboarding until the user makes one.
+fn bootstrap(query_manager: &QueryManager) -> Result<()> {
+    query_manager.with_tx(|tx| {
+        tx.ensure_settings()?;
+        Ok(())
+    })
 }

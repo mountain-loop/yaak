@@ -271,8 +271,8 @@
         "authenticationType": "apikey",
         "authentication": {
           "location": "query",
-          "key": "value",
-          "value": "key"
+          "key": "X-API-Key",
+          "value": "secret-123"
         }
       },
       {
@@ -297,9 +297,123 @@
           "headerPrefix": "Bearer",
           "location": "header"
         }
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_10",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": null,
+        "name": "Digest",
+        "method": "GET",
+        "url": "https://yaak.app/x/echo",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "sortPriority": 10,
+        "headers": [],
+        "authenticationType": "digest",
+        "authentication": {
+          "username": "digest-user",
+          "password": "digest-pass",
+          "realm": "testrealm@yaak.app"
+        }
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_11",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": null,
+        "name": "NTLM",
+        "method": "GET",
+        "url": "https://yaak.app/x/echo",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "sortPriority": 11,
+        "headers": [],
+        "authenticationType": "windows",
+        "authentication": {
+          "username": "ntlm-user",
+          "password": "ntlm-pass",
+          "domain": "CORP",
+          "workstation": "WORKSTATION-01"
+        }
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_12",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": null,
+        "name": "OAuth 1",
+        "method": "GET",
+        "url": "https://yaak.app/x/echo",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "sortPriority": 12,
+        "headers": [],
+        "authenticationType": "oauth1",
+        "authentication": {
+          "signatureMethod": "HMAC-SHA256",
+          "consumerKey": "consumer-key",
+          "consumerSecret": "consumer-secret",
+          "tokenKey": "access-token",
+          "tokenSecret": "token-secret",
+          "callback": "https://yaak.app/x/callback",
+          "verifier": "verifier-123",
+          "timestamp": "1700000000",
+          "nonce": "9e6dfada256c",
+          "version": "1.0",
+          "realm": "yaak.app"
+        }
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_13",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "name": "Folder Child Inherit",
+        "method": "GET",
+        "url": "https://yaak.app/x/echo",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "sortPriority": 14,
+        "headers": [],
+        "authenticationType": null,
+        "authentication": {}
+      },
+      {
+        "model": "http_request",
+        "id": "GENERATE_ID::HTTP_REQUEST_14",
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "folderId": "GENERATE_ID::FOLDER_0",
+        "name": "Folder Child No Auth",
+        "method": "GET",
+        "url": "https://yaak.app/x/echo",
+        "urlParameters": [],
+        "body": {},
+        "bodyType": null,
+        "sortPriority": 15,
+        "headers": [],
+        "authenticationType": "none",
+        "authentication": {}
       }
     ],
-    "folders": []
+    "folders": [
+      {
+        "model": "folder",
+        "sortPriority": 13,
+        "workspaceId": "GENERATE_ID::WORKSPACE_0",
+        "id": "GENERATE_ID::FOLDER_0",
+        "name": "Folder With Auth",
+        "folderId": null,
+        "authenticationType": "bearer",
+        "authentication": {
+          "token": "folder-token"
+        }
+      }
+    ]
   },
   "sourceKeys": {
     "GENERATE_ID::WORKSPACE_0": "collection:9e6dfada-256c-49ea-a38f-7d1b05b7ca2d"

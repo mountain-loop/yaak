@@ -1,0 +1,181 @@
+{
+  "workspaces": [
+    {
+      "id": "{{WORKSPACE}}",
+      "name": "Example Workspace",
+      "description": "A small tour of Yaak using the [Yaak Playground](https://yaak.run) API. Nothing here needs an account.\n\n1. Open **Getting Started / List posts** and press Send\n2. Open **Variables / Get the current user**, then switch the environment in the top-left to change which user it fetches\n3. Open **Chaining / Posts by the first user** to see how one request reads a value out of another request's response\n4. Open **Authentication / Get my profile** to see a login token used for you\n\nDelete this workspace whenever you're done with it."
+    }
+  ],
+  "environments": [
+    {
+      "id": "{{ENV_BASE}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "name": "Global Variables",
+      "parentModel": "workspace",
+      "public": true,
+      "variables": [
+        { "name": "base_url", "value": "https://yaak.run", "enabled": true },
+        { "name": "user_id", "value": "1", "enabled": true },
+        { "name": "username", "value": "ada", "enabled": true },
+        { "name": "password", "value": "yaak", "enabled": true }
+      ]
+    },
+    {
+      "id": "{{ENV_USER_2}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "name": "Another User",
+      "parentModel": "environment",
+      "public": true,
+      "color": "#c084fc",
+      "variables": [
+        { "name": "user_id", "value": "2", "enabled": true },
+        { "name": "username", "value": "grace", "enabled": true }
+      ]
+    }
+  ],
+  "folders": [
+    {
+      "id": "{{FOLDER_BASICS}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "name": "Getting Started",
+      "sortPriority": 1,
+      "description": "Plain requests. Send one, then look through the response tabs: Body, Headers, Cookies, and Timeline."
+    },
+    {
+      "id": "{{FOLDER_VARIABLES}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "name": "Variables",
+      "sortPriority": 2,
+      "description": "Anything wrapped in `${[ ... ]}` is a template. Variables come from the environment selected in the top-left, and sub-environments override the base values."
+    },
+    {
+      "id": "{{FOLDER_CHAINING}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "name": "Chaining",
+      "sortPriority": 3,
+      "description": "The `response()` template function reads a value out of another request's response, sending that request first if it has to. Put the cursor in a URL and press Ctrl+Space to insert one."
+    },
+    {
+      "id": "{{FOLDER_AUTH}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "name": "Authentication",
+      "sortPriority": 4,
+      "description": "This folder sets Bearer auth to the token from the **Log in** response. Every request inside inherits it, so the token lives in one place. When the last login is more than 50 minutes old, Yaak logs in again before sending.",
+      "authenticationType": "bearer",
+      "authentication": {
+        "token": "${[ response.body.path(request='{{RQ_LOG_IN}}', path='$.accessToken', behavior='ttl', ttl='3000') ]}"
+      }
+    }
+  ],
+  "httpRequests": [
+    {
+      "id": "{{RQ_LIST_POSTS}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_BASICS}}",
+      "name": "List posts",
+      "method": "GET",
+      "url": "${[ base_url ]}/posts",
+      "sortPriority": 1,
+      "urlParameters": [{ "name": "limit", "value": "5", "enabled": true }],
+      "description": "Query parameters live in the Params tab. Try raising `limit`."
+    },
+    {
+      "id": "{{RQ_GET_POST}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_BASICS}}",
+      "name": "Get a post",
+      "method": "GET",
+      "url": "${[ base_url ]}/posts/1",
+      "sortPriority": 2,
+      "description": "Change the ID at the end of the URL and send again."
+    },
+    {
+      "id": "{{RQ_CREATE_POST}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_BASICS}}",
+      "name": "Create a post",
+      "method": "POST",
+      "url": "${[ base_url ]}/posts",
+      "sortPriority": 3,
+      "bodyType": "application/json",
+      "body": {
+        "text": "{\n  \"title\": \"Hello from Yaak\",\n  \"body\": \"Templates work inside bodies too\",\n  \"userId\": ${[ user_id ]}\n}"
+      },
+      "headers": [{ "name": "Content-Type", "value": "application/json", "enabled": true }],
+      "description": "Posts you create are only visible to you, and go back to the sample data after an hour. Put the new ID into **Get a post** to read it back."
+    },
+    {
+      "id": "{{RQ_CURRENT_USER}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_VARIABLES}}",
+      "name": "Get the current user",
+      "method": "GET",
+      "url": "${[ base_url ]}/users/${[ user_id ]}",
+      "sortPriority": 1,
+      "description": "Switch to the **Another User** environment in the top-left and send again. Hover a template in the URL to see what it resolves to."
+    },
+    {
+      "id": "{{RQ_TODOS}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_VARIABLES}}",
+      "name": "List the user's todos",
+      "method": "GET",
+      "url": "${[ base_url ]}/users/${[ user_id ]}/todos",
+      "sortPriority": 2,
+      "urlParameters": [{ "name": "completed", "value": "false", "enabled": true }],
+      "description": "The same `user_id` variable, used in a different request. Disable the `completed` parameter to see finished todos too."
+    },
+    {
+      "id": "{{RQ_LIST_USERS}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_CHAINING}}",
+      "name": "List users",
+      "method": "GET",
+      "url": "${[ base_url ]}/users",
+      "sortPriority": 1
+    },
+    {
+      "id": "{{RQ_POSTS_BY_FIRST_USER}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_CHAINING}}",
+      "name": "Posts by the first user",
+      "method": "GET",
+      "url": "${[ base_url ]}/posts",
+      "sortPriority": 2,
+      "urlParameters": [
+        {
+          "name": "userId",
+          "value": "${[ response.body.path(request='{{RQ_LIST_USERS}}', path='$[0].id') ]}",
+          "enabled": true
+        }
+      ],
+      "description": "The `userId` parameter is pulled from the **List users** response with the JSONPath `$[0].id`. If that request hasn't been sent yet, Yaak sends it first."
+    },
+    {
+      "id": "{{RQ_LOG_IN}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_AUTH}}",
+      "name": "Log in",
+      "method": "POST",
+      "url": "${[ base_url ]}/auth/token",
+      "sortPriority": 1,
+      "authenticationType": "none",
+      "bodyType": "application/json",
+      "body": {
+        "text": "{\n  \"username\": \"${[ username ]}\",\n  \"password\": \"${[ password ]}\"\n}"
+      },
+      "headers": [{ "name": "Content-Type", "value": "application/json", "enabled": true }],
+      "description": "Sends the username and password from the environment and returns a token. Its Auth tab is set to No Auth, so it doesn't try to use the token it's fetching."
+    },
+    {
+      "id": "{{RQ_ME}}",
+      "workspaceId": "{{WORKSPACE}}",
+      "folderId": "{{FOLDER_AUTH}}",
+      "name": "Get my profile",
+      "method": "GET",
+      "url": "${[ base_url ]}/auth/me",
+      "sortPriority": 2,
+      "description": "Open the Auth tab: it inherits Bearer auth from the folder, and there's nothing to copy and paste. Check the Timeline tab after sending to see the Authorization header that was sent. To try it as someone else, switch to **Another User** and send **Log in** again."
+    }
+  ]
+}

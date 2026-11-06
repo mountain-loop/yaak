@@ -1,5 +1,5 @@
 use super::{conflict_free_name, merge_headers};
-use crate::client_db::ClientDb;
+use crate::client_db::{ClientDb, WriteDb};
 use crate::connection_or_tx::ConnectionOrTx;
 use crate::error::Result;
 use crate::models::{
@@ -18,99 +18,6 @@ impl<'a> ClientDb<'a> {
 
     pub fn list_folders(&self, workspace_id: &str) -> Result<Vec<Folder>> {
         self.find_many(FolderIden::WorkspaceId, workspace_id, None)
-    }
-
-    pub fn delete_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        match self.conn() {
-            ConnectionOrTx::Connection(_) => {}
-            ConnectionOrTx::Transaction(_) => {}
-        }
-
-        let fid = &folder.id;
-        for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
-            self.delete_http_request(&m, source)?;
-        }
-
-        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
-            self.delete_grpc_request(&m, source)?;
-        }
-
-        for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
-            self.delete_websocket_request(&m, source)?;
-        }
-
-        for e in self.find_many(EnvironmentIden::ParentId, fid, None)? {
-            self.delete_environment(&e, source)?;
-        }
-
-        // Recurse down into child folders
-        for folder in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
-            self.delete_folder(&folder, source)?;
-        }
-
-        self.delete(folder, source)
-    }
-
-    pub fn delete_folder_by_id(&self, id: &str, source: &UpdateSource) -> Result<Folder> {
-        let folder = self.get_folder(id)?;
-        self.delete_folder(&folder, source)
-    }
-
-    pub fn upsert_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        self.upsert(folder, source)
-    }
-
-    pub fn duplicate_folder(&self, src_folder: &Folder, source: &UpdateSource) -> Result<Folder> {
-        let fid = &src_folder.id;
-
-        let mut folder = Folder {
-            id: "".into(),
-            sort_priority: src_folder.sort_priority + 0.001,
-            ..src_folder.clone()
-        };
-        let sibling_names = self
-            .list_folders(&folder.workspace_id)?
-            .into_iter()
-            .filter(|f| f.folder_id == folder.folder_id)
-            .map(|f| f.name)
-            .collect::<Vec<_>>();
-        folder.name = conflict_free_name(&folder.name, &sibling_names);
-        let new_folder = self.upsert_folder(&folder, source)?;
-
-        for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
-            self.upsert_http_request(
-                &HttpRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
-                source,
-            )?;
-        }
-
-        for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
-            self.upsert_websocket_request(
-                &WebsocketRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
-                source,
-            )?;
-        }
-
-        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
-            self.upsert_grpc_request(
-                &GrpcRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
-                source,
-            )?;
-        }
-
-        for m in self.find_many::<Environment>(EnvironmentIden::ParentId, fid, None)? {
-            self.upsert_environment(
-                &Environment { id: "".into(), parent_id: Some(new_folder.id.clone()), ..m },
-                source,
-            )?;
-        }
-
-        for m in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
-            // Recurse down
-            self.duplicate_folder(&Folder { folder_id: Some(new_folder.id.clone()), ..m }, source)?;
-        }
-
-        Ok(new_folder)
     }
 
     pub fn resolve_auth_for_folder(
@@ -217,5 +124,100 @@ impl<'a> ClientDb<'a> {
                 parent.http_version
             },
         })
+    }
+}
+
+impl<'a> WriteDb<'a> {
+    pub fn delete_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
+        match self.conn() {
+            ConnectionOrTx::Connection(_) => {}
+            ConnectionOrTx::Transaction(_) => {}
+        }
+
+        let fid = &folder.id;
+        for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
+            self.delete_http_request(&m, source)?;
+        }
+
+        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
+            self.delete_grpc_request(&m, source)?;
+        }
+
+        for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
+            self.delete_websocket_request(&m, source)?;
+        }
+
+        for e in self.find_many(EnvironmentIden::ParentId, fid, None)? {
+            self.delete_environment(&e, source)?;
+        }
+
+        // Recurse down into child folders
+        for folder in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
+            self.delete_folder(&folder, source)?;
+        }
+
+        self.delete(folder, source)
+    }
+
+    pub fn delete_folder_by_id(&self, id: &str, source: &UpdateSource) -> Result<Folder> {
+        let folder = self.get_folder(id)?;
+        self.delete_folder(&folder, source)
+    }
+
+    pub fn upsert_folder(&self, folder: &Folder, source: &UpdateSource) -> Result<Folder> {
+        self.upsert(folder, source)
+    }
+
+    pub fn duplicate_folder(&self, src_folder: &Folder, source: &UpdateSource) -> Result<Folder> {
+        let fid = &src_folder.id;
+
+        let mut folder = Folder {
+            id: "".into(),
+            sort_priority: src_folder.sort_priority + 0.001,
+            ..src_folder.clone()
+        };
+        let sibling_names = self
+            .list_folders(&folder.workspace_id)?
+            .into_iter()
+            .filter(|f| f.folder_id == folder.folder_id)
+            .map(|f| f.name)
+            .collect::<Vec<_>>();
+        folder.name = conflict_free_name(&folder.name, &sibling_names);
+        let new_folder = self.upsert_folder(&folder, source)?;
+
+        for m in self.find_many::<HttpRequest>(HttpRequestIden::FolderId, fid, None)? {
+            self.upsert_http_request(
+                &HttpRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
+                source,
+            )?;
+        }
+
+        for m in self.find_many::<WebsocketRequest>(WebsocketRequestIden::FolderId, fid, None)? {
+            self.upsert_websocket_request(
+                &WebsocketRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
+                source,
+            )?;
+        }
+
+        for m in self.find_many::<GrpcRequest>(GrpcRequestIden::FolderId, fid, None)? {
+            self.upsert_grpc_request(
+                &GrpcRequest { id: "".into(), folder_id: Some(new_folder.id.clone()), ..m },
+                source,
+            )?;
+        }
+
+        for m in self.find_many::<Environment>(EnvironmentIden::ParentId, fid, None)? {
+            self.upsert_environment(
+                &Environment { id: "".into(), parent_id: Some(new_folder.id.clone()), ..m },
+                source,
+            )?;
+        }
+
+        for m in self.find_many::<Folder>(FolderIden::FolderId, fid, None)? {
+            // Recurse down
+            self.duplicate_folder(&Folder { folder_id: Some(new_folder.id.clone()), ..m }, source)?;
+        }
+
+        Ok(new_folder)
     }
 }

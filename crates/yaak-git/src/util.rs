@@ -99,7 +99,7 @@ pub(crate) fn get_default_remote_name_in_repo(repo: &Repository) -> Result<Strin
     }
 
     // if `origin` exists return that
-    let found_origin = remotes.iter().any(|r| r.is_some_and(|r| r == DEFAULT_REMOTE_NAME));
+    let found_origin = remotes.iter().any(|r| matches!(r, Ok(Some(r)) if r == DEFAULT_REMOTE_NAME));
     if found_origin {
         return Ok(DEFAULT_REMOTE_NAME.into());
     }
@@ -109,6 +109,7 @@ pub(crate) fn get_default_remote_name_in_repo(repo: &Repository) -> Result<Strin
         let first_remote = remotes
             .iter()
             .next()
+            .and_then(|r| r.ok())
             .flatten()
             .map(String::from)
             .ok_or_else(|| GenericError("no remote found".into()))?;

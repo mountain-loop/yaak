@@ -13,7 +13,6 @@ use tokio::task::JoinHandle;
 use yaak::plugin_events::{
     GroupedPluginEvent, HostRequest, SharedPluginEventContext, handle_shared_plugin_event,
 };
-use yaak_models::render::{render_grpc_request, render_http_request};
 use yaak::response_body::FileResponseBodyStore;
 use yaak::send::{SendHttpRequestWithPluginsParams, send_http_request_with_plugins};
 use yaak_crypto::manager::EncryptionManager;
@@ -24,6 +23,7 @@ use yaak_models::models::Environment;
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::render::make_vars_hashmap;
+use yaak_models::render::{render_grpc_request, render_http_request};
 use yaak_models::util::UpdateSource;
 use yaak_plugins::events::{
     EmptyPayload, ErrorResponse, FormInput, GetCookieValueResponse, InternalEvent,
@@ -36,9 +36,14 @@ use yaak_plugins::manager::PluginManager;
 use yaak_plugins::template_callback::PluginTemplateCallback;
 use yaak_templates::{RenderOptions, TemplateCallback, render_json_value_raw};
 
+/// Execution contexts for sends in flight, by the id of the plugin context
+/// each send was given, so plugin calls made during a send see its settings.
+pub type SendContexts = Arc<std::sync::Mutex<HashMap<String, CliExecutionContext>>>;
+
 pub struct CliPluginEventBridge {
     rx_id: String,
     task: JoinHandle<()>,
+    send_contexts: SendContexts,
 }
 
 struct CliHostContext {
@@ -49,6 +54,14 @@ struct CliHostContext {
     connection_manager: Arc<HttpConnectionManager>,
     response_dir: PathBuf,
     execution_context: CliExecutionContext,
+    send_contexts: SendContexts,
+}
+
+impl CliHostContext {
+    fn execution_context(&self, context: &PluginContext) -> CliExecutionContext {
+        let send_contexts = self.send_contexts.lock().expect("send contexts lock");
+        send_contexts.get(&context.id).cloned().unwrap_or_else(|| self.execution_context.clone())
+    }
 }
 
 impl CliPluginEventBridge {
@@ -64,6 +77,7 @@ impl CliPluginEventBridge {
         let (rx_id, mut rx) = plugin_manager.subscribe("cli").await;
         let rx_id_for_task = rx_id.clone();
         let pm = plugin_manager.clone();
+        let send_contexts = SendContexts::default();
         let host_context = Arc::new(CliHostContext {
             query_manager,
             blob_manager,
@@ -72,6 +86,7 @@ impl CliPluginEventBridge {
             connection_manager,
             response_dir: data_dir.join("responses"),
             execution_context,
+            send_contexts: send_contexts.clone(),
         });
 
         let task = tokio::spawn(async move {
@@ -113,7 +128,11 @@ impl CliPluginEventBridge {
             pm.unsubscribe(&rx_id_for_task).await;
         });
 
-        Self { rx_id, task }
+        Self { rx_id, task, send_contexts }
+    }
+
+    pub fn send_contexts(&self) -> SendContexts {
+        self.send_contexts.clone()
     }
 
     pub async fn shutdown(self, plugin_manager: &PluginManager) {
@@ -128,7 +147,7 @@ async fn build_plugin_reply(
     event: &InternalEvent,
     plugin_name: &str,
 ) -> Option<InternalEventPayload> {
-    let execution_context = &host_context.execution_context;
+    let execution_context = &host_context.execution_context(&event.context);
     let shared_workspace_id =
         event.context.workspace_id.as_deref().or(execution_context.workspace_id.as_deref());
 
@@ -182,6 +201,31 @@ async fn build_plugin_reply(
                     http_request.workspace_id = workspace_id;
                 }
 
+                let environment_id = if let Some(environment_id) =
+                    send_http_request_request.environment_id.as_deref()
+                {
+                    if shared_workspace_id.is_some_and(|id| id != http_request.workspace_id) {
+                        return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                            error: "HTTP request does not belong to the selected workspace"
+                                .to_string(),
+                        }));
+                    }
+                    match host_context
+                        .query_manager
+                        .connect()
+                        .get_environment_for_workspace(&http_request.workspace_id, environment_id)
+                    {
+                        Ok(environment) => Some(environment.id),
+                        Err(err) => {
+                            return Some(InternalEventPayload::ErrorResponse(ErrorResponse {
+                                error: err.to_string(),
+                            }));
+                        }
+                    }
+                } else {
+                    execution_context.environment_id.clone()
+                };
+
                 let cookie_jar_id =
                     if let Some(cookie_jar_id) = execution_context.cookie_jar_id.clone() {
                         Some(cookie_jar_id)
@@ -211,7 +255,7 @@ async fn build_plugin_reply(
                     query_manager: &host_context.query_manager,
                     blob_manager: &host_context.blob_manager,
                     request: http_request,
-                    environment_id: execution_context.environment_id.as_deref(),
+                    environment_id: environment_id.as_deref(),
                     update_source: UpdateSource::Plugin,
                     cookie_jar_id,
                     response_dir: &host_context.response_dir,
@@ -1002,4 +1046,186 @@ fn prompt_label_for_base(base: &yaak_plugins::events::FormInputBase) -> String {
         }
     }
     base.name.clone()
+}
+
+#[cfg(test)]
+mod environment_tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::TempDir;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+    use tokio::time::{Duration, timeout};
+    use yaak_models::models::{EnvironmentVariable, HttpRequest, HttpRequestHeader, Workspace};
+
+    #[tokio::test]
+    async fn plugin_send_uses_override_and_fallback_and_rejects_invalid_ids_before_sending() {
+        let dir = TempDir::new().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (received_tx, mut received_rx) = tokio::sync::mpsc::unbounded_channel();
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                loop {
+                    let mut chunk = [0u8; 1024];
+                    let n = socket.read(&mut chunk).await.unwrap();
+                    if n == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&chunk[..n]);
+                    if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                let request = String::from_utf8(request).unwrap();
+                eprintln!("Local HTTP test received on {address}:\n{request}");
+                received_tx.send(request).unwrap();
+                socket
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+        let (query_manager, blob_manager, _rx) = yaak_models::init_standalone(
+            &dir.path().join("db.sqlite"),
+            &dir.path().join("blobs.sqlite"),
+        )
+        .unwrap();
+        let (base, a, b, request) = query_manager
+            .with_tx(|db| {
+                let source = &UpdateSource::Background;
+                // Fresh databases no longer come with a workspace, so make one
+                let workspace = db.upsert_workspace(
+                    &Workspace { name: "Test".into(), ..Default::default() },
+                    source,
+                )?;
+                let vars = |value: &str| {
+                    vec![EnvironmentVariable {
+                        enabled: true,
+                        name: "marker".into(),
+                        value: value.into(),
+                        ..Default::default()
+                    }]
+                };
+                let base = db.ensure_base_environment(&workspace.id)?;
+                let base = db.upsert_environment(
+                    &Environment { variables: vars("global"), ..base },
+                    source,
+                )?;
+                let sub = |name: &str| {
+                    db.upsert_environment(
+                        &Environment {
+                            name: name.into(),
+                            workspace_id: workspace.id.clone(),
+                            parent_model: "environment".into(),
+                            parent_id: Some(base.id.clone()),
+                            variables: vars(name),
+                            ..Default::default()
+                        },
+                        source,
+                    )
+                };
+                let a = sub("a")?;
+                let b = sub("b")?;
+                let request = db.upsert_http_request(
+                    &HttpRequest {
+                        workspace_id: workspace.id,
+                        url: format!("http://{address}/echo"),
+                        method: "GET".into(),
+                        headers: vec![HttpRequestHeader {
+                            enabled: true,
+                            name: "X-Environment".into(),
+                            value: "${[ marker ]}".into(),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
+                    source,
+                )?;
+                Ok::<_, yaak_models::error::Error>((base, a, b, request))
+            })
+            .unwrap();
+        let plugin_dir = dir.path().join("plugins");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+        let plugin_manager = Arc::new(
+            PluginManager::new(
+                plugin_dir.clone(),
+                plugin_dir,
+                PathBuf::from("node"),
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../crates-tauri/yaak-app-client/vendored/plugin-runtime/index.cjs"),
+                &query_manager,
+                &PluginContext::new_empty(),
+                false,
+            )
+            .await
+            .unwrap(),
+        );
+        let host = CliHostContext {
+            encryption_manager: Arc::new(EncryptionManager::new(
+                query_manager.clone(),
+                "yaak-test",
+            )),
+            query_manager,
+            blob_manager,
+            plugin_manager: plugin_manager.clone(),
+            connection_manager: Arc::new(HttpConnectionManager::new()),
+            response_dir: dir.path().join("responses"),
+            execution_context: CliExecutionContext {
+                workspace_id: Some(base.workspace_id.clone()),
+                environment_id: Some(a.id.clone()),
+                ..Default::default()
+            },
+            send_contexts: SendContexts::default(),
+        };
+        std::fs::create_dir_all(&host.response_dir).unwrap();
+        let event = |environment_id: Option<&str>| -> InternalEvent {
+            let mut payload =
+                json!({ "type": "send_http_request_request", "httpRequest": request });
+            if let Some(id) = environment_id {
+                payload["environmentId"] = json!(id);
+            }
+            serde_json::from_value(json!({
+                "id": "test", "pluginRefId": "test", "pluginName": "test", "replyId": null,
+                "context": PluginContext::new_empty(), "payload": payload
+            }))
+            .unwrap()
+        };
+        for (id, marker) in [
+            (Some(b.id.as_str()), "b"),
+            (None, "a"),
+            (Some(base.id.as_str()), "global"),
+        ] {
+            let reply =
+                timeout(Duration::from_secs(10), build_plugin_reply(&host, &event(id), "test"))
+                    .await
+                    .unwrap();
+            assert!(
+                matches!(reply, Some(InternalEventPayload::SendHttpRequestResponse(ref r)) if r.http_response.status == 200),
+                "{reply:?}"
+            );
+            let received = received_rx.recv().await.unwrap().to_lowercase();
+            assert!(received.contains(&format!("x-environment: {marker}\r\n")), "{received}");
+            assert_eq!(host.execution_context.environment_id.as_deref(), Some(a.id.as_str()));
+        }
+        for id in ["", "ev_missing"] {
+            let reply = build_plugin_reply(&host, &event(Some(id)), "test").await;
+            assert!(matches!(reply, Some(InternalEventPayload::ErrorResponse(_))), "{reply:?}");
+        }
+        assert!(received_rx.try_recv().is_err());
+        assert_eq!(
+            host.query_manager
+                .connect()
+                .list_http_responses_for_request(&request.id, None)
+                .unwrap()
+                .len(),
+            3
+        );
+        plugin_manager.terminate().await;
+        server.abort();
+    }
 }

@@ -3,15 +3,25 @@ use crate::error::Result;
 use crate::import::{file_origin, import_data, url_origin};
 use crate::models_ext::QueryManagerExt;
 use log::{info, warn};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Url};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use ts_rs::TS;
 use yaak_api::{ApiClientKind, yaak_api_client};
 use yaak_models::util::generate_id;
 use yaak_plugins::events::{Color, ShowToastRequest};
 use yaak_plugins::install::download_and_install;
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "index.ts")]
+pub struct NavigateWorkspace {
+    workspace_id: String,
+    environment_id: Option<String>,
+}
 
 pub(crate) async fn handle_deep_link<R: Runtime>(
     app_handle: &AppHandle<R>,
@@ -129,6 +139,15 @@ pub(crate) async fn handle_deep_link<R: Runtime>(
                     timeout: Some(5000),
                 },
             )?;
+            if let Some(workspace) = results.workspaces.first() {
+                window.emit(
+                    "navigate_workspace",
+                    NavigateWorkspace {
+                        workspace_id: workspace.id.clone(),
+                        environment_id: results.environments.first().map(|e| e.id.clone()),
+                    },
+                )?;
+            }
         }
         _ => {
             warn!("Unknown deep link command: {command}");

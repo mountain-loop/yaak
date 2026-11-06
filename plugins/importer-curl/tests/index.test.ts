@@ -142,6 +142,33 @@ describe("importer-curl", () => {
     });
   });
 
+  // A trailing space after the continuation backslash is invisible in most
+  // editors but used to stop the join, so the quoted body split across
+  // lines and the parser failed with "Got EOF while in a quoted string".
+  test("Imports line continuations with trailing whitespace after the backslash", () => {
+    expect(
+      convertCurl(
+        "curl -X POST https://yaak.app \\ \n  -H 'Content-Type: application/json' \\\t\n  --data '{\"a\":1}' \\ \r\n  -H 'Accept: application/json'",
+      ),
+    ).toEqual({
+      resources: {
+        workspaces: [baseWorkspace()],
+        httpRequests: [
+          baseRequest({
+            url: "https://yaak.app",
+            method: "POST",
+            headers: [
+              { name: "Content-Type", value: "application/json", enabled: true },
+              { name: "Accept", value: "application/json", enabled: true },
+            ],
+            bodyType: "application/json",
+            body: { text: '{"a":1}' },
+          }),
+        ],
+      },
+    });
+  });
+
   test("Imports with Windows CRLF line endings", () => {
     expect(convertCurl("curl \\\r\n  -X POST \\\r\n  https://yaak.app")).toEqual({
       resources: {

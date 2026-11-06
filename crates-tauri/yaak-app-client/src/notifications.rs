@@ -55,12 +55,15 @@ impl YaakNotifier {
         seen.push(id.to_string());
         debug!("Marked notification as seen {}", id);
         let seen_json = serde_json::to_string(&seen)?;
-        window.db().set_key_value_raw(
-            KV_NAMESPACE,
-            KV_KEY,
-            seen_json.as_str(),
-            &UpdateSource::from_window_label(window.label()),
-        );
+        window.with_tx(|tx| {
+            tx.set_key_value_raw(
+                KV_NAMESPACE,
+                KV_KEY,
+                seen_json.as_str(),
+                &UpdateSource::from_window_label(window.label()),
+            );
+            Ok(())
+        })?;
         Ok(())
     }
 

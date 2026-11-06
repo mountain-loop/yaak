@@ -61,7 +61,12 @@ export const plugin: PluginDefinition = {
         },
       ],
       async onRender(_ctx: Context, args: CallTemplateFunctionArgs): Promise<string | null> {
-        return v6({ msecs: new Date(String(args.values.timestamp)).getTime() });
+        // `timestamp` is optional, so an absent or unparseable value has to fall
+        // back to v6()'s own clock. Handing it NaN msecs is not a fallback: the
+        // uuid package masks NaN down to a zero timestamp (1582-10-15).
+        const timestamp = String(args.values.timestamp ?? "").trim();
+        const msecs = timestamp ? new Date(timestamp).getTime() : Number.NaN;
+        return Number.isNaN(msecs) ? v6() : v6({ msecs });
       },
     },
     {

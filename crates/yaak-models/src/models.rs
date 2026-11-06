@@ -377,6 +377,7 @@ pub struct Settings {
     pub update_channel: String,
     pub hide_license_badge: bool,
     pub prompt_feedback: bool,
+    pub mcp_server_enabled: bool,
     pub autoupdate: bool,
     pub auto_download_updates: bool,
     pub check_notifications: bool,
@@ -435,6 +436,7 @@ impl UpsertModelInfo for Settings {
             (UpdateChannel, self.update_channel.into()),
             (HideLicenseBadge, self.hide_license_badge.into()),
             (PromptFeedback, self.prompt_feedback.into()),
+            (McpServerEnabled, self.mcp_server_enabled.into()),
             (Autoupdate, self.autoupdate.into()),
             (AutoDownloadUpdates, self.auto_download_updates.into()),
             (ColoredMethods, self.colored_methods.into()),
@@ -465,6 +467,7 @@ impl UpsertModelInfo for Settings {
             SettingsIden::UpdateChannel,
             SettingsIden::HideLicenseBadge,
             SettingsIden::PromptFeedback,
+            SettingsIden::McpServerEnabled,
             SettingsIden::Autoupdate,
             SettingsIden::AutoDownloadUpdates,
             SettingsIden::ColoredMethods,
@@ -506,6 +509,7 @@ impl UpsertModelInfo for Settings {
             auto_download_updates: row.get("auto_download_updates")?,
             hide_license_badge: row.get("hide_license_badge")?,
             prompt_feedback: row.get("prompt_feedback")?,
+            mcp_server_enabled: row.get("mcp_server_enabled")?,
             colored_methods: row.get("colored_methods")?,
             check_notifications: row.get("check_notifications")?,
             hotkeys: serde_json::from_str(&hotkeys).unwrap_or_default(),
@@ -2850,7 +2854,7 @@ impl UpsertModelInfo for Plugin {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_models.ts")]
 #[enum_def(table_name = "sync_states")]
@@ -3133,8 +3137,12 @@ pub struct ImportSourceResource {
     pub import_source_id: String,
     pub source_key: String,
     pub model_type: String,
-    pub model_id: String,
-    pub snapshot: String,
+    /// `None` once the user has decided not to import this key
+    #[ts(optional)]
+    pub model_id: Option<String>,
+    /// Hash of the resource as last applied or decided from the source, if one was recorded
+    #[ts(optional)]
+    pub content_hash: Option<String>,
 }
 
 impl<'s> TryFrom<&Row<'s>> for ImportSourceResource {
@@ -3149,7 +3157,7 @@ impl<'s> TryFrom<&Row<'s>> for ImportSourceResource {
             source_key: r.get("source_key")?,
             model_type: r.get("model_type")?,
             model_id: r.get("model_id")?,
-            snapshot: r.get("snapshot")?,
+            content_hash: r.get("content_hash")?,
         })
     }
 }

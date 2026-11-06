@@ -1,0 +1,396 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Yaak Playground",
+    "version": "1.0.0",
+    "description": "A small API for trying out Yaak. Users and todos are fixed sample data. Posts you create, change, or delete are only visible to you, and go back to the sample data after a while.\n\nLog in with any username (like `ada`) and the password `yaak`."
+  },
+  "servers": [{ "url": "https://yaak.run" }],
+  "tags": [
+    { "name": "Users" },
+    { "name": "Posts" },
+    { "name": "Todos" },
+    { "name": "Auth", "description": "Two ways to stay logged in: a bearer token you send yourself, or a session cookie the cookie jar sends for you." }
+  ],
+  "paths": {
+    "/users": {
+      "get": {
+        "tags": ["Users"],
+        "operationId": "listUsers",
+        "summary": "List users",
+        "responses": {
+          "200": {
+            "description": "Every user",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": ["Users"],
+        "operationId": "getUser",
+        "summary": "Get a user",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": {
+          "200": {
+            "description": "The user",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/users/{id}/todos": {
+      "get": {
+        "tags": ["Users", "Todos"],
+        "operationId": "listUserTodos",
+        "summary": "List a user's todos",
+        "parameters": [
+          { "$ref": "#/components/parameters/Id" },
+          { "$ref": "#/components/parameters/Completed" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user's todos",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/todos": {
+      "get": {
+        "tags": ["Todos"],
+        "operationId": "listTodos",
+        "summary": "List todos",
+        "parameters": [
+          { "$ref": "#/components/parameters/UserId" },
+          { "$ref": "#/components/parameters/Completed" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching todos",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Todo" } }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/posts": {
+      "get": {
+        "tags": ["Posts"],
+        "operationId": "listPosts",
+        "summary": "List posts",
+        "parameters": [
+          { "$ref": "#/components/parameters/UserId" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching posts",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Post" } }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      },
+      "post": {
+        "tags": ["Posts"],
+        "operationId": "createPost",
+        "summary": "Create a post",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "The new post",
+            "headers": {
+              "Location": { "description": "Where to fetch the new post", "schema": { "type": "string" } }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": {
+            "description": "You already have the most posts allowed",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/posts/{id}": {
+      "get": {
+        "tags": ["Posts"],
+        "operationId": "getPost",
+        "summary": "Get a post",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": {
+          "200": {
+            "description": "The post",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "tags": ["Posts"],
+        "operationId": "replacePost",
+        "summary": "Replace a post",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostInput" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated post",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "patch": {
+        "tags": ["Posts"],
+        "operationId": "updatePost",
+        "summary": "Update part of a post",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PostPatch" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated post",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Post" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Posts"],
+        "operationId": "deletePost",
+        "summary": "Delete a post",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/auth/token": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "createToken",
+        "summary": "Log in for a bearer token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Login" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "A token to send as `Authorization: Bearer <token>`",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Token" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "operationId": "getMe",
+        "summary": "Get the user a bearer token belongs to",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "The logged-in user",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/session": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "createSession",
+        "summary": "Log in with a session cookie",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Login" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "The logged-in user. The session cookie comes back in `Set-Cookie`.",
+            "headers": {
+              "Set-Cookie": { "description": "The `session` cookie", "schema": { "type": "string" } }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "get": {
+        "tags": ["Auth"],
+        "operationId": "getSession",
+        "summary": "Get the user a session cookie belongs to",
+        "security": [{ "cookieAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "The logged-in user",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "delete": {
+        "tags": ["Auth"],
+        "operationId": "deleteSession",
+        "summary": "Log out",
+        "responses": {
+          "204": { "description": "Logged out, and the cookie is cleared" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "minimum": 1 },
+        "example": 1
+      },
+      "UserId": {
+        "name": "userId",
+        "in": "query",
+        "description": "Only return items belonging to this user",
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "Completed": {
+        "name": "completed",
+        "in": "query",
+        "schema": { "type": "boolean" }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Return at most this many items",
+        "schema": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Something in the request is invalid",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "NotFound": {
+        "description": "Nothing has that ID",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid credentials",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id", "name", "username", "email"],
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "name": { "type": "string", "example": "Ada Lovelace" },
+          "username": { "type": "string", "example": "ada" },
+          "email": { "type": "string", "format": "email", "example": "ada@example.com" }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "required": ["id", "userId", "title", "body"],
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "body": { "type": "string" }
+        }
+      },
+      "PostInput": {
+        "type": "object",
+        "required": ["userId", "title", "body"],
+        "properties": {
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string", "maxLength": 200, "example": "Hello from Yaak" },
+          "body": { "type": "string", "maxLength": 2000, "example": "My first post" }
+        }
+      },
+      "PostPatch": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "integer" },
+          "title": { "type": "string", "maxLength": 200 },
+          "body": { "type": "string", "maxLength": 2000 }
+        }
+      },
+      "Todo": {
+        "type": "object",
+        "required": ["id", "userId", "title", "completed"],
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "userId": { "type": "integer", "example": 1 },
+          "title": { "type": "string" },
+          "completed": { "type": "boolean" }
+        }
+      },
+      "Login": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "ada" },
+          "password": { "type": "string", "example": "yaak" }
+        }
+      },
+      "Token": {
+        "type": "object",
+        "required": ["accessToken", "tokenType", "expiresIn"],
+        "properties": {
+          "accessToken": { "type": "string" },
+          "tokenType": { "type": "string", "const": "Bearer" },
+          "expiresIn": { "type": "integer", "description": "Seconds until the token expires", "example": 3600 }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": { "error": { "type": "string" } }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" },
+      "cookieAuth": { "type": "apiKey", "in": "cookie", "name": "session" }
+    }
+  }
+}

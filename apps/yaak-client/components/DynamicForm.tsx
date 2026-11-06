@@ -11,7 +11,7 @@ import type {
   FormInputText,
   JsonPrimitive,
 } from "@yaakapp-internal/plugins";
-import { Banner, VStack } from "@yaakapp-internal/ui";
+import { Banner, VStack, Label } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo } from "react";
@@ -26,7 +26,6 @@ import { Editor } from "./core/Editor/LazyEditor";
 import { IconButton } from "./core/IconButton";
 import type { InputProps } from "./core/Input";
 import { Input } from "./core/Input";
-import { Label } from "./core/Label";
 import type { Pair } from "./core/PairEditor";
 import { PairEditor } from "./core/PairEditor";
 import { PlainInput } from "./core/PlainInput";

@@ -38,7 +38,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
 COPY --from=server /app/target/release/yaak-web /usr/local/bin/yaak-web
 COPY --from=web /app/dist/apps/yaak-client /srv
-ENV YAAK_WEB_BIND=0.0.0.0:8080
+# 0.0.0.0 so the port is reachable from outside the container. PORT is the variable a
+# platform-as-a-service assigns, so a deploy that sets it needs nothing else changed.
+ENV HOST=0.0.0.0
+ENV PORT=8080
 EXPOSE 8080
 USER nobody
 # Overriding the command (dropping --serve) leaves the stateless send executor:

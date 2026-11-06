@@ -1,0 +1,129 @@
+<!doctype html>
+<!--
+  Source for og.png (1200x630). Re-render after editing:
+  cd apps/yaak-client/web && "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars --window-size=1200,630 --force-device-scale-factor=1 --virtual-time-budget=10000 --screenshot=og.png "file://$PWD/og.html"
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;800&family=JetBrains+Mono:wght@400;500&display=block"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
+      body {
+        font-family: Inter, sans-serif;
+        color: hsl(245, 23%, 85%);
+        background:
+          radial-gradient(900px 600px at 0% 100%, hsl(160, 40%, 16%) 0%, transparent 60%),
+          radial-gradient(900px 600px at 100% 0%, hsl(275, 40%, 20%) 0%, transparent 60%),
+          linear-gradient(135deg, hsl(244, 23%, 12%) 0%, hsl(244, 23%, 15%) 100%);
+        -webkit-font-smoothing: antialiased;
+      }
+      .dots {
+        position: absolute;
+        inset: 0;
+        background-image: radial-gradient(hsla(245, 23%, 85%, 0.07) 1.2px, transparent 1.2px);
+        background-size: 28px 28px;
+        mask-image: radial-gradient(ellipse at 50% 40%, black 30%, transparent 75%);
+      }
+      .page {
+        position: relative;
+        height: 100%;
+        padding: 56px 64px;
+        display: flex;
+        flex-direction: column;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-weight: 600;
+        font-size: 26px;
+      }
+      .brand img {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+      }
+      h1 {
+        margin-top: 52px;
+        font-size: 84px;
+        line-height: 1.05;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: hsl(245, 23%, 92%);
+      }
+      h1 em {
+        font-style: normal;
+        color: hsl(48, 80%, 63%);
+      }
+      p {
+        margin-top: 28px;
+        font-size: 34px;
+        line-height: 1.4;
+        font-weight: 500;
+        color: hsl(245, 18%, 68%);
+        max-width: 1040px;
+      }
+      .bar {
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        height: 72px;
+        padding: 0 28px;
+        border-radius: 12px;
+        background: hsla(244, 23%, 22%, 0.6);
+        border: 1px solid hsl(244, 23%, 28%);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 28px;
+        box-shadow: 0 10px 40px hsla(244, 40%, 5%, 0.4);
+      }
+      .method {
+        color: hsl(245, 18%, 62%);
+        font-weight: 500;
+      }
+      .url .scheme {
+        color: hsl(245, 18%, 55%);
+      }
+      .url .host {
+        color: hsl(245, 23%, 92%);
+      }
+      .status {
+        margin-left: auto;
+        color: hsl(150, 99%, 44%);
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dots"></div>
+    <div class="page">
+      <div class="brand">
+        <img src="../../../crates-tauri/yaak-app-client/icons/release/128x128@2x.png" alt="" />
+        <span>Yaak</span>
+      </div>
+      <h1>Your favorite API client<br /><em>in your browser</em></h1>
+      <p>No download, no setup. Open a tab and send your first request.</p>
+      <div class="bar">
+        <span class="method">GET</span>
+        <span class="url"><span class="scheme">https://</span><span class="host">web.yaak.app</span></span>
+        <span class="status">200 OK</span>
+      </div>
+    </div>
+  </body>
+</html>

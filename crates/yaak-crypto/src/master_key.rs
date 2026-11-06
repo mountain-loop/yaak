@@ -2,7 +2,7 @@ use crate::encryption::{decrypt_data, encrypt_data};
 use crate::error::Error::GenericError;
 use crate::error::Result;
 use base32::Alphabet;
-use chacha20poly1305::aead::{Key, KeyInit, OsRng};
+use chacha20poly1305::aead::{Generate, Key};
 use chacha20poly1305::XChaCha20Poly1305;
 use keyring::{Entry, Error};
 use log::info;
@@ -24,11 +24,12 @@ impl MasterKey {
                 let without_prefix = encoded.strip_prefix(HUMAN_PREFIX).unwrap_or(&encoded);
                 let key_bytes = base32::decode(Alphabet::Crockford {}, &without_prefix)
                     .ok_or(GenericError("Failed to decode master key".to_string()))?;
-                Key::<XChaCha20Poly1305>::clone_from_slice(key_bytes.as_slice())
+                Key::<XChaCha20Poly1305>::try_from(key_bytes.as_slice())
+                    .map_err(|_| GenericError("Master key is the wrong length".to_string()))?
             }
             Err(Error::NoEntry) => {
                 info!("Creating new master key");
-                let key = XChaCha20Poly1305::generate_key(OsRng);
+                let key = Key::<XChaCha20Poly1305>::generate();
                 let encoded = base32::encode(Alphabet::Crockford {}, key.as_slice());
                 let with_prefix = format!("{HUMAN_PREFIX}{encoded}");
                 entry.set_password(&with_prefix)?;
@@ -50,9 +51,7 @@ impl MasterKey {
 
     #[cfg(test)]
     pub(crate) fn test_key() -> Self {
-        let key: Key<XChaCha20Poly1305> = Key::<XChaCha20Poly1305>::clone_from_slice(
-            "00000000000000000000000000000000".as_bytes(),
-        );
+        let key = Key::<XChaCha20Poly1305>::from(*b"00000000000000000000000000000000");
         Self { key }
     }
 }

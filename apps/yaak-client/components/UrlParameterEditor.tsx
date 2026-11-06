@@ -1,8 +1,11 @@
-import { VStack } from "@yaakapp-internal/ui";
+import {
+  type EditablePair,
+  type PairEditorHandle,
+  type PairEditorProps,
+  UrlParametersEditor as BaseUrlParametersEditor,
+} from "@yaakapp-internal/ui";
 import { useCallback, useRef } from "react";
 import { useRequestEditor, useRequestEditorEvent } from "../hooks/useRequestEditor";
-import type { EditablePair, PairEditorHandle, PairEditorProps } from "./core/PairEditor";
-import { PairOrBulkEditor } from "./core/PairOrBulkEditor";
 
 type Props = {
   forceUpdateKey: string;
@@ -11,6 +14,7 @@ type Props = {
   onChange: PairEditorProps["onChange"];
 };
 
+/** The shared parameters editor, wired to the request editor's focus events */
 export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey }: Props) {
   const pairEditorRef = useRef<PairEditorHandle>(null);
   const handleInitPairEditorRef = useCallback((ref: PairEditorHandle) => {
@@ -33,22 +37,12 @@ export function UrlParametersEditor({ pairs, forceUpdateKey, onChange, stateKey 
   );
 
   return (
-    <VStack className="h-full">
-      <PairOrBulkEditor
-        setRef={handleInitPairEditorRef}
-        allowMultilineValues
-        forceUpdateKey={forceUpdateKey + urlParametersKey}
-        nameAutocompleteFunctions
-        nameAutocompleteVariables
-        namePlaceholder="param_name"
-        onChange={onChange}
-        pairs={pairs}
-        preferenceName="url_parameters"
-        stateKey={stateKey}
-        valueAutocompleteFunctions
-        valueAutocompleteVariables
-        valuePlaceholder="Value"
-      />
-    </VStack>
+    <BaseUrlParametersEditor
+      setRef={handleInitPairEditorRef}
+      forceUpdateKey={forceUpdateKey + urlParametersKey}
+      onChange={onChange}
+      pairs={pairs}
+      stateKey={stateKey}
+    />
   );
 }

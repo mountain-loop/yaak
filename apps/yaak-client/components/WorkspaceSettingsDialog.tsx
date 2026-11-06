@@ -1,5 +1,5 @@
 import { patchModel, workspaceMetasAtom, workspacesAtom } from "@yaakapp-internal/models";
-import { Banner, HStack, InlineCode } from "@yaakapp-internal/ui";
+import { Banner, HStack, InlineCode, CountBadge } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { useAuthTab } from "../hooks/useAuthTab";
 import { useHeadersTab } from "../hooks/useHeadersTab";
@@ -9,7 +9,6 @@ import { showDialog } from "../lib/dialog";
 import { router } from "../lib/router";
 import { CopyIconButton } from "./CopyIconButton";
 import { Button } from "./core/Button";
-import { CountBadge } from "./core/CountBadge";
 import { PlainInput } from "./core/PlainInput";
 import { SettingsList, SettingsSection } from "./core/SettingRow";
 import { TabContent, Tabs } from "./core/Tabs/Tabs";

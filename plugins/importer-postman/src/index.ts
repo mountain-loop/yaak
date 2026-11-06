@@ -6,6 +6,7 @@ import type {
   HttpRequest,
   HttpRequestHeader,
   HttpUrlParameter,
+  ImportSource,
   PartialImportResources,
   PluginDefinition,
   Workspace,
@@ -15,6 +16,33 @@ import type { ImportPluginResponse } from "@yaakapp/api/lib/plugins/ImporterPlug
 const POSTMAN_2_1_0_SCHEMA = "https://schema.getpostman.com/json/collection/v2.1.0/collection.json";
 const POSTMAN_2_0_0_SCHEMA = "https://schema.getpostman.com/json/collection/v2.0.0/collection.json";
 const VALID_SCHEMAS = [POSTMAN_2_0_0_SCHEMA, POSTMAN_2_1_0_SCHEMA];
+
+// Both products happen to spell these the same way, but the names are written
+// out so anything Yaak's oauth1 plugin can't offer as a select option lands on
+// the default instead of being passed straight through.
+const OAUTH1_SIGNATURE_METHODS: Record<string, string> = {
+  "HMAC-SHA1": "HMAC-SHA1",
+  "HMAC-SHA256": "HMAC-SHA256",
+  "HMAC-SHA512": "HMAC-SHA512",
+  "RSA-SHA1": "RSA-SHA1",
+  "RSA-SHA256": "RSA-SHA256",
+  "RSA-SHA512": "RSA-SHA512",
+  PLAINTEXT: "PLAINTEXT",
+};
+const DEFAULT_OAUTH1_SIGNATURE_METHOD = "HMAC-SHA1";
+
+// Postman's dynamic variables that a Yaak template function reproduces exactly.
+// The faker-backed ones ({{$randomFirstName}} and friends) have no equivalent and
+// are left alone. Arguments have to be single-quoted; the template parser reads a
+// double-quoted call as raw text.
+const POSTMAN_DYNAMIC_VARIABLES: Record<string, string> = {
+  $guid: "uuid.v4()",
+  $randomUUID: "uuid.v4()",
+  $timestamp: "timestamp.unix()",
+  $isoTimestamp: "timestamp.iso8601()",
+  // Postman's $randomInt is an integer from 0 to 1000
+  $randomInt: "random.range(min='0',max='1000',decimals='0')",
+};
 
 type AtLeast<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 
@@ -29,8 +57,9 @@ export const plugin: PluginDefinition = {
   importer: {
     name: "Postman",
     description: "Import postman collections",
-    onImport(_ctx: Context, args: { text: string }) {
-      return convertPostman(args.text);
+    onImportSource(_ctx: Context, { source }: { source: ImportSource }) {
+      if (source.type !== "text") return null;
+      return convertPostman(source.text);
     },
   },
 };
@@ -98,6 +127,7 @@ export function convertPostman(contents: string): ImportPluginResponse | undefin
         id: generateId("folder"),
         name: v.name,
         folderId,
+        ...importAuth(v.auth),
       };
       trackSourceKey(folder.id, v, "item");
       exportResources.folders.push(folder);
@@ -222,8 +252,6 @@ function convertUrl(rawUrl: unknown): Pick<HttpRequest, "url" | "urlParameters">
     v += `#${url.hash}`;
   }
 
-  // TODO: Implement url.variables (path variables)
-
   return { url: v, urlParameters: params };
 }
 
@@ -274,6 +302,31 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, "authentication" | "aut
     };
   }
 
+  if ("digest" in auth && authType === "digest") {
+    const d = pmArrayToObj(auth.digest);
+    return {
+      authenticationType: "digest",
+      authentication: {
+        username: d.username != null ? String(d.username) : undefined,
+        password: d.password != null ? String(d.password) : undefined,
+        realm: d.realm != null ? String(d.realm) : undefined,
+      },
+    };
+  }
+
+  if ("ntlm" in auth && authType === "ntlm") {
+    const n = pmArrayToObj(auth.ntlm);
+    return {
+      authenticationType: "windows",
+      authentication: {
+        username: n.username != null ? String(n.username) : undefined,
+        password: n.password != null ? String(n.password) : undefined,
+        domain: n.domain != null ? String(n.domain) : undefined,
+        workstation: n.workstation != null ? String(n.workstation) : undefined,
+      },
+    };
+  }
+
   if ("awsv4" in auth && authType === "awsv4") {
     const a = pmArrayToObj(auth.awsv4);
     return {
@@ -294,8 +347,10 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, "authentication" | "aut
       authenticationType: "apikey",
       authentication: {
         location: a.in === "query" ? "query" : "header",
-        key: a.value != null ? String(a.value) : undefined,
-        value: a.key != null ? String(a.key) : undefined,
+        // Postman's "key" is the header/parameter name and its "value" is the
+        // secret, matching Yaak's own apikey auth.
+        key: a.key != null ? String(a.key) : undefined,
+        value: a.value != null ? String(a.value) : undefined,
       },
     };
   }
@@ -311,6 +366,32 @@ function importAuth(rawAuth: unknown): Pick<HttpRequest, "authentication" | "aut
         payload: a.payload != null ? String(a.payload) : undefined,
         headerPrefix: a.headerPrefix != null ? String(a.headerPrefix) : undefined,
         location: a.addTokenTo === "header" ? "header" : "query",
+      },
+    };
+  }
+
+  if ("oauth1" in auth && authType === "oauth1") {
+    const o = pmArrayToObj(auth.oauth1);
+    const signatureMethod =
+      o.signatureMethod != null
+        ? String(o.signatureMethod).toUpperCase()
+        : DEFAULT_OAUTH1_SIGNATURE_METHOD;
+    return {
+      authenticationType: "oauth1",
+      authentication: {
+        signatureMethod:
+          OAUTH1_SIGNATURE_METHODS[signatureMethod] ?? DEFAULT_OAUTH1_SIGNATURE_METHOD,
+        consumerKey: o.consumerKey != null ? String(o.consumerKey) : undefined,
+        consumerSecret: o.consumerSecret != null ? String(o.consumerSecret) : undefined,
+        tokenKey: o.token != null ? String(o.token) : undefined,
+        tokenSecret: o.tokenSecret != null ? String(o.tokenSecret) : undefined,
+        privateKey: o.privateKey != null ? String(o.privateKey) : undefined,
+        callback: o.callback != null ? String(o.callback) : undefined,
+        verifier: o.verifier != null ? String(o.verifier) : undefined,
+        timestamp: o.timestamp != null ? String(o.timestamp) : undefined,
+        nonce: o.nonce != null ? String(o.nonce) : undefined,
+        version: o.version != null ? String(o.version) : undefined,
+        realm: o.realm != null ? String(o.realm) : undefined,
       },
     };
   }
@@ -538,10 +619,14 @@ function importDescription(rawDescription: unknown): string | undefined {
 /** Recursively render all nested object properties */
 function convertTemplateSyntax<T>(obj: T): T {
   if (typeof obj === "string") {
-    return obj.replace(
-      /{{\s*(_\.)?([^}]*)\s*}}/g,
-      (_m, _dot, expr) => `\${[${expr.trim().replace(/^vault:/, "")}]}`,
-    ) as T;
+    return obj.replace(/{{\s*(_\.)?([^}]*)\s*}}/g, (_m, _dot, expr) => {
+      const name = String(expr).trim();
+      // hasOwn, so a collection using {{constructor}} doesn't reach Object.prototype
+      if (Object.hasOwn(POSTMAN_DYNAMIC_VARIABLES, name)) {
+        return `\${[${POSTMAN_DYNAMIC_VARIABLES[name]}]}`;
+      }
+      return `\${[${name.replace(/^vault:/, "")}]}`;
+    }) as T;
   }
   if (Array.isArray(obj) && obj != null) {
     return obj.map(convertTemplateSyntax) as T;

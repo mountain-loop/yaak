@@ -10,7 +10,7 @@ use tauri::plugin::TauriPlugin;
 use tauri::{Emitter, Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use yaak_models::blob_manager::BlobManager;
-use yaak_models::client_db::ClientDb;
+use yaak_models::client_db::{ClientDb, WriteDb};
 use yaak_models::error::Result;
 use yaak_models::query_manager::QueryManager;
 use yaak_models::util::{ModelPayload, UpdateSource};
@@ -95,7 +95,7 @@ pub trait QueryManagerExt<'a, R> {
     fn db(&'a self) -> ClientDb<'a>;
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
-        F: FnOnce(&ClientDb) -> Result<T>;
+        F: FnOnce(&WriteDb) -> Result<T>;
 }
 
 impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
@@ -110,7 +110,7 @@ impl<'a, R: Runtime, M: Manager<R>> QueryManagerExt<'a, R> for M {
 
     fn with_tx<F, T>(&'a self, func: F) -> Result<T>
     where
-        F: FnOnce(&ClientDb) -> Result<T>,
+        F: FnOnce(&WriteDb) -> Result<T>,
     {
         let qm = self.state::<QueryManager>();
         qm.inner().with_tx(func)
@@ -168,8 +168,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
             // Fast path for local app writes initiated by frontend windows. This keeps the
             // current sync-model UX snappy, while DB polling handles external writers (CLI).
+            // A thread of its own: `recv` blocks, and a runtime worker parked in it strands
+            // anything spawned from the loop in that worker's unstealable LIFO slot.
             let app_handle_local = app_handle.clone();
-            tauri::async_runtime::spawn(async move {
+            std::thread::spawn(move || {
                 while let Ok(payload) = rx.recv() {
                     let mut batch: Vec<ModelPayload> = Vec::new();
                     if matches!(payload.update_source, UpdateSource::Window { .. }) {

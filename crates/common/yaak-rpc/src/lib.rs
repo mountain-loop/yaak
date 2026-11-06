@@ -13,8 +13,9 @@ pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 /// `dispatch` call frame, so it cannot borrow, and contexts are cheap clones
 /// (handles and `Arc`s). Synchronous handlers wrap into this via `rpc_handler!`
 /// with no visible change.
-type HandlerFn<Ctx> =
-    Box<dyn Fn(Ctx, serde_json::Value) -> BoxFuture<Result<serde_json::Value, RpcError>> + Send + Sync>;
+type HandlerFn<Ctx> = Box<
+    dyn Fn(Ctx, serde_json::Value) -> BoxFuture<Result<serde_json::Value, RpcError>> + Send + Sync,
+>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcError {
@@ -138,6 +139,9 @@ impl RpcEventEmitter {
 /// - `RpcSchema` — a struct with ts-rs derives for TypeScript type generation
 /// - `RpcEventSchema` — (if events declared) a struct mapping event names to payload types
 ///
+/// Commands under the optional `async_commands` block are `async fn(Ctx, Req)` handlers,
+/// wrapped with `rpc_handler_async!`.
+///
 /// The wire name for each command/event is derived from `stringify!($ident)`.
 ///
 /// # Example
@@ -161,6 +165,9 @@ macro_rules! define_rpc {
         commands {
             $( $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
         }
+        $( async_commands {
+            $( $async_handler:ident ( $async_req:ty ) -> $async_res:ty ),* $(,)?
+        } )?
         events {
             $( $evt_ident:ident ( $evt_payload:ty ) ),* $(,)?
         }
@@ -168,6 +175,7 @@ macro_rules! define_rpc {
         pub fn build_router() -> $crate::RpcRouter<$ctx> {
             let mut router = $crate::RpcRouter::new();
             $( router.register(stringify!($handler), $crate::rpc_handler!($handler)); )*
+            $( $( router.register(stringify!($async_handler), $crate::rpc_handler_async!($async_handler)); )* )?
             router
         }
 
@@ -175,6 +183,7 @@ macro_rules! define_rpc {
         #[ts(export, export_to = "gen_rpc.ts")]
         pub struct RpcSchema {
             $( pub $handler: ($req, $res), )*
+            $( $( pub $async_handler: ($async_req, $async_res), )* )?
         }
 
         #[derive(ts_rs::TS)]
@@ -190,10 +199,14 @@ macro_rules! define_rpc {
         commands {
             $( $handler:ident ( $req:ty ) -> $res:ty ),* $(,)?
         }
+        $( async_commands {
+            $( $async_handler:ident ( $async_req:ty ) -> $async_res:ty ),* $(,)?
+        } )?
     ) => {
         pub fn build_router() -> $crate::RpcRouter<$ctx> {
             let mut router = $crate::RpcRouter::new();
             $( router.register(stringify!($handler), $crate::rpc_handler!($handler)); )*
+            $( $( router.register(stringify!($async_handler), $crate::rpc_handler_async!($async_handler)); )* )?
             router
         }
 
@@ -201,6 +214,7 @@ macro_rules! define_rpc {
         #[ts(export, export_to = "gen_rpc.ts")]
         pub struct RpcSchema {
             $( pub $handler: ($req, $res), )*
+            $( $( pub $async_handler: ($async_req, $async_res), )* )?
         }
     };
 }
@@ -249,9 +263,8 @@ macro_rules! rpc_handler_async {
         Box::new(|ctx, payload| {
             Box::pin(async move {
                 let req = serde_json::from_value(payload).map_err($crate::RpcError::from)?;
-                let res = $f(ctx, req)
-                    .await
-                    .map_err(|e| $crate::RpcError { message: e.to_string() })?;
+                let res =
+                    $f(ctx, req).await.map_err(|e| $crate::RpcError { message: e.to_string() })?;
                 serde_json::to_value(res).map_err($crate::RpcError::from)
             })
         })

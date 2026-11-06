@@ -4,7 +4,7 @@ import { emit as tauriEmit, listen as tauriListen } from "@tauri-apps/api/event"
 import { basename, resolveResource } from "@tauri-apps/api/path";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { clear, readText, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { readDir, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { type as osType } from "@tauri-apps/plugin-os";
@@ -67,6 +67,7 @@ const ALL_CAPABILITIES: PlatformCapabilities = {
   clipboardRead: true,
   systemFonts: true,
   license: true,
+  agents: true,
 };
 
 function createWindow(): PlatformWindow {
@@ -119,11 +120,25 @@ function storedBodyPath(id: string): Promise<string | null> {
   return rpc<string | null>("cmd_http_response_body_path", { responseId: id });
 }
 
+/**
+ * Base64 for the trip over IPC, in chunks so a few megabytes don't blow the
+ * argument limit. The engine's write command speaks base64; only this host has
+ * to care.
+ */
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
 export function createTauriPlatform(): Platform {
   const window = createWindow();
 
   return {
     capabilities: ALL_CAPABILITIES,
+    httpProxyUrl: null,
     window,
 
     clipboard: {
@@ -135,7 +150,7 @@ export function createTauriPlatform(): Platform {
     dialog: {
       // Overloaded on the interface; one implementation covers both shapes.
       open: ((options?: OpenDialogOptions) => open(options)) as Platform["dialog"]["open"],
-      save: (options) => save(options ?? {}),
+      save: (options) => saveDialog(options ?? {}),
     },
 
     files: {
@@ -144,6 +159,18 @@ export function createTauriPlatform(): Platform {
       url: (path) => convertFileSrc(path),
       basename: (path) => basename(path),
       resolveResource: (path) => resolveResource(path),
+
+      async save(suggestedName, content, filters) {
+        const path = await saveDialog({ defaultPath: suggestedName, filters });
+        if (path == null) return null;
+        // Not the fs plugin: its ACL is read-only and scoped to the app's own
+        // directories, and a path the user just picked is neither. The engine
+        // writes it, which is where the desktop has always written it — and it
+        // speaks base64, so content that is already base64 goes straight over.
+        const data = content instanceof Uint8Array ? toBase64(content) : content.base64;
+        await rpc("cmd_save_base64_to_binary", { filepath: path, data });
+        return path;
+      },
     },
 
     blobs: {

@@ -21,7 +21,7 @@ use yaak_http::transaction::HttpTransaction;
 use yaak_http::types::{
     SendableBody, SendableHttpRequest, SendableHttpRequestOptions, append_query_params,
 };
-use yaak_models::blob_manager::{BlobManager, BodyChunk};
+use yaak_models::blob_manager::{BODY_CHUNK_SIZE, BlobManager, BodyChunk, BodyChunkWriter};
 use yaak_models::models::{
     ClientCertificate, Cookie, CookieJar, DnsOverride, Environment, HttpRequest, HttpResponse,
     HttpResponseEvent, HttpResponseEventData, HttpResponseHeader, HttpResponseState,
@@ -40,7 +40,6 @@ use yaak_templates::{RenderOptions, TemplateCallback};
 use yaak_tls::find_client_certificate;
 
 const HTTP_EVENT_CHANNEL_CAPACITY: usize = 100;
-const REQUEST_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 const RESPONSE_PROGRESS_UPDATE_INTERVAL_MS: u128 = 100;
 const MAX_AUTH_BODY_BYTES: usize = 10 * 1024 * 1024;
 
@@ -444,8 +443,26 @@ pub fn resolve_send_inputs(
         // should put back. Every host reaches sending through this function — the desktop,
         // the CLI, plugin-triggered sends — so every response gets a version without each
         // of them remembering to ask for one.
-        version_id: db.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
+        version_id: snapshot_request_for_send(query_manager, request),
     })
+}
+
+/// Capture the request in its own transaction. Like the snapshot itself, a failure
+/// to get the write connection is not worth failing the send over.
+fn snapshot_request_for_send(
+    query_manager: &QueryManager,
+    request: &HttpRequest,
+) -> Option<String> {
+    query_manager
+        .with_tx(|tx| {
+            Ok::<_, yaak_models::error::Error>(
+                tx.snapshot_request_for_send(&AnyRequest::HttpRequest(request.clone())),
+            )
+        })
+        .unwrap_or_else(|err| {
+            warn!("Failed to snapshot request before send: {err}");
+            None
+        })
 }
 
 /// Apply the authentication and headers a request inherits from its folder or workspace.
@@ -659,8 +676,9 @@ pub async fn send_http_request<T: TemplateCallback>(
     if let Some(store) = store {
         response = store
             .query_manager
-            .connect()
-            .upsert_http_response(&response, &store.update_source, store.blob_manager)
+            .with_tx(|tx| {
+                tx.upsert_http_response(&response, &store.update_source, store.blob_manager)
+            })
             .map_err(SendHttpRequestError::PersistResponse)?;
     } else if response.id.is_empty() {
         response.id = generate_prefixed_id("rs");
@@ -713,8 +731,8 @@ pub async fn send_http_request<T: TemplateCallback>(
                     &event_workspace_id,
                     event.clone().into(),
                 );
-                if let Err(err) =
-                    query_manager.connect().upsert_http_response_event(&db_event, update_source)
+                if let Err(err) = query_manager
+                    .with_tx(|tx| tx.upsert_http_response_event(&db_event, update_source))
                 {
                     warn!("Failed to persist HTTP response event: {}", err);
                 }
@@ -812,8 +830,13 @@ pub async fn send_http_request<T: TemplateCallback>(
     if let Some(store) = store {
         response = store
             .query_manager
-            .connect()
-            .upsert_http_response(&connected_response, &store.update_source, store.blob_manager)
+            .with_tx(|tx| {
+                tx.upsert_http_response(
+                    &connected_response,
+                    &store.update_source,
+                    store.blob_manager,
+                )
+            })
             .map_err(SendHttpRequestError::PersistResponse)?;
     } else {
         response = connected_response;
@@ -899,12 +922,13 @@ pub async fn send_http_request<T: TemplateCallback>(
                     if let Some(store) = store {
                         response = store
                             .query_manager
-                            .connect()
-                            .upsert_http_response(
-                                &progress_response,
-                                &store.update_source,
-                                store.blob_manager,
-                            )
+                            .with_tx(|tx| {
+                                tx.upsert_http_response(
+                                    &progress_response,
+                                    &store.update_source,
+                                    store.blob_manager,
+                                )
+                            })
                             .map_err(SendHttpRequestError::PersistResponse)?;
                     } else {
                         response = progress_response;
@@ -973,8 +997,9 @@ pub async fn send_http_request<T: TemplateCallback>(
     if let Some(store) = store {
         response = store
             .query_manager
-            .connect()
-            .upsert_http_response(&final_response, &store.update_source, store.blob_manager)
+            .with_tx(|tx| {
+                tx.upsert_http_response(&final_response, &store.update_source, store.blob_manager)
+            })
             .map_err(SendHttpRequestError::PersistResponse)?;
     } else {
         response = final_response;
@@ -1011,8 +1036,9 @@ pub async fn send_http_request<T: TemplateCallback>(
         if update_response && let Some(store) = store {
             response = store
                 .query_manager
-                .connect()
-                .upsert_http_response(&response, &store.update_source, store.blob_manager)
+                .with_tx(|tx| {
+                    tx.upsert_http_response(&response, &store.update_source, store.blob_manager)
+                })
                 .map_err(SendHttpRequestError::PersistResponse)?;
         }
     }
@@ -1040,17 +1066,14 @@ fn persist_request_body_bytes(
         return Ok(());
     }
 
-    let blob_ctx = blob_manager.connect();
-    let mut offset = 0;
-    let mut chunk_index: i32 = 0;
-    while offset < bytes.len() {
-        let end = std::cmp::min(offset + REQUEST_BODY_CHUNK_SIZE, bytes.len());
-        let chunk = BodyChunk::new(body_id, chunk_index, bytes[offset..end].to_vec());
-        blob_ctx.insert_chunk(&chunk).map_err(|e| e.to_string())?;
-        chunk_index += 1;
-        offset = end;
-    }
-    Ok(())
+    blob_manager
+        .with_tx(|b| {
+            for (chunk_index, data) in bytes.chunks(BODY_CHUNK_SIZE).enumerate() {
+                b.insert_chunk(&BodyChunk::new(body_id, chunk_index as i32, data.to_vec()))?;
+            }
+            Ok::<_, yaak_models::error::Error>(())
+        })
+        .map_err(|e| e.to_string())
 }
 
 async fn persist_request_body_stream(
@@ -1058,29 +1081,11 @@ async fn persist_request_body_stream(
     body_id: String,
     mut rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
 ) -> std::result::Result<usize, String> {
-    let mut chunk_index: i32 = 0;
-    let mut total_bytes = 0usize;
-
-    // Stream reads arrive in small (eg. 8-16 KiB) pieces, so accumulate them into
-    // full-size chunks to avoid thousands of tiny inserts for large bodies
-    let mut buf: Vec<u8> = Vec::with_capacity(REQUEST_BODY_CHUNK_SIZE);
+    let mut writer = BodyChunkWriter::new(blob_manager, body_id);
     while let Some(data) = rx.recv().await {
-        total_bytes += data.len();
-        buf.extend_from_slice(&data);
-        while buf.len() >= REQUEST_BODY_CHUNK_SIZE {
-            let data = buf.drain(..REQUEST_BODY_CHUNK_SIZE).collect();
-            let chunk = BodyChunk::new(&body_id, chunk_index, data);
-            blob_manager.connect().insert_chunk(&chunk).map_err(|e| e.to_string())?;
-            chunk_index += 1;
-        }
+        writer.write(&data).map_err(|e| e.to_string())?;
     }
-
-    if !buf.is_empty() {
-        let chunk = BodyChunk::new(&body_id, chunk_index, buf);
-        blob_manager.connect().insert_chunk(&chunk).map_err(|e| e.to_string())?;
-    }
-
-    Ok(total_bytes)
+    writer.finish().map_err(|e| e.to_string())
 }
 
 fn append_error_message(existing_error: Option<String>, message: String) -> String {
@@ -1127,8 +1132,7 @@ pub fn persist_cookies_after_send(
 
     cookie_jar.cookies = cookies;
     query_manager
-        .connect()
-        .upsert_cookie_jar(cookie_jar, &UpdateSource::Background)
+        .with_tx(|tx| tx.upsert_cookie_jar(cookie_jar, &UpdateSource::Background))
         .map_err(SendHttpRequestError::PersistCookieJar)?;
     Ok(())
 }
@@ -1222,23 +1226,24 @@ fn persist_response_error(
     let elapsed = duration_to_i32(started_at.elapsed());
     store
         .query_manager
-        .connect()
-        .upsert_http_response(
-            &HttpResponse {
-                state: HttpResponseState::Closed,
-                elapsed,
-                elapsed_headers: if response.elapsed_headers == 0 {
-                    elapsed
-                } else {
-                    response.elapsed_headers
+        .with_tx(|tx| {
+            tx.upsert_http_response(
+                &HttpResponse {
+                    state: HttpResponseState::Closed,
+                    elapsed,
+                    elapsed_headers: if response.elapsed_headers == 0 {
+                        elapsed
+                    } else {
+                        response.elapsed_headers
+                    },
+                    error: Some(error),
+                    url: if response.url.is_empty() { fallback_url } else { response.url.clone() },
+                    ..response.clone()
                 },
-                error: Some(error),
-                url: if response.url.is_empty() { fallback_url } else { response.url.clone() },
-                ..response.clone()
-            },
-            &store.update_source,
-            store.blob_manager,
-        )
+                &store.update_source,
+                store.blob_manager,
+            )
+        })
         .map_err(SendHttpRequestError::PersistResponse)
 }
 
@@ -1459,23 +1464,25 @@ mod tests {
         .expect("Failed to initialize DB");
 
         query_manager
-            .connect()
-            .upsert_workspace(
-                &Workspace { id: "wk_test".to_string(), ..Default::default() },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_workspace(
+                    &Workspace { id: "wk_test".to_string(), ..Default::default() },
+                    &UpdateSource::Sync,
+                )
+            })
             .expect("Failed to seed workspace");
         let cookie_jar = query_manager
-            .connect()
-            .upsert_cookie_jar(
-                &CookieJar {
-                    id: "cj_test".to_string(),
-                    workspace_id: "wk_test".to_string(),
-                    name: "Default".to_string(),
-                    ..Default::default()
-                },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_cookie_jar(
+                    &CookieJar {
+                        id: "cj_test".to_string(),
+                        workspace_id: "wk_test".to_string(),
+                        name: "Default".to_string(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Sync,
+                )
+            })
             .expect("Failed to seed cookie jar");
 
         (query_manager, cookie_jar, temp_dir)
@@ -1488,16 +1495,17 @@ mod tests {
     async fn a_stored_send_links_the_request_version_that_produced_it() {
         let (query_manager, blob_manager, temp_dir) = seed_send_storage();
         let request = query_manager
-            .connect()
-            .upsert_http_request(
-                &HttpRequest {
-                    workspace_id: "wk_test".to_string(),
-                    url: "http://localhost/test".to_string(),
-                    name: "Original".to_string(),
-                    ..Default::default()
-                },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_http_request(
+                    &HttpRequest {
+                        workspace_id: "wk_test".to_string(),
+                        url: "http://localhost/test".to_string(),
+                        name: "Original".to_string(),
+                        ..Default::default()
+                    },
+                    &UpdateSource::Sync,
+                )
+            })
             .expect("Failed to seed request");
 
         let first = stored_send(&query_manager, &blob_manager, temp_dir.path(), &request).await;
@@ -1514,8 +1522,12 @@ mod tests {
 
         // Editing after the fact is what the response pane has to be able to notice
         query_manager
-            .connect()
-            .upsert_http_request(&HttpRequest { name: "Edited".to_string(), ..request.clone() }, &UpdateSource::Sync)
+            .with_tx(|tx| {
+                tx.upsert_http_request(
+                    &HttpRequest { name: "Edited".to_string(), ..request.clone() },
+                    &UpdateSource::Sync,
+                )
+            })
             .expect("Failed to edit request");
         assert!(!db.request_matches_version(&version).expect("Failed to compare"));
     }
@@ -1558,11 +1570,12 @@ mod tests {
         )
         .expect("Failed to initialize DB");
         query_manager
-            .connect()
-            .upsert_workspace(
-                &Workspace { id: "wk_test".to_string(), ..Default::default() },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_workspace(
+                    &Workspace { id: "wk_test".to_string(), ..Default::default() },
+                    &UpdateSource::Sync,
+                )
+            })
             .expect("Failed to seed workspace");
         (query_manager, blob_manager, temp_dir)
     }
@@ -1608,18 +1621,18 @@ mod tests {
         let (query_manager, mut cookie_jar, _temp_dir) = seed_cookie_jar();
         cookie_jar.cookies = vec![cookie("original")];
         cookie_jar = query_manager
-            .connect()
-            .upsert_cookie_jar(&cookie_jar, &UpdateSource::Sync)
+            .with_tx(|tx| tx.upsert_cookie_jar(&cookie_jar, &UpdateSource::Sync))
             .expect("Failed to seed cookies");
         let store = CookieStore::from_cookies(cookie_jar.cookies.clone());
 
         // Someone else updates the jar while the send is in flight.
         query_manager
-            .connect()
-            .upsert_cookie_jar(
-                &CookieJar { cookies: vec![cookie("newer")], ..cookie_jar.clone() },
-                &UpdateSource::Sync,
-            )
+            .with_tx(|tx| {
+                tx.upsert_cookie_jar(
+                    &CookieJar { cookies: vec![cookie("newer")], ..cookie_jar.clone() },
+                    &UpdateSource::Sync,
+                )
+            })
             .expect("Failed to update cookie jar");
 
         persist_cookies_after_send(&query_manager, Some(&mut cookie_jar), Some(&store))

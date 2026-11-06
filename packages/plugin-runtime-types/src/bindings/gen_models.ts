@@ -11,6 +11,7 @@ export type AnyModel =
   | HttpRequest
   | HttpResponse
   | HttpResponseEvent
+  | ImportSource
   | KeyValue
   | Plugin
   | Settings
@@ -137,6 +138,10 @@ export type GrpcConnection = {
   state: GrpcConnectionState;
   trailers: { [key in string]?: string };
   url: string;
+  /**
+   * The request version this connection was opened from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type GrpcConnectionState = "initialized" | "connected" | "closed";
@@ -241,6 +246,10 @@ export type HttpResponse = {
   state: HttpResponseState;
   url: string;
   version: string | null;
+  /**
+   * The request version this response was sent from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type HttpResponseEvent = {
@@ -318,6 +327,18 @@ export type HttpUrlParameter = {
 
 export type HttpVersion = "auto" | "http1" | "http2";
 
+export type ImportSource = {
+  model: "import_source";
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  workspaceId: string;
+  importer: string;
+  origin: string;
+  originLabel: string;
+  lastImportedAt: string;
+};
+
 export type InheritedBoolSetting = { enabled?: boolean; value: boolean };
 
 export type InheritedHttpVersionSetting = { enabled?: boolean; value: HttpVersion };
@@ -385,6 +406,7 @@ export type Settings = {
   updateChannel: string;
   hideLicenseBadge: boolean;
   promptFeedback: boolean;
+  mcpServerEnabled: boolean;
   autoupdate: boolean;
   autoDownloadUpdates: boolean;
   checkNotifications: boolean;
@@ -417,6 +439,10 @@ export type WebsocketConnection = {
   state: WebsocketConnectionState;
   status: number;
   url: string;
+  /**
+   * The request version this connection was opened from, when one was captured.
+   */
+  versionId: string | null;
 };
 
 export type WebsocketConnectionState = "initialized" | "connected" | "closing" | "closed";

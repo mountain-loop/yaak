@@ -5,24 +5,23 @@ edition = "2024"
 publish = false
 
 [dependencies]
-async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "brotli", "zstd"] }
+async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate", "zlib", "brotli", "zstd"] }
 async-trait = "0.1"
-brotli = "7"
+brotli = "9"
 bytes = "1.11.1"
 cookie = "0.18.1"
 flate2 = "1"
 futures-util = "0.3"
 http-body = "1"
 url = "2"
-zstd = "0.13"
+zstd = "0.14"
 hyper-util = { version = "0.1.17", default-features = false, features = ["client-legacy"] }
 log = { workspace = true }
 mime_guess = "2.0.5"
 native-tls = { version = "0.2", features = ["alpn"] }
 reqwest = { workspace = true, features = [
-  "rustls-tls-manual-roots-no-provider",
+  "rustls-no-provider",
   "native-tls",
-  "native-tls-alpn",
   "socks",
   "http2",
   "stream",
@@ -41,3 +40,4 @@ yaak-tls = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { workspace = true, features = ["net"] }

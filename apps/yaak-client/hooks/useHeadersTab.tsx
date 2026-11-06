@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { CountBadge } from "../components/core/CountBadge";
 import type { TabItem } from "../components/core/Tabs/Tabs";
 import type { HeaderModel } from "./useInheritedHeaders";
 import { useInheritedHeaders } from "./useInheritedHeaders";
+import { CountBadge } from "@yaakapp-internal/ui";
 
 export function useHeadersTab<T extends string>(
   tabValue: T,

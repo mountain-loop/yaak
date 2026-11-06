@@ -103,12 +103,34 @@ pub enum ImportDestination {
     },
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gen_util.ts")]
 pub struct ImportPlanWarning {
     pub title: String,
     pub detail: String,
+    #[serde(default)]
+    pub level: ImportPlanWarningLevel,
+}
+
+/// Whether a plan's note is something to know or something to think twice about.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportPlanWarningLevel {
+    #[default]
+    Info,
+    Warning,
+}
+
+impl ImportPlanWarning {
+    pub fn info(title: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self { title: title.into(), detail: detail.into(), level: ImportPlanWarningLevel::Info }
+    }
+
+    pub fn warning(title: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self { title: title.into(), detail: detail.into(), level: ImportPlanWarningLevel::Warning }
+    }
 }
 
 /// Where an import's contents came from, used to link the committed workspace back to it.
@@ -169,6 +191,16 @@ pub enum ImportPlanAction {
     Unchanged,
     KeepLocal,
     Conflict,
+    /// Present in the source but previously turned down; selecting it imports it again
+    Ignored,
+}
+
+/// Extra context for an action that would otherwise be indistinguishable from its plain form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "gen_util.ts")]
+pub enum ImportPlanReason {
+    MovedIntoIgnoredFolder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, TS)]
@@ -193,6 +225,24 @@ pub struct ImportPlanItem {
     pub selected: bool,
     #[ts(optional)]
     pub resolution: Option<ImportConflictResolution>,
+    #[ts(optional)]
+    pub reason: Option<ImportPlanReason>,
+    /// Fields where the source and the local copy disagree, so the preview can say why
+    #[serde(default)]
+    pub changed_fields: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_util.ts")]
+pub struct ImportPlanSource {
+    pub importer: String,
+    pub origin: ImportOrigin,
+    pub workspace_id: String,
+    pub source_keys: BTreeMap<String, String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub linked_source_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -214,6 +264,10 @@ pub struct ImportPlan {
     #[serde(default)]
     #[ts(optional)]
     pub origin: Option<ImportOrigin>,
+
+    /// Individual origins in a combined import, each retaining its own reimport history.
+    #[serde(default)]
+    pub sources: Vec<ImportPlanSource>,
 }
 
 pub fn get_workspace_export_resources(
@@ -240,7 +294,7 @@ pub fn get_workspace_export_resources(
         data.resources.workspaces.push(db.find_one(WorkspaceIden::Id, workspace_id)?);
         data.resources.environments.append(
             &mut db
-                .list_environments_ensure_base(workspace_id)?
+                .list_environments(workspace_id)?
                 .into_iter()
                 .filter(|e| include_private_environments || e.public)
                 .collect(),

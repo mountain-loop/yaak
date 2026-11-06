@@ -27,6 +27,10 @@ impl TestHttpServer {
             while !shutdown_signal.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // macOS and the BSDs hand back accepted sockets carrying the
+                        // listener's non-blocking flag, which leaves the read timeout
+                        // below with nothing to govern.
+                        let _ = stream.set_nonblocking(false);
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
                         let mut request = Vec::new();
                         let mut request_buf = [0u8; 4096];

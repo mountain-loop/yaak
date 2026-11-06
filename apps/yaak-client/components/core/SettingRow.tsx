@@ -1,5 +1,6 @@
 import type { AnyModel } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
+import { Icon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { ReactNode } from "react";
 import { CopyIconButton } from "../CopyIconButton";
@@ -136,6 +137,90 @@ export function SettingValue({
         <CopyIconButton size="2xs" text={textToCopy} title="Copy value" />
       )}
     </>
+  );
+}
+
+/**
+ * A command or config to copy, set as a block: its title, an optional line
+ * saying which file it goes in, then the snippet at full width with the copy
+ * button on it. One-line shell commands and multi-line JSON get the same block.
+ */
+export function SettingCommand({
+  className,
+  description,
+  disabled,
+  done,
+  language,
+  snippet,
+  title,
+}: {
+  description?: ReactNode;
+  disabled?: boolean;
+  /** A short word shown with a check beside the title once the step is detected as done */
+  done?: ReactNode;
+  language: SettingSnippetLanguage;
+  snippet: string;
+  title: ReactNode;
+} & Pick<SettingRowBaseProps, "className">) {
+  return (
+    <div
+      aria-disabled={disabled || undefined}
+      className={classNames(
+        className,
+        "border-b border-border-subtle py-4",
+        disabled && "opacity-disabled",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2 text text-text">
+        <span>{title}</span>
+        {done != null && done !== false && (
+          <span className="inline-flex items-center gap-1 text-sm text-success">
+            <Icon icon="check" size="sm" />
+            {done}
+          </span>
+        )}
+      </div>
+      {description != null && (
+        <div className="mt-1 max-w-2xl text-sm text-text-subtle">{description}</div>
+      )}
+      <SettingSnippet className="mt-3" language={language} snippet={snippet} />
+    </div>
+  );
+}
+
+export type SettingSnippetLanguage = "shell" | "json" | "text";
+
+/** The snippet half of a `SettingCommand`, for places with their own title, like a banner. */
+export function SettingSnippet({
+  className,
+  language,
+  snippet,
+}: {
+  className?: string;
+  language: SettingSnippetLanguage;
+  snippet: string;
+}) {
+  const prompt = language === "shell";
+
+  return (
+    <div
+      className={classNames(
+        className,
+        "flex items-start gap-2 rounded-md border border-border-subtle bg-surface-highlight/40 py-1.5 pr-1.5 pl-3",
+      )}
+    >
+      <div className="flex min-h-sm min-w-0 flex-1 items-center font-mono text-editor text-text">
+        <span className="cursor-text select-text whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {prompt && (
+            <span aria-hidden className="mr-2 select-none text-text-subtlest">
+              $
+            </span>
+          )}
+          {snippet}
+        </span>
+      </div>
+      <CopyIconButton size="sm" variant="border" title="Copy" text={snippet} className="shrink-0" />
+    </div>
   );
 }
 

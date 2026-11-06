@@ -40,6 +40,17 @@ export interface RpcStreamHandle<T> {
   unlisten: Unsubscribe;
 }
 
+/**
+ * What to save: the bytes, or base64 of them for a caller that already has it
+ * that way.
+ *
+ * Both forms exist because both hosts want a different one, and a value that
+ * arrives base64 should not be decoded and re-encoded to get back where it
+ * started. Whichever a caller has is the one to pass; each host converts only
+ * when it has to.
+ */
+export type SaveContent = Uint8Array | { base64: string };
+
 export interface DialogFilter {
   name: string;
   extensions: string[];
@@ -157,6 +168,25 @@ export interface PlatformFiles {
 
   /** Resolve a path bundled with the app itself, rather than one from the backend. */
   resolveResource(path: string): Promise<string>;
+
+  /**
+   * Put bytes somewhere the user chooses. Returns where they went — a path, a
+   * filename, whatever this host can say — or null if the user backed out.
+   *
+   * The caller supplies the bytes, which is the whole point: the alternative
+   * shape, where a dialog mints a path and a separate backend command writes to
+   * it, can only work on a host that has both a filesystem and a backend. A tab
+   * has neither, so every one of those call sites was a dead control. Whoever
+   * produces the bytes already knows what they are; the host only has to know
+   * where they go.
+   *
+   * `suggestedName` is what the save dialog opens with, extension included.
+   */
+  save(
+    suggestedName: string,
+    content: SaveContent,
+    filters?: DialogFilter[],
+  ): Promise<string | null>;
 }
 
 /**
@@ -186,6 +216,8 @@ export interface PlatformBlobs {
 
 export interface Platform {
   readonly capabilities: PlatformCapabilities;
+  /** Web request relay, or null when this host executes requests itself. */
+  readonly httpProxyUrl: string | null;
   readonly window: PlatformWindow;
   readonly clipboard: PlatformClipboard;
   readonly dialog: PlatformDialog;
@@ -281,6 +313,8 @@ export interface PlatformCapabilities {
   systemFonts: boolean;
   /** Commercial licence activation. */
   license: boolean;
+  /** Connecting local AI agents through the Yaak CLI on this machine. */
+  agents: boolean;
 }
 
 export type CapabilityName = keyof PlatformCapabilities;

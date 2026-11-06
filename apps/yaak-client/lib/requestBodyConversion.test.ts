@@ -92,6 +92,21 @@ describe("convertRequestBody", () => {
     });
   });
 
+  test.each(["__proto__", "constructor", "toString"])(
+    "preserves the form field %s when converting to JSON",
+    (name) => {
+      const body = convertRequestBody({
+        fromBodyType: BODY_TYPE_FORM_URLENCODED,
+        toBodyType: BODY_TYPE_JSON,
+        body: { form: [{ enabled: true, name, value: "hello" }] },
+      });
+
+      expect(body).toEqual({
+        text: JSON.stringify({ [name]: "hello" }, null, 2),
+      });
+    },
+  );
+
   test("preserves text when converting to form bodies cannot build form pairs", () => {
     const body = convertRequestBody({
       fromBodyType: BODY_TYPE_XML,

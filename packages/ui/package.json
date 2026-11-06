@@ -3,9 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./editor": "./src/editor.ts",
+    "./httpTypes": "./src/components/http/types.ts",
+    "./mimeType": "./src/lib/mimeType.ts",
+    "./resolvedModelName": "./src/lib/resolvedModelName.ts",
+    "./templateTags": "./src/lib/templateTags.ts",
+    "./toast": "./src/lib/toast.ts",
+    "./useToggle": "./src/hooks/useToggle.ts"
+  },
   "dependencies": {
+    "hexy": "^0.4.0",
     "jotai-family": "^1.0.1"
   }
 }

@@ -4,7 +4,7 @@ use crate::error::Error::GenericError;
 use crate::error::Result;
 use crate::grpc::{build_metadata, metadata_to_map};
 use crate::http_request::send_http_request;
-use crate::import::{commit_import, plan_import_data, plan_import_url};
+use crate::import::{commit_import, plan_import_data};
 use crate::models_ext::{BlobManagerExt, QueryManagerExt};
 use crate::notifications::YaakNotifier;
 use crate::render::{render_grpc_request, render_template};
@@ -29,16 +29,16 @@ use tokio::sync::Mutex;
 use tokio::task::block_in_place;
 use tokio::time;
 use yaak::send::ResponseBody;
-use yaak_commands::responses::locate_response_body;
 use yaak_commands::resolve::resolve_grpc_request;
+use yaak_commands::responses::locate_response_body;
 use yaak_common::command::new_checked_command;
 use yaak_crypto::manager::EncryptionManager;
 use yaak_grpc::manager::{GrpcConfig, GrpcHandle};
 use yaak_grpc::{Code, ServiceDefinition};
 use yaak_mac_window::AppHandleMacWindowExt;
 use yaak_models::models::{
-    CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent,
-    GrpcEventType, HttpRequest, HttpResponse, HttpResponseState, Workspace,
+    CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType,
+    HttpRequest, HttpResponse, HttpResponseState, Workspace,
 };
 use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan, UpdateSource};
@@ -138,6 +138,7 @@ fn setup_window_menu<R: Runtime>(win: &WebviewWindow<R>) -> Result<()> {
             "dev.generate_theme_css" => {
                 w.emit("generate_theme_css", true).unwrap();
             }
+            "dev.show_home" => w.emit("show_home", true).unwrap(),
             "dev.toggle_devtools" => {
                 if webview_window.is_devtools_open() {
                     webview_window.close_devtools();
@@ -331,25 +332,25 @@ async fn cmd_grpc_go<R: Runtime>(
     let settings = app_handle.db().get_settings();
     let client_cert = find_client_certificate(&request.url, &settings.client_certificates);
 
-    // Capture the stored request, not the rendered one: what a restore should
-    // put back is what the user typed
-    let version_id = app_handle
-        .db()
-        .snapshot_request_for_send(&AnyRequest::GrpcRequest(unrendered_request.clone()));
-
-    let conn = app_handle.db().upsert_grpc_connection(
-        &GrpcConnection {
-            workspace_id: request.workspace_id.clone(),
-            request_id: request.id.clone(),
-            status: -1,
-            elapsed: 0,
-            state: GrpcConnectionState::Initialized,
-            url: request.url.clone(),
-            version_id,
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-    )?;
+    let conn = app_handle.with_tx(|tx| {
+        // Capture the stored request, not the rendered one: what a restore should
+        // put back is what the user typed
+        let version_id =
+            tx.snapshot_request_for_send(&AnyRequest::GrpcRequest(unrendered_request.clone()));
+        tx.upsert_grpc_connection(
+            &GrpcConnection {
+                workspace_id: request.workspace_id.clone(),
+                request_id: request.id.clone(),
+                status: -1,
+                elapsed: 0,
+                state: GrpcConnectionState::Initialized,
+                url: request.url.clone(),
+                version_id,
+                ..Default::default()
+            },
+            &UpdateSource::from_window_label(window.label()),
+        )
+    })?;
 
     let conn_id = conn.id.clone();
 
@@ -394,15 +395,17 @@ async fn cmd_grpc_go<R: Runtime>(
     let connection = match connection {
         Ok(c) => c,
         Err(err) => {
-            app_handle.db().upsert_grpc_connection(
-                &GrpcConnection {
-                    elapsed: start.elapsed().as_millis() as i32,
-                    error: Some(err.to_string()),
-                    state: GrpcConnectionState::Closed,
-                    ..conn.clone()
-                },
-                &UpdateSource::from_window_label(window.label()),
-            )?;
+            app_handle.with_tx(|tx| {
+                tx.upsert_grpc_connection(
+                    &GrpcConnection {
+                        elapsed: start.elapsed().as_millis() as i32,
+                        error: Some(err.to_string()),
+                        state: GrpcConnectionState::Closed,
+                        ..conn.clone()
+                    },
+                    &UpdateSource::from_window_label(window.label()),
+                )
+            })?;
             return Ok(conn_id);
         }
     };
@@ -503,15 +506,17 @@ async fn cmd_grpc_go<R: Runtime>(
         .await?;
         let msg = strip_json_comments(&msg);
 
-        app_handle.db().upsert_grpc_event(
-            &GrpcEvent {
-                content: format!("Connecting to {}", req.url),
-                event_type: GrpcEventType::ConnectionStart,
-                metadata: metadata.clone(),
-                ..base_event.clone()
-            },
-            &UpdateSource::from_window_label(window.label()),
-        )?;
+        app_handle.with_tx(|tx| {
+            tx.upsert_grpc_event(
+                &GrpcEvent {
+                    content: format!("Connecting to {}", req.url),
+                    event_type: GrpcEventType::ConnectionStart,
+                    metadata: metadata.clone(),
+                    ..base_event.clone()
+                },
+                &UpdateSource::from_window_label(window.label()),
+            )
+        })?;
 
         async move {
             // Create callback for streaming methods that handles both success and error
@@ -521,24 +526,28 @@ async fn cmd_grpc_go<R: Runtime>(
                 let window_label = window.label().to_string();
                 move |result: std::result::Result<String, String>| match result {
                     Ok(msg) => {
-                        let _ = app_handle.db().upsert_grpc_event(
-                            &GrpcEvent {
-                                content: msg,
-                                event_type: GrpcEventType::ClientMessage,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(&window_label),
-                        );
+                        let _ = app_handle.with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    content: msg,
+                                    event_type: GrpcEventType::ClientMessage,
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(&window_label),
+                            )
+                        });
                     }
                     Err(error) => {
-                        let _ = app_handle.db().upsert_grpc_event(
-                            &GrpcEvent {
-                                content: format!("Failed to send message: {}", error),
-                                event_type: GrpcEventType::Error,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(&window_label),
-                        );
+                        let _ = app_handle.with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    content: format!("Failed to send message: {}", error),
+                                    event_type: GrpcEventType::Error,
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(&window_label),
+                            )
+                        });
                     }
                 }
             };
@@ -591,36 +600,38 @@ async fn cmd_grpc_go<R: Runtime>(
 
             if !method_desc.is_client_streaming() {
                 app_handle
-                    .db()
-                    .upsert_grpc_event(
-                        &GrpcEvent {
-                            event_type: GrpcEventType::ClientMessage,
-                            content: msg,
-                            ..base_event.clone()
-                        },
-                        &UpdateSource::from_window_label(window.label()),
-                    )
+                    .with_tx(|tx| {
+                        tx.upsert_grpc_event(
+                            &GrpcEvent {
+                                event_type: GrpcEventType::ClientMessage,
+                                content: msg,
+                                ..base_event.clone()
+                            },
+                            &UpdateSource::from_window_label(window.label()),
+                        )
+                    })
                     .unwrap();
             }
 
             match maybe_msg {
                 Some(Ok(msg)) => {
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &GrpcEvent {
-                                metadata: metadata_to_map(msg.metadata().clone()),
-                                content: if msg.metadata().len() == 0 {
-                                    "Received response"
-                                } else {
-                                    "Received response with metadata"
-                                }
-                                .to_string(),
-                                event_type: GrpcEventType::Info,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    metadata: metadata_to_map(msg.metadata().clone()),
+                                    content: if msg.metadata().len() == 0 {
+                                        "Received response"
+                                    } else {
+                                        "Received response with metadata"
+                                    }
+                                    .to_string(),
+                                    event_type: GrpcEventType::Info,
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                     let response_message = msg.into_inner();
                     let content = match connection
@@ -630,83 +641,88 @@ async fn cmd_grpc_go<R: Runtime>(
                         Ok(content) => content,
                         Err(err) => {
                             app_handle
-                                .db()
-                                .upsert_grpc_event(
-                                    &GrpcEvent {
-                                        content: "Failed to read response".to_string(),
-                                        error: Some(err.to_string()),
-                                        status: Some(Code::Internal as i32),
-                                        event_type: GrpcEventType::ConnectionEnd,
-                                        ..base_event.clone()
-                                    },
-                                    &UpdateSource::from_window_label(window.label()),
-                                )
+                                .with_tx(|tx| {
+                                    tx.upsert_grpc_event(
+                                        &GrpcEvent {
+                                            content: "Failed to read response".to_string(),
+                                            error: Some(err.to_string()),
+                                            status: Some(Code::Internal as i32),
+                                            event_type: GrpcEventType::ConnectionEnd,
+                                            ..base_event.clone()
+                                        },
+                                        &UpdateSource::from_window_label(window.label()),
+                                    )
+                                })
                                 .unwrap();
                             return;
                         }
                     };
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &GrpcEvent {
-                                content,
-                                event_type: GrpcEventType::ServerMessage,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    content,
+                                    event_type: GrpcEventType::ServerMessage,
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &GrpcEvent {
-                                content: "Connection complete".to_string(),
-                                event_type: GrpcEventType::ConnectionEnd,
-                                status: Some(Code::Ok as i32),
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    content: "Connection complete".to_string(),
+                                    event_type: GrpcEventType::ConnectionEnd,
+                                    status: Some(Code::Ok as i32),
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                 }
                 Some(Err(yaak_grpc::error::Error::GrpcStreamError(e))) => {
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &(match e.status {
-                                Some(s) => GrpcEvent {
-                                    error: Some(s.message().to_string()),
-                                    status: Some(s.code() as i32),
-                                    content: "Request failed".to_string(),
-                                    metadata: metadata_to_map(s.metadata().clone()),
-                                    event_type: GrpcEventType::ConnectionEnd,
-                                    ..base_event.clone()
-                                },
-                                None => GrpcEvent {
-                                    error: Some(e.message),
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &(match e.status {
+                                    Some(s) => GrpcEvent {
+                                        error: Some(s.message().to_string()),
+                                        status: Some(s.code() as i32),
+                                        content: "Request failed".to_string(),
+                                        metadata: metadata_to_map(s.metadata().clone()),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                    None => GrpcEvent {
+                                        error: Some(e.message),
+                                        status: Some(Code::Unknown as i32),
+                                        content: "Request failed".to_string(),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                }),
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
+                        .unwrap();
+                }
+                Some(Err(e)) => {
+                    app_handle
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    error: Some(e.to_string()),
                                     status: Some(Code::Unknown as i32),
                                     content: "Request failed".to_string(),
                                     event_type: GrpcEventType::ConnectionEnd,
                                     ..base_event.clone()
                                 },
-                            }),
-                            &UpdateSource::from_window_label(window.label()),
-                        )
-                        .unwrap();
-                }
-                Some(Err(e)) => {
-                    app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &GrpcEvent {
-                                error: Some(e.to_string()),
-                                status: Some(Code::Unknown as i32),
-                                content: "Request failed".to_string(),
-                                event_type: GrpcEventType::ConnectionEnd,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                 }
                 None => {
@@ -717,64 +733,67 @@ async fn cmd_grpc_go<R: Runtime>(
             let mut stream = match maybe_stream {
                 Some(Ok(stream)) => {
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &GrpcEvent {
-                                metadata: metadata_to_map(stream.metadata().clone()),
-                                content: if stream.metadata().len() == 0 {
-                                    "Received response"
-                                } else {
-                                    "Received response with metadata"
-                                }
-                                .to_string(),
-                                event_type: GrpcEventType::Info,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    metadata: metadata_to_map(stream.metadata().clone()),
+                                    content: if stream.metadata().len() == 0 {
+                                        "Received response"
+                                    } else {
+                                        "Received response with metadata"
+                                    }
+                                    .to_string(),
+                                    event_type: GrpcEventType::Info,
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                     stream.into_inner()
                 }
                 Some(Err(yaak_grpc::error::Error::GrpcStreamError(e))) => {
                     warn!("GRPC stream error {e:?}");
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &(match e.status {
-                                Some(s) => GrpcEvent {
-                                    error: Some(s.message().to_string()),
-                                    status: Some(s.code() as i32),
-                                    content: "Stream failed".to_string(),
-                                    metadata: metadata_to_map(s.metadata().clone()),
-                                    event_type: GrpcEventType::ConnectionEnd,
-                                    ..base_event.clone()
-                                },
-                                None => GrpcEvent {
-                                    error: Some(e.message),
-                                    status: Some(Code::Unknown as i32),
-                                    content: "Stream failed".to_string(),
-                                    event_type: GrpcEventType::ConnectionEnd,
-                                    ..base_event.clone()
-                                },
-                            }),
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &(match e.status {
+                                    Some(s) => GrpcEvent {
+                                        error: Some(s.message().to_string()),
+                                        status: Some(s.code() as i32),
+                                        content: "Stream failed".to_string(),
+                                        metadata: metadata_to_map(s.metadata().clone()),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                    None => GrpcEvent {
+                                        error: Some(e.message),
+                                        status: Some(Code::Unknown as i32),
+                                        content: "Stream failed".to_string(),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                }),
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                     return;
                 }
                 Some(Err(e)) => {
                     app_handle
-                        .db()
-                        .upsert_grpc_event(
-                            &GrpcEvent {
-                                error: Some(e.to_string()),
-                                status: Some(Code::Unknown as i32),
-                                content: "Stream failed".to_string(),
-                                event_type: GrpcEventType::ConnectionEnd,
-                                ..base_event.clone()
-                            },
-                            &UpdateSource::from_window_label(window.label()),
-                        )
+                        .with_tx(|tx| {
+                            tx.upsert_grpc_event(
+                                &GrpcEvent {
+                                    error: Some(e.to_string()),
+                                    status: Some(Code::Unknown as i32),
+                                    content: "Stream failed".to_string(),
+                                    event_type: GrpcEventType::ConnectionEnd,
+                                    ..base_event.clone()
+                                },
+                                &UpdateSource::from_window_label(window.label()),
+                            )
+                        })
                         .unwrap();
                     return;
                 }
@@ -791,65 +810,69 @@ async fn cmd_grpc_go<R: Runtime>(
                             Ok(message) => message,
                             Err(err) => {
                                 app_handle
-                                    .db()
-                                    .upsert_grpc_event(
-                                        &GrpcEvent {
-                                            content: "Failed to read response".to_string(),
-                                            error: Some(err.to_string()),
-                                            status: Some(Code::Internal as i32),
-                                            event_type: GrpcEventType::ConnectionEnd,
-                                            ..base_event.clone()
-                                        },
-                                        &UpdateSource::from_window_label(window.label()),
-                                    )
+                                    .with_tx(|tx| {
+                                        tx.upsert_grpc_event(
+                                            &GrpcEvent {
+                                                content: "Failed to read response".to_string(),
+                                                error: Some(err.to_string()),
+                                                status: Some(Code::Internal as i32),
+                                                event_type: GrpcEventType::ConnectionEnd,
+                                                ..base_event.clone()
+                                            },
+                                            &UpdateSource::from_window_label(window.label()),
+                                        )
+                                    })
                                     .unwrap();
                                 break;
                             }
                         };
                         app_handle
-                            .db()
-                            .upsert_grpc_event(
-                                &GrpcEvent {
-                                    content: message,
-                                    event_type: GrpcEventType::ServerMessage,
-                                    ..base_event.clone()
-                                },
-                                &UpdateSource::from_window_label(window.label()),
-                            )
+                            .with_tx(|tx| {
+                                tx.upsert_grpc_event(
+                                    &GrpcEvent {
+                                        content: message,
+                                        event_type: GrpcEventType::ServerMessage,
+                                        ..base_event.clone()
+                                    },
+                                    &UpdateSource::from_window_label(window.label()),
+                                )
+                            })
                             .unwrap();
                     }
                     Ok(None) => {
                         let trailers =
                             stream.trailers().await.unwrap_or_default().unwrap_or_default();
                         app_handle
-                            .db()
-                            .upsert_grpc_event(
-                                &GrpcEvent {
-                                    content: "Connection complete".to_string(),
-                                    status: Some(Code::Ok as i32),
-                                    metadata: metadata_to_map(trailers),
-                                    event_type: GrpcEventType::ConnectionEnd,
-                                    ..base_event.clone()
-                                },
-                                &UpdateSource::from_window_label(window.label()),
-                            )
+                            .with_tx(|tx| {
+                                tx.upsert_grpc_event(
+                                    &GrpcEvent {
+                                        content: "Connection complete".to_string(),
+                                        status: Some(Code::Ok as i32),
+                                        metadata: metadata_to_map(trailers),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                    &UpdateSource::from_window_label(window.label()),
+                                )
+                            })
                             .unwrap();
                         break;
                     }
                     Err(status) => {
                         app_handle
-                            .db()
-                            .upsert_grpc_event(
-                                &GrpcEvent {
-                                    content: "Stream failed".to_string(),
-                                    error: Some(status.message().to_string()),
-                                    status: Some(status.code() as i32),
-                                    metadata: metadata_to_map(status.metadata().clone()),
-                                    event_type: GrpcEventType::ConnectionEnd,
-                                    ..base_event.clone()
-                                },
-                                &UpdateSource::from_window_label(window.label()),
-                            )
+                            .with_tx(|tx| {
+                                tx.upsert_grpc_event(
+                                    &GrpcEvent {
+                                        content: "Stream failed".to_string(),
+                                        error: Some(status.message().to_string()),
+                                        status: Some(status.code() as i32),
+                                        metadata: metadata_to_map(status.metadata().clone()),
+                                        event_type: GrpcEventType::ConnectionEnd,
+                                        ..base_event.clone()
+                                    },
+                                    &UpdateSource::from_window_label(window.label()),
+                                )
+                            })
                             .unwrap();
                         break;
                     }
@@ -882,21 +905,24 @@ async fn cmd_grpc_go<R: Runtime>(
                     }).unwrap();
                 },
                 _ = cancelled_rx.changed() => {
-                    w.db().upsert_grpc_event(
-                        &GrpcEvent {
-                            content: "Cancelled".to_string(),
-                            event_type: GrpcEventType::ConnectionEnd,
-                            status: Some(Code::Cancelled as i32),
-                            ..base_msg.clone()
-                        },
-                        &UpdateSource::from_window_label(window.label()),
-                    ).unwrap();
+                    w.with_tx(|tx| {
+                        tx.upsert_grpc_event(
+                            &GrpcEvent {
+                                content: "Cancelled".to_string(),
+                                event_type: GrpcEventType::ConnectionEnd,
+                                status: Some(Code::Cancelled as i32),
+                                ..base_msg.clone()
+                            },
+                            &UpdateSource::from_window_label(window.label()),
+                        )
+                    })
+                    .unwrap();
                     w.with_tx(|c| {
                         c.upsert_grpc_connection(
                             &GrpcConnection{
-                            elapsed: start.elapsed().as_millis() as i32,
-                            status: Code::Cancelled as i32,
-                            state: GrpcConnectionState::Closed,
+                                elapsed: start.elapsed().as_millis() as i32,
+                                status: Code::Cancelled as i32,
+                                state: GrpcConnectionState::Closed,
                                 ..c.get_grpc_connection( &conn_id).unwrap().clone()
                             },
                             &UpdateSource::from_window_label(window.label()),
@@ -983,10 +1009,11 @@ async fn cmd_http_response_body<R: Runtime>(
         .ok_or(GenericError("Failed to find response body".to_string()))?;
 
     match filter {
-        Some(filter) if !filter.is_empty() => Ok(plugins_ext::plugin_manager(&window)
-            .await?
-            .filter_data(&window.plugin_context(), filter, &body, content_type)
-            .await?),
+        Some(filter) if !filter.is_empty() => {
+            let language = yaak_filter::Language::for_content_type(content_type);
+            let result = yaak_filter::filter(language, &body, filter);
+            Ok(FilterResponse { content: result.content, error: result.error })
+        }
         _ => Ok(FilterResponse { content: body, error: None }),
     }
 }
@@ -1020,18 +1047,11 @@ async fn cmd_get_sse_events<R: Runtime>(
 
 async fn cmd_import_data<R: Runtime>(
     window: WebviewWindow<R>,
-    file_path: &str,
+    file_paths: &[String],
+    urls: &[String],
     destination: ImportDestination,
 ) -> YaakResult<ImportPlan> {
-    plan_import_data(&window, file_path, destination).await
-}
-
-async fn cmd_import_url<R: Runtime>(
-    window: WebviewWindow<R>,
-    url: &str,
-    destination: ImportDestination,
-) -> YaakResult<ImportPlan> {
-    plan_import_url(&window, url, destination).await
+    plan_import_data(&window, file_paths, urls, destination).await
 }
 
 async fn cmd_commit_import<R: Runtime>(
@@ -1040,20 +1060,6 @@ async fn cmd_commit_import<R: Runtime>(
 ) -> YaakResult<BatchUpsertResult> {
     commit_import(&window, plan)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /// Decodes base64 and writes the bytes to a file the user picked.
 ///
@@ -1088,15 +1094,17 @@ async fn cmd_send_http_request<R: Runtime>(
     let request = app_handle.db().get_http_request(&request_id)?;
 
     let blobs = app_handle.blob_manager();
-    let response = app_handle.db().upsert_http_response(
-        &HttpResponse {
-            request_id: request.id.clone(),
-            workspace_id: request.workspace_id.clone(),
-            ..Default::default()
-        },
-        &UpdateSource::from_window_label(window.label()),
-        &blobs,
-    )?;
+    let response = app_handle.with_tx(|tx| {
+        tx.upsert_http_response(
+            &HttpResponse {
+                request_id: request.id.clone(),
+                workspace_id: request.workspace_id.clone(),
+                ..Default::default()
+            },
+            &UpdateSource::from_window_label(window.label()),
+            &blobs,
+        )
+    })?;
 
     let (cancel_tx, mut cancel_rx) = tokio::sync::watch::channel(false);
     app_handle.listen_any(format!("cancel_http_response_{}", response.id), move |_event| {
@@ -1134,21 +1142,22 @@ async fn cmd_send_http_request<R: Runtime>(
         Ok(sent) => sent.response,
         Err(e) => {
             let resp = app_handle.db().get_http_response(&response.id)?;
-            app_handle.db().upsert_http_response(
-                &HttpResponse {
-                    state: HttpResponseState::Closed,
-                    error: Some(e.to_string()),
-                    ..resp
-                },
-                &UpdateSource::from_window_label(window.label()),
-                &blobs,
-            )?
+            app_handle.with_tx(|tx| {
+                tx.upsert_http_response(
+                    &HttpResponse {
+                        state: HttpResponseState::Closed,
+                        error: Some(e.to_string()),
+                        ..resp
+                    },
+                    &UpdateSource::from_window_label(window.label()),
+                    &blobs,
+                )
+            })?
         }
     };
 
     Ok(r)
 }
-
 
 async fn cmd_new_child_window<R: Runtime>(
     parent_window: WebviewWindow<R>,
@@ -1277,8 +1286,8 @@ pub fn run() {
         .setup(|app| {
             let lifecycle_host = yaak_lifecycle::Host::owner()
                 .with_responses_dir(app.path().app_data_dir()?.join("responses"));
-            if let Err(e) =
-                yaak_lifecycle::on_launch(&lifecycle_host, &app.db(), &app.blob_manager())
+            if let Err(e) = app
+                .with_tx(|tx| yaak_lifecycle::on_launch(&lifecycle_host, tx, &app.blob_manager()))
             {
                 error!("on_launch hook failed: {e:?}");
             }
