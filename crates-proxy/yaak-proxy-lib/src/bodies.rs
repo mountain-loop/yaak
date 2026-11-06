@@ -77,7 +77,9 @@ pub async fn read_body(
     body: FlowBody,
     limit: usize,
 ) -> Result<DecodedBody, String> {
-    if from_messages(flow, body) {
+    // An encoded stream whose bytes never decoded into messages kept its bytes instead.
+    let stored = blobs.connect().body_exists(&Flow::body_id(&flow.id, body)).unwrap_or(false);
+    if from_messages(flow, body) && !stored {
         return message_body(db, blobs, flow, body, limit);
     }
     let raw = read_raw_body(blobs, &flow.id, body)?;
@@ -182,7 +184,8 @@ fn message_body(
                 }
                 MessageKind::GrpcTrailers if trailers_in_body => {
                     let payload = messages::payload(db, blobs, &message)?;
-                    grpc_frame(&mut out, 0x80, &payload);
+                    let compressed = u8::from(message.compressed && message.error.is_some());
+                    grpc_frame(&mut out, 0x80 | compressed, &payload);
                 }
                 _ => continue,
             }

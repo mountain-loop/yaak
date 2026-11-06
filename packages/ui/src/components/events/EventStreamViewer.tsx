@@ -396,9 +396,14 @@ function StreamEventDetail({
     body = <Banner color="danger">{payload.error}</Banner>;
   } else if (payload.loading) {
     body = null;
-  } else if (bytes == null || bytes.length === 0) {
+  } else if (
+    (bytes == null || bytes.length === 0) &&
+    (extraViews == null || view?.type !== "text")
+  ) {
+    // An empty payload has nothing to show as text or bytes; a decode of one may (an empty
+    // protobuf message is its defaults)
     body = <EmptyStateText>No Content</EmptyStateText>;
-  } else if (!showLarge && bytes.length > LARGE_PAYLOAD) {
+  } else if (!showLarge && bytes != null && bytes.length > LARGE_PAYLOAD) {
     body = (
       <VStack space={2} className="italic text-text-subtlest">
         Message previews larger than 1MB are hidden
@@ -409,7 +414,7 @@ function StreamEventDetail({
         </div>
       </VStack>
     );
-  } else if (view?.type === "hexdump") {
+  } else if (view?.type === "hexdump" && bytes != null) {
     body = <HexdumpViewer data={bytes} renderEditor={(props) => <Editor {...props} />} />;
   } else if (text.error != null) {
     body = <Banner color="danger">{text.error}</Banner>;

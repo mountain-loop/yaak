@@ -1494,12 +1494,20 @@ struct InFlight {
 
 impl InFlight {
     /// Stops writing the bodies its stream's messages carry, which are read back from them.
+    /// One whose bytes come encoded is kept until its first message shows they decode, as a
+    /// body that fails to has only its bytes to show.
     fn drop_message_bodies(&mut self) {
-        if bodies::from_messages(&self.flow, FlowBody::Request) {
-            self.request_body = None;
+        for which in [FlowBody::Request, FlowBody::Response] {
+            if bodies::from_messages(&self.flow, which) && !encoded(&self.flow, which) {
+                *self.body_writer(which) = None;
+            }
         }
-        if bodies::from_messages(&self.flow, FlowBody::Response) {
-            self.response_body = None;
+    }
+
+    fn body_writer(&mut self, which: FlowBody) -> &mut Option<BodyChunkWriter> {
+        match which {
+            FlowBody::Request => &mut self.request_body,
+            FlowBody::Response => &mut self.response_body,
         }
     }
 
@@ -1838,6 +1846,30 @@ impl FlowSink {
             rows.push((id, message, inline));
         }
 
+        // An encoded body's messages decoded: they are its record now, and the bytes kept until
+        // they did are not kept.
+        let mut decoded_bodies = Vec::new();
+        for (id, message, _) in &rows {
+            let Some(f) = in_flight.get_mut(id) else {
+                continue;
+            };
+            let which = match message.direction {
+                messages::MessageDirection::Client => FlowBody::Request,
+                messages::MessageDirection::Server => FlowBody::Response,
+            };
+            if bodies::from_messages(&f.flow, which) && f.body_writer(which).take().is_some() {
+                decoded_bodies.push(Flow::body_id(&f.flow.id, which));
+            }
+        }
+        if !decoded_bodies.is_empty() {
+            let deleted = self
+                .blobs
+                .with_tx(|b| decoded_bodies.iter().try_for_each(|id| b.delete_chunks(id)));
+            if let Err(e) = deleted {
+                warn!("Failed to delete a stream's body bytes: {e}");
+            }
+        }
+
         let mut orphaned = Vec::new();
         let mut newly_cleared = Vec::new();
         let written = self.db.with_tx(|ctx| {
@@ -1983,6 +2015,12 @@ impl FlowSink {
             warn!("Failed to delete a cleared flow's bodies: {e}");
         }
     }
+}
+
+/// The body names a Content-Encoding.
+fn encoded(flow: &Flow, which: FlowBody) -> bool {
+    find_header(flow.headers(which), "content-encoding")
+        .is_some_and(|e| !e.trim().is_empty() && !e.trim().eq_ignore_ascii_case("identity"))
 }
 
 fn flow_exists(conn: &rusqlite::Connection, flow_id: &str) -> bool {
@@ -2265,6 +2303,85 @@ mod tests {
         assert!(response_body.truncated);
         let har = har::export(&ctx.db, &ctx.blobs, &[flow], 1 << 20).await.unwrap();
         assert_eq!(har.log.entries[0].response.content.size, 10);
+    }
+
+    /// A gzipped event stream keeps its bytes until an event shows they decode; one whose bytes
+    /// never do keeps them, so its body still reads, with why it didn't decode.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn encoded_event_streams_keep_their_bytes_until_they_decode() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        for (id, url) in [
+            (1, "https://a.example.com/events"),
+            (2, "https://b.example.com/events"),
+        ] {
+            tx.send(ProxyEvent::RequestStart {
+                id,
+                started_at: SystemTime::now(),
+                method: "GET".into(),
+                url: url.into(),
+                http_version: "HTTP/1.1".into(),
+                connection: id,
+                client_addr: "127.0.0.1:1".parse().unwrap(),
+            })
+            .unwrap();
+            tx.send(ProxyEvent::ResponseStart {
+                id,
+                status: 200,
+                http_version: "HTTP/1.1".into(),
+                remote_addr: None,
+                elapsed_ms: 1,
+            })
+            .unwrap();
+            for (name, value) in [
+                ("content-type", "text/event-stream"),
+                ("content-encoding", "gzip"),
+            ] {
+                let (name, value) = (name.into(), value.into());
+                tx.send(ProxyEvent::ResponseHeader { id, name, value }).unwrap();
+            }
+            tx.send(ProxyEvent::StreamStart { id, kind: yaak_proxy::StreamKind::Sse }).unwrap();
+            let data = bytes::Bytes::from_static(b"\x1f\x8b not really gzip");
+            tx.send(ProxyEvent::ResponseBodyChunk { id, len: data.len(), data }).unwrap();
+        }
+        // The first one's bytes decoded into an event; the second's never did.
+        let raw = "data: hi\n\n".to_string();
+        let event = K::SseEvent { event: None, id: None, retry: None, raw: raw.clone() };
+        let mut message = ws_message(1, D::Server, event, b"hi");
+        if let ProxyEvent::Message { message, .. } = &mut message {
+            message.size = raw.len() as u64;
+        }
+        tx.send(message).unwrap();
+        for id in [1, 2] {
+            tx.send(ProxyEvent::ResponseBodyComplete {
+                id,
+                size: 20,
+                truncated: false,
+                elapsed_ms: 5,
+                error: None,
+                cancelled: false,
+            })
+            .unwrap();
+        }
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let flows = flows::list(&ctx.db, &Default::default()).unwrap();
+        let flow = |host: &str| flows.iter().find(|f| f.url.contains(host)).unwrap().clone();
+        let (decoded, undecoded) = (flow("a.example"), flow("b.example"));
+        let blobs = ctx.blobs.connect();
+        assert!(!blobs.body_exists(&Flow::body_id(&decoded.id, FlowBody::Response)).unwrap());
+        assert!(blobs.body_exists(&Flow::body_id(&undecoded.id, FlowBody::Response)).unwrap());
+
+        let read =
+            |flow| bodies::read_body_or_raw(&ctx.db, &ctx.blobs, flow, FlowBody::Response, 1024);
+        assert_eq!(read(&decoded).await.unwrap().data, raw.as_bytes());
+        let body = read(&undecoded).await.unwrap();
+        assert_eq!(body.data, b"\x1f\x8b not really gzip");
+        assert!(body.decode_error.is_some());
     }
 
     #[tokio::test(flavor = "multi_thread")]

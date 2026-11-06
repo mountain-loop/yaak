@@ -4,7 +4,7 @@ import type {
   GetMessagePayloadResponse,
   ListMessagesResponse,
 } from "@yaakapp-internal/proxy-lib";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { mergeMessages } from "../lib/messages";
 import { listen, rpc } from "../lib/rpc";
 
@@ -50,7 +50,9 @@ interface State {
  * and added as each is written. A message that does not follow on from the last one held (one
  * written while a page loaded) reads the pages after it instead.
  */
-export function useFlowMessages(flowId: string, source: MessageSource) {
+export function useFlowMessages(flowId: string, source: MessageSource, messageCount: number) {
+  // Reads what's after the last message held, for a count that says there's more
+  const readMore = useRef<(() => void) | null>(null);
   const [state, setState] = useState<State>({
     flowId,
     messages: [],
@@ -106,6 +108,7 @@ export function useFlowMessages(flowId: string, source: MessageSource) {
     };
 
     setState({ flowId, messages: [], loading: true, error: null });
+    readMore.current = () => void readAfter();
     void readAfter();
     const unsubscribe = source.subscribe((message) => {
       if (message.flowId !== flowId) return;
@@ -124,6 +127,13 @@ export function useFlowMessages(flowId: string, source: MessageSource) {
       unsubscribe();
     };
   }, [flowId, source]);
+
+  // A message written before the subscription took hold is in neither the first page nor its
+  // events; the flow's count, written after its messages, says it's there to read.
+  const held = state.flowId === flowId ? state.messages.length : 0;
+  useEffect(() => {
+    if (messageCount > held) readMore.current?.();
+  }, [held, messageCount]);
 
   // Another flow's, until the effect has started over for this one
   return state.flowId === flowId ? state : { flowId, messages: [], loading: true, error: null };

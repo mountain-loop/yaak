@@ -41,7 +41,7 @@ const GRPC_COLUMNS: EventStreamColumns = {
  */
 export function FlowMessages({ flow }: { flow: Flow }) {
   const source = useMessageSource();
-  const { messages, loading, error } = useFlowMessages(flow.id, source);
+  const { messages, loading, error } = useFlowMessages(flow.id, source, flow.messageCount);
   const events = useMemo(() => messages.map(messageToStreamEvent), [messages]);
   const kind = flow.streamKind;
   const grpc = kind === "grpc" || kind === "grpc_web";
