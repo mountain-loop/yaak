@@ -445,8 +445,9 @@ impl AsyncWrite for NwStream {
 
 /// How long an open that went through a proxy on this Mac marks its target as the engine's own.
 const OWN_FALLBACK_WINDOW: Duration = Duration::from_secs(10);
-/// Longest wait in [`is_own_fallback`] for an open of the same target to finish.
-const OWN_FALLBACK_WAIT: Duration = Duration::from_secs(30);
+/// Longest wait in [`is_own_fallback`] for the opens of the same target to finish, all together.
+/// The engine's own fallback finishes within milliseconds of the engine answering its `CONNECT`.
+const OWN_FALLBACK_WAIT: Duration = Duration::from_secs(2);
 
 /// One open by [`connect`] that is under way, or recently went through a proxy on this Mac.
 struct Attempt {
@@ -509,19 +510,28 @@ impl Drop for AttemptGuard {
 /// Whether a `CONNECT` to `host:port` may be one of the engine's own connections that fell back
 /// to the system proxy, which is this engine: an open of the same target went through a proxy on
 /// this Mac. Waits for opens of it that are under way, since the one that sent the `CONNECT`
-/// finishes as soon as the engine answers it. An open that went direct never sent one.
+/// finishes as soon as the engine answers it. An open that went direct never sent one. They are
+/// watched together, up to [`OWN_FALLBACK_WAIT`] in all: the first through a local proxy answers
+/// yes, and once every one has finished without, no.
 pub(crate) async fn is_own_fallback(host: &str, port: u16) -> bool {
     let pending = {
         let mut attempts = ATTEMPTS.lock().unwrap();
         prune_attempts(&mut attempts);
         attempts.get(&attempt_key(host, port)).cloned().unwrap_or_default()
     };
+    let mut outcomes = tokio::task::JoinSet::new();
     for attempt in pending {
         let mut outcome = attempt.outcome.subscribe();
-        let finished = tokio::time::timeout(OWN_FALLBACK_WAIT, outcome.wait_for(Option::is_some));
-        if let Ok(Ok(outcome)) = finished.await
-            && *outcome == Some(true)
-        {
+        outcomes.spawn(async move {
+            outcome.wait_for(Option::is_some).await.is_ok_and(|o| *o == Some(true))
+        });
+    }
+    let deadline = tokio::time::Instant::now() + OWN_FALLBACK_WAIT;
+    // Dropping the set at the end aborts the waits still running.
+    while let Ok(Some(via_local_proxy)) =
+        tokio::time::timeout_at(deadline, outcomes.join_next()).await
+    {
+        if via_local_proxy.unwrap_or(false) {
             return true;
         }
     }
@@ -1002,6 +1012,38 @@ mod tests {
         assert!(!is_own_fallback("localhost", addr.port()).await);
         drop(stream);
         assert!(!is_own_fallback("localhost", addr.port()).await);
+    }
+
+    /// Opens of the same target that never finish, perhaps other clients' to a slow host, hold a
+    /// new tunnel up for one wait in all, not one each.
+    #[tokio::test]
+    async fn pending_opens_are_waited_for_together() {
+        const HOST: &str = "yaak-proxy-test-pending.invalid";
+        let guards: Vec<_> = (0..3).map(|_| AttemptGuard::start(HOST, 80)).collect();
+
+        let started = std::time::Instant::now();
+        assert!(!is_own_fallback(HOST, 80).await);
+        let waited = started.elapsed();
+        assert!(waited >= OWN_FALLBACK_WAIT, "{waited:?}");
+        assert!(waited < OWN_FALLBACK_WAIT * 3 / 2, "{waited:?}");
+        drop(guards);
+    }
+
+    /// The first open through a local proxy answers, whatever the others are doing.
+    #[tokio::test]
+    async fn an_own_fallback_among_pending_opens_answers_at_once() {
+        const HOST: &str = "yaak-proxy-test-own-among-pending.invalid";
+        let slow = [AttemptGuard::start(HOST, 80), AttemptGuard::start(HOST, 80)];
+        let own = AttemptGuard::start(HOST, 80);
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            own.finish(true);
+        });
+
+        let started = std::time::Instant::now();
+        assert!(is_own_fallback(HOST, 80).await);
+        assert!(started.elapsed() < OWN_FALLBACK_WAIT / 2, "{:?}", started.elapsed());
+        drop(slow);
     }
 
     #[test]
