@@ -18,6 +18,7 @@ import { showPrompt } from "../lib/prompt";
 import { useDetailsBannerStoredValue } from "./core/DetailsBanner";
 import { Editor } from "./core/Editor/LazyEditor";
 import { Input } from "./core/Input";
+import { Select } from "./core/Select";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { MultipartViewer } from "./responseViewers/MultipartViewer";
 import { TextViewer } from "./responseViewers/TextViewer";
@@ -79,6 +80,7 @@ function PdfRequestBody({ body }: { body: HttpBodyLoader }) {
 const clientEditorHost: EditorHost = {
   Editor,
   Input,
+  Select,
   SelectFile,
   showDialog,
   showPrompt,

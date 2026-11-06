@@ -32,6 +32,7 @@ export type {
   HostEditorLanguage,
   HostEditorProps,
   HostInputProps,
+  HostSelectProps,
   HostPromptArgs,
   SelectFileProps,
   StoredValueNamespace,
@@ -41,6 +42,23 @@ export type {
 } from "./components/EditorHost";
 export { EditorHostProvider, useEditorHost } from "./components/EditorHost";
 export { EmptyStateText } from "./components/EmptyStateText";
+export { AutoScroller } from "./components/events/AutoScroller";
+export type {
+  EventStreamColumns,
+  EventStreamViewerProps,
+} from "./components/events/EventStreamViewer";
+export { EventStreamViewer, payloadText } from "./components/events/EventStreamViewer";
+export type { EventDetailAction } from "./components/events/EventViewer";
+export { EventDetailHeader, EventViewer } from "./components/events/EventViewer";
+export { EventViewerRow } from "./components/events/EventViewerRow";
+export type {
+  StreamEvent,
+  StreamEventDirection,
+  StreamPayload,
+  StreamPayloadText,
+  StreamPayloadView,
+} from "./components/events/streamEvents";
+export { eventDeltas, formatEventDelta, formatEventTime } from "./components/events/streamEvents";
 export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
 export { FormMultipartEditor } from "./components/http/FormMultipartEditor";
 export { FormUrlencodedEditor } from "./components/http/FormUrlencodedEditor";
@@ -55,7 +73,10 @@ export {
   REQUEST_TAB_PARAMS,
   RequestBodyEditor,
 } from "./components/http/HttpRequestPaneView";
-export type { ExtraPaneTab, HttpResponsePaneViewProps } from "./components/http/HttpResponsePaneView";
+export type {
+  ExtraPaneTab,
+  HttpResponsePaneViewProps,
+} from "./components/http/HttpResponsePaneView";
 export {
   HttpResponsePaneView,
   RESPONSE_TAB_BODY,
@@ -97,11 +118,10 @@ export { PairEditor, PairEditorRow } from "./components/pairs/PairEditor";
 export { ensurePairId } from "./components/pairs/PairEditor.util";
 export { PairOrBulkEditor } from "./components/pairs/PairOrBulkEditor";
 export { PillButton } from "./components/PillButton";
-export type {
-  RadioDropdownItem,
-  RadioDropdownProps,
-} from "./components/RadioDropdown";
+export type { RadioDropdownItem, RadioDropdownProps } from "./components/RadioDropdown";
 export { RadioDropdown } from "./components/RadioDropdown";
+export type { SelectProps } from "./components/Select";
+export { Select } from "./components/Select";
 export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
 export { ErrorBoundary } from "./components/ErrorBoundary";
 export { FormattedError } from "./components/FormattedError";

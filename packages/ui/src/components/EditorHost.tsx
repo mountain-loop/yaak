@@ -17,6 +17,8 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { LazyCodeEditor } from "./editor/LazyCodeEditor";
 import type { InputProps } from "./Input";
 import { Input } from "./Input";
+import type { SelectProps } from "./Select";
+import { Select } from "./Select";
 
 export type GenericCompletion = GenericCompletionOption & {
   apply?: Completion["apply"];
@@ -61,6 +63,9 @@ export type HostInputProps = Omit<
     showOptionsPicker?: boolean;
   };
 
+/** A select of string values, as the shared components draw one */
+export type HostSelectProps = SelectProps<string>;
+
 export type SelectFileProps = Omit<ButtonProps, "type" | "onChange"> & {
   onChange: (value: { filePath: string | null; contentType: string | null }) => void;
   filePath: string | null;
@@ -101,6 +106,8 @@ export type UseHostStoredValue = <T extends StoredValue>(
 export interface EditorHost {
   Editor: ComponentType<HostEditorProps>;
   Input: ComponentType<HostInputProps>;
+  /** A select, as the app draws them (the client uses the system's own on macOS) */
+  Select: ComponentType<HostSelectProps>;
   SelectFile: ComponentType<SelectFileProps> | null;
   showDialog: ((args: HostDialogArgs) => void) | null;
   showPrompt: ((args: HostPromptArgs) => Promise<string | null>) | null;
@@ -143,6 +150,7 @@ const defaultEditorHost: EditorHost = {
   },
   Editor: PlainEditor,
   Input: PlainInputEditor,
+  Select,
   SelectFile: null,
   showDialog: null,
   showPrompt: null,

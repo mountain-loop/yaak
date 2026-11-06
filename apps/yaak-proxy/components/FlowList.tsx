@@ -3,6 +3,7 @@ import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
+  CountBadge,
   formatMillis,
   HttpMethodTagRaw,
   HttpStatusTagRaw,
@@ -360,9 +361,14 @@ const FlowRow = memo(function FlowRow({
       )}
       <HttpMethodTagRaw method={flow.method} short colored />
       <span className="text-text-subtle">{host}</span>
-      <span>
-        {path}
-        <span className="text-text-subtlest">{query}</span>
+      <span className="flex items-center">
+        <span className="truncate">
+          {path}
+          <span className="text-text-subtlest">{query}</span>
+        </span>
+        {flow.streamKind != null && (
+          <CountBadge count={flow.messageCount} color="info" showZero className="shrink-0 mb-0!" />
+        )}
       </span>
       {flow.cancelled && flow.status == null ? (
         <span className="font-mono text-text-subtlest">--</span>
