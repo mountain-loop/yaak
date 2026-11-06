@@ -25,8 +25,6 @@ export interface SelectProps<T extends string> {
   className?: string;
   disabled?: boolean;
   filterable?: boolean;
-  /** Use the system's own `<select>`; by default on macOS, unless `filterable` */
-  native?: boolean;
 }
 
 /** On macOS, where the host can say; an app with no platform host (the proxy) says no */
@@ -53,7 +51,6 @@ export function Select<T extends string>({
   className,
   defaultValue,
   filterable,
-  native,
   size = "md",
 }: SelectProps<T>) {
   const [focused, setFocused] = useState<boolean>(false);
@@ -78,7 +75,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName} help={help}>
         {label}
       </Label>
-      {(native ?? isMacOs()) && !filterable ? (
+      {isMacOs() && !filterable ? (
         <HStack
           space={2}
           className={classNames(

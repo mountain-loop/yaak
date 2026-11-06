@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import { payloadText, StreamEventRow } from "./EventStreamViewer";
 import type { StreamEvent } from "./streamEvents";
+
+// The detail header's select asks the platform which OS it runs on
+vi.mock("@yaakapp-internal/platform", () => ({ platform: { osType: () => "macos" } }));
 
 const event: StreamEvent = {
   key: "3",
