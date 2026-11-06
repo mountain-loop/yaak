@@ -95,18 +95,20 @@ impl ContentDecoder {
     }
 
     /// Decompresses `input`, handing the output on to `out` a piece at a time.
-    pub(crate) fn feed(
-        &mut self,
-        mut input: &[u8],
-        out: &mut impl FnMut(&[u8]),
-    ) -> Result<(), String> {
+    pub(crate) fn feed(&mut self, input: &[u8], out: &mut impl FnMut(&[u8])) -> Result<(), String> {
+        self.feed_inner(input, out)?;
+        // Kept only until the body gives output; empty deflate blocks can go on without end,
+        // and what is kept for them cannot.
+        if self.zlib && !self.started && self.unframed.len() > self.unframed_limit {
+            self.unframed = Vec::new();
+            return Err("No output from the deflate body within the capture limit".into());
+        }
+        Ok(())
+    }
+
+    fn feed_inner(&mut self, mut input: &[u8], out: &mut impl FnMut(&[u8])) -> Result<(), String> {
         if self.zlib && !self.started {
             self.unframed.extend_from_slice(input);
-            // Empty deflate blocks can go on without end; what is kept for them cannot.
-            if self.unframed.len() > self.unframed_limit {
-                self.unframed = Vec::new();
-                return Err("No output from the deflate body within the capture limit".into());
-            }
         }
         let mut buf = [0u8; PIECE];
         loop {
@@ -157,7 +159,7 @@ impl ContentDecoder {
                     self.decompress = Decompress::new(false);
                     self.zlib = false;
                     let replay = std::mem::take(&mut self.unframed);
-                    return self.feed(&replay, out);
+                    return self.feed_inner(&replay, out);
                 }
                 Err(e) => return Err(e.to_string()),
             };
@@ -321,6 +323,21 @@ mod tests {
         }
         assert!(result.is_err(), "stopped once past the limit");
         assert!(decoder.unframed.len() <= 1024);
+    }
+
+    #[test]
+    fn a_chunk_past_the_limit_is_decoded_when_it_gives_output() {
+        let text = b"data: tick\n\n".repeat(400);
+        let mut zlib = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::none());
+        zlib.write_all(&text).unwrap();
+        let body = zlib.finish().unwrap();
+        assert!(body.len() > 1024);
+        let Decoding::Decoder(mut decoder) = Decoding::new(Some("deflate"), 1024) else {
+            panic!()
+        };
+        let mut out = Vec::new();
+        decoder.feed(&body, &mut |piece| out.extend_from_slice(piece)).unwrap();
+        assert_eq!(out, text);
     }
 
     #[test]
