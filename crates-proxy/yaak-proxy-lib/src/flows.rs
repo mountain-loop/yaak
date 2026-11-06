@@ -35,6 +35,9 @@ pub struct FlowFilter {
     /// tells them by their executable.
     #[ts(optional)]
     pub system: Option<bool>,
+    /// Only HTTPS connections tunnelled undecrypted (true), or none of them (false).
+    #[ts(optional)]
+    pub tunnelled: Option<bool>,
     /// Only flows one of these groups covers, each judged on its own: several sidebar rows
     /// selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
     /// pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
@@ -78,6 +81,11 @@ impl FlowFilter {
                         .map(|v| v.parse().map_err(|_| format!("Invalid system {v:?}")))
                         .transpose()?
                 }
+                "tunnelled" => {
+                    filter.tunnelled = value
+                        .map(|v| v.parse().map_err(|_| format!("Invalid tunnelled {v:?}")))
+                        .transpose()?
+                }
                 "method" => filter.method = value,
                 "status" => filter.status = value,
                 "after" => filter.after = value,
@@ -97,7 +105,13 @@ impl FlowFilter {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         let limit = self.limit.map(|l| l.to_string());
         let system = self.system.map(|s| s.to_string());
-        for (key, value) in [("q", &self.q), ("host", &self.host), ("system", &system)] {
+        let tunnelled = self.tunnelled.map(|t| t.to_string());
+        for (key, value) in [
+            ("q", &self.q),
+            ("host", &self.host),
+            ("system", &system),
+            ("tunnelled", &tunnelled),
+        ] {
             if let Some(value) = value {
                 query.append_pair(key, value);
             }
@@ -131,6 +145,7 @@ impl FlowFilter {
             || self.under.is_some()
             || self.app.is_some()
             || self.system.is_some()
+            || self.tunnelled.is_some()
             || self.any.as_ref().is_some_and(|groups| groups.iter().any(FlowFilter::narrows))
     }
 
@@ -138,12 +153,17 @@ impl FlowFilter {
     /// for the database `conn` reads, which may be from before the folder or gRPC columns, when
     /// read without migrating.
     fn condition_in(&self, conn: &rusqlite::Connection) -> (String, Vec<Value>) {
-        self.condition(has_column(conn, "client_cwd"), has_column(conn, "grpc_status"))
+        let columns = Columns {
+            cwd: has_column(conn, "client_cwd"),
+            grpc: has_column(conn, "grpc_status"),
+            tunnelled: has_column(conn, "tunnelled"),
+        };
+        self.condition(columns)
     }
 
-    /// [`Self::condition_in`], told which of the later columns the database has: `has_cwd`,
-    /// the folder a program ran in, and `grpc`, gRPC statuses.
-    fn condition(&self, has_cwd: bool, grpc: bool) -> (String, Vec<Value>) {
+    /// [`Self::condition_in`], told which of the later columns the database has.
+    fn condition(&self, columns: Columns) -> (String, Vec<Value>) {
+        let Columns { cwd: has_cwd, grpc, tunnelled } = columns;
         let mut sql = String::from("1");
         let mut params: Vec<Value> = Vec::new();
         for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
@@ -209,11 +229,18 @@ impl FlowFilter {
             Some(false) => sql.push_str(" AND NOT is_system(client_bundle_id, client_path)"),
             None => {}
         }
+        match (self.tunnelled, tunnelled) {
+            (Some(true), true) => sql.push_str(" AND tunnelled"),
+            (Some(false), true) => sql.push_str(" AND NOT tunnelled"),
+            // A database from before tunnelled flows has none.
+            (Some(true), false) => sql.push_str(" AND 0"),
+            _ => {}
+        }
         // Each group whole, then any of them.
         if let Some(groups) = self.any.as_ref().filter(|g| !g.is_empty()) {
             let mut any = Vec::new();
             for group in groups {
-                let (condition, group_params) = group.condition(has_cwd, grpc);
+                let (condition, group_params) = group.condition(columns);
                 any.push(format!("({condition})"));
                 params.extend(group_params);
             }
@@ -243,6 +270,17 @@ impl FlowFilter {
         }
         (sql, params)
     }
+}
+
+/// Which of the columns later migrations added a database has, as one opened read-only before
+/// they ran may not.
+#[derive(Clone, Copy)]
+struct Columns {
+    /// The folder a program ran in.
+    cwd: bool,
+    /// gRPC statuses.
+    grpc: bool,
+    tunnelled: bool,
 }
 
 /// The host and port of `url`, in SQL: what follows `://` up to the first `/`, `?` or `#`.
@@ -645,6 +683,73 @@ pub fn find_in(conn: &rusqlite::Connection, flow_id: &str) -> Option<Flow> {
 
 pub fn get(db: &ProxyQueryManager, flow_id: &str) -> Result<Flow, String> {
     find(db, flow_id).ok_or_else(|| format!("No flow {flow_id}"))
+}
+
+/// The hosts and apps flows have gone to and come from, for the decrypt list's suggestions.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SeenTargets {
+    /// Hosts as the sidebar names them, with a port other than the scheme's: most recent first.
+    pub hosts: Vec<String>,
+    /// Apps by name and bundle id, most recent first.
+    pub apps: Vec<SeenApp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SeenApp {
+    pub name: String,
+    pub bundle_id: Option<String>,
+}
+
+/// Distinct hosts and apps listed by [`seen`] at most.
+const SEEN_LIMIT: i64 = 1000;
+
+/// The distinct hosts and apps of the flows not cleared, most recent first, up to
+/// [`SEEN_LIMIT`] of each.
+pub fn seen(db: &ProxyQueryManager) -> Result<SeenTargets, String> {
+    db.with_conn(|c| {
+        let conn = c.conn().resolve();
+        let mut params: Vec<Value> = Vec::new();
+        let mut cleared = String::new();
+        push_clear_mark(conn, &mut cleared, &mut params);
+        params.push(SEEN_LIMIT.into());
+        // The newest flow of each host, whose URL names it as the sidebar does.
+        let sql = format!(
+            "SELECT url FROM flows WHERE rowid IN (SELECT max(rowid) FROM flows WHERE 1{cleared} \
+            GROUP BY lower({HOST_SQL})) ORDER BY rowid DESC LIMIT ?"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let urls = stmt
+            .query_map(rusqlite::params_from_iter(params.clone()), |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        let mut hosts: Vec<String> = Vec::new();
+        for url in urls {
+            let path = sidebar_path(&url);
+            let host = path.split('/').next().unwrap_or_default().to_string();
+            if !host.is_empty() && !hosts.contains(&host) {
+                hosts.push(host);
+            }
+        }
+
+        let sql = format!(
+            "SELECT client_name, client_bundle_id FROM flows WHERE client_name IS NOT NULL{cleared} \
+            GROUP BY client_name, client_bundle_id ORDER BY max(rowid) DESC LIMIT ?"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let apps = stmt
+            .query_map(rusqlite::params_from_iter(params), |r| {
+                Ok(SeenApp { name: r.get(0)?, bundle_id: r.get(1)? })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(SeenTargets { hosts, apps })
+    })
 }
 
 pub fn count(db: &ProxyQueryManager) -> Result<usize, String> {
@@ -1312,6 +1417,12 @@ mod tests {
         assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
         assert_eq!(FlowFilter::from_query("").unwrap(), FlowFilter::default());
         assert!(FlowFilter::from_query("limit=lots").is_err());
+
+        let tunnelled = FlowFilter { tunnelled: Some(true), ..Default::default() };
+        assert_eq!(tunnelled.to_query(), "tunnelled=true");
+        assert_eq!(FlowFilter::from_query("tunnelled=true").unwrap(), tunnelled);
+        assert!(tunnelled.narrows());
+        assert!(FlowFilter::from_query("tunnelled=maybe").is_err());
     }
 
     #[test]

@@ -5,7 +5,7 @@ import { getDomain } from "tldts";
  * A search over every flow in the database: the search box's terms, its field terms, and
  * whether System's flows are hidden, as `list_flows` takes them.
  */
-export type FlowQuery = Pick<FlowFilter, "q" | "under" | "app" | "system" | "any">;
+export type FlowQuery = Pick<FlowFilter, "q" | "under" | "app" | "system" | "tunnelled" | "any">;
 
 /** A word of the search box: a free term, or `@field:value`, maybe negated with `-` */
 export interface SearchToken {
@@ -56,7 +56,8 @@ export function formatFieldFilter(field: string, value: string, negated = false)
  * not every pairing of their apps and hosts. Within a clause, `@app` terms match any of their
  * apps; `@host` terms any of their hosts, each with the `@path` terms after it; `@is:system`
  * keeps only macOS's daemons and `-@is:system` drops them, as hiding System does when the
- * clause says neither. Other words match the URL, the method, the status or the type.
+ * clause says neither. `@is:tunnelled` keeps only HTTPS passed through undecrypted, and
+ * `-@is:tunnelled` drops it. Other words match the URL, the method, the status or the type.
  */
 export function parseSearch(text: string, hideSystem = false): FlowQuery | null {
   const clauses = clausesOf(text);
@@ -77,6 +78,7 @@ function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | nu
   // Each host with the paths written after it.
   const hosts: { host: string; paths: string[] }[] = [];
   let system: boolean | undefined = hideSystem ? false : undefined;
+  let tunnelled: boolean | undefined;
   for (const t of tokens) {
     if (t.field === "app" && !t.negated && t.value !== "") apps.push(t.value);
     else if (t.field === "host" && !t.negated && t.value !== "") {
@@ -91,6 +93,7 @@ function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | nu
         host.paths.push(path);
       }
     } else if (t.field === "is" && t.value.toLowerCase() === "system") system = !t.negated;
+    else if (t.field === "is" && t.value.toLowerCase() === "tunnelled") tunnelled = !t.negated;
     else if (t.field == null && !t.negated) words.push(t.value);
     // Fields and exclusions the query language will add are ignored until it lands.
   }
@@ -105,6 +108,7 @@ function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | nu
     ...(under.length > 0 ? { under } : {}),
     ...(apps.length > 0 ? { app: apps } : {}),
     ...(system == null ? {} : { system }),
+    ...(tunnelled == null ? {} : { tunnelled }),
   };
   return Object.keys(query).length === 0 ? null : query;
 }
@@ -190,6 +194,7 @@ export function matchesQuery(flow: Flow, query: FlowQuery): boolean {
   if (query.under != null && !query.under.some((node) => isUnder(flow.url, node))) return false;
   if (query.app != null && !query.app.some((app) => matchesApp(flow, app))) return false;
   if (query.system != null && isSystemFlow(flow) !== query.system) return false;
+  if (query.tunnelled != null && flow.tunnelled !== query.tunnelled) return false;
   // One of the groups, each judged whole, as the database judges them.
   if (query.any != null && query.any.length > 0) {
     return query.any.some((group) => matchesQuery(flow, group));

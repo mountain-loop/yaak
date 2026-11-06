@@ -234,6 +234,13 @@ pub struct RecordingRequest {
     pub enabled: bool,
 }
 
+/// `PUT /decrypt`: every entry of the decrypt list, in order. A built-in exclusion left out is
+/// removed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecryptRequest {
+    pub entries: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearResponse {
     /// How many flows were deleted.
@@ -510,6 +517,11 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let body: RecordingRequest = read_json(req).await?;
             ctx.set_recording(body.enabled);
             json(&status(ctx).await?)
+        }
+        (&Method::GET, ["decrypt"]) => json(&ctx.decrypt_list()?),
+        (&Method::PUT, ["decrypt"]) => {
+            let body: DecryptRequest = read_json(req).await?;
+            json(&ctx.set_decrypt_list(&body.entries).map_err(bad_request)?)
         }
         (&Method::GET, ["flows"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;

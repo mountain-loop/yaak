@@ -103,6 +103,44 @@ describe("buildSidebarTree", () => {
   });
 });
 
+describe("decrypting from the sidebar", () => {
+  const tunnel = flow("https://bank.example.com", {
+    ...slack,
+    method: "CONNECT",
+    tunnelled: true,
+  });
+  const root = buildSidebarTree([...flows, tunnel], 5);
+  const items = itemsById(root);
+
+  test("Not decrypted follows All traffic while there are tunnelled flows", () => {
+    expect((root.children ?? []).slice(0, 2).map((c) => shape(c)[0])).toEqual([
+      "All traffic 5",
+      "Not decrypted 1",
+    ]);
+    expect(items.get("tunnelled")?.query).toBe("@is:tunnelled");
+    expect(itemsById(buildSidebarTree(flows, 4)).has("tunnelled")).toBe(false);
+  });
+
+  test("hosts, sites and apps name what their menu's Decrypt covers", () => {
+    expect(items.get("host:bank.example.com")?.decrypt).toEqual({
+      kind: "host",
+      host: "bank.example.com",
+    });
+    expect(items.get("site:example.com")?.decrypt).toEqual({ kind: "site", site: "example.com" });
+    expect(items.get("app:Slack|host:edgeapi.slack.com")?.decrypt).toEqual({
+      kind: "host",
+      host: "edgeapi.slack.com",
+    });
+    expect(items.get("app:Slack")?.decrypt).toEqual({
+      kind: "app",
+      name: "Slack",
+      bundleId: "com.slack",
+    });
+    expect(items.get("path:api.github.com/repos")?.decrypt).toBeUndefined();
+    expect(items.get("domains")?.decrypt).toBeUndefined();
+  });
+});
+
 describe("selection and the search text", () => {
   test("selects rows under different apps as groups of their own", () => {
     const items = itemsById(buildSidebarTree(flows, 4));

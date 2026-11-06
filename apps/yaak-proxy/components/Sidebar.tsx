@@ -1,12 +1,22 @@
-import { Icon, IconButton, Tree } from "@yaakapp-internal/ui";
+import {
+  ContextMenu,
+  type DropdownItem,
+  Icon,
+  IconButton,
+  Tree,
+  type TreeProps,
+} from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { atom, useAtom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
+import { useDecryptList, useSetDecryptList } from "../hooks/useDecryptList";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
+import { blockerOf, decryptMenuAction, isDecrypted, setDecrypted } from "../lib/decrypt";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
 import { hideSystemAtom, noteSidebarInput, sidebarTreeAtom } from "../lib/store";
+import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
 
 /** The apps, sites, hosts and paths the user expanded, by node id, kept across launches */
@@ -52,13 +62,30 @@ function ItemInner({ item }: { item: SidebarItem }) {
   return (
     <div className="flex items-center gap-2 w-full min-w-0">
       {item.kind === "all" && <Icon icon="layers" size="sm" className="text-text-subtle" />}
+      {item.kind === "tunnelled" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
       {item.appPath != null && <AppIcon path={item.appPath} />}
       <span className="truncate">{item.label}</span>
       {item.sublabel != null && (
         <span className="truncate text-xs text-text-subtlest">{item.sublabel}</span>
       )}
+      {item.decrypt != null && <DecryptedMark item={item} />}
       <Count item={item} />
     </div>
+  );
+}
+
+/** A row with nothing in its menu: the menu closes as it opens, so the row is not left marked */
+function CloseAtOnce({ onClose }: { onClose: () => void }) {
+  useEffect(() => onClose(), [onClose]);
+  return null;
+}
+
+/** A small open lock on a host, site or app the decrypt list decrypts */
+function DecryptedMark({ item }: { item: SidebarItem }) {
+  const list = useDecryptList();
+  if (item.decrypt == null || !isDecrypted(list, item.decrypt)) return null;
+  return (
+    <Icon icon="lock_open" size="xs" title="Decrypted" className="shrink-0 text-text-subtlest" />
   );
 }
 
@@ -94,6 +121,48 @@ export function Sidebar() {
     (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}`,
     [],
   );
+  const decryptList = useDecryptList();
+  const setDecryptList = useSetDecryptList();
+  const { mutate: saveDecryptList } = setDecryptList;
+  const showToast = useShowToast();
+
+  // Decrypt or Stop Decrypting the selected hosts, sites and apps, from new connections on.
+  const getContextMenu = useCallback(
+    (items: SidebarItem[]): DropdownItem[] => {
+      const subjects = items.flatMap((i) => (i.decrypt == null ? [] : [i.decrypt]));
+      const action = decryptMenuAction(decryptList, subjects);
+      if (action == null) return [];
+      return [
+        {
+          label: action.label,
+          icon: action.on ? "lock_open" : "lock",
+          onSelect: () => {
+            const blocked = action.on ? blockerOf(decryptList, subjects) : null;
+            if (blocked != null) {
+              showToast({
+                id: "decrypt-blocked",
+                color: "notice",
+                message: `${blocked} in the decrypt list keeps it from being decrypted. Remove it from the list first.`,
+              });
+              return;
+            }
+            const next = setDecrypted(decryptList, subjects, action.on);
+            saveDecryptList({ entries: next.map((e) => e.entry) });
+          },
+        },
+      ];
+    },
+    [decryptList, saveDecryptList, showToast],
+  );
+  const renderContextMenu = useCallback<NonNullable<TreeProps<SidebarItem>["renderContextMenu"]>>(
+    ({ items, position, onClose }) =>
+      items.length === 0 ? (
+        <CloseAtOnce onClose={onClose} />
+      ) : (
+        <ContextMenu items={items as DropdownItem[]} triggerPosition={position} onClose={onClose} />
+      ),
+    [],
+  );
 
   return (
     // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows
@@ -114,6 +183,8 @@ export function Sidebar() {
         getItemKey={getItemKey}
         ItemInner={ItemInner}
         ItemRightSlot={ItemRightSlot}
+        getContextMenu={getContextMenu}
+        renderContextMenu={renderContextMenu}
       />
     </aside>
   );

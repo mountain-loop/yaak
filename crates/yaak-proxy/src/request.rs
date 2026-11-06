@@ -31,7 +31,7 @@ use crate::connection::serve_tls;
 use crate::grpc::{self, GrpcParser};
 use crate::messages::{MessageDirection, StreamKind};
 use crate::sse::SseParser;
-use crate::tunnel::{Rewind, splice, tunnel};
+use crate::tunnel::{Counted, Rewind, is_own_connection, splice, tunnel};
 use crate::ws::{self, WsFlow};
 use crate::{ClientConn, Engine, ProxyEvent};
 
@@ -376,6 +376,7 @@ struct Target {
     authority: String,
     /// `host:port` to dial.
     addr: String,
+    port: u16,
 }
 
 fn handle_connect(
@@ -401,6 +402,7 @@ fn handle_connect(
             server_name: host.trim_start_matches('[').trim_end_matches(']').to_string(),
             authority: if port == 443 { host.clone() } else { format!("{host}:{port}") },
             addr: format!("{host}:{port}"),
+            port,
         };
         if let Err(e) = intercept(upgraded, target, client, engine).await {
             debug!("Tunnel to {host}:{port} ended: {}", error_chain(e.as_ref()));
@@ -419,8 +421,13 @@ async fn intercept<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
+    if !engine.decrypts(&target.server_name, target.port, conn.connection).await {
+        debug!("Tunneling {} undecrypted, as the decrypt list leaves it out", target.addr);
+        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
+    }
+    // The fallback for clients that rejected the engine's certificate.
     if engine.is_passthrough(&target.addr) {
-        return Ok(tunnel(client, &target.addr, &[]).await?);
+        return Ok(tunnel_flow(client, &target, conn, &engine).await?);
     }
 
     let mut buf = vec![0u8; 4096];
@@ -478,6 +485,49 @@ where
     let upstreams = Arc::new(Upstreams::new(Target { server_name, ..target }));
     serve_tls(tls, http2, move |req| forward_https(req, upstreams.clone(), conn, engine.clone()))
         .await
+}
+
+/// Tunnels a CONNECT undecrypted, recorded as a flow of its own with the bytes each way. Not
+/// one of the engine's own connections coming back, which [`tunnel`] refuses.
+async fn tunnel_flow<S>(
+    client: S,
+    target: &Target,
+    conn: ClientConn,
+    engine: &Engine,
+) -> std::io::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    if is_own_connection(&target.addr).await {
+        return tunnel(client, &target.addr, &[]).await;
+    }
+    let id = engine.next_flow_id();
+    let start = Instant::now();
+    engine.emit(ProxyEvent::TunnelStart {
+        id,
+        started_at: SystemTime::now(),
+        authority: target.authority.clone(),
+        connection: conn.connection,
+        client_addr: conn.addr,
+    });
+    let client = Counted::new(client);
+    let (sent, received) = client.counters();
+    let result = tunnel(client, &target.addr, &[]).await;
+    let (sent, received) = (sent.load(Ordering::Relaxed), received.load(Ordering::Relaxed));
+    // A tunnel that carried the server's bytes and then broke ended as connections do; one that
+    // never did failed to reach the server.
+    let error = match &result {
+        Err(e) if received == 0 => Some(error_chain(e)),
+        _ => None,
+    };
+    engine.emit(ProxyEvent::TunnelEnd {
+        id,
+        sent,
+        received,
+        elapsed_ms: start.elapsed().as_millis() as u64,
+        error,
+    });
+    result
 }
 
 fn record_handshake_failure(

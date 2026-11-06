@@ -50,6 +50,7 @@ const base: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  tunnelled: false,
 };
 
 const jsonRequest = JSON.stringify({ amount: 4200, currency: "usd", capture: true });

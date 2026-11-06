@@ -33,8 +33,8 @@ use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use yaak_proxy::{
-    CaStore, MessageDirection, MessageKind, ProxyConfig, ProxyEvent, ProxyHandle, StreamKind,
-    StreamMessage, start_proxy,
+    CaStore, DecryptApp, DecryptPolicy, MessageDirection, MessageKind, ProxyConfig, ProxyEvent,
+    ProxyHandle, StreamKind, StreamMessage, start_proxy,
 };
 
 const BIG_BODY: usize = 64 * 1024;
@@ -405,6 +405,7 @@ fn is_terminal(event: &ProxyEvent) -> bool {
             | ProxyEvent::Error { .. }
             | ProxyEvent::Cancelled { .. }
             | ProxyEvent::StreamEnd { .. }
+            | ProxyEvent::TunnelEnd { .. }
     )
 }
 
@@ -422,7 +423,9 @@ fn flow_id(event: &ProxyEvent) -> u64 {
         | ProxyEvent::Cancelled { id, .. }
         | ProxyEvent::StreamStart { id, .. }
         | ProxyEvent::Message { id, .. }
-        | ProxyEvent::StreamEnd { id, .. } => *id,
+        | ProxyEvent::StreamEnd { id, .. }
+        | ProxyEvent::TunnelStart { id, .. }
+        | ProxyEvent::TunnelEnd { id, .. } => *id,
     }
 }
 
@@ -1252,7 +1255,171 @@ async fn pinned_client_falls_back_to_passthrough() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     assert_eq!(body.as_deref(), Some("hello"));
-    assert!(h.events.try_recv().is_err(), "passthrough traffic must not produce flows");
+    // Passed through, it is a tunnelled flow, recorded without its contents.
+    drop(pinned);
+    let events = h.flow_events();
+    let authority = find!(events, ProxyEvent::TunnelStart { authority, .. } => authority.clone());
+    assert_eq!(authority, format!("localhost:{}", upstream.port()));
+    let (sent, received) =
+        find!(events, ProxyEvent::TunnelEnd { sent, received, .. } => (*sent, *received));
+    assert!(sent > 0 && received > 0, "sent {sent}, received {received}");
+    assert!(!events.iter().any(|e| matches!(e, ProxyEvent::RequestStart { .. })));
+}
+
+/// TLS straight to the upstream server through a CONNECT tunnel, trusting only the server's own
+/// CA, as a client that never trusted the proxy's does.
+async fn upstream_tls(
+    h: &Harness,
+    port: u16,
+    alpn: &[&[u8]],
+) -> tokio_rustls::client::TlsStream<TcpStream> {
+    let mut roots = RootCertStore::empty();
+    roots.add(h.pki.ca_der.clone()).unwrap();
+    let mut config = ClientConfig::builder_with_provider(ring())
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    config.alpn_protocols = alpn.iter().map(|p| p.to_vec()).collect();
+    let name = ServerName::try_from("localhost").unwrap();
+    let tcp = h.connect_tunnel(port).await;
+    TlsConnector::from(Arc::new(config)).connect(name, tcp).await.expect("TLS to the server")
+}
+
+/// `GET /hello` over HTTP/1.1 on `tls`, closing the connection after.
+async fn get_hello_and_close(mut tls: tokio_rustls::client::TlsStream<TcpStream>) -> String {
+    tls.write_all(b"GET /hello HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut response = Vec::new();
+    let _ = tls.read_to_end(&mut response).await;
+    String::from_utf8_lossy(&response).into_owned()
+}
+
+fn with_policy(entries: &[&str]) -> impl FnOnce(&mut ProxyConfig) {
+    let policy = DecryptPolicy::parse(entries).unwrap();
+    move |config| config.decrypt = policy
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_empty_decrypt_list_tunnels_https_untouched() {
+    within(async {
+        let h = Harness::start_with(1024, with_policy(&[]));
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+
+        // The server's own certificate arrives, so no CA of the proxy's is involved.
+        let tls = upstream_tls(&h, upstream.port(), &[b"http/1.1"]).await;
+        let response = get_hello_and_close(tls).await;
+        assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+        assert!(response.ends_with("hello"), "{response}");
+
+        let events = h.flow_events();
+        let (connection, authority) = find!(events, ProxyEvent::TunnelStart { connection, authority, .. } => (*connection, authority.clone()));
+        assert_eq!(connection, 1);
+        assert_eq!(authority, format!("localhost:{}", upstream.port()));
+        let (sent, received, error) = find!(events, ProxyEvent::TunnelEnd { sent, received, error, .. } => (*sent, *received, error.clone()));
+        assert_eq!(error, None);
+        // The ClientHello and request one way, the certificate and response the other.
+        assert!(sent > 100, "sent {sent}");
+        assert!(received as usize > response.len(), "received {received}");
+        assert!(!events.iter().any(|e| matches!(e, ProxyEvent::RequestStart { .. })));
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tunnelled_host_passes_http2_through() {
+    within(async {
+        let h = Harness::start_with(1024, with_policy(&["host:example.com"]));
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let tls = upstream_tls(&h, upstream.port(), &[b"h2", b"http/1.1"]).await;
+        assert_eq!(tls.get_ref().1.alpn_protocol(), Some(&b"h2"[..]), "the server's ALPN");
+        let (mut sender, conn) =
+            http2::handshake(TokioExecutor::new(), TokioIo::new(tls)).await.unwrap();
+        let conn = tokio::spawn(conn);
+        let req = Request::get(format!("https://localhost:{}/hello", upstream.port()))
+            .body(full(Bytes::new()))
+            .unwrap();
+        let resp = sender.send_request(req).await.unwrap();
+        assert_eq!(resp.version(), Version::HTTP_2);
+        assert_eq!(resp.into_body().collect().await.unwrap().to_bytes(), "hello");
+        drop(sender);
+        let _ = conn.await;
+
+        let events = h.flow_events();
+        find!(events, ProxyEvent::TunnelStart { .. } => ());
+        let error = find!(events, ProxyEvent::TunnelEnd { error, .. } => error.clone());
+        assert_eq!(error, None);
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_listed_host_is_decrypted_and_others_tunnelled() {
+    within(async {
+        let h = Harness::start_with(1024, with_policy(&["host:localhost"]));
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let url = format!("https://localhost:{}/hello", upstream.port());
+        assert_eq!(h.client().get(&url).send().await.unwrap().text().await.unwrap(), "hello");
+        let events = h.flow_events();
+        let flow_url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
+        assert_eq!(flow_url, url);
+
+        // Only from the next connection on.
+        h.proxy.set_decrypt_policy(DecryptPolicy::parse(&["host:*.example.com"]).unwrap());
+        let tls = upstream_tls(&h, upstream.port(), &[b"http/1.1"]).await;
+        assert!(get_hello_and_close(tls).await.ends_with("hello"));
+        let events = h.flow_events();
+        find!(events, ProxyEvent::TunnelEnd { .. } => ());
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_app_entry_decrypts_that_app_alone() {
+    within(async {
+        let h = Harness::start_with(1024, |config| {
+            config.decrypt = DecryptPolicy::parse(&["app:com.example.curl"]).unwrap();
+            // The first connection is from the listed app, the rest from another.
+            config.app_of = Some(Arc::new(|connection| {
+                let bundle_id = if connection == 1 { "com.example.curl" } else { "com.other" };
+                Some(DecryptApp { name: "curl".into(), bundle_id: Some(bundle_id.into()) })
+            }));
+        });
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let url = format!("https://localhost:{}/hello", upstream.port());
+        let client = h.client();
+        assert_eq!(client.get(&url).send().await.unwrap().text().await.unwrap(), "hello");
+        let events = h.flow_events();
+        find!(events, ProxyEvent::RequestStart { .. } => ());
+        drop(client);
+
+        let tls = upstream_tls(&h, upstream.port(), &[b"http/1.1"]).await;
+        assert!(get_hello_and_close(tls).await.ends_with("hello"));
+        let events = h.flow_events();
+        let connection = find!(events, ProxyEvent::TunnelStart { connection, .. } => *connection);
+        assert_eq!(connection, 2);
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tunnel_to_nowhere_is_a_failed_flow() {
+    within(async {
+        let h = Harness::start_with(1024, with_policy(&[]));
+        // A port nothing listens on.
+        let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+        let mut tcp = h.connect_tunnel(closed).await;
+        let _ = tcp.write_all(b"\x16\x03\x01").await;
+        let mut rest = Vec::new();
+        let _ = tcp.read_to_end(&mut rest).await;
+        let events = h.flow_events();
+        let (received, error) =
+            find!(events, ProxyEvent::TunnelEnd { received, error, .. } => (*received, error.clone()));
+        assert_eq!(received, 0);
+        assert!(error.is_some(), "{events:#?}");
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]

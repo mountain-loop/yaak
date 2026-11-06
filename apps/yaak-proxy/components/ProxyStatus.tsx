@@ -16,6 +16,7 @@ import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperDialogOpenAtom, helperRegisteredAtAtom } from "../lib/atoms";
+import { decryptListDialogOpenAtom } from "./DecryptListEditor";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState, systemProxyEverOnAtom } from "../lib/store";
 import {
@@ -43,6 +44,7 @@ export function ProxyStatus() {
   const setHttpVersion = useSetHttpVersion();
   const copyEnvironment = useCopyEnvironment();
   const setHelperDialogOpen = useSetAtom(helperDialogOpenAtom);
+  const setDecryptListOpen = useSetAtom(decryptListDialogOpenAtom);
   const { caStatus, trust, systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
 
@@ -155,6 +157,11 @@ export function ProxyStatus() {
       ),
     },
     { type: "separator" },
+    {
+      label: "Decrypt List…",
+      icon: "lock_open",
+      onSelect: () => setDecryptListOpen(true),
+    },
     {
       label: "Copy Environment for a Terminal",
       icon: "square_terminal",

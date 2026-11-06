@@ -88,6 +88,10 @@ pub struct Flow {
     pub grpc_status: Option<i32>,
     /// A gRPC call's `grpc-message`, decoded.
     pub grpc_message: Option<String>,
+    /// An HTTPS connection passed through undecrypted, as the decrypt list leaves it out or its
+    /// client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
+    /// the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
+    pub tunnelled: bool,
 }
 
 /// The streaming protocol a flow carries.
@@ -236,6 +240,7 @@ impl UpsertModelInfo for Flow {
             (GrpcMethod, self.grpc_method.into()),
             (GrpcStatus, self.grpc_status.into()),
             (GrpcMessage, self.grpc_message.into()),
+            (Tunnelled, self.tunnelled.into()),
         ])
     }
 
@@ -272,6 +277,7 @@ impl UpsertModelInfo for Flow {
             FlowIden::GrpcMethod,
             FlowIden::GrpcStatus,
             FlowIden::GrpcMessage,
+            FlowIden::Tunnelled,
         ]
     }
 
@@ -317,6 +323,7 @@ impl UpsertModelInfo for Flow {
             grpc_method: added_column(r, "grpc_method")?,
             grpc_status: added_column(r, "grpc_status")?,
             grpc_message: added_column(r, "grpc_message")?,
+            tunnelled: added_column(r, "tunnelled")?.unwrap_or_default(),
         })
     }
 }

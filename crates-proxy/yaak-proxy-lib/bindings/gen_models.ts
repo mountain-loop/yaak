@@ -101,7 +101,13 @@ grpcStatus: number | null,
 /**
  * A gRPC call's `grpc-message`, decoded.
  */
-grpcMessage: string | null, };
+grpcMessage: string | null, 
+/**
+ * An HTTPS connection passed through undecrypted, as the decrypt list leaves it out or its
+ * client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
+ * the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
+ */
+tunnelled: boolean, };
 
 export type FlowBody = "request" | "response";
 

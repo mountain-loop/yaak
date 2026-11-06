@@ -761,3 +761,85 @@ async fn another_app_owning_the_engine_is_not_taken_over() {
     assert_eq!(app.port(), None);
     other.stop().unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_is_read_and_replaced_over_the_control_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("{}/decrypt", info.base_url());
+
+    assert_eq!(http.get(&url).send().await.unwrap().status(), 401);
+    let list: Value =
+        http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
+    assert!(list["entries"].as_array().unwrap().iter().all(|e| e["builtIn"] == true));
+
+    let put = http
+        .put(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"entries": ["*", "!host:*.bank.example"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(put.status(), 200);
+    let list: Value = put.json().await.unwrap();
+    assert_eq!(
+        list["entries"],
+        json!([
+            {"entry": "*", "builtIn": false},
+            {"entry": "!host:*.bank.example", "builtIn": false},
+        ]),
+        "every built-in exclusion left out is removed"
+    );
+    let read: Value =
+        http.get(&url).bearer_auth(&info.token).send().await.unwrap().json().await.unwrap();
+    assert_eq!(read, list);
+
+    let bad = http
+        .put(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"entries": ["app:"]}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+}
+
+/// While the CLI owns the engine, the app's change to the decrypt list goes to the CLI, whose
+/// engine decrypts the next connection by it.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let cli = ctx(dir.path(), client_dir.path()).with_owner(Owner::Cli);
+    let _server = ControlServer::start(cli.clone()).unwrap();
+    cli.start().unwrap();
+    let app = ctx(dir.path(), client_dir.path());
+
+    let list = rpc(&app, "set_decrypt_list", json!({"entries": ["*"]})).await.unwrap();
+    assert_eq!(list["entries"][0], json!({"entry": "*", "builtIn": false}));
+
+    // Decrypted, the request is a flow of its own: a 502, as nothing listens there.
+    let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
+    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::all(format!("http://127.0.0.1:{}", cli.port().unwrap())).unwrap())
+        .add_root_certificate(reqwest::Certificate::from_pem(&ca).unwrap())
+        .build()
+        .unwrap();
+    let url = format!("https://localhost:{closed}/forwarded");
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let flows = cli.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        if let Some(flow) = flows.iter().find(|f| f.url == url) {
+            assert!(!flow.tunnelled);
+            break;
+        }
+        assert!(Instant::now() < deadline, "no decrypted flow for {url}");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
