@@ -411,7 +411,15 @@ fn re_importing_an_edited_export_updates_the_workspace_in_place() {
     let export_path = temp_dir.path().join("exp.json");
     let (workspace_id, base_id, staging_id, request_id) = cli_made_workspace(data_dir);
 
-    cli_cmd(data_dir).args(["export", path_str(&export_path), &workspace_id]).assert().success();
+    cli_cmd(data_dir)
+        .args([
+            "export",
+            path_str(&export_path),
+            &workspace_id,
+            "--include-private",
+        ])
+        .assert()
+        .success();
     let mut exported = read_json(&export_path);
     exported["resources"]["httpRequests"][0]["name"] = "Health (edited)".into();
     std::fs::write(&export_path, exported.to_string()).expect("write edited export");
@@ -454,7 +462,15 @@ fn import_into_a_fresh_data_dir_keeps_the_ids() {
     let export_path = temp_dir.path().join("ci-export.json");
     let (workspace_id, base_id, staging_id, request_id) = cli_made_workspace(&data_dir);
 
-    cli_cmd(&data_dir).args(["export", path_str(&export_path), &workspace_id]).assert().success();
+    cli_cmd(&data_dir)
+        .args([
+            "export",
+            path_str(&export_path),
+            &workspace_id,
+            "--include-private",
+        ])
+        .assert()
+        .success();
     cli_cmd(&ci_dir).args(["import", path_str(&export_path)]).assert().success();
 
     let query_manager = query_manager(&ci_dir);
@@ -465,24 +481,14 @@ fn import_into_a_fresh_data_dir_keeps_the_ids() {
     assert_eq!(db.get_environment(&staging_id).expect("Staging keeps its ID").name, "Staging");
 }
 
-/// QA sweep bug 8: `yaak export` left out every environment the CLI made, since they were
-/// private, and there was no `--include-private`.
+/// QA sweep bug 8: there was no `--include-private`, so the environments the CLI makes, which
+/// are private like the app's, could not be exported without the long flag.
 #[test]
-fn export_includes_cli_made_environments_and_private_ones_on_request() {
+fn export_includes_cli_made_environments_only_with_include_private() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let data_dir = temp_dir.path();
     let export_path = temp_dir.path().join("export.json");
     let (workspace_id, base_id, staging_id, _) = cli_made_workspace(data_dir);
-    let private_id = created_id(
-        data_dir,
-        &[
-            "environment",
-            "create",
-            &workspace_id,
-            "--json",
-            r#"{"name":"Secret","public":false}"#,
-        ],
-    );
 
     let exported_ids = |args: &[&str]| {
         cli_cmd(data_dir).args(["export", path_str(&export_path)]).args(args).assert().success();
@@ -496,13 +502,12 @@ fn export_includes_cli_made_environments_and_private_ones_on_request() {
         ids
     };
 
-    let mut public = vec![base_id.clone(), staging_id.clone()];
-    public.sort();
-    assert_eq!(exported_ids(&[&workspace_id]), public);
+    assert!(exported_ids(&[&workspace_id]).is_empty(), "CLI-made environments are private");
 
-    let mut all = vec![base_id, staging_id, private_id];
+    let mut all = vec![base_id, staging_id];
     all.sort();
     assert_eq!(exported_ids(&[&workspace_id, "--include-private"]), all);
+    assert_eq!(exported_ids(&[&workspace_id, "--include-private-environments"]), all);
 }
 
 /// QA sweep bug 15: the planner's warnings, such as IDs taken by another workspace, were
@@ -514,7 +519,15 @@ fn import_prints_the_plan_warnings_after_the_counts() {
     let export_path = temp_dir.path().join("e9.json");
     let (workspace_id, ..) = cli_made_workspace(data_dir);
     let other_id = created_id(data_dir, &["workspace", "create", "--name", "Other WS"]);
-    cli_cmd(data_dir).args(["export", path_str(&export_path), &workspace_id]).assert().success();
+    cli_cmd(data_dir)
+        .args([
+            "export",
+            path_str(&export_path),
+            &workspace_id,
+            "--include-private",
+        ])
+        .assert()
+        .success();
 
     cli_cmd(data_dir)
         .args(["import", path_str(&export_path), "--workspace-id", &other_id])

@@ -13,11 +13,6 @@ use yaak_models::util::UpdateSource;
 
 type CommandResult<T = ()> = std::result::Result<T, String>;
 
-/// Environments the CLI creates are public unless the caller says otherwise. The app keeps
-/// new environments private and offers a toggle; the CLI has no such toggle, so a private
-/// default would leave them out of every `yaak export` made without `--include-private`.
-const CLI_ENVIRONMENTS_ARE_PUBLIC: bool = true;
-
 pub fn run(ctx: &CliContext, args: EnvironmentArgs) -> i32 {
     let result = match args.command {
         EnvironmentCommands::List { workspace_id } => list(ctx, workspace_id.as_deref()),
@@ -56,7 +51,7 @@ fn list(ctx: &CliContext, workspace_id: Option<&str>) -> CommandResult {
     let environments = ctx
         .query_manager()
         .with_tx(|tx| {
-            tx.ensure_base_environment_with_visibility(&workspace_id, CLI_ENVIRONMENTS_ARE_PUBLIC)?;
+            tx.ensure_base_environment(&workspace_id)?;
             tx.list_environments(&workspace_id)
         })
         .map_err(|e| format!("Failed to list environments: {e}"))?;
@@ -100,12 +95,8 @@ fn create(
         }
 
         validate_create_id(&payload, "environment")?;
-        let public_given = payload.get("public").is_some();
         let mut environment: Environment = serde_json::from_value(payload)
             .map_err(|e| format!("Failed to parse environment create JSON: {e}"))?;
-        if !public_given {
-            environment.public = CLI_ENVIRONMENTS_ARE_PUBLIC;
-        }
         let fallback_workspace_id =
             if workspace_id_arg.is_none() && environment.workspace_id.is_empty() {
                 Some(resolve_workspace_id(ctx, None, "environment create")?)
@@ -141,7 +132,6 @@ fn create(
         workspace_id,
         name,
         parent_model: "environment".to_string(),
-        public: CLI_ENVIRONMENTS_ARE_PUBLIC,
         ..Default::default()
     };
 
@@ -181,25 +171,7 @@ fn delete(ctx: &CliContext, environment_id: &str, yes: bool) -> CommandResult {
 
     let deleted = ctx
         .query_manager()
-        .with_tx(|tx| {
-            let existing = tx.get_environment(environment_id)?;
-            let other_base_exists = tx
-                .list_environments(&existing.workspace_id)?
-                .iter()
-                .any(|e| e.parent_model == "workspace" && e.id != existing.id);
-            let deleted = tx.delete_environment(&existing, &UpdateSource::Sync)?;
-            // Deleting the only base environment recreates it with the app's private default
-            if deleted.parent_model == "workspace" && !other_base_exists {
-                let base = tx.get_base_environment(&deleted.workspace_id)?;
-                if base.public != CLI_ENVIRONMENTS_ARE_PUBLIC {
-                    tx.upsert_environment(
-                        &Environment { public: CLI_ENVIRONMENTS_ARE_PUBLIC, ..base },
-                        &UpdateSource::Sync,
-                    )?;
-                }
-            }
-            Ok::<_, yaak_models::error::Error>(deleted)
-        })
+        .with_tx(|tx| tx.delete_environment_by_id(environment_id, &UpdateSource::Sync))
         .map_err(|e| format!("Failed to delete environment: {e}"))?;
 
     println!("Deleted environment: {}", deleted.id);
