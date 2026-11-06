@@ -1,3 +1,4 @@
+import { platform } from "@yaakapp-internal/platform";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
@@ -24,8 +25,17 @@ export interface SelectProps<T extends string> {
   className?: string;
   disabled?: boolean;
   filterable?: boolean;
-  /** Use the system's own `<select>`, as the client does on macOS, unless `filterable` */
+  /** Use the system's own `<select>`; by default on macOS, unless `filterable` */
   native?: boolean;
+}
+
+/** On macOS, where the host can say; an app with no platform host (the proxy) says no */
+function isMacOs(): boolean {
+  try {
+    return platform.osType() === "macos";
+  } catch {
+    return false;
+  }
 }
 
 export function Select<T extends string>({
@@ -43,7 +53,7 @@ export function Select<T extends string>({
   className,
   defaultValue,
   filterable,
-  native = false,
+  native,
   size = "md",
 }: SelectProps<T>) {
   const [focused, setFocused] = useState<boolean>(false);
@@ -68,7 +78,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName} help={help}>
         {label}
       </Label>
-      {native && !filterable ? (
+      {(native ?? isMacOs()) && !filterable ? (
         <HStack
           space={2}
           className={classNames(

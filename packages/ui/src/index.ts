@@ -32,7 +32,6 @@ export type {
   HostEditorLanguage,
   HostEditorProps,
   HostInputProps,
-  HostSelectProps,
   HostPromptArgs,
   SelectFileProps,
   StoredValueNamespace,
@@ -59,6 +58,8 @@ export type {
   StreamPayloadView,
 } from "./components/events/streamEvents";
 export { eventDeltas, formatEventDelta, formatEventTime } from "./components/events/streamEvents";
+export type { ExternalLinkProps } from "./components/ExternalLink";
+export { ExternalLink } from "./components/ExternalLink";
 export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
 export { FormMultipartEditor } from "./components/http/FormMultipartEditor";
 export { FormUrlencodedEditor } from "./components/http/FormUrlencodedEditor";
@@ -148,6 +149,42 @@ export { PlainInput } from "./components/PlainInput";
 export { Portal } from "./components/Portal";
 export type { SeparatorAction } from "./components/Separator";
 export { Separator } from "./components/Separator";
+export type { SettingRowBaseProps, SettingSnippetLanguage } from "./components/settings/SettingRow";
+export {
+  SettingCommand,
+  SettingOverrideRow,
+  SettingRow,
+  SettingRowBoolean,
+  SettingRowNumber,
+  SettingRowSelect,
+  SettingRowText,
+  SettingSelectControl,
+  SettingSnippet,
+  SettingsList,
+  SettingsSection,
+  SettingValue,
+} from "./components/settings/SettingRow";
+export type {
+  SettingsDialogProps,
+  SettingsTabDef,
+  SettingsTitlebar,
+} from "./components/settings/SettingsDialog";
+export {
+  SETTINGS_TAB_GENERAL,
+  SETTINGS_TAB_INTERFACE,
+  SETTINGS_TAB_LICENSE,
+  SETTINGS_TAB_THEME,
+  SettingsDialog,
+} from "./components/settings/SettingsDialog";
+export type { SettingsGeneralProps } from "./components/settings/SettingsGeneral";
+export { SettingsGeneral, SettingsUpdatesSection } from "./components/settings/SettingsGeneral";
+export type { SettingsInterfaceProps } from "./components/settings/SettingsInterface";
+export { SettingsInterface } from "./components/settings/SettingsInterface";
+export type { SettingsLicenseProps } from "./components/settings/SettingsLicense";
+export { SettingsLicense } from "./components/settings/SettingsLicense";
+export type { SettingsThemeProps } from "./components/settings/SettingsTheme";
+export { SettingsTheme } from "./components/settings/SettingsTheme";
+export * from "./components/settings/types";
 export type { ResizeHandleEvent } from "./components/ResizeHandle";
 export { ResizeHandle } from "./components/ResizeHandle";
 export { SidebarLayout } from "./components/SidebarLayout";
@@ -239,6 +276,7 @@ export { languageFromContent, languageFromContentType } from "./lib/contentType"
 export { getMimeTypeFromContentType, isJSON, isProbablyTextContentType } from "./lib/mimeType";
 export { textLikelyContainsJsonComments } from "./lib/jsonComments";
 export { validateHttpHeader } from "./lib/validateHttpHeader";
+export { isYaakUrl } from "./lib/yaakUrl";
 export { computeSideForDragMove } from "./lib/dnd";
 export { docFingerprint } from "./lib/docFingerprint";
 export { getNodeText } from "./lib/getNodeText";

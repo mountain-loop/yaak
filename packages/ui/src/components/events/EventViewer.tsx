@@ -7,8 +7,9 @@ import { useEventViewerKeyboard } from "../../hooks/useEventViewerKeyboard";
 import { Banner } from "../Banner";
 import { Button } from "../Button";
 import { CopyIconButton } from "../CopyIconButton";
-import { type HostSelectProps, useEditorHost } from "../EditorHost";
+import { useEditorHost } from "../EditorHost";
 import { IconButton } from "../IconButton";
+import { Select, type SelectProps } from "../Select";
 import { Separator } from "../Separator";
 import { SplitLayout } from "../SplitLayout";
 import { HStack } from "../Stacks";
@@ -235,7 +236,7 @@ export type EventDetailAction =
       /** Selected value */
       value: string;
       /** Select options */
-      options: HostSelectProps["options"];
+      options: SelectProps<string>["options"];
       /** Change handler */
       onChange: (value: string) => void;
     };
@@ -257,7 +258,7 @@ export function EventDetailHeader({
   copyText,
   onClose,
 }: EventDetailHeaderProps) {
-  const { Select, copy } = useEditorHost();
+  const { copy } = useEditorHost();
   const formattedTime = timestamp ? format(new Date(`${timestamp}Z`), "HH:mm:ss.SSS") : null;
 
   return (
