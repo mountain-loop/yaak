@@ -42,6 +42,12 @@ const base: Flow = {
   clientName: "curl",
   clientBundleId: null,
   clientPath: "/usr/bin/curl",
+  streamKind: null,
+  messageCount: 0,
+  grpcService: null,
+  grpcMethod: null,
+  grpcStatus: null,
+  grpcMessage: null,
 };
 
 const jsonRequest = JSON.stringify({ amount: 4200, currency: "usd", capture: true });

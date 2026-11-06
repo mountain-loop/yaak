@@ -65,10 +65,145 @@ clientBundleId: string | null,
 /**
  * Its app bundle's path, or its executable's outside an app.
  */
-clientPath: string | null, };
+clientPath: string | null, 
+/**
+ * The flow carries a stream of messages, listed with `list_messages`. It is written as the
+ * stream opens and again as messages land; it is open until `elapsedMs`, `error` or
+ * `cancelled` is set.
+ */
+streamKind: StreamKind | null, 
+/**
+ * Messages recorded so far.
+ */
+messageCount: number, 
+/**
+ * A gRPC call's service, from its path: `package.Service`.
+ */
+grpcService: string | null, 
+/**
+ * A gRPC call's method, from its path.
+ */
+grpcMethod: string | null, 
+/**
+ * A gRPC call's status, from its trailers. Not 0 is a failed call.
+ */
+grpcStatus: number | null, 
+/**
+ * A gRPC call's `grpc-message`, decoded.
+ */
+grpcMessage: string | null, };
 
 export type FlowBody = "request" | "response";
+
+/**
+ * One message of a streaming flow. Its payload is fetched on its own.
+ */
+export type FlowMessage = { id: string, flowId: string, 
+/**
+ * Its place in the flow, from 0, in the order messages passed the proxy.
+ */
+seq: number, direction: MessageDirection, kind: MessageKind, 
+/**
+ * When it had passed the proxy whole.
+ */
+timestamp: string, 
+/**
+ * Bytes it took on the wire: the frames' payloads, the event's lines, the gRPC message
+ * without its prefix.
+ */
+size: number, 
+/**
+ * Bytes of payload stored: unmasked, reassembled, inflated or decompressed, and cut at the
+ * capture limit.
+ */
+storedSize: number, 
+/**
+ * The stored payload is cut short at the capture limit.
+ */
+truncated: boolean, 
+/**
+ * It was compressed on the wire (permessage-deflate, gRPC's compressed flag); the payload is
+ * stored decompressed unless `error` says otherwise.
+ */
+compressed: boolean, 
+/**
+ * Why the payload could not be decoded or stored.
+ */
+error: string | null, meta: MessageMeta, 
+/**
+ * The payload's start as text, when it is text.
+ */
+preview: string | null, };
+
+/**
+ * Descriptors for decoding the gRPC calls to hosts that match `hostPattern`.
+ */
+export type GrpcSchema = { id: string, createdAt: string, updatedAt: string, 
+/**
+ * A host (`api.example.com`), a host and port (`localhost:50051`), any subdomain of one
+ * (`*.example.com`), or every host (`*`).
+ */
+hostPattern: string, source: GrpcSchemaSource, 
+/**
+ * The `.proto` files and include directories compiled, for a `files` schema.
+ */
+protoPaths: Array<string>, 
+/**
+ * The services the descriptors define, by full name.
+ */
+services: Array<string>, };
+
+/**
+ * Where a schema's descriptors came from.
+ */
+export type GrpcSchemaSource = "files" | "reflection";
+
+export type MessageDirection = "client" | "server";
+
+export type MessageKind = "websocket_text" | "websocket_binary" | "websocket_ping" | "websocket_pong" | "websocket_close" | "sse_event" | "grpc_message" | "grpc_trailers";
+
+/**
+ * What a kind of message carries beside its payload. Fields that do not apply are left out.
+ */
+export type MessageMeta = { 
+/**
+ * A WebSocket close frame's status code.
+ */
+closeCode?: number, 
+/**
+ * A WebSocket close frame's reason.
+ */
+closeReason?: string, 
+/**
+ * An SSE event's `event` field.
+ */
+event?: string, 
+/**
+ * An SSE event's `id` field.
+ */
+eventId?: string, 
+/**
+ * An SSE event's `retry` field, in milliseconds.
+ */
+retry?: number, 
+/**
+ * An SSE event's lines as they came, comments included, up to 4 KB.
+ */
+raw?: string, 
+/**
+ * gRPC trailers' `grpc-status`.
+ */
+grpcStatus?: number, 
+/**
+ * gRPC trailers' `grpc-message`, decoded.
+ */
+grpcMessage?: string, };
 
 export type ModelPayload = { model: Flow, change: ModelChangeEvent, };
 
 export type ProxyHeader = { name: string, value: string, };
+
+/**
+ * The streaming protocol a flow carries.
+ */
+export type StreamKind = "websocket" | "sse" | "grpc" | "grpc_web";

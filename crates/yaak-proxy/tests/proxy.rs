@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, SystemTime};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::combinators::BoxBody;
@@ -28,9 +30,25 @@ use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
 use tokio_tungstenite::tungstenite::protocol::Role;
-use yaak_proxy::{CaStore, ProxyConfig, ProxyEvent, ProxyHandle, start_proxy};
+use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use yaak_proxy::{
+    CaStore, MessageDirection, MessageKind, ProxyConfig, ProxyEvent, ProxyHandle, StreamKind,
+    StreamMessage, start_proxy,
+};
 
 const BIG_BODY: usize = 64 * 1024;
+
+/// The longest a streaming test may run: one that hangs fails with a message instead of
+/// holding CI until its job is cancelled.
+const STREAM_TEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+async fn within<T>(test: impl Future<Output = T>) -> T {
+    match tokio::time::timeout(STREAM_TEST_TIMEOUT, test).await {
+        Ok(result) => result,
+        Err(_) => panic!("the test did not finish within {STREAM_TEST_TIMEOUT:?}"),
+    }
+}
 
 macro_rules! find {
     ($events:expr, $pat:pat => $out:expr) => {
@@ -166,7 +184,7 @@ fn websocket_echo(mut req: Request<Incoming>) -> Response<TestBody> {
         let io = TokioIo::new(on_upgrade.await.unwrap());
         let mut ws = WebSocketStream::from_raw_socket(io, Role::Server, None).await;
         while let Some(Ok(msg)) = ws.next().await {
-            if msg.is_text() {
+            if msg.is_text() || msg.is_binary() {
                 ws.send(msg).await.unwrap();
             }
         }
@@ -231,6 +249,10 @@ struct Harness {
 
 impl Harness {
     fn start(capture_body_limit: usize) -> Self {
+        Self::start_with(capture_body_limit, |_| {})
+    }
+
+    fn start_with(capture_body_limit: usize, configure: impl FnOnce(&mut ProxyConfig)) -> Self {
         let dir = TempDir::new().unwrap();
         let ca_dir = dir.path().join("ca");
         let created = CaStore::load_or_create(&ca_dir).unwrap();
@@ -242,6 +264,7 @@ impl Harness {
         let mut config = ProxyConfig::new(0, ca.clone());
         config.capture_body_limit = capture_body_limit;
         config.upstream_root_certs = vec![pki.ca_der.clone()];
+        configure(&mut config);
         let mut proxy = start_proxy(config).unwrap();
         let events = proxy.take_event_rx().unwrap();
         Self { proxy, events, ca, pki, _dir: dir }
@@ -381,6 +404,7 @@ fn is_terminal(event: &ProxyEvent) -> bool {
         ProxyEvent::ResponseBodyComplete { .. }
             | ProxyEvent::Error { .. }
             | ProxyEvent::Cancelled { .. }
+            | ProxyEvent::StreamEnd { .. }
     )
 }
 
@@ -395,7 +419,10 @@ fn flow_id(event: &ProxyEvent) -> u64 {
         | ProxyEvent::ResponseBodyChunk { id, .. }
         | ProxyEvent::ResponseBodyComplete { id, .. }
         | ProxyEvent::Error { id, .. }
-        | ProxyEvent::Cancelled { id, .. } => *id,
+        | ProxyEvent::Cancelled { id, .. }
+        | ProxyEvent::StreamStart { id, .. }
+        | ProxyEvent::Message { id, .. }
+        | ProxyEvent::StreamEnd { id, .. } => *id,
     }
 }
 
@@ -677,33 +704,534 @@ async fn bodies_over_the_cap_are_truncated_but_delivered() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn websocket_upgrade_passes_through() {
-    let h = Harness::start(1024);
-    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
-    let port = upstream.port();
+    within(async {
+        let h = Harness::start(1024);
+        let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+        let port = upstream.port();
 
-    let tcp = h.connect_tunnel(port).await;
+        let tcp = h.connect_tunnel(port).await;
+        let tls = TlsConnector::from(h.tls_client_config())
+            .connect(ServerName::try_from("localhost").unwrap(), tcp)
+            .await
+            .unwrap();
+
+        let url = format!("wss://localhost:{port}/ws");
+        let (mut ws, _) = tokio_tungstenite::client_async(url.as_str(), tls).await.unwrap();
+        ws.send(Message::text("hello")).await.unwrap();
+        assert_eq!(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str(), "hello");
+        ws.send(Message::binary(vec![0u8, 1, 2, 255])).await.unwrap();
+        assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), &[0u8, 1, 2, 255]);
+        ws.send(Message::Ping(Bytes::from_static(b"p"))).await.unwrap();
+        assert!(
+            matches!(ws.next().await.unwrap().unwrap(), Message::Pong(p) if p.as_ref() == b"p")
+        );
+        ws.close(Some(CloseFrame { code: CloseCode::Normal, reason: "bye".into() })).await.unwrap();
+        while let Some(Ok(_)) = ws.next().await {}
+
+        let events = h.flow_events();
+        let req_url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
+        assert_eq!(req_url, format!("https://localhost:{port}/ws"));
+        let (status, version) = find!(events,
+        ProxyEvent::ResponseStart { status, http_version, .. } => (*status, http_version.clone()));
+        assert_eq!((status, version.as_str()), (101, "HTTP/1.1"));
+        let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
+        assert_eq!(kind, StreamKind::WebSocket);
+        // The flow ends with the close handshake, not with the 101.
+        assert!(!events.iter().any(|e| matches!(e, ProxyEvent::ResponseBodyComplete { .. })));
+        let error = find!(events, ProxyEvent::StreamEnd { error, .. } => error.clone());
+        assert_eq!(error, None);
+
+        for direction in [MessageDirection::Client, MessageDirection::Server] {
+            let sent = messages(&events, direction);
+            let expected_control = match direction {
+                MessageDirection::Client => MessageKind::WebSocketPing,
+                MessageDirection::Server => MessageKind::WebSocketPong,
+            };
+            let close = MessageKind::WebSocketClose { code: Some(1000), reason: "bye".into() };
+            let kinds: Vec<_> = sent.iter().map(|m| m.kind.clone()).collect();
+            assert_eq!(
+                kinds,
+                vec![
+                    MessageKind::WebSocketText,
+                    MessageKind::WebSocketBinary,
+                    expected_control,
+                    close
+                ],
+                "{direction:?}"
+            );
+            assert_eq!(&sent[0].data[..], b"hello");
+            assert_eq!(&sent[1].data[..], &[0u8, 1, 2, 255]);
+            assert_eq!(&sent[2].data[..], b"p");
+        }
+    })
+    .await
+}
+
+/// The messages a flow recorded from one side, in order.
+fn messages(events: &[ProxyEvent], direction: MessageDirection) -> Vec<StreamMessage> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            ProxyEvent::Message { message, .. } if message.direction == direction => {
+                Some(message.clone())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A WebSocket frame as written on the wire, masked when `mask` is given.
+fn ws_frame(fin: bool, rsv1: bool, opcode: u8, payload: &[u8], mask: Option<[u8; 4]>) -> Vec<u8> {
+    let mut out = vec![(u8::from(fin) << 7) | (u8::from(rsv1) << 6) | opcode];
+    let mask_bit = if mask.is_some() { 0x80 } else { 0 };
+    match payload.len() {
+        n if n < 126 => out.push(mask_bit | n as u8),
+        n if n <= u16::MAX as usize => {
+            out.push(mask_bit | 126);
+            out.extend((n as u16).to_be_bytes());
+        }
+        n => {
+            out.push(mask_bit | 127);
+            out.extend((n as u64).to_be_bytes());
+        }
+    }
+    match mask {
+        Some(mask) => {
+            out.extend(mask);
+            out.extend(payload.iter().enumerate().map(|(i, b)| b ^ mask[i % 4]));
+        }
+        None => out.extend(payload),
+    }
+    out
+}
+
+/// permessage-deflate's compression of one message, in a context kept across messages.
+fn deflate_message(compress: &mut flate2::Compress, data: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(data.len() + 64);
+    compress.compress_vec(data, &mut out, flate2::FlushCompress::Sync).unwrap();
+    assert!(out.ends_with(&[0, 0, 0xff, 0xff]));
+    out.truncate(out.len() - 4);
+    out
+}
+
+/// A server that switches to WebSocket with permessage-deflate and then sends back every byte
+/// it gets, as it got it, keeping a copy.
+fn raw_websocket_echo(
+    mut req: Request<Incoming>,
+    received: Arc<std::sync::Mutex<Vec<u8>>>,
+) -> Response<TestBody> {
+    let accept = derive_accept_key(req.headers()["sec-websocket-key"].as_bytes());
+    let on_upgrade = hyper::upgrade::on(&mut req);
+    tokio::spawn(async move {
+        let mut io = TokioIo::new(on_upgrade.await.unwrap());
+        let mut buf = vec![0u8; 4096];
+        loop {
+            let n = io.read(&mut buf).await.unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            received.lock().unwrap().extend_from_slice(&buf[..n]);
+            io.write_all(&buf[..n]).await.unwrap();
+        }
+    });
+    Response::builder()
+        .status(StatusCode::SWITCHING_PROTOCOLS)
+        .header(UPGRADE, "websocket")
+        .header(CONNECTION, "Upgrade")
+        .header("sec-websocket-accept", accept)
+        .header("sec-websocket-extensions", "permessage-deflate")
+        .body(full(Bytes::new()))
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn websocket_frames_pass_byte_for_byte() {
+    within(async {
+    let h = Harness::start(1024 * 1024);
+    let received = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let handler = {
+        let received = received.clone();
+        move |req| {
+            let received = received.clone();
+            async move { Ok::<_, Infallible>(raw_websocket_echo(req, received)) }
+        }
+    };
+    let upstream =
+        spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), handler)
+            .await;
+    let mut tls = h.tls_tunnel(upstream.port(), &[b"http/1.1"]).await;
+    let handshake = format!(
+        "GET /raw HTTP/1.1\r\nHost: localhost:{}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+        Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\
+        Sec-WebSocket-Extensions: permessage-deflate\r\n\r\n",
+        upstream.port()
+    );
+    tls.write_all(handshake.as_bytes()).await.unwrap();
+    let mut head = Vec::new();
+    while !head.ends_with(b"\r\n\r\n") {
+        head.push(tls.read_u8().await.unwrap());
+    }
+    assert!(head.starts_with(b"HTTP/1.1 101"), "{}", String::from_utf8_lossy(&head));
+
+    let mask = Some([0x12, 0x34, 0x56, 0x78]);
+    let mut compress = flate2::Compress::new(flate2::Compression::default(), false);
+    let big: Vec<u8> = (0..200_000u32).map(|i| (i % 7) as u8).collect();
+    let mut wire = Vec::new();
+    // A text message in two fragments, with a ping between them.
+    wire.extend(ws_frame(false, false, 0x1, b"Hel", mask));
+    wire.extend(ws_frame(true, false, 0x9, b"x", mask));
+    wire.extend(ws_frame(true, false, 0x0, b"lo", mask));
+    // Two compressed messages sharing one deflate context, the second over 64 KB inflated.
+    let compressed = deflate_message(&mut compress, b"compressed text compressed text");
+    wire.extend(ws_frame(true, true, 0x1, &compressed, mask));
+    let compressed = deflate_message(&mut compress, &big);
+    wire.extend(ws_frame(true, true, 0x2, &compressed, mask));
+    let mut close = 4000u16.to_be_bytes().to_vec();
+    close.extend(b"done");
+    wire.extend(ws_frame(true, false, 0x8, &close, mask));
+
+    // Odd-sized writes, so frames and headers split across reads.
+    for piece in wire.chunks(7) {
+        tls.write_all(piece).await.unwrap();
+    }
+    // TLS may hold the last records back until flushed.
+    tls.flush().await.unwrap();
+    let mut echoed = vec![0u8; wire.len()];
+    tls.read_exact(&mut echoed).await.unwrap();
+    assert_eq!(echoed, wire, "the client gets back exactly what the server sent");
+    assert_eq!(*received.lock().unwrap(), wire, "the server gets exactly what the client sent");
+    drop(tls);
+
+    let events = h.flow_events();
+    // The server sent the client's masked frames back, so both sides recorded the same.
+    for direction in [MessageDirection::Client, MessageDirection::Server] {
+        let sent = messages(&events, direction);
+        let kinds: Vec<_> = sent.iter().map(|m| m.kind.clone()).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                MessageKind::WebSocketPing,
+                MessageKind::WebSocketText,
+                MessageKind::WebSocketText,
+                MessageKind::WebSocketBinary,
+                MessageKind::WebSocketClose { code: Some(4000), reason: "done".into() },
+            ],
+            "{direction:?}"
+        );
+        assert_eq!(&sent[1].data[..], b"Hello");
+        assert_eq!(sent[1].size, 5);
+        assert_eq!(&sent[2].data[..], b"compressed text compressed text");
+        assert!(sent[2].compressed && sent[2].error.is_none(), "{:?}", sent[2].error);
+        assert_eq!(&sent[3].data[..], &big[..], "inflated with the first message's context");
+        assert!(sent[3].size < big.len() as u64, "size on the wire, compressed");
+    }
+    let error = find!(events, ProxyEvent::StreamEnd { error, .. } => error.clone());
+    assert_eq!(error, None, "ended by the close frames");
+    })
+    .await
+}
+
+/// Round trips over a WebSocket through the proxy, in microseconds, sorted.
+async fn websocket_round_trips(websocket_capture: bool, n: usize) -> Vec<u128> {
+    let h = Harness::start_with(1024 * 1024, |c| c.websocket_capture = websocket_capture);
+    let upstream = spawn_upstream(Some(h.pki.server.clone())).await;
+    let tcp = h.connect_tunnel(upstream.port()).await;
     let tls = TlsConnector::from(h.tls_client_config())
         .connect(ServerName::try_from("localhost").unwrap(), tcp)
         .await
         .unwrap();
-
-    let url = format!("wss://localhost:{port}/ws");
+    let url = format!("wss://localhost:{}/ws", upstream.port());
     let (mut ws, _) = tokio_tungstenite::client_async(url.as_str(), tls).await.unwrap();
-    for text in ["ping", "pong"] {
-        ws.send(Message::text(text)).await.unwrap();
-        let reply = ws.next().await.unwrap().unwrap();
-        assert_eq!(reply.into_text().unwrap().as_str(), text);
+    let payload = "x".repeat(256);
+    let mut times = Vec::with_capacity(n);
+    for i in 0..n + 100 {
+        let start = std::time::Instant::now();
+        ws.send(Message::text(payload.clone())).await.unwrap();
+        ws.next().await.unwrap().unwrap();
+        // The first hundred warm up.
+        if i >= 100 {
+            times.push(start.elapsed().as_micros());
+        }
     }
     ws.close(None).await.unwrap();
+    times.sort_unstable();
+    times
+}
 
-    let events = h.flow_events();
-    let req_url = find!(events, ProxyEvent::RequestStart { url, .. } => url.clone());
-    assert_eq!(req_url, format!("https://localhost:{port}/ws"));
-    let (status, version) = find!(events,
-        ProxyEvent::ResponseStart { status, http_version, .. } => (*status, http_version.clone()));
-    assert_eq!((status, version.as_str()), (101, "HTTP/1.1"));
-    let (size, error) = find!(events, ProxyEvent::ResponseBodyComplete { size, error, .. } => (*size, error.clone()));
-    assert_eq!((size, error), (0, None));
+#[tokio::test(flavor = "multi_thread")]
+async fn websocket_capture_adds_no_measurable_latency() {
+    within(async {
+        const N: usize = 2000;
+        let blind = websocket_round_trips(false, N).await;
+        let captured = websocket_round_trips(true, N).await;
+        let pct = |t: &[u128], p: usize| t[(t.len() * p / 100).min(t.len() - 1)];
+        eprintln!(
+            "WebSocket round trip through the proxy, {N} x 256 B text, microseconds: \
+        blind splice p50 {} p90 {} p99 {}; captured p50 {} p90 {} p99 {}",
+            pct(&blind, 50),
+            pct(&blind, 90),
+            pct(&blind, 99),
+            pct(&captured, 50),
+            pct(&captured, 90),
+            pct(&captured, 99),
+        );
+        // Generous, so a busy machine does not fail it: within a millisecond of the blind splice at
+        // the median.
+        assert!(pct(&captured, 50) < pct(&blind, 50) + 1000);
+    })
+    .await
+}
+
+/// An event stream whose chunks the test sends one at a time.
+fn event_stream(chunks: tokio::sync::mpsc::UnboundedReceiver<&'static str>) -> Response<TestBody> {
+    let frames = futures_util::stream::unfold(chunks, |mut chunks| async move {
+        let chunk = chunks.recv().await?;
+        Some((Ok(Frame::data(Bytes::from(chunk))), chunks))
+    });
+    Response::builder()
+        .header(CONTENT_TYPE, "text/event-stream")
+        .body(BodyExt::boxed(StreamBody::new(frames)))
+        .unwrap()
+}
+
+/// The next event of a flow, skipping body chunks and headers.
+fn next_stream_message(h: &Harness) -> StreamMessage {
+    loop {
+        match h.events.recv_timeout(Duration::from_secs(10)).expect("no message") {
+            ProxyEvent::Message { message, .. } => return message,
+            ProxyEvent::ResponseBodyComplete { .. } => panic!("the stream ended first"),
+            _ => {}
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn server_sent_events_are_recorded_as_they_arrive() {
+    within(async {
+        let h = Harness::start(1024);
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let rx = Arc::new(std::sync::Mutex::new(Some(rx)));
+        let handler = move |_req| {
+            let rx = rx.lock().unwrap().take().unwrap();
+            async move { Ok::<_, Infallible>(event_stream(rx)) }
+        };
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), handler)
+                .await;
+        let url = format!("https://localhost:{}/events", upstream.port());
+        let mut resp = h.client().get(&url).send().await.unwrap();
+
+        tx.send("event: greet\nid: 1\ndata: hello\n").unwrap();
+        tx.send("data: world\n\n").unwrap();
+        // Recorded while the stream is still open.
+        let first = next_stream_message(&h);
+        assert_eq!(&first.data[..], b"hello\nworld");
+        assert_eq!(
+            first.kind,
+            MessageKind::SseEvent {
+                event: Some("greet".into()),
+                id: Some("1".into()),
+                retry: None,
+                raw: "event: greet\nid: 1\ndata: hello\ndata: world\n\n".into(),
+            }
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        tx.send(": a comment\r\nretry: 1500\r\ndata: two\r\n\r\n").unwrap();
+        let second = next_stream_message(&h);
+        assert_eq!(&second.data[..], b"two");
+        assert!(matches!(second.kind, MessageKind::SseEvent { retry: Some(1500), .. }));
+        drop(tx);
+
+        let mut body = Vec::new();
+        while let Some(chunk) = resp.chunk().await.unwrap() {
+            body.extend_from_slice(&chunk);
+        }
+        assert!(body.ends_with(b"data: two\r\n\r\n"), "the client gets the stream unchanged");
+        let events = h.flow_events();
+        let error = find!(events, ProxyEvent::ResponseBodyComplete { error, .. } => error.clone());
+        assert_eq!(error, None);
+    })
+    .await
+}
+
+/// A gRPC message on the wire: its five-byte prefix, then `payload`.
+fn grpc_frame(flag: u8, payload: &[u8]) -> Vec<u8> {
+    let mut out = vec![flag];
+    out.extend((payload.len() as u32).to_be_bytes());
+    out.extend(payload);
+    out
+}
+
+/// A protobuf message with one string field, number 1, as `HelloRequest { name }` encodes.
+fn proto_string(value: &str) -> Vec<u8> {
+    let mut out = vec![0x0a, value.len() as u8];
+    out.extend(value.as_bytes());
+    out
+}
+
+/// A gRPC server for `pkg.Greeter`: `SayHello` answers once, `StreamHellos` three times, and
+/// `Fail` at once with a NOT_FOUND status in its headers.
+async fn greeter(req: Request<Incoming>) -> Result<Response<TestBody>, Infallible> {
+    let path = req.uri().path().to_string();
+    let web = req.headers()[CONTENT_TYPE].to_str().unwrap().starts_with("application/grpc-web");
+    // Asked for by a header of the test's own: clients built with gzip support ask for it on
+    // every request.
+    let gzip = req.headers().contains_key("x-test-gzip");
+    let request = req.into_body().collect().await.unwrap().to_bytes();
+    let request = if web { BASE64.decode(&request).unwrap() } else { request.to_vec() };
+    let name = String::from_utf8_lossy(&request[7..]).into_owned();
+    let replies: Vec<String> = match path.as_str() {
+        "/pkg.Greeter/SayHello" => vec![format!("Hello {name}")],
+        "/pkg.Greeter/StreamHellos" => (1..=3).map(|i| format!("Hello {name} #{i}")).collect(),
+        _ => {
+            return Ok(Response::builder()
+                .header(CONTENT_TYPE, "application/grpc")
+                .header("grpc-status", "5")
+                .header("grpc-message", "no%20such%20greeter")
+                .body(full(Bytes::new()))
+                .unwrap());
+        }
+    };
+    if web {
+        // gRPC-Web's text flavor: each frame base64 of its own, the trailers in the last.
+        let mut body = String::new();
+        for reply in &replies {
+            body.push_str(&BASE64.encode(grpc_frame(0, &proto_string(reply))));
+        }
+        body.push_str(&BASE64.encode(grpc_frame(0x80, b"grpc-status: 0\r\ngrpc-message: \r\n")));
+        let resp = Response::builder().header(CONTENT_TYPE, "application/grpc-web-text");
+        // Compressed for HTTP as a whole when the client accepts it, as a CDN does.
+        if gzip {
+            let mut encoder =
+                flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            std::io::Write::write_all(&mut encoder, body.as_bytes()).unwrap();
+            let body = encoder.finish().unwrap();
+            return Ok(resp.header("content-encoding", "gzip").body(full(body)).unwrap());
+        }
+        return Ok(resp.body(full(body)).unwrap());
+    }
+    let frames = futures_util::stream::iter(replies)
+        .then(|reply| async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            Ok(Frame::data(Bytes::from(grpc_frame(0, &proto_string(&reply)))))
+        })
+        .chain(futures_util::stream::once(async {
+            let mut trailers = hyper::HeaderMap::new();
+            trailers.insert("grpc-status", HeaderValue::from_static("0"));
+            Ok(Frame::trailers(trailers))
+        }));
+    Ok(Response::builder()
+        .header(CONTENT_TYPE, "application/grpc")
+        .body(BodyExt::boxed(StreamBody::new(frames)))
+        .unwrap())
+}
+
+async fn grpc_call(
+    sender: &mut http2::SendRequest<TestBody>,
+    port: u16,
+    method: &str,
+    name: &str,
+) -> (Vec<u8>, Option<hyper::HeaderMap>, hyper::HeaderMap) {
+    let req = Request::builder()
+        .method("POST")
+        .uri(format!("https://localhost:{port}/pkg.Greeter/{method}"))
+        .header(CONTENT_TYPE, "application/grpc")
+        .header("te", "trailers")
+        .body(full(grpc_frame(0, &proto_string(name))))
+        .unwrap();
+    let resp = sender.send_request(req).await.unwrap();
+    let headers = resp.headers().clone();
+    let collected = resp.into_body().collect().await.unwrap();
+    let trailers = collected.trailers().cloned();
+    (collected.to_bytes().to_vec(), trailers, headers)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn grpc_messages_and_status_are_recorded() {
+    within(async {
+        let h = Harness::start(1024);
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
+                .await;
+        let port = upstream.port();
+        let mut sender = h.h2_client(port).await;
+
+        let (body, trailers, _) = grpc_call(&mut sender, port, "SayHello", "Ada").await;
+        assert_eq!(body, grpc_frame(0, &proto_string("Hello Ada")));
+        assert_eq!(trailers.unwrap()["grpc-status"], "0", "trailers pass through");
+        let events = h.flow_events();
+        assert_eq!(find!(events, ProxyEvent::StreamStart { kind, .. } => *kind), StreamKind::Grpc);
+        let sent = messages(&events, MessageDirection::Client);
+        assert_eq!(sent.len(), 1);
+        assert_eq!((&sent[0].data[..], sent[0].size), (&proto_string("Ada")[..], 5));
+        let received = messages(&events, MessageDirection::Server);
+        assert_eq!(received.len(), 2);
+        assert_eq!(&received[0].data[..], &proto_string("Hello Ada")[..]);
+        assert_eq!(received[1].kind, MessageKind::GrpcTrailers { status: Some(0), message: None });
+
+        let (_, _, _) = grpc_call(&mut sender, port, "StreamHellos", "Bo").await;
+        let events = h.flow_events();
+        let received = messages(&events, MessageDirection::Server);
+        let replies: Vec<_> = received.iter().map(|m| m.data.clone()).collect();
+        assert_eq!(replies.len(), 4);
+        for (i, reply) in replies[..3].iter().enumerate() {
+            assert_eq!(&reply[..], &proto_string(&format!("Hello Bo #{}", i + 1))[..]);
+        }
+
+        let (body, _, headers) = grpc_call(&mut sender, port, "Fail", "Cy").await;
+        assert!(body.is_empty());
+        assert_eq!(headers["grpc-status"], "5");
+        let events = h.flow_events();
+        let received = messages(&events, MessageDirection::Server);
+        assert_eq!(
+            received[0].kind,
+            MessageKind::GrpcTrailers { status: Some(5), message: Some("no such greeter".into()) }
+        );
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn grpc_web_text_is_recorded() {
+    within(async {
+        let h = Harness::start(1024);
+        let upstream =
+            spawn_upstream_with(Some(h.pki.server.clone()), Arc::new(AtomicUsize::new(0)), greeter)
+                .await;
+        let url = format!("https://localhost:{}/pkg.Greeter/StreamHellos", upstream.port());
+        // Plain, then with the whole response gzipped for HTTP.
+        for gzip in [false, true] {
+            let mut req = h
+                .client()
+                .post(&url)
+                .header(CONTENT_TYPE, "application/grpc-web-text")
+                .body(BASE64.encode(grpc_frame(0, &proto_string("Di"))));
+            if gzip {
+                req = req.header("x-test-gzip", "1");
+            }
+            let resp = req.send().await.unwrap();
+            assert_eq!(resp.status(), 200);
+            resp.bytes().await.unwrap();
+
+            let events = h.flow_events();
+            // As the server sent it: a client with gzip support may undo it before the test sees it.
+            let encoding =
+                headers(&events, false).into_iter().find(|(n, _)| n == "content-encoding");
+            assert_eq!(encoding.is_some(), gzip, "the response passed compressed");
+            let kind = find!(events, ProxyEvent::StreamStart { kind, .. } => *kind);
+            assert_eq!(kind, StreamKind::GrpcWeb);
+            let sent = messages(&events, MessageDirection::Client);
+            assert_eq!(&sent[0].data[..], &proto_string("Di")[..]);
+            let received = messages(&events, MessageDirection::Server);
+            assert_eq!(received.len(), 4, "gzip: {gzip}");
+            assert_eq!(&received[2].data[..], &proto_string("Hello Di #3")[..]);
+            assert_eq!(
+                received[3].kind,
+                MessageKind::GrpcTrailers { status: Some(0), message: Some(String::new()) }
+            );
+        }
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
