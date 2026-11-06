@@ -8,6 +8,9 @@ use tokio::io::AsyncReadExt;
 use yaak_http::decompress::{ContentEncoding, streaming_decoder};
 use yaak_models::blob_manager::BlobManager;
 
+/// Messages read at a time while putting a body back together.
+const MESSAGE_PAGE: usize = 500;
+
 /// What a WebSocket's response body reads as: it has none.
 pub const WEBSOCKET_BODY_NOTE: &str =
     "A WebSocket has no body after its 101 response. Its frames are its messages.";
@@ -17,6 +20,11 @@ pub const WEBSOCKET_BODY_NOTE: &str =
 /// in gRPC (a gateway's error page is a body like any other), and a WebSocket's response. Such a
 /// body is not written to `blobs.sqlite`; reading it puts it back together from the messages.
 pub fn from_messages(flow: &Flow, which: FlowBody) -> bool {
+    // A body in an encoding the stream's reader can't undo has no messages; it keeps its bytes.
+    let encoding = find_header(flow.headers(which), "content-encoding");
+    if flow.stream_kind != Some(StreamKind::Websocket) && !yaak_proxy::decodes_stream(encoding) {
+        return false;
+    }
     match (flow.stream_kind, which) {
         (None, _) => false,
         (Some(StreamKind::Websocket | StreamKind::Sse), FlowBody::Request) => false,
@@ -138,34 +146,51 @@ fn message_body(
     // Enough to fill the limit, after base64 makes it a third longer.
     let room = if base64_text { limit / 3 * 4 + 4 } else { limit };
 
+    // A response that failed or was cancelled after its headers ended short, as `read_body`
+    // says of one stored whole.
+    let mut truncated = which == FlowBody::Response
+        && flow.status.is_some()
+        && (flow.error.is_some() || flow.cancelled);
     let mut out = Vec::new();
-    let mut truncated = false;
-    for message in messages::list(db, &flow.id, None, None)? {
-        if out.len() > room {
-            truncated = true;
+    let mut after = None;
+    // Read a page at a time, and no further than the limit needs.
+    'pages: loop {
+        let page = messages::list(db, &flow.id, after, Some(MESSAGE_PAGE))?;
+        let Some(last) = page.last() else {
+            break;
+        };
+        after = Some(last.seq);
+        let full = page.len() == MESSAGE_PAGE;
+        for message in page {
+            if out.len() > room {
+                truncated = true;
+                break 'pages;
+            }
+            if message.direction != direction {
+                continue;
+            }
+            match message.kind {
+                MessageKind::SseEvent => {
+                    let payload = messages::payload(db, blobs, &message)?;
+                    out.extend_from_slice(&sse_event_lines(&message, &payload));
+                }
+                MessageKind::GrpcMessage => {
+                    let payload = messages::payload(db, blobs, &message)?;
+                    // A payload that failed to decompress is kept as it came, still compressed.
+                    let flag = u8::from(message.compressed && message.error.is_some());
+                    grpc_frame(&mut out, flag, &payload);
+                }
+                MessageKind::GrpcTrailers if trailers_in_body => {
+                    let payload = messages::payload(db, blobs, &message)?;
+                    grpc_frame(&mut out, 0x80, &payload);
+                }
+                _ => continue,
+            }
+            truncated |= message.truncated;
+        }
+        if !full {
             break;
         }
-        if message.direction != direction {
-            continue;
-        }
-        match message.kind {
-            MessageKind::SseEvent => {
-                let payload = messages::payload(db, blobs, &message)?;
-                out.extend_from_slice(&sse_event_lines(&message, &payload));
-            }
-            MessageKind::GrpcMessage => {
-                let payload = messages::payload(db, blobs, &message)?;
-                // A payload that failed to decompress is kept as it came, still compressed.
-                let flag = u8::from(message.compressed && message.error.is_some());
-                grpc_frame(&mut out, flag, &payload);
-            }
-            MessageKind::GrpcTrailers if trailers_in_body => {
-                let payload = messages::payload(db, blobs, &message)?;
-                grpc_frame(&mut out, 0x80, &payload);
-            }
-            _ => continue,
-        }
-        truncated |= message.truncated;
     }
     if base64_text {
         out = BASE64.encode(&out).into_bytes();
@@ -520,6 +545,25 @@ mod tests {
         assert!(!from_messages(&flow, FlowBody::Request));
         let cut = read_body(&db, &blobs, &flow, FlowBody::Response, 10).await.unwrap();
         assert_eq!((cut.data.as_slice(), cut.truncated), (&short.as_bytes()[..10], true));
+
+        // Ended by a failure or a cancel, it is cut short, however whole its events are.
+        let cancelled = Flow { status: Some(200), cancelled: true, ..flow.clone() };
+        assert!(
+            read_body(&db, &blobs, &cancelled, FlowBody::Response, 1 << 20)
+                .await
+                .unwrap()
+                .truncated
+        );
+
+        // In an encoding the stream's reader can't undo, there are no events: the bytes stay.
+        let brotli = Flow {
+            response_headers: vec![crate::models::ProxyHeader {
+                name: "Content-Encoding".into(),
+                value: "br".into(),
+            }],
+            ..flow
+        };
+        assert!(!from_messages(&brotli, FlowBody::Response));
     }
 
     #[tokio::test]

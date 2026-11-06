@@ -22,6 +22,12 @@ pub(crate) enum Decoding {
     Unsupported,
 }
 
+/// Whether a streaming body in `content_encoding` can be read for its messages. One that can't
+/// yields none, so only its bytes on the wire say what it carried.
+pub fn decodes_stream(content_encoding: Option<&str>) -> bool {
+    !matches!(Decoding::new(content_encoding, 0), Decoding::Unsupported)
+}
+
 impl Decoding {
     /// `limit` bounds what decoding may hold on to: the input of a deflate body kept until it
     /// shows whether it is zlib-framed.

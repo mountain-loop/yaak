@@ -93,7 +93,9 @@ export function useFlowMessages(flowId: string, source: MessageSource) {
           const page = await source.list(flowId, last?.seq, PAGE);
           if (cancelled) return;
           messages = mergeMessages(messages, page.messages);
+          // Shown as each page lands, so a stream that never pauses still shows what's read
           if (page.messages.length < PAGE && !readAgain) break;
+          publishSoon();
         }
         publish(false);
       } catch (e) {
