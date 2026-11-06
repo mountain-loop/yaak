@@ -54,6 +54,7 @@ const TAB = 0x09;
 
 const encoder = new TextEncoder();
 const latin1 = new TextDecoder("latin1");
+const utf8 = new TextDecoder("utf-8", { fatal: true });
 
 /** Results already parsed, by the bytes and boundary they came from, for as long as those bytes live */
 const parsed = new WeakMap<Uint8Array, Map<string, MultipartParseResult>>();
@@ -64,22 +65,25 @@ const parsed = new WeakMap<Uint8Array, Map<string, MultipartParseResult>>();
  */
 export function boundaryFromContentType(contentType: string | null | undefined): string | null {
   if (contentType == null) return null;
-  const match = /(?:^|;)\s*boundary\s*=\s*("(?:[^"\\]|\\.)*"|[^;]*)/i.exec(contentType);
-  return normalizeBoundary(match?.[1] ?? null);
+  const boundary = headerParams(contentType).get("boundary");
+  return boundary == null || boundary === "" ? null : boundary;
 }
 
 /**
  * A boundary as it appears after `--`: surrounding quotes removed, escapes undone, and anything
- * after an unquoted `;` dropped, so a value like `"a b"; charset=x` gives `a b`.
+ * after an unquoted `;` dropped, so a value like `"a b"; charset=x` gives `a b`. A boundary can't
+ * hold `"` or `;`, so normalizing one that already is gives it back unchanged, leading spaces and
+ * all.
  */
 export function normalizeBoundary(boundary: string | null | undefined): string | null {
   if (boundary == null) return null;
-  let value = boundary.trim();
-  if (value.startsWith('"')) {
-    const end = /^"((?:[^"\\]|\\.)*)"/.exec(value);
-    value = end != null ? end[1]!.replace(/\\(.)/g, "$1") : value.slice(1);
+  let value = boundary;
+  if (value.trimStart().startsWith('"')) {
+    const end = /^"((?:[^"\\]|\\.)*)"/.exec(value.trimStart());
+    value = end != null ? end[1]!.replace(/\\(.)/g, "$1") : value.trimStart().slice(1);
   } else {
-    value = value.split(";")[0]!.trim();
+    // Trailing whitespace isn't part of a boundary (RFC 2046)
+    value = value.split(";")[0]!.trimEnd();
   }
   return value === "" ? null : value;
 }
@@ -130,7 +134,7 @@ function parseMultipartUncached(data: Uint8Array, boundary: string): MultipartPa
     const next = findDelimiter(data, delimiter, pos);
     if (next < 0) {
       // Cut off before the next delimiter: the rest is the last part, as far as it got
-      parts.push(parsePart(data.subarray(pos, lineStart(data, data.length))));
+      parts.push(parsePart(data.subarray(pos)));
       return { parts, complete: false };
     }
 
@@ -185,14 +189,18 @@ function lineStart(data: Uint8Array, at: number): number {
 function parsePart(bytes: Uint8Array): MultipartPart {
   const { headers, body } = splitHeaders(bytes);
   const contentType = headerValue(headers, "content-type");
-  const disposition = headerValue(headers, "content-disposition");
+  const disposition = headerParams(headerValue(headers, "content-disposition") ?? "");
   const contentId = headerValue(headers, "content-id");
+  const extendedFilename = disposition.get("filename*");
   return {
     headers,
     contentType,
     mediaType: mediaTypeOf(contentType),
-    name: headerParam(disposition, "name"),
-    filename: headerParam(disposition, "filename*") ?? headerParam(disposition, "filename"),
+    name: disposition.get("name") ?? null,
+    filename:
+      extendedFilename != null
+        ? decodeExtendedValue(extendedFilename)
+        : (disposition.get("filename") ?? null),
     contentId: contentId == null ? null : contentId.replace(/^<(.*)>$/, "$1"),
     body,
   };
@@ -214,7 +222,7 @@ function splitHeaders(bytes: Uint8Array): { headers: MultipartHeader[]; body: Ui
       pos = lf < 0 ? bytes.length : lf + 1;
       break;
     }
-    const line = latin1.decode(bytes.subarray(pos, contentEnd));
+    const line = decodeHeaderLine(bytes.subarray(pos, contentEnd));
     if (lines.length === 0 && !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+\s*:/.test(line)) {
       // Not a header, so a part sent without its blank line: all of it is body
       return { headers: [], body: bytes };
@@ -275,6 +283,15 @@ export function parseHttpMessage(bytes: Uint8Array): HttpMessage | null {
   };
 }
 
+/** A header line as UTF-8, as browsers send form field names, or Latin-1 when it isn't valid UTF-8 */
+function decodeHeaderLine(bytes: Uint8Array): string {
+  try {
+    return utf8.decode(bytes);
+  } catch {
+    return latin1.decode(bytes);
+  }
+}
+
 export function headerValue(headers: MultipartHeader[], name: string): string | null {
   const lower = name.toLowerCase();
   return headers.find((h) => h.name.toLowerCase() === lower)?.value ?? null;
@@ -286,30 +303,63 @@ function mediaTypeOf(contentType: string | null): string | null {
   return essence === "" ? null : essence;
 }
 
-/** A parameter of a header like `form-data; name="a"; filename="b.txt"`, unquoted */
-function headerParam(header: string | null, param: string): string | null {
-  if (header == null) return null;
-  const escaped = param.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`(?:^|;)\\s*${escaped}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|[^;]*)`, "i").exec(
-    header,
-  );
-  if (match == null) return null;
-  let value = match[1]!.trim();
-  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
-    value = value.slice(1, -1).replace(/\\(.)/g, "$1");
-  }
-  if (param.endsWith("*")) {
-    // RFC 5987: charset'language'percent-encoded
-    const ext = /^([^']*)'[^']*'(.*)$/.exec(value);
-    if (ext != null) {
-      try {
-        return decodeURIComponent(ext[2]!);
-      } catch {
-        return ext[2]!;
+/**
+ * The parameters after a header's first `;`, like `form-data; name="a"; filename="b.txt"`, by
+ * lowercased name and unquoted. A quoted value may hold `;` and `=` without ending it.
+ */
+function headerParams(header: string): Map<string, string> {
+  const params = new Map<string, string>();
+  let i = header.indexOf(";");
+  if (i < 0) return params;
+  while (i < header.length) {
+    // Past the `;` and whitespace, then the name up to `=` or the next `;`
+    while (i < header.length && (header[i] === ";" || header[i] === " " || header[i] === "\t")) i++;
+    const nameStart = i;
+    while (i < header.length && header[i] !== "=" && header[i] !== ";") i++;
+    const name = header.slice(nameStart, i).trim().toLowerCase();
+    if (header[i] !== "=") continue;
+    i++;
+    while (header[i] === " " || header[i] === "\t") i++;
+    let value = "";
+    if (header[i] === '"') {
+      i++;
+      while (i < header.length && header[i] !== '"') {
+        if (header[i] === "\\" && i + 1 < header.length) i++;
+        value += header[i];
+        i++;
       }
+      // Past the closing quote and anything up to the next parameter
+      while (i < header.length && header[i] !== ";") i++;
+    } else {
+      const valueStart = i;
+      while (i < header.length && header[i] !== ";") i++;
+      value = header.slice(valueStart, i).trim();
+    }
+    if (name !== "" && !params.has(name)) params.set(name, value);
+  }
+  return params;
+}
+
+/** An RFC 5987 extended value, `charset'language'percent-encoded`, decoded in its charset */
+function decodeExtendedValue(value: string): string {
+  const ext = /^([^']*)'[^']*'(.*)$/.exec(value);
+  if (ext == null) return value;
+  const encoded = ext[2]!;
+  const bytes: number[] = [];
+  for (let i = 0; i < encoded.length; i++) {
+    const hex = encoded.slice(i + 1, i + 3);
+    if (encoded[i] === "%" && /^[0-9a-f]{2}$/i.test(hex)) {
+      bytes.push(parseInt(hex, 16));
+      i += 2;
+    } else {
+      bytes.push(encoded.charCodeAt(i) & 0xff);
     }
   }
-  return value;
+  try {
+    return new TextDecoder(ext[1]!.trim() || "utf-8").decode(new Uint8Array(bytes));
+  } catch {
+    return encoded;
+  }
 }
 
 /** Whether bytes look binary: not valid UTF-8, or holding NUL or other control bytes */

@@ -8,7 +8,6 @@ import {
   isProbablyBinary,
   type MultipartParseResult,
   type MultipartPart,
-  normalizeBoundary,
   parseHttpMessage,
   parseMultipart,
 } from "../../lib/multipart";
@@ -51,7 +50,7 @@ export function MultipartViewer({
     { result: MultipartParseResult; error: null } | { result: null; error: string }
   >(() => {
     try {
-      return { result: parseMultipart(data, normalizeBoundary(boundary) ?? boundary), error: null };
+      return { result: parseMultipart(data, boundary), error: null };
     } catch (err) {
       return { result: null, error: err instanceof Error ? err.message : String(err) };
     }

@@ -156,6 +156,38 @@ describe("parseMultipart", () => {
     expect(parts[0]!.filename).toBe("résumé.txt");
   });
 
+  test("reads UTF-8 names, quoted semicolons and a filename in its declared charset", () => {
+    const body = [
+      "--b",
+      'Content-Disposition: form-data; filename="a; name=wrong"; name="café"',
+      "",
+      "x",
+      "--b",
+      "Content-Disposition: attachment; filename*=ISO-8859-1''caf%E9.txt",
+      "",
+      "y",
+      "--b--",
+    ].join("\r\n");
+    const { parts } = parseMultipart(bytes(body), "b");
+    expect(parts[0]!.name).toBe("café");
+    expect(parts[0]!.filename).toBe("a; name=wrong");
+    expect(parts[1]!.filename).toBe("café.txt");
+  });
+
+  test("keeps every byte of a part cut off before its delimiter", () => {
+    const { parts } = parseMultipart(bytes("--b\r\n\r\nhello\r\n"), "b");
+    expect(text(parts[0]!.body)).toBe("hello\r\n");
+  });
+
+  test("keeps a quoted boundary's leading space, however often it's normalized", () => {
+    const contentType = 'multipart/mixed; boundary=" b"';
+    const boundary = boundaryFromContentType(contentType)!;
+    expect(boundary).toBe(" b");
+    expect(normalizeBoundary(boundary)).toBe(" b");
+    const { parts } = parseMultipart(bytes("-- b\r\n\r\nx\r\n-- b--"), boundary);
+    expect(parts.map((p) => text(p.body))).toEqual(["x"]);
+  });
+
   test("throws when the boundary never appears", () => {
     expect(() => parseMultipart(bytes("nothing here"), "b")).toThrow(/No "--b" delimiter/);
   });
