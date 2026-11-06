@@ -104,30 +104,41 @@ impl<'a> WriteDb<'a> {
         self.snapshot_request(&self.get_any_request(request_id)?, reason)
     }
 
-    /// What every send calls: capture the request, and don't make a fuss.
+    /// What a send calls when all it has is the request's id: capture the
+    /// stored row, and don't make a fuss.
     ///
-    /// Takes an id rather than a request because the request a send holds is
-    /// not always the stored one: a plugin can send a request it has already
-    /// rendered, and a version of that would hold literal values, secrets
-    /// included, where the user wrote templates. The stored row is what a
-    /// restore should put back, so that is what gets captured.
-    ///
-    /// A send is not worth failing over history that couldn't be written, and
-    /// a request with no id or no stored row is ephemeral and has nothing to
-    /// version. Either way the response just has no version to offer.
-    pub fn snapshot_request_for_send(&self, request_id: &str) -> Option<String> {
+    /// For sends whose request may not be the stored one: a plugin can send a
+    /// request it has already rendered, and a version of that would hold
+    /// literal values, secrets included, where the user wrote templates. The
+    /// stored row is what a restore should put back. A request with no id or
+    /// no stored row is ephemeral and has nothing to version.
+    pub fn snapshot_stored_request_for_send(&self, request_id: &str) -> Option<String> {
         if request_id.is_empty() {
             return None;
         }
-        let stored = match self.get_any_request(request_id) {
-            Ok(stored) => stored,
-            Err(Error::ModelNotFound(_)) => return None,
+        match self.get_any_request(request_id) {
+            Ok(stored) => self.snapshot_request_for_send(&stored),
+            Err(Error::ModelNotFound(_)) => None,
             Err(err) => {
                 warn!("Failed to load request to snapshot before send: {err}");
-                return None;
+                None
             }
-        };
-        match self.snapshot_request(&stored, ModelVersionReason::Send) {
+        }
+    }
+
+    /// What a send calls with the stored request it loaded: capture it, and
+    /// don't make a fuss.
+    ///
+    /// The caller must pass the request as stored, never a resolved or rendered
+    /// copy; with only an id, use [`Self::snapshot_stored_request_for_send`].
+    /// A send is not worth failing over history that couldn't be written, and
+    /// a request with no id is ephemeral and has nothing to version. Either way
+    /// the response just has no version to offer.
+    pub fn snapshot_request_for_send(&self, request: &AnyRequest) -> Option<String> {
+        if request.id().is_empty() {
+            return None;
+        }
+        match self.snapshot_request(request, ModelVersionReason::Send) {
             Ok(version) => Some(version.id),
             Err(err) => {
                 warn!("Failed to snapshot request before send: {err}");

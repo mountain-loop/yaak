@@ -40,6 +40,7 @@ use yaak_models::models::{
     CookieJar, Environment, GrpcConnection, GrpcConnectionState, GrpcEvent, GrpcEventType,
     HttpRequest, HttpResponse, HttpResponseState, Workspace,
 };
+use yaak_models::queries::any_request::AnyRequest;
 use yaak_models::util::{BatchUpsertResult, ImportDestination, ImportPlan, UpdateSource};
 use yaak_plugins::events::{
     Color, ErrorResponse, FilterResponse, InternalEvent, InternalEventPayload, PluginContext,
@@ -334,7 +335,8 @@ async fn cmd_grpc_go<R: Runtime>(
     let conn = app_handle.with_tx(|tx| {
         // Capture the stored request, not the rendered one: what a restore should
         // put back is what the user typed
-        let version_id = tx.snapshot_request_for_send(&unrendered_request.id);
+        let version_id =
+            tx.snapshot_request_for_send(&AnyRequest::GrpcRequest(unrendered_request.clone()));
         tx.upsert_grpc_connection(
             &GrpcConnection {
                 workspace_id: request.workspace_id.clone(),

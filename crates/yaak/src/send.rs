@@ -453,7 +453,9 @@ fn snapshot_request_for_send(query_manager: &QueryManager, request_id: &str) -> 
         return None;
     }
     query_manager
-        .with_tx(|tx| Ok::<_, yaak_models::error::Error>(tx.snapshot_request_for_send(request_id)))
+        .with_tx(|tx| {
+            Ok::<_, yaak_models::error::Error>(tx.snapshot_stored_request_for_send(request_id))
+        })
         .unwrap_or_else(|err| {
             warn!("Failed to snapshot request before send: {err}");
             None
