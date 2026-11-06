@@ -1,6 +1,6 @@
 use crate::bodies;
 use crate::db::ProxyQueryManager;
-use crate::models::{Flow, FlowBody, FlowIden};
+use crate::models::{Flow, FlowBody};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use rusqlite::types::Value;
@@ -22,13 +22,25 @@ pub struct FlowFilter {
     #[ts(optional)]
     pub host: Option<String>,
     /// Only flows under one of these hosts or paths, as the app's sidebar names them:
-    /// `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host.
+    /// `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host. A host
+    /// written `*.github.com` is a site: `github.com` and every host below it.
     #[ts(optional)]
     pub under: Option<Vec<String>>,
-    /// Only flows from one of these apps, by bundle id, or by path for a process outside an
-    /// app bundle.
+    /// Only flows from one of these apps: by bundle id, by path for a process outside an app
+    /// bundle, by name in any case (`slack`), or, for a process outside an app, by the folder
+    /// it ran in (`fieldwork`).
     #[ts(optional)]
     pub app: Option<Vec<String>>,
+    /// Only flows from macOS's own daemons (true), or none of them (false), as [`is_system`]
+    /// tells them by their executable.
+    #[ts(optional)]
+    pub system: Option<bool>,
+    /// Only flows one of these groups covers, each judged on its own: several sidebar rows
+    /// selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
+    /// pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
+    /// carried by a query string.
+    #[ts(optional)]
+    pub any: Option<Vec<FlowFilter>>,
     /// The method, any case.
     #[ts(optional)]
     pub method: Option<String>,
@@ -50,8 +62,8 @@ pub struct FlowFilter {
 }
 
 impl FlowFilter {
-    /// The filter from a query string's `q`, `host`, `under`, `app`, `method`, `status`,
-    /// `limit`, `after` and `before`. `under` and `app` may repeat.
+    /// The filter from a query string's `q`, `host`, `under`, `app`, `system`, `method`,
+    /// `status`, `limit`, `after` and `before`. `under` and `app` may repeat.
     pub fn from_query(query: &str) -> Result<Self, String> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -61,6 +73,11 @@ impl FlowFilter {
                 "host" => filter.host = value,
                 "under" => filter.under.get_or_insert_default().extend(value),
                 "app" => filter.app.get_or_insert_default().extend(value),
+                "system" => {
+                    filter.system = value
+                        .map(|v| v.parse().map_err(|_| format!("Invalid system {v:?}")))
+                        .transpose()?
+                }
                 "method" => filter.method = value,
                 "status" => filter.status = value,
                 "after" => filter.after = value,
@@ -79,7 +96,8 @@ impl FlowFilter {
     pub fn to_query(&self) -> String {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         let limit = self.limit.map(|l| l.to_string());
-        for (key, value) in [("q", &self.q), ("host", &self.host)] {
+        let system = self.system.map(|s| s.to_string());
+        for (key, value) in [("q", &self.q), ("host", &self.host), ("system", &system)] {
             if let Some(value) = value {
                 query.append_pair(key, value);
             }
@@ -112,12 +130,20 @@ impl FlowFilter {
             || given(&self.status)
             || self.under.is_some()
             || self.app.is_some()
+            || self.system.is_some()
+            || self.any.as_ref().is_some_and(|groups| groups.iter().any(FlowFilter::narrows))
     }
 
-    /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters.
-    /// `grpc` says the database has gRPC statuses: one opened read-only before its migrations
-    /// have run may not.
-    fn condition(&self, grpc: bool) -> (String, Vec<Value>) {
+    /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters,
+    /// for the database `conn` reads, which may be from before the folder or gRPC columns, when
+    /// read without migrating.
+    fn condition_in(&self, conn: &rusqlite::Connection) -> (String, Vec<Value>) {
+        self.condition(has_column(conn, "client_cwd"), has_column(conn, "grpc_status"))
+    }
+
+    /// [`Self::condition_in`], told which of the later columns the database has: `has_cwd`,
+    /// the folder a program ran in, and `grpc`, gRPC statuses.
+    fn condition(&self, has_cwd: bool, grpc: bool) -> (String, Vec<Value>) {
         let mut sql = String::from("1");
         let mut params: Vec<Value> = Vec::new();
         for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
@@ -145,6 +171,11 @@ impl FlowFilter {
             // The node itself, or anything below it, by the sidebar's rules.
             let mut any = Vec::new();
             for node in under {
+                if let Some(site) = site_of_node(node) {
+                    any.push("under_site(url, ?)");
+                    params.push(site.into());
+                    continue;
+                }
                 let node = normalize_node(node);
                 any.push("(sidebar_path(url) = ? OR substr(sidebar_path(url), 1, ?) = ?)");
                 let below = format!("{node}/");
@@ -159,8 +190,34 @@ impl FlowFilter {
         }
         if let Some(apps) = &self.app {
             let marks = vec!["?"; apps.len()].join(", ");
-            sql.push_str(&format!(" AND coalesce(client_bundle_id, client_path) IN ({marks})"));
+            sql.push_str(&format!(
+                " AND (coalesce(client_bundle_id, client_path) IN ({marks}) \
+                OR lower(client_name) IN ({marks})"
+            ));
             params.extend(apps.iter().map(|a| a.clone().into()));
+            params.extend(apps.iter().map(|a| a.to_lowercase().into()));
+            if has_cwd {
+                sql.push_str(&format!(
+                    " OR (client_bundle_id IS NULL AND lower(folder_name(client_cwd)) IN ({marks}))"
+                ));
+                params.extend(apps.iter().map(|a| a.to_lowercase().into()));
+            }
+            sql.push(')');
+        }
+        match self.system {
+            Some(true) => sql.push_str(" AND is_system(client_bundle_id, client_path)"),
+            Some(false) => sql.push_str(" AND NOT is_system(client_bundle_id, client_path)"),
+            None => {}
+        }
+        // Each group whole, then any of them.
+        if let Some(groups) = self.any.as_ref().filter(|g| !g.is_empty()) {
+            let mut any = Vec::new();
+            for group in groups {
+                let (condition, group_params) = group.condition(has_cwd, grpc);
+                any.push(format!("({condition})"));
+                params.extend(group_params);
+            }
+            sql.push_str(&format!(" AND ({})", any.join(" OR ")));
         }
         if let Some(method) = self.method.as_deref().filter(|m| !m.is_empty()) {
             sql.push_str(" AND lower(method) = ?");
@@ -231,6 +288,75 @@ fn normalize_node(node: &str) -> String {
     }
 }
 
+/// The site a sidebar node names, `github.com` for `*.github.com`, lowercased. None for a host or
+/// a path.
+fn site_of_node(node: &str) -> Option<String> {
+    let site = node.strip_prefix("*.")?;
+    (!site.is_empty() && !site.contains('/')).then(|| site.to_ascii_lowercase())
+}
+
+/// `url`'s host, without its port, is `site` or a host below it: `api.github.com` is under
+/// `github.com`.
+pub fn under_site(url: &str, site: &str) -> bool {
+    let path = sidebar_path(url);
+    let host = path.split('/').next().unwrap_or_default();
+    let host = strip_port(host);
+    host == site || host.strip_suffix(site).is_some_and(|rest| rest.ends_with('.'))
+}
+
+/// `host` without a `:port` after it, keeping an IPv6 address's brackets.
+fn strip_port(host: &str) -> &str {
+    if host.starts_with('[') {
+        return host.find(']').map_or(host, |end| &host[..=end]);
+    }
+    host.rsplit_once(':').map_or(host, |(h, _)| h)
+}
+
+/// The last part of a directory's path, `fieldwork` for `/Users/me/src/fieldwork`. None for the
+/// root, where daemons run, or no path.
+pub fn folder_name(path: Option<&str>) -> Option<&str> {
+    let name = path?.trim_end_matches('/').rsplit('/').next()?;
+    (!name.is_empty()).then_some(name)
+}
+
+/// Where macOS keeps its own daemons and tools.
+const SYSTEM_DIRS: &[&str] = &[
+    "/System/",
+    "/usr/libexec/",
+    "/usr/sbin/",
+    "/sbin/",
+    "/Library/Apple/",
+];
+
+/// Daemons that are macOS's own wherever they run from.
+const SYSTEM_PROGRAMS: &[&str] = &[
+    "akd",
+    "apsd",
+    "cloudd",
+    "mDNSResponder",
+    "nsurlsessiond",
+    "ocspd",
+    "softwareupdated",
+    "trustd",
+];
+
+/// A flow came from one of macOS's own daemons rather than an app or a program someone ran: a
+/// process outside an app bundle whose executable is under `/System`, `/usr/libexec` and the
+/// like, or one of a few daemons by name. WebKit's helper processes, which also live under
+/// `/System`, send apps' traffic and are not. `isSystemFlow` in the app's `lib/search.ts`
+/// follows the same rules.
+pub fn is_system(bundle_id: Option<&str>, path: Option<&str>) -> bool {
+    let Some(path) = path else { return false };
+    if bundle_id.is_some() {
+        return false;
+    }
+    let name = path.rsplit('/').next().unwrap_or_default();
+    if name.starts_with("com.apple.WebKit.") {
+        return false;
+    }
+    SYSTEM_DIRS.iter().any(|dir| path.starts_with(dir)) || SYSTEM_PROGRAMS.contains(&name)
+}
+
 /// The SQL condition for a status term: `404` exactly, `40` as the start of one, or a class
 /// such as `4xx`. None when the term is not one.
 fn status_condition(term: &str, params: &mut Vec<Value>) -> Option<String> {
@@ -276,13 +402,17 @@ pub fn page(
 }
 
 /// The database has the gRPC status column, added by a later migration.
-fn has_grpc_status(conn: &rusqlite::Connection) -> bool {
-    conn.prepare("SELECT grpc_status FROM flows LIMIT 0").is_ok()
+/// The flows table has `column`: a database opened read-only before its migrations have run may
+/// not.
+fn has_column(conn: &rusqlite::Connection, column: &str) -> bool {
+    conn.prepare(&format!("SELECT {column} FROM flows LIMIT 0")).is_ok()
 }
 
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
-    let (condition, mut params) = filter.condition(has_grpc_status(conn));
-    let mut sql = format!("SELECT * FROM flows WHERE {condition}");
+    let (condition, mut params) = filter.condition_in(conn);
+    // The rowid, for the flow's number.
+    let mut sql = format!("SELECT rowid, * FROM flows WHERE {condition}");
+    push_clear_mark(conn, &mut sql, &mut params);
     if let Some(id) = &filter.after {
         // By rowid, which only grows as flows are written.
         let rowid: i64 = conn
@@ -312,44 +442,205 @@ fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>
 }
 
 fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<usize, String> {
-    let (condition, params) = filter.condition(has_grpc_status(conn));
-    conn.query_row(
-        &format!("SELECT COUNT(*) FROM flows WHERE {condition}"),
-        rusqlite::params_from_iter(params),
-        |r| r.get::<_, i64>(0),
-    )
-    .map(|n| n as usize)
-    .map_err(|e| e.to_string())
+    let (condition, mut params) = filter.condition_in(conn);
+    let mut sql = format!("SELECT COUNT(*) FROM flows WHERE {condition}");
+    push_clear_mark(conn, &mut sql, &mut params);
+    conn.query_row(&sql, rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0))
+        .map(|n| n as usize)
+        .map_err(|e| e.to_string())
 }
 
-/// Deletes every flow and their bodies, in a transaction in each database. The flows' deletion
-/// commits only after their bodies' has, so when clearing the bodies fails the flows stay, to be
-/// cleared again. Returns how many there were.
-pub fn clear(db: &ProxyQueryManager, blobs: &BlobManager) -> Result<usize, String> {
+/// Leaves out cleared flows, when a clear is pending; otherwise adds nothing, so SQLite keeps its
+/// cheapest plan.
+fn push_clear_mark(conn: &rusqlite::Connection, sql: &mut String, params: &mut Vec<Value>) {
+    let mark = clear_mark(conn);
+    if mark > 0 {
+        sql.push_str(" AND rowid > ?");
+        params.push(mark.into());
+    }
+}
+
+/// The rowid at or below which flows are cleared, or 0 when none are waiting to be deleted. 0
+/// too for a database from before the mark, read without migrating.
+pub fn clear_mark(conn: &rusqlite::Connection) -> i64 {
+    conn.query_row("SELECT max_rowid FROM flow_clear_mark WHERE id = 1", [], |r| r.get(0))
+        .unwrap_or(0)
+}
+
+/// Clears every flow at once: marks the newest flow's rowid, so no listing or count sees it or
+/// any before it, and leaves the deleting to [`delete_cleared`]. Flows written afterwards are
+/// unaffected. Returns how many flows were cleared.
+pub fn clear(db: &ProxyQueryManager) -> Result<usize, String> {
     db.with_tx(|c| {
         let conn = c.conn().resolve();
-        let mut stmt = conn.prepare("SELECT id FROM flows")?;
-        let ids = stmt.query_map([], |r| r.get(0))?.collect::<Result<Vec<String>, _>>()?;
-        conn.execute("DELETE FROM flows", [])?;
-        conn.execute("DELETE FROM flow_messages", [])?;
-        // Only the deleted flows' bodies, so a flow still in flight keeps what it has written.
+        let mark = clear_mark(conn);
+        let (newest, cleared): (Option<i64>, i64) = conn.query_row(
+            "SELECT max(rowid), count(*) FROM flows WHERE rowid > ?",
+            [mark],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        if let Some(newest) = newest {
+            conn.execute(
+                "INSERT INTO flow_clear_mark (id, max_rowid) VALUES (1, ?) \
+                ON CONFLICT (id) DO UPDATE SET max_rowid = excluded.max_rowid",
+                [newest],
+            )?;
+        }
+        Ok::<_, yaak_database::Error>(cleared as usize)
+    })
+    .map_err(|e| format!("Failed to clear flows: {e}"))
+}
+
+/// Flows deleted per transaction while deleting cleared ones, so a flow being written never
+/// waits long behind it.
+pub const DELETE_BATCH: usize = 500;
+
+/// How long a cleaner may go without a batch before another process takes the deleting over.
+const CLEANER_LEASE_MS: i64 = 30_000;
+
+/// What a batch of deleting cleared flows left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cleaned {
+    /// More cleared flows wait.
+    More,
+    /// None are left, and the mark is gone.
+    Done,
+    /// Another process holds the lease and is deleting them.
+    Elsewhere,
+}
+
+/// Deletes up to `batch` cleared flows, their messages and their bodies, as `cleaner`, the
+/// process's name for itself. Once none are left, removes the mark in the same transaction as
+/// the last of them, so a clear that raised it meanwhile is never lost.
+///
+/// One process deletes at a time, the one holding the mark's lease, which each batch renews:
+/// the app and the CLI share the database, and two cleaners could otherwise race. The bodies go
+/// first, in their own transaction, and the rows after, so when deleting the bodies fails the
+/// flows stay, to be deleted again. The two writers are never held together: a flow being
+/// written holds the bodies' while it waits for the flows', and the other order would stall them
+/// both.
+pub fn delete_cleared(
+    db: &ProxyQueryManager,
+    blobs: &BlobManager,
+    batch: usize,
+    cleaner: &str,
+) -> Result<Cleaned, String> {
+    let fail = |e: String| format!("Failed to delete cleared flows: {e}");
+    if clear_mark_in(db) == 0 {
+        return Ok(Cleaned::Done);
+    }
+    if !take_lease(db, cleaner).map_err(|e| fail(e.to_string()))? {
+        return Ok(Cleaned::Elsewhere);
+    }
+    let rows = read_cleared(db, batch).map_err(|e| fail(e.to_string()))?;
+    // Their bodies and their messages' payloads, by flow, so a flow still in flight keeps what
+    // it has written.
+    if !rows.is_empty() {
         blobs
             .with_tx(|b| {
-                for id in &ids {
+                for (_, id) in &rows {
                     b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
                     b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
                     b.delete_chunks_like(&format!("{id}.msg.%"))?;
                 }
                 Ok::<_, yaak_models::error::Error>(())
             })
-            .map_err(|e| yaak_database::Error::Database(format!("flow bodies: {e}")))?;
-        Ok::<_, yaak_database::Error>(ids.len())
-    })
-    .map_err(|e| format!("Failed to clear flows: {e}"))
+            .map_err(|e| fail(format!("flow bodies: {e}")))?;
+    }
+    delete_rows(db, &rows, cleaner).map_err(|e| fail(e.to_string()))
 }
 
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
+
+/// Takes or renews the lease on deleting cleared flows for `cleaner`. False while another
+/// process holds it, or when nothing is cleared.
+fn take_lease(db: &ProxyQueryManager, cleaner: &str) -> Result<bool, yaak_database::Error> {
+    db.with_tx(|c| {
+        let now = now_ms();
+        let taken = c.conn().resolve().execute(
+            "UPDATE flow_clear_mark SET cleaner = ?1, cleaner_at = ?2 WHERE id = 1 \
+            AND (cleaner IS NULL OR cleaner = ?1 OR cleaner_at IS NULL OR cleaner_at < ?3)",
+            rusqlite::params![cleaner, now, now - CLEANER_LEASE_MS],
+        )?;
+        Ok(taken == 1)
+    })
+}
+
+/// The next `batch` cleared flows, by rowid and id.
+fn read_cleared(db: &ProxyQueryManager, batch: usize) -> rusqlite::Result<Vec<(i64, String)>> {
+    db.with_conn(|c| {
+        let conn = c.conn().resolve();
+        let mut stmt =
+            conn.prepare("SELECT rowid, id FROM flows WHERE rowid <= ? ORDER BY rowid LIMIT ?")?;
+        stmt.query_map([clear_mark(conn), batch as i64], |r| Ok((r.get(0)?, r.get(1)?)))?.collect()
+    })
+}
+
+/// Deletes `rows`, read a moment ago, and their messages, while `cleaner` still holds the lease
+/// and only those still under the mark with the same id: read since, the mark may be gone and a
+/// new flow have the rowid again. Drops the mark once nothing is left under it.
+fn delete_rows(
+    db: &ProxyQueryManager,
+    rows: &[(i64, String)],
+    cleaner: &str,
+) -> Result<Cleaned, yaak_database::Error> {
+    db.with_tx(|c| {
+        let conn = c.conn().resolve();
+        let held: Option<Option<String>> = conn
+            .query_row("SELECT cleaner FROM flow_clear_mark WHERE id = 1", [], |r| r.get(0))
+            .ok();
+        match held {
+            // The mark went meanwhile: a rowid read may be a new flow's now.
+            None => return Ok(Cleaned::Done),
+            Some(held) if held.as_deref() != Some(cleaner) => return Ok(Cleaned::Elsewhere),
+            Some(_) => {}
+        }
+        let mark = clear_mark(conn);
+        let mut delete =
+            conn.prepare("DELETE FROM flows WHERE rowid = ? AND id = ? AND rowid <= ?")?;
+        let mut delete_messages = conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
+        for (rowid, id) in rows {
+            if delete.execute(rusqlite::params![rowid, id, mark])? > 0 {
+                delete_messages.execute([id])?;
+            }
+        }
+        // With none left under it, the mark goes in this transaction, since an empty table
+        // hands out rowids from 1 again and a new flow would fall under it.
+        let left: bool =
+            conn.query_row("SELECT EXISTS (SELECT 1 FROM flows WHERE rowid <= ?)", [mark], |r| {
+                r.get(0)
+            })?;
+        if left {
+            conn.execute("UPDATE flow_clear_mark SET cleaner_at = ? WHERE id = 1", [now_ms()])?;
+            Ok(Cleaned::More)
+        } else {
+            conn.execute("DELETE FROM flow_clear_mark WHERE id = 1", [])?;
+            Ok(Cleaned::Done)
+        }
+    })
+}
+
+/// [`clear_mark`], read from `db`.
+pub fn clear_mark_in(db: &ProxyQueryManager) -> i64 {
+    db.with_conn(|c| clear_mark(c.conn().resolve()))
+}
+
+/// A flow by id, with its number. None once it is cleared, though its row may not be deleted
+/// yet.
 pub fn find(db: &ProxyQueryManager, flow_id: &str) -> Option<Flow> {
-    db.with_conn(|c| c.find_optional::<Flow>(FlowIden::Id, flow_id))
+    db.with_conn(|c| find_in(c.conn().resolve(), flow_id))
+}
+
+/// [`find`], inside a transaction or on a connection already held.
+pub fn find_in(conn: &rusqlite::Connection, flow_id: &str) -> Option<Flow> {
+    conn.query_row(
+        "SELECT rowid, * FROM flows WHERE id = ? AND rowid > ?",
+        rusqlite::params![flow_id, clear_mark(conn)],
+        Flow::from_row,
+    )
+    .ok()
 }
 
 pub fn get(db: &ProxyQueryManager, flow_id: &str) -> Result<Flow, String> {
@@ -361,9 +652,14 @@ pub fn count(db: &ProxyQueryManager) -> Result<usize, String> {
 }
 
 fn count_in(conn: &rusqlite::Connection) -> Result<usize, String> {
-    conn.query_row("SELECT COUNT(*) FROM flows", [], |r| r.get::<_, i64>(0))
-        .map(|n| n as usize)
-        .map_err(|e| e.to_string())
+    // Without a clear pending, SQLite counts over its smallest index rather than the table.
+    let mark = clear_mark(conn);
+    let count = if mark == 0 {
+        conn.query_row("SELECT COUNT(*) FROM flows", [], |r| r.get::<_, i64>(0))
+    } else {
+        conn.query_row("SELECT COUNT(*) FROM flows WHERE rowid > ?", [mark], |r| r.get(0))
+    };
+    count.map(|n| n as usize).map_err(|e| e.to_string())
 }
 
 /// A body in JSON: text when it is UTF-8, base64 when it is not.
@@ -649,7 +945,7 @@ mod tests {
         let plan: Vec<String> = db.with_conn(|c| {
             let conn = c.conn().resolve();
             let (condition, params) =
-                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition(true);
+                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition_in(conn);
             let sql = format!(
                 "EXPLAIN QUERY PLAN SELECT * FROM flows WHERE {condition} \
                 ORDER BY started_at DESC, id DESC LIMIT 500"
@@ -733,7 +1029,7 @@ mod tests {
     }
 
     #[test]
-    fn clear_deletes_flows_and_their_bodies() {
+    fn clear_marks_flows_then_deletes_them_in_batches() {
         use yaak_database::UpdateSource;
         use yaak_models::blob_manager::BodyChunkWriter;
         let dir = tempfile::tempdir().unwrap();
@@ -744,25 +1040,258 @@ mod tests {
             writer.write(b"body").unwrap();
             writer.finish().unwrap();
         };
-        for id in ["fl_a", "fl_b"] {
+        let write_flow = |id: &str| {
             write_body(id, FlowBody::Request);
             write_body(id, FlowBody::Response);
             let flow = Flow { id: id.into(), ..Default::default() };
             db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+        };
+        let rows = || {
+            db.with_conn(|c| {
+                c.conn()
+                    .resolve()
+                    .query_row("SELECT count(*) FROM flows", [], |r| r.get::<_, i64>(0))
+                    .unwrap()
+            })
+        };
+        let ids = |filter: &FlowFilter| -> Vec<String> {
+            list(&db, filter).unwrap().into_iter().map(|f| f.id).collect()
+        };
+        for id in ["fl_a", "fl_b", "fl_c"] {
+            write_flow(id);
         }
         // A flow still in flight has written a body but not its row.
         write_body("fl_live", FlowBody::Request);
 
-        // Bodies that fail to clear keep their flows, to clear again.
-        let read_only = crate::db::open_blobs_read_only(&dir.path().join("blobs.sqlite")).unwrap();
-        assert!(clear(&db, &read_only).is_err());
-        assert_eq!(count(&db).unwrap(), 2);
-
-        assert_eq!(clear(&db, &blobs).unwrap(), 2);
+        // Cleared at once: no listing, count or lookup sees them, though their rows remain.
+        assert_eq!(clear(&db).unwrap(), 3);
         assert_eq!(count(&db).unwrap(), 0);
-        let body_ids = blobs.connect().list_body_ids().unwrap();
-        assert_eq!(body_ids, vec![Flow::body_id("fl_live", FlowBody::Request)]);
-        assert_eq!(clear(&db, &blobs).unwrap(), 0);
+        assert_eq!(ids(&FlowFilter::default()), Vec::<String>::new());
+        assert!(find(&db, "fl_a").is_none());
+        assert_eq!(rows(), 3);
+        assert_eq!(db.with_conn(|c| clear_mark(c.conn().resolve())), 3);
+
+        // A flow written after the clear is unaffected, and a second clear takes only it.
+        write_flow("fl_d");
+        assert_eq!(ids(&FlowFilter::default()), vec!["fl_d"]);
+        assert_eq!(find(&db, "fl_d").map(|f| f.number), Some(4));
+        let narrowed = FlowFilter { q: Some("example".into()), ..Default::default() };
+        assert_eq!(page(&db, &narrowed).unwrap().1, 1);
+
+        // Bodies that fail to delete keep their flows, to delete again.
+        let read_only = crate::db::open_blobs_read_only(&dir.path().join("blobs.sqlite")).unwrap();
+        assert!(delete_cleared(&db, &read_only, 2, "cln_a").is_err());
+        assert_eq!(rows(), 4);
+
+        // In batches, the mark going with the last of them.
+        assert_eq!(delete_cleared(&db, &blobs, 2, "cln_a"), Ok(Cleaned::More));
+        assert_eq!(rows(), 2);
+        assert_eq!(delete_cleared(&db, &blobs, 2, "cln_a"), Ok(Cleaned::Done));
+        assert_eq!(rows(), 1);
+        assert_eq!(db.with_conn(|c| clear_mark(c.conn().resolve())), 0);
+        assert_eq!(ids(&FlowFilter::default()), vec!["fl_d"]);
+        let mut body_ids = blobs.connect().list_body_ids().unwrap();
+        body_ids.sort();
+        assert_eq!(
+            body_ids,
+            vec![
+                Flow::body_id("fl_d", FlowBody::Request),
+                Flow::body_id("fl_d", FlowBody::Response),
+                Flow::body_id("fl_live", FlowBody::Request),
+            ]
+        );
+
+        assert_eq!(clear(&db).unwrap(), 1);
+        assert_eq!(clear(&db).unwrap(), 0);
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH, "cln_a"), Ok(Cleaned::Done));
+        assert_eq!(rows(), 0);
+
+        // An empty table numbers from 1 again, which no stale mark may hide.
+        write_flow("fl_e");
+        assert_eq!(ids(&FlowFilter::default()), vec!["fl_e"]);
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH, "cln_a"), Ok(Cleaned::Done));
+        assert_eq!(rows(), 1);
+    }
+
+    #[test]
+    fn one_cleaner_at_a_time_and_never_a_reused_rowid() {
+        use yaak_database::UpdateSource;
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let blobs = yaak_models::init_blob_store(dir.path().join("blobs.sqlite")).unwrap();
+        let write_flow = |id: &str| {
+            let flow = Flow { id: id.into(), ..Default::default() };
+            db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap().0
+        };
+        let rows = || -> Vec<String> {
+            db.with_conn(|c| {
+                let conn = c.conn().resolve();
+                let mut stmt = conn.prepare("SELECT id FROM flows ORDER BY rowid").unwrap();
+                stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+            })
+        };
+        for id in ["fl_a", "fl_b", "fl_c"] {
+            write_flow(id);
+        }
+        assert_eq!(clear(&db).unwrap(), 3);
+
+        // The app takes the lease; the CLI, sharing the database, leaves the deleting to it.
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_app"), Ok(Cleaned::More));
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_cli"), Ok(Cleaned::Elsewhere));
+        assert_eq!(rows(), vec!["fl_b", "fl_c"]);
+
+        // A lease gone stale passes to the next cleaner.
+        let exec = |sql: &str| {
+            db.with_tx(|c| Ok::<_, yaak_database::Error>(c.conn().resolve().execute(sql, [])?))
+                .unwrap()
+        };
+        exec("UPDATE flow_clear_mark SET cleaner_at = 0");
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_cli"), Ok(Cleaned::More));
+        assert_eq!(delete_cleared(&db, &blobs, 1, "cln_app"), Ok(Cleaned::Elsewhere));
+
+        // A batch read before the last one finished: by then the mark is gone, the table empty,
+        // and a new flow has the same rowid as the one read. It is not deleted.
+        let stale = read_cleared(&db, DELETE_BATCH).unwrap();
+        assert_eq!(stale.iter().map(|(_, id)| id.as_str()).collect::<Vec<_>>(), vec!["fl_c"]);
+        assert_eq!(delete_cleared(&db, &blobs, DELETE_BATCH, "cln_cli"), Ok(Cleaned::Done));
+        exec(&format!("INSERT INTO flows (rowid, id) VALUES ({}, 'fl_new')", stale[0].0));
+        assert_eq!(delete_rows(&db, &stale, "cln_cli").unwrap(), Cleaned::Done);
+        assert_eq!(rows(), vec!["fl_new"]);
+
+        // Under a new mark, the same rowid with another id is not the flow read either.
+        assert_eq!(clear(&db).unwrap(), 1);
+        exec("UPDATE flow_clear_mark SET cleaner = 'cln_cli'");
+        assert_eq!(delete_rows(&db, &stale, "cln_cli").unwrap(), Cleaned::More);
+        assert_eq!(rows(), vec!["fl_new"]);
+    }
+
+    #[test]
+    fn numbers_flows_by_rowid_and_keeps_it_on_update() {
+        use yaak_database::UpdateSource;
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let write = |flow: &Flow| db.with_tx(|tx| tx.upsert(flow, &UpdateSource::Background));
+        let (a, _) = write(&Flow { id: "fl_a".into(), ..Default::default() }).unwrap();
+        let (b, _) = write(&Flow { id: "fl_b".into(), ..Default::default() }).unwrap();
+        assert_eq!((a.number, b.number), (1, 2));
+        let (a, created) = write(&Flow { status: Some(200), ..a }).unwrap();
+        assert_eq!((a.number, created), (1, false));
+        let numbers: Vec<i64> =
+            list(&db, &FlowFilter::default()).unwrap().iter().map(|f| f.number).collect();
+        assert_eq!(numbers, vec![2, 1]);
+        assert_eq!(find(&db, "fl_b").map(|f| f.number), Some(2));
+    }
+
+    #[test]
+    fn filters_by_app_name_folder_site_and_system() {
+        use yaak_database::UpdateSource;
+        let dir = tempfile::tempdir().unwrap();
+        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let flows = [
+            Flow {
+                id: "fl_slack".into(),
+                url: "https://edgeapi.slack.com/cache".into(),
+                client_name: Some("Slack".into()),
+                client_bundle_id: Some("com.tinyspeck.slackmacgap".into()),
+                client_path: Some("/Applications/Slack.app".into()),
+                ..Default::default()
+            },
+            Flow {
+                id: "fl_node".into(),
+                url: "https://api.github.com:443/repos".into(),
+                client_name: Some("node".into()),
+                client_path: Some("/opt/homebrew/bin/node".into()),
+                client_cwd: Some("/Users/me/src/fieldwork".into()),
+                ..Default::default()
+            },
+            Flow {
+                id: "fl_daemon".into(),
+                url: "https://github.com/login".into(),
+                client_name: Some("nsurlsessiond".into()),
+                client_path: Some("/usr/libexec/nsurlsessiond".into()),
+                client_cwd: Some("/".into()),
+                ..Default::default()
+            },
+            Flow {
+                id: "fl_none".into(),
+                url: "http://notgithub.com/".into(),
+                ..Default::default()
+            },
+        ];
+        for flow in &flows {
+            db.with_tx(|tx| tx.upsert(flow, &UpdateSource::Background)).unwrap();
+        }
+        let ids = |filter: FlowFilter| -> Vec<String> {
+            let mut ids: Vec<String> =
+                list(&db, &filter).unwrap().into_iter().map(|f| f.id).collect();
+            ids.sort();
+            ids
+        };
+        let app = |a: &str| FlowFilter { app: Some(vec![a.into()]), ..Default::default() };
+        assert_eq!(ids(app("slack")), vec!["fl_slack"]);
+        assert_eq!(ids(app("com.tinyspeck.slackmacgap")), vec!["fl_slack"]);
+        assert_eq!(ids(app("Fieldwork")), vec!["fl_node"]);
+        assert_eq!(ids(app("/opt/homebrew/bin/node")), vec!["fl_node"]);
+        let under = |n: &str| FlowFilter { under: Some(vec![n.into()]), ..Default::default() };
+        assert_eq!(ids(under("*.github.com")), vec!["fl_daemon", "fl_node"]);
+        assert_eq!(ids(under("api.github.com")), vec!["fl_node"]);
+        let system = |s| FlowFilter { system: Some(s), ..Default::default() };
+        assert_eq!(ids(system(true)), vec!["fl_daemon"]);
+        assert_eq!(ids(system(false)), vec!["fl_node", "fl_none", "fl_slack"]);
+
+        // Groups, as two sidebar rows under different apps write them, each judged whole:
+        // flattened, the apps and hosts would pair across rows and match both flows.
+        let group = |a: &str, n: &str| FlowFilter {
+            app: Some(vec![a.into()]),
+            under: Some(vec![n.into()]),
+            ..Default::default()
+        };
+        let crossed = FlowFilter {
+            any: Some(vec![
+                group("fieldwork", "github.com"),
+                group("nsurlsessiond", "api.github.com"),
+            ]),
+            ..Default::default()
+        };
+        assert_eq!(ids(crossed.clone()), Vec::<String>::new());
+        assert_eq!(page(&db, &crossed).unwrap().2, Some(0));
+        let flattened = FlowFilter {
+            app: Some(vec!["fieldwork".into(), "nsurlsessiond".into()]),
+            under: Some(vec!["github.com".into(), "api.github.com".into()]),
+            ..Default::default()
+        };
+        assert_eq!(ids(flattened), vec!["fl_daemon", "fl_node"]);
+        let either = FlowFilter {
+            any: Some(vec![
+                group("fieldwork", "api.github.com"),
+                FlowFilter { app: Some(vec!["slack".into()]), ..Default::default() },
+            ]),
+            q: Some("https".into()),
+            ..Default::default()
+        };
+        assert_eq!(ids(either), vec!["fl_node", "fl_slack"]);
+    }
+
+    #[test]
+    fn tells_system_daemons_apart() {
+        assert!(is_system(None, Some("/usr/libexec/nsurlsessiond")));
+        assert!(is_system(None, Some("/System/Library/PrivateFrameworks/X.framework/geod")));
+        assert!(is_system(None, Some("/somewhere/else/trustd")));
+        assert!(!is_system(None, Some("/usr/bin/curl")));
+        assert!(!is_system(None, Some("/opt/homebrew/bin/node")));
+        // An app in /System is an app, and WebKit's helpers send apps' traffic.
+        assert!(!is_system(Some("com.apple.Music"), Some("/System/Applications/Music.app")));
+        assert!(!is_system(
+            None,
+            Some(
+                "/System/Library/Frameworks/WebKit.framework/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking"
+            )
+        ));
+        assert!(!is_system(None, None));
+        assert_eq!(folder_name(Some("/Users/me/src/fieldwork/")), Some("fieldwork"));
+        assert_eq!(folder_name(Some("/")), None);
+        assert!(under_site("https://api.github.com:8443/x", "github.com"));
+        assert!(!under_site("https://notgithub.com/", "github.com"));
     }
 
     #[test]

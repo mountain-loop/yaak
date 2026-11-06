@@ -8,71 +8,111 @@ import {
   HttpMethodTagRaw,
   HttpStatusTagRaw,
   Icon,
+  useContainerSize,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import type { CSSProperties, KeyboardEvent, MouseEvent, WheelEvent } from "react";
-import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
-import { useFlowActions } from "../lib/flowActions";
+import { utcTimestamp } from "../lib/flowViews";
+import {
+  type Column,
+  type ColumnId,
+  gridTemplate,
+  hostOf,
+  nextSort,
+  shownColumns,
+} from "../lib/columns";
+import { useExportShownHar, useFlowActions } from "../lib/flowActions";
 import { compareFlows } from "../lib/flowWindow";
 import { countNewFlows } from "../lib/follow";
+import { folderOf } from "../lib/search";
 import {
-  activeQueryAtom,
-  followAtom,
+  columnPrefsAtom,
   hasAppsAtom,
+  flowSortAtom,
+  followAtom,
   loadOlderFlowsAtom,
   newestStartedAtAtom,
   oldestFlowAtom,
-  searchWindowAtom,
+  proxyStateAtom,
   shownFlowsAtom,
 } from "../lib/store";
 import { AppIcon } from "./AppIcon";
-import { SearchBar } from "./SearchBar";
+import { FlowListEmpty, PausedRow } from "./FlowListEmpty";
+import { FlowListHeader } from "./FlowListHeader";
 
-const ROW_HEIGHT = 24;
 const BOTTOM_PADDING = 6;
 /** Rows from the top at which older flows start loading */
 const LOAD_OLDER_ROWS = 20;
+/** How long a row that arrives while following stays tinted */
+const ARRIVAL_MS = 1400;
+/** Most flows arriving together that still tint; more is a burst */
+const ARRIVAL_MAX_BATCH = 5;
+
+/** `h-xs`, the height of Yaak's event rows and menu items, in pixels at the root font size */
+function rowHeight(): number {
+  const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 15;
+  return Math.round(1.8 * root);
+}
 
 interface Props {
-  sideBySide: boolean;
   style?: CSSProperties;
   className?: string;
 }
 
 /**
  * Follows new traffic until a flow is selected or the list is scrolled, then holds. Scrolling to
- * the top loads older flows from the database.
+ * the top loads older flows from the database. Catching up leaves a divider where the hold
+ * began. Sorting by a column sorts the flows loaded and stops following.
  */
-export function FlowList({ sideBySide, style, className }: Props) {
+export function FlowList({ style, className }: Props) {
   const flows = useAtomValue(shownFlowsAtom);
-  const hasApps = useAtomValue(hasAppsAtom);
   const [menu, setMenu] = useState<{ flow: Flow; x: number; y: number } | null>(null);
   const flowActions = useFlowActions();
+  const exportShown = useExportShownHar();
   const selectedId = useAtomValue(selectedFlowIdAtom);
   const setSelectedFlow = useSetAtom(selectedFlowAtom);
   const loadOlder = useSetAtom(loadOlderFlowsAtom);
   const oldestFlow = useAtomValue(oldestFlowAtom);
+  const prefs = useAtomValue(columnPrefsAtom);
+  const [sort, setSort] = useAtom(flowSortAtom);
+  const proxyState = useAtomValue(proxyStateAtom);
+  const paused = proxyState?.state === "running" && proxyState.recording === false;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { width } = useContainerSize(containerRef);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ignoreScroll = useRef(false);
   const [following, setFollowing] = useAtom(followAtom);
   const [heldAt, setHeldAt] = useState<string | null>(null);
+  /** The first flow after the last catch-up's hold, and how many came after it */
+  const [divider, setDivider] = useState<{ id: string; count: number } | null>(null);
   // The newest flow across all traffic, not just this list, so a filter change keeps the hold
   const newestStartedAt = useAtomValue(newestStartedAtAtom);
+  const ROW_HEIGHT = useMemo(rowHeight, []);
   // Read by the callbacks below, which stay the same across new traffic so rows don't re-render
-  const latest = useRef({ flows, following, newestStartedAt });
+  const latest = useRef({ flows, following, newestStartedAt, heldAt, sort });
   useLayoutEffect(() => {
-    latest.current = { flows, following, newestStartedAt };
+    latest.current = { flows, following, newestStartedAt, heldAt, sort };
   });
+
+  // Where the platform cannot tell which app sent a flow, there is no App column.
+  const hasApps = useAtomValue(hasAppsAtom);
+  const columns = useMemo(
+    () => shownColumns(prefs, width).filter((c) => hasApps || c.id !== "app"),
+    [prefs, width, hasApps],
+  );
+  const template = useMemo(() => gridTemplate(columns), [columns]);
+  const arrivals = useArrivals(flows, following && sort == null);
 
   const virtualizer = useVirtualizer({
     count: flows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     getItemKey: (index) => flows[index]?.id ?? index,
-    paddingEnd: BOTTOM_PADDING,
+    paddingEnd: BOTTOM_PADDING + (paused && flows.length > 0 ? ROW_HEIGHT + 8 : 0),
     overscan: 40,
   });
 
@@ -93,30 +133,44 @@ export function FlowList({ sideBySide, style, className }: Props) {
   }, [setFollowing]);
 
   const follow = useCallback(() => {
+    const { flows, heldAt, following, sort } = latest.current;
+    // Catching up from a hold marks where it began.
+    if (!following && sort == null) {
+      const count = countNewFlows(flows, heldAt);
+      const first = flows[flows.length - count];
+      setDivider(count > 0 && first != null ? { id: first.id, count } : null);
+    }
+    setSort(null);
     setFollowing(true);
     setHeldAt(null);
     setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [setFollowing, setScrollTop]);
+  }, [setFollowing, setScrollTop, setSort]);
 
   useLayoutEffect(() => {
     if (following) setScrollTop(Number.MAX_SAFE_INTEGER);
-  }, [following, flows, setScrollTop]);
+  }, [following, flows, paused, setScrollTop]);
+
+  // A new sort starts from its top.
+  useLayoutEffect(() => {
+    if (sort != null) setScrollTop(0);
+  }, [sort, setScrollTop]);
 
   // Older flows that loaded in above push the rows down; scroll by as much, so they stay put.
   const anchor = useRef<Flow | null>(null);
   useLayoutEffect(() => {
     const previous = anchor.current;
     anchor.current = oldestFlow;
-    if (following || previous == null || oldestFlow == null) return;
+    if (following || sort != null || previous == null || oldestFlow == null) return;
     if (compareFlows(oldestFlow, previous) >= 0) return;
     const added = flows.findIndex((f) => compareFlows(f, previous) >= 0);
     const el = scrollRef.current;
     if (added > 0 && el != null) setScrollTop(el.scrollTop + added * ROW_HEIGHT);
-  }, [oldestFlow, flows, following, setScrollTop]);
+  }, [oldestFlow, flows, following, sort, setScrollTop, ROW_HEIGHT]);
 
+  // Sorted, the flows loaded are what is sorted; older ones would land anywhere.
   const loadOlderHeld = useCallback(() => {
     hold();
-    void loadOlder();
+    if (latest.current.sort == null) void loadOlder();
   }, [hold, loadOlder]);
 
   const handleScroll = useCallback(() => {
@@ -127,14 +181,16 @@ export function FlowList({ sideBySide, style, className }: Props) {
     const el = scrollRef.current;
     if (el == null) return;
     const atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 2;
-    if (atEnd) {
+    if (atEnd && latest.current.sort == null) {
       setFollowing(true);
       setHeldAt(null);
     } else {
       hold();
-      if (el.scrollTop < LOAD_OLDER_ROWS * ROW_HEIGHT) void loadOlder();
+      if (el.scrollTop < LOAD_OLDER_ROWS * ROW_HEIGHT && latest.current.sort == null) {
+        void loadOlder();
+      }
     }
-  }, [hold, loadOlder, setFollowing]);
+  }, [hold, loadOlder, setFollowing, ROW_HEIGHT]);
 
   // A list too short to scroll still loads older flows on scrolling up.
   const handleWheel = useCallback(
@@ -158,11 +214,17 @@ export function FlowList({ sideBySide, style, className }: Props) {
         setScrollTop(top + ROW_HEIGHT - el.clientHeight);
       }
     },
-    [hold, setSelectedFlow, setScrollTop],
+    [hold, setSelectedFlow, setScrollTop, ROW_HEIGHT],
   );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
+      // ⌘↓ catches up, as the pill does.
+      if (e.metaKey && !e.shiftKey && !e.altKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        follow();
+        return;
+      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       e.preventDefault();
@@ -171,7 +233,7 @@ export function FlowList({ sideBySide, style, className }: Props) {
       else if (index === 0 && e.key === "ArrowUp") loadOlderHeld();
       else select(e.key === "ArrowDown" ? index + 1 : index - 1);
     },
-    [flows, loadOlderHeld, select, selectedId],
+    [flows, follow, loadOlderHeld, select, selectedId],
   );
 
   const openMenu = useCallback(
@@ -185,39 +247,32 @@ export function FlowList({ sideBySide, style, className }: Props) {
     [select],
   );
 
-  const newCount = following ? 0 : countNewFlows(flows, heldAt);
+  const handleSort = useCallback(
+    (column: ColumnId) => {
+      hold();
+      setSort((prev) => nextSort(prev, column));
+    },
+    [hold, setSort],
+  );
 
-  const columns = sideBySide
-    ? hasApps
-      ? "grid-cols-[0.9rem_1rem_2.6rem_minmax(0,2fr)_minmax(0,3fr)_2.4rem_3.6rem]"
-      : "grid-cols-[0.9rem_2.6rem_minmax(0,2fr)_minmax(0,3fr)_2.4rem_3.6rem]"
-    : hasApps
-      ? "grid-cols-[0.9rem_8.5rem_2.6rem_13rem_minmax(0,1fr)_2.4rem_5rem_4.5rem_3.8rem]"
-      : "grid-cols-[0.9rem_2.6rem_13rem_minmax(0,1fr)_2.4rem_5rem_4.5rem_3.8rem]";
+  const newCount = following || sort != null ? 0 : countNewFlows(flows, heldAt);
+  const dividerIndex = divider == null ? -1 : flows.findIndex((f) => f.id === divider.id);
+  const totalSize = virtualizer.getTotalSize();
 
   return (
     <div
+      ref={containerRef}
       style={style}
-      className={classNames(className, "grid grid-rows-[auto_auto_minmax(0,1fr)] min-h-0 text-sm")}
+      className={classNames(className, "grid grid-rows-[auto_minmax(0,1fr)] min-h-0 text-sm")}
     >
-      <SearchBar />
-      <div
-        className={classNames(
-          columns,
-          "grid items-center gap-x-3 h-[26px] px-1.5 mx-1.5",
-          "text-text-subtlest border-b border-surface-highlight",
-        )}
-      >
-        <span />
-        {hasApps && <span>{sideBySide ? "" : "App"}</span>}
-        <span>Method</span>
-        <span>Host</span>
-        <span>Path</span>
-        <span>Status</span>
-        {!sideBySide && <span>Type</span>}
-        {!sideBySide && <span className="text-right">Size</span>}
-        <span className="text-right">Time</span>
-      </div>
+      <FlowListHeader
+        columns={columns}
+        template={template}
+        prefs={prefs}
+        sort={sort}
+        onSort={handleSort}
+        onSortByStart={follow}
+      />
       <div className="relative min-h-0">
         <div
           ref={scrollRef}
@@ -230,9 +285,9 @@ export function FlowList({ sideBySide, style, className }: Props) {
           className="group/flows h-full overflow-y-auto px-1.5 outline-hidden"
         >
           {flows.length === 0 ? (
-            <EmptyList />
+            <FlowListEmpty />
           ) : (
-            <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+            <div className="relative" style={{ height: totalSize }}>
               {virtualizer.getVirtualItems().map((item) => {
                 const flow = flows[item.index];
                 if (flow == null) return null;
@@ -242,15 +297,28 @@ export function FlowList({ sideBySide, style, className }: Props) {
                     flow={flow}
                     index={item.index}
                     start={item.start}
+                    height={ROW_HEIGHT}
                     columns={columns}
-                    sideBySide={sideBySide}
-                    showApp={hasApps}
+                    template={template}
                     selected={flow.id === selectedId}
+                    arrivedAt={arrivals.get(flow.id) ?? null}
                     onSelect={select}
                     onContextMenu={openMenu}
                   />
                 );
               })}
+              {dividerIndex > 0 && divider != null && (
+                <div
+                  aria-hidden
+                  style={{ top: dividerIndex * ROW_HEIGHT }}
+                  className="pointer-events-none absolute inset-x-0 h-0 border-t border-border"
+                >
+                  <span className="absolute -top-2 left-1 px-1 bg-surface text-2xs text-primary">
+                    {divider.count === 1 ? "1 new" : `${divider.count} new`}
+                  </span>
+                </div>
+              )}
+              {paused && <PausedRow style={{ top: flows.length * ROW_HEIGHT }} />}
             </div>
           )}
         </div>
@@ -271,7 +339,7 @@ export function FlowList({ sideBySide, style, className }: Props) {
         )}
         <ContextMenu
           triggerPosition={menu}
-          items={menu == null ? [] : flowActions(menu.flow)}
+          items={menu == null ? [] : [...flowActions(menu.flow), exportShown()]}
           onClose={() => setMenu(null)}
         />
       </div>
@@ -279,26 +347,53 @@ export function FlowList({ sideBySide, style, className }: Props) {
   );
 }
 
-/** Nothing to list, or nothing a search matches */
-function EmptyList() {
-  const query = useAtomValue(activeQueryAtom);
-  const search = useAtomValue(searchWindowAtom);
-  if (search?.loading) return null;
-  return (
-    <p className="text-text-subtlest text-sm px-3 py-3">
-      {query == null ? "No traffic yet" : "No flows match"}
-    </p>
-  );
+/**
+ * When each flow that arrived while following came in, for the tint that fades over
+ * `ARRIVAL_MS`. Only the newest end of the list is checked, back to the first flow already
+ * known, so a new flow costs the same however many are held.
+ */
+function useArrivals(flows: Flow[], following: boolean): Map<string, number> {
+  const seen = useRef<{ known: Set<string> | null; arrivals: Map<string, number> }>({
+    known: null,
+    arrivals: new Map(),
+  });
+  // Worked out in the render the new flows cause, rather than in a second one after it.
+  return useMemo(() => {
+    const s = seen.current;
+    if (s.known == null || !following) {
+      s.known = new Set(flows.map((f) => f.id));
+      return s.arrivals;
+    }
+    const now = Date.now();
+    const arrived: string[] = [];
+    for (let i = flows.length - 1; i >= 0; i--) {
+      const flow = flows[i];
+      if (flow == null || s.known.has(flow.id)) break;
+      s.known.add(flow.id);
+      arrived.push(flow.id);
+    }
+    // Kept to the flows held, which the window trims.
+    if (s.known.size > flows.length * 2) s.known = new Set(flows.map((f) => f.id));
+    // A burst renews every row in view, so tinting it says nothing and costs a layer a row.
+    if (arrived.length === 0 || arrived.length > ARRIVAL_MAX_BATCH) return s.arrivals;
+    const next = new Map<string, number>();
+    for (const [id, at] of s.arrivals) if (now - at < ARRIVAL_MS) next.set(id, at);
+    for (const id of arrived) next.set(id, now);
+    s.arrivals = next;
+    return next;
+  }, [flows, following]);
 }
 
 interface RowProps {
   flow: Flow;
   index: number;
   start: number;
-  columns: string;
-  sideBySide: boolean;
-  showApp: boolean;
+  height: number;
+  columns: Column[];
+  template: string;
   selected: boolean;
+  /** When it arrived while following, for its tint, or null */
+  arrivedAt: number | null;
   onSelect: (index: number) => void;
   onContextMenu: (index: number, e: MouseEvent) => void;
 }
@@ -307,18 +402,21 @@ const FlowRow = memo(function FlowRow({
   flow,
   index,
   start,
+  height,
   columns,
-  sideBySide,
-  showApp,
+  template,
   selected,
+  arrivedAt,
   onSelect,
   onContextMenu,
 }: RowProps) {
-  const { host, path, query } = splitUrl(flow.url);
   const failed = flow.error != null;
   // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
   const noResponse = (failed || flow.cancelled) && flow.status == null;
-  const type = shortContentType(flow.contentType);
+  const ids = columns.map((c) => c.id);
+  // A failure's reason, or Cancelled, takes the type and size cells together.
+  const spanReason = noResponse && ids.includes("type") && ids.includes("size");
+  const sinceArrival = arrivedAt == null ? null : Date.now() - arrivedAt;
 
   return (
     <div
@@ -328,91 +426,210 @@ const FlowRow = memo(function FlowRow({
         if (e.button === 0) onSelect(index);
       }}
       onContextMenu={(e) => onContextMenu(index, e)}
-      style={{ height: ROW_HEIGHT, transform: `translateY(${start}px)` }}
+      style={{
+        height,
+        transform: `translateY(${start}px)`,
+        gridTemplateColumns: template,
+        // Continues the fade where it was when a row scrolls back into view.
+        ...(sinceArrival != null && sinceArrival < ARRIVAL_MS
+          ? { animationDelay: `-${sinceArrival}ms` }
+          : {}),
+      }}
       className={classNames(
-        columns,
         "absolute top-0 inset-x-0 grid items-center gap-x-3 px-1.5 rounded-md whitespace-nowrap",
-        "[&>*]:overflow-hidden [&>*]:text-ellipsis [&>*]:min-w-0",
+        "[&>*]:overflow-hidden [&>*]:text-ellipsis [&>*]:min-w-0 tabular-nums",
+        flow.cancelled && "text-text-subtlest",
         selected
           ? "text-text bg-surface-highlight group-focus-within/flows:bg-surface-active"
-          : index % 2 === 1 && "bg-surface-highlight/30",
+          : "hover:bg-surface-highlight/50",
+        sinceArrival != null && sinceArrival < ARRIVAL_MS && !selected && "flow-arrived",
       )}
     >
-      <span className="flex items-center justify-center">
-        {flow.savedRequestId != null ? (
-          <Icon icon="bookmark" size="xs" color="primary" title="Saved to Yaak" />
-        ) : failed ? (
-          <Icon icon="circle_alert" size="xs" color="danger" />
-        ) : flow.cancelled ? (
-          <Icon icon="circle_off" size="xs" color="secondary" title="Cancelled by the app" />
-        ) : flow.responseTruncated ? (
-          <Icon icon="scissors" size="xs" color="notice" title="Body cut at the capture limit" />
-        ) : null}
-      </span>
-      {showApp && (
-        <span className="flex items-center gap-1.5" title={flow.clientPath ?? undefined}>
-          {flow.clientPath != null && <AppIcon path={flow.clientPath} />}
-          {!sideBySide && (
-            <span className="truncate text-text-subtle">
-              {flow.clientName ?? <span className="text-text-subtlest">--</span>}
-            </span>
-          )}
-        </span>
-      )}
-      <HttpMethodTagRaw method={flow.method} short colored />
-      <span className="text-text-subtle">{host}</span>
-      <span className="flex items-center">
-        <span className="truncate">
-          {path}
-          <span className="text-text-subtlest">{query}</span>
-        </span>
-        {flow.streamKind != null && (
-          <CountBadge count={flow.messageCount} color="info" showZero className="shrink-0 mb-0!" />
-        )}
-      </span>
-      {flow.cancelled && flow.status == null ? (
-        <span className="font-mono text-text-subtlest">--</span>
-      ) : (
-        <HttpStatusTagRaw status={flow.status ?? 0} short />
-      )}
-      {!sideBySide &&
-        (failed ? (
-          <span className="text-danger" title={flow.error ?? undefined}>
-            {flow.error}
-          </span>
-        ) : flow.cancelled ? (
-          <span className="text-text-subtle">Cancelled</span>
-        ) : (
-          <span className="text-text-subtle">
-            {type ?? <span className="text-text-subtlest">--</span>}
-          </span>
-        ))}
-      {!sideBySide && (
-        <span
-          className={classNames(
-            "font-mono text-right",
-            flow.responseTruncated ? "text-notice" : "text-text-subtle",
-          )}
-        >
-          {noResponse ? (
-            <span className="text-text-subtlest">--</span>
-          ) : (
-            formatSize(flow.responseSize)
-          )}
-        </span>
-      )}
-      <span className="font-mono text-right text-text-subtle">
-        {flow.elapsedMs == null ? "--" : formatMillis(flow.elapsedMs)}
-      </span>
+      <FlowMark flow={flow} />
+      {columns.map((c) => {
+        if (spanReason && c.id === "size") return null;
+        return (
+          <FlowCell key={c.id} column={c.id} flow={flow} span={spanReason && c.id === "type"} />
+        );
+      })}
     </div>
   );
 });
 
-function splitUrl(url: string): { host: string; path: string; query: string } {
+/**
+ * One mark per row, by a fixed priority: failed, cancelled, cut, saved. Its tooltip lists every
+ * state the flow has. Streaming and agent reads join it once the engine records them.
+ */
+function FlowMark({ flow }: { flow: Flow }) {
+  const open = isOpenStream(flow);
+  const states: string[] = [];
+  if (flow.error != null) states.push(`Failed: ${flow.error}`);
+  if (flow.cancelled) states.push("Cancelled by the app");
+  if (open) states.push("Streaming");
+  if (flow.responseTruncated) states.push("Body cut at the capture limit");
+  if (flow.savedRequestId != null) states.push("Saved to Yaak");
+  const title = states.length === 0 ? undefined : states.join("\n");
+  return (
+    <span className="flex items-center justify-center" title={title}>
+      {flow.error != null ? (
+        <Icon icon="circle_alert" size="sm" color="danger" />
+      ) : flow.cancelled ? (
+        <Icon icon="circle_off" size="sm" className="text-text-subtlest" />
+      ) : open ? (
+        <span aria-hidden className="w-[7px] h-[7px] rounded-full bg-info ring-3 ring-info/20" />
+      ) : flow.responseTruncated ? (
+        <Icon icon="scissors" size="sm" color="notice" />
+      ) : flow.savedRequestId != null ? (
+        <Icon icon="bookmark" size="sm" color="primary" className="[&_path]:fill-current" />
+      ) : null}
+    </span>
+  );
+}
+
+const mono = "font-mono text-xs";
+
+/** A WebSocket, event stream or gRPC call still open: written as it opens, done once it ends */
+function isOpenStream(flow: Flow): boolean {
+  return flow.streamKind != null && flow.elapsedMs == null && flow.error == null && !flow.cancelled;
+}
+
+function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: boolean }) {
+  const failed = flow.error != null;
+  const noResponse = (failed || flow.cancelled) && flow.status == null;
+  switch (column) {
+    case "number":
+      return (
+        <span className={classNames(mono, "text-right text-text-subtlest")}>
+          {flow.number || ""}
+        </span>
+      );
+    case "app": {
+      if (flow.clientPath == null) return <span />;
+      const folder = folderOf(flow);
+      const name = flow.clientName ?? flow.clientPath;
+      return (
+        <span className="flex items-center" title={folder == null ? name : `${name} in ${folder}`}>
+          <AppIcon path={flow.clientPath} />
+        </span>
+      );
+    }
+    case "method":
+      return (
+        <HttpMethodTagRaw
+          method={flow.method}
+          short
+          className={classNames(mono, !flow.cancelled && "text-text-subtle")}
+        />
+      );
+    case "host":
+      // Cut from the front, so the part that names the service stays.
+      return (
+        <span className={classNames("rtl text-left", !flow.cancelled && "text-text-subtle")}>
+          <bdi>{hostOf(flow.url)}</bdi>
+        </span>
+      );
+    case "path": {
+      const { path, query } = splitPath(flow.url);
+      if (flow.streamKind == null) {
+        return (
+          <span>
+            {path}
+            <span className="text-text-subtlest">{query}</span>
+          </span>
+        );
+      }
+      // A stream's message count rides the end of the path, so it survives the narrow width,
+      // ticking while the stream is open.
+      return (
+        <span className="flex items-center">
+          <span className="truncate">
+            {path}
+            <span className="text-text-subtlest">{query}</span>
+          </span>
+          <CountBadge
+            count={flow.messageCount}
+            showZero
+            color={isOpenStream(flow) ? "info" : undefined}
+            className="shrink-0 !mb-0 tabular-nums"
+          />
+        </span>
+      );
+    }
+    case "status":
+      return flow.cancelled && flow.status == null ? (
+        <span className={classNames(mono, "text-text-subtlest")}>--</span>
+      ) : (
+        <HttpStatusTagRaw status={flow.status ?? 0} short className={mono} />
+      );
+    case "type":
+      return failed && noResponse ? (
+        <span
+          className={classNames("text-danger text-xs", span && "col-span-2")}
+          title={flow.error ?? undefined}
+        >
+          {flow.error}
+        </span>
+      ) : flow.cancelled && noResponse ? (
+        <span className={classNames("text-xs", span && "col-span-2")}>Cancelled</span>
+      ) : (
+        <span className={classNames(mono, "text-text-subtlest")}>
+          {shortContentType(flow.contentType) ?? "--"}
+        </span>
+      );
+    case "size":
+      return (
+        <span
+          className={classNames(
+            mono,
+            "text-right",
+            flow.responseTruncated ? "text-notice" : "text-text-subtle",
+          )}
+        >
+          {noResponse ? "--" : formatSize(flow.responseSize)}
+        </span>
+      );
+    case "time":
+      // An open stream shows how long it has been open, quietly, as its messages land.
+      if (isOpenStream(flow)) {
+        const open = Date.now() - Date.parse(utcTimestamp(flow.startedAt));
+        return (
+          <span className={classNames(mono, "text-right text-text-subtlest")}>
+            {Number.isFinite(open) ? formatMillis(Math.max(0, open)) : "--"}
+          </span>
+        );
+      }
+      return (
+        <span
+          className={classNames(
+            mono,
+            "text-right",
+            // A second or more stands out without a new colour.
+            flow.elapsedMs != null && flow.elapsedMs >= 1000 && !flow.cancelled
+              ? "text-text"
+              : "text-text-subtle",
+          )}
+        >
+          {flow.elapsedMs == null ? "--" : formatMillis(flow.elapsedMs)}
+        </span>
+      );
+    case "remote":
+      return (
+        <span className={classNames(mono, "text-text-subtle")}>{flow.remoteAddr ?? "--"}</span>
+      );
+    case "version":
+      return (
+        <span className={classNames(mono, "text-text-subtle")}>
+          {flow.upstreamHttpVersion ?? flow.clientHttpVersion}
+        </span>
+      );
+  }
+}
+
+function splitPath(url: string): { path: string; query: string } {
   try {
     const u = new URL(url);
-    return { host: u.host, path: u.pathname, query: u.search };
+    return { path: u.pathname, query: u.search };
   } catch {
-    return { host: "", path: url, query: "" };
+    return { path: url, query: "" };
   }
 }

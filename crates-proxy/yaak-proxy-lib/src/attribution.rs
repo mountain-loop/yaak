@@ -21,6 +21,8 @@ pub struct ClientApp {
     pub bundle_id: Option<String>,
     /// The outermost `.app` bundle's path, or the executable's path when there is no bundle.
     pub path: String,
+    /// The working directory of a process outside an app, as it was when first looked up.
+    pub cwd: Option<String>,
 }
 
 /// Finds the app behind each client connection, once per connection, off the caller's thread.
@@ -379,7 +381,14 @@ mod imp {
             {
                 return app.clone();
             }
-            let app = proc::executable(pid).map(|exe| describe(pid, &exe));
+            let app = proc::executable(pid).map(|exe| {
+                let mut app = describe(pid, &exe);
+                // A program's folder names it; an app's is wherever launchd started it.
+                if app.bundle_id.is_none() {
+                    app.cwd = proc::cwd(pid);
+                }
+                app
+            });
             if let Some(key) = key {
                 self.apps.insert(key, app.clone());
             }
@@ -392,7 +401,13 @@ mod imp {
         match outermost_bundle(exe) {
             Some(bundle) => {
                 let (name, bundle_id) = bundle_info(bundle);
-                ClientApp { pid, name, bundle_id, path: bundle.to_string_lossy().into_owned() }
+                ClientApp {
+                    pid,
+                    name,
+                    bundle_id,
+                    path: bundle.to_string_lossy().into_owned(),
+                    cwd: None,
+                }
             }
             None => ClientApp {
                 pid,
@@ -402,6 +417,7 @@ mod imp {
                     .unwrap_or_else(|| exe.to_string_lossy().into_owned()),
                 bundle_id: None,
                 path: exe.to_string_lossy().into_owned(),
+                cwd: None,
             },
         }
     }
@@ -698,6 +714,35 @@ mod proc {
         Some((info.pbi_start_tvsec, info.pbi_start_tvusec))
     }
 
+    /// The working directory of `pid`, which only its own user or root can read.
+    pub fn cwd(pid: i32) -> Option<String> {
+        let mut info = std::mem::MaybeUninit::<libc::proc_vnodepathinfo>::zeroed();
+        let size = size_of::<libc::proc_vnodepathinfo>();
+        let written = unsafe {
+            libc::proc_pidinfo(
+                pid,
+                libc::PROC_PIDVNODEPATHINFO,
+                0,
+                info.as_mut_ptr().cast::<c_void>(),
+                size as c_int,
+            )
+        };
+        if written as usize != size {
+            return None;
+        }
+        let info = unsafe { info.assume_init() };
+        // A NUL-terminated C string, in libc's nested array.
+        let bytes: Vec<u8> = info
+            .pvi_cdir
+            .vip_path
+            .iter()
+            .flatten()
+            .map(|&c| c as u8)
+            .take_while(|&b| b != 0)
+            .collect();
+        (!bytes.is_empty()).then(|| String::from_utf8_lossy(&bytes).into_owned())
+    }
+
     /// The path of the executable `pid` runs.
     pub fn executable(pid: i32) -> Option<PathBuf> {
         let mut buf = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
@@ -876,6 +921,7 @@ mod tests {
                 name: "Fake Browser".into(),
                 bundle_id: Some("com.example.browser".into()),
                 path: bundle.to_string_lossy().into_owned(),
+                cwd: None,
             }
         );
     }
@@ -890,7 +936,8 @@ mod tests {
                 pid: 7,
                 name: "curl".into(),
                 bundle_id: None,
-                path: "/usr/bin/curl".into()
+                path: "/usr/bin/curl".into(),
+                cwd: None,
             }
         );
     }

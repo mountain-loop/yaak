@@ -17,6 +17,7 @@ function body(data: string | Uint8Array): GetFlowBodyResponse {
 
 const base: Flow = {
   id: "fl_harness",
+  number: 1429,
   createdAt: "2026-11-04T22:10:00",
   updatedAt: "2026-11-04T22:10:01",
   startedAt: "2026-11-04T22:10:00.000",
@@ -42,6 +43,7 @@ const base: Flow = {
   clientName: "curl",
   clientBundleId: null,
   clientPath: "/usr/bin/curl",
+  clientCwd: null,
   streamKind: null,
   messageCount: 0,
   grpcService: null,

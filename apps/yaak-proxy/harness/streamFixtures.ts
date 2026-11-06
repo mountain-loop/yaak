@@ -16,6 +16,7 @@ const encode = (s: string) => new TextEncoder().encode(s);
 
 const flowBase: Flow = {
   id: "fl_stream",
+  number: 1410,
   createdAt: "2026-11-05T21:41:12",
   updatedAt: "2026-11-05T21:41:20",
   startedAt: "2026-11-05T21:41:12.100",
@@ -41,6 +42,7 @@ const flowBase: Flow = {
   clientName: "Discord",
   clientBundleId: "com.hnc.Discord",
   clientPath: "/Applications/Discord.app",
+  clientCwd: null,
   streamKind: "websocket",
   messageCount: 0,
   grpcService: null,

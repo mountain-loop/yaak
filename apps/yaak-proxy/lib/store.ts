@@ -1,7 +1,15 @@
-import type { GetProxyStateResponse, ModelPayload } from "@yaakapp-internal/proxy-lib";
+import type { Flow, GetProxyStateResponse, ModelPayload } from "@yaakapp-internal/proxy-lib";
 import { selectedIdsFamily } from "@yaakapp-internal/ui";
 import { atom, type createStore } from "jotai";
+import { atomWithStorage } from "jotai/utils";
 import { followingAtom, SIDEBAR_TREE_ID, selectedFlowAtom } from "./atoms";
+import {
+  type ColumnPrefs,
+  defaultColumnPrefs,
+  type FlowSort,
+  parseColumnPrefs,
+  sortFlows,
+} from "./columns";
 import {
   applyChanges,
   emptyWindow,
@@ -13,7 +21,16 @@ import {
   windowFromPage,
 } from "./flowWindow";
 import { listen, rpc } from "./rpc";
-import { type FlowQuery, matchesQuery, selectionQuery } from "./search";
+import { type FlowQuery, matchesQuery, parseSearch } from "./search";
+import {
+  ALL_ID,
+  APPS_ID,
+  buildSidebarTree,
+  DOMAINS_ID,
+  itemsById,
+  queryInText,
+  selectionText,
+} from "./sidebarTree";
 
 type Store = ReturnType<typeof createStore>;
 
@@ -42,26 +59,89 @@ export const flowTotalAtom = atom((get) => get(flowWindowAtom).total);
 export const flowsLoadedAtom = atom(false);
 
 /**
- * The database has no flows and nothing narrows the list, so the first-run card shows. A boolean
- * of its own, so new traffic does not re-render what reads it.
+ * The database has no flows and nothing narrows the list. A boolean of its own, so new traffic
+ * does not re-render what reads it.
  */
-export const showFirstRunAtom = atom(
-  (get) => get(flowsLoadedAtom) && get(flowTotalAtom) === 0 && get(activeQueryAtom) == null,
+export const noFlowsAtom = atom(
+  (get) => get(flowsLoadedAtom) && get(flowTotalAtom) === 0 && get(searchTextAtom).trim() === "",
 );
+
+/** The system proxy has been on at some point since this install, which first run waits for */
+export const systemProxyEverOnAtom = atomWithStorage("system_proxy_ever_on", false, undefined, {
+  getOnInit: true,
+});
 
 /** Some flow held names the app that sent it, which only some platforms can tell */
 export const hasAppsAtom = atom((get) => get(flowsAtom).some((f) => f.clientName != null));
 
-/** The search box's terms, once typing settles, or null */
-export const searchTermsAtom = atom<string | null>(null);
+/** The search box's text as typed, which the sidebar's selection writes too */
+export const searchTextAtom = atom("");
 
-/** The search the list shows, from the search box and the sidebar, or null for all traffic */
-export const activeQueryAtom = atom<FlowQuery | null>((get) => {
-  const q = get(searchTermsAtom);
-  const selection = selectionQuery(get(selectedIdsFamily(SIDEBAR_TREE_ID)));
-  if (q == null && selection == null) return null;
-  return { ...(q == null ? {} : { q }), ...selection };
+/** Bumped when the text changes from outside the box, such as the sidebar, so the box takes it */
+export const searchTextVersionAtom = atom(0);
+
+/** The search box's text once typing settles */
+export const searchTermsAtom = atom("");
+
+/** System's flows are left out of All traffic, by the eye on System's row */
+export const hideSystemAtom = atomWithStorage("sidebar_hide_system", false, undefined, {
+  getOnInit: true,
 });
+
+/** The search the list shows, from the search box's settled text, or null for all traffic */
+export const activeQueryAtom = atom<FlowQuery | null>((get) =>
+  parseSearch(get(searchTermsAtom), get(hideSystemAtom)),
+);
+
+/** Writes `text` into the search box at once, as the sidebar does, without waiting for typing */
+export const setSearchTextAtom = atom(null, (_get, set, text: string) => {
+  set(searchTextAtom, text);
+  set(searchTermsAtom, text);
+  set(searchTextVersionAtom, (v) => v + 1);
+});
+
+/** Flows All traffic covers in the database: every one, or all but System's while hidden */
+export const allTrafficTotalAtom = atom((get) =>
+  get(hideSystemAtom) ? get(nonSystemTotalAtom) : get(flowTotalAtom),
+);
+
+/** Flows in the database not from System, counted while System is hidden */
+export const nonSystemTotalAtom = atom(0);
+
+/**
+ * The flows the sidebar counts: the window's, taken at most once a second, so a burst of traffic
+ * rebuilds its trees once rather than on every batch
+ */
+export const sidebarFlowsAtom = atom<Flow[]>([]);
+
+/** How long the sidebar's counts may lag the list */
+const SIDEBAR_MS = 1000;
+
+/** The sidebar's rows, from the flows loaded */
+export const sidebarTreeAtom = atom((get) =>
+  buildSidebarTree(get(sidebarFlowsAtom), get(allTrafficTotalAtom)),
+);
+
+const storedColumnPrefsAtom = atomWithStorage<unknown>(
+  "flow_columns",
+  defaultColumnPrefs,
+  undefined,
+  {
+    getOnInit: true,
+  },
+);
+
+/** Which columns the list shows and how wide, as the person left them */
+export const columnPrefsAtom = atom(
+  (get) => parseColumnPrefs(get(storedColumnPrefsAtom)),
+  (get, set, update: ColumnPrefs | ((prev: ColumnPrefs) => ColumnPrefs)) => {
+    const prev = parseColumnPrefs(get(storedColumnPrefsAtom));
+    set(storedColumnPrefsAtom, typeof update === "function" ? update(prev) : update);
+  },
+);
+
+/** The list's sort, or null for start time, the order flows arrive in */
+export const flowSortAtom = atom<FlowSort | null>(null);
 
 /** A window onto the flows a search covers, loaded from the database as the main one is */
 export interface SearchWindow {
@@ -79,14 +159,17 @@ export const searchWindowAtom = atom<SearchWindow | null>(null);
 /** The window the list shows: the search's, or all traffic's */
 const shownWindowAtom = atom((get) => get(searchWindowAtom)?.win ?? get(flowWindowAtom));
 
-/** The flows the list shows, oldest first */
-export const shownFlowsAtom = atom((get) => get(shownWindowAtom).flows);
+/** The flows loaded for the list, oldest first */
+export const windowFlowsAtom = atom((get) => get(shownWindowAtom).flows);
+
+/** The flows the list shows: oldest first, or in the sort's order, over those loaded */
+export const shownFlowsAtom = atom((get) => sortFlows(get(windowFlowsAtom), get(flowSortAtom)));
 
 /** Flows in the database the list covers: every one, or those the search matches */
 export const shownTotalAtom = atom((get) => get(shownWindowAtom).total);
 
 /** Start and id of the oldest flow shown, which loading older flows moves back */
-export const oldestFlowAtom = atom((get) => get(shownFlowsAtom)[0] ?? null);
+export const oldestFlowAtom = atom((get) => get(windowFlowsAtom)[0] ?? null);
 
 /** Follows new traffic, dropping the older flows scrolling up loaded, or holds the list */
 export const followAtom = atom(
@@ -101,6 +184,9 @@ export const followAtom = atom(
 
 /** The engine's state, kept current from its events, and polled while another process has it */
 export const proxyStateAtom = atom<GetProxyStateResponse | null>(null);
+
+/** When recording was seen to pause, in this session; null while recording or not known */
+export const pausedAtAtom = atom<number | null>(null);
 
 /**
  * Changes applied while a page of older flows loads, or null when none is loading. A slow flow
@@ -203,6 +289,11 @@ export function syncFlows(store: Store) {
         win.total === res.total ? win : { ...win, total: res.total },
       );
     });
+    if (store.get(hideSystemAtom)) {
+      void rpc("list_flows", { system: false, limit: 0 }).then((res) => {
+        if (thisLoad === loads) store.set(nonSystemTotalAtom, res.matching ?? res.total);
+      });
+    }
     const search = store.get(searchWindowAtom);
     if (search == null || search.loading) return;
     void rpc("list_flows", { ...search.query, limit: 0 }).then((res) => {
@@ -218,12 +309,10 @@ export function syncFlows(store: Store) {
     receive([payload]);
   });
 
-  // Loads again rather than only emptying, for a flow written between the delete and the event.
+  // Loads again rather than only emptying, for a flow written between the clear and the event.
   listen("flows_cleared", () => {
+    store.set(emptyFlowsAtom);
     pending = [];
-    store.set(flowWindowAtom, emptyWindow);
-    store.set(selectedFlowAtom, null);
-    store.set(followingAtom, true);
     load();
   });
 
@@ -237,10 +326,14 @@ export function syncFlows(store: Store) {
       seenId = res.flows[0]?.id ?? null;
       loaded = true;
       store.set(flowsLoadedAtom, true);
+      // Flows recorded before this install remembered it mean setup was done.
+      if (res.total > 0) store.set(systemProxyEverOnAtom, true);
       flush();
+      recount();
     });
     loadSearch(store.get(activeQueryAtom));
   }
+  reloadFlows = load;
 
   /** Loads the first page of `query`'s flows into a window of its own, or drops it for null */
   function loadSearch(query: FlowQuery | null) {
@@ -271,6 +364,29 @@ export function syncFlows(store: Store) {
         settle(null);
       });
   }
+
+  // The sidebar takes the window's flows at once when it empties or first fills, and at most
+  // once a second otherwise.
+  let sidebarTimer: ReturnType<typeof setTimeout> | null = null;
+  const takeSidebarFlows = () => {
+    sidebarTimer = null;
+    store.set(sidebarFlowsAtom, store.get(flowsAtom));
+  };
+  store.sub(flowsAtom, () => {
+    const now = store.get(flowsAtom).length;
+    const before = store.get(sidebarFlowsAtom).length;
+    if (now === 0 || before === 0) {
+      if (sidebarTimer != null) clearTimeout(sidebarTimer);
+      takeSidebarFlows();
+    } else if (sidebarTimer == null) {
+      sidebarTimer = setTimeout(takeSidebarFlows, SIDEBAR_MS);
+    }
+  });
+
+  // All traffic's count leaves System out while it is hidden.
+  store.sub(hideSystemAtom, () => {
+    if (loaded) recount();
+  });
 
   let activeKey = JSON.stringify(store.get(activeQueryAtom));
   store.sub(activeQueryAtom, () => {
@@ -333,11 +449,113 @@ export function syncFlows(store: Store) {
   load();
 }
 
+/** Loads the newest flows again, once `syncFlows` has started */
+let reloadFlows: (() => void) | null = null;
+
+/** Empties the list, the search's too, and their counts, as a clear leaves them */
+const emptyFlowsAtom = atom(null, (_get, set) => {
+  set(flowWindowAtom, emptyWindow);
+  set(nonSystemTotalAtom, 0);
+  set(searchWindowAtom, (s) => (s == null ? s : { ...s, win: emptyWindow, buffered: [] }));
+  set(selectedFlowAtom, null);
+  set(followingAtom, true);
+  set(flowSortAtom, null);
+});
+
+/**
+ * Clears every flow. The list and its counts empty at once; the database marks them cleared in a
+ * moment and deletes them in the background, and its event reloads what came since.
+ */
+export const clearFlowsAtom = atom(null, async (_get, set) => {
+  set(emptyFlowsAtom);
+  try {
+    await rpc("clear_flows", {});
+  } catch (err) {
+    // Nothing was cleared: show the flows again.
+    reloadFlows?.();
+    throw err;
+  }
+});
+
+/** When the person last clicked or pressed a key in the sidebar */
+let lastSidebarInput = 0;
+
+/** How soon after a click or key a change of the sidebar's selection counts as theirs */
+const SIDEBAR_INPUT_MS = 500;
+
+/** Notes a click or key in the sidebar, so the selection change it makes writes the search */
+export function noteSidebarInput() {
+  lastSidebarInput = Date.now();
+}
+
+/**
+ * Keeps the sidebar's selection and the search box in step. Selecting rows writes their query
+ * into the box; typing keeps a row selected while its query is still one of the box's terms,
+ * and All traffic selected while the box is empty.
+ */
+export function syncSidebarSelection(store: Store) {
+  const selectedAtom = selectedIdsFamily(SIDEBAR_TREE_ID);
+  let syncing = false;
+
+  // The tree writes its selection again as it renders, the same rows in a new array, or its last
+  // row when the selection was emptied; only a change of rows right after a click or a key in
+  // the sidebar is the person selecting.
+  let lastRows = store.get(selectedAtom).join("\n");
+  store.sub(selectedAtom, () => {
+    const ids = store.get(selectedAtom);
+    const key = ids.join("\n");
+    if (key === lastRows) return;
+    lastRows = key;
+    if (syncing || Date.now() - lastSidebarInput > SIDEBAR_INPUT_MS) return;
+    // Group headings are not filters.
+    const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID);
+    if (rows.length === 0) return;
+    const items = itemsById(store.get(sidebarTreeAtom));
+    const selected = rows.flatMap((id) => {
+      const item = items.get(id);
+      return item == null ? [] : [item];
+    });
+    if (selected.length === 0) return;
+    const text = selectionText(selected);
+    if (text === store.get(searchTextAtom)) return;
+    syncing = true;
+    store.set(setSearchTextAtom, text);
+    syncing = false;
+  });
+
+  store.sub(searchTextAtom, () => {
+    if (syncing) return;
+    const text = store.get(searchTextAtom);
+    const items = itemsById(store.get(sidebarTreeAtom));
+    const ids = store.get(selectedAtom);
+    const kept = ids.filter((id) => {
+      const item = items.get(id);
+      return item != null && item.query !== "" && queryInText(item.query, text);
+    });
+    const next = text.trim() === "" ? [ALL_ID] : kept;
+    if (next.length === ids.length && next.every((id, i) => id === ids[i])) return;
+    syncing = true;
+    store.set(selectedAtom, next);
+    syncing = false;
+  });
+
+  if (store.get(selectedAtom).length === 0) store.set(selectedAtom, [ALL_ID]);
+}
+
 /**
  * Keeps `proxyStateAtom` current: on each state change, and polled while the engine is not
  * running here, so another process taking it or letting it go shows.
  */
 export function syncProxyState(store: Store) {
+  let wasRecording: boolean | null = null;
+  store.sub(proxyStateAtom, () => {
+    const recording = store.get(proxyStateAtom)?.recording ?? null;
+    if (recording === wasRecording) return;
+    // Only a pause seen here has a time; one from before launch does not.
+    if (recording === false && wasRecording === true) store.set(pausedAtAtom, Date.now());
+    if (recording !== false) store.set(pausedAtAtom, null);
+    wasRecording = recording;
+  });
   function refresh() {
     rpc("get_proxy_state", {})
       .then((state) => store.set(proxyStateAtom, state))
