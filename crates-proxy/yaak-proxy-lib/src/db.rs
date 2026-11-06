@@ -153,6 +153,12 @@ mod tests {
             ALTER TABLE flows DROP COLUMN client_bundle_id;
             ALTER TABLE flows DROP COLUMN client_path;
             ALTER TABLE flows DROP COLUMN cancelled;
+            ALTER TABLE flows DROP COLUMN stream_kind;
+            ALTER TABLE flows DROP COLUMN message_count;
+            ALTER TABLE flows DROP COLUMN grpc_service;
+            ALTER TABLE flows DROP COLUMN grpc_method;
+            ALTER TABLE flows DROP COLUMN grpc_status;
+            ALTER TABLE flows DROP COLUMN grpc_message;
             INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://example.com', 'GET');",
         )
         .unwrap();
@@ -164,6 +170,11 @@ mod tests {
         assert_eq!((flows[0].id.as_str(), flows[0].saved_request_id.as_deref()), ("fl_old", None));
         assert_eq!((flows[0].client_pid, flows[0].client_name.as_deref()), (None, None));
         assert!(!flows[0].cancelled);
+        assert_eq!((flows[0].stream_kind, flows[0].message_count), (None, 0));
+        // Failed flows are found without the gRPC status column too.
+        let failed =
+            crate::flows::FlowFilter { status: Some("error".into()), ..Default::default() };
+        assert_eq!(crate::flows::list(&db, &failed).unwrap().len(), 0);
 
         // Filters by app work without the folder column, and count without the clear mark.
         drop(db);
@@ -219,7 +230,16 @@ mod tests {
             .unwrap()
             .map(|t| t.unwrap())
             .collect();
-        assert_eq!(tables, vec!["_sqlx_migrations", "flow_clear_mark", "flows"]);
+        assert_eq!(
+            tables,
+            vec![
+                "_sqlx_migrations",
+                "flow_clear_mark",
+                "flow_messages",
+                "flows",
+                "grpc_schemas"
+            ]
+        );
 
         let flow_columns = columns(&conn, "flows");
         assert!(flow_columns.contains(&"response_truncated".to_string()));
@@ -230,6 +250,12 @@ mod tests {
             "client_path",
             "client_cwd",
             "cancelled",
+            "stream_kind",
+            "message_count",
+            "grpc_service",
+            "grpc_method",
+            "grpc_status",
+            "grpc_message",
         ] {
             assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
         }
@@ -245,5 +271,70 @@ mod tests {
 
         let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert_eq!(journal_mode, "wal");
+    }
+
+    #[test]
+    fn takes_the_folder_and_clear_mark_after_the_messages_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("proxy.db");
+
+        // As a build with every migration up to the messages one left it, with a stream in it.
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE _sqlx_migrations (
+                version TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );",
+        )
+        .unwrap();
+        let mut files: Vec<_> = MIGRATIONS
+            .files()
+            .map(|f| (f.path().to_string_lossy().into_owned(), f.contents_utf8().unwrap()))
+            .filter(|(name, _)| name.as_str() < "00000007")
+            .collect();
+        files.sort();
+        assert_eq!(files.len(), 6);
+        for (name, sql) in files {
+            conn.execute_batch(sql).unwrap();
+            conn.execute(
+                "INSERT INTO _sqlx_migrations (version, description) VALUES (?, ?)",
+                [&name[..8], &name],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO flows (id, url, method, stream_kind, message_count, client_path)
+                VALUES ('fl_ws', 'wss://example.com/socket', 'GET', 'websocket', 2, '/bin/node');
+            INSERT INTO flow_messages (id, flow_id, seq, direction, kind, timestamp)
+                VALUES ('fm_1', 'fl_ws', 1, 'client', 'text', CURRENT_TIMESTAMP);",
+        )
+        .unwrap();
+        drop(conn);
+
+        drop(ProxyQueryManager::new(&path).unwrap());
+
+        let conn = Connection::open(&path).unwrap();
+        assert!(columns(&conn, "flows").contains(&"client_cwd".to_string()));
+        let applied: Vec<String> = conn
+            .prepare("SELECT version FROM _sqlx_migrations ORDER BY version")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(|v| v.unwrap())
+            .collect();
+        assert_eq!(applied.last().map(String::as_str), Some("00000007"));
+        drop(conn);
+
+        // The stream and its messages come through, and clearing then deleting takes both.
+        let db = ProxyQueryManager::new(&path).unwrap();
+        let blobs = yaak_models::init_blob_store(dir.path().join("blobs.sqlite")).unwrap();
+        let listed = crate::flows::list(&db, &Default::default()).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!((listed[0].id.as_str(), listed[0].message_count), ("fl_ws", 2));
+        assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 1);
+        assert_eq!(crate::flows::clear(&db).unwrap(), 1);
+        assert_eq!(crate::flows::delete_cleared(&db, &blobs, 500), Ok(true));
+        assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 0);
     }
 }

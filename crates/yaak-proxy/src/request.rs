@@ -25,9 +25,13 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::net::TcpStream;
 use tokio_rustls::{LazyConfigAcceptor, TlsConnector};
 
-use crate::body::{CaptureBody, Direction};
+use crate::body::{BodyParser, CaptureBody, Direction};
 use crate::connection::serve_tls;
+use crate::grpc::{self, GrpcParser};
+use crate::messages::{MessageDirection, StreamKind};
+use crate::sse::SseParser;
 use crate::tunnel::{Rewind, splice, tunnel};
+use crate::ws::{self, WsFlow};
 use crate::{ClientConn, Engine, ProxyEvent};
 
 pub(crate) type BoxBody = http_body_util::combinators::BoxBody<Bytes, hyper::Error>;
@@ -65,6 +69,20 @@ fn error_chain(e: &(dyn Error + 'static)) -> String {
     message
 }
 
+fn header_str<'a>(headers: &'a hyper::HeaderMap, name: &str) -> Option<&'a str> {
+    headers.get(name).and_then(|v| v.to_str().ok())
+}
+
+/// A gRPC call, from its request headers.
+struct GrpcCall {
+    /// gRPC-Web's base64 flavor.
+    text: bool,
+    /// What the client's compressed messages are compressed with.
+    encoding: Option<String>,
+    /// The request body's `Content-Encoding`, which gRPC-Web may use.
+    content_encoding: Option<String>,
+}
+
 /// Per-flow bookkeeping shared by the plain HTTP and the intercepted HTTPS paths.
 struct Flow {
     id: u64,
@@ -74,6 +92,7 @@ struct Flow {
     answered: bool,
     /// Reading the client's upload failed: it reset the stream or closed the connection.
     upload_failed: Arc<AtomicBool>,
+    grpc: Option<GrpcCall>,
 }
 
 impl Flow {
@@ -83,12 +102,13 @@ impl Flow {
         req: &Request<Incoming>,
         url: String,
     ) -> Self {
-        let flow = Self {
+        let mut flow = Self {
             id: engine.next_flow_id(),
             start: Instant::now(),
             engine,
             answered: false,
             upload_failed: Arc::new(AtomicBool::new(false)),
+            grpc: None,
         };
         flow.engine.emit(ProxyEvent::RequestStart {
             id: flow.id,
@@ -118,20 +138,57 @@ impl Flow {
                 value: String::from_utf8_lossy(value.as_bytes()).into_owned(),
             });
         }
+        if let Some((kind, text)) = grpc::detect(header_str(req.headers(), "content-type")) {
+            flow.engine.emit(ProxyEvent::StreamStart { id: flow.id, kind });
+            let encoding = header_str(req.headers(), "grpc-encoding").map(String::from);
+            let content_encoding = header_str(req.headers(), "content-encoding").map(String::from);
+            flow.grpc = Some(GrpcCall { text, encoding, content_encoding });
+        }
         flow
     }
 
     fn capture_request(&self, body: Incoming) -> BoxBody {
+        let parser = self.grpc.as_ref().map(|call| {
+            let limit = self.engine.capture_body_limit;
+            let encoding = call.encoding.as_deref();
+            let parser = GrpcParser::new(MessageDirection::Client, encoding, call.text, limit)
+                .with_content_encoding(call.content_encoding.as_deref());
+            BodyParser::Grpc(parser)
+        });
         CaptureBody::new(body, Direction::Request, self.id, self.start, self.engine.clone())
             .flag_failure(self.upload_failed.clone())
+            .with_parser(parser)
             .boxed()
     }
 
-    fn respond(
-        mut self,
-        resp: Response<Incoming>,
-        remote_addr: Option<SocketAddr>,
-    ) -> Response<BoxBody> {
+    /// How the response's body is read for messages, if it streams them, after recording that
+    /// it does.
+    fn response_parser(&self, resp: &Response<Incoming>) -> Option<BodyParser> {
+        let limit = self.engine.capture_body_limit;
+        let headers = resp.headers();
+        if self.grpc.is_some() {
+            // A call that fails at once answers with its status in the headers, and no body.
+            if let Some(message) = grpc::trailers_from_headers(headers) {
+                self.engine.emit(ProxyEvent::Message { id: self.id, message });
+            }
+            // A gateway's own error page is no gRPC body.
+            let (_, text) = grpc::detect(header_str(headers, "content-type"))?;
+            let encoding = header_str(headers, "grpc-encoding");
+            let parser = GrpcParser::new(MessageDirection::Server, encoding, text, limit)
+                .with_content_encoding(header_str(headers, "content-encoding"));
+            return Some(BodyParser::Grpc(parser));
+        }
+        let content_type = header_str(headers, "content-type").unwrap_or_default();
+        let essence = content_type.split(';').next().unwrap_or_default().trim();
+        if !essence.eq_ignore_ascii_case("text/event-stream") {
+            return None;
+        }
+        self.engine.emit(ProxyEvent::StreamStart { id: self.id, kind: StreamKind::Sse });
+        let encoding = header_str(headers, "content-encoding");
+        Some(BodyParser::Sse(Box::new(SseParser::new(encoding, limit))))
+    }
+
+    fn respond_head(&mut self, resp: &Response<Incoming>, remote_addr: Option<SocketAddr>) {
         self.answered = true;
         self.engine.emit(ProxyEvent::ResponseStart {
             id: self.id,
@@ -147,10 +204,34 @@ impl Flow {
                 value: String::from_utf8_lossy(value.as_bytes()).into_owned(),
             });
         }
+    }
+
+    fn respond(
+        mut self,
+        resp: Response<Incoming>,
+        remote_addr: Option<SocketAddr>,
+    ) -> Response<BoxBody> {
+        self.respond_head(&resp, remote_addr);
+        let parser = self.response_parser(&resp);
         let (parts, body) = resp.into_parts();
         let engine = self.engine.clone();
-        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, engine);
+        let body = CaptureBody::new(body, Direction::Response, self.id, self.start, engine)
+            .with_parser(parser);
         Response::from_parts(parts, body.boxed())
+    }
+
+    /// Answers with a WebSocket's `101`. The flow goes on in the returned [`WsFlow`], which
+    /// ends it, as the `101` has no body to.
+    fn respond_websocket(
+        mut self,
+        resp: Response<Incoming>,
+        remote_addr: Option<SocketAddr>,
+    ) -> (Response<BoxBody>, Arc<WsFlow>) {
+        self.respond_head(&resp, remote_addr);
+        self.engine.emit(ProxyEvent::StreamStart { id: self.id, kind: StreamKind::WebSocket });
+        let ws = Arc::new(WsFlow::new(self.id, self.start, self.engine.clone()));
+        let (parts, body) = resp.into_parts();
+        (Response::from_parts(parts, body.boxed()), ws)
     }
 
     /// Answers the client with `status` and `error` without contacting any server.
@@ -683,6 +764,19 @@ async fn forward_https(
     {
         let upstream_upgrade = hyper::upgrade::on(&mut resp);
         let addr = target.addr.clone();
+        let websocket = header_str(resp.headers(), UPGRADE.as_str())
+            .is_some_and(|u| u.trim().eq_ignore_ascii_case("websocket"));
+        if websocket && engine.websocket_capture {
+            let deflate = ws::negotiated_deflate(resp.headers());
+            let (resp, ws_flow) = flow.respond_websocket(resp, remote_addr);
+            tokio::spawn(async move {
+                if let Err(e) = ws::relay(client_upgrade, upstream_upgrade, ws_flow, deflate).await
+                {
+                    debug!("WebSocket to {addr} ended: {e}");
+                }
+            });
+            return Ok(resp);
+        }
         tokio::spawn(async move {
             if let Err(e) = splice(client_upgrade, upstream_upgrade).await {
                 debug!("Upgraded tunnel to {addr} ended: {e}");

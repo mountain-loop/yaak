@@ -38,7 +38,8 @@ pub struct FlowFilter {
     /// The method, any case.
     #[ts(optional)]
     pub method: Option<String>,
-    /// A status (`404`), a class of them (`4xx`), or `error` for flows that failed.
+    /// A status (`404`), a class of them (`4xx`), or `error` for flows that failed, gRPC calls
+    /// that ended with a status other than OK among them.
     #[ts(optional)]
     pub status: Option<String>,
     /// At most this many flows, the newest.
@@ -127,20 +128,15 @@ impl FlowFilter {
     }
 
     /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters,
-    /// for the database `conn` reads, which may be from before the folder column, when read
-    /// without migrating.
+    /// for the database `conn` reads, which may be from before the folder or gRPC columns, when
+    /// read without migrating.
     fn condition_in(&self, conn: &rusqlite::Connection) -> (String, Vec<Value>) {
-        let has_cwd = conn
-            .query_row(
-                "SELECT EXISTS (SELECT 1 FROM pragma_table_info('flows') WHERE name = 'client_cwd')",
-                [],
-                |r| r.get::<_, bool>(0),
-            )
-            .unwrap_or(false);
-        self.condition_with(has_cwd)
+        self.condition(has_column(conn, "client_cwd"), has_column(conn, "grpc_status"))
     }
 
-    fn condition_with(&self, has_cwd: bool) -> (String, Vec<Value>) {
+    /// [`Self::condition_in`], told which of the later columns the database has: `has_cwd`,
+    /// the folder a program ran in, and `grpc`, gRPC statuses.
+    fn condition(&self, has_cwd: bool, grpc: bool) -> (String, Vec<Value>) {
         let mut sql = String::from("1");
         let mut params: Vec<Value> = Vec::new();
         for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
@@ -212,6 +208,10 @@ impl FlowFilter {
         }
         match self.status.as_deref().map(str::trim) {
             None | Some("") => {}
+            // A gRPC call that ended with a status other than OK failed too.
+            Some(s) if s.eq_ignore_ascii_case("error") && grpc => {
+                sql.push_str(" AND (error IS NOT NULL OR coalesce(grpc_status, 0) != 0)")
+            }
             Some(s) if s.eq_ignore_ascii_case("error") => sql.push_str(" AND error IS NOT NULL"),
             // A whole status or a class, not the start of one as a search term may be.
             Some(s) if s.len() == 3 => match status_condition(&s.to_ascii_lowercase(), &mut params)
@@ -384,6 +384,13 @@ pub fn page(
     })
 }
 
+/// The database has the gRPC status column, added by a later migration.
+/// The flows table has `column`: a database opened read-only before its migrations have run may
+/// not.
+fn has_column(conn: &rusqlite::Connection, column: &str) -> bool {
+    conn.prepare(&format!("SELECT {column} FROM flows LIMIT 0")).is_ok()
+}
+
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
     let (condition, mut params) = filter.condition_in(conn);
     // The rowid, for the flow's number.
@@ -471,56 +478,73 @@ pub fn clear(db: &ProxyQueryManager) -> Result<usize, String> {
 /// waits long behind it.
 pub const DELETE_BATCH: usize = 500;
 
-/// Deletes up to `batch` cleared flows and their bodies. Once none are left, removes the mark in
-/// the same transaction, so a clear that raised it meanwhile is never lost. True when it is
-/// done. The flows' deletion commits only after their bodies' has, so when deleting the bodies
-/// fails the flows stay, to be deleted again.
+/// Deletes up to `batch` cleared flows, their messages and their bodies. Once none are left,
+/// removes the mark in the same transaction as the last of them, so a clear that raised it
+/// meanwhile is never lost. True when it is done.
+///
+/// The bodies go first, in their own transaction, and the rows after, so when deleting the
+/// bodies fails the flows stay, to be deleted again. The two writers are never held together: a
+/// flow being written holds the bodies' while it waits for the flows', and the other order would
+/// stall them both. Cleared flows are not written again, so the rows read stay as they were.
 pub fn delete_cleared(
     db: &ProxyQueryManager,
     blobs: &BlobManager,
     batch: usize,
 ) -> Result<bool, String> {
-    db.with_tx(|c| {
-        let conn = c.conn().resolve();
-        let mark = clear_mark(conn);
-        if mark == 0 {
-            return Ok(true);
-        }
-        let mut stmt =
-            conn.prepare("SELECT rowid, id FROM flows WHERE rowid <= ? ORDER BY rowid LIMIT ?")?;
-        let rows = stmt
-            .query_map([mark, batch as i64], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?;
-        if rows.is_empty() {
-            conn.execute("DELETE FROM flow_clear_mark WHERE id = 1", [])?;
-            return Ok(true);
-        }
+    let fail = |e: String| format!("Failed to delete cleared flows: {e}");
+    let rows = db
+        .with_conn(|c| {
+            let conn = c.conn().resolve();
+            let mark = clear_mark(conn);
+            let mut stmt = conn
+                .prepare("SELECT rowid, id FROM flows WHERE rowid <= ? ORDER BY rowid LIMIT ?")?;
+            let rows = stmt
+                .query_map([mark, batch as i64], |r| {
+                    Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok::<_, rusqlite::Error>(rows)
+        })
+        .map_err(|e| fail(e.to_string()))?;
+    // Their bodies and their messages' payloads, by flow, so a flow still in flight keeps what
+    // it has written.
+    if !rows.is_empty() {
         blobs
             .with_tx(|b| {
                 for (_, id) in &rows {
                     b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
                     b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
+                    b.delete_chunks_like(&format!("{id}.msg.%"))?;
                 }
                 Ok::<_, yaak_models::error::Error>(())
             })
-            .map_err(|e| yaak_database::Error::Database(format!("flow bodies: {e}")))?;
+            .map_err(|e| fail(format!("flow bodies: {e}")))?;
+    }
+    db.with_tx(|c| {
+        let conn = c.conn().resolve();
         let mut delete = conn.prepare("DELETE FROM flows WHERE rowid = ?")?;
-        for (rowid, _) in &rows {
+        let mut delete_messages = conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
+        for (rowid, id) in &rows {
             delete.execute([rowid])?;
+            delete_messages.execute([id])?;
         }
-        // The last of them: the mark goes in the same transaction, since an empty table hands
-        // out rowids from 1 again and a new flow would fall under it.
+        // Read again here, in case a clear raised it since. With none left under it, it goes
+        // in this transaction, since an empty table hands out rowids from 1 again and a new
+        // flow would fall under it.
+        let mark = clear_mark(conn);
+        if mark == 0 {
+            return Ok(true);
+        }
         let left: bool =
             conn.query_row("SELECT EXISTS (SELECT 1 FROM flows WHERE rowid <= ?)", [mark], |r| {
                 r.get(0)
             })?;
         if !left {
             conn.execute("DELETE FROM flow_clear_mark WHERE id = 1", [])?;
-            return Ok(true);
         }
-        Ok::<_, yaak_database::Error>(false)
+        Ok::<_, yaak_database::Error>(!left)
     })
-    .map_err(|e| format!("Failed to delete cleared flows: {e}"))
+    .map_err(|e| fail(e.to_string()))
 }
 
 /// A flow by id, with its number. None once it is cleared, though its row may not be deleted

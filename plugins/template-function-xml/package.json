@@ -13,6 +13,6 @@
   },
   "dependencies": {
     "@xmldom/xmldom": "^0.9.12",
-    "xpath": "^0.0.35"
+    "xpath": "^0.0.36"
   }
 }

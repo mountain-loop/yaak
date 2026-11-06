@@ -477,6 +477,17 @@ export const clearFlowsAtom = atom(null, async (_get, set) => {
   }
 });
 
+/** When the person last clicked or pressed a key in the sidebar */
+let lastSidebarInput = 0;
+
+/** How soon after a click or key a change of the sidebar's selection counts as theirs */
+const SIDEBAR_INPUT_MS = 500;
+
+/** Notes a click or key in the sidebar, so the selection change it makes writes the search */
+export function noteSidebarInput() {
+  lastSidebarInput = Date.now();
+}
+
 /**
  * Keeps the sidebar's selection and the search box in step. Selecting rows writes their query
  * into the box; typing keeps a row selected while its query is still one of the box's terms,
@@ -486,15 +497,16 @@ export function syncSidebarSelection(store: Store) {
   const selectedAtom = selectedIdsFamily(SIDEBAR_TREE_ID);
   let syncing = false;
 
-  // The tree writes its selection again as it renders, the same rows in a new array; only a
-  // change of rows is the person selecting.
+  // The tree writes its selection again as it renders, the same rows in a new array, or its last
+  // row when the selection was emptied; only a change of rows right after a click or a key in
+  // the sidebar is the person selecting.
   let lastRows = store.get(selectedAtom).join("\n");
   store.sub(selectedAtom, () => {
     const ids = store.get(selectedAtom);
     const key = ids.join("\n");
     if (key === lastRows) return;
     lastRows = key;
-    if (syncing) return;
+    if (syncing || Date.now() - lastSidebarInput > SIDEBAR_INPUT_MS) return;
     // Group headings are not filters.
     const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID);
     if (rows.length === 0) return;

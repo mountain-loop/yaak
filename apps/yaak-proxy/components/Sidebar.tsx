@@ -6,7 +6,7 @@ import { useCallback } from "react";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
-import { hideSystemAtom, sidebarTreeAtom } from "../lib/store";
+import { hideSystemAtom, noteSidebarInput, sidebarTreeAtom } from "../lib/store";
 import { AppIcon } from "./AppIcon";
 
 /** The apps, sites, hosts and paths the user expanded, by node id, kept across launches */
@@ -98,7 +98,14 @@ export function Sidebar() {
   return (
     // The tree scrolls itself, in a row of bounded height, so its virtualizer mounts only the rows
     // in view rather than every site, host and path.
-    <aside className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle">
+    // A click or key here marks the selection change it makes as the person's, so it writes the
+    // search; the tree's own upkeep does not.
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- only notes input the tree handles
+    <aside
+      onPointerDownCapture={noteSidebarInput}
+      onKeyDownCapture={noteSidebarInput}
+      className="x-theme-sidebar bg-surface h-full w-full min-w-0 grid grid-rows-[minmax(0,1fr)] border-r border-border-subtle"
+    >
       <Tree
         treeId={SIDEBAR_TREE_ID}
         collapsedAtom={collapsedAtom}

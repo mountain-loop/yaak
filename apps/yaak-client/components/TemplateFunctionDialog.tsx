@@ -24,8 +24,11 @@ import { showDialog } from "../lib/dialog";
 import { convertTemplateToInsecure } from "../lib/encryption";
 import { jotaiStore } from "../lib/jotai";
 import { setupOrConfigureEncryption } from "../lib/setupOrConfigureEncryption";
+import {
+  collectEditableArgumentValues,
+  preserveUnchangedArgumentExpressions,
+} from "../lib/templateFunctionArguments";
 import { DialogFooter } from "./core/Dialog";
-import { collectArgumentValues } from "./core/Editor/twig/util";
 import { IconButton } from "./core/IconButton";
 import { PlainInput } from "./core/PlainInput";
 import { DYNAMIC_FORM_NULL_ARG, DynamicForm } from "./DynamicForm";
@@ -48,7 +51,11 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
     }
 
     (async () => {
-      const initial = collectArgumentValues(initialTokens, templateFunction);
+      const initial = await collectEditableArgumentValues(
+        initialTokens,
+        templateFunction,
+        templateTokensToString,
+      );
 
       // HACK: Replace the secure() function's encrypted `value` arg with the decrypted version so
       //  we can display it in the editor input.
@@ -74,6 +81,7 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
     <InitializedTemplateFunctionDialog
       {...props}
       templateFunction={templateFunction}
+      initialTokens={initialTokens}
       initialArgValues={initialArgValues}
     />
   );
@@ -82,10 +90,11 @@ export function TemplateFunctionDialog({ initialTokens, templateFunction, ...pro
 function InitializedTemplateFunctionDialog({
   templateFunction: { name, previewType: ogPreviewType },
   initialArgValues,
+  initialTokens,
   hide,
   onChange,
   model,
-}: Omit<Props, "initialTokens"> & {
+}: Props & {
   initialArgValues: Record<string, string | boolean>;
 }) {
   const previewType = ogPreviewType == null ? "live" : ogPreviewType;
@@ -111,12 +120,17 @@ function InitializedTemplateFunctionDialog({
           val: {
             type: "fn",
             name,
-            args: argTokens,
+            args: preserveUnchangedArgumentExpressions(
+              argTokens,
+              initialTokens,
+              initialArgValues,
+              argValues,
+            ),
           },
         },
       ],
     };
-  }, [argValues, name]);
+  }, [argValues, initialArgValues, initialTokens, name]);
 
   const tagText = useTemplateTokensToString(tokens);
   const templateFunction = useTemplateFunctionConfig(name, argValues, model);

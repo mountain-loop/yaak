@@ -230,6 +230,6 @@ impl OfflineStore {
 
     pub async fn har(&self, filter: &FlowFilter) -> Result<Har, String> {
         let flows = flows::list(&self.db, filter)?;
-        har::export(&self.blobs, &flows, self.capture_body_limit).await
+        har::export(&self.db, &self.blobs, &flows, self.capture_body_limit).await
     }
 }

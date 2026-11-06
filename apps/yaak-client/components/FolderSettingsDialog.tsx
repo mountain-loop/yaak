@@ -1,5 +1,5 @@
 import { createWorkspaceModel, foldersAtom, patchModel } from "@yaakapp-internal/models";
-import { EmptyStateText, HStack, Icon, InlineCode, VStack, CountBadge } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, VStack, CountBadge } from "@yaakapp-internal/ui";
 import { useAtomValue } from "jotai";
 import { Fragment, useMemo } from "react";
 import { useAuthTab } from "../hooks/useAuthTab";
@@ -15,6 +15,7 @@ import { Input } from "./core/Input";
 import { Link } from "./core/Link";
 import type { TabItem } from "./core/Tabs/Tabs";
 import { TabContent, Tabs } from "./core/Tabs/Tabs";
+import { EmptyStateText } from "./EmptyStateText";
 import { EnvironmentEditor } from "./EnvironmentEditor";
 import { HeadersEditor } from "./HeadersEditor";
 import { HttpAuthenticationEditor } from "./HttpAuthenticationEditor";

@@ -4,7 +4,6 @@ import { patchModel, pluginsAtom } from "@yaakapp-internal/models";
 import type { PluginVersion } from "@yaakapp-internal/plugins";
 import { checkPluginUpdates, installPlugin, searchPlugins } from "@yaakapp-internal/plugins";
 import {
-  EmptyStateText,
   Banner,
   HStack,
   Icon,
@@ -32,6 +31,7 @@ import { IconButton } from "../core/IconButton";
 import { Link } from "../core/Link";
 import { PlainInput } from "../core/PlainInput";
 import { TabContent, Tabs } from "../core/Tabs/Tabs";
+import { EmptyStateText } from "../EmptyStateText";
 import { SelectFile } from "../SelectFile";
 import { platform } from "@yaakapp-internal/platform";
 

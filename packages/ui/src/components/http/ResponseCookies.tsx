@@ -1,14 +1,15 @@
-import type { HttpResponse } from "@yaakapp-internal/models";
 import classNames from "classnames";
 import { useMemo } from "react";
 import type { JSX } from "react/jsx-runtime";
-import { useHttpResponseEvents } from "../hooks/useHttpResponseEvents";
-import { DetailsBanner } from "./core/DetailsBanner";
-import { KeyValueRow } from "./core/KeyValueRow";
-import { CountBadge, KeyValueRows } from "@yaakapp-internal/ui";
+import { CountBadge } from "../CountBadge";
+import { DetailsBanner } from "../DetailsBanner";
+import { useEditorHost } from "../EditorHost";
+import { KeyValueRows } from "../KeyValueRow";
+import { KeyValueRow } from "./ResponseHeaders";
+import type { HttpResponseView } from "./types";
 
 interface Props {
-  response: HttpResponse;
+  response: HttpResponseView;
 }
 
 interface ParsedCookie {
@@ -80,45 +81,40 @@ function parseSetCookieHeader(setCookieHeader: string): ParsedCookie {
   return cookie;
 }
 
-export function ResponseCookies({ response }: Props) {
-  const { data: events } = useHttpResponseEvents(response);
+/** The cookies a response's headers sent and received, the latest value of each name winning */
+export function parseCookieHeaders({ sent, received }: HttpResponseView["cookieHeaders"]) {
+  const sentMap = new Map<string, { name: string; value: string }>();
+  const receivedMap = new Map<string, ParsedCookie>();
 
-  const { sentCookies, receivedCookies } = useMemo(() => {
-    if (!events) return { sentCookies: [], receivedCookies: [] };
-
-    // Use Maps to deduplicate by cookie name (latest value wins)
-    const sentMap = new Map<string, { name: string; value: string }>();
-    const receivedMap = new Map<string, ParsedCookie>();
-
-    for (const event of events) {
-      const e = event.event;
-
-      // Cookie headers sent (header_up with name=cookie)
-      if (e.type === "header_up" && e.name.toLowerCase() === "cookie") {
-        const cookies = parseCookieHeader(e.value);
-        for (const cookie of cookies) {
-          sentMap.set(cookie.name, cookie);
-        }
-      }
-
-      // Set-Cookie headers received (header_down with name=set-cookie)
-      if (e.type === "header_down" && e.name.toLowerCase() === "set-cookie") {
-        const cookie = parseSetCookieHeader(e.value);
-        receivedMap.set(cookie.name, cookie);
-      }
+  for (const header of sent) {
+    for (const cookie of parseCookieHeader(header)) {
+      sentMap.set(cookie.name, cookie);
     }
+  }
+  for (const header of received) {
+    const cookie = parseSetCookieHeader(header);
+    receivedMap.set(cookie.name, cookie);
+  }
 
-    return {
-      sentCookies: Array.from(sentMap.values()),
-      receivedCookies: Array.from(receivedMap.values()),
-    };
-  }, [events]);
+  return {
+    sentCookies: Array.from(sentMap.values()),
+    receivedCookies: Array.from(receivedMap.values()),
+  };
+}
+
+export function ResponseCookies({ response }: Props) {
+  const { useDetailsBannerStoredValue } = useEditorHost();
+  const { sentCookies, receivedCookies } = useMemo(
+    () => parseCookieHeaders(response.cookieHeaders),
+    [response.cookieHeaders],
+  );
 
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner
         defaultOpen
-        storageKey={`${response.requestId}.sent_cookies`}
+        useStoredValue={useDetailsBannerStoredValue}
+        storageKey={`${response.ownerId}.sent_cookies`}
         summary={
           <h2 className="flex items-center">
             Sent Cookies <CountBadge showZero count={sentCookies.length} />
@@ -141,7 +137,8 @@ export function ResponseCookies({ response }: Props) {
 
       <DetailsBanner
         defaultOpen
-        storageKey={`${response.requestId}.received_cookies`}
+        useStoredValue={useDetailsBannerStoredValue}
+        storageKey={`${response.ownerId}.received_cookies`}
         summary={
           <h2 className="flex items-center">
             Received Cookies <CountBadge showZero count={receivedCookies.length} />

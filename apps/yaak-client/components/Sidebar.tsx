@@ -70,7 +70,6 @@ import { evaluate, parseQuery } from "./core/Editor/filter/query";
 import { formatFieldFilter } from "./core/Editor/filter/format";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import {
-  EmptyStateText,
   Icon,
   LoadingIcon,
   Tree,
@@ -83,6 +82,7 @@ import type { TreeNode, TreeHandle, TreeProps, TreeItemProps } from "@yaakapp-in
 import { IconButton } from "./core/IconButton";
 import type { InputHandle } from "./core/Input";
 import { Input } from "./core/Input";
+import { EmptyStateText } from "./EmptyStateText";
 import { atomWithKVStorage } from "../lib/atoms/atomWithKVStorage";
 import { GitDropdown } from "./git/GitDropdown";
 import { gitCallbacks } from "./git/callbacks";

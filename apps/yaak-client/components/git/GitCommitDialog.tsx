@@ -8,7 +8,7 @@ import type {
   WebsocketRequest,
   Workspace,
 } from "@yaakapp-internal/models";
-import { EmptyStateText, Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
+import { Banner, HStack, Icon, InlineCode, SplitLayout } from "@yaakapp-internal/ui";
 import { type ComponentProps, useCallback, useMemo, useState } from "react";
 import { modelToYaml } from "../../lib/diffYaml";
 import { trackFeatureUsage } from "../../lib/featureFeedback";
@@ -26,6 +26,7 @@ import { CheckboxTree } from "../core/CheckboxTree";
 import { DiffViewer } from "../core/Editor/DiffViewer";
 import { Input } from "../core/Input";
 import { Separator } from "../core/Separator";
+import { EmptyStateText } from "../EmptyStateText";
 import { useGitCallbacks } from "./callbacks";
 import { handlePushResult } from "./git-util";
 

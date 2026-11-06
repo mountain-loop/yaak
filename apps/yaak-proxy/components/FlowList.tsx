@@ -3,6 +3,7 @@ import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import {
   ContextMenu,
+  CountBadge,
   formatMillis,
   HttpMethodTagRaw,
   HttpStatusTagRaw,
@@ -15,6 +16,7 @@ import type { CSSProperties, KeyboardEvent, MouseEvent, WheelEvent } from "react
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { selectedFlowAtom, selectedFlowIdAtom } from "../lib/atoms";
 import { shortContentType } from "../lib/body";
+import { utcTimestamp } from "../lib/flowViews";
 import {
   type Column,
   type ColumnId,
@@ -459,9 +461,11 @@ const FlowRow = memo(function FlowRow({
  * state the flow has. Streaming and agent reads join it once the engine records them.
  */
 function FlowMark({ flow }: { flow: Flow }) {
+  const open = isOpenStream(flow);
   const states: string[] = [];
   if (flow.error != null) states.push(`Failed: ${flow.error}`);
   if (flow.cancelled) states.push("Cancelled by the app");
+  if (open) states.push("Streaming");
   if (flow.responseTruncated) states.push("Body cut at the capture limit");
   if (flow.savedRequestId != null) states.push("Saved to Yaak");
   const title = states.length === 0 ? undefined : states.join("\n");
@@ -471,6 +475,8 @@ function FlowMark({ flow }: { flow: Flow }) {
         <Icon icon="circle_alert" size="sm" color="danger" />
       ) : flow.cancelled ? (
         <Icon icon="circle_off" size="sm" className="text-text-subtlest" />
+      ) : open ? (
+        <span aria-hidden className="w-[7px] h-[7px] rounded-full bg-info ring-3 ring-info/20" />
       ) : flow.responseTruncated ? (
         <Icon icon="scissors" size="sm" color="notice" />
       ) : flow.savedRequestId != null ? (
@@ -481,6 +487,11 @@ function FlowMark({ flow }: { flow: Flow }) {
 }
 
 const mono = "font-mono text-xs";
+
+/** A WebSocket, event stream or gRPC call still open: written as it opens, done once it ends */
+function isOpenStream(flow: Flow): boolean {
+  return flow.streamKind != null && flow.elapsedMs == null && flow.error == null && !flow.cancelled;
+}
 
 function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: boolean }) {
   const failed = flow.error != null;
@@ -519,10 +530,28 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       );
     case "path": {
       const { path, query } = splitPath(flow.url);
+      if (flow.streamKind == null) {
+        return (
+          <span>
+            {path}
+            <span className="text-text-subtlest">{query}</span>
+          </span>
+        );
+      }
+      // A stream's message count rides the end of the path, so it survives the narrow width,
+      // ticking while the stream is open.
       return (
-        <span>
-          {path}
-          <span className="text-text-subtlest">{query}</span>
+        <span className="flex items-center">
+          <span className="truncate">
+            {path}
+            <span className="text-text-subtlest">{query}</span>
+          </span>
+          <CountBadge
+            count={flow.messageCount}
+            showZero
+            color={isOpenStream(flow) ? "info" : undefined}
+            className="shrink-0 !mb-0 tabular-nums"
+          />
         </span>
       );
     }
@@ -560,6 +589,15 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
         </span>
       );
     case "time":
+      // An open stream shows how long it has been open, quietly, as its messages land.
+      if (isOpenStream(flow)) {
+        const open = Date.now() - Date.parse(utcTimestamp(flow.startedAt));
+        return (
+          <span className={classNames(mono, "text-right text-text-subtlest")}>
+            {Number.isFinite(open) ? formatMillis(Math.max(0, open)) : "--"}
+          </span>
+        );
+      }
       return (
         <span
           className={classNames(

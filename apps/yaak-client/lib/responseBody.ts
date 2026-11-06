@@ -3,7 +3,9 @@ import type { FilterResponse } from "@yaakapp-internal/plugins";
 import type { ServerSentEvent, SseSummary } from "@yaakapp-internal/sse";
 import { candidateJsonPayloadsFromSseText, computeSseSummary } from "@yaakapp-internal/sse";
 import { rpc } from "./rpc";
+import { decodeBodyText } from "@yaakapp-internal/lib/decodeBodyText";
 import { platform } from "@yaakapp-internal/platform";
+import { getContentTypeFromHeaders } from "./model_util";
 
 /**
  * Reading a response body means naming the response, never the file it lives
@@ -74,5 +76,6 @@ export async function getResponseBodyBytes(
 
 async function getResponseBodyDecoded(response: HttpResponse): Promise<string | null> {
   const bytes = await getResponseBodyBytes(response);
-  return bytes == null ? null : new TextDecoder("utf-8").decode(bytes);
+  if (bytes == null) return null;
+  return decodeBodyText(bytes, getContentTypeFromHeaders(response.headers));
 }

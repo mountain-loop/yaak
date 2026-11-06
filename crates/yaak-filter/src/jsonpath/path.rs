@@ -46,7 +46,7 @@ fn regex(pattern: &str) -> Regex {
 fn replace(
     re: &Regex,
     text: &str,
-    rep: impl FnMut(&Captures<'_>) -> String,
+    rep: impl FnMut(&Captures<'_, str>) -> String,
 ) -> Result<String, String> {
     re.try_replacen(text, 0, rep)
         .map(|s| s.into_owned())

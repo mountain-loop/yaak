@@ -6,7 +6,7 @@ import type {
   Workspace,
 } from "@yaakapp-internal/models";
 import { patchModel } from "@yaakapp-internal/models";
-import { EmptyStateText, HStack, Icon, InlineCode } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode } from "@yaakapp-internal/ui";
 import { useCallback } from "react";
 import { openFolderSettings } from "../commands/openFolderSettings";
 import { openWorkspaceSettings } from "../commands/openWorkspaceSettings";
@@ -23,6 +23,7 @@ import { Link } from "./core/Link";
 import { RadioDropdown } from "./core/RadioDropdown";
 import { SegmentedControl } from "./core/SegmentedControl";
 import { DynamicForm } from "./DynamicForm";
+import { EmptyStateText } from "./EmptyStateText";
 
 interface Props {
   model: HttpRequest | GrpcRequest | WebsocketRequest | Folder | Workspace;

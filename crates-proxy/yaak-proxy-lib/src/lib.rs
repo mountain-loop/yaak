@@ -7,9 +7,11 @@ pub mod control;
 pub mod convert;
 pub mod db;
 pub mod flows;
+pub mod grpc;
 pub mod har;
 pub mod helper;
 pub mod macos;
+pub mod messages;
 pub mod models;
 pub mod save;
 pub mod settings;
@@ -21,9 +23,11 @@ use crate::client::ControlClient;
 use crate::control::{ControlFile, ControlInfo, ControlServer, Owner};
 use crate::convert::DroppedHeader;
 use crate::db::ProxyQueryManager;
+use crate::grpc::{DecodedGrpcMessage, GrpcSchema, GrpcState};
 use crate::helper::HelperState;
 use crate::macos::{SystemProxyBackend, SystemProxyStatus};
-use crate::models::{Flow, FlowBody, FlowIden, ModelPayload, ProxyHeader, find_header};
+use crate::messages::FlowMessage;
+use crate::models::{Flow, FlowBody, ModelPayload, ProxyHeader, StreamKind, find_header};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
 use crate::settings::{HttpVersion, ProxySettings};
 use base64::Engine;
@@ -40,6 +44,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 use yaak_database::{ModelChangeEvent, UpdateSource, UpsertModelInfo};
+pub use yaak_grpc::GrpcConfig;
 use yaak_models::blob_manager::{BlobManager, BodyChunkWriter};
 use yaak_proxy::{CaStore, ProxyConfig, ProxyEvent, ProxyHandle};
 use yaak_rpc::{RpcError, RpcEventEmitter, define_rpc};
@@ -73,6 +78,8 @@ pub struct ProxyCtx {
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
+    /// gRPC schemas as decoded, and the protoc that compiles attached protos.
+    pub grpc: GrpcState,
 }
 
 impl ProxyCtx {
@@ -98,6 +105,7 @@ impl ProxyCtx {
             db,
             blobs,
             events,
+            grpc: GrpcState::default(),
         }
         // A clear the last run did not finish deleting.
         .with_cleared_deleting())
@@ -108,6 +116,13 @@ impl ProxyCtx {
         if pending {
             self.delete_cleared();
         }
+        self
+    }
+
+    /// The protoc that compiles `.proto` files attached for gRPC decoding, as the app bundles
+    /// it. Without one, a `protoc` on `PATH` is used.
+    pub fn with_protoc(self, config: yaak_grpc::GrpcConfig) -> Self {
+        self.grpc.set_protoc(config);
         self
     }
 
@@ -181,6 +196,7 @@ impl ProxyCtx {
         }
 
         let settings = self.settings()?;
+        self.end_stale_streams();
         let ca = CaStore::load_or_create(&self.ca_dir())
             .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
         let mut config = ProxyConfig::new(port.unwrap_or(settings.port), Arc::new(ca));
@@ -235,6 +251,22 @@ impl ProxyCtx {
         }
         self.events.emit("proxy_state_changed", &ProxyStatePayload { state: ProxyState::Running });
         Ok(())
+    }
+
+    /// Marks streams an engine left open, as one that crashed does, as ended. Only the engine's
+    /// owner, about to start it, may: until then another process's streams may be open.
+    fn end_stale_streams(&self) {
+        let ended = self.db.with_tx(|c| {
+            c.conn().resolve().execute(
+                "UPDATE flows SET error = ?1 WHERE stream_kind IS NOT NULL \
+                AND elapsed_ms IS NULL AND error IS NULL AND NOT cancelled",
+                [STOPPED_MID_STREAM],
+            )?;
+            Ok::<_, yaak_database::Error>(())
+        });
+        if let Err(e) = ended {
+            warn!("Failed to end streams left open: {e}");
+        }
     }
 
     /// Stops the engine and turns off a system proxy that points at it.
@@ -614,9 +646,13 @@ impl ProxyCtx {
             (self.db.clone(), self.blobs.clone(), self.deleting_cleared.clone());
         let spawned = std::thread::Builder::new().name("proxy-clear".into()).spawn(move || {
             lower_thread_priority();
+            let mut retry = DELETE_PAUSE;
             loop {
                 match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH) {
-                    Ok(false) => std::thread::sleep(DELETE_PAUSE),
+                    Ok(false) => {
+                        retry = DELETE_PAUSE;
+                        std::thread::sleep(DELETE_PAUSE);
+                    }
                     Ok(true) => {
                         *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
                         // A clear since the last batch saw this running and left its flows to
@@ -626,10 +662,12 @@ impl ProxyCtx {
                             return;
                         }
                     }
+                    // A busy database, most likely: tried again, waiting longer each time, so a
+                    // clear is never left half done until the next launch.
                     Err(e) => {
                         warn!("{e}");
-                        *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
-                        return;
+                        std::thread::sleep(retry);
+                        retry = (retry * 4).min(DELETE_RETRY_MAX);
                     }
                 }
             }
@@ -650,11 +688,16 @@ fn claim(flag: &Mutex<bool>) -> bool {
 /// How long deleting cleared flows rests between batches, leaving the database to new flows.
 const DELETE_PAUSE: Duration = Duration::from_millis(5);
 
-/// Runs the calling thread at background priority, where the platform has one.
+/// The longest deleting cleared flows waits before trying a failed batch again.
+const DELETE_RETRY_MAX: Duration = Duration::from_secs(5);
+
+/// Runs the calling thread below the app's own work, where the platform has priorities: macOS's
+/// utility class, not background, whose disk throttling can stall a delete for as long as the
+/// Mac is busy.
 fn lower_thread_priority() {
     #[cfg(target_os = "macos")]
     unsafe {
-        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_BACKGROUND, 0);
+        libc::pthread_set_qos_class_self_np(libc::qos_class_t::QOS_CLASS_UTILITY, 0);
     }
 }
 
@@ -919,12 +962,40 @@ pub struct GetFlowBodyRequest {
 #[serde(rename_all = "camelCase")]
 pub struct GetFlowBodyResponse {
     /// The body decoded with its Content-Encoding, at most the capture limit of it, in base64.
+    /// When it fails to decode, the bytes as they were on the wire instead.
     pub data: String,
     /// The body is incomplete: cut on the wire, or decoded past the capture limit.
     pub truncated: bool,
     /// Bytes stored for the body, as they were on the wire.
     #[ts(type = "number")]
     pub stored_size: usize,
+    /// Why the body failed to decode, in which case `data` is as it was on the wire.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub decode_error: Option<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFlowBodyRequest {
+    pub flow_id: String,
+    pub which: FlowBody,
+    /// The file to write.
+    pub path: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SaveFlowBodyResponse {
+    /// Bytes written.
+    #[ts(type = "number")]
+    pub size: usize,
+    /// What was written is incomplete, as `GetFlowBodyResponse.truncated` is.
+    pub truncated: bool,
+    /// The body failed to decode, so the file has it as it was on the wire.
+    pub raw: bool,
 }
 
 #[derive(Deserialize, TS)]
@@ -987,7 +1058,145 @@ pub struct HelperRegisterRequest {}
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct HelperUnregisterRequest {}
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ListMessagesRequest {
+    pub flow_id: String,
+    /// Only messages after this `seq`, for following a stream as it grows.
+    #[ts(optional, type = "number")]
+    pub after_seq: Option<i64>,
+    /// At most this many, the first after `afterSeq`.
+    #[ts(optional, type = "number")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ListMessagesResponse {
+    /// In order, by `seq`.
+    pub messages: Vec<FlowMessage>,
+    /// Messages the flow has in all.
+    #[ts(type = "number")]
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GetMessagePayloadRequest {
+    pub flow_id: String,
+    #[ts(type = "number")]
+    pub seq: i64,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GetMessagePayloadResponse {
+    /// The payload as stored (unmasked, inflated, decompressed), in base64.
+    pub data: String,
+    /// It is cut at the capture limit.
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DecodeGrpcMessageRequest {
+    pub flow_id: String,
+    #[ts(type = "number")]
+    pub seq: i64,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListGrpcSchemasRequest {}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AddGrpcSchemaRequest {
+    /// `api.example.com`, `localhost:50051`, `*.example.com` or `*`.
+    pub host_pattern: String,
+    /// `.proto` files, and directories they import from.
+    pub proto_paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct RemoveGrpcSchemaRequest {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ReflectGrpcHostRequest {
+    /// `host` or `host:port`, over TLS on 443 unless a port is given, or either after
+    /// `http://` to ask without TLS.
+    pub host: String,
+}
+
+/// A message of a streaming flow was recorded.
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct MessagePayload {
+    pub message: FlowMessage,
+}
+
 // -- Handlers --
+
+fn list_messages(
+    ctx: &ProxyCtx,
+    req: ListMessagesRequest,
+) -> Result<ListMessagesResponse, RpcError> {
+    find_flow(ctx, &req.flow_id)?;
+    let messages =
+        messages::list(&ctx.db, &req.flow_id, req.after_seq, req.limit).map_err(rpc_error)?;
+    let total = messages::count(&ctx.db, &req.flow_id).map_err(rpc_error)?;
+    Ok(ListMessagesResponse { messages, total })
+}
+
+fn get_message_payload(
+    ctx: &ProxyCtx,
+    req: GetMessagePayloadRequest,
+) -> Result<GetMessagePayloadResponse, RpcError> {
+    let message = messages::get(&ctx.db, &req.flow_id, req.seq).map_err(rpc_error)?;
+    let data = messages::payload(&ctx.db, &ctx.blobs, &message).map_err(rpc_error)?;
+    Ok(GetMessagePayloadResponse { data: BASE64.encode(data), truncated: message.truncated })
+}
+
+async fn decode_grpc_message(
+    ctx: ProxyCtx,
+    req: DecodeGrpcMessageRequest,
+) -> Result<DecodedGrpcMessage, RpcError> {
+    let flow = find_flow(&ctx, &req.flow_id)?;
+    grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, req.seq).await.map_err(rpc_error)
+}
+
+fn list_grpc_schemas(
+    ctx: &ProxyCtx,
+    _req: ListGrpcSchemasRequest,
+) -> Result<Vec<GrpcSchema>, RpcError> {
+    grpc::list(&ctx.db).map_err(rpc_error)
+}
+
+async fn add_grpc_schema(ctx: ProxyCtx, req: AddGrpcSchemaRequest) -> Result<GrpcSchema, RpcError> {
+    grpc::add(&ctx.db, &ctx.grpc, &req.host_pattern, &req.proto_paths).await.map_err(rpc_error)
+}
+
+fn remove_grpc_schema(ctx: &ProxyCtx, req: RemoveGrpcSchemaRequest) -> Result<bool, RpcError> {
+    grpc::remove(&ctx.db, &ctx.grpc, &req.id).map_err(rpc_error)
+}
+
+async fn reflect_grpc_host(
+    ctx: ProxyCtx,
+    req: ReflectGrpcHostRequest,
+) -> Result<GrpcSchema, RpcError> {
+    let (host, plaintext) = grpc::reflection_host(&req.host);
+    grpc::reflect(&ctx.db, &ctx.grpc, &host, plaintext).await.map_err(rpc_error)
+}
 
 fn execute_action(ctx: &ProxyCtx, invocation: ActionInvocation) -> Result<bool, RpcError> {
     match invocation {
@@ -1126,7 +1335,7 @@ async fn export_har(ctx: ProxyCtx, req: ExportHarRequest) -> Result<usize, RpcEr
     }
     .map_err(rpc_error)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let har = har::export(&ctx.blobs, &flows, limit).await.map_err(rpc_error)?;
+    let har = har::export(&ctx.db, &ctx.blobs, &flows, limit).await.map_err(rpc_error)?;
     let path = PathBuf::from(req.path);
     blocking(move || {
         let file = std::fs::File::create(&path)
@@ -1150,16 +1359,42 @@ async fn get_flow_body(
 ) -> Result<GetFlowBodyResponse, RpcError> {
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
-    let body = viewer_body(&ctx, &flow, req.which, limit).await?;
+    let body =
+        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
     Ok(GetFlowBodyResponse {
         data: BASE64.encode(&body.data),
         truncated: body.truncated,
         stored_size: body.stored_size,
+        decode_error: body.decode_error,
     })
 }
 
-/// A body for the app's viewer, which shows a body that failed to decode as its error, as it
-/// always has, rather than as what decoded before the failure.
+/// Writes a body to a file the person picked: decoded, as the viewer shows it, or as it was on
+/// the wire when it fails to decode.
+async fn save_flow_body(
+    ctx: ProxyCtx,
+    req: SaveFlowBodyRequest,
+) -> Result<SaveFlowBodyResponse, RpcError> {
+    let flow = find_flow(&ctx, &req.flow_id)?;
+    let limit = settings(&ctx)?.capture_body_limit;
+    let body =
+        bodies::read_body_or_raw(&ctx.blobs, &flow, req.which, limit).await.map_err(rpc_error)?;
+    let saved = SaveFlowBodyResponse {
+        size: body.data.len(),
+        truncated: body.truncated,
+        raw: body.decode_error.is_some(),
+    };
+    let path = PathBuf::from(req.path);
+    blocking(move || {
+        std::fs::write(&path, &body.data)
+            .map_err(|e| format!("Failed to write {}: {e}", path.display()))
+    })
+    .await?;
+    Ok(saved)
+}
+
+/// A body to filter, which fails when the body failed to decode rather than filtering what
+/// decoded before the failure.
 async fn viewer_body(
     ctx: &ProxyCtx,
     flow: &Flow,
@@ -1180,14 +1415,13 @@ async fn filter_body(
     let flow = find_flow(&ctx, &req.flow_id)?;
     let limit = settings(&ctx)?.capture_body_limit;
     let body = viewer_body(&ctx, &flow, req.which, limit).await?;
-    let text = String::from_utf8_lossy(&body.data);
+    let content_type = find_header(flow.headers(req.which), "content-type");
+    // The text the viewer shows, so the filter's results match it
+    let text = bodies::body_text(&body.data, content_type, body.truncated);
     let language = match req.language {
         Some(FilterLanguage::JsonPath) => yaak_filter::Language::JsonPath,
         Some(FilterLanguage::XPath) => yaak_filter::Language::XPath,
-        None => {
-            let content_type = find_header(flow.headers(req.which), "content-type");
-            yaak_filter::Language::for_content_type(content_type.unwrap_or_default())
-        }
+        None => yaak_filter::Language::for_content_type(content_type.unwrap_or_default()),
     };
     let result = yaak_filter::filter(language, &text, &req.expression);
     Ok(FilterBodyResponse { content: result.content, error: result.error })
@@ -1244,8 +1478,10 @@ fn settings(ctx: &ProxyCtx) -> Result<ProxySettings, RpcError> {
     ctx.settings().map_err(rpc_error)
 }
 
+/// A flow by id, with its number; not one that is cleared, though its row may wait to be
+/// deleted.
 fn find_flow(ctx: &ProxyCtx, flow_id: &str) -> Result<Flow, RpcError> {
-    ctx.db.with_conn(|db| db.find_one::<Flow>(FlowIden::Id, flow_id)).map_err(rpc_error)
+    flows::get(&ctx.db, flow_id).map_err(rpc_error)
 }
 
 fn rpc_error(e: impl ToString) -> RpcError {
@@ -1284,6 +1520,21 @@ const ACCEPT_ATTRIBUTION_WAIT: Duration = Duration::from_millis(20);
 /// the lookup starts with the request and takes a few milliseconds.
 const ATTRIBUTION_WAIT: Duration = Duration::from_millis(100);
 
+/// The most often a streaming flow is written again as its messages land. Each message is
+/// sent to the app as it is written; the flow's count follows at this pace.
+const STREAM_FLOW_WRITE_INTERVAL: Duration = Duration::from_millis(250);
+
+/// Messages written in one transaction at most. Messages arriving together are batched up to
+/// this, so a busy WebSocket does not cost a transaction a frame.
+const MESSAGE_BATCH: usize = 256;
+
+/// How often the event loop looks for streaming flows due to be written while events keep
+/// coming.
+const DUE_CHECK_INTERVAL: Duration = Duration::from_millis(50);
+
+/// Why a stream still open when the engine stopped ended.
+const STOPPED_MID_STREAM: &str = "Yaak Proxy stopped before the stream ended";
+
 /// A flow between its `RequestStart` and its end, with its bodies being written as they
 /// stream.
 struct InFlight {
@@ -1292,6 +1543,31 @@ struct InFlight {
     connection: u64,
     request_body: Option<BodyChunkWriter>,
     response_body: Option<BodyChunkWriter>,
+    /// Written to the database already, as a streaming flow is when its stream opens.
+    persisted: bool,
+    /// Cleared while it streamed: nothing more of it is kept.
+    cleared: bool,
+    next_seq: i64,
+    /// Changed since it was last written, by a message or a status.
+    dirty: bool,
+    last_write: Option<std::time::Instant>,
+}
+
+impl InFlight {
+    /// Something shown of the flow changed: one written while it streams is written again on
+    /// the stream flow interval, so it does not wait for a message to show it.
+    fn changed(&mut self) {
+        if self.persisted {
+            self.dirty = true;
+        }
+    }
+}
+
+/// A message waiting to be written, with its payload.
+struct PendingMessage {
+    id: u64,
+    message: messages::FlowMessage,
+    data: bytes::Bytes,
 }
 
 /// Where the event loop stores flows, and whether it does.
@@ -1304,10 +1580,108 @@ struct FlowSink {
 }
 
 fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
-    let FlowSink { db, blobs, events, attribution, recording } = sink;
+    use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
     let mut in_flight: HashMap<u64, InFlight> = HashMap::new();
+    let mut pending: Vec<PendingMessage> = Vec::new();
+    let mut last_due_check = std::time::Instant::now();
 
-    while let Ok(event) = rx.recv() {
+    loop {
+        // Messages are written once no more are waiting, or a batch is full; flows changed by
+        // them once their interval is up.
+        let event = if !pending.is_empty() {
+            match rx.try_recv() {
+                Ok(event) => event,
+                Err(TryRecvError::Empty) => {
+                    sink.write_messages(&mut in_flight, &mut pending);
+                    sink.write_due_flows(&mut in_flight);
+                    continue;
+                }
+                Err(TryRecvError::Disconnected) => break,
+            }
+        } else if let Some(due) = next_flow_write(&in_flight) {
+            let wait = due.saturating_duration_since(std::time::Instant::now());
+            match rx.recv_timeout(wait) {
+                Ok(event) => event,
+                Err(RecvTimeoutError::Timeout) => {
+                    sink.write_due_flows(&mut in_flight);
+                    continue;
+                }
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        } else {
+            match rx.recv() {
+                Ok(event) => event,
+                Err(_) => break,
+            }
+        };
+        if let ProxyEvent::Message { id, message } = event {
+            record_message(&mut in_flight, &mut pending, id, &message);
+            if pending.len() >= MESSAGE_BATCH {
+                sink.write_messages(&mut in_flight, &mut pending);
+            }
+        } else {
+            // Before anything else of the flows, so a flow's messages are in before it ends.
+            sink.write_messages(&mut in_flight, &mut pending);
+            sink.handle(&mut in_flight, event);
+        }
+        // Traffic that never lets up never empties the queue, so flows due to be written are
+        // looked for here too, every so often, their messages written first.
+        if last_due_check.elapsed() >= DUE_CHECK_INTERVAL {
+            last_due_check = std::time::Instant::now();
+            sink.write_messages(&mut in_flight, &mut pending);
+            sink.write_due_flows(&mut in_flight);
+        }
+    }
+
+    sink.write_messages(&mut in_flight, &mut pending);
+    // The engine stopped: a stream still open ends with it. Other flows in flight are dropped,
+    // as they always have been.
+    for (_, mut f) in in_flight.drain() {
+        if f.persisted {
+            f.flow.error = Some(STOPPED_MID_STREAM.to_string());
+            sink.finish_flow(f);
+        }
+    }
+}
+
+/// When the next changed streaming flow is due to be written.
+fn next_flow_write(in_flight: &HashMap<u64, InFlight>) -> Option<std::time::Instant> {
+    in_flight
+        .values()
+        .filter(|f| f.dirty)
+        .map(|f| {
+            f.last_write.map_or_else(std::time::Instant::now, |t| t + STREAM_FLOW_WRITE_INTERVAL)
+        })
+        .min()
+}
+
+fn record_message(
+    in_flight: &mut HashMap<u64, InFlight>,
+    pending: &mut Vec<PendingMessage>,
+    id: u64,
+    message: &yaak_proxy::StreamMessage,
+) {
+    let Some(f) = in_flight.get_mut(&id).filter(|f| !f.cleared) else {
+        return;
+    };
+    if let yaak_proxy::MessageKind::GrpcTrailers { status, message } = &message.kind {
+        f.flow.grpc_status = *status;
+        f.flow.grpc_message = message.clone();
+    }
+    let seq = f.next_seq;
+    f.next_seq += 1;
+    f.flow.message_count += 1;
+    f.dirty = true;
+    pending.push(PendingMessage {
+        id,
+        message: messages::FlowMessage::from_engine(&f.flow.id, seq, message),
+        data: message.data.clone(),
+    });
+}
+
+impl FlowSink {
+    fn handle(&self, in_flight: &mut HashMap<u64, InFlight>, event: ProxyEvent) {
+        let FlowSink { blobs, attribution, recording, .. } = self;
         match event {
             ProxyEvent::RequestStart {
                 id,
@@ -1321,7 +1695,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                 // Paused when it started: it passes through, and none of its events are kept.
                 // Judged by its start rather than now, as the loop can run behind.
                 if !recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true) {
-                    continue;
+                    return;
                 }
                 // Begun as the connection was accepted; this covers one accepted before the
                 // engine's port was known.
@@ -1344,8 +1718,37 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                         connection,
                         request_body: Some(BodyChunkWriter::new(blobs.clone(), request_body)),
                         response_body: Some(BodyChunkWriter::new(blobs.clone(), response_body)),
+                        persisted: false,
+                        cleared: false,
+                        next_seq: 0,
+                        dirty: false,
+                        last_write: None,
                     },
                 );
+            }
+            ProxyEvent::StreamStart { id, kind } => {
+                if let Some(f) = in_flight.get_mut(&id) {
+                    let kind = StreamKind::from(kind);
+                    f.flow.stream_kind = Some(kind);
+                    if kind.is_grpc()
+                        && let Ok(url) = url::Url::parse(&f.flow.url)
+                        && let Some((service, method)) = yaak_proxy::service_and_method(url.path())
+                    {
+                        f.flow.grpc_service = Some(service.to_string());
+                        f.flow.grpc_method = Some(method.to_string());
+                    }
+                    // Shown while it streams, rather than only once it ends.
+                    self.write_stream_flow(f);
+                }
+            }
+            // Recorded by the loop, which batches them.
+            ProxyEvent::Message { .. } => {}
+            ProxyEvent::StreamEnd { id, elapsed_ms, error } => {
+                if let Some(mut f) = in_flight.remove(&id) {
+                    f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
+                    f.flow.error = error;
+                    self.finish_flow(f);
+                }
             }
             ProxyEvent::RequestHeader { id, name, value } => {
                 if let Some(f) = in_flight.get_mut(&id) {
@@ -1359,6 +1762,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                     f.flow.request_size += len as i64;
                     f.flow.request_truncated |= data.len() < len;
                     write_body_chunk(&mut f.request_body, &data);
+                    f.changed();
                 }
             }
             ProxyEvent::RequestBodyComplete { id, size, truncated } => {
@@ -1366,6 +1770,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                     f.flow.request_size = size as i64;
                     f.flow.request_truncated = truncated;
                     finish_body(f.request_body.take());
+                    f.changed();
                 }
             }
             ProxyEvent::ResponseStart { id, status, http_version, remote_addr, elapsed_ms } => {
@@ -1374,16 +1779,22 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                     f.flow.upstream_http_version = Some(http_version);
                     f.flow.remote_addr = remote_addr.map(|a| a.to_string());
                     f.flow.elapsed_headers_ms = Some(clamp_ms(elapsed_ms));
+                    f.changed();
                 }
             }
             ProxyEvent::ResponseHeader { id, name, value } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.response_headers.push(ProxyHeader { name, value });
+                    f.changed();
                 }
             }
-            ProxyEvent::ResponseBodyChunk { id, data, .. } => {
+            // Counted per chunk too, for a stream written while it is open.
+            ProxyEvent::ResponseBodyChunk { id, len, data } => {
                 if let Some(f) = in_flight.get_mut(&id) {
+                    f.flow.response_size += len as i64;
+                    f.flow.response_truncated |= data.len() < len;
                     write_body_chunk(&mut f.response_body, &data);
+                    f.changed();
                 }
             }
             ProxyEvent::ResponseBodyComplete {
@@ -1400,25 +1811,213 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
                     f.flow.error = error;
                     f.flow.cancelled = cancelled;
-                    finish_flow(&db, &events, &attribution, f);
+                    self.finish_flow(f);
                 }
             }
             ProxyEvent::Cancelled { id, elapsed_ms } => {
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
                     f.flow.cancelled = true;
-                    finish_flow(&db, &events, &attribution, f);
+                    self.finish_flow(f);
                 }
             }
             ProxyEvent::Error { id, error, elapsed_ms } => {
                 if let Some(mut f) = in_flight.remove(&id) {
                     f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
                     f.flow.error = Some(error);
-                    finish_flow(&db, &events, &attribution, f);
+                    self.finish_flow(f);
                 }
             }
         }
     }
+
+    /// Writes `pending` in one transaction, each payload over [`messages::INLINE_LIMIT`] first
+    /// to `blobs.sqlite`, and tells the app of each. A flow cleared meanwhile keeps nothing more.
+    fn write_messages(
+        &self,
+        in_flight: &mut HashMap<u64, InFlight>,
+        pending: &mut Vec<PendingMessage>,
+    ) {
+        if pending.is_empty() {
+            return;
+        }
+        let batch = std::mem::take(pending);
+        let mut rows = Vec::with_capacity(batch.len());
+        for PendingMessage { id, mut message, data } in batch {
+            let inline = if data.len() > messages::INLINE_LIMIT {
+                let mut writer = BodyChunkWriter::new(self.blobs.clone(), message.blob_id());
+                if let Err(e) = writer.write(&data).and_then(|_| writer.finish()) {
+                    warn!("Failed to store a proxy message payload: {e}");
+                    message.stored_size = 0;
+                    message
+                        .error
+                        .get_or_insert_with(|| format!("Failed to store the payload: {e}"));
+                }
+                None
+            } else {
+                Some(data)
+            };
+            rows.push((id, message, inline));
+        }
+
+        let mut orphaned = Vec::new();
+        let mut newly_cleared = Vec::new();
+        let written = self.db.with_tx(|ctx| {
+            let conn = ctx.conn().resolve();
+            let mut checked = std::collections::HashSet::new();
+            for (id, message, inline) in &rows {
+                let Some(f) = in_flight.get_mut(id) else {
+                    continue;
+                };
+                // Cleared since it was written: what comes after is not kept either.
+                if f.persisted && checked.insert(*id) && !flow_exists(conn, &f.flow.id) {
+                    f.cleared = true;
+                    newly_cleared.push(*id);
+                }
+                if f.cleared {
+                    orphaned.push(message.blob_id());
+                    continue;
+                }
+                messages::insert(conn, message, inline.as_deref())?;
+                // Before the commit, as flows are, so a clear's event comes after it.
+                self.events.emit("message_write", &MessagePayload { message: message.clone() });
+            }
+            Ok::<_, yaak_database::Error>(())
+        });
+        if let Err(e) = written {
+            warn!("Failed to write proxy messages: {e}");
+        }
+        if !orphaned.is_empty() {
+            let _ = self.blobs.with_tx(|b| orphaned.iter().try_for_each(|id| b.delete_chunks(id)));
+        }
+        for id in newly_cleared {
+            if let Some(f) = in_flight.get_mut(&id) {
+                self.stop_cleared(f);
+            }
+        }
+    }
+
+    /// A stream cleared while open keeps nothing more: its bodies stop being written, and what
+    /// they wrote since the clear is deleted, as the stream may run long before it ends.
+    fn stop_cleared(&self, f: &mut InFlight) {
+        f.cleared = true;
+        f.request_body = None;
+        f.response_body = None;
+        self.forget_cleared(&f.flow.id);
+    }
+
+    /// Writes the streaming flows whose messages or status changed, at most once per
+    /// [`STREAM_FLOW_WRITE_INTERVAL`] each.
+    fn write_due_flows(&self, in_flight: &mut HashMap<u64, InFlight>) {
+        let now = std::time::Instant::now();
+        for f in in_flight.values_mut() {
+            let due = f.last_write.is_none_or(|t| now >= t + STREAM_FLOW_WRITE_INTERVAL);
+            if f.dirty && due {
+                self.write_stream_flow(f);
+            }
+        }
+    }
+
+    /// Writes a streaming flow as it is so far, for the app to show while it streams. Unless it
+    /// was cleared since it was last written: then nothing more of it is kept.
+    fn write_stream_flow(&self, f: &mut InFlight) {
+        f.dirty = false;
+        f.last_write = Some(std::time::Instant::now());
+        if f.cleared {
+            return;
+        }
+        let mut flow = f.flow.clone();
+        flow.content_type = find_header(&flow.response_headers, "content-type").map(String::from);
+        // Not waited for here; the flow's end waits for it.
+        if let Some(app) = self.attribution.get(f.connection, Duration::ZERO) {
+            flow.client_pid = Some(app.pid);
+            flow.client_name = Some(app.name);
+            flow.client_bundle_id = app.bundle_id;
+            flow.client_path = Some(app.path);
+            flow.client_cwd = app.cwd;
+        }
+        let persisted = f.persisted;
+        let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, persisted));
+        match written {
+            Ok(true) => f.persisted = true,
+            Ok(false) => self.stop_cleared(f),
+            Err(e) => warn!("Failed to write proxy flow: {e}"),
+        }
+    }
+
+    fn finish_flow(&self, f: InFlight) {
+        finish_body(f.request_body);
+        finish_body(f.response_body);
+        let id = f.flow.id.clone();
+        if f.cleared {
+            self.forget_cleared(&id);
+            return;
+        }
+
+        let mut flow = f.flow;
+        flow.content_type = find_header(&flow.response_headers, "content-type").map(String::from);
+        if let Some(app) = self.attribution.get(f.connection, ATTRIBUTION_WAIT) {
+            flow.client_pid = Some(app.pid);
+            flow.client_name = Some(app.name);
+            flow.client_bundle_id = app.bundle_id;
+            flow.client_path = Some(app.path);
+            flow.client_cwd = app.cwd;
+        }
+        let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, f.persisted));
+        match written {
+            Ok(true) => {}
+            Ok(false) => self.forget_cleared(&id),
+            Err(e) => warn!("Failed to write proxy flow: {e}"),
+        }
+    }
+
+    /// Writes `flow` and tells the app. One written before, as a stream is while open, keeps
+    /// what was recorded on it since, the request it was saved as; one cleared since stays
+    /// cleared, and this returns false.
+    fn write_flow(
+        &self,
+        ctx: &yaak_database::DbContext,
+        mut flow: Flow,
+        persisted: bool,
+    ) -> Result<bool, yaak_database::Error> {
+        if persisted {
+            // Not one cleared since, whose row may wait to be deleted.
+            let Some(stored) = flows::find_in(ctx.conn().resolve(), &flow.id) else {
+                return Ok(false);
+            };
+            flow.saved_request_id = stored.saved_request_id;
+        }
+        let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
+        // Sent while this holds the writer, before the commit, so a clear's event, sent after
+        // its own commit, always comes after it.
+        self.events.emit(
+            "model_write",
+            &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
+        );
+        Ok(true)
+    }
+
+    /// Deletes what a flow cleared while it streamed wrote after the clear.
+    fn forget_cleared(&self, flow_id: &str) {
+        let deleted = self.blobs.with_tx(|b| {
+            b.delete_chunks(&Flow::body_id(flow_id, FlowBody::Request))?;
+            b.delete_chunks(&Flow::body_id(flow_id, FlowBody::Response))?;
+            b.delete_chunks_like(&format!("{flow_id}.msg.%"))
+        });
+        if let Err(e) = deleted {
+            warn!("Failed to delete a cleared flow's bodies: {e}");
+        }
+    }
+}
+
+/// The flow is stored and not cleared: a cleared one's row may wait to be deleted.
+fn flow_exists(conn: &rusqlite::Connection, flow_id: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM flows WHERE id = ?1 AND rowid > ?2",
+        rusqlite::params![flow_id, flows::clear_mark(conn)],
+        |_| Ok(()),
+    )
+    .is_ok()
 }
 
 fn clamp_ms(ms: u64) -> i32 {
@@ -1446,39 +2045,6 @@ fn finish_body(writer: Option<BodyChunkWriter>) {
     }
 }
 
-fn finish_flow(
-    db: &ProxyQueryManager,
-    events: &RpcEventEmitter,
-    attribution: &Attribution,
-    f: InFlight,
-) {
-    finish_body(f.request_body);
-    finish_body(f.response_body);
-
-    let mut flow = f.flow;
-    flow.content_type = find_header(&flow.response_headers, "content-type").map(String::from);
-    if let Some(app) = attribution.get(f.connection, ATTRIBUTION_WAIT) {
-        flow.client_pid = Some(app.pid);
-        flow.client_name = Some(app.name);
-        flow.client_bundle_id = app.bundle_id;
-        flow.client_path = Some(app.path);
-        flow.client_cwd = app.cwd;
-    }
-    let written = db.with_tx(|ctx| {
-        let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
-        // Sent while this holds the writer, before the commit, so a clear's event, sent after
-        // its own commit, always comes after it.
-        events.emit(
-            "model_write",
-            &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
-        );
-        Ok::<_, yaak_database::Error>(())
-    });
-    if let Err(e) = written {
-        warn!("Failed to write proxy flow: {e}");
-    }
-}
-
 // -- Router + Schema --
 
 define_rpc! {
@@ -1486,17 +2052,23 @@ define_rpc! {
     commands {
         execute_action(ActionInvocation) -> bool,
         format_body(FormatBodyRequest) -> String,
+        get_message_payload(GetMessagePayloadRequest) -> GetMessagePayloadResponse,
         list_actions(ListActionsRequest) -> ListActionsResponse,
         list_flows(flows::FlowFilter) -> ListFlowsResponse,
+        list_grpc_schemas(ListGrpcSchemasRequest) -> Vec<GrpcSchema>,
+        list_messages(ListMessagesRequest) -> ListMessagesResponse,
+        remove_grpc_schema(RemoveGrpcSchemaRequest) -> bool,
         set_recording(SetRecordingRequest) -> bool,
         set_system_proxy_at_launch(SetSystemProxyAtLaunchRequest) -> bool,
         set_http_version(SetHttpVersionRequest) -> HttpVersion,
     }
     async_commands {
+        add_grpc_schema(AddGrpcSchemaRequest) -> GrpcSchema,
         app_icon(AppIconRequest) -> Option<String>,
         ca_status(CaStatusRequest) -> CaStatus,
         ca_trust(CaTrustRequest) -> CaStatus,
         clear_flows(ClearFlowsRequest) -> usize,
+        decode_grpc_message(DecodeGrpcMessageRequest) -> DecodedGrpcMessage,
         export_har(ExportHarRequest) -> usize,
         filter_body(FilterBodyRequest) -> FilterBodyResponse,
         get_flow_body(GetFlowBodyRequest) -> GetFlowBodyResponse,
@@ -1505,13 +2077,16 @@ define_rpc! {
         helper_unregister(HelperUnregisterRequest) -> SystemProxyStatus,
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
         preview_save(PreviewSaveRequest) -> SavePreview,
+        reflect_grpc_host(ReflectGrpcHostRequest) -> GrpcSchema,
         save_flow(SaveFlowToYaakRequest) -> SavedFlow,
+        save_flow_body(SaveFlowBodyRequest) -> SaveFlowBodyResponse,
         system_proxy_set(SystemProxySetRequest) -> SystemProxyStatus,
         system_proxy_status(SystemProxyStatusRequest) -> SystemProxyStatus,
         take_over(TakeOverRequest) -> bool,
     }
     events {
         flows_cleared(FlowsClearedPayload),
+        message_write(MessagePayload),
         model_write(ModelPayload),
         proxy_state_changed(ProxyStatePayload),
     }
@@ -1560,6 +2135,324 @@ mod tests {
         assert!(log.was_on_at(SystemTime::now()));
     }
 
+    /// An event loop writing to `ctx`'s databases, fed by the returned sender.
+    fn event_loop(
+        ctx: &ProxyCtx,
+    ) -> (std::sync::mpsc::Sender<ProxyEvent>, std::thread::JoinHandle<()>) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let sink = FlowSink {
+            db: ctx.db.clone(),
+            blobs: ctx.blobs.clone(),
+            events: ctx.events.clone(),
+            attribution: Attribution::new(0),
+            recording: ctx.recording.clone(),
+        };
+        (tx, std::thread::spawn(move || run_event_loop(rx, sink)))
+    }
+
+    fn open_websocket(tx: &std::sync::mpsc::Sender<ProxyEvent>, id: u64, url: &str) {
+        tx.send(ProxyEvent::RequestStart {
+            id,
+            started_at: SystemTime::now(),
+            method: "GET".into(),
+            url: url.into(),
+            http_version: "HTTP/1.1".into(),
+            connection: id,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        })
+        .unwrap();
+        tx.send(ProxyEvent::ResponseStart {
+            id,
+            status: 101,
+            http_version: "HTTP/1.1".into(),
+            remote_addr: None,
+            elapsed_ms: 1,
+        })
+        .unwrap();
+        tx.send(ProxyEvent::StreamStart { id, kind: yaak_proxy::StreamKind::WebSocket }).unwrap();
+    }
+
+    fn ws_message(
+        id: u64,
+        direction: yaak_proxy::MessageDirection,
+        kind: yaak_proxy::MessageKind,
+        data: &[u8],
+    ) -> ProxyEvent {
+        ProxyEvent::Message {
+            id,
+            message: yaak_proxy::StreamMessage {
+                direction,
+                kind,
+                at: SystemTime::now(),
+                size: data.len() as u64,
+                data: bytes::Bytes::copy_from_slice(data),
+                truncated: false,
+                compressed: false,
+                error: None,
+            },
+        }
+    }
+
+    fn wait_for_flow(ctx: &ProxyCtx, check: impl Fn(&Flow) -> bool) -> Flow {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let flows = ctx.db.with_conn(|c| c.find_all::<Flow>().unwrap());
+            if let Some(flow) = flows.into_iter().find(&check) {
+                return flow;
+            }
+            assert!(std::time::Instant::now() < deadline, "no flow as expected");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn websocket_messages_are_stored_and_exported() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        open_websocket(&tx, 1, "https://example.com/socket");
+        let big: Vec<u8> = (0..10_000u32).map(|i| i as u8).collect();
+        tx.send(ws_message(1, D::Client, K::WebSocketText, b"hi")).unwrap();
+        tx.send(ws_message(1, D::Server, K::WebSocketBinary, &big)).unwrap();
+        let close = K::WebSocketClose { code: Some(1000), reason: "bye".into() };
+        tx.send(ws_message(1, D::Client, close, b"\x03\xe8bye")).unwrap();
+
+        // Written while open, its count following its messages.
+        let open = wait_for_flow(&ctx, |f| f.message_count == 3);
+        assert_eq!((open.stream_kind, open.elapsed_ms), (Some(StreamKind::Websocket), None));
+        tx.send(ProxyEvent::StreamEnd { id: 1, elapsed_ms: 50, error: None }).unwrap();
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let flow = flows::list(&ctx.db, &Default::default()).unwrap().remove(0);
+        assert_eq!((flow.elapsed_ms, flow.error.as_deref()), (Some(50), None));
+        let stored = messages::list(&ctx.db, &flow.id, None, None).unwrap();
+        let kinds: Vec<_> = stored.iter().map(|m| (m.seq, m.kind, m.direction)).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                (0, messages::MessageKind::WebsocketText, messages::MessageDirection::Client),
+                (1, messages::MessageKind::WebsocketBinary, messages::MessageDirection::Server),
+                (2, messages::MessageKind::WebsocketClose, messages::MessageDirection::Client),
+            ]
+        );
+        assert_eq!(stored[0].preview.as_deref(), Some("hi"));
+        assert_eq!(stored[1].preview, None);
+        assert_eq!(
+            (stored[2].meta.close_code, stored[2].meta.close_reason.as_deref()),
+            (Some(1000), Some("bye"))
+        );
+        // The large payload is in the blob store, the small ones in their rows.
+        assert_eq!(messages::payload(&ctx.db, &ctx.blobs, &stored[1]).unwrap(), big);
+        assert!(ctx.blobs.connect().body_exists(&stored[1].blob_id()).unwrap());
+        assert!(!ctx.blobs.connect().body_exists(&stored[0].blob_id()).unwrap());
+        assert_eq!(messages::payload(&ctx.db, &ctx.blobs, &stored[0]).unwrap(), b"hi");
+
+        let har =
+            har::export(&ctx.db, &ctx.blobs, std::slice::from_ref(&flow), 1 << 20).await.unwrap();
+        let har = serde_json::to_value(&har).unwrap();
+        let sent = &har["log"]["entries"][0]["_webSocketMessages"];
+        assert_eq!(sent.as_array().unwrap().len(), 2, "data messages only, as devtools exports");
+        assert_eq!((sent[0]["type"].as_str(), sent[0]["opcode"].as_u64()), (Some("send"), Some(1)));
+        assert_eq!(sent[0]["data"], "hi");
+        assert_eq!(
+            (sent[1]["type"].as_str(), sent[1]["opcode"].as_u64()),
+            (Some("receive"), Some(2))
+        );
+        assert_eq!(sent[1]["data"], BASE64.encode(&big));
+
+        let names: Vec<_> = event_rx.try_iter().map(|e| e.event).collect();
+        assert_eq!(names.iter().filter(|n| **n == "message_write").count(), 3, "{names:?}");
+
+        // Gone from listings at once, and with its messages and their payloads once the
+        // background delete has run.
+        ctx.clear_flows().unwrap();
+        assert_eq!(flows::count(&ctx.db).unwrap(), 0);
+        wait_for_cleared(&ctx);
+        assert!(!ctx.blobs.connect().body_exists(&stored[1].blob_id()).unwrap());
+        let left: i64 = ctx.db.with_conn(|c| {
+            c.conn()
+                .resolve()
+                .query_row("SELECT count(*) FROM flow_messages", [], |r| r.get(0))
+                .unwrap()
+        });
+        assert_eq!(left, 0);
+    }
+
+    /// Waits for the background delete a clear starts to finish.
+    fn wait_for_cleared(ctx: &ProxyCtx) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while ctx.db.with_conn(|c| flows::clear_mark(c.conn().resolve())) > 0 {
+            assert!(std::time::Instant::now() < deadline, "cleared flows were not deleted");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn a_stream_cleared_while_open_stays_cleared() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        open_websocket(&tx, 1, "https://example.com/socket");
+        tx.send(ws_message(1, D::Client, K::WebSocketText, b"before")).unwrap();
+        let flow = wait_for_flow(&ctx, |f| f.message_count == 1);
+        ctx.clear_flows().unwrap();
+
+        tx.send(ws_message(1, D::Server, K::WebSocketBinary, &[7; 8192])).unwrap();
+        // A body chunk past a blob chunk's size would be written at once, were it kept.
+        let data = bytes::Bytes::from(vec![b'x'; 2 << 20]);
+        tx.send(ProxyEvent::ResponseBodyChunk { id: 1, len: data.len(), data }).unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        let blobs = ctx.blobs.connect().list_body_ids().unwrap();
+        assert!(blobs.iter().all(|b| !b.starts_with(&flow.id)), "while open: {blobs:?}");
+
+        tx.send(ProxyEvent::StreamEnd { id: 1, elapsed_ms: 9, error: None }).unwrap();
+        drop(tx);
+        event_loop.join().unwrap();
+        assert_eq!(flows::count(&ctx.db).unwrap(), 0, "not brought back by its end");
+        // The messages written before the clear go with the background delete.
+        wait_for_cleared(&ctx);
+        assert_eq!(flows::count(&ctx.db).unwrap(), 0, "not brought back by its end");
+        assert_eq!(messages::count(&ctx.db, &flow.id).unwrap(), 0);
+        let blobs = ctx.blobs.connect().list_body_ids().unwrap();
+        assert!(blobs.iter().all(|b| !b.starts_with(&flow.id)), "{blobs:?}");
+    }
+
+    #[test]
+    fn an_open_stream_is_written_while_events_never_let_up() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        open_websocket(&tx, 1, "https://example.com/socket");
+        wait_for_flow(&ctx, |f| f.stream_kind.is_some());
+
+        // A backlog of messages, each followed by another event, which costs the loop a
+        // transaction for the message before it, so its queue does not empty for a while.
+        const SENT: i64 = 10_000;
+        for _ in 0..SENT {
+            tx.send(ws_message(1, D::Client, K::WebSocketText, b"tick")).unwrap();
+            let data = bytes::Bytes::from_static(b"x");
+            tx.send(ProxyEvent::ResponseBodyChunk { id: 1, len: 1, data }).unwrap();
+        }
+        let counted = wait_for_flow(&ctx, |f| f.message_count > 0);
+        assert!(counted.message_count < SENT, "written before the backlog was through");
+        drop(tx);
+        event_loop.join().unwrap();
+    }
+
+    #[test]
+    fn an_open_call_shows_its_response_before_any_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        tx.send(ProxyEvent::RequestStart {
+            id: 1,
+            started_at: SystemTime::now(),
+            method: "POST".into(),
+            url: "https://example.com/pkg.Greeter/Watch".into(),
+            http_version: "HTTP/2".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        })
+        .unwrap();
+        tx.send(ProxyEvent::StreamStart { id: 1, kind: yaak_proxy::StreamKind::Grpc }).unwrap();
+        wait_for_flow(&ctx, |f| f.stream_kind.is_some());
+        tx.send(ProxyEvent::ResponseStart {
+            id: 1,
+            status: 200,
+            http_version: "HTTP/2".into(),
+            remote_addr: None,
+            elapsed_ms: 3,
+        })
+        .unwrap();
+        tx.send(ProxyEvent::ResponseHeader {
+            id: 1,
+            name: "content-type".into(),
+            value: "application/grpc".into(),
+        })
+        .unwrap();
+        // No message yet, and the server may send none for a long while.
+        let open = wait_for_flow(&ctx, |f| f.status == Some(200));
+        assert_eq!(
+            (open.elapsed_ms, open.content_type.as_deref()),
+            (None, Some("application/grpc"))
+        );
+        drop(tx);
+        event_loop.join().unwrap();
+    }
+
+    #[test]
+    fn streams_still_open_end_when_the_engine_stops() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        open_websocket(&tx, 1, "https://example.com/socket");
+        wait_for_flow(&ctx, |f| f.stream_kind.is_some());
+        drop(tx);
+        event_loop.join().unwrap();
+        let flow = flows::list(&ctx.db, &Default::default()).unwrap().remove(0);
+        assert_eq!(flow.error.as_deref(), Some(STOPPED_MID_STREAM));
+    }
+
+    /// A flow whose response is `body` under `content_type`, stored in `ctx`
+    fn flow_with_response(ctx: &ProxyCtx, id: &str, content_type: &str, body: &[u8]) {
+        let flow = Flow {
+            id: id.into(),
+            status: Some(200),
+            response_size: body.len() as i64,
+            response_headers: vec![ProxyHeader {
+                name: "Content-Type".into(),
+                value: content_type.into(),
+            }],
+            ..Default::default()
+        };
+        ctx.db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+        let mut writer =
+            BodyChunkWriter::new(ctx.blobs.clone(), Flow::body_id(id, FlowBody::Response));
+        writer.write(body).unwrap();
+        writer.finish().unwrap();
+    }
+
+    /// The filter reads the text the viewer shows: in the body's charset, not UTF-8 alone.
+    #[tokio::test]
+    async fn filter_reads_the_body_in_its_charset() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+
+        let xml = "<cities><city>Zürich</city><city>Kraków</city></cities>";
+        let utf16: Vec<u8> = xml.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        flow_with_response(&ctx, "fl_utf16", "application/xml; charset=utf-16le", &utf16);
+        let json = r#"{"items":[{"name":"Café"},{"name":"Crème brûlée"}]}"#;
+        let latin1: Vec<u8> = json.chars().map(|c| c as u8).collect();
+        flow_with_response(&ctx, "fl_latin1", "application/json; charset=iso-8859-1", &latin1);
+        flow_with_response(&ctx, "fl_unlabeled", "application/json", &latin1);
+
+        let filter = |flow_id: &str, expression: &str, language| FilterBodyRequest {
+            flow_id: flow_id.into(),
+            which: FlowBody::Response,
+            expression: expression.into(),
+            language: Some(language),
+        };
+        let xpath = filter("fl_utf16", "//city[2]", FilterLanguage::XPath);
+        let result = filter_body(ctx.clone(), xpath).await.unwrap();
+        assert_eq!((result.content.as_str(), result.error), ("<city>Kraków</city>", None));
+        for flow_id in ["fl_latin1", "fl_unlabeled"] {
+            let names = filter(flow_id, "$.items[*].name", FilterLanguage::JsonPath);
+            let result = filter_body(ctx.clone(), names).await.unwrap();
+            assert_eq!(result.error, None, "{flow_id}");
+            assert_eq!(result.content, "[\n  \"Café\",\n  \"Crème brûlée\"\n]", "{flow_id}");
+        }
+    }
+
     #[tokio::test]
     async fn the_app_still_hears_why_a_body_failed_to_decode() {
         let dir = tempfile::tempdir().unwrap();
@@ -1580,9 +2473,25 @@ mod tests {
         writer.write(b"not a gzip stream").unwrap();
         writer.finish().unwrap();
 
+        // The viewer gets the bytes as they were on the wire, and why they didn't decode.
         let req = GetFlowBodyRequest { flow_id: "fl_bad".into(), which: FlowBody::Response };
-        let err = get_flow_body(ctx.clone(), req).await.err().unwrap();
-        assert!(err.message.starts_with("Failed to decode"), "{}", err.message);
+        let body = get_flow_body(ctx.clone(), req).await.unwrap();
+        let error = body.decode_error.unwrap();
+        assert!(error.starts_with("Failed to decode Gzip body"), "{error}");
+        assert_eq!(BASE64.decode(body.data).unwrap(), b"not a gzip stream");
+        assert!(!body.truncated);
+
+        // Saving writes those same bytes.
+        let path = dir.path().join("body.bin");
+        let req = SaveFlowBodyRequest {
+            flow_id: "fl_bad".into(),
+            which: FlowBody::Response,
+            path: path.to_string_lossy().into_owned(),
+        };
+        let saved = save_flow_body(ctx.clone(), req).await.unwrap();
+        assert_eq!((saved.size, saved.truncated, saved.raw), (17, false, true));
+        assert_eq!(std::fs::read(&path).unwrap(), b"not a gzip stream");
+
         let req = FilterBodyRequest {
             flow_id: "fl_bad".into(),
             which: FlowBody::Response,

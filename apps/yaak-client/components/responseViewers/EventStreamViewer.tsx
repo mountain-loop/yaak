@@ -1,6 +1,6 @@
 import type { HttpResponse } from "@yaakapp-internal/models";
 import { extractSseValueAtPath, type ServerSentEvent } from "@yaakapp-internal/sse";
-import { EmptyStateText, HStack, Icon, InlineCode, SplitLayout, VStack, IconTooltip } from "@yaakapp-internal/ui";
+import { HStack, Icon, InlineCode, SplitLayout, VStack, IconTooltip } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment, useMemo, useState } from "react";
@@ -13,6 +13,7 @@ import {
   useSseSummaryResultKeyPath,
 } from "../../hooks/useSseSummaryResultKeyPath";
 import { isJSON } from "../../lib/contentType";
+import { EmptyStateText } from "../EmptyStateText";
 import { Markdown } from "../Markdown";
 import { Button } from "../core/Button";
 import type { DropdownItem } from "../core/Dropdown";
