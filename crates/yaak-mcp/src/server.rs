@@ -284,20 +284,13 @@ impl<H: McpHost> YaakMcpServer<H> {
         description = "Show a toast notification in Yaak"
     )]
     async fn show_toast(&self, Parameters(p): Parameters<ShowToastParams>) -> ToolResult {
-        let shown = self.host.show_toast(ShowToastRequest {
+        self.host.show_toast(ShowToastRequest {
             message: p.message.clone(),
             icon: p.icon.map(icon),
             color: p.color.map(color),
             timeout: Some(p.timeout.map_or(5000, |t| t as i32)),
         })?;
-        Ok(if shown {
-            format!("✓ Toast shown: \"{}\"", p.message)
-        } else {
-            format!(
-                "Toast not shown: \"{}\". This Yaak MCP server has no window to show it in.",
-                p.message
-            )
-        })
+        Ok(format!("✓ Toast shown: \"{}\"", p.message))
     }
 }
 

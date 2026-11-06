@@ -42,8 +42,8 @@ impl McpHost for EmptyHost {
     ) -> HostResult<HttpResponse> {
         Err("missing".into())
     }
-    fn show_toast(&self, _: ShowToastRequest) -> HostResult<bool> {
-        Ok(true)
+    fn show_toast(&self, _: ShowToastRequest) -> HostResult<()> {
+        Ok(())
     }
 }
 

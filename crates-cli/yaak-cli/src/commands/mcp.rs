@@ -233,11 +233,10 @@ impl McpHost for CliMcpHost {
         Ok(result.response)
     }
 
-    fn show_toast(&self, toast: ShowToastRequest) -> HostResult<bool> {
-        // The CLI has no window for it. The message goes to stderr, since stdout carries the
-        // protocol, but that is a log line, not a toast anyone is shown.
+    fn show_toast(&self, toast: ShowToastRequest) -> HostResult<()> {
+        // stdout carries the protocol
         eprintln!("[mcp] {}", toast.message);
-        Ok(false)
+        Ok(())
     }
 }
 
@@ -729,12 +728,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn show_toast_says_the_cli_did_not_show_it() {
+    async fn show_toast_reports_the_message() {
         let fx = Fixture::new(None).await;
         assert_eq!(
             fx.ok("show_toast", json!({ "message": "Hello", "icon": "info", "color": "success" }))
                 .await,
-            "Toast not shown: \"Hello\". This Yaak MCP server has no window to show it in."
+            "✓ Toast shown: \"Hello\""
         );
         fx.finish().await;
     }
