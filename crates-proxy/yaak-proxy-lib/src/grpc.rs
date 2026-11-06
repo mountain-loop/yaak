@@ -93,16 +93,27 @@ impl GrpcState {
         if let Some(config) = self.protoc.lock().ok().and_then(|p| p.clone()) {
             return Ok(config);
         }
-        let name = if cfg!(windows) { "protoc.exe" } else { "protoc" };
-        let bin = std::env::var_os("PATH")
-            .iter()
-            .flat_map(std::env::split_paths)
-            .map(|dir| dir.join(name))
-            .find(|p| p.is_file())
-            .ok_or("No protoc to compile .proto files with: install protoc and put it on PATH")?;
-        let include = bin.parent().and_then(|d| d.parent()).map(|d| d.join("include"));
-        Ok(GrpcConfig { protoc_include_dir: include.unwrap_or_default(), protoc_bin_path: bin })
+        protoc_on_path(std::env::var_os("PATH"))
     }
+}
+
+/// What to do when there is no protoc to compile attached `.proto` files with.
+pub const NO_PROTOC: &str = "Yaak Proxy has no protoc to compile .proto files with. A packaged \
+    Yaak Proxy includes one; otherwise install protoc (on macOS, `brew install protobuf`) so it \
+    is on PATH, or let the server's reflection supply the schema.";
+
+/// A `protoc` in one of the directories of `path`, a `PATH` value, with the `include` directory
+/// installed beside it.
+fn protoc_on_path(path: Option<std::ffi::OsString>) -> Result<GrpcConfig, String> {
+    let name = if cfg!(windows) { "protoc.exe" } else { "protoc" };
+    let bin = path
+        .iter()
+        .flat_map(std::env::split_paths)
+        .map(|dir| dir.join(name))
+        .find(|p| p.is_file())
+        .ok_or(NO_PROTOC)?;
+    let include = bin.parent().and_then(|d| d.parent()).map(|d| d.join("include"));
+    Ok(GrpcConfig { protoc_include_dir: include.unwrap_or_default(), protoc_bin_path: bin })
 }
 
 const COLUMNS: &str = "id, created_at, updated_at, host_pattern, source, proto_paths, services";
@@ -538,6 +549,15 @@ fn read_varint(bytes: &mut &[u8]) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn without_protoc_the_error_says_what_to_install() {
+        let empty = tempfile::tempdir().unwrap();
+        let err = protoc_on_path(Some(empty.path().as_os_str().to_owned())).err().unwrap();
+        assert_eq!(err, NO_PROTOC);
+        assert!(err.contains("brew install protobuf"), "{err}");
+        assert!(protoc_on_path(None).is_err());
+    }
 
     #[test]
     fn reflection_hosts() {
