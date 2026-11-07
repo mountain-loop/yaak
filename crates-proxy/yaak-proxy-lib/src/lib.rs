@@ -360,6 +360,7 @@ impl ProxyCtx {
                 events: self.events.clone(),
                 attribution,
                 recording: self.recording.clone(),
+                finished: Default::default(),
             };
             std::thread::spawn(move || run_event_loop(event_rx, sink));
         }
@@ -1746,7 +1747,34 @@ struct FlowSink {
     events: RpcEventEmitter,
     attribution: Attribution,
     recording: Arc<Mutex<RecordingLog>>,
+    /// Flows that have ended, waiting to be written together.
+    finished: std::cell::RefCell<FinishedFlows>,
 }
+
+/// Flows that have ended and are yet to be written, with when the first of them ended. Each
+/// commit encrypts every page it writes, so flows ending together share one: a batch is
+/// written once no more events are waiting, or it reaches [`FLOW_BATCH`], or its first flow
+/// has waited [`FLOW_BATCH_WAIT`]. What an engine that crashes loses with it is the batch
+/// open then, as it loses the events still queued and the flows still in flight.
+#[derive(Default)]
+struct FinishedFlows {
+    flows: Vec<FinishedFlow>,
+    since: Option<std::time::Instant>,
+}
+
+struct FinishedFlow {
+    flow: Flow,
+    persisted: bool,
+    /// The last chunk of each of its bodies, written with the batch.
+    chunks: Vec<yaak_models::blob_manager::BodyChunk>,
+}
+
+/// Flows written in one transaction at most.
+const FLOW_BATCH: usize = 50;
+
+/// The longest a flow that has ended waits for others to be written with, while events keep
+/// coming. Alone, it is written at once.
+const FLOW_BATCH_WAIT: Duration = Duration::from_millis(20);
 
 fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
     use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
@@ -1757,11 +1785,14 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
     loop {
         // Messages are written once no more are waiting, or a batch is full; flows changed by
         // them once their interval is up.
-        let event = if !pending.is_empty() {
+        // Flows that have ended likewise, so under load many share a transaction, and one
+        // that comes alone is written at once.
+        let event = if !pending.is_empty() || sink.has_finished() {
             match rx.try_recv() {
                 Ok(event) => event,
                 Err(TryRecvError::Empty) => {
                     sink.write_messages(&mut in_flight, &mut pending);
+                    sink.write_finished();
                     sink.write_due_flows(&mut in_flight);
                     continue;
                 }
@@ -1793,6 +1824,11 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
             sink.write_messages(&mut in_flight, &mut pending);
             sink.handle(&mut in_flight, event);
         }
+        // Traffic that never lets up never empties the queue, so a batch is written once it
+        // is full or its first flow has waited long enough.
+        if sink.finished_due() {
+            sink.write_finished();
+        }
         // Traffic that never lets up never empties the queue, so flows due to be written are
         // looked for here too, every so often, their messages written first.
         if last_due_check.elapsed() >= DUE_CHECK_INTERVAL {
@@ -1804,13 +1840,14 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
 
     sink.write_messages(&mut in_flight, &mut pending);
     // The engine stopped: a stream still open ends with it. Other flows in flight are dropped,
-    // as they always have been.
+    // as they always have been. Every flow that ended is written.
     for (_, mut f) in in_flight.drain() {
         if f.persisted {
             f.flow.error = Some(STOPPED_MID_STREAM.to_string());
             sink.finish_flow(f);
         }
     }
+    sink.write_finished();
 }
 
 /// When the next changed streaming flow is due to be written.
@@ -2114,14 +2151,19 @@ impl FlowSink {
         }
     }
 
+    /// Puts a flow that has ended, with the rest of its bodies, in the batch to be written.
     fn finish_flow(&self, f: InFlight) {
-        finish_body(f.request_body);
-        finish_body(f.response_body);
-        let id = f.flow.id.clone();
         if f.cleared {
-            self.forget_cleared(&id);
+            // Nothing more of it is kept, so its bodies are not finished.
+            drop((f.request_body, f.response_body));
+            self.forget_cleared(&f.flow.id);
             return;
         }
+        let chunks = [f.request_body, f.response_body]
+            .into_iter()
+            .flatten()
+            .filter_map(BodyChunkWriter::finish_deferred)
+            .collect();
 
         let mut flow = f.flow;
         flow.content_type = find_header(&flow.response_headers, "content-type").map(String::from);
@@ -2132,11 +2174,74 @@ impl FlowSink {
             flow.client_path = Some(app.path);
             flow.client_cwd = app.cwd;
         }
-        let written = self.db.with_tx(|ctx| self.write_flow(ctx, flow, f.persisted));
-        match written {
-            Ok(true) => {}
-            Ok(false) => self.forget_cleared(&id),
-            Err(e) => warn!("Failed to write proxy flow: {e}"),
+        let mut finished = self.finished.borrow_mut();
+        finished.since.get_or_insert_with(std::time::Instant::now);
+        finished.flows.push(FinishedFlow { flow, persisted: f.persisted, chunks });
+    }
+
+    fn has_finished(&self) -> bool {
+        !self.finished.borrow().flows.is_empty()
+    }
+
+    /// The batch is full, or its first flow has waited long enough.
+    fn finished_due(&self) -> bool {
+        let finished = self.finished.borrow();
+        finished.flows.len() >= FLOW_BATCH
+            || finished.since.is_some_and(|t| t.elapsed() >= FLOW_BATCH_WAIT)
+    }
+
+    /// Writes the flows that have ended: their bodies' last chunks in one transaction, then
+    /// the flows in another, telling the app of each. Bodies first, so a flow the app hears of
+    /// has its bodies. A flow that fails to write is rolled back alone, and a batch of bodies
+    /// that fails is written again a body at a time, so one bad row loses no others.
+    fn write_finished(&self) {
+        let flows = {
+            let mut finished = self.finished.borrow_mut();
+            finished.since = None;
+            std::mem::take(&mut finished.flows)
+        };
+        if flows.is_empty() {
+            return;
+        }
+
+        let chunks: Vec<_> = flows.iter().flat_map(|f| f.chunks.iter()).collect();
+        if !chunks.is_empty() {
+            let stored = self.blobs.with_tx(|b| chunks.iter().try_for_each(|c| b.insert_chunk(c)));
+            if let Err(e) = stored {
+                warn!("Failed to store proxy body chunks together, so each alone: {e}");
+                for chunk in &chunks {
+                    if let Err(e) = self.blobs.with_tx(|b| b.insert_chunk(chunk)) {
+                        warn!("Failed to store proxy body chunk: {e}");
+                    }
+                }
+            }
+        }
+
+        let mut cleared = Vec::new();
+        let written = self.db.with_tx(|ctx| {
+            let conn = ctx.conn().resolve();
+            for FinishedFlow { flow, persisted, .. } in flows {
+                let id = flow.id.clone();
+                conn.execute_batch("SAVEPOINT finished_flow")?;
+                match self.write_flow(ctx, flow, persisted) {
+                    Ok(true) => conn.execute_batch("RELEASE finished_flow")?,
+                    Ok(false) => {
+                        conn.execute_batch("RELEASE finished_flow")?;
+                        cleared.push(id);
+                    }
+                    Err(e) => {
+                        warn!("Failed to write proxy flow: {e}");
+                        conn.execute_batch("ROLLBACK TO finished_flow; RELEASE finished_flow")?;
+                    }
+                }
+            }
+            Ok::<_, yaak_database::Error>(())
+        });
+        if let Err(e) = written {
+            warn!("Failed to write proxy flows: {e}");
+        }
+        for id in cleared {
+            self.forget_cleared(&id);
         }
     }
 
@@ -2315,6 +2420,7 @@ mod tests {
             events: ctx.events.clone(),
             attribution: Attribution::new(0),
             recording: ctx.recording.clone(),
+            finished: Default::default(),
         };
         (tx, std::thread::spawn(move || run_event_loop(rx, sink)))
     }
@@ -2697,6 +2803,128 @@ mod tests {
             language: None,
         };
         assert!(filter_body(ctx, req).await.is_err());
+    }
+
+    /// Sends one whole flow for `url`, with a response body, as the engine does.
+    fn send_flow(tx: &std::sync::mpsc::Sender<ProxyEvent>, id: u64, url: &str) {
+        tx.send(ProxyEvent::RequestStart {
+            id,
+            started_at: SystemTime::now(),
+            method: "GET".into(),
+            url: url.into(),
+            http_version: "HTTP/1.1".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        })
+        .unwrap();
+        tx.send(ProxyEvent::ResponseStart {
+            id,
+            status: 200,
+            http_version: "HTTP/1.1".into(),
+            remote_addr: None,
+            elapsed_ms: 1,
+        })
+        .unwrap();
+        let data = bytes::Bytes::from(format!("body of {url}"));
+        tx.send(ProxyEvent::ResponseBodyChunk { id, len: data.len(), data }).unwrap();
+        tx.send(ProxyEvent::ResponseBodyComplete {
+            id,
+            size: 0,
+            truncated: false,
+            elapsed_ms: 2,
+            error: None,
+            cancelled: false,
+        })
+        .unwrap();
+    }
+
+    /// Flows that end together are written together, and every one the engine sent is written
+    /// when it stops, mid-batch or not, each with its body.
+    #[test]
+    fn a_stop_mid_batch_writes_every_flow() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        // More than a batch, sent faster than they are written, then the engine stops.
+        for id in 1..=(FLOW_BATCH as u64 * 2 + 7) {
+            send_flow(&tx, id, &format!("https://example.com/{id}"));
+        }
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let stored = flows::list(&ctx.db(), &Default::default()).unwrap();
+        assert_eq!(stored.len(), FLOW_BATCH * 2 + 7);
+        for flow in &stored {
+            let body = bodies::read_raw_body(&ctx.blobs(), &flow.id, FlowBody::Response).unwrap();
+            assert_eq!(body, format!("body of {}", flow.url).into_bytes());
+        }
+    }
+
+    /// A flow that ends alone is written at once, not after the batch's wait.
+    #[test]
+    fn a_lone_flow_shows_at_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        let sent = std::time::Instant::now();
+        send_flow(&tx, 1, "https://example.com/alone");
+        wait_for_flow(&ctx, |f| f.url == "https://example.com/alone");
+        let shown = sent.elapsed();
+        assert!(shown < Duration::from_millis(50), "shown after {shown:?}");
+        drop(tx);
+        event_loop.join().unwrap();
+    }
+
+    /// A flow that fails to write is rolled back alone: the others in its batch are kept.
+    #[test]
+    fn one_bad_flow_loses_no_others_in_its_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        ctx.db()
+            .with_tx(|tx| {
+                tx.conn().resolve().execute_batch(
+                    "CREATE TEMP TRIGGER refuse BEFORE INSERT ON flows
+                    WHEN NEW.url = 'https://example.com/bad'
+                    BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+                )?;
+                Ok::<_, yaak_database::Error>(())
+            })
+            .unwrap();
+        let sink = FlowSink {
+            db: ctx.db(),
+            blobs: ctx.blobs(),
+            events: ctx.events.clone(),
+            attribution: Attribution::new(0),
+            recording: ctx.recording.clone(),
+            finished: Default::default(),
+        };
+        // One batch of three, the middle one refused.
+        for url in ["before", "bad", "after"] {
+            let flow = Flow {
+                id: Flow::generate_id(),
+                url: format!("https://example.com/{url}"),
+                ..Default::default()
+            };
+            let chunks = vec![yaak_models::blob_manager::BodyChunk::new(
+                Flow::body_id(&flow.id, FlowBody::Response),
+                0,
+                url.as_bytes().to_vec(),
+            )];
+            sink.finished.borrow_mut().flows.push(FinishedFlow { flow, persisted: false, chunks });
+        }
+        sink.write_finished();
+        assert!(!sink.has_finished());
+
+        let mut urls: Vec<String> = flows::list(&ctx.db(), &Default::default())
+            .unwrap()
+            .into_iter()
+            .map(|f| f.url)
+            .collect();
+        urls.sort();
+        assert_eq!(urls, ["https://example.com/after", "https://example.com/before"]);
     }
 
     /// Capture throughput and flow-open latency at 3,000 flows, for weighing what encryption
