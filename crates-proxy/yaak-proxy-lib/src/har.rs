@@ -152,8 +152,8 @@ pub async fn export(
 ) -> Result<Har, String> {
     let mut entries = Vec::with_capacity(flows.len());
     for flow in flows {
-        let request = bodies::read_body(blobs, flow, FlowBody::Request, limit).await?;
-        let response = bodies::read_body(blobs, flow, FlowBody::Response, limit).await?;
+        let request = bodies::read_body(db, blobs, flow, FlowBody::Request, limit).await?;
+        let response = bodies::read_body(db, blobs, flow, FlowBody::Response, limit).await?;
         let mut entry = entry(flow, &request, &response);
         if flow.stream_kind == Some(StreamKind::Websocket) {
             entry.web_socket_messages = Some(websocket_messages(db, blobs, flow)?);
@@ -323,7 +323,13 @@ mod tests {
     }
 
     fn body(data: &[u8], truncated: bool) -> DecodedBody {
-        DecodedBody { data: data.to_vec(), stored_size: data.len(), truncated, decode_error: None }
+        DecodedBody {
+            data: data.to_vec(),
+            stored_size: data.len(),
+            truncated,
+            decode_error: None,
+            note: None,
+        }
     }
 
     fn at(second: u32) -> chrono::NaiveDateTime {

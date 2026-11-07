@@ -23,6 +23,7 @@ import {
   bodyImageType,
   filterText,
   findHeader,
+  emptyBodyText,
   flowBodyQueryOptions,
   formatText,
   mimeEssence,
@@ -53,9 +54,9 @@ export function FlowBodyViewer({ flow, which, pretty }: Props) {
     return <Banner color="danger">{body.error.message}</Banner>;
   }
 
-  const { bytes, truncated, storedSize, decodeError } = body.data;
+  const { bytes, truncated, storedSize, decodeError, note } = body.data;
   if (bytes.length === 0 && decodeError == null) {
-    return <EmptyState>{which === "request" ? "No request body" : "Empty"}</EmptyState>;
+    return <EmptyState>{emptyBodyText(which, note)}</EmptyState>;
   }
 
   const headers = which === "request" ? flow.requestHeaders : flow.responseHeaders;

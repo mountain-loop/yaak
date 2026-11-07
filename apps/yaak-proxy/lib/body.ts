@@ -4,7 +4,12 @@ import {
   decodeBodyText,
   strictUtf8Text,
 } from "@yaakapp-internal/lib/decodeBodyText";
-import type { FilterLanguage, Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
+import type {
+  FilterLanguage,
+  Flow,
+  FlowBody,
+  GetFlowBodyResponse,
+} from "@yaakapp-internal/proxy-lib";
 import type { CodeEditorProps } from "@yaakapp-internal/ui/editor";
 import vkBeautify from "vkbeautify";
 import { rpc } from "./rpc";
@@ -13,18 +18,28 @@ import { rpc } from "./rpc";
 export function flowBodyQueryOptions(flow: Flow, which: FlowBody) {
   return queryOptions({
     queryKey: ["get_flow_body", flow.id, which, flow.updatedAt],
-    queryFn: async () => {
-      const res = await rpc("get_flow_body", { flowId: flow.id, which });
-      return {
-        bytes: base64ToBytes(res.data),
-        truncated: res.truncated,
-        storedSize: res.storedSize,
-        decodeError: res.decodeError ?? null,
-      };
-    },
+    queryFn: async () => viewerBody(await rpc("get_flow_body", { flowId: flow.id, which })),
     // Reading a stored body fails the same way every time, so the error shows at once.
     retry: false,
   });
+}
+
+/** The body RPC's answer as the viewer reads it, with what to know of it beyond its bytes */
+export function viewerBody(res: GetFlowBodyResponse) {
+  return {
+    bytes: base64ToBytes(res.data),
+    truncated: res.truncated,
+    storedSize: res.storedSize,
+    decodeError: res.decodeError ?? null,
+    /** Why there is no body, as a WebSocket has none after its 101 */
+    note: res.note ?? null,
+  };
+}
+
+/** What an empty body's pane says: a WebSocket's points at its messages */
+export function emptyBodyText(which: FlowBody, note: string | null): string {
+  if (note != null) return "No body. See Messages.";
+  return which === "request" ? "No request body" : "Empty";
 }
 
 export function base64ToBytes(data: string): Uint8Array<ArrayBuffer> {

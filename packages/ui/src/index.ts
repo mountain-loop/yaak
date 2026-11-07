@@ -41,6 +41,23 @@ export type {
 } from "./components/EditorHost";
 export { EditorHostProvider, useEditorHost } from "./components/EditorHost";
 export { EmptyStateText } from "./components/EmptyStateText";
+export { AutoScroller } from "./components/events/AutoScroller";
+export type {
+  EventStreamColumns,
+  EventStreamViewerProps,
+} from "./components/events/EventStreamViewer";
+export { EventStreamViewer, payloadText } from "./components/events/EventStreamViewer";
+export type { EventDetailAction } from "./components/events/EventViewer";
+export { EventDetailHeader, EventViewer } from "./components/events/EventViewer";
+export { EventViewerRow } from "./components/events/EventViewerRow";
+export type {
+  StreamEvent,
+  StreamEventDirection,
+  StreamPayload,
+  StreamPayloadText,
+  StreamPayloadView,
+} from "./components/events/streamEvents";
+export { eventDeltas, formatEventDelta, formatEventTime } from "./components/events/streamEvents";
 export type { ExternalLinkProps } from "./components/ExternalLink";
 export { ExternalLink } from "./components/ExternalLink";
 export { ConfirmLargeResponse } from "./components/http/ConfirmLargeResponse";
@@ -104,6 +121,8 @@ export { PairOrBulkEditor } from "./components/pairs/PairOrBulkEditor";
 export { PillButton } from "./components/PillButton";
 export type { RadioDropdownItem, RadioDropdownProps } from "./components/RadioDropdown";
 export { RadioDropdown } from "./components/RadioDropdown";
+export type { SelectProps } from "./components/Select";
+export { Select } from "./components/Select";
 export type { ErrorBoundaryProps } from "./components/ErrorBoundary";
 export { ErrorBoundary } from "./components/ErrorBoundary";
 export { FormattedError } from "./components/FormattedError";
@@ -128,8 +147,6 @@ export { Overlay } from "./components/Overlay";
 export type { PlainInputProps } from "./components/PlainInput";
 export { PlainInput } from "./components/PlainInput";
 export { Portal } from "./components/Portal";
-export type { SelectProps } from "./components/Select";
-export { Select } from "./components/Select";
 export type { SeparatorAction } from "./components/Separator";
 export { Separator } from "./components/Separator";
 export type { SettingRowBaseProps, SettingSnippetLanguage } from "./components/settings/SettingRow";
