@@ -9,6 +9,7 @@ use crate::control::{
     SystemProxyRequest, TRUNCATED_HEADER,
 };
 use crate::db::ProxyQueryManager;
+use crate::db::Stores;
 use crate::flows::{self, FlowDetail, FlowFilter};
 use crate::har::{self, Har};
 use crate::macos::SystemProxyStatus;
@@ -18,6 +19,7 @@ use crate::settings::ProxySettings;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::path::Path;
+use yaak_crypto::MasterKeySource;
 use yaak_models::blob_manager::BlobManager;
 
 /// Where captured traffic is read from.
@@ -29,11 +31,13 @@ pub enum ProxyConnection {
 }
 
 impl ProxyConnection {
-    /// The live owner in `data_dir`, or its databases when there is none.
-    pub fn connect(data_dir: &Path) -> Result<Self, String> {
+    /// The live owner in `data_dir`, or its databases when there is none, read with the data
+    /// key the master key in `keys` unwraps. The app's keychain item, so on macOS a CLI asking
+    /// for it is prompted to be allowed.
+    pub fn connect(data_dir: &Path, keys: &MasterKeySource) -> Result<Self, String> {
         match control::live_owner(data_dir) {
             Some(info) => Ok(Self::Live(ControlClient::new(info))),
-            None => Ok(Self::Offline(OfflineStore::open(data_dir)?)),
+            None => Ok(Self::Offline(OfflineStore::open(data_dir, keys)?)),
         }
     }
 
@@ -199,18 +203,17 @@ pub struct OfflineStore {
 }
 
 impl OfflineStore {
-    pub fn open(data_dir: &Path) -> Result<Self, String> {
-        let db_path = data_dir.join("proxy.db");
+    /// Opens the databases in `data_dir`, decrypting with the data key the master key in `keys`
+    /// unwraps. Ones from before encryption, not yet converted, are read as they are.
+    pub fn open(data_dir: &Path, keys: &MasterKeySource) -> Result<Self, String> {
+        let db_path = data_dir.join(crate::db::PROXY_DB);
         if !db_path.exists() {
             return Err(format!(
                 "No captured traffic yet: {} does not exist. Start Yaak Proxy to capture some.",
                 db_path.display()
             ));
         }
-        let db = ProxyQueryManager::open_read_only(&db_path)
-            .map_err(|e| format!("Failed to open {}: {e}", db_path.display()))?;
-        let blobs = crate::db::open_blobs_read_only(&data_dir.join("blobs.sqlite"))
-            .map_err(|e| format!("Failed to open the proxy's blob store: {e}"))?;
+        let Stores { db, blobs, .. } = Stores::open_read_only(data_dir, keys)?;
         let settings = ProxySettings::load(&data_dir.join("settings.json"))?;
         Ok(Self { db, blobs, capture_body_limit: settings.capture_body_limit })
     }

@@ -2,7 +2,7 @@ use log::{error, info, warn};
 use tauri::Runtime;
 use tauri::path::BaseDirectory;
 use tauri::{Emitter, Manager, RunEvent, State, WebviewWindow};
-use yaak_proxy_lib::ProxyCtx;
+use yaak_proxy_lib::{MasterKeySource, ProxyCtx};
 use yaak_rpc::{RpcEventEmitter, RpcRouter};
 use yaak_window::window::CreateWindowConfig;
 
@@ -88,7 +88,14 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
 
             let (emitter, event_rx) = RpcEventEmitter::new();
-            let mut ctx = ProxyCtx::new(&data_dir, emitter)?;
+            // Captured traffic is encrypted with a key wrapped by a master key in the keychain,
+            // under this app's identifier, so a development build keeps its own. Linux without
+            // a Secret Service keeps it in a file only the user can read, with a warning.
+            let keys = MasterKeySource::keychain_or_file(
+                &app.config().identifier,
+                data_dir.join("encryption.key"),
+            );
+            let mut ctx = ProxyCtx::new(&data_dir, emitter, keys)?;
             // Compiles protos attached for gRPC decoding when the bundle has protoc, as Yaak's
             // does; otherwise one on PATH is used.
             if let Some(config) = bundled_protoc(app.handle()) {

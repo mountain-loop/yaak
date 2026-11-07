@@ -19,6 +19,12 @@ pub enum Error {
     #[error("Failed to decrypt workspace key: {0}")]
     WorkspaceKeyDecryptionError(String),
 
+    #[error("The encryption key is missing from the keychain")]
+    MissingMasterKey,
+
+    #[error("The keychain's encryption key does not match the one this data was encrypted with")]
+    IncorrectMasterKey,
+
     #[error("Crypto IO error: {0}")]
     IoError(#[from] io::Error),
 

@@ -463,7 +463,8 @@ mod tests {
         };
 
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         let har = export(&db, &blobs, &[flow], 1024 * 1024).await.unwrap();
         let entry = &har.log.entries[0];
         let text_kept = entry.response.content.text.as_deref().unwrap();

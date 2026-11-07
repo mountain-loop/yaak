@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use yaak_proxy_lib::models::Flow;
 use yaak_proxy_lib::settings::ProxySettings;
-use yaak_proxy_lib::{GrpcConfig, ProxyCtx};
+use yaak_proxy_lib::{GrpcConfig, MasterKeySource, ProxyCtx};
 use yaak_rpc::RpcEventEmitter;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -183,7 +183,7 @@ fn start(dir: &Path) -> (ProxyCtx, std::sync::mpsc::Receiver<yaak_rpc::RpcEvent>
     };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir, events).unwrap().with_protoc(protoc());
+    let ctx = ProxyCtx::new(dir, events, MasterKeySource::memory()).unwrap().with_protoc(protoc());
     ctx.start().unwrap();
     (ctx, event_rx)
 }
@@ -201,7 +201,7 @@ async fn rpc(ctx: &ProxyCtx, cmd: &str, payload: Value) -> Result<Value, String>
 async fn wait_for(ctx: &ProxyCtx, url: &str, check: impl Fn(&Flow) -> bool) -> Flow {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url && check(f)) {
             return flow;
         }
@@ -373,11 +373,11 @@ async fn grpc_web_calls_are_stored_and_decoded() {
         assert!(rpc(&ctx, "list_messages", json!({ "flowId": flow.id })).await.is_err());
         // The rows go with the background delete the clear starts.
         let deadline = Instant::now() + Duration::from_secs(10);
-        while ctx.db.with_conn(|c| yaak_proxy_lib::flows::clear_mark(c.conn().resolve())) > 0 {
+        while ctx.db().with_conn(|c| yaak_proxy_lib::flows::clear_mark(c.conn().resolve())) > 0 {
             assert!(Instant::now() < deadline, "cleared flows were not deleted");
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        let left: i64 = ctx.db.with_conn(|c| {
+        let left: i64 = ctx.db().with_conn(|c| {
             c.conn()
                 .resolve()
                 .query_row("SELECT COUNT(*) FROM flow_messages", [], |r| r.get(0))

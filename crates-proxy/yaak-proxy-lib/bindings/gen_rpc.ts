@@ -243,6 +243,11 @@ httpVersion: HttpVersion,
  */
 startError: string | null, 
 /**
+ * How far encrypting traffic stored before encryption has got, from 0 to 1, while it
+ * runs. The engine starts once it is done.
+ */
+encrypting: number | null, 
+/**
  * Another process that owns the engine, such as the CLI daemon. While one does, this app
  * cannot start its own, and new flows reach it only through the database.
  */

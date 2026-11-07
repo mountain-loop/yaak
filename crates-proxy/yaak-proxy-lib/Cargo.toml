@@ -24,14 +24,17 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 ts-rs = { workspace = true, features = ["chrono-impl"] }
+tempfile = "3"
 url = "2"
 yaak-common = { workspace = true }
-yaak-database = { workspace = true }
+yaak-crypto = { workspace = true }
+# Its databases are encrypted whole with SQLCipher.
+yaak-database = { workspace = true, features = ["sqlcipher"] }
 yaak-filter = { workspace = true }
 yaak-grpc = { workspace = true }
 yaak-http = { workspace = true }
 yaak-lifecycle = { workspace = true }
-yaak-models = { workspace = true }
+yaak-models = { workspace = true, features = ["sqlcipher"] }
 yaak-proxy = { workspace = true }
 yaak-proxy-helper = { workspace = true, features = ["ts"] }
 yaak-rpc = { workspace = true }
@@ -80,6 +83,6 @@ protoc-bin-vendored = "3"
 tonic = { version = "0.14.6", default-features = false }
 tonic-reflection = "0.14.6"
 reqwest = { workspace = true }
-tempfile = "3"
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
+yaak-crypto = { workspace = true, features = ["test-support"] }
 yaak-proxy-helper = { workspace = true, features = ["test-support"] }

@@ -33,7 +33,6 @@ use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use ts_rs::TS;
-use yaak_proxy::CaStore;
 
 pub const CONTROL_FILE: &str = "control.json";
 const LOCK_FILE: &str = "control.lock";
@@ -513,7 +512,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         }
         (&Method::GET, ["flows"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
-            json(&flows::list(&ctx.db, &filter)?)
+            json(&flows::list(&ctx.db(), &filter)?)
         }
         (&Method::POST, ["flows", "clear"]) => {
             let ctx = ctx.clone();
@@ -522,7 +521,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["flows", id]) => {
             found(ctx, id)?;
             let limit = body_limit(&query)?;
-            json(&flows::detail(&ctx.db, &ctx.blobs, id, limit).await?)
+            json(&flows::detail(&ctx.db(), &ctx.blobs(), id, limit).await?)
         }
         (&Method::GET, ["flows", id, "request-body"]) => raw_body(ctx, id, FlowBody::Request).await,
         (&Method::GET, ["flows", id, "response-body"]) => {
@@ -531,20 +530,20 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["flows", id, "messages"]) => {
             found(ctx, id)?;
             let (after_seq, limit) = message_page(&query)?;
-            let messages = messages::list(&ctx.db, id, after_seq, limit)?;
-            let total = messages::count(&ctx.db, id)?;
+            let messages = messages::list(&ctx.db(), id, after_seq, limit)?;
+            let total = messages::count(&ctx.db(), id)?;
             json(&ListMessagesResponse { messages, total })
         }
         (&Method::GET, ["flows", id, "messages", seq]) => {
-            let flow = flows::find(&ctx.db, id)
+            let flow = flows::find(&ctx.db(), id)
                 .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}")))?;
             let seq: i64 = seq.parse().map_err(|_| bad_request(format!("Invalid seq {seq:?}")))?;
-            let message = messages::find(&ctx.db, id, seq)?.ok_or_else(|| {
+            let message = messages::find(&ctx.db(), id, seq)?.ok_or_else(|| {
                 ApiError::new(StatusCode::NOT_FOUND, format!("No message {seq} in flow {id}"))
             })?;
-            let payload = messages::payload(&ctx.db, &ctx.blobs, &message)?;
+            let payload = messages::payload(&ctx.db(), &ctx.blobs(), &message)?;
             let (decoded, decode_error) = if message.kind == MessageKind::GrpcMessage {
-                match grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, seq).await {
+                match grpc::decode(&ctx.db(), &ctx.blobs(), &ctx.grpc, &flow, seq).await {
                     Ok(decoded) => (Some(decoded), None),
                     Err(e) => (None, Some(e)),
                 }
@@ -554,20 +553,23 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let payload = BodyPreview::new(&payload, message.truncated);
             json(&MessageDetail { message, payload, decoded, decode_error })
         }
-        (&Method::GET, ["grpc-schemas"]) => json(&grpc::list(&ctx.db)?),
+        (&Method::GET, ["grpc-schemas"]) => json(&grpc::list(&ctx.db())?),
         (&Method::POST, ["grpc-schemas"]) => {
             let body: AddGrpcSchemaRequest = read_json(req).await?;
-            let added = grpc::add(&ctx.db, &ctx.grpc, &body.host_pattern, &body.proto_paths);
+            // Not into a scratch database, which would lose it.
+            let db = ctx.unlocked_db()?;
+            let added = grpc::add(&db, &ctx.grpc, &body.host_pattern, &body.proto_paths);
             json(&added.await.map_err(bad_request)?)
         }
         (&Method::POST, ["grpc-schemas", "reflect"]) => {
             let body: ReflectGrpcHostRequest = read_json(req).await?;
             let (host, plaintext) = grpc::reflection_host(&body.host);
-            let reflected = grpc::reflect(&ctx.db, &ctx.grpc, &host, plaintext).await;
+            let db = ctx.unlocked_db()?;
+            let reflected = grpc::reflect(&db, &ctx.grpc, &host, plaintext).await;
             json(&reflected.map_err(bad_request)?)
         }
         (&Method::DELETE, ["grpc-schemas", id]) => {
-            json(&RemovedResponse { removed: grpc::remove(&ctx.db, &ctx.grpc, id)? })
+            json(&RemovedResponse { removed: grpc::remove(&ctx.unlocked_db()?, &ctx.grpc, id)? })
         }
         (&Method::POST, ["flows", id, "save"]) => {
             found(ctx, id)?;
@@ -577,17 +579,15 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         }
         (&Method::GET, ["har"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;
-            let flows = flows::list(&ctx.db, &filter)?;
-            json(&har::export(&ctx.db, &ctx.blobs, &flows, ctx.capture_body_limit()?).await?)
+            let flows = flows::list(&ctx.db(), &filter)?;
+            json(&har::export(&ctx.db(), &ctx.blobs(), &flows, ctx.capture_body_limit()?).await?)
         }
         (&Method::GET, ["ca"]) => {
-            let ca = CaStore::load_or_create(&ctx.ca_dir())
-                .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
+            let ca = ctx.load_ca()?;
             Ok(response(StatusCode::OK, "application/x-pem-file", ca.pem().to_string()))
         }
         (&Method::POST, ["ca", "trust"]) => {
-            let ca = CaStore::load_or_create(&ctx.ca_dir())
-                .map_err(|e| format!("Failed to load proxy CA: {e}"))?;
+            let ca = ctx.load_ca()?;
             ca::trust(ca.cert_path()).await.map_err(bad_request)?;
             ctx.forget_passthrough();
             json(&ca::status(ca.cert_path()).await?)
@@ -623,23 +623,23 @@ async fn status(ctx: &ProxyCtx) -> Result<ControlStatus, ApiError> {
         proxy_port,
         configured_port: ctx.settings()?.port,
         recording: ctx.recording(),
-        flow_count: flows::count(&ctx.db)?,
+        flow_count: flows::count(&ctx.db())?,
         ca,
         system_proxy,
     })
 }
 
 fn found(ctx: &ProxyCtx, id: &str) -> Result<(), ApiError> {
-    match flows::find(&ctx.db, id) {
+    match flows::find(&ctx.db(), id) {
         Some(_) => Ok(()),
         None => Err(ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}"))),
     }
 }
 
 async fn raw_body(ctx: &ProxyCtx, id: &str, which: FlowBody) -> Result<ControlResponse, ApiError> {
-    let flow = flows::find(&ctx.db, id)
+    let flow = flows::find(&ctx.db(), id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}")))?;
-    let body = bodies::read_body(&ctx.blobs, &flow, which, ctx.capture_body_limit()?).await?;
+    let body = bodies::read_body(&ctx.blobs(), &flow, which, ctx.capture_body_limit()?).await?;
     let content_type =
         find_header(flow.headers(which), "content-type").unwrap_or("application/octet-stream");
     let mut resp = response(StatusCode::OK, content_type, body.data);
