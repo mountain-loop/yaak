@@ -15,6 +15,9 @@ pub struct ProxySettings {
     pub system_proxy_at_launch: bool,
     /// Bytes of each request and response body stored per flow.
     pub capture_body_limit: usize,
+    /// The most captured traffic kept, in bytes of the databases' used pages; the oldest flows
+    /// are deleted past it. None keeps everything.
+    pub keep_traffic_bytes: Option<u64>,
     /// The HTTP versions offered to clients in intercepted HTTPS.
     pub http_version: HttpVersion,
     /// The user's decrypt entries, in order: `host:api.example.com`, `app:Google Chrome`, `*`,
@@ -31,6 +34,7 @@ impl Default for ProxySettings {
             port: 9090,
             system_proxy_at_launch: true,
             capture_body_limit: DEFAULT_CAPTURE_BODY_LIMIT,
+            keep_traffic_bytes: None,
             http_version: HttpVersion::Auto,
             decrypt: Vec::new(),
             decrypt_built_ins_removed: Vec::new(),
@@ -178,6 +182,7 @@ mod tests {
         assert_eq!(settings.port, 9090);
         assert!(settings.system_proxy_at_launch);
         assert_eq!(settings.capture_body_limit, 10 * 1024 * 1024);
+        assert_eq!(settings.keep_traffic_bytes, None, "everything is kept");
     }
 
     #[test]
@@ -197,6 +202,7 @@ mod tests {
             port: 8080,
             system_proxy_at_launch: false,
             capture_body_limit: 1024,
+            keep_traffic_bytes: Some(1 << 30),
             http_version: HttpVersion::Http1Only,
             decrypt: vec!["host:api.example.com".into()],
             decrypt_built_ins_removed: vec!["!host:*.zoom.us".into()],
@@ -212,6 +218,7 @@ mod tests {
                 "port": 8080,
                 "systemProxyAtLaunch": false,
                 "captureBodyLimit": 1024,
+                "keepTrafficBytes": 1073741824,
                 "httpVersion": "http1Only",
                 "decrypt": ["host:api.example.com"],
                 "decryptBuiltInsRemoved": ["!host:*.zoom.us"],

@@ -6,6 +6,7 @@ pub mod client;
 pub mod control;
 pub mod convert;
 pub mod db;
+mod exit_gate;
 pub mod flows;
 pub mod grpc;
 pub mod har;
@@ -15,6 +16,7 @@ pub mod messages;
 pub mod models;
 pub mod save;
 pub mod settings;
+pub mod terminal;
 
 use crate::actions::{ActionInvocation, ActionMetadata, GlobalAction};
 use crate::attribution::Attribution;
@@ -40,7 +42,7 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError, RwLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError, RwLock, Weak};
 use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 pub use yaak_crypto::MasterKeySource;
@@ -97,6 +99,11 @@ pub struct ProxyCtx {
     stores: Arc<RwLock<Option<Stores>>>,
     /// Why they could not be unlocked, the last time it was tried.
     lock_reason: Arc<Mutex<Option<String>>>,
+    /// Resets of the captured data so far, so a thread deleting from databases since deleted
+    /// stops.
+    resets: Arc<AtomicU64>,
+    /// The thread keeping captured traffic under the keep-traffic cap, while there is one.
+    sweeper: Arc<(Mutex<Sweeper>, Condvar)>,
     pub events: RpcEventEmitter,
     /// gRPC schemas as decoded, and the protoc that compiles attached protos.
     pub grpc: GrpcState,
@@ -137,6 +144,8 @@ impl ProxyCtx {
             stops: Arc::new(AtomicU64::new(0)),
             stores: Arc::new(RwLock::new(None)),
             lock_reason: Arc::new(Mutex::new(None)),
+            resets: Arc::new(AtomicU64::new(0)),
+            sweeper: Default::default(),
             events,
             grpc: GrpcState::default(),
         };
@@ -243,6 +252,8 @@ impl ProxyCtx {
             converted?;
         }
         let stores = Stores::open(&self.data_dir, &db_key)?;
+        // SQLCipher's exit handler is registered by now, so the gate's runs before it.
+        exit_gate::install();
         *self.stores.write().unwrap_or_else(PoisonError::into_inner) = Some(stores);
         *unlocked = Some(key.clone());
         drop(unlocked);
@@ -253,6 +264,7 @@ impl ProxyCtx {
         if self.db().is_ok_and(|db| db.with_conn(|c| flows::clear_mark(c.conn().resolve())) > 0) {
             self.delete_cleared();
         }
+        self.sweep_soon();
         Ok(key)
     }
 
@@ -336,7 +348,13 @@ impl ProxyCtx {
     /// another process owns the engine, so there are never two. A failure is kept until the
     /// next start, for the app to show.
     pub fn start_on(&self, port: Option<u16>) -> Result<(), String> {
-        let started = self.start_engine(port);
+        self.start_routing(port, None)
+    }
+
+    /// [`Self::start_on`], the system proxy pointed at the engine when `system_proxy` says so,
+    /// or as the settings ask at launch when it is None.
+    fn start_routing(&self, port: Option<u16>, system_proxy: Option<bool>) -> Result<(), String> {
+        let started = self.start_engine(port, system_proxy);
         if let Ok(mut start_error) = self.start_error.lock() {
             *start_error = started.as_ref().err().cloned();
         }
@@ -352,7 +370,7 @@ impl ProxyCtx {
         self.start_error.lock().ok()?.clone()
     }
 
-    fn start_engine(&self, port: Option<u16>) -> Result<(), String> {
+    fn start_engine(&self, port: Option<u16>, system_proxy: Option<bool>) -> Result<(), String> {
         if let Some(owner) = control::live_owner(&self.data_dir)
             && owner.pid != std::process::id()
         {
@@ -403,6 +421,7 @@ impl ProxyCtx {
                 attribution,
                 recording: self.recording.clone(),
                 finished: Default::default(),
+                clock: BatchClock::Real,
             };
             std::thread::spawn(move || run_event_loop(event_rx, sink));
         }
@@ -414,10 +433,11 @@ impl ProxyCtx {
         if let Ok(mut last_port) = self.last_port.lock() {
             *last_port = Some(bound);
         }
-        self.system_proxy_on.store(settings.system_proxy_at_launch, Ordering::SeqCst);
-        if settings.system_proxy_at_launch {
+        let route = system_proxy.unwrap_or(settings.system_proxy_at_launch);
+        self.system_proxy_on.store(route, Ordering::SeqCst);
+        if route {
             // The password dialog can sit open for a while; the engine is up regardless.
-            let ctx = self.clone();
+            let ctx = self.detached();
             std::thread::spawn(move || {
                 if let Err(e) = ctx.change_system_proxy(true, bound, true) {
                     warn!("Failed to turn on the system proxy: {e}");
@@ -463,7 +483,7 @@ impl ProxyCtx {
         self.system_proxy_on.store(false, Ordering::SeqCst);
         let port = self.take_handle()?;
         if let Some(port) = port {
-            let ctx = self.clone();
+            let ctx = self.detached();
             std::thread::spawn(move || {
                 if let Err(e) = ctx.change_system_proxy(false, port, true) {
                     warn!("Failed to turn off the system proxy: {e}");
@@ -533,7 +553,7 @@ impl ProxyCtx {
 
         let mut ports: Vec<u16> = previous.and_then(|p| p.proxy_port).into_iter().collect();
         ports.extend(self.settings().ok().map(|s| s.port));
-        let ctx = self.clone();
+        let ctx = self.detached();
         std::thread::spawn(move || {
             if let Err(e) = ctx.reset_stale_system_proxy(&ports) {
                 warn!("Failed to reset a stale system proxy: {e}");
@@ -686,7 +706,9 @@ impl ProxyCtx {
     pub fn set_system_proxy_at_launch(&self, enabled: bool) -> Result<(), String> {
         let mut settings = self.settings()?;
         settings.system_proxy_at_launch = enabled;
-        settings.save(&self.settings_path())
+        settings.save(&self.settings_path())?;
+        self.emit_state();
+        Ok(())
     }
 
     /// The HTTP versions offered to clients, saved in `settings.json` and applied to the running
@@ -700,7 +722,255 @@ impl ProxyCtx {
         {
             handle.set_http2(version == HttpVersion::Auto);
         }
+        self.emit_state();
         Ok(())
+    }
+
+    /// The port the engine starts on, saved in `settings.json`. A running engine is restarted on
+    /// it at once, the system proxy following. When it cannot bind there, the port before is put
+    /// back and the engine restarted on it, and why is returned. Another process's engine takes
+    /// it at its next start.
+    pub fn set_port(&self, port: u16) -> Result<u16, String> {
+        if port == 0 {
+            return Err("The port must be from 1 to 65535".to_string());
+        }
+        let mut settings = self.settings()?;
+        let previous = settings.port;
+        settings.port = port;
+        settings.save(&self.settings_path())?;
+        if self.port().is_none_or(|running| running == port) {
+            self.emit_state();
+            return Ok(port);
+        }
+        // Read once: stopping clears it, and a failed start would leave the rollback reading
+        // the cleared value, so the old port would come back without the system proxy.
+        let proxy_on = self.system_proxy_on.load(Ordering::SeqCst);
+        if let Err(e) = self.restart(proxy_on) {
+            settings.port = previous;
+            settings.save(&self.settings_path())?;
+            if let Err(e) = self.restart(proxy_on) {
+                warn!("Failed to restart the proxy on port {previous}: {e}");
+            }
+            return Err(e);
+        }
+        Ok(port)
+    }
+
+    /// Stops the engine and starts it again as `settings.json` has it, routing the system proxy
+    /// to it only when `proxy_on`, as it was before the first stop: a restart keeps the routing
+    /// as the user left it rather than applying the launch setting again.
+    fn restart(&self, proxy_on: bool) -> Result<(), String> {
+        self.stop()?;
+        self.start_routing(None, Some(proxy_on))
+    }
+
+    /// Bytes of each body stored per flow, saved in `settings.json` and applied to the running
+    /// engine's bodies from now on.
+    pub fn set_capture_body_limit(&self, bytes: usize) -> Result<usize, String> {
+        let mut settings = self.settings()?;
+        settings.capture_body_limit = bytes;
+        settings.save(&self.settings_path())?;
+        if let Ok(handle) = self.handle.lock()
+            && let Some(handle) = handle.as_ref()
+        {
+            handle.set_capture_body_limit(bytes);
+        }
+        self.emit_state();
+        Ok(bytes)
+    }
+
+    /// The most captured traffic kept, saved in `settings.json`, or None to keep everything.
+    /// Swept down to it soon after.
+    pub fn set_keep_traffic(&self, bytes: Option<u64>) -> Result<Option<u64>, String> {
+        if bytes == Some(0) {
+            return Err("Keep more than 0 bytes of traffic, or all of it".to_string());
+        }
+        let mut settings = self.settings()?;
+        settings.keep_traffic_bytes = bytes;
+        settings.save(&self.settings_path())?;
+        self.sweep_soon();
+        self.emit_state();
+        Ok(bytes)
+    }
+
+    /// Bytes the captured traffic takes, as the keep-traffic cap counts them: the databases'
+    /// used pages, so it shrinks as flows are deleted though the files do not. Locked, the
+    /// files' sizes instead, as nothing in them can be read.
+    pub fn storage_size(&self) -> Result<u64, String> {
+        match self.stores() {
+            Ok(stores) => stores.used_bytes(),
+            Err(_) => Ok(db::file_bytes(&self.data_dir)),
+        }
+    }
+
+    /// Deletes every flow, body and message for good, with the data key that encrypts them, and
+    /// opens new databases under a new one, so the app goes on, empty. Works while locked, as
+    /// the way out of a key the keychain lost. The master key in the keychain stays: it wraps
+    /// only the data key, and wraps the new one, or a new one is made when it is gone. The CA is
+    /// kept, its key encrypted again, while the old key can read it; locked, it goes too, and a
+    /// new one has to be trusted. Refused while another process owns the engine, as it has the
+    /// databases open. A running engine is restarted on the new ones.
+    pub fn reset_captured_data(&self) -> Result<(), String> {
+        if let Some(owner) = control::live_owner(&self.data_dir)
+            && owner.pid != std::process::id()
+        {
+            return Err(format!("{}. Quit it first.", control::already_owned(&owner)));
+        }
+        let running = self.port().is_some();
+        let proxy_on = self.system_proxy_on.load(Ordering::SeqCst);
+        if running {
+            self.stop()?;
+        }
+        {
+            // Held so nothing unlocks the old databases meanwhile.
+            let mut unlocked = self.unlocked.lock().unwrap_or_else(PoisonError::into_inner);
+            let old_key = unlocked.take();
+            *self.stores.write().unwrap_or_else(PoisonError::into_inner) = None;
+            self.resets.fetch_add(1, Ordering::SeqCst);
+            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
+
+            let ca_key = self.ca_dir().join("ca.key");
+            let ca_pem = old_key.and_then(|key| match std::fs::read(&ca_key) {
+                Ok(stored) => key.decrypt(&stored).ok(),
+                Err(_) => None,
+            });
+            // The event loop and a clear's batch let go of the databases moments after the
+            // engine stops; until then Windows refuses to delete files still open.
+            if let Err(e) = remove_captured_when_closed(&self.data_dir) {
+                drop(unlocked);
+                // What is left opens again, so the app is not left without its databases.
+                if let Err(e) = self.unlock() {
+                    warn!("Failed to reopen the proxy's databases: {e}");
+                }
+                if running {
+                    self.start_routing(None, Some(proxy_on))?;
+                }
+                return Err(e);
+            }
+            let new_key = db::load_or_create_data_key(&self.keys, &self.data_dir);
+            match (ca_pem, &new_key) {
+                (Some(pem), Ok(new_key)) => {
+                    let sealed = new_key.encrypt(&pem).map_err(|e| e.to_string())?;
+                    write_private(&ca_key, &sealed)?;
+                }
+                // Unreadable without the old key: a new CA is made as the databases open.
+                _ => {
+                    for name in ["ca.key", "ca.pem"] {
+                        let _ = std::fs::remove_file(self.ca_dir().join(name));
+                    }
+                }
+            }
+            *self.lock_reason.lock().unwrap_or_else(PoisonError::into_inner) = None;
+        }
+        log::info!("Reset the proxy's captured traffic in {}", self.data_dir.display());
+        let unlocked = self.unlock();
+        // Whatever the app had is gone, opened again or not.
+        self.events.emit("flows_cleared", &FlowsClearedPayload {});
+        self.emit_state();
+        unlocked?;
+        if running {
+            self.start_routing(None, Some(proxy_on))?;
+        }
+        Ok(())
+    }
+
+    /// A clone sharing everything but the databases, for a thread that may outlive every
+    /// context that owns them, like one turning the system proxy off as the engine stops. Were
+    /// it the last to hold them, it would close them itself, and at a process's exit that races
+    /// SQLCipher's own teardown and crashes; this way they close where their owner lets go.
+    fn detached(&self) -> Self {
+        Self { stores: Arc::new(RwLock::new(None)), ..self.clone() }
+    }
+
+    /// Has the sweeper look at the captured traffic's size now, started when the keep-traffic
+    /// cap is set and it is not running. Without a cap nothing runs, and a sweeper running
+    /// stops.
+    fn sweep_soon(&self) {
+        let (state, wake) = &*self.sweeper;
+        let mut sweeper = state.lock().unwrap_or_else(PoisonError::into_inner);
+        if sweeper.running {
+            sweeper.poked = true;
+            wake.notify_all();
+            return;
+        }
+        if self.keep_traffic().is_none() {
+            return;
+        }
+        sweeper.running = true;
+        drop(sweeper);
+        let ctx = self.detached();
+        let stores = Arc::downgrade(&self.stores);
+        let spawned = std::thread::Builder::new().name("proxy-sweep".into()).spawn(move || {
+            lower_thread_priority();
+            ctx.run_sweeper(&stores);
+        });
+        if let Err(e) = spawned {
+            warn!("Failed to start keeping captured traffic under its cap: {e}");
+            state.lock().unwrap_or_else(PoisonError::into_inner).running = false;
+        }
+    }
+
+    /// The keep-traffic cap, as `settings.json` has it.
+    fn keep_traffic(&self) -> Option<u64> {
+        self.settings().ok().and_then(|s| s.keep_traffic_bytes)
+    }
+
+    /// Sweeps the oldest flows while the captured traffic is over the cap, then waits for
+    /// [`SWEEP_INTERVAL`] or a nudge, until the cap is taken away. The cap is read under the
+    /// sweeper's lock, so one set as this stops finds it stopped and starts another.
+    fn run_sweeper(&self, stores: &Weak<RwLock<Option<Stores>>>) {
+        let (state, wake) = &*self.sweeper;
+        loop {
+            let cap = {
+                let mut sweeper = state.lock().unwrap_or_else(PoisonError::into_inner);
+                let Some(cap) = self.keep_traffic() else {
+                    sweeper.running = false;
+                    return;
+                };
+                sweeper.poked = false;
+                cap
+            };
+            self.sweep_under(cap, stores);
+            let sweeper = state.lock().unwrap_or_else(PoisonError::into_inner);
+            if !sweeper.poked {
+                drop(wake.wait_timeout(sweeper, SWEEP_INTERVAL));
+            }
+        }
+    }
+
+    /// Deletes the oldest flows a batch at a time, yielding the writer between, until the
+    /// captured traffic is under `cap`, telling the app of each batch. Stops early when the
+    /// sweeper is nudged, to read the cap again. `stores` is the context's databases, held
+    /// weakly so the sweeper never keeps them open past the context that owns them.
+    fn sweep_under(&self, cap: u64, stores: &Weak<RwLock<Option<Stores>>>) {
+        loop {
+            // Held through the batch, letting go of the databases included.
+            let gate = exit_gate::hold();
+            // Each batch from the databases open now, which a reset replaces.
+            let Some(stores) = stores
+                .upgrade()
+                .and_then(|s| s.read().unwrap_or_else(PoisonError::into_inner).clone())
+            else {
+                return;
+            };
+            match flows::sweep_oldest(&stores, cap) {
+                Ok(ids) if ids.is_empty() => return,
+                Ok(ids) => {
+                    // After the commit, as a clear's is.
+                    self.events.emit("flows_removed", &FlowsRemovedPayload { ids });
+                }
+                Err(e) => {
+                    warn!("{e}");
+                    return;
+                }
+            }
+            drop(stores);
+            drop(gate);
+            if self.sweeper.0.lock().unwrap_or_else(PoisonError::into_inner).poked {
+                return;
+            }
+            std::thread::sleep(DELETE_PAUSE);
+        }
     }
 
     /// What HTTPS is decrypted, as `settings.json` has it.
@@ -873,18 +1143,46 @@ impl ProxyCtx {
     /// already doing so. Yields the writer between batches, so new flows are written meanwhile.
     fn delete_cleared(&self) {
         // Only ever after a clear or unlocking, so open.
-        let Ok(Stores { db, blobs }) = self.stores() else {
+        let Ok(Stores { db, blobs, .. }) = self.stores() else {
             return;
         };
         if !claim(&self.deleting_cleared) {
             return;
         }
         let (running, cleaner) = (self.deleting_cleared.clone(), self.cleaner_id.clone());
+        let (resets, reset) = (self.resets.clone(), self.resets.load(Ordering::SeqCst));
         let spawned = std::thread::Builder::new().name("proxy-clear".into()).spawn(move || {
             lower_thread_priority();
+            clean(&db, &blobs, &running, &cleaner, &resets, reset);
+            // Its last hold on the databases, which may close them, is let go of in a batch too.
+            let _gate = exit_gate::hold();
+            drop((db, blobs));
+        });
+        if let Err(e) = spawned {
+            warn!("Failed to start deleting cleared flows: {e}");
+            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        }
+
+        /// Deletes cleared flows a batch at a time until none are left, another process takes
+        /// over, or a reset replaces the databases.
+        fn clean(
+            db: &ProxyQueryManager,
+            blobs: &BlobManager,
+            running: &Mutex<bool>,
+            cleaner: &str,
+            resets: &AtomicU64,
+            reset: u64,
+        ) {
             let mut retry = DELETE_PAUSE;
             loop {
-                match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH, &cleaner) {
+                let gate = exit_gate::hold();
+                // Its databases are gone, and the reset has let another start.
+                if resets.load(Ordering::SeqCst) != reset {
+                    return;
+                }
+                let cleaned = flows::delete_cleared(db, blobs, flows::DELETE_BATCH, cleaner);
+                drop(gate);
+                match cleaned {
                     Ok(flows::Cleaned::More) => {
                         retry = DELETE_PAUSE;
                         std::thread::sleep(DELETE_PAUSE);
@@ -896,7 +1194,11 @@ impl ProxyCtx {
                         *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
                         // A clear since the last batch saw this running and left its flows to
                         // it, so they are deleted here unless another thread has taken over.
-                        if flows::clear_mark_in(&db) == 0 || !claim(&running) {
+                        let more = {
+                            let _gate = exit_gate::hold();
+                            flows::clear_mark_in(db) != 0
+                        };
+                        if !more || !claim(running) {
                             return;
                         }
                     }
@@ -909,10 +1211,6 @@ impl ProxyCtx {
                     }
                 }
             }
-        });
-        if let Err(e) = spawned {
-            warn!("Failed to start deleting cleared flows: {e}");
-            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
         }
     }
 }
@@ -921,6 +1219,50 @@ impl ProxyCtx {
 fn claim(flag: &Mutex<bool>) -> bool {
     let mut set = flag.lock().unwrap_or_else(PoisonError::into_inner);
     !std::mem::replace(&mut *set, true)
+}
+
+/// Whether the sweeper runs, and whether it has been asked to look again since it last read the
+/// cap.
+#[derive(Debug, Default)]
+struct Sweeper {
+    running: bool,
+    poked: bool,
+}
+
+/// Deletes the captured databases, trying again for a few seconds while something still has
+/// them open, as Windows refuses to delete an open file.
+fn remove_captured_when_closed(data_dir: &Path) -> Result<(), String> {
+    let mut tries = 0;
+    loop {
+        match db::remove_captured(data_dir) {
+            Ok(()) => return Ok(()),
+            Err(_) if tries < REMOVE_TRIES => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Tries at deleting the captured databases, 100 ms apart, before a reset gives up.
+const REMOVE_TRIES: u32 = 50;
+
+/// How often the sweeper measures the captured traffic against the keep-traffic cap.
+const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Writes `contents` to `path` through a file beside it and a rename, readable by the user
+/// alone where the platform has such modes.
+fn write_private(path: &Path, contents: &[u8]) -> Result<(), String> {
+    let fail = |e: std::io::Error| format!("Failed to write {}: {e}", path.display());
+    let tmp = path.with_extension("tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(&tmp).map_err(fail)?;
+    file.write_all(contents).and_then(|_| file.sync_all()).map_err(fail)?;
+    std::fs::rename(&tmp, path).map_err(fail)
 }
 
 /// How long deleting cleared flows rests between batches, leaving the database to new flows.
@@ -1051,6 +1393,13 @@ pub struct ClearFlowsRequest {}
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct FlowsClearedPayload {}
 
+/// Flows deleted to keep captured traffic under the keep-traffic cap, the oldest first.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct FlowsRemovedPayload {
+    pub ids: Vec<String>,
+}
+
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct GetProxyStateRequest {}
@@ -1070,6 +1419,12 @@ pub struct GetProxyStateResponse {
     pub system_proxy_at_launch: bool,
     /// The HTTP versions offered to clients.
     pub http_version: HttpVersion,
+    /// Bytes of each body stored per flow.
+    #[ts(type = "number")]
+    pub capture_body_limit: usize,
+    /// The most captured traffic kept, in bytes, or null to keep everything.
+    #[ts(type = "number | null")]
+    pub keep_traffic_bytes: Option<u64>,
     /// Why the engine last failed to start, until it starts.
     pub start_error: Option<String>,
     /// How far encrypting traffic stored before encryption has got, from 0 to 1, while it
@@ -1152,6 +1507,51 @@ pub struct SetSystemProxyAtLaunchRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SetHttpVersionRequest {
     pub http_version: HttpVersion,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetPortRequest {
+    pub port: u16,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetCaptureBodyLimitRequest {
+    #[ts(type = "number")]
+    pub bytes: u64,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetKeepTrafficRequest {
+    /// Null keeps everything.
+    #[ts(type = "number | null")]
+    pub bytes: Option<u64>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetStorageSizeRequest {}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetStorageSizeResponse {
+    /// The databases' used pages, as the keep-traffic cap counts them; locked, their files'
+    /// sizes on disk.
+    #[ts(type = "number")]
+    pub bytes: u64,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ResetCapturedDataRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct OpenTerminalRequest {
+    /// Environment variables the shell starts with, by name: `HTTPS_PROXY`.
+    pub vars: Vec<(String, String)>,
 }
 
 #[derive(Deserialize, TS)]
@@ -1561,6 +1961,8 @@ async fn get_proxy_state(
             recording: ctx.recording(),
             system_proxy_at_launch: settings.system_proxy_at_launch,
             http_version: settings.http_version,
+            capture_body_limit: settings.capture_body_limit,
+            keep_traffic_bytes: settings.keep_traffic_bytes,
             start_error: ctx.start_error(),
             encrypting: ctx.encrypting(),
             locked: ctx.locked(),
@@ -1586,6 +1988,46 @@ fn set_system_proxy_at_launch(
 fn set_http_version(ctx: &ProxyCtx, req: SetHttpVersionRequest) -> Result<HttpVersion, RpcError> {
     ctx.set_http_version(req.http_version).map_err(rpc_error)?;
     Ok(req.http_version)
+}
+
+/// Off the async threads: restarting the engine joins its thread.
+async fn set_port(ctx: ProxyCtx, req: SetPortRequest) -> Result<u16, RpcError> {
+    blocking(move || ctx.set_port(req.port)).await
+}
+
+fn set_capture_body_limit(
+    ctx: &ProxyCtx,
+    req: SetCaptureBodyLimitRequest,
+) -> Result<usize, RpcError> {
+    let bytes = usize::try_from(req.bytes).map_err(rpc_error)?;
+    ctx.set_capture_body_limit(bytes).map_err(rpc_error)
+}
+
+/// The cap as saved, in bytes, or null to keep everything.
+fn set_keep_traffic(ctx: &ProxyCtx, req: SetKeepTrafficRequest) -> Result<Option<usize>, RpcError> {
+    let bytes = ctx.set_keep_traffic(req.bytes).map_err(rpc_error)?;
+    Ok(bytes.map(|b| usize::try_from(b).unwrap_or(usize::MAX)))
+}
+
+async fn get_storage_size(
+    ctx: ProxyCtx,
+    _req: GetStorageSizeRequest,
+) -> Result<GetStorageSizeResponse, RpcError> {
+    let bytes = blocking(move || ctx.storage_size()).await?;
+    Ok(GetStorageSizeResponse { bytes })
+}
+
+async fn reset_captured_data(
+    ctx: ProxyCtx,
+    _req: ResetCapturedDataRequest,
+) -> Result<bool, RpcError> {
+    blocking(move || ctx.reset_captured_data()).await?;
+    Ok(true)
+}
+
+async fn open_terminal(_ctx: ProxyCtx, req: OpenTerminalRequest) -> Result<bool, RpcError> {
+    blocking(move || terminal::open(&req.vars)).await?;
+    Ok(true)
 }
 
 fn get_decrypt_list(ctx: &ProxyCtx, _req: GetDecryptListRequest) -> Result<DecryptList, RpcError> {
@@ -1991,6 +2433,28 @@ struct FlowSink {
     recording: Arc<Mutex<RecordingLog>>,
     /// Flows that have ended, waiting to be written together.
     finished: std::cell::RefCell<FinishedFlows>,
+    /// What a batch's wait is timed by.
+    clock: BatchClock,
+}
+
+/// What the event loop times a batch's wait by: the time, or in tests a time that stands still,
+/// so a batch is written only once no events wait or it is full.
+#[derive(Debug, Clone, Copy, Default)]
+enum BatchClock {
+    #[default]
+    Real,
+    #[cfg(test)]
+    Stopped(std::time::Instant),
+}
+
+impl BatchClock {
+    fn now(self) -> std::time::Instant {
+        match self {
+            Self::Real => std::time::Instant::now(),
+            #[cfg(test)]
+            Self::Stopped(at) => at,
+        }
+    }
 }
 
 /// Flows that have ended and are yet to be written, with when the first of them ended. Each
@@ -2033,6 +2497,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
             match rx.try_recv() {
                 Ok(event) => event,
                 Err(TryRecvError::Empty) => {
+                    let _gate = exit_gate::hold();
                     sink.write_messages(&mut in_flight, &mut pending);
                     sink.write_finished();
                     sink.write_due_flows(&mut in_flight);
@@ -2045,6 +2510,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
             match rx.recv_timeout(wait) {
                 Ok(event) => event,
                 Err(RecvTimeoutError::Timeout) => {
+                    let _gate = exit_gate::hold();
                     sink.write_due_flows(&mut in_flight);
                     continue;
                 }
@@ -2056,6 +2522,8 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                 Err(_) => break,
             }
         };
+        // Only while writing, not while waiting for an event above.
+        let _gate = exit_gate::hold();
         if let ProxyEvent::Message { id, message } = event {
             record_message(&mut in_flight, &mut pending, id, &message);
             if pending.len() >= MESSAGE_BATCH {
@@ -2080,6 +2548,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
         }
     }
 
+    let _gate = exit_gate::hold();
     sink.write_messages(&mut in_flight, &mut pending);
     // The engine stopped: a stream still open ends with it. Other flows in flight are dropped,
     // as they always have been. Every flow that ended is written.
@@ -2091,6 +2560,8 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
         }
     }
     sink.write_finished();
+    // Its hold on the databases goes before the gate opens again.
+    drop(sink);
 }
 
 /// When the next changed streaming flow is due to be written.
@@ -2174,6 +2645,7 @@ impl FlowSink {
                     method,
                     url,
                     client_http_version: http_version,
+                    client_addr: Some(client_addr.to_string()),
                     ..Default::default()
                 };
                 in_flight.insert(
@@ -2202,6 +2674,7 @@ impl FlowSink {
                     method: "CONNECT".to_string(),
                     url: format!("https://{authority}"),
                     client_http_version: "HTTP/1.1".to_string(),
+                    client_addr: Some(client_addr.to_string()),
                     tunnelled: true,
                     ..Default::default()
                 };
@@ -2274,9 +2747,10 @@ impl FlowSink {
                     f.changed();
                 }
             }
-            ProxyEvent::RequestBodyComplete { id, size, truncated } => {
+            ProxyEvent::RequestBodyComplete { id, size, truncated, elapsed_ms } => {
                 if let Some(f) = in_flight.get_mut(&id) {
                     f.flow.request_size = size as i64;
+                    f.flow.elapsed_request_ms = Some(clamp_ms(elapsed_ms));
                     if f.keeps_bytes(FlowBody::Request) {
                         f.flow.request_truncated = truncated;
                         finish_body(f.request_body.take());
@@ -2287,6 +2761,21 @@ impl FlowSink {
                             warn!("Failed to delete a stream's request bytes: {e}");
                         }
                     }
+                    f.changed();
+                }
+            }
+            ProxyEvent::UpstreamConnection {
+                id,
+                elapsed_connect_ms,
+                elapsed_tls_ms,
+                tls_version,
+                tls_cipher,
+            } => {
+                if let Some(f) = in_flight.get_mut(&id) {
+                    f.flow.elapsed_connect_ms = elapsed_connect_ms.map(clamp_ms);
+                    f.flow.elapsed_tls_ms = elapsed_tls_ms.map(clamp_ms);
+                    f.flow.upstream_tls_version = tls_version;
+                    f.flow.upstream_tls_cipher = tls_cipher;
                     f.changed();
                 }
             }
@@ -2496,7 +2985,7 @@ impl FlowSink {
             flow.client_cwd = app.cwd;
         }
         let mut finished = self.finished.borrow_mut();
-        finished.since.get_or_insert_with(std::time::Instant::now);
+        finished.since.get_or_insert_with(|| self.clock.now());
         finished.flows.push(FinishedFlow { flow, persisted: f.persisted, chunks });
     }
 
@@ -2508,7 +2997,9 @@ impl FlowSink {
     fn finished_due(&self) -> bool {
         let finished = self.finished.borrow();
         finished.flows.len() >= FLOW_BATCH
-            || finished.since.is_some_and(|t| t.elapsed() >= FLOW_BATCH_WAIT)
+            || finished
+                .since
+                .is_some_and(|t| self.clock.now().saturating_duration_since(t) >= FLOW_BATCH_WAIT)
     }
 
     /// Writes the flows that have ended: their bodies' last chunks in one transaction, then
@@ -2657,6 +3148,8 @@ define_rpc! {
         set_recording(SetRecordingRequest) -> bool,
         set_system_proxy_at_launch(SetSystemProxyAtLaunchRequest) -> bool,
         set_http_version(SetHttpVersionRequest) -> HttpVersion,
+        set_capture_body_limit(SetCaptureBodyLimitRequest) -> usize,
+        set_keep_traffic(SetKeepTrafficRequest) -> Option<usize>,
     }
     async_commands {
         add_grpc_schema(AddGrpcSchemaRequest) -> GrpcSchema,
@@ -2682,10 +3175,15 @@ define_rpc! {
         system_proxy_set(SystemProxySetRequest) -> SystemProxyStatus,
         system_proxy_status(SystemProxyStatusRequest) -> SystemProxyStatus,
         take_over(TakeOverRequest) -> bool,
+        set_port(SetPortRequest) -> u16,
+        get_storage_size(GetStorageSizeRequest) -> GetStorageSizeResponse,
+        reset_captured_data(ResetCapturedDataRequest) -> bool,
+        open_terminal(OpenTerminalRequest) -> bool,
     }
     events {
         decrypt_list_changed(DecryptListChangedPayload),
         flows_cleared(FlowsClearedPayload),
+        flows_removed(FlowsRemovedPayload),
         message_write(MessagePayload),
         model_write(ModelPayload),
         proxy_state_changed(ProxyStatePayload),
@@ -2739,16 +3237,30 @@ mod tests {
     fn event_loop(
         ctx: &ProxyCtx,
     ) -> (std::sync::mpsc::Sender<ProxyEvent>, std::thread::JoinHandle<()>) {
+        event_loop_timed(ctx, BatchClock::Real)
+    }
+
+    /// [`event_loop`], its batches timed by `clock`.
+    fn event_loop_timed(
+        ctx: &ProxyCtx,
+        clock: BatchClock,
+    ) -> (std::sync::mpsc::Sender<ProxyEvent>, std::thread::JoinHandle<()>) {
         let (tx, rx) = std::sync::mpsc::channel();
-        let sink = FlowSink {
+        let sink = sink(ctx);
+        let sink = FlowSink { clock, ..sink };
+        (tx, std::thread::spawn(move || run_event_loop(rx, sink)))
+    }
+
+    fn sink(ctx: &ProxyCtx) -> FlowSink {
+        FlowSink {
             db: ctx.db().unwrap(),
             blobs: ctx.blobs().unwrap(),
             events: ctx.events.clone(),
             attribution: Attribution::new(0),
             recording: ctx.recording.clone(),
             finished: Default::default(),
-        };
-        (tx, std::thread::spawn(move || run_event_loop(rx, sink)))
+            clock: BatchClock::Real,
+        }
     }
 
     fn open_websocket(tx: &std::sync::mpsc::Sender<ProxyEvent>, id: u64, url: &str) {
@@ -2842,6 +3354,7 @@ mod tests {
             id: 1,
             size: request.len() as u64,
             truncated: false,
+            elapsed_ms: 1,
         });
         send(ProxyEvent::ResponseStart {
             id: 1,
@@ -3020,7 +3533,7 @@ mod tests {
             len: 30,
             data: bytes::Bytes::from_static(b"junk"),
         });
-        send(ProxyEvent::RequestBodyComplete { id: 1, size: 30, truncated: true });
+        send(ProxyEvent::RequestBodyComplete { id: 1, size: 30, truncated: true, elapsed_ms: 1 });
         send(ProxyEvent::ResponseStart {
             id: 1,
             status: 200,
@@ -3548,20 +4061,401 @@ mod tests {
         }
     }
 
-    /// A flow that ends alone is written at once, not after the batch's wait.
+    /// A flow that ends alone is written at once, not after the batch's wait: with the batch's
+    /// clock stopped, the wait never ends, so only the queue running dry writes it.
     #[test]
     fn a_lone_flow_shows_at_once() {
         let dir = tempfile::tempdir().unwrap();
         let (events, _rx) = RpcEventEmitter::new();
         let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
-        let (tx, event_loop) = event_loop(&ctx);
-        let sent = std::time::Instant::now();
+        let stopped = BatchClock::Stopped(std::time::Instant::now());
+        let (tx, event_loop) = event_loop_timed(&ctx, stopped);
         send_flow(&tx, 1, "https://example.com/alone");
+        // The engine still runs, so it is not the stop that writes it.
         wait_for_flow(&ctx, |f| f.url == "https://example.com/alone");
-        let shown = sent.elapsed();
-        assert!(shown < Duration::from_millis(50), "shown after {shown:?}");
         drop(tx);
         event_loop.join().unwrap();
+    }
+
+    /// The batch's wait is what writes a batch while events keep coming.
+    #[test]
+    fn a_batch_is_due_once_its_first_flow_has_waited() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let started = std::time::Instant::now();
+        let mut sink = FlowSink { clock: BatchClock::Stopped(started), ..sink(&ctx) };
+        let f = InFlight {
+            flow: Flow { id: Flow::generate_id(), ..Default::default() },
+            connection: 1,
+            request_body: None,
+            response_body: None,
+            persisted: false,
+            cleared: false,
+            next_seq: 0,
+            dirty: false,
+            last_write: None,
+        };
+        sink.finish_flow(f);
+        assert!(!sink.finished_due(), "the clock stands still");
+        sink.clock = BatchClock::Stopped(started + FLOW_BATCH_WAIT);
+        assert!(sink.finished_due());
+        sink.write_finished();
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 1);
+    }
+
+    /// A flow keeps the client's address, its connection's timings and TLS, and when its
+    /// request was sent whole, for its timeline and details.
+    #[test]
+    fn a_flow_keeps_its_connection_and_timings() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        let send = |event| tx.send(event).unwrap();
+        send(ProxyEvent::RequestStart {
+            id: 1,
+            started_at: SystemTime::now(),
+            method: "POST".into(),
+            url: "https://api.example.com/upload".into(),
+            http_version: "HTTP/2".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:54321".parse().unwrap(),
+        });
+        send(ProxyEvent::UpstreamConnection {
+            id: 1,
+            elapsed_connect_ms: Some(3),
+            elapsed_tls_ms: Some(9),
+            tls_version: Some("TLSv1.3".into()),
+            tls_cipher: Some("TLS13_AES_128_GCM_SHA256".into()),
+        });
+        let data = bytes::Bytes::from_static(b"payload");
+        send(ProxyEvent::RequestBodyChunk { id: 1, len: data.len(), data });
+        send(ProxyEvent::RequestBodyComplete { id: 1, size: 7, truncated: false, elapsed_ms: 12 });
+        send(ProxyEvent::ResponseStart {
+            id: 1,
+            status: 201,
+            http_version: "HTTP/2".into(),
+            remote_addr: Some("93.184.216.34:443".parse().unwrap()),
+            elapsed_ms: 20,
+        });
+        send(ProxyEvent::ResponseBodyComplete {
+            id: 1,
+            size: 0,
+            truncated: false,
+            elapsed_ms: 25,
+            error: None,
+            cancelled: false,
+        });
+        drop(tx);
+        event_loop.join().unwrap();
+        let flow = flows::list(&ctx.db().unwrap(), &Default::default()).unwrap().remove(0);
+        assert_eq!(flow.client_addr.as_deref(), Some("127.0.0.1:54321"));
+        assert_eq!((flow.elapsed_connect_ms, flow.elapsed_tls_ms), (Some(3), Some(9)));
+        assert_eq!((flow.elapsed_request_ms, flow.elapsed_headers_ms), (Some(12), Some(20)));
+        assert_eq!(flow.upstream_tls_version.as_deref(), Some("TLSv1.3"));
+        assert_eq!(flow.upstream_tls_cipher.as_deref(), Some("TLS13_AES_128_GCM_SHA256"));
+    }
+
+    /// Waits up to 5 seconds for `check`.
+    fn wait_until(what: &str, check: impl Fn() -> bool) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !check() {
+            assert!(std::time::Instant::now() < deadline, "{what}");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn sweeper_running(ctx: &ProxyCtx) -> bool {
+        ctx.sweeper.0.lock().unwrap().running
+    }
+
+    /// Without a cap nothing sweeps. With one, the oldest flows go until the traffic is under
+    /// it, and the app hears which; taken away, the sweeper stops.
+    #[test]
+    fn keeping_traffic_under_a_cap_sweeps_the_oldest() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let empty = ctx.storage_size().unwrap();
+        let ids: Vec<String> = (0..20).map(|i| format!("fl_{i:02}")).collect();
+        for id in &ids {
+            flow_with_response(&ctx, id, "application/octet-stream", &[3; 64 * 1024]);
+        }
+        let full = ctx.storage_size().unwrap();
+
+        ctx.sweep_soon();
+        assert!(!sweeper_running(&ctx), "no thread without a cap");
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 20);
+
+        let cap = (empty + full) / 2;
+        // Swept here rather than waited on from the sweeper's thread, which a busy machine may
+        // not run in time: what goes is the same either way.
+        ctx.sweep_under(cap, &Arc::downgrade(&ctx.stores));
+        let removed: Vec<String> = rx
+            .try_iter()
+            .filter(|e| e.event == "flows_removed")
+            .flat_map(|e| serde_json::from_value::<Vec<String>>(e.payload["ids"].clone()).unwrap())
+            .collect();
+        let kept = flows::count(&ctx.db().unwrap()).unwrap();
+        let after = ctx.storage_size().unwrap();
+        let sizes = format!("empty {empty}, full {full}, cap {cap}, after {after}");
+        assert!(after <= cap, "under the cap: {sizes}");
+        assert!(!removed.is_empty() && removed.len() < 20, "some, not all: {removed:?}, {sizes}");
+        assert_eq!(removed.len(), 20 - kept, "the app hears of each");
+        assert_eq!(removed, ids[..removed.len()], "the oldest, in order");
+
+        // Set, the cap starts the sweeper, which finds nothing more to do; taken away, it stops.
+        assert_eq!(ctx.set_keep_traffic(Some(cap)).unwrap(), Some(cap));
+        assert_eq!(ctx.settings().unwrap().keep_traffic_bytes, Some(cap));
+        assert!(sweeper_running(&ctx));
+        assert_eq!(ctx.set_keep_traffic(None).unwrap(), None);
+        wait_until("the sweeper stops", || !sweeper_running(&ctx));
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), kept, "nothing more went");
+        assert!(ctx.set_keep_traffic(Some(0)).is_err());
+    }
+
+    /// Writes a body for `body_id` straight to the blob store, as the event loop does.
+    fn write_blob(ctx: &ProxyCtx, body_id: &str, bytes: &[u8]) {
+        let mut writer = BodyChunkWriter::new(ctx.blobs().unwrap(), body_id.to_string());
+        writer.write(bytes).unwrap();
+        writer.finish().unwrap();
+    }
+
+    /// The bodies stored under a flow's id: its request and response, and its messages' payloads
+    /// numbered below `messages`.
+    fn blobs_of(ctx: &ProxyCtx, id: &str, messages: usize) -> usize {
+        let blobs = ctx.blobs().unwrap();
+        let conn = blobs.connect();
+        let bodies = [
+            Flow::body_id(id, FlowBody::Request),
+            Flow::body_id(id, FlowBody::Response),
+        ];
+        let payloads = (0..messages).map(|n| format!("{id}.msg.{n}"));
+        bodies.into_iter().chain(payloads).filter(|b| conn.body_exists(b).unwrap()).count()
+    }
+
+    /// A thread turning the system proxy on or off holds none of the databases, so it never
+    /// closes them itself, as it would at a process's exit, crashing in SQLCipher's teardown.
+    #[test]
+    fn threads_that_outlive_the_engine_hold_no_databases() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert!(ctx.stores().is_ok());
+        let detached = ctx.detached();
+        assert!(detached.stores().is_err(), "none of its own");
+        assert_eq!(Arc::strong_count(&ctx.stores), 1, "the owner's alone");
+        // Everything else is shared, as the system proxy's state is.
+        ctx.system_proxy_on.store(true, Ordering::SeqCst);
+        assert!(detached.system_proxy_on.load(Ordering::SeqCst));
+    }
+
+    /// A message written for a flow while the sweep deletes it, before its row goes or between
+    /// its row and its bodies, is deleted with it rather than left counting against the cap.
+    #[test]
+    fn a_message_written_while_its_flow_is_swept_goes_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        for id in ["fl_a", "fl_b"] {
+            flow_with_response(&ctx, id, "text/plain", &[1; 4096]);
+        }
+        let stores = ctx.stores().unwrap();
+
+        let rows = flows::sweepable(&stores, 1).unwrap();
+        assert_eq!(rows.iter().map(|(_, id)| id.as_str()).collect::<Vec<_>>(), ["fl_a"]);
+        // Written after it was chosen, before its row is deleted...
+        write_blob(&ctx, "fl_a.msg.7", b"late");
+        let deleted = flows::delete_swept_rows(&stores, rows).unwrap();
+        // ...and after its row is gone, before its bodies are.
+        write_blob(&ctx, "fl_a.msg.8", b"later");
+        flows::delete_swept_bodies(&stores, &deleted).unwrap();
+
+        assert_eq!(deleted, ["fl_a"]);
+        assert_eq!(blobs_of(&ctx, "fl_a", 10), 0, "no orphans");
+        assert_eq!(blobs_of(&ctx, "fl_b", 10), 1, "the other flow kept");
+    }
+
+    /// A sweep that deletes the rows and then fails before the bodies, as on a full disk, leaves
+    /// them pending, and the next sweep deletes them, even with nothing more to sweep.
+    #[test]
+    fn bodies_a_failed_sweep_left_go_on_the_next() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        for id in ["fl_a", "fl_b"] {
+            flow_with_response(&ctx, id, "text/plain", &[1; 4096]);
+        }
+        let stores = ctx.stores().unwrap();
+
+        let rows = flows::sweepable(&stores, 1).unwrap();
+        // The rows go, and the bodies don't.
+        assert_eq!(flows::delete_swept_rows(&stores, rows).unwrap(), ["fl_a"]);
+        assert_eq!(flows::pending_sweeps(&stores).unwrap(), ["fl_a"]);
+        assert_eq!(blobs_of(&ctx, "fl_a", 0), 1, "left behind");
+
+        // Under the cap, so only what was left goes.
+        assert!(flows::sweep_oldest(&stores, u64::MAX).unwrap().is_empty());
+        assert_eq!(blobs_of(&ctx, "fl_a", 0), 0);
+        assert!(flows::pending_sweeps(&stores).unwrap().is_empty());
+        assert_eq!(blobs_of(&ctx, "fl_b", 0), 1, "the other flow kept");
+    }
+
+    /// A stream still open is never swept, even while its writer adds messages as the sweep
+    /// runs and it is the oldest flow there is.
+    #[test]
+    fn an_open_stream_is_not_swept_while_it_is_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let open = Flow {
+            id: "fl_open".into(),
+            stream_kind: Some(StreamKind::Websocket),
+            status: Some(101),
+            ..Default::default()
+        };
+        ctx.db().unwrap().with_tx(|tx| tx.upsert(&open, &UpdateSource::Background)).unwrap();
+        write_blob(&ctx, "fl_open.msg.0", &[2; 16 * 1024]);
+        let ended: Vec<String> = (0..10).map(|i| format!("fl_{i:02}")).collect();
+        for id in &ended {
+            flow_with_response(&ctx, id, "application/octet-stream", &[3; 32 * 1024]);
+        }
+
+        let done = Arc::new(AtomicBool::new(false));
+        let writer = {
+            let (ctx, done) = (ctx.clone(), done.clone());
+            std::thread::spawn(move || {
+                let mut seq = 1;
+                while !done.load(Ordering::SeqCst) {
+                    write_blob(&ctx, &format!("fl_open.msg.{seq}"), &[4; 1024]);
+                    seq += 1;
+                }
+                seq
+            })
+        };
+        // A cap below anything reachable, so the sweep takes every flow it may.
+        let stores = ctx.stores().unwrap();
+        while !flows::sweep_oldest(&stores, 1).unwrap().is_empty() {}
+        done.store(true, Ordering::SeqCst);
+        let written = writer.join().unwrap();
+
+        let db = ctx.db().unwrap();
+        assert!(flows::find(&db, "fl_open").is_some(), "the open stream stays");
+        assert_eq!(flows::count(&db).unwrap(), 1, "every ended flow swept");
+        assert_eq!(blobs_of(&ctx, "fl_open", written), written, "its messages all kept");
+        for id in &ended {
+            assert_eq!(blobs_of(&ctx, id, 0), 0, "{id} left nothing behind");
+        }
+    }
+
+    /// Resetting deletes the traffic and its data key and opens empty databases under a new
+    /// one; the CA, readable with the old key, is kept, so it stays trusted.
+    #[test]
+    fn resetting_captured_data_starts_empty_and_keeps_the_ca() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        flow_with_response(&ctx, "fl_old", "text/plain", b"secret");
+        let pem = ctx.load_ca().unwrap().pem().to_string();
+        let key = std::fs::read(db::data_key_path(dir.path())).unwrap();
+        rx.try_iter().count();
+
+        ctx.reset_captured_data().unwrap();
+        assert!(ctx.locked().is_none());
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 0);
+        assert!(!ctx.blobs().unwrap().connect().body_exists("fl_old.response").unwrap());
+        assert_ne!(std::fs::read(db::data_key_path(dir.path())).unwrap(), key, "a new key");
+        assert_eq!(ctx.load_ca().unwrap().pem(), pem, "the same CA");
+        let heard: Vec<&str> = rx.try_iter().map(|e| e.event).collect();
+        assert!(heard.contains(&"flows_cleared") && heard.contains(&"proxy_state_changed"));
+        // Capturing goes on into the new databases.
+        flow_with_response(&ctx, "fl_new", "text/plain", b"hello");
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 1);
+    }
+
+    /// With the key lost from the keychain, nothing can be read, and resetting is the way out:
+    /// the traffic and the CA, which only the lost key could read, make way for new ones.
+    #[test]
+    fn resetting_while_locked_is_the_way_out_of_a_lost_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let pem = {
+            let (events, _rx) = RpcEventEmitter::new();
+            let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+            flow_with_response(&ctx, "fl_old", "text/plain", b"secret");
+            ctx.load_ca().unwrap().pem().to_string()
+        };
+        // Another keychain, without the master key that wrapped the data key.
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert!(ctx.locked().is_some());
+        assert!(ctx.db().is_err());
+        assert!(ctx.storage_size().unwrap() > 0, "the files, measured on disk");
+
+        ctx.reset_captured_data().unwrap();
+        assert!(ctx.locked().is_none());
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 0);
+        assert_ne!(ctx.load_ca().unwrap().pem(), pem, "a new CA");
+        flow_with_response(&ctx, "fl_new", "text/plain", b"hello");
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 1);
+    }
+
+    /// A port that is free and unused now.
+    fn free_port() -> u16 {
+        std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+    }
+
+    /// The running engine moves to a new port at once; one it cannot bind leaves it, and the
+    /// setting, where they were.
+    #[test]
+    fn setting_the_port_restarts_the_engine_on_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = free_port();
+        let settings =
+            ProxySettings { port: first, system_proxy_at_launch: false, ..Default::default() };
+        settings.save(&dir.path().join("settings.json")).unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert!(ctx.set_port(0).is_err());
+        ctx.start().unwrap();
+        assert_eq!(ctx.port(), Some(first));
+
+        let second = free_port();
+        assert_eq!(ctx.set_port(second).unwrap(), second);
+        assert_eq!((ctx.port(), ctx.settings().unwrap().port), (Some(second), second));
+        assert!(is_listening(second));
+
+        let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let taken_port = taken.local_addr().unwrap().port();
+        assert!(ctx.set_port(taken_port).is_err());
+        assert_eq!((ctx.port(), ctx.settings().unwrap().port), (Some(second), second));
+        assert_eq!(ctx.start_error(), None);
+        ctx.stop().unwrap();
+
+        // Stopped, it is only saved, for the next start.
+        let third = free_port();
+        assert_eq!(ctx.set_port(third).unwrap(), third);
+        assert_eq!(ctx.port(), None);
+        ctx.start().unwrap();
+        assert_eq!(ctx.port(), Some(third));
+        ctx.stop().unwrap();
+    }
+
+    /// The capture limit is saved and shows in the proxy's state, as the keep-traffic cap does.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_state_has_the_capture_limit_and_the_traffic_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let req = SetCaptureBodyLimitRequest { bytes: 4096 };
+        assert_eq!(set_capture_body_limit(&ctx, req).unwrap(), 4096);
+        let req = SetKeepTrafficRequest { bytes: Some(1 << 30) };
+        assert_eq!(set_keep_traffic(&ctx, req).unwrap(), Some(1 << 30));
+        let state = get_proxy_state(ctx.clone(), GetProxyStateRequest {}).await.unwrap();
+        assert_eq!((state.capture_body_limit, state.keep_traffic_bytes), (4096, Some(1 << 30)));
+        let size = get_storage_size(ctx.clone(), GetStorageSizeRequest {}).await.unwrap();
+        assert!(size.bytes > 0);
+        ctx.set_keep_traffic(None).unwrap();
     }
 
     /// A flow that fails to write is rolled back alone: the others in its batch are kept.
@@ -3581,14 +4475,7 @@ mod tests {
                 Ok::<_, yaak_database::Error>(())
             })
             .unwrap();
-        let sink = FlowSink {
-            db: ctx.db().unwrap(),
-            blobs: ctx.blobs().unwrap(),
-            events: ctx.events.clone(),
-            attribution: Attribution::new(0),
-            recording: ctx.recording.clone(),
-            finished: Default::default(),
-        };
+        let sink = sink(&ctx);
         // One batch of three, the middle one refused.
         for url in ["before", "bad", "after"] {
             let flow = Flow {

@@ -10,23 +10,17 @@ import {
   LoadingIcon,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import { useEffect, useRef } from "react";
 import { useRpcEvent } from "../hooks/useRpcEvent";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
-import { helperDialogOpenAtom, helperRegisteredAtAtom } from "../lib/atoms";
-import { decryptListDialogOpenAtom } from "./DecryptListEditor";
+import { helperRegisteredAtAtom } from "../lib/atoms";
 import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
-import { proxyStateAtom, refreshProxyState, systemProxyEverOnAtom } from "../lib/store";
-import {
-  helperPollInterval,
-  helperRow,
-  recordingLabel,
-  systemProxySwitch,
-} from "../lib/systemProxy";
+import { proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
+import { helperPollInterval, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 
@@ -34,7 +28,7 @@ import { useShowToast } from "../lib/toast";
  * The header's state pill and its menu of four rows: the state, Pause or Resume Recording,
  * Override system proxy, and the certificate. The engine runs for as long as the app does, so the
  * pill shows whether flows are being stored. A certificate that is not trusted steps out of the
- * menu beside the pill until it is. More… holds the rows that move to Settings until it exists.
+ * menu beside the pill until it is. Everything set once and left alone lives in Settings.
  */
 export function ProxyStatus() {
   const dropdownRef = useRef<DropdownRef>(null);
@@ -42,11 +36,6 @@ export function ProxyStatus() {
   const setup = useProxySetup();
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
-  const setAtLaunch = useSetSystemProxyAtLaunch();
-  const setHttpVersion = useSetHttpVersion();
-  const copyEnvironment = useCopyEnvironment();
-  const setHelperDialogOpen = useSetAtom(helperDialogOpenAtom);
-  const setDecryptListOpen = useSetAtom(decryptListDialogOpenAtom);
   const { caStatus, trust, systemProxy, setSystemProxy } = setup;
   const systemSwitch = useSystemProxySwitch(setup);
 
@@ -113,72 +102,6 @@ export function ProxyStatus() {
     systemProxy.data.helper !== "enabled" &&
     systemProxy.data.helper !== "unavailable";
 
-  // The rows that move to Settings, reachable here until it exists.
-  const moreItems: DropdownItem[] = [
-    {
-      type: "content",
-      hidden: systemProxy.data?.supported !== true,
-      label: (
-        <KeepMenuOpen className="block px-1.5 py-1.5">
-          <Checkbox
-            title={<span className="text-sm">Override system proxy at launch</span>}
-            checked={proxyState?.systemProxyAtLaunch ?? true}
-            disabled={setAtLaunch.isPending}
-            onChange={(enabled) => setAtLaunch.mutate({ enabled })}
-          />
-        </KeepMenuOpen>
-      ),
-    },
-    {
-      type: "content",
-      hidden: systemProxy.data?.supported !== true,
-      label: systemProxy.data != null && (
-        <HelperMenuRow
-          status={systemProxy.data}
-          onOpenDialog={() => {
-            dropdownRef.current?.close?.();
-            setHelperDialogOpen(true);
-          }}
-        />
-      ),
-    },
-    {
-      type: "content",
-      label: (
-        <MenuRow
-          icon={<Icon icon="zap" size="sm" color="secondary" />}
-          title="HTTP/2"
-          description="Lets browsers send many requests at once. Turn off for apps that misbehave on it. Applies to new connections."
-          action={
-            <KeepMenuOpen>
-              <Checkbox
-                title="HTTP/2"
-                hideLabel
-                checked={proxyState?.httpVersion !== "http1Only"}
-                // The owner's engine would not see the change until it restarts.
-                disabled={other != null || setHttpVersion.isPending}
-                onChange={(enabled) =>
-                  setHttpVersion.mutate({ httpVersion: enabled ? "auto" : "http1Only" })
-                }
-              />
-            </KeepMenuOpen>
-          }
-        />
-      ),
-    },
-    { type: "separator" },
-    {
-      label: "Decrypt List…",
-      icon: "lock_open",
-      onSelect: () => setDecryptListOpen(true),
-    },
-    {
-      label: "Copy Environment for a Terminal",
-      icon: "square_terminal",
-      onSelect: copyEnvironment,
-    },
-  ];
-
   const items: DropdownItem[] = [
     { type: "content", label: stateRow },
     {
@@ -204,7 +127,7 @@ export function ProxyStatus() {
               </span>
               {helperNotice && (
                 <span className="block text-notice">
-                  macOS asks for your password each time until the helper is approved, under More.
+                  macOS asks for your password each time until the helper is approved in Settings.
                 </span>
               )}
             </>
@@ -262,8 +185,6 @@ export function ProxyStatus() {
         />
       ),
     },
-    { type: "separator" },
-    { label: "More…", icon: "settings", submenu: moreItems },
   ];
 
   return (
@@ -371,74 +292,6 @@ export function useSystemProxySwitch(setup: ReturnType<typeof useProxySetup>) {
 }
 
 /** The privileged helper: whether it is installed and approved, and which way changes go */
-function HelperMenuRow({
-  status,
-  onOpenDialog,
-}: {
-  status: SystemProxyStatus;
-  onOpenDialog: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const unregister = useRpcMutation("helper_unregister", {
-    onSuccess: (status) =>
-      queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status),
-  });
-  const row = helperRow(status.helper, status.backend);
-  const error = unregister.error;
-  return (
-    <MenuRow
-      icon={
-        <Icon
-          icon={status.helper === "enabled" ? "badge_check" : "lock"}
-          size="sm"
-          color={status.helper === "enabled" ? "success" : "secondary"}
-        />
-      }
-      title={row.title}
-      description={
-        error != null ? <span className="text-danger">{error.message}</span> : row.description
-      }
-      action={
-        row.action != null && (
-          <Button
-            size="2xs"
-            variant="border"
-            color={row.action === "unregister" ? "default" : "primary"}
-            isLoading={unregister.isPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (row.action === "unregister") unregister.mutate({});
-              else onOpenDialog();
-            }}
-          >
-            {row.action === "install"
-              ? "Install"
-              : row.action === "approve"
-                ? "Approve"
-                : "Unregister"}
-          </Button>
-        )
-      }
-    />
-  );
-}
-
-/** Saves whether the system proxy turns on as the app launches */
-function useSetSystemProxyAtLaunch() {
-  const store = useStore();
-  return useRpcMutation("set_system_proxy_at_launch", {
-    onSettled: () => void refreshProxyState(store),
-  });
-}
-
-/** Saves the HTTP versions offered to clients, which the engine applies to new connections */
-function useSetHttpVersion() {
-  const store = useStore();
-  return useRpcMutation("set_http_version", {
-    onSettled: () => void refreshProxyState(store),
-  });
-}
-
 export function useCopyEnvironment() {
   const proxyState = useAtomValue(proxyStateAtom);
   const caStatus = useRpcQuery("ca_status", {});

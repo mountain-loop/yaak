@@ -7,10 +7,10 @@ import {
   Toasts,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useState } from "react";
 import { useLocalStorage } from "react-use";
-import { flowLayoutAtom, settingsRequestedAtom } from "../lib/atoms";
+import { flowLayoutAtom } from "../lib/atoms";
 import { setupIncomplete } from "../lib/firstRun";
 import { lockedAtom, noFlowsAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
@@ -20,17 +20,17 @@ import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
 import { LockedState } from "./LockedState";
 import { ProxyStatus, useProxySetup } from "./ProxyStatus";
-import { DecryptListDialog } from "./DecryptListEditor";
 import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
 import { SearchBar } from "./SearchBar";
+import { SettingsWindow, useOpenSettings } from "./Settings";
 import { Sidebar } from "./Sidebar";
 import { TakeOverBanner } from "./TakeOverBanner";
 
 export function ProxyLayout() {
   const os = getOsType();
   const [flowLayout, setFlowLayout] = useAtom(flowLayoutAtom);
-  const requestSettings = useSetAtom(settingsRequestedAtom);
+  const openSettings = useOpenSettings();
   const [sidebarWidth, setSidebarWidth] = useLocalStorage("sidebar_width", 250);
   const [sidebarHidden, setSidebarHidden] = useLocalStorage("sidebar_hidden", false);
   const [floatingSidebarHidden, setFloatingSidebarHidden] = useLocalStorage(
@@ -57,10 +57,16 @@ export function ProxyLayout() {
         className="x-theme-appHeader bg-surface"
       >
         {/* Yaak's silhouette: the sidebar toggle and the state pill where Yaak has the toggle and
-            the environment, the search where it names the request, then its icons. */}
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(10rem,26rem)_minmax(0,1fr)] gap-2 items-center w-full h-full pointer-events-none">
-          <div className="flex items-center gap-1 pl-1 min-w-0 pointer-events-auto">
+            the environment, the search where it names the request, then its icons. Only the
+            controls take the pointer: everything around them, the traffic lights' corner
+            included, falls through to the header, which drags the window. */}
+        <div
+          data-tauri-drag-region
+          className="grid grid-cols-[minmax(auto,1fr)_minmax(0,26rem)_minmax(auto,1fr)] gap-2 items-center w-full h-full pointer-events-none"
+        >
+          <div data-tauri-drag-region className="flex items-center gap-1 pl-1 whitespace-nowrap">
             <IconButton
+              className="pointer-events-auto"
               size="sm"
               title="Toggle sidebar"
               icon={isHidden ? "left_panel_hidden" : "left_panel_visible"}
@@ -75,8 +81,10 @@ export function ProxyLayout() {
             />
             <ProxyStatus />
           </div>
-          <div className="pointer-events-auto min-w-0">
-            <SearchBar />
+          <div data-tauri-drag-region className="min-w-0">
+            <div className="pointer-events-auto">
+              <SearchBar />
+            </div>
           </div>
           <div data-tauri-drag-region className="flex items-center justify-end gap-1 pr-1">
             <ClearFlowsButton />
@@ -96,7 +104,7 @@ export function ProxyLayout() {
               title="Settings"
               size="sm"
               iconColor="secondary"
-              onClick={() => requestSettings((n) => n + 1)}
+              onClick={() => openSettings()}
             />
           </div>
         </div>
@@ -151,7 +159,7 @@ export function ProxyLayout() {
       </SidebarLayout>
       <SaveDialog />
       <HelperDialog />
-      <DecryptListDialog />
+      <SettingsWindow />
       <Toasts />
     </div>
   );

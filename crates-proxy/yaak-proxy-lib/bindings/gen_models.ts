@@ -48,7 +48,28 @@ elapsedHeadersMs: number | null,
 /**
  * Milliseconds from `started_at` to the end of the response.
  */
-elapsedMs: number | null, error: string | null, 
+elapsedMs: number | null, 
+/**
+ * Milliseconds from `started_at` to the TCP connection to the server, and to the end of
+ * its TLS handshake. Only for intercepted HTTPS on a connection opened for this flow.
+ */
+elapsedConnectMs: number | null, elapsedTlsMs: number | null, 
+/**
+ * Milliseconds from `started_at` to the request body being sent whole. None without one.
+ */
+elapsedRequestMs: number | null, 
+/**
+ * The client's end of its connection: `127.0.0.1:54321`.
+ */
+clientAddr: string | null, 
+/**
+ * The TLS negotiated with the server for intercepted HTTPS: `TLSv1.3`.
+ */
+upstreamTlsVersion: string | null, 
+/**
+ * `TLS13_AES_128_GCM_SHA256`.
+ */
+upstreamTlsCipher: string | null, error: string | null, 
 /**
  * The client gave up before the response ended, by resetting its HTTP/2 stream or closing
  * the connection. Not an error.

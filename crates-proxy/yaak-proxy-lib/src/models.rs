@@ -59,6 +59,18 @@ pub struct Flow {
     pub elapsed_headers_ms: Option<i32>,
     /// Milliseconds from `started_at` to the end of the response.
     pub elapsed_ms: Option<i32>,
+    /// Milliseconds from `started_at` to the TCP connection to the server, and to the end of
+    /// its TLS handshake. Only for intercepted HTTPS on a connection opened for this flow.
+    pub elapsed_connect_ms: Option<i32>,
+    pub elapsed_tls_ms: Option<i32>,
+    /// Milliseconds from `started_at` to the request body being sent whole. None without one.
+    pub elapsed_request_ms: Option<i32>,
+    /// The client's end of its connection: `127.0.0.1:54321`.
+    pub client_addr: Option<String>,
+    /// The TLS negotiated with the server for intercepted HTTPS: `TLSv1.3`.
+    pub upstream_tls_version: Option<String>,
+    /// `TLS13_AES_128_GCM_SHA256`.
+    pub upstream_tls_cipher: Option<String>,
     pub error: Option<String>,
     /// The client gave up before the response ended, by resetting its HTTP/2 stream or closing
     /// the connection. Not an error.
@@ -244,6 +256,12 @@ impl UpsertModelInfo for Flow {
             (GrpcStatus, self.grpc_status.into()),
             (GrpcMessage, self.grpc_message.into()),
             (Tunnelled, self.tunnelled.into()),
+            (ElapsedConnectMs, self.elapsed_connect_ms.into()),
+            (ElapsedTlsMs, self.elapsed_tls_ms.into()),
+            (ElapsedRequestMs, self.elapsed_request_ms.into()),
+            (ClientAddr, self.client_addr.into()),
+            (UpstreamTlsVersion, self.upstream_tls_version.into()),
+            (UpstreamTlsCipher, self.upstream_tls_cipher.into()),
         ])
     }
 
@@ -281,6 +299,12 @@ impl UpsertModelInfo for Flow {
             FlowIden::GrpcStatus,
             FlowIden::GrpcMessage,
             FlowIden::Tunnelled,
+            FlowIden::ElapsedConnectMs,
+            FlowIden::ElapsedTlsMs,
+            FlowIden::ElapsedRequestMs,
+            FlowIden::ClientAddr,
+            FlowIden::UpstreamTlsVersion,
+            FlowIden::UpstreamTlsCipher,
         ]
     }
 
@@ -311,6 +335,12 @@ impl UpsertModelInfo for Flow {
             response_truncated: r.get("response_truncated")?,
             elapsed_headers_ms: r.get("elapsed_headers_ms")?,
             elapsed_ms: r.get("elapsed_ms")?,
+            elapsed_connect_ms: added_column(r, "elapsed_connect_ms")?,
+            elapsed_tls_ms: added_column(r, "elapsed_tls_ms")?,
+            elapsed_request_ms: added_column(r, "elapsed_request_ms")?,
+            client_addr: added_column(r, "client_addr")?,
+            upstream_tls_version: added_column(r, "upstream_tls_version")?,
+            upstream_tls_cipher: added_column(r, "upstream_tls_cipher")?,
             error: r.get("error")?,
             cancelled: added_column(r, "cancelled")?.unwrap_or_default(),
             saved_request_id: added_column(r, "saved_request_id")?,

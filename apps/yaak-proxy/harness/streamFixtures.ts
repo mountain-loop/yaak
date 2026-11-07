@@ -50,6 +50,12 @@ const flowBase: Flow = {
   grpcStatus: null,
   grpcMessage: null,
   tunnelled: false,
+  clientAddr: null,
+  elapsedConnectMs: null,
+  elapsedTlsMs: null,
+  elapsedRequestMs: null,
+  upstreamTlsVersion: null,
+  upstreamTlsCipher: null,
 };
 
 /** Seconds past 21:41:12 as a stored timestamp */

@@ -5,7 +5,10 @@ import { getDomain } from "tldts";
  * A search over every flow in the database: the search box's terms, its field terms, and
  * whether System's flows are hidden, as `list_flows` takes them.
  */
-export type FlowQuery = Pick<FlowFilter, "q" | "under" | "app" | "system" | "tunnelled" | "any">;
+export type FlowQuery = Pick<
+  FlowFilter,
+  "q" | "under" | "app" | "cwd" | "system" | "tunnelled" | "any"
+>;
 
 /** A word of the search box: a free term, or `@field:value`, maybe negated with `-` */
 export interface SearchToken {
@@ -75,12 +78,14 @@ export function parseSearch(text: string, hideSystem = false): FlowQuery | null 
 function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | null {
   const words: string[] = [];
   const apps: string[] = [];
+  const cwds: string[] = [];
   // Each host with the paths written after it.
   const hosts: { host: string; paths: string[] }[] = [];
   let system: boolean | undefined = hideSystem ? false : undefined;
   let tunnelled: boolean | undefined;
   for (const t of tokens) {
     if (t.field === "app" && !t.negated && t.value !== "") apps.push(t.value);
+    else if (t.field === "cwd" && !t.negated && t.value !== "") cwds.push(t.value);
     else if (t.field === "host" && !t.negated && t.value !== "") {
       hosts.push({ host: t.value.replace(/\/+$/, ""), paths: [] });
     } else if (t.field === "path" && !t.negated && t.value !== "") {
@@ -107,6 +112,7 @@ function parseClause(tokens: SearchToken[], hideSystem: boolean): FlowQuery | nu
     ...(q === "" ? {} : { q }),
     ...(under.length > 0 ? { under } : {}),
     ...(apps.length > 0 ? { app: apps } : {}),
+    ...(cwds.length > 0 ? { cwd: cwds } : {}),
     ...(system == null ? {} : { system }),
     ...(tunnelled == null ? {} : { tunnelled }),
   };
@@ -136,19 +142,49 @@ export function widerQueries(text: string): string[] {
   return [...out];
 }
 
-/** The folder a program outside an app ran in, which names it better than its executable */
+/** The folder a program outside an app ran in */
 export function folderOf(flow: Pick<Flow, "clientBundleId" | "clientCwd">): string | null {
-  if (flow.clientBundleId != null || flow.clientCwd == null) return null;
-  const name = flow.clientCwd.replace(/\/+$/, "").split("/").pop() ?? "";
+  if (flow.clientBundleId != null) return null;
+  return folderName(flow.clientCwd);
+}
+
+/** The last part of a path: `fieldwork` of `/src/fieldwork/` */
+function folderName(path: string | null): string | null {
+  if (path == null) return null;
+  const name =
+    path
+      .replace(/[/\\]+$/, "")
+      .split(/[/\\]/)
+      .pop() ?? "";
   return name === "" ? null : name;
 }
 
+/** Runtimes that run anyone's code, so six rows of `node` say nothing without their folder */
+const GENERIC_RUNTIMES = new Set(["node", "python", "bun", "deno", "ruby", "java", "cargo"]);
+
+/** A program outside an app that runs other code: `node`, `python3.12`, `java` */
+export function isGenericRuntime(flow: Pick<Flow, "clientBundleId" | "clientName">): boolean {
+  if (flow.clientBundleId != null || flow.clientName == null) return false;
+  const name = flow.clientName.toLowerCase().replace(/\.exe$/, "");
+  return GENERIC_RUNTIMES.has(name.replace(/[\d.]+$/, ""));
+}
+
 /**
- * What `@app` names a flow's app by, and what the sidebar groups its apps by: an app's name, or
- * for a program outside an app the folder it ran in, else its name. Null when unknown.
+ * The folder that names a generic runtime's row, `node` in `fieldwork`; null for anything
+ * else, whose folders are rows under it
+ */
+export function runtimeFolderOf(
+  flow: Pick<Flow, "clientBundleId" | "clientName" | "clientCwd">,
+): string | null {
+  return isGenericRuntime(flow) ? folderOf(flow) : null;
+}
+
+/**
+ * What `@app` names a flow's app by, and what the sidebar groups its apps by: an app's name, a
+ * program's name, or for a generic runtime the folder it ran in. Null when unknown.
  */
 export function appKeyOf(flow: Flow): string | null {
-  return folderOf(flow) ?? flow.clientName ?? flow.clientBundleId ?? flow.clientPath;
+  return runtimeFolderOf(flow) ?? flow.clientName ?? flow.clientBundleId ?? flow.clientPath;
 }
 
 const SYSTEM_DIRS = ["/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/", "/Library/Apple/"];
@@ -193,6 +229,7 @@ export function matchesQuery(flow: Flow, query: FlowQuery): boolean {
   }
   if (query.under != null && !query.under.some((node) => isUnder(flow.url, node))) return false;
   if (query.app != null && !query.app.some((app) => matchesApp(flow, app))) return false;
+  if (query.cwd != null && !query.cwd.some((cwd) => matchesCwd(flow, cwd))) return false;
   if (query.system != null && isSystemFlow(flow) !== query.system) return false;
   if (query.tunnelled != null && flow.tunnelled !== query.tunnelled) return false;
   // One of the groups, each judged whole, as the database judges them.
@@ -207,6 +244,12 @@ function matchesApp(flow: Flow, app: string): boolean {
   if ((flow.clientBundleId ?? flow.clientPath) === app) return true;
   const lower = app.toLowerCase();
   return flow.clientName?.toLowerCase() === lower || folderOf(flow)?.toLowerCase() === lower;
+}
+
+/** By the whole working directory exactly, or its folder's name in any case */
+function matchesCwd(flow: Flow, cwd: string): boolean {
+  if (flow.clientCwd == null) return false;
+  return flow.clientCwd === cwd || folderName(flow.clientCwd)?.toLowerCase() === cwd.toLowerCase();
 }
 
 /** `404` exactly, `40` as the start of one, or a class such as `4xx` */

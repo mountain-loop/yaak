@@ -56,6 +56,8 @@ pub(crate) struct CaptureBody {
     id: u64,
     start: Instant,
     engine: Arc<Engine>,
+    /// The capture limit as the body started, so a change applies to bodies after it.
+    limit: usize,
     captured: usize,
     size: u64,
     finished: bool,
@@ -77,6 +79,7 @@ impl CaptureBody {
             direction,
             id,
             start,
+            limit: engine.capture_body_limit(),
             engine,
             captured: 0,
             size: 0,
@@ -122,16 +125,20 @@ impl CaptureBody {
             self.emit_messages(messages);
         }
         let truncated = self.size > self.captured as u64;
+        let elapsed_ms = self.start.elapsed().as_millis() as u64;
         let event = match self.direction {
             Direction::Request if self.size == 0 => return,
-            Direction::Request => {
-                ProxyEvent::RequestBodyComplete { id: self.id, size: self.size, truncated }
-            }
+            Direction::Request => ProxyEvent::RequestBodyComplete {
+                id: self.id,
+                size: self.size,
+                truncated,
+                elapsed_ms,
+            },
             Direction::Response => ProxyEvent::ResponseBodyComplete {
                 id: self.id,
                 size: self.size,
                 truncated,
-                elapsed_ms: self.start.elapsed().as_millis() as u64,
+                elapsed_ms,
                 error,
                 cancelled,
             },
@@ -153,7 +160,7 @@ impl Body for CaptureBody {
             Poll::Ready(Some(Ok(frame))) => {
                 if let Some(frame_data) = frame.data_ref() {
                     let len = frame_data.len();
-                    let room = self.engine.capture_body_limit.saturating_sub(self.captured);
+                    let room = self.limit.saturating_sub(self.captured);
                     let data = frame_data.slice(..len.min(room));
                     self.captured += data.len();
                     self.size += len as u64;

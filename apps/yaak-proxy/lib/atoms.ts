@@ -17,9 +17,6 @@ export const followingAtom = atom(true);
 /** When the helper was last registered, so its state is read until approval shows */
 export const helperRegisteredAtAtom = atom<number | null>(null);
 
-/** Settings was asked for, by the header's gear; the settings window opens from it once it exists */
-export const settingsRequestedAtom = atom(0);
-
 /** The dialog that walks through allowing the helper in System Settings */
 export const helperDialogOpenAtom = atom(false);
 

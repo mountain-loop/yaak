@@ -10,6 +10,8 @@ import type { HttpResponseView } from "./types";
 
 interface Props {
   response: HttpResponseView;
+  /** Only the cookies sent or only those received, for a pane that shows one side */
+  side?: "sent" | "received";
 }
 
 interface ParsedCookie {
@@ -102,7 +104,7 @@ export function parseCookieHeaders({ sent, received }: HttpResponseView["cookieH
   };
 }
 
-export function ResponseCookies({ response }: Props) {
+export function ResponseCookies({ response, side }: Props) {
   const { useDetailsBannerStoredValue } = useEditorHost();
   const { sentCookies, receivedCookies } = useMemo(
     () => parseCookieHeaders(response.cookieHeaders),
@@ -111,6 +113,7 @@ export function ResponseCookies({ response }: Props) {
 
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
+      {side !== "received" && (
       <DetailsBanner
         defaultOpen
         useStoredValue={useDetailsBannerStoredValue}
@@ -134,7 +137,9 @@ export function ResponseCookies({ response }: Props) {
           </KeyValueRows>
         )}
       </DetailsBanner>
+      )}
 
+      {side !== "sent" && (
       <DetailsBanner
         defaultOpen
         useStoredValue={useDetailsBannerStoredValue}
@@ -213,6 +218,7 @@ export function ResponseCookies({ response }: Props) {
           </div>
         )}
       </DetailsBanner>
+      )}
     </div>
   );
 }

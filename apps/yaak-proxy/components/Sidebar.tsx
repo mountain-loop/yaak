@@ -63,6 +63,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
     <div className="flex items-center gap-2 w-full min-w-0">
       {item.kind === "all" && <Icon icon="layers" size="sm" className="text-text-subtle" />}
       {item.kind === "tunnelled" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
+      {item.kind === "folder" && <Icon icon="folder" size="sm" className="text-text-subtle" />}
       {item.appPath != null && <AppIcon path={item.appPath} />}
       <span className="truncate">{item.label}</span>
       {item.sublabel != null && (

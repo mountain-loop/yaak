@@ -165,6 +165,9 @@ fn missing_data_key(data_dir: &Path) -> String {
 pub struct Stores {
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
+    /// `blobs.sqlite` and its key, for measuring it: its pools are its manager's own.
+    blobs_path: PathBuf,
+    key: Option<DatabaseKey>,
 }
 
 impl Stores {
@@ -173,9 +176,26 @@ impl Stores {
     pub fn open(data_dir: &Path, key: &DatabaseKey) -> std::result::Result<Self, String> {
         let db = ProxyQueryManager::new(&data_dir.join(PROXY_DB), key)
             .map_err(|e| format!("Failed to open proxy database: {e}"))?;
-        let blobs = open_blobs(&data_dir.join(BLOBS_DB), key)
+        let blobs_path = data_dir.join(BLOBS_DB);
+        let blobs = open_blobs(&blobs_path, key)
             .map_err(|e| format!("Failed to open proxy blob store: {e}"))?;
-        Ok(Self { db, blobs })
+        Ok(Self { db, blobs, blobs_path, key: Some(key.clone()) })
+    }
+
+    /// Bytes the captured traffic takes, as [`used_bytes`] counts them, in both databases.
+    pub fn used_bytes(&self) -> std::result::Result<u64, String> {
+        let fail = |e: rusqlite::Error| format!("Failed to measure captured traffic: {e}");
+        let flows = self.db.with_conn(|c| used_bytes(c.conn().resolve())).map_err(fail)?;
+        let conn = rusqlite::Connection::open_with_flags(
+            &self.blobs_path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(fail)?;
+        if let Some(key) = &self.key {
+            encryption::apply_key(&conn, key).map_err(fail)?;
+        }
+        conn.busy_timeout(Duration::from_millis(5000)).map_err(fail)?;
+        Ok(flows + used_bytes(&conn).map_err(fail)?)
     }
 
     /// The databases in `data_dir` for reading, with the data key the master key in `keys`
@@ -198,8 +218,56 @@ impl Stores {
             .map_err(|e| format!("Failed to open {}: {e}", db_path.display()))?;
         let blobs = open_blobs_read_only(&blobs_path, key.as_ref())
             .map_err(|e| format!("Failed to open the proxy's blob store: {e}"))?;
-        Ok(Self { db, blobs })
+        Ok(Self { db, blobs, blobs_path, key })
     }
+}
+
+/// Bytes the data in a database takes: its pages less the free ones. SQLite reuses free pages
+/// but gives none back to the file without a vacuum, so this shrinks as rows are deleted where
+/// the file does not. The WAL is left out, as its pages are copies of ones counted here.
+pub fn used_bytes(conn: &rusqlite::Connection) -> rusqlite::Result<u64> {
+    use rusqlite::types::Value;
+    // SQLCipher answers `page_size` with its own as text.
+    let pragma = |name: &str| {
+        let value = conn.query_row(&format!("PRAGMA {name}"), [], |r| r.get::<_, Value>(0))?;
+        let n = match &value {
+            Value::Integer(n) => Some(*n),
+            Value::Text(s) => s.trim().parse().ok(),
+            _ => None,
+        };
+        n.ok_or_else(|| rusqlite::Error::InvalidColumnType(0, name.into(), value.data_type()))
+    };
+    let used = (pragma("page_count")? - pragma("freelist_count")?) * pragma("page_size")?;
+    Ok(used.max(0) as u64)
+}
+
+/// The databases' files and what goes with them: their WAL and shared memory.
+fn database_files(data_dir: &Path) -> impl Iterator<Item = PathBuf> + '_ {
+    [PROXY_DB, BLOBS_DB]
+        .into_iter()
+        .flat_map(|name| ["", "-wal", "-shm"].map(|suffix| format!("{name}{suffix}")))
+        .map(move |name| data_dir.join(name))
+}
+
+/// Bytes the databases' files take on disk, free pages and WAL included, for when they are
+/// locked and cannot be measured as [`Stores::used_bytes`] does.
+pub fn file_bytes(data_dir: &Path) -> u64 {
+    database_files(data_dir).filter_map(|p| std::fs::metadata(p).ok()).map(|m| m.len()).sum()
+}
+
+/// Deletes the databases and the data key that encrypts them, for good. Nothing may write to
+/// them meanwhile.
+pub fn remove_captured(data_dir: &Path) -> std::result::Result<(), String> {
+    let key = data_key_path(data_dir);
+    for path in database_files(data_dir).chain([key.with_extension("tmp"), key]) {
+        match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                return Err(format!("Failed to delete {}: {e}", path.display()));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Either database in `data_dir` is plain, left by a build from before encryption.
@@ -443,6 +511,7 @@ mod tests {
                 "_sqlx_migrations",
                 "flow_clear_mark",
                 "flow_messages",
+                "flow_sweep_pending",
                 "flows",
                 "grpc_schemas"
             ]
@@ -530,7 +599,7 @@ mod tests {
             .unwrap()
             .map(|v| v.unwrap())
             .collect();
-        assert_eq!(&applied[applied.len() - 3..], ["00000007", "00000008", "00000009"]);
+        assert_eq!(&applied[6..], ["00000007", "00000008", "00000009", "00000010", "00000011"]);
         let mark_columns = columns(&conn, "flow_clear_mark");
         assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
         drop(conn);

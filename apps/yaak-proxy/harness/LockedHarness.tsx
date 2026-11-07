@@ -3,6 +3,7 @@ import type { GetProxyStateResponse } from "@yaakapp-internal/proxy-lib";
 import { useStore } from "jotai";
 import { type ReactNode, useEffect, useState } from "react";
 import { ProxyLayout } from "../components/ProxyLayout";
+import { DragRegionCheck } from "./DragRegionCheck";
 import { useHotkeyContextValue } from "../lib/hotkeys";
 import { syncFlows, syncProxyState, syncSidebarSelection } from "../lib/store";
 
@@ -21,6 +22,8 @@ const STATE: GetProxyStateResponse = {
   encrypting: null,
   locked: { message: LOCKED, keychain: true },
   otherOwner: null,
+  captureBodyLimit: 10 * 1024 * 1024,
+  keepTrafficBytes: null,
 };
 
 /** What the backend answers while the keychain refuses: the state, and every read refused */
@@ -55,8 +58,9 @@ export function installLockedBackend() {
     if (cmd.startsWith("plugin:event|")) return 0;
     throw new Error(`Not in the harness: ${cmd}`);
   };
-  (window as unknown as { __TAURI_OS_PLUGIN_INTERNALS__: Record<string, string> })
-    .__TAURI_OS_PLUGIN_INTERNALS__ = {
+  (
+    window as unknown as { __TAURI_OS_PLUGIN_INTERNALS__: Record<string, string> }
+  ).__TAURI_OS_PLUGIN_INTERNALS__ = {
     os_type: "macos",
     platform: "macos",
     family: "unix",
@@ -67,7 +71,10 @@ export function installLockedBackend() {
   localStorage.setItem("system_proxy_ever_on", "true");
 }
 
-/** The whole window, as the app renders it, while captured traffic is locked */
+/**
+ * The whole window, as the app renders it: while captured traffic is locked, or over the
+ * fixture backend with `?window`
+ */
 export function LockedHarness() {
   const store = useStore();
   const [synced, setSynced] = useState(false);
@@ -81,6 +88,7 @@ export function LockedHarness() {
   return (
     <Hotkeys>
       <ProxyLayout />
+      {new URLSearchParams(location.search).has("dragcheck") && <DragRegionCheck />}
     </Hotkeys>
   );
 }
