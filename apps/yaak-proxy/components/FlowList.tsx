@@ -457,14 +457,15 @@ const FlowRow = memo(function FlowRow({
 });
 
 /**
- * One mark per row, by a fixed priority: failed, cancelled, cut, saved. Its tooltip lists every
- * state the flow has. Streaming and agent reads join it once the engine records them.
+ * One mark per row, by a fixed priority: failed, cancelled, not decrypted, streaming, cut, saved.
+ * Its tooltip lists every state the flow has. Agent reads join it once the engine records them.
  */
 function FlowMark({ flow }: { flow: Flow }) {
   const open = isOpenStream(flow);
   const states: string[] = [];
   if (flow.error != null) states.push(`Failed: ${flow.error}`);
   if (flow.cancelled) states.push("Cancelled by the app");
+  if (flow.tunnelled) states.push("Not decrypted");
   if (open) states.push("Streaming");
   if (flow.responseTruncated) states.push("Body cut at the capture limit");
   if (flow.savedRequestId != null) states.push("Saved to Yaak");
@@ -475,6 +476,8 @@ function FlowMark({ flow }: { flow: Flow }) {
         <Icon icon="circle_alert" size="sm" color="danger" />
       ) : flow.cancelled ? (
         <Icon icon="circle_off" size="sm" className="text-text-subtlest" />
+      ) : flow.tunnelled ? (
+        <Icon icon="lock" size="sm" className="text-text-subtlest" />
       ) : open ? (
         <span aria-hidden className="w-[7px] h-[7px] rounded-full bg-info ring-3 ring-info/20" />
       ) : flow.responseTruncated ? (
@@ -487,6 +490,11 @@ function FlowMark({ flow }: { flow: Flow }) {
 }
 
 const mono = "font-mono text-xs";
+
+/** An undecrypted tunnel still open: written as it opens, done once it closes */
+function isOpenTunnel(flow: Flow): boolean {
+  return flow.tunnelled && flow.elapsedMs == null && flow.error == null;
+}
 
 /** A WebSocket, event stream or gRPC call still open: written as it opens, done once it ends */
 function isOpenStream(flow: Flow): boolean {
@@ -529,6 +537,8 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
         </span>
       );
     case "path": {
+      // A tunnel's only path is its host; what it carried is unread.
+      if (flow.tunnelled) return <span className="text-text-subtlest">Not decrypted</span>;
       const { path, query } = splitPath(flow.url);
       if (flow.streamKind == null) {
         return (
@@ -556,7 +566,7 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
       );
     }
     case "status":
-      return flow.cancelled && flow.status == null ? (
+      return (flow.cancelled || flow.tunnelled) && flow.status == null ? (
         <span className={classNames(mono, "text-text-subtlest")}>--</span>
       ) : (
         <HttpStatusTagRaw status={flow.status ?? 0} short className={mono} />
@@ -589,8 +599,8 @@ function FlowCell({ column, flow, span }: { column: ColumnId; flow: Flow; span: 
         </span>
       );
     case "time":
-      // An open stream shows how long it has been open, quietly, as its messages land.
-      if (isOpenStream(flow)) {
+      // An open stream or tunnel shows how long it has been open, quietly, as its messages land.
+      if (isOpenStream(flow) || isOpenTunnel(flow)) {
         const open = Date.now() - Date.parse(utcTimestamp(flow.startedAt));
         return (
           <span className={classNames(mono, "text-right text-text-subtlest")}>

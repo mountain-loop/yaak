@@ -2,6 +2,7 @@ mod body;
 mod cert;
 mod connection;
 mod decode;
+mod decrypt;
 mod grpc;
 mod messages;
 #[cfg(target_os = "macos")]
@@ -17,7 +18,7 @@ use std::hash::{BuildHasher, Hasher};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc as std_mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
 use bytes::Bytes;
@@ -32,6 +33,9 @@ use tokio::net::TcpListener;
 
 pub use cert::{CaStore, KeyCipher};
 use connection::handle_connection;
+pub use decrypt::{
+    BUILT_IN_EXCLUSIONS, DecryptApp, DecryptEntry, DecryptPolicy, DecryptQuery, DecryptTarget,
+};
 pub use grpc::{detect as detect_grpc, service_and_method};
 pub use messages::{MessageDirection, MessageKind, RAW_LIMIT, StreamKind, StreamMessage};
 use request::BoxBody;
@@ -62,10 +66,20 @@ pub struct ProxyConfig {
     /// Record WebSocket frames as messages. Off, upgraded connections are spliced blind, as
     /// other upgrades are.
     pub websocket_capture: bool,
+    /// Which HTTPS connections are decrypted; the rest are tunnelled, recorded as a flow each
+    /// without their contents. Everything by default. See [`ProxyHandle::set_decrypt_policy`].
+    pub decrypt: DecryptPolicy,
+    /// Finds the app that opened a client connection, by its number, for the policy's `app:`
+    /// entries. Runs on a blocking thread as each CONNECT is judged, only while the policy has
+    /// such an entry, and may wait briefly for a lookup in progress.
+    pub app_of: Option<AppLookup>,
 }
 
 /// See [`ProxyConfig::on_accept`].
 pub type AcceptHook = Arc<dyn Fn(u64, SocketAddr) + Send + Sync>;
+
+/// See [`ProxyConfig::app_of`].
+pub type AppLookup = Arc<dyn Fn(u64) -> Option<DecryptApp> + Send + Sync>;
 
 impl ProxyConfig {
     pub fn new(port: u16, ca: Arc<CaStore>) -> Self {
@@ -77,6 +91,8 @@ impl ProxyConfig {
             on_accept: None,
             http2: true,
             websocket_capture: true,
+            decrypt: DecryptPolicy::everything(),
+            app_of: None,
         }
     }
 }
@@ -85,8 +101,10 @@ impl ProxyConfig {
 /// `RequestStart` and ends with exactly one `ResponseBodyComplete`, `StreamEnd`, `Error` or
 /// `Cancelled`. Each HTTP/2 stream is a flow of its own. A streaming flow (WebSocket,
 /// server-sent events, gRPC) has a `StreamStart` and then a `Message` for each message as it
-/// passes. Traffic the engine tunnels without decrypting (pinned clients, non-TLS CONNECT
-/// payloads, upgrades to protocols other than WebSocket) produces no events.
+/// passes. An HTTPS connection the engine tunnels without decrypting, because the decrypt policy
+/// leaves it out or its client rejected the engine's certificate, is a flow of its own, from
+/// `TunnelStart` to `TunnelEnd`. Other traffic tunnelled blind (non-TLS CONNECT payloads,
+/// upgrades to protocols other than WebSocket) produces no events.
 #[derive(Debug, Clone)]
 pub enum ProxyEvent {
     /// Request headers arrived from the client.
@@ -181,6 +199,26 @@ pub enum ProxyEvent {
         elapsed_ms: u64,
         error: Option<String>,
     },
+    /// A CONNECT is tunnelled without being decrypted: its bytes pass untouched, and only their
+    /// count is recorded.
+    TunnelStart {
+        id: u64,
+        started_at: SystemTime,
+        /// `host[:port]`, the port left out when it is 443.
+        authority: String,
+        connection: u64,
+        client_addr: SocketAddr,
+    },
+    /// The tunnel closed, with `error` when connecting upstream or relaying failed.
+    TunnelEnd {
+        id: u64,
+        /// Bytes from the client to the server.
+        sent: u64,
+        /// Bytes from the server to the client.
+        received: u64,
+        elapsed_ms: u64,
+        error: Option<String>,
+    },
 }
 
 /// A running engine. Dropping it stops the listener and joins its thread.
@@ -210,6 +248,12 @@ impl ProxyHandle {
     /// open keep the protocol they chose.
     pub fn set_http2(&self, enabled: bool) {
         self.engine.http2.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Decides which HTTPS connections are decrypted from the next CONNECT on. Connections
+    /// already open stay decrypted or tunnelled as they were.
+    pub fn set_decrypt_policy(&self, policy: DecryptPolicy) {
+        *self.engine.decrypt.write().unwrap() = Arc::new(policy);
     }
 
     /// Handshake failures counted toward passing `addr` (`host:port`) through, and whether it
@@ -253,6 +297,8 @@ pub(crate) struct Engine {
     /// Offer HTTP/2 to clients in intercepted TLS.
     http2: AtomicBool,
     websocket_capture: bool,
+    decrypt: RwLock<Arc<DecryptPolicy>>,
+    app_of: Option<AppLookup>,
     /// `Via` value marking the plain-HTTP requests the engine forwards, unique to this run, so one
     /// that comes back to the engine is refused instead of forwarded again.
     via: HeaderValue,
@@ -269,6 +315,27 @@ impl Engine {
 
     fn offers_http2(&self) -> bool {
         self.http2.load(Ordering::Relaxed)
+    }
+
+    fn decrypt_policy(&self) -> Arc<DecryptPolicy> {
+        self.decrypt.read().unwrap().clone()
+    }
+
+    /// Whether the policy decrypts a CONNECT to `host:port` on `connection`, looking up its app
+    /// only when an entry names one.
+    async fn decrypts(&self, host: &str, port: u16, connection: u64) -> bool {
+        let policy = self.decrypt_policy();
+        if !policy.decrypts_anything() {
+            return false;
+        }
+        let app = match &self.app_of {
+            Some(app_of) if policy.needs_app() => {
+                let app_of = app_of.clone();
+                tokio::task::spawn_blocking(move || app_of(connection)).await.ok().flatten()
+            }
+            _ => None,
+        };
+        policy.decrypts(&DecryptQuery { host: host.to_string(), port, app })
     }
 
     fn is_passthrough(&self, addr: &str) -> bool {
@@ -352,6 +419,8 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
         handshake_failures: Mutex::new(HashMap::new()),
         http2: AtomicBool::new(config.http2),
         websocket_capture: config.websocket_capture,
+        decrypt: RwLock::new(Arc::new(config.decrypt)),
+        app_of: config.app_of,
         via: via_marker(),
     });
 

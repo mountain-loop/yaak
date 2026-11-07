@@ -1,5 +1,6 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
+import type { DecryptSubject } from "./decrypt";
 import {
   appKeyOf,
   folderOf,
@@ -10,7 +11,7 @@ import {
   tokenize,
 } from "./search";
 
-export type SidebarKind = "all" | "group" | "app" | "site" | "host" | "path";
+export type SidebarKind = "all" | "tunnelled" | "group" | "app" | "site" | "host" | "path";
 
 /** A row of the sidebar: All traffic, a group, an app, or a site, host or path under one */
 export interface SidebarItem {
@@ -27,6 +28,8 @@ export interface SidebarItem {
   appPath?: string;
   /** What selecting the row writes into the search box; empty for all traffic */
   query: string;
+  /** What Decrypt in the row's menu decrypts: its host, site or app */
+  decrypt?: DecryptSubject;
 }
 
 /** The ids of All traffic and the groups */
@@ -34,6 +37,7 @@ export const ALL_ID = "all";
 export const APPS_ID = "apps";
 export const DOMAINS_ID = "domains";
 export const SYSTEM_ID = "system";
+export const TUNNELLED_ID = "tunnelled";
 
 /** A row a flow sits under, with what makes it, so a rebuild only looks it up */
 interface PlaceRow {
@@ -41,6 +45,7 @@ interface PlaceRow {
   kind: "site" | "host" | "path";
   label: string;
   query: string;
+  decrypt?: DecryptSubject;
 }
 
 /**
@@ -72,8 +77,15 @@ function placeOf(flow: Flow): Place {
       kind: "site",
       label: site,
       query: formatFieldFilter("host", `*.${site}`),
+      decrypt: { kind: "site", site },
     },
-    { id: `host:${host}`, kind: "host", label: host, query: hostQuery },
+    {
+      id: `host:${host}`,
+      kind: "host",
+      label: host,
+      query: hostQuery,
+      decrypt: { kind: "host", host },
+    },
   ];
   let p = "";
   for (const segment of segments) {
@@ -121,6 +133,7 @@ function child(parent: Trie, row: PlaceRow): Trie {
       item: { id: row.id, kind: row.kind, label: row.label, count: 0, query: row.query },
       children: new Map(),
     };
+    if (row.decrypt != null) node.item.decrypt = row.decrypt;
     parent.children.set(row.id, node);
   }
   node.item.count++;
@@ -162,7 +175,8 @@ function group(id: string, label: string): Trie {
 /**
  * The sidebar: All traffic, then Apps, each app opening to its own sites, hosts and paths, then
  * Domains by site, host and path, then System, macOS's daemons, apart from the apps. A group with
- * nothing in it is left out. `total` is All traffic's count: every flow it covers in the
+ * nothing in it is left out. Not decrypted, after All traffic, gathers the HTTPS passed through
+ * undecrypted, when there is any. `total` is All traffic's count: every flow it covers in the
  * database.
  */
 export function buildSidebarTree(flows: Flow[], total: number): TreeNode<SidebarItem> {
@@ -177,9 +191,11 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
   const domains = group(DOMAINS_ID, "Domains");
   const system = { ...group(SYSTEM_ID, "System") };
   system.item.query = formatFieldFilter("is", "system");
+  let tunnelled = 0;
 
   for (const flow of flows) {
     const place = placeOf(flow);
+    if (flow.tunnelled) tunnelled++;
     domains.item.count++;
     addPlace(domains, place.rows);
     if (place.app == null) continue;
@@ -195,6 +211,9 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
         count: 0,
         query: appQueryFor(place.app, place.system),
       };
+      if (flow.clientName != null) {
+        item.decrypt = { kind: "app", name: flow.clientName, bundleId: flow.clientBundleId };
+      }
       if (folder != null) item.sublabel = folder;
       if (flow.clientPath != null) item.appPath = flow.clientPath;
       app = { item, children: new Map() };
@@ -214,6 +233,20 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
     depth: 1,
     draggable: false,
   });
+  if (tunnelled > 0) {
+    root.children?.push({
+      item: {
+        id: TUNNELLED_ID,
+        kind: "tunnelled",
+        label: "Not decrypted",
+        count: tunnelled,
+        query: formatFieldFilter("is", "tunnelled"),
+      },
+      parent: root,
+      depth: 1,
+      draggable: false,
+    });
+  }
   for (const g of [apps, domains, system]) {
     if (g.children.size === 0) continue;
     const node: TreeNode<SidebarItem> = {

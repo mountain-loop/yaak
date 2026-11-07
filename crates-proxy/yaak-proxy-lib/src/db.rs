@@ -25,6 +25,23 @@ pub const BLOBS_DB: &str = "blobs.sqlite";
 /// The key both are encrypted with, wrapped by the app's master key in the keychain.
 pub const DATA_KEY: &str = "data.key";
 
+/// A pre-release build added `flows.tunnelled` in migration 8. A database it made has the
+/// column without migration 9 recorded, which would fail adding it again, so it is recorded
+/// as applied first.
+fn record_early_tunnelled_column(pool: &SqlitePool) -> Result<()> {
+    let conn = pool.get()?;
+    let has_column = conn.prepare("SELECT tunnelled FROM flows LIMIT 0").is_ok();
+    let has_tracking = conn.prepare("SELECT version FROM _sqlx_migrations LIMIT 0").is_ok();
+    if has_column && has_tracking {
+        conn.execute(
+            "INSERT OR IGNORE INTO _sqlx_migrations (version, description) \
+            VALUES ('00000009', '00000009_flow_tunnelled.sql')",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
 /// Reads come from a pool; writes go through one connection, as in yaak-models'
 /// `QueryManager`. WAL lets the CLI read `proxy.db` while the app writes it.
 #[derive(Clone)]
@@ -42,6 +59,7 @@ impl ProxyQueryManager {
         }
         encryption::encrypt_in_place(db_path, key, &|_| {})?;
         let writer = file_pool(db_path, 1, key)?;
+        record_early_tunnelled_column(&writer)?;
         run_migrations(&writer, &MIGRATIONS)?;
         Ok(Self { readers: file_pool(db_path, 5, key)?, writer })
     }
@@ -512,7 +530,7 @@ mod tests {
             .unwrap()
             .map(|v| v.unwrap())
             .collect();
-        assert_eq!(&applied[applied.len() - 2..], ["00000007", "00000008"]);
+        assert_eq!(&applied[applied.len() - 3..], ["00000007", "00000008", "00000009"]);
         let mark_columns = columns(&conn, "flow_clear_mark");
         assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
         drop(conn);
@@ -531,5 +549,110 @@ mod tests {
             Ok(crate::flows::Cleaned::Done)
         );
         assert_eq!(crate::messages::count(&db, "fl_ws").unwrap(), 0);
+    }
+
+    /// A database a pre-release build made, with `tunnelled` added by its migration 8, opens
+    /// without adding the column twice.
+    #[test]
+    fn opens_a_database_whose_migration_8_added_tunnelled() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("proxy.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE _sqlx_migrations (
+                version TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );",
+        )
+        .unwrap();
+        let mut files: Vec<_> = MIGRATIONS
+            .files()
+            .map(|f| (f.path().to_string_lossy().into_owned(), f.contents_utf8().unwrap()))
+            .filter(|(name, _)| name.as_str() < "00000009")
+            .collect();
+        files.sort();
+        for (name, sql) in files {
+            conn.execute_batch(sql).unwrap();
+            conn.execute(
+                "INSERT INTO _sqlx_migrations (version, description) VALUES (?, ?)",
+                [&name[..8], &name],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "ALTER TABLE flows ADD COLUMN tunnelled BOOLEAN NOT NULL DEFAULT FALSE;",
+        )
+        .unwrap();
+        drop(conn);
+
+        let db = ProxyQueryManager::new(&path, &crate::db::test_key()).unwrap();
+        let tunnel = crate::models::Flow {
+            id: "fl_tunnel".into(),
+            url: "https://a.com".into(),
+            tunnelled: true,
+            ..Default::default()
+        };
+        db.with_tx(|c| c.upsert(&tunnel, &yaak_database::UpdateSource::Background).map(|_| ()))
+            .unwrap();
+        assert!(crate::flows::find(&db, "fl_tunnel").unwrap().tunnelled);
+        drop(db);
+        // And again, with everything recorded.
+        drop(ProxyQueryManager::new(&path, &crate::db::test_key()).unwrap());
+    }
+
+    /// A database that ran every migration up to the clear cleaner's, as the build before
+    /// tunnelled flows left it, takes the `tunnelled` column and stores tunnelled flows.
+    #[test]
+    fn adds_tunnelled_to_a_database_at_migration_8() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("proxy.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE _sqlx_migrations (
+                version TEXT PRIMARY KEY,
+                description TEXT NOT NULL,
+                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+            );",
+        )
+        .unwrap();
+        let mut files: Vec<_> = MIGRATIONS
+            .files()
+            .map(|f| (f.path().to_string_lossy().into_owned(), f.contents_utf8().unwrap()))
+            .filter(|(name, _)| name.as_str() < "00000009")
+            .collect();
+        files.sort();
+        assert_eq!(files.len(), 8);
+        for (name, sql) in files {
+            conn.execute_batch(sql).unwrap();
+            conn.execute(
+                "INSERT INTO _sqlx_migrations (version, description) VALUES (?, ?)",
+                [&name[..8], &name],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO flows (id, url, method) VALUES ('fl_old', 'https://a.com/', 'GET')",
+            [],
+        )
+        .unwrap();
+        assert!(!columns(&conn, "flows").contains(&"tunnelled".to_string()));
+        drop(conn);
+
+        let db = ProxyQueryManager::new(&path, &crate::db::test_key()).unwrap();
+        let tunnel = crate::models::Flow {
+            id: "fl_tunnel".into(),
+            method: "CONNECT".into(),
+            url: "https://bank.example.com".into(),
+            tunnelled: true,
+            ..Default::default()
+        };
+        db.with_tx(|c| c.upsert(&tunnel, &yaak_database::UpdateSource::Background).map(|_| ()))
+            .unwrap();
+        let filter = crate::flows::FlowFilter { tunnelled: Some(true), ..Default::default() };
+        let listed = crate::flows::list(&db, &filter).unwrap();
+        assert_eq!(listed.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), ["fl_tunnel"]);
+        let old = crate::flows::find(&db, "fl_old").unwrap();
+        assert!(!old.tunnelled);
     }
 }

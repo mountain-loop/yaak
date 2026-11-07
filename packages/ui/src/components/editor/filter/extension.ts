@@ -13,6 +13,18 @@ export interface FieldDef {
 
 export interface FilterOptions {
   fields: FieldDef[] | null; // e.g., ['method','status','path'] or [{name:'tag', values:()=>cachedTags}]
+  /** Written before a field name, `@` by default: `@method:`. Empty for `host:` */
+  fieldPrefix?: string;
+  /**
+   * A prefix that negates a term, such as `!`: offered where a field name is, and a term may
+   * start with it before its field name
+   */
+  negation?: { prefix: string; info?: string };
+  /**
+   * Value suggestions replace only what follows the field's colon, so `host:api` offers hosts
+   * matching `api`. Off, they replace the whole term
+   */
+  replaceValueOnly?: boolean;
 }
 
 const FIELD_IDENT = /[A-Za-z0-9_/]+$/;
@@ -44,19 +56,31 @@ function wordBefore(
   return { from, to: pos, text: m[0] };
 }
 
-function fieldCompletionFrom(doc: string, pos: number): { from: number; includeAt: boolean } | null {
+function fieldCompletionFrom(
+  doc: string,
+  pos: number,
+  fieldPrefix = "@",
+  negation?: string,
+): { from: number; includeAt: boolean; negated: boolean } | null {
   const w = wordBefore(doc, pos, FIELD_IDENT);
-  const from = w?.from ?? pos;
-  const beforeToken = doc[from - 1];
-
-  if (from === 0 || (beforeToken != null && /\s/.test(beforeToken))) {
-    return { from, includeAt: true };
+  let from = w?.from ?? pos;
+  const atTermStart = (at: number) => {
+    const before = doc[at - 1];
+    return at === 0 || (before != null && /\s/.test(before));
+  };
+  let negated = false;
+  if (negation != null && doc.slice(0, from).endsWith(negation)) {
+    from -= negation.length;
+    negated = true;
   }
 
-  if (beforeToken === "@") {
-    const beforeAt = doc[from - 2];
-    if (from === 1 || (beforeAt != null && /\s/.test(beforeAt))) {
-      return { from, includeAt: false };
+  if (atTermStart(from)) {
+    return { from, includeAt: true, negated };
+  }
+
+  if (fieldPrefix !== "" && doc.slice(0, from).endsWith(fieldPrefix)) {
+    if (atTermStart(from - fieldPrefix.length)) {
+      return { from, includeAt: false, negated };
     }
   }
 
@@ -117,13 +141,20 @@ function contextInfo(stateDoc: string, pos: number) {
 }
 
 /** Build a completion list for field names */
-function fieldNameCompletions(fieldNames: string[], includeAt: boolean): Completion[] {
+function fieldNameCompletions(
+  fieldNames: string[],
+  includeAt: boolean,
+  fieldPrefix = "@",
+  fieldMap: Record<string, { info?: string }> = {},
+  negated = "",
+): Completion[] {
   return fieldNames.map((name) => ({
-    label: name,
+    label: `${negated}${name}`,
     type: "property",
+    info: fieldMap[name]?.info,
     apply: (view, _completion, from, to) => {
       // Leave cursor right after the field filter colon.
-      const insert = `${includeAt ? "@" : ""}${name}:`;
+      const insert = `${negated}${includeAt ? fieldPrefix : ""}${name}:`;
       view.dispatch({
         changes: { from, to, insert },
         selection: { anchor: from + insert.length },
@@ -146,8 +177,24 @@ function fieldValueCompletions(
   }));
 }
 
+/** Offers the negation prefix itself, reopening the list for a field name after it */
+function negationCompletion(negation: { prefix: string; info?: string }): Completion {
+  return {
+    label: negation.prefix,
+    type: "keyword",
+    info: negation.info,
+    apply: (view, _completion, from, to) => {
+      view.dispatch({
+        changes: { from, to, insert: negation.prefix },
+        selection: { anchor: from + negation.prefix.length },
+      });
+      startCompletion(view);
+    },
+  };
+}
+
 /** The main completion source */
-function makeCompletionSource(opts: FilterOptions) {
+export function makeCompletionSource(opts: FilterOptions) {
   const { fieldNames, fieldMap } = normalizeFields(opts.fields ?? []);
   return (ctx: CompletionContext): CompletionResult | null => {
     const { state, pos } = ctx;
@@ -157,12 +204,12 @@ function makeCompletionSource(opts: FilterOptions) {
       return null;
     }
 
-    const { inValue, fieldName, emptyAfterColon } = contextInfo(doc, pos);
+    const { inValue, fieldName, lastColon, emptyAfterColon } = contextInfo(doc, pos);
 
     // In field value position
     if (inValue && fieldName) {
       const w = wordBefore(doc, pos, VALUE_IDENT);
-      const from = w?.from ?? pos;
+      const from = opts.replaceValueOnly ? lastColon + 1 : (w?.from ?? pos);
       const to = pos;
       const valDefs = fieldMap[fieldName];
       const vals = fieldValueCompletions(valDefs);
@@ -186,11 +233,18 @@ function makeCompletionSource(opts: FilterOptions) {
     }
 
     // Not in a value: suggest field names (and maybe boolean ops)
-    const completion = fieldCompletionFrom(doc, pos);
+    const completion = fieldCompletionFrom(doc, pos, opts.fieldPrefix, opts.negation?.prefix);
     if (completion == null) return null;
-    const { from, includeAt } = completion;
+    const { from, includeAt, negated } = completion;
     const to = pos;
-    const options: Completion[] = fieldNameCompletions(fieldNames, includeAt);
+    const options: Completion[] = fieldNameCompletions(
+      fieldNames,
+      includeAt,
+      opts.fieldPrefix,
+      fieldMap,
+      negated ? (opts.negation?.prefix ?? "") : "",
+    );
+    if (opts.negation != null && !negated) options.push(negationCompletion(opts.negation));
 
     return { from, to, options, filter: true };
   };
@@ -203,6 +257,14 @@ const language = LRLanguage.define({
     autocompletion: {},
   },
 });
+
+/**
+ * Field and value suggestions, as the sidebar's filter offers them, for a field of another
+ * language: a plain input of `host:` and `app:` entries, say
+ */
+export function filterAutocomplete(options: FilterOptions) {
+  return autocompletion({ override: [makeCompletionSource(options)] });
+}
 
 /** Public extension */
 export function filter(options: FilterOptions) {

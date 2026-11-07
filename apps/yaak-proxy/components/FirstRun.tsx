@@ -2,7 +2,10 @@ import { Button, Icon, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
+import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
+import { everythingEdit } from "../lib/decrypt";
+import { decryptStep } from "../lib/firstRun";
 import { encryptingPercent } from "../lib/encrypting";
 import { proxyStateAtom } from "../lib/store";
 import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./ProxyStatus";
@@ -11,7 +14,7 @@ type StepState = "todo" | "next" | "wait" | "done" | "fail";
 
 /**
  * The list's empty state until traffic arrives: trust the certificate, turn on the system proxy,
- * then see traffic. Not dismissable and nothing remembered; the first flow replaces it. Copy
+ * choose what to decrypt, then see traffic. Not dismissable and nothing remembered; the first flow replaces it. Copy
  * environment beside it serves someone who wants one terminal proxied and nothing system-wide.
  */
 export function FirstRun() {
@@ -22,6 +25,8 @@ export function FirstRun() {
   const execute = useRpcMutation("execute_action");
   const retry = useRpcMutation("take_over");
   const copyEnvironment = useCopyEnvironment();
+  const decryptList = useDecryptList();
+  const saveDecryptList = useEditDecryptList();
 
   const running = proxyState?.state === "running";
   // Changed only by the process that owns the engine, so not from here while the CLI does.
@@ -47,6 +52,9 @@ export function FirstRun() {
         : trusted
           ? "next"
           : "todo";
+  const decrypt = decryptStep(decryptList, trusted);
+  const everything = decrypt.choice === "everything";
+  const setEverything = (on: boolean) => saveDecryptList.mutate(everythingEdit(on));
   const ready = trusted && (systemOn || !systemSupported);
   const encrypting = !running && !otherOwner ? encryptingPercent(proxyState) : null;
   const trafficState: StepState =
@@ -57,8 +65,8 @@ export function FirstRun() {
       <div className="w-full max-w-[40rem]">
         <div className="text-xl font-semibold mb-1.5">Set up Yaak Proxy</div>
         <div className="text-text-subtle text-sm leading-relaxed mb-4">
-          Three steps, once. Then every app on this Mac sends its traffic here, and HTTPS reads as
-          plain text.
+          {systemSupported ? "Four" : "Three"} steps, once. Then every app on this Mac sends its
+          traffic here.
         </div>
         <div className="rounded-lg border border-border-subtle bg-surface divide-y divide-border-subtle">
           <Step
@@ -115,6 +123,40 @@ export function FirstRun() {
           )}
           <Step
             n={systemSupported ? 3 : 2}
+            state={decrypt.state}
+            title="What to decrypt"
+            description={
+              everything ? (
+                <span title="Except the built-in exclusions">Everything</span>
+              ) : (
+                <span title="From a flow or the sidebar">Pick as they appear</span>
+              )
+            }
+            action={
+              everything ? (
+                <Button
+                  size="2xs"
+                  variant="border"
+                  isLoading={saveDecryptList.isPending}
+                  onClick={() => setEverything(false)}
+                >
+                  Pick As They Appear
+                </Button>
+              ) : (
+                <Button
+                  size="2xs"
+                  variant="border"
+                  color={decrypt.state === "next" ? "primary" : "default"}
+                  isLoading={saveDecryptList.isPending}
+                  onClick={() => setEverything(true)}
+                >
+                  Everything
+                </Button>
+              )
+            }
+          />
+          <Step
+            n={systemSupported ? 4 : 3}
             state={trafficState}
             title={
               encrypting != null

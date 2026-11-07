@@ -1,6 +1,12 @@
 export type { CodeEditorProps } from "./components/editor/CodeEditor";
 export { CodeEditor } from "./components/editor/CodeEditor";
 export type { LanguageSupports } from "./components/editor/extensions";
+export type { FieldDef, FilterOptions } from "./components/editor/filter/extension";
+export {
+  filter,
+  filterAutocomplete,
+  makeCompletionSource as filterCompletionSource,
+} from "./components/editor/filter/extension";
 export {
   closeBracketsExtensions,
   getLanguageExtension,

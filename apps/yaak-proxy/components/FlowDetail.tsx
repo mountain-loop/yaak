@@ -30,6 +30,7 @@ import { messagesTabLabel, streamIsOpen } from "../lib/messages";
 import { EmptyState, FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowHeaders, FlowQuery, queryParams } from "./FlowHeaders";
 import { FlowMessages } from "./FlowMessages";
+import { NotDecrypted } from "./NotDecrypted";
 
 const TAB_RESPONSE = "response";
 const TAB_REQUEST = "request";
@@ -62,6 +63,8 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
               <Keys keys={["⌘", "K"]} />
             </div>
           </EmptyState>
+        ) : flow.tunnelled ? (
+          <NotDecrypted flow={flow} />
         ) : (
           <FlowPane flow={flow} />
         )}

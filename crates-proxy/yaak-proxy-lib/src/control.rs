@@ -12,8 +12,8 @@ use crate::messages::{self, FlowMessage, MessageKind};
 use crate::models::{FlowBody, find_header};
 use crate::save::SaveFlowRequest;
 use crate::{
-    AddGrpcSchemaRequest, ListMessagesResponse, ProxyCtx, ProxyState, ReflectGrpcHostRequest,
-    bodies,
+    AddGrpcSchemaRequest, EditDecryptListRequest, ListMessagesResponse, ProxyCtx, ProxyState,
+    ReflectGrpcHostRequest, bodies,
 };
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -235,6 +235,13 @@ pub struct SystemProxyRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordingRequest {
     pub enabled: bool,
+}
+
+/// `PUT /decrypt`: every entry of the decrypt list, in order. A built-in exclusion left out is
+/// removed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecryptRequest {
+    pub entries: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -526,6 +533,15 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let body: RecordingRequest = read_json(req).await?;
             ctx.set_recording(body.enabled);
             json(&status(ctx).await?)
+        }
+        (&Method::GET, ["decrypt"]) => json(&ctx.decrypt_list()?),
+        (&Method::PATCH, ["decrypt"]) => {
+            let body: EditDecryptListRequest = read_json(req).await?;
+            json(&ctx.edit_decrypt_list(&body.add, &body.remove).map_err(bad_request)?)
+        }
+        (&Method::PUT, ["decrypt"]) => {
+            let body: DecryptRequest = read_json(req).await?;
+            json(&ctx.set_decrypt_list(&body.entries).map_err(bad_request)?)
         }
         (&Method::GET, ["flows"]) => {
             let filter = FlowFilter::from_query(&query).map_err(bad_request)?;

@@ -20,6 +20,7 @@ import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
 import { LockedState } from "./LockedState";
 import { ProxyStatus, useProxySetup } from "./ProxyStatus";
+import { DecryptListDialog } from "./DecryptListEditor";
 import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
 import { SearchBar } from "./SearchBar";
@@ -150,6 +151,7 @@ export function ProxyLayout() {
       </SidebarLayout>
       <SaveDialog />
       <HelperDialog />
+      <DecryptListDialog />
       <Toasts />
     </div>
   );

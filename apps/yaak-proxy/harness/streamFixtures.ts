@@ -49,6 +49,7 @@ const flowBase: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  tunnelled: false,
 };
 
 /** Seconds past 21:41:12 as a stored timestamp */

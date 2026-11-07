@@ -229,6 +229,16 @@ describe("parseSearch", () => {
     expect(parseSearch("@is:system", true)).toEqual({ system: true });
   });
 
+  test("keeps or drops HTTPS passed through undecrypted", () => {
+    expect(parseSearch("@is:tunnelled")).toEqual({ tunnelled: true });
+    expect(parseSearch("-@is:tunnelled stripe")).toEqual({ q: "stripe", tunnelled: false });
+    const tunnel = { url: "https://a.com", method: "CONNECT", tunnelled: true } as Flow;
+    const decrypted = { url: "https://a.com/x", method: "GET", tunnelled: false } as Flow;
+    expect(matchesQuery(tunnel, { tunnelled: true })).toBe(true);
+    expect(matchesQuery(decrypted, { tunnelled: true })).toBe(false);
+    expect(matchesQuery(decrypted, { tunnelled: false })).toBe(true);
+  });
+
   test("round-trips what the sidebar writes", () => {
     const text = [
       formatFieldFilter("app", "Google Chrome"),

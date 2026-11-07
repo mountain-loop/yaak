@@ -5,8 +5,8 @@
 use crate::bodies::{self, DecodedBody};
 use crate::ca::CaStatus;
 use crate::control::{
-    self, ControlInfo, ControlStatus, ErrorBody, NOTE_HEADER, RecordingRequest, StartRequest,
-    SystemProxyRequest, TRUNCATED_HEADER,
+    self, ControlInfo, ControlStatus, DecryptRequest, ErrorBody, NOTE_HEADER, RecordingRequest,
+    StartRequest, SystemProxyRequest, TRUNCATED_HEADER,
 };
 use crate::db::ProxyQueryManager;
 use crate::db::Stores;
@@ -15,7 +15,7 @@ use crate::har::{self, Har};
 use crate::macos::SystemProxyStatus;
 use crate::models::{Flow, FlowBody};
 use crate::save::{SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
-use crate::settings::ProxySettings;
+use crate::settings::{DecryptList, ProxySettings};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::path::Path;
@@ -144,6 +144,38 @@ impl ControlClient {
 
     pub async fn set_system_proxy(&self, enabled: bool) -> Result<SystemProxyStatus, String> {
         self.post("/system-proxy", &SystemProxyRequest { enabled }).await
+    }
+
+    pub async fn decrypt_list(&self) -> Result<DecryptList, String> {
+        self.get("/decrypt").await
+    }
+
+    /// Adds and removes entries in the owner's decrypt list as it is there.
+    pub async fn edit_decrypt_list(
+        &self,
+        edit: &crate::EditDecryptListRequest,
+    ) -> Result<DecryptList, String> {
+        let body = serde_json::to_vec(edit).map_err(|e| e.to_string())?;
+        let req = self
+            .http
+            .patch(self.url("/decrypt"))
+            .header("content-type", "application/json")
+            .body(body);
+        let resp = self.send(req).await?;
+        resp.json().await.map_err(|e| format!("Invalid response from the proxy: {e}"))
+    }
+
+    /// Replaces the decrypt list in the owner, which saves it and applies it to its engine.
+    pub async fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptList, String> {
+        let body = serde_json::to_vec(&DecryptRequest { entries: entries.to_vec() })
+            .map_err(|e| e.to_string())?;
+        let req = self
+            .http
+            .put(self.url("/decrypt"))
+            .header("content-type", "application/json")
+            .body(body);
+        let resp = self.send(req).await?;
+        resp.json().await.map_err(|e| format!("Invalid response from the proxy: {e}"))
     }
 
     pub async fn workspaces(&self) -> Result<Vec<WorkspaceSummary>, String> {

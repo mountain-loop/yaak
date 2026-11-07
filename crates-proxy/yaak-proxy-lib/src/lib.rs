@@ -29,7 +29,7 @@ use crate::macos::{SystemProxyBackend, SystemProxyStatus};
 use crate::messages::FlowMessage;
 use crate::models::{Flow, FlowBody, ModelPayload, ProxyHeader, StreamKind, find_header};
 use crate::save::{ClientDb, SaveFlowRequest, SaveFlowResponse, WorkspaceSummary};
-use crate::settings::{HttpVersion, ProxySettings};
+use crate::settings::{DecryptList, HttpVersion, ProxySettings};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::{DateTime, Utc};
@@ -80,6 +80,9 @@ pub struct ProxyCtx {
     /// This context's name as the one deleting cleared flows, which the database leases to one
     /// process at a time.
     cleaner_id: String,
+    /// Held through each change to the decrypt list, so concurrent edits apply in turn, each to
+    /// the list the last one left.
+    decrypt_edits: Arc<Mutex<()>>,
     /// Where the master key that unwraps the data key is kept: the keychain, normally.
     keys: MasterKeySource,
     /// The data key, once read. Held while it is read and the databases converted and opened,
@@ -127,6 +130,7 @@ impl ProxyCtx {
             start_error: Arc::new(Mutex::new(None)),
             deleting_cleared: Arc::new(Mutex::new(false)),
             cleaner_id: yaak_database::generate_prefixed_id("cln"),
+            decrypt_edits: Arc::new(Mutex::new(())),
             keys,
             unlocked: Arc::new(Mutex::new(None)),
             encrypting: Arc::new(Mutex::new(None)),
@@ -370,8 +374,14 @@ impl ProxyCtx {
         let mut config = ProxyConfig::new(port.unwrap_or(settings.port), Arc::new(ca));
         config.capture_body_limit = settings.capture_body_limit;
         config.http2 = settings.http_version == HttpVersion::Auto;
+        config.decrypt = settings.decrypt_policy();
         // Filled once the engine has bound, since the lookup matches sockets by its port.
         let attribution_slot: Arc<OnceLock<Attribution>> = Arc::new(OnceLock::new());
+        let slot = attribution_slot.clone();
+        config.app_of = Some(Arc::new(move |connection| {
+            let app = slot.get()?.get(connection, ATTRIBUTION_WAIT)?;
+            Some(yaak_proxy::DecryptApp { name: app.name, bundle_id: app.bundle_id })
+        }));
         let slot = attribution_slot.clone();
         config.on_accept = Some(Arc::new(move |connection, client_addr| {
             // A client that is answered quickly may exit soon after, so it is found before
@@ -430,10 +440,16 @@ impl ProxyCtx {
             return;
         };
         let ended = db.with_tx(|c| {
-            c.conn().resolve().execute(
+            let conn = c.conn().resolve();
+            conn.execute(
                 "UPDATE flows SET error = ?1 WHERE stream_kind IS NOT NULL \
                 AND elapsed_ms IS NULL AND error IS NULL AND NOT cancelled",
                 [STOPPED_MID_STREAM],
+            )?;
+            conn.execute(
+                "UPDATE flows SET error = ?1 WHERE tunnelled \
+                AND elapsed_ms IS NULL AND error IS NULL",
+                [STOPPED_MID_TUNNEL],
             )?;
             Ok::<_, yaak_database::Error>(())
         });
@@ -685,6 +701,47 @@ impl ProxyCtx {
             handle.set_http2(version == HttpVersion::Auto);
         }
         Ok(())
+    }
+
+    /// What HTTPS is decrypted, as `settings.json` has it.
+    pub fn decrypt_list(&self) -> Result<DecryptList, String> {
+        Ok(self.settings()?.decrypt_list())
+    }
+
+    /// Replaces the decrypt list, saved in `settings.json` and applied to the running engine's
+    /// next connections. Connections already open stay as they were.
+    pub fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptList, String> {
+        self.change_decrypt_list(|settings| settings.set_decrypt_list(entries))
+    }
+
+    /// Adds and removes entries in the list as it is now, so edits made together each keep
+    /// the other's, unlike replacing the whole list from a copy read earlier.
+    pub fn edit_decrypt_list(
+        &self,
+        add: &[String],
+        remove: &[String],
+    ) -> Result<DecryptList, String> {
+        self.change_decrypt_list(|settings| settings.edit_decrypt_list(add, remove))
+    }
+
+    /// Changes the list in `settings.json`, one change at a time, applies it to the running
+    /// engine, and tells the app.
+    fn change_decrypt_list(
+        &self,
+        change: impl FnOnce(&mut ProxySettings) -> Result<(), String>,
+    ) -> Result<DecryptList, String> {
+        let _turn = self.decrypt_edits.lock().map_err(|_| "lock poisoned".to_string())?;
+        let mut settings = self.settings()?;
+        change(&mut settings)?;
+        settings.save(&self.settings_path())?;
+        if let Ok(handle) = self.handle.lock()
+            && let Some(handle) = handle.as_ref()
+        {
+            handle.set_decrypt_policy(settings.decrypt_policy());
+        }
+        let list = settings.decrypt_list();
+        self.events.emit("decrypt_list_changed", &DecryptListChangedPayload { list: list.clone() });
+        Ok(list)
     }
 
     /// Intercepts again the hosts passed through after clients rejected the CA, as they no
@@ -947,6 +1004,13 @@ pub enum ProxyState {
     Stopped,
 }
 
+/// The decrypt list changed, here or through the control API.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct DecryptListChangedPayload {
+    pub list: DecryptList,
+}
+
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ProxyStatePayload {
@@ -1089,6 +1153,32 @@ pub struct SetSystemProxyAtLaunchRequest {
 pub struct SetHttpVersionRequest {
     pub http_version: HttpVersion,
 }
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct GetDecryptListRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SetDecryptListRequest {
+    /// Every entry, in order, as typed: a bare hostname is a `host:` entry. A built-in
+    /// exclusion left out is removed.
+    pub entries: Vec<String>,
+}
+
+/// Entries to add after the user's own and to remove, applied to the list as it is when the
+/// change lands. Each is normalized first.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct EditDecryptListRequest {
+    pub add: Vec<String>,
+    pub remove: Vec<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListSeenRequest {}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
@@ -1498,6 +1588,42 @@ fn set_http_version(ctx: &ProxyCtx, req: SetHttpVersionRequest) -> Result<HttpVe
     Ok(req.http_version)
 }
 
+fn get_decrypt_list(ctx: &ProxyCtx, _req: GetDecryptListRequest) -> Result<DecryptList, RpcError> {
+    ctx.decrypt_list().map_err(rpc_error)
+}
+
+/// Saved and applied here, or, while another process such as the CLI daemon owns the engine,
+/// there, as its engine is the one that reads it.
+async fn set_decrypt_list(
+    ctx: ProxyCtx,
+    req: SetDecryptListRequest,
+) -> Result<DecryptList, RpcError> {
+    if ctx.port().is_none()
+        && let Some(owner) = ctx.other_owner()
+    {
+        return ControlClient::new(owner).set_decrypt_list(&req.entries).await.map_err(rpc_error);
+    }
+    blocking(move || ctx.set_decrypt_list(&req.entries)).await
+}
+
+/// [`set_decrypt_list`], adding and removing entries rather than replacing them all.
+async fn edit_decrypt_list(
+    ctx: ProxyCtx,
+    req: EditDecryptListRequest,
+) -> Result<DecryptList, RpcError> {
+    if ctx.port().is_none()
+        && let Some(owner) = ctx.other_owner()
+    {
+        return ControlClient::new(owner).edit_decrypt_list(&req).await.map_err(rpc_error);
+    }
+    blocking(move || ctx.edit_decrypt_list(&req.add, &req.remove)).await
+}
+
+async fn list_seen(ctx: ProxyCtx, _req: ListSeenRequest) -> Result<flows::SeenTargets, RpcError> {
+    let db = ctx.db()?;
+    blocking(move || flows::seen(&db)).await
+}
+
 async fn take_over(ctx: ProxyCtx, _req: TakeOverRequest) -> Result<bool, RpcError> {
     ctx.take_over().await.map_err(rpc_error)?;
     Ok(true)
@@ -1802,6 +1928,9 @@ const DUE_CHECK_INTERVAL: Duration = Duration::from_millis(50);
 /// Why a stream still open when the engine stopped ended.
 const STOPPED_MID_STREAM: &str = "Yaak Proxy stopped before the stream ended";
 
+/// Why a tunnel still open when the engine stopped ended.
+const STOPPED_MID_TUNNEL: &str = "Yaak Proxy stopped before the connection closed";
+
 /// A flow between its `RequestStart` and its end, with its bodies being written as they
 /// stream.
 struct InFlight {
@@ -1956,7 +2085,8 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
     // as they always have been. Every flow that ended is written.
     for (_, mut f) in in_flight.drain() {
         if f.persisted {
-            f.flow.error = Some(STOPPED_MID_STREAM.to_string());
+            let why = if f.flow.tunnelled { STOPPED_MID_TUNNEL } else { STOPPED_MID_STREAM };
+            f.flow.error = Some(why.to_string());
             sink.finish_flow(f);
         }
     }
@@ -2060,6 +2190,44 @@ impl FlowSink {
                         last_write: None,
                     },
                 );
+            }
+            ProxyEvent::TunnelStart { id, started_at, authority, connection, client_addr } => {
+                if !recording.lock().map(|r| r.was_on_at(started_at)).unwrap_or(true) {
+                    return;
+                }
+                attribution.begin(connection, client_addr);
+                let flow = Flow {
+                    id: Flow::generate_id(),
+                    started_at: DateTime::<Utc>::from(started_at).naive_utc(),
+                    method: "CONNECT".to_string(),
+                    url: format!("https://{authority}"),
+                    client_http_version: "HTTP/1.1".to_string(),
+                    tunnelled: true,
+                    ..Default::default()
+                };
+                let mut f = InFlight {
+                    flow,
+                    connection,
+                    request_body: None,
+                    response_body: None,
+                    persisted: false,
+                    cleared: false,
+                    next_seq: 0,
+                    dirty: false,
+                    last_write: None,
+                };
+                // Shown while it is open, as tunnels often stay open for minutes.
+                self.write_stream_flow(&mut f);
+                in_flight.insert(id, f);
+            }
+            ProxyEvent::TunnelEnd { id, sent, received, elapsed_ms, error } => {
+                if let Some(mut f) = in_flight.remove(&id) {
+                    f.flow.request_size = sent as i64;
+                    f.flow.response_size = received as i64;
+                    f.flow.elapsed_ms = Some(clamp_ms(elapsed_ms));
+                    f.flow.error = error;
+                    self.finish_flow(f);
+                }
             }
             ProxyEvent::StreamStart { id, kind } => {
                 if let Some(f) = in_flight.get_mut(&id) {
@@ -2479,6 +2647,7 @@ define_rpc! {
     commands {
         execute_action(ActionInvocation) -> bool,
         format_body(FormatBodyRequest) -> String,
+        get_decrypt_list(GetDecryptListRequest) -> DecryptList,
         get_message_payload(GetMessagePayloadRequest) -> GetMessagePayloadResponse,
         list_actions(ListActionsRequest) -> ListActionsResponse,
         list_flows(flows::FlowFilter) -> ListFlowsResponse,
@@ -2502,6 +2671,9 @@ define_rpc! {
         get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
         helper_register(HelperRegisterRequest) -> SystemProxyStatus,
         helper_unregister(HelperUnregisterRequest) -> SystemProxyStatus,
+        edit_decrypt_list(EditDecryptListRequest) -> DecryptList,
+        list_seen(ListSeenRequest) -> flows::SeenTargets,
+        set_decrypt_list(SetDecryptListRequest) -> DecryptList,
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
         preview_save(PreviewSaveRequest) -> SavePreview,
         reflect_grpc_host(ReflectGrpcHostRequest) -> GrpcSchema,
@@ -2512,6 +2684,7 @@ define_rpc! {
         take_over(TakeOverRequest) -> bool,
     }
     events {
+        decrypt_list_changed(DecryptListChangedPayload),
         flows_cleared(FlowsClearedPayload),
         message_write(MessagePayload),
         model_write(ModelPayload),

@@ -58,6 +58,7 @@ const flow: Flow = {
   grpcMethod: null,
   grpcStatus: null,
   grpcMessage: null,
+  tunnelled: false,
 };
 
 function bytes(text: string): FlowBodyData {

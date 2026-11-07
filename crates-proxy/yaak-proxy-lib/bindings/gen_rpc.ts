@@ -87,9 +87,39 @@ schema: GrpcSchema | null,
  */
 note: string | null, };
 
+/**
+ * What HTTPS is decrypted: the user's entries in order, then the built-in exclusions not
+ * removed. A connection is decrypted when a positive entry matches it and no exclusion does.
+ */
+export type DecryptList = { entries: Array<DecryptListEntry>, };
+
+/**
+ * The decrypt list changed, here or through the control API.
+ */
+export type DecryptListChangedPayload = { list: DecryptList, };
+
+/**
+ * One entry of the decrypt list, as the app shows it.
+ */
+export type DecryptListEntry = { 
+/**
+ * As stored: `host:*.example.com`, `app:Google Chrome`, `!host:*.apple.com`, `*`.
+ */
+entry: string, 
+/**
+ * Shipped with the app: an exclusion of Apple's services or a pinned app's hosts.
+ */
+builtIn: boolean, };
+
 export type DropReason = "hop_by_hop" | "set_by_sending" | "body_decoded";
 
 export type DroppedHeader = { name: string, value: string, reason: DropReason, };
+
+/**
+ * Entries to add after the user's own and to remove, applied to the list as it is when the
+ * change lands. Each is normalized first.
+ */
+export type EditDecryptListRequest = { add: Array<string>, remove: Array<string>, };
 
 export type ExportHarRequest = { 
 /**
@@ -146,6 +176,10 @@ app?: Array<string>,
  */
 system?: boolean, 
 /**
+ * Only HTTPS connections tunnelled undecrypted (true), or none of them (false).
+ */
+tunnelled?: boolean, 
+/**
  * Only flows one of these groups covers, each judged on its own: several sidebar rows
  * selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
  * pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
@@ -185,6 +219,8 @@ export type FolderSummary = { id: string, name: string,
 folderId: string | null, };
 
 export type FormatBodyRequest = { text: string, };
+
+export type GetDecryptListRequest = Record<string, never>;
 
 export type GetFlowBodyRequest = { flowId: string, which: FlowBody, };
 
@@ -319,6 +355,8 @@ messages: Array<FlowMessage>,
  */
 total: number, };
 
+export type ListSeenRequest = Record<string, never>;
+
 export type ListWorkspacesRequest = Record<string, never>;
 
 export type ListWorkspacesResponse = { 
@@ -374,9 +412,9 @@ host: string, };
 
 export type RemoveGrpcSchemaRequest = { id: string, };
 
-export type RpcEventSchema = { flows_cleared: FlowsClearedPayload, message_write: MessagePayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
+export type RpcEventSchema = { decrypt_list_changed: DecryptListChangedPayload, flows_cleared: FlowsClearedPayload, message_write: MessagePayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_decrypt_list: [GetDecryptListRequest, DecryptList], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], edit_decrypt_list: [EditDecryptListRequest, DecryptList], list_seen: [ListSeenRequest, SeenTargets], set_decrypt_list: [SetDecryptListRequest, DecryptList], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
 
 export type SaveFlowBodyRequest = { flowId: string, which: FlowBody, 
 /**
@@ -440,6 +478,21 @@ authorization: boolean, };
 
 export type SavedFlow = { requestId: string, name: string, };
 
+export type SeenApp = { name: string, bundleId: string | null, };
+
+/**
+ * The hosts and apps flows have gone to and come from, for the decrypt list's suggestions.
+ */
+export type SeenTargets = { 
+/**
+ * Hosts as the sidebar names them, with a port other than the scheme's: most recent first.
+ */
+hosts: Array<string>, 
+/**
+ * Apps by name and bundle id, most recent first.
+ */
+apps: Array<SeenApp>, };
+
 export type ServiceProxy = { 
 /**
  * The network service, as System Settings names it: "Wi-Fi", "USB 10/100/1000 LAN".
@@ -450,6 +503,13 @@ name: string,
  * port when it has none. Absent when `networksetup` lists neither.
  */
 id?: string, http: ProxySetting, https: ProxySetting, };
+
+export type SetDecryptListRequest = { 
+/**
+ * Every entry, in order, as typed: a bare hostname is a `host:` entry. A built-in
+ * exclusion left out is removed.
+ */
+entries: Array<string>, };
 
 export type SetHttpVersionRequest = { httpVersion: HttpVersion, };
 
