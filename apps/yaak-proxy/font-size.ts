@@ -1,3 +1,6 @@
-// Yaak's default interface size, so the two apps read as one family. Later from the shared
-// Interface settings.
-document.documentElement.style.fontSize = "15px";
+import { applyFontSizes } from "./lib/interfaceSettings";
+import { readSettingsValues, SETTINGS_VALUES_KEY } from "./lib/settings";
+
+// Yaak's default sizes unless changed in Settings' Interface tab, so the two apps read as one
+// family.
+applyFontSizes(readSettingsValues(localStorage.getItem(SETTINGS_VALUES_KEY)));

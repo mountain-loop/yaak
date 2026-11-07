@@ -21,6 +21,9 @@ export function flowBodyQueryOptions(flow: Flow, which: FlowBody) {
     queryFn: async () => viewerBody(await rpc("get_flow_body", { flowId: flow.id, which })),
     // Reading a stored body fails the same way every time, so the error shows at once.
     retry: false,
+    // A stream's body changes with each message, each a new key: dropped once unwatched, so a
+    // long stream left selected doesn't hold a copy per message
+    ...(flow.streamKind == null ? {} : { gcTime: 0 }),
   });
 }
 

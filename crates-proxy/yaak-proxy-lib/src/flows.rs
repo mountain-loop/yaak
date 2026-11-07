@@ -1,5 +1,5 @@
 use crate::bodies;
-use crate::db::ProxyQueryManager;
+use crate::db::{ProxyQueryManager, Stores};
 use crate::models::{Flow, FlowBody};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -31,6 +31,10 @@ pub struct FlowFilter {
     /// it ran in (`fieldwork`).
     #[ts(optional)]
     pub app: Option<Vec<String>>,
+    /// Only flows from a process that ran in one of these working directories: the whole path,
+    /// or its folder's name in any case (`fieldwork`). With `app`, a program in a folder.
+    #[ts(optional)]
+    pub cwd: Option<Vec<String>>,
     /// Only flows from macOS's own daemons (true), or none of them (false), as [`is_system`]
     /// tells them by their executable.
     #[ts(optional)]
@@ -65,8 +69,8 @@ pub struct FlowFilter {
 }
 
 impl FlowFilter {
-    /// The filter from a query string's `q`, `host`, `under`, `app`, `system`, `method`,
-    /// `status`, `limit`, `after` and `before`. `under` and `app` may repeat.
+    /// The filter from a query string's `q`, `host`, `under`, `app`, `cwd`, `system`, `method`,
+    /// `status`, `limit`, `after` and `before`. `under`, `app` and `cwd` may repeat.
     pub fn from_query(query: &str) -> Result<Self, String> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -76,6 +80,7 @@ impl FlowFilter {
                 "host" => filter.host = value,
                 "under" => filter.under.get_or_insert_default().extend(value),
                 "app" => filter.app.get_or_insert_default().extend(value),
+                "cwd" => filter.cwd.get_or_insert_default().extend(value),
                 "system" => {
                     filter.system = value
                         .map(|v| v.parse().map_err(|_| format!("Invalid system {v:?}")))
@@ -116,7 +121,11 @@ impl FlowFilter {
                 query.append_pair(key, value);
             }
         }
-        for (key, values) in [("under", &self.under), ("app", &self.app)] {
+        for (key, values) in [
+            ("under", &self.under),
+            ("app", &self.app),
+            ("cwd", &self.cwd),
+        ] {
             for value in values.iter().flatten() {
                 query.append_pair(key, value);
             }
@@ -144,6 +153,7 @@ impl FlowFilter {
             || given(&self.status)
             || self.under.is_some()
             || self.app.is_some()
+            || self.cwd.is_some()
             || self.system.is_some()
             || self.tunnelled.is_some()
             || self.any.as_ref().is_some_and(|groups| groups.iter().any(FlowFilter::narrows))
@@ -223,6 +233,19 @@ impl FlowFilter {
                 params.extend(apps.iter().map(|a| a.to_lowercase().into()));
             }
             sql.push(')');
+        }
+        if let Some(cwds) = &self.cwd {
+            if has_cwd && !cwds.is_empty() {
+                let marks = vec!["?"; cwds.len()].join(", ");
+                sql.push_str(&format!(
+                    " AND (client_cwd IN ({marks}) OR lower(folder_name(client_cwd)) IN ({marks}))"
+                ));
+                params.extend(cwds.iter().map(|c| c.clone().into()));
+                params.extend(cwds.iter().map(|c| c.to_lowercase().into()));
+            } else {
+                // None, or a database from before the column, which has no folders.
+                sql.push_str(" AND 0");
+            }
         }
         match self.system {
             Some(true) => sql.push_str(" AND is_system(client_bundle_id, client_path)"),
@@ -665,6 +688,142 @@ pub fn clear_mark_in(db: &ProxyQueryManager) -> i64 {
     db.with_conn(|c| clear_mark(c.conn().resolve()))
 }
 
+/// When captured traffic takes more than `cap` bytes, as [`Stores::used_bytes`] counts them,
+/// deletes the flows written first, with their bodies and messages: as many as the average flow
+/// says would bring it under, from one to [`DELETE_BATCH`]. Returns the ids deleted, none once it
+/// is under or no flow is left, so a caller sweeps a batch per call until then. Cleared flows are
+/// left to [`delete_cleared`], and a stream still open is never swept: its writer would go on
+/// adding messages to it.
+pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
+    // Bodies a sweep that failed partway left behind go first: they count against the cap.
+    let pending = pending_sweeps(stores)?;
+    delete_swept_bodies(stores, &pending)?;
+    let used = stores.used_bytes()?;
+    if used <= cap {
+        return Ok(Vec::new());
+    }
+    let count = count(&stores.db)? as u64;
+    if count == 0 {
+        return Ok(Vec::new());
+    }
+    let average = (used / count).max(1);
+    let batch = (used - cap).div_ceil(average).clamp(1, DELETE_BATCH as u64);
+    let rows = sweepable(stores, batch as usize)?;
+    let deleted = delete_swept_rows(stores, rows)?;
+    delete_swept_bodies(stores, &deleted)?;
+    Ok(deleted)
+}
+
+/// Flows whose rows a sweep deleted and whose bodies it may not have, at most a batch of them.
+pub(crate) fn pending_sweeps(stores: &Stores) -> Result<Vec<String>, String> {
+    stores
+        .db
+        .with_conn(|c| {
+            let conn = c.conn().resolve();
+            let mut stmt = conn.prepare("SELECT flow_id FROM flow_sweep_pending LIMIT ?")?;
+            stmt.query_map([DELETE_BATCH as i64], |r| r.get(0))?.collect::<rusqlite::Result<_>>()
+        })
+        .map_err(sweep_failed)
+}
+
+/// A stream still open: it has no end yet, and its writer goes on adding messages to it.
+const OPEN_STREAM: &str =
+    "stream_kind IS NOT NULL AND elapsed_ms IS NULL AND error IS NULL AND NOT cancelled";
+
+/// Fail messages for sweeping, all of a kind.
+fn sweep_failed(e: impl std::fmt::Display) -> String {
+    format!("Failed to delete the oldest flows: {e}")
+}
+
+/// Up to `limit` of the oldest flows that are neither cleared nor an open stream, by rowid.
+pub(crate) fn sweepable(stores: &Stores, limit: usize) -> Result<Vec<(i64, String)>, String> {
+    stores
+        .db
+        .with_conn(|c| {
+            let conn = c.conn().resolve();
+            let mut stmt = conn.prepare(&format!(
+                "SELECT rowid, id FROM flows WHERE rowid > ?
+                    AND NOT ({OPEN_STREAM})
+                    ORDER BY rowid LIMIT ?"
+            ))?;
+            stmt.query_map(rusqlite::params![clear_mark(conn), limit as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?
+            .collect::<rusqlite::Result<_>>()
+        })
+        .map_err(sweep_failed)
+}
+
+/// Deletes the flows' rows and their messages' rows in one transaction, first, so nothing
+/// written for them after this has an owner left to count under, and records them as pending
+/// until their bodies go, so a failure before then is finished by the next sweep. A flow that
+/// changed or was cleared since it was chosen is kept. Returns the ids deleted.
+pub(crate) fn delete_swept_rows(
+    stores: &Stores,
+    rows: Vec<(i64, String)>,
+) -> Result<Vec<String>, String> {
+    stores
+        .db
+        .with_tx(|c| {
+            let conn = c.conn().resolve();
+            let mut delete = conn.prepare(&format!(
+                "DELETE FROM flows WHERE rowid = ? AND id = ?
+                    AND NOT ({OPEN_STREAM})"
+            ))?;
+            let mut delete_messages =
+                conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
+            let mut pending =
+                conn.prepare("INSERT OR IGNORE INTO flow_sweep_pending (flow_id) VALUES (?)")?;
+            let mut deleted = Vec::with_capacity(rows.len());
+            for (rowid, id) in rows {
+                if delete.execute(rusqlite::params![rowid, id])? > 0 {
+                    delete_messages.execute([&id])?;
+                    pending.execute([&id])?;
+                    deleted.push(id);
+                }
+            }
+            Ok::<_, yaak_database::Error>(deleted)
+        })
+        .map_err(sweep_failed)
+}
+
+/// Deletes the bodies and message payloads of flows whose rows are gone, then once more the
+/// message rows: anything a writer added for them while the rows went is an orphan, which
+/// would otherwise go on counting against the cap with nothing to sweep it by. The flows stop
+/// being pending once this is done.
+pub(crate) fn delete_swept_bodies(stores: &Stores, ids: &[String]) -> Result<(), String> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    stores
+        .blobs
+        .with_tx(|b| {
+            for id in ids {
+                b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
+                b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
+                b.delete_chunks_like(&format!("{id}.msg.%"))?;
+            }
+            Ok::<_, yaak_models::error::Error>(())
+        })
+        .map_err(|e| sweep_failed(format!("flow bodies: {e}")))?;
+    stores
+        .db
+        .with_tx(|c| {
+            let conn = c.conn().resolve();
+            let mut orphans = conn.prepare(
+                "DELETE FROM flow_messages WHERE flow_id = ?
+                    AND NOT EXISTS (SELECT 1 FROM flows WHERE flows.id = flow_messages.flow_id)",
+            )?;
+            let mut done = conn.prepare("DELETE FROM flow_sweep_pending WHERE flow_id = ?")?;
+            for id in ids {
+                orphans.execute([id])?;
+                done.execute([id])?;
+            }
+            Ok::<_, yaak_database::Error>(())
+        })
+        .map_err(sweep_failed)
+}
+
 /// A flow by id, with its number. None once it is cleared, though its row may not be deleted
 /// yet.
 pub fn find(db: &ProxyQueryManager, flow_id: &str) -> Option<Flow> {
@@ -1012,6 +1171,42 @@ mod tests {
         assert_eq!(app(&["/usr/bin/curl"]), 1);
         assert_eq!(app(&["/Applications/Google Chrome.app"]), 0);
         assert_eq!(app(&["com.google.Chrome", "/usr/bin/curl"]), 3);
+    }
+
+    /// A program in a folder: its working directory by the whole path, or its folder's name in
+    /// any case, along with whatever else the filter asks.
+    #[test]
+    fn cwd_matches_a_path_or_a_folder_name() {
+        let node_in = |cwd: Option<&str>| Flow {
+            client_name: Some("node".into()),
+            client_path: Some("/usr/local/bin/node".into()),
+            client_cwd: cwd.map(String::from),
+            ..flow("https://example.com/", "GET", Some(200), None)
+        };
+        let (_dir, db) = db_of(vec![
+            node_in(Some("/Users/ada/Workspace/fieldwork")),
+            node_in(Some("/Users/ada/Workspace/fieldwork")),
+            node_in(Some("/Users/ada/Workspace/Ledger")),
+            node_in(None),
+            Flow { client_cwd: Some("/tmp/fieldwork".into()), ..node_in(None) },
+            Flow { client_path: Some("/usr/bin/curl".into()), ..node_in(Some("/tmp/ledger")) },
+        ]);
+        let count = |app: Option<&str>, cwds: &[&str]| {
+            let cwd = Some(cwds.iter().map(|c| c.to_string()).collect());
+            let app = app.map(|a| vec![a.to_string()]);
+            urls(&db, FlowFilter { app, cwd, ..Default::default() }).len()
+        };
+        assert_eq!(count(None, &["/Users/ada/Workspace/fieldwork"]), 2, "the whole path");
+        assert_eq!(count(None, &["/users/ada/workspace/fieldwork"]), 0, "a path exactly");
+        assert_eq!(count(None, &["FieldWork"]), 3, "a folder name, any case");
+        assert_eq!(count(None, &["fieldwork", "ledger"]), 5, "any of them");
+        assert_eq!(count(Some("/usr/local/bin/node"), &["ledger"]), 1, "and the program");
+        assert_eq!(count(Some("/usr/bin/curl"), &["ledger"]), 1);
+        assert_eq!(count(None, &[]), 0);
+        let query = FlowFilter { cwd: Some(vec!["a".into(), "/b".into()]), ..Default::default() };
+        assert_eq!(query.to_query(), "cwd=a&cwd=%2Fb");
+        assert_eq!(FlowFilter::from_query(&query.to_query()).unwrap(), query);
+        assert!(query.narrows());
     }
 
     #[test]
@@ -1459,5 +1654,55 @@ mod tests {
             (binary.data.as_str(), binary.encoding, binary.size),
             ("/wD+", BodyEncoding::Base64, 3)
         );
+    }
+
+    /// Sweeping takes the flows written first, with their bodies, until the traffic is under the
+    /// cap, and no more; under it, nothing goes.
+    #[test]
+    fn sweeping_deletes_the_oldest_until_under_the_cap() {
+        use yaak_database::UpdateSource;
+        use yaak_models::blob_manager::BodyChunkWriter;
+        const BODY: usize = 64 * 1024;
+        let dir = tempfile::tempdir().unwrap();
+        let stores = Stores::open(dir.path(), &crate::db::test_key()).unwrap();
+        let empty = stores.used_bytes().unwrap();
+        let ids: Vec<String> = (0..20).map(|i| format!("fl_{i:02}")).collect();
+        for id in &ids {
+            let flow = Flow { id: id.clone(), ..Default::default() };
+            stores.db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap();
+            let body_id = Flow::body_id(id, FlowBody::Response);
+            let mut writer = BodyChunkWriter::new(stores.blobs.clone(), body_id);
+            writer.write(&[7; BODY]).unwrap();
+            writer.finish().unwrap();
+        }
+        let full = stores.used_bytes().unwrap();
+        assert!(full > empty + (20 * BODY) as u64, "{empty} {full}");
+
+        assert_eq!(sweep_oldest(&stores, full).unwrap(), Vec::<String>::new(), "under the cap");
+
+        let cap = (empty + full) / 2;
+        let mut removed = Vec::new();
+        loop {
+            let swept = sweep_oldest(&stores, cap).unwrap();
+            if swept.is_empty() {
+                break;
+            }
+            removed.extend(swept);
+        }
+        assert!(stores.used_bytes().unwrap() <= cap);
+        // About half went, oldest first, and no more than had to.
+        assert_eq!(removed, ids[..removed.len()]);
+        assert!((8..=11).contains(&removed.len()), "{removed:?}");
+        let kept: Vec<String> = list(&stores.db, &FlowFilter::default())
+            .unwrap()
+            .into_iter()
+            .rev()
+            .map(|f| f.id)
+            .collect();
+        assert_eq!(kept, ids[removed.len()..]);
+        let bodies = stores.blobs.connect();
+        let has_body = |id: &str| bodies.body_exists(&Flow::body_id(id, FlowBody::Response));
+        assert!(removed.iter().all(|id| !has_body(id).unwrap()));
+        assert!(kept.iter().all(|id| has_body(id).unwrap()));
     }
 }

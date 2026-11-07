@@ -107,11 +107,8 @@ export const FlowListHeader = memo(function FlowListHeader({
           <button
             type="button"
             onClick={() => onSort(c.id)}
-            title={
-              sort?.column === c.id
-                ? "Sorted over the loaded flows. Sort by Start Time in this menu goes back."
-                : `Sort by ${c.label}`
-            }
+            // No tooltip: the header sits under the search field, and a tooltip here covered it
+            aria-label={`Sort by ${c.label}`}
             className={classNames(
               "flex items-center gap-0.5 min-w-0 w-full h-full whitespace-nowrap hover:text-text-subtle",
               c.align === "right" && "justify-end",

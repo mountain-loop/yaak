@@ -103,6 +103,71 @@ describe("buildSidebarTree", () => {
   });
 });
 
+describe("programs outside an app", () => {
+  const claude = (cwd: string) => ({
+    clientName: "claude",
+    clientPath: "/usr/local/bin/claude",
+    clientCwd: cwd,
+  });
+  const python = {
+    clientName: "python3.12",
+    clientPath: "/usr/bin/python3.12",
+    clientCwd: "/src/ml",
+  };
+  const curl = { clientName: "curl", clientPath: "/usr/bin/curl", clientCwd: null };
+  const root = buildSidebarTree(
+    [
+      flow("https://api.anthropic.com/v1/messages", claude("/src/yaak")),
+      flow("https://api.anthropic.com/v1/models", claude("/src/fieldwork")),
+      flow("https://statsig.anthropic.com/v1", claude("/src/yaak")),
+      flow("https://pypi.org/simple", python),
+      flow("https://example.com/", curl),
+      flow("https://api.github.com/repos", node),
+    ],
+    6,
+  );
+  const items = itemsById(root);
+  const apps = (root.children ?? []).find((c) => c.item.id === "apps");
+
+  test("one row per program, its working directories one level down above the hosts", () => {
+    expect(shape(apps as TreeNode<SidebarItem>).slice(0, 12)).toEqual([
+      "Apps 6",
+      "  claude 3",
+      "    fieldwork 1",
+      "      anthropic.com 1",
+      "        api.anthropic.com 1",
+      "          /v1 1",
+      "            /models 1",
+      "    yaak 2",
+      "      anthropic.com 2",
+      "        api.anthropic.com 1",
+      "          /v1 1",
+      "            /messages 1",
+    ]);
+  });
+
+  test("generic runtimes keep their folder in the row's name", () => {
+    const labels = (apps?.children ?? []).map((c) => [c.item.label, c.item.sublabel ?? null]);
+    expect(labels).toEqual([
+      ["claude", null],
+      ["curl", null],
+      ["node", "fieldwork"],
+      ["python3.12", "ml"],
+    ]);
+    // A program with no working directory has its hosts straight under it.
+    expect(items.get("app:curl|site:example.com")?.kind).toBe("site");
+  });
+
+  test("a folder row selects that program in that folder", () => {
+    const query = items.get("app:claude|cwd:yaak")?.query ?? "";
+    expect(query).toBe("@app:claude @cwd:yaak");
+    expect(items.get("app:claude|cwd:yaak|host:statsig.anthropic.com")?.query).toBe(
+      "@app:claude @cwd:yaak @host:statsig.anthropic.com",
+    );
+    expect(parseSearch(query)).toEqual({ app: ["claude"], cwd: ["yaak"] });
+  });
+});
+
 describe("decrypting from the sidebar", () => {
   const tunnel = flow("https://bank.example.com", {
     ...slack,

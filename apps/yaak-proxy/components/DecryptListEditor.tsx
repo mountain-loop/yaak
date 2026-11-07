@@ -1,10 +1,9 @@
 import { Prec } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import type { DecryptListEntry, SeenTargets } from "@yaakapp-internal/proxy-lib";
-import { Dialog, Icon, IconButton, Input } from "@yaakapp-internal/ui";
+import { Icon, IconButton, Input } from "@yaakapp-internal/ui";
 import { filterAutocomplete } from "@yaakapp-internal/ui/editor";
 import classNames from "classnames";
-import { atom, useAtom } from "jotai";
 import { useMemo, useRef, useState } from "react";
 import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcQuery } from "../hooks/useRpcQuery";
@@ -13,8 +12,8 @@ import { decryptFilterOptions, entryLabel, normalizeEntry } from "../lib/decrypt
 /**
  * What HTTPS is decrypted: one row per entry, the user's in order and then the built-in
  * exclusions, each removable, and an input that adds one, suggesting `host:`, `app:` and `!`,
- * then the hosts and apps seen in the capture. Saves as it changes. Placed by Settings; until
- * that exists, by the dialog the state pill's More… opens.
+ * then the hosts and apps seen in the capture. Saves as it changes. Placed by Settings' Proxy
+ * tab.
  */
 export function DecryptListEditor({ className }: { className?: string }) {
   const list = useDecryptList();
@@ -165,23 +164,5 @@ function EntryInput({
       />
       {error != null && <div className="text-xs text-danger">{error}</div>}
     </div>
-  );
-}
-
-/** Opens the decrypt list from the state pill's More…, until Settings holds it */
-export const decryptListDialogOpenAtom = atom(false);
-
-export function DecryptListDialog() {
-  const [open, setOpen] = useAtom(decryptListDialogOpenAtom);
-  return (
-    <Dialog
-      open={open}
-      onClose={() => setOpen(false)}
-      size="dynamic"
-      title="Decrypt List"
-      className="w-[36rem]"
-    >
-      <div className="pb-4">{open && <DecryptListEditor />}</div>
-    </Dialog>
   );
 }

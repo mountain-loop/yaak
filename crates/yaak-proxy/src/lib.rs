@@ -16,7 +16,7 @@ use std::collections::hash_map::RandomState;
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasher, Hasher};
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc as std_mpsc;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
@@ -139,6 +139,21 @@ pub enum ProxyEvent {
         size: u64,
         /// Whether `size` exceeded `capture_body_limit`.
         truncated: bool,
+        /// Milliseconds from `started_at` to the body's end.
+        elapsed_ms: u64,
+    },
+    /// The connection to the server an intercepted HTTPS request goes on, before it is sent.
+    /// Plain HTTP shares pooled connections the engine does not see opened, so it has none.
+    UpstreamConnection {
+        id: u64,
+        /// Milliseconds from `started_at` to the TCP connection, and to the TLS handshake's
+        /// end. None when the connection was opened for an earlier request and reused.
+        elapsed_connect_ms: Option<u64>,
+        elapsed_tls_ms: Option<u64>,
+        /// `TLSv1.3`, `TLSv1.2`.
+        tls_version: Option<String>,
+        /// `TLS13_AES_128_GCM_SHA256`.
+        tls_cipher: Option<String>,
     },
     /// Response headers arrived from upstream.
     ResponseStart {
@@ -250,6 +265,11 @@ impl ProxyHandle {
         self.engine.http2.store(enabled, Ordering::Relaxed);
     }
 
+    /// Bytes of each body captured, for bodies that start from now on.
+    pub fn set_capture_body_limit(&self, limit: usize) {
+        self.engine.capture_body_limit.store(limit, Ordering::Relaxed);
+    }
+
     /// Decides which HTTPS connections are decrypted from the next CONNECT on. Connections
     /// already open stay decrypted or tunnelled as they were.
     pub fn set_decrypt_policy(&self, policy: DecryptPolicy) {
@@ -285,7 +305,7 @@ pub(crate) struct ClientConn {
 
 pub(crate) struct Engine {
     ca: Arc<CaStore>,
-    capture_body_limit: usize,
+    capture_body_limit: AtomicUsize,
     events: std_mpsc::Sender<ProxyEvent>,
     next_id: AtomicU64,
     next_connection: AtomicU64,
@@ -307,6 +327,11 @@ pub(crate) struct Engine {
 impl Engine {
     fn emit(&self, event: ProxyEvent) {
         let _ = self.events.send(event);
+    }
+
+    /// Bytes of each body captured, as it is when the body starts.
+    fn capture_body_limit(&self) -> usize {
+        self.capture_body_limit.load(Ordering::Relaxed)
     }
 
     fn next_flow_id(&self) -> u64 {
@@ -408,7 +433,7 @@ pub fn start_proxy(config: ProxyConfig) -> Result<ProxyHandle, String> {
     let (event_tx, event_rx) = std_mpsc::channel();
     let engine = Arc::new(Engine {
         ca: config.ca,
-        capture_body_limit: config.capture_body_limit,
+        capture_body_limit: AtomicUsize::new(config.capture_body_limit),
         events: event_tx,
         next_id: AtomicU64::new(1),
         next_connection: AtomicU64::new(1),

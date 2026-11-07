@@ -177,4 +177,21 @@ mod tests {
         );
         assert_eq!(target("../yaak-app-client/vendored/protoc/include"), Some(PROTOC_INCLUDE_DIR));
     }
+
+    /// The window may call each opener command the app's settings use: without its permission,
+    /// Tauri refuses the call and the button does nothing.
+    #[test]
+    fn the_window_may_open_links_and_reveal_folders() {
+        let capability: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let permissions: Vec<&str> = capability["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        for needed in ["opener:allow-open-url", "opener:allow-reveal-item-in-dir"] {
+            assert!(permissions.contains(&needed), "{needed} missing from {permissions:?}");
+        }
+    }
 }

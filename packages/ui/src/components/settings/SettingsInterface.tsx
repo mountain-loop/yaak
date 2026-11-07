@@ -13,7 +13,12 @@ import {
   SettingsList,
   SettingsSection,
 } from "./SettingRow";
-import type { SettingsCallbacks, SettingsEditorKeymap, SettingsView } from "./types";
+import type {
+  SettingsCallbacks,
+  SettingsEditorKeymap,
+  SettingsInterfaceRow,
+  SettingsView,
+} from "./types";
 
 const NULL_FONT_VALUE = "__NULL_FONT__";
 
@@ -44,6 +49,7 @@ export function SettingsInterface({
   trailingSections,
 }: SettingsInterfaceProps) {
   const { app, values, fonts } = view;
+  const shown = (row: SettingsInterfaceRow) => !view.hiddenInterfaceRows?.includes(row);
 
   return (
     <VStack space={1.5} className="mb-4">
@@ -125,43 +131,55 @@ export function SettingsInterface({
           </SettingRow>
         </SettingsSection>
 
-        <SettingsSection title="Editor">
-          <SettingRowSelect
-            name="editorKeymap"
-            title="Editor keymap"
-            description="Keyboard shortcut preset used by text editors."
-            value={values.editorKeymap}
-            onChange={(editorKeymap) => callbacks.onChange({ editorKeymap })}
-            options={keymaps}
-          />
-          <SettingRowBoolean
-            title="Wrap editor lines"
-            description="Wrap long lines in request and response editors."
-            checked={values.editorSoftWrap}
-            onChange={(editorSoftWrap) => callbacks.onChange({ editorSoftWrap })}
-          />
-          <SettingRowBoolean
-            title="Colorize request methods"
-            description="Use method-specific colors for HTTP request methods."
-            checked={values.coloredMethods}
-            onChange={(coloredMethods) => callbacks.onChange({ coloredMethods })}
-          />
-        </SettingsSection>
+        {(shown("editorKeymap") || shown("editorSoftWrap") || shown("coloredMethods")) && (
+          <SettingsSection title="Editor">
+            {shown("editorKeymap") && (
+              <SettingRowSelect
+                name="editorKeymap"
+                title="Editor keymap"
+                description="Keyboard shortcut preset used by text editors."
+                value={values.editorKeymap}
+                onChange={(editorKeymap) => callbacks.onChange({ editorKeymap })}
+                options={keymaps}
+              />
+            )}
+            {shown("editorSoftWrap") && (
+              <SettingRowBoolean
+                title="Wrap editor lines"
+                description="Wrap long lines in request and response editors."
+                checked={values.editorSoftWrap}
+                onChange={(editorSoftWrap) => callbacks.onChange({ editorSoftWrap })}
+              />
+            )}
+            {shown("coloredMethods") && (
+              <SettingRowBoolean
+                title="Colorize request methods"
+                description="Use method-specific colors for HTTP request methods."
+                checked={values.coloredMethods}
+                onChange={(coloredMethods) => callbacks.onChange({ coloredMethods })}
+              />
+            )}
+          </SettingsSection>
+        )}
 
-        <SettingsSection title="Window">
-          <NativeTitlebarSetting
-            useNativeTitlebar={values.useNativeTitlebar}
-            onApply={callbacks.onApplyNativeTitlebar}
-          />
-          {view.windowControlsSetting && (
-            <SettingRowBoolean
-              title="Hide window controls"
-              description="Hide the close, maximize, and minimize controls on Windows or Linux."
-              checked={values.hideWindowControls}
-              onChange={(hideWindowControls) => callbacks.onChange({ hideWindowControls })}
-            />
-          )}
-        </SettingsSection>
+        {(shown("nativeTitlebar") || view.windowControlsSetting) && (
+          <SettingsSection title="Window">
+            {shown("nativeTitlebar") && (
+              <NativeTitlebarSetting
+                useNativeTitlebar={values.useNativeTitlebar}
+                onApply={callbacks.onApplyNativeTitlebar}
+              />
+            )}
+            {view.windowControlsSetting && (
+              <SettingRowBoolean
+                title="Hide window controls"
+                description="Hide the close, maximize, and minimize controls on Windows or Linux."
+                checked={values.hideWindowControls}
+                onChange={(hideWindowControls) => callbacks.onChange({ hideWindowControls })}
+              />
+            )}
+          </SettingsSection>
+        )}
 
         {trailingSections}
       </SettingsList>

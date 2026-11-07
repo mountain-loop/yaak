@@ -7,6 +7,7 @@
     "dialog:allow-save",
     "opener:allow-default-urls",
     "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
     "os:allow-os-type",
     "core:window:allow-close",
     "core:window:allow-is-fullscreen",

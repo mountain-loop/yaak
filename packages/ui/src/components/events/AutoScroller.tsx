@@ -116,7 +116,7 @@ export function AutoScroller<T>({
           className={classNames(
             "absolute bottom-3 left-1/2 -translate-x-1/2 z-10",
             "flex items-center gap-1.5 h-6 px-3 rounded-full",
-            "bg-surface border border-border shadow-lg text-text text-xs",
+            "bg-surface border border-border shadow-lg text-text text-xs tabular-nums",
             "hover:bg-surface-highlight",
           )}
         >

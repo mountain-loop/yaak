@@ -106,7 +106,16 @@ export interface SettingsView {
   feedbackPrompts: boolean;
   /** Null when this build has no license */
   license: SettingsLicenseView | null;
+  /** Interface rows this app doesn't act on yet, left out of the tab */
+  hiddenInterfaceRows?: SettingsInterfaceRow[];
 }
+
+/** The Interface tab's rows an app may leave out */
+export type SettingsInterfaceRow =
+  | "editorKeymap"
+  | "editorSoftWrap"
+  | "coloredMethods"
+  | "nativeTitlebar";
 
 export interface SettingsCallbacks {
   onChange: (patch: SettingsPatch) => void | Promise<void>;
