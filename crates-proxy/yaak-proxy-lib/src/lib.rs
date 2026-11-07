@@ -1588,10 +1588,10 @@ struct InFlight {
 
 impl InFlight {
     /// Stops writing the bodies its stream's messages carry, which are read back from them.
+    /// A request's bytes are kept while it uploads, as a call can end before its upload does,
+    /// with a message still partway in: they are dropped once the upload ends, or kept as its
+    /// record, cut, when the flow ends first.
     fn drop_message_bodies(&mut self) {
-        if bodies::from_messages(&self.flow, FlowBody::Request) {
-            self.request_body = None;
-        }
         if bodies::from_messages(&self.flow, FlowBody::Response) {
             self.response_body = None;
         }
@@ -1841,8 +1841,14 @@ impl FlowSink {
                     f.flow.request_size = size as i64;
                     if f.keeps_bytes(FlowBody::Request) {
                         f.flow.request_truncated = truncated;
+                        finish_body(f.request_body.take());
+                    } else if f.request_body.take().is_some() {
+                        // The upload ended whole, its messages its record: its bytes go.
+                        let body_id = Flow::body_id(&f.flow.id, FlowBody::Request);
+                        if let Err(e) = blobs.with_tx(|b| b.delete_chunks(&body_id)) {
+                            warn!("Failed to delete a stream's request bytes: {e}");
+                        }
                     }
-                    finish_body(f.request_body.take());
                     f.changed();
                 }
             }
@@ -2023,7 +2029,12 @@ impl FlowSink {
         }
     }
 
-    fn finish_flow(&self, f: InFlight) {
+    fn finish_flow(&self, mut f: InFlight) {
+        // Ended while its upload still went on: what came of it is kept, cut.
+        let upload_cut = bodies::from_messages(&f.flow, FlowBody::Request)
+            && f.request_body.is_some()
+            && f.flow.request_size > 0;
+        f.flow.request_truncated |= upload_cut;
         finish_body(f.request_body);
         finish_body(f.response_body);
         let id = f.flow.id.clone();
@@ -2539,6 +2550,71 @@ mod tests {
             let body = bodies::read_body(&ctx.db, &ctx.blobs, &flow, which, 1024).await.unwrap();
             assert!(body.truncated, "{which:?}");
         }
+    }
+
+    /// A call that ends while its upload still goes on keeps what came of the upload, cut; one
+    /// whose upload ended whole keeps only its messages.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_grpc_upload_outlived_by_its_call_keeps_its_bytes() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _event_rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+        let (tx, event_loop) = event_loop(&ctx);
+        let send = |event| tx.send(event).unwrap();
+        send(ProxyEvent::RequestStart {
+            id: 1,
+            started_at: SystemTime::now(),
+            method: "POST".into(),
+            url: "https://api.example.com/pkg.Uploader/Upload".into(),
+            http_version: "HTTP/2.0".into(),
+            connection: 1,
+            client_addr: "127.0.0.1:1".parse().unwrap(),
+        });
+        send(ProxyEvent::RequestHeader {
+            id: 1,
+            name: "content-type".into(),
+            value: "application/grpc".into(),
+        });
+        send(ProxyEvent::StreamStart { id: 1, kind: yaak_proxy::StreamKind::Grpc });
+        // One whole message, and the start of the next.
+        let uploaded = b"\x00\x00\x00\x00\x02\x08\x01\x00\x00\x00\x00\x0a\x0a\x08par";
+        send(ProxyEvent::RequestBodyChunk {
+            id: 1,
+            len: uploaded.len(),
+            data: bytes::Bytes::from_static(uploaded),
+        });
+        send(ws_message(1, D::Client, K::GrpcMessage, b"\x08\x01"));
+        send(ProxyEvent::ResponseStart {
+            id: 1,
+            status: 200,
+            http_version: "HTTP/2.0".into(),
+            remote_addr: None,
+            elapsed_ms: 1,
+        });
+        send(ProxyEvent::ResponseHeader {
+            id: 1,
+            name: "content-type".into(),
+            value: "application/grpc".into(),
+        });
+        // The server answers and ends the call before the upload is done.
+        send(ProxyEvent::ResponseBodyComplete {
+            id: 1,
+            size: 0,
+            truncated: false,
+            elapsed_ms: 5,
+            error: None,
+            cancelled: false,
+        });
+        drop(tx);
+        event_loop.join().unwrap();
+
+        let flow = flows::list(&ctx.db, &Default::default()).unwrap().remove(0);
+        assert!(flow.request_truncated);
+        let body = bodies::read_body(&ctx.db, &ctx.blobs, &flow, FlowBody::Request, 1 << 20)
+            .await
+            .unwrap();
+        assert_eq!((body.data.as_slice(), body.truncated), (&uploaded[..], true));
     }
 
     #[tokio::test(flavor = "multi_thread")]

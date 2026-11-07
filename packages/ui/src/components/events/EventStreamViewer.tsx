@@ -283,20 +283,18 @@ export function isLargePayload(size: number, showLarge: boolean): boolean {
 }
 
 /**
- * Whether a payload's text view may load: decoding, parsing and pretty-printing it. Not for a
- * payload too large to show yet, nor before its bytes are in unless the view decodes on its own
- * (a gRPC message's decodes).
+ * Whether a payload's text view may load: decoding, parsing and pretty-printing it. Only once its
+ * bytes are in, so its size is known (a compressed gRPC message's is not until then), and not
+ * while it is too large to show.
  */
 export function shouldLoadText({
   hasBytes,
-  decodes,
   tooLarge,
 }: {
   hasBytes: boolean;
-  decodes: boolean;
   tooLarge: boolean;
 }): boolean {
-  return !tooLarge && (hasBytes || decodes);
+  return hasBytes && !tooLarge;
 }
 
 /** The text and hexdump views every payload has */
@@ -379,8 +377,7 @@ function StreamEventDetail({
   const tooLarge = isLargePayload(bytes?.length ?? event.size ?? 0, showLarge);
 
   const textLoad =
-    view?.type === "text" &&
-    shouldLoadText({ hasBytes: bytes != null, decodes: extraViews != null, tooLarge })
+    view?.type === "text" && shouldLoadText({ hasBytes: bytes != null, tooLarge })
       ? view.load
       : null;
   const text = useLoaded(

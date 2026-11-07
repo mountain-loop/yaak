@@ -102,12 +102,9 @@ describe("large payloads", () => {
     expect(isLargePayload(big, false)).toBe(true);
     expect(isLargePayload(big, true)).toBe(false);
     expect(isLargePayload(1000, false)).toBe(false);
-    // A gRPC message's decode starts before its bytes are in, but not when it is too large
-    expect(shouldLoadText({ hasBytes: false, decodes: true, tooLarge: false })).toBe(true);
-    expect(shouldLoadText({ hasBytes: false, decodes: true, tooLarge: true })).toBe(false);
-    expect(shouldLoadText({ hasBytes: true, decodes: false, tooLarge: true })).toBe(false);
-    // Text read from the bytes waits for them
-    expect(shouldLoadText({ hasBytes: false, decodes: false, tooLarge: false })).toBe(false);
-    expect(shouldLoadText({ hasBytes: true, decodes: false, tooLarge: false })).toBe(true);
+    // Nothing is decoded before the bytes are in, as only they say how large it decodes to
+    expect(shouldLoadText({ hasBytes: false, tooLarge: false })).toBe(false);
+    expect(shouldLoadText({ hasBytes: true, tooLarge: true })).toBe(false);
+    expect(shouldLoadText({ hasBytes: true, tooLarge: false })).toBe(true);
   });
 });

@@ -81,7 +81,10 @@ pub async fn read_body(
     body: FlowBody,
     limit: usize,
 ) -> Result<DecodedBody, String> {
-    if from_messages(flow, body) {
+    // A gRPC call that ended while its upload still went on kept the upload's bytes instead.
+    if from_messages(flow, body)
+        && !blobs.connect().body_exists(&Flow::body_id(&flow.id, body)).unwrap_or(false)
+    {
         return message_body(db, blobs, flow, body, limit);
     }
     let raw = read_raw_body(blobs, &flow.id, body)?;
