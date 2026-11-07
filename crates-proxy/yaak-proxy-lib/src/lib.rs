@@ -6,6 +6,7 @@ pub mod client;
 pub mod control;
 pub mod convert;
 pub mod db;
+mod exit_gate;
 pub mod flows;
 pub mod grpc;
 pub mod har;
@@ -41,7 +42,7 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError, RwLock};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError, RwLock, Weak};
 use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 pub use yaak_crypto::MasterKeySource;
@@ -251,6 +252,8 @@ impl ProxyCtx {
             converted?;
         }
         let stores = Stores::open(&self.data_dir, &db_key)?;
+        // SQLCipher's exit handler is registered by now, so the gate's runs before it.
+        exit_gate::install();
         *self.stores.write().unwrap_or_else(PoisonError::into_inner) = Some(stores);
         *unlocked = Some(key.clone());
         drop(unlocked);
@@ -434,7 +437,7 @@ impl ProxyCtx {
         self.system_proxy_on.store(route, Ordering::SeqCst);
         if route {
             // The password dialog can sit open for a while; the engine is up regardless.
-            let ctx = self.clone();
+            let ctx = self.detached();
             std::thread::spawn(move || {
                 if let Err(e) = ctx.change_system_proxy(true, bound, true) {
                     warn!("Failed to turn on the system proxy: {e}");
@@ -480,7 +483,7 @@ impl ProxyCtx {
         self.system_proxy_on.store(false, Ordering::SeqCst);
         let port = self.take_handle()?;
         if let Some(port) = port {
-            let ctx = self.clone();
+            let ctx = self.detached();
             std::thread::spawn(move || {
                 if let Err(e) = ctx.change_system_proxy(false, port, true) {
                     warn!("Failed to turn off the system proxy: {e}");
@@ -550,7 +553,7 @@ impl ProxyCtx {
 
         let mut ports: Vec<u16> = previous.and_then(|p| p.proxy_port).into_iter().collect();
         ports.extend(self.settings().ok().map(|s| s.port));
-        let ctx = self.clone();
+        let ctx = self.detached();
         std::thread::spawn(move || {
             if let Err(e) = ctx.reset_stale_system_proxy(&ports) {
                 warn!("Failed to reset a stale system proxy: {e}");
@@ -871,6 +874,14 @@ impl ProxyCtx {
         Ok(())
     }
 
+    /// A clone sharing everything but the databases, for a thread that may outlive every
+    /// context that owns them, like one turning the system proxy off as the engine stops. Were
+    /// it the last to hold them, it would close them itself, and at a process's exit that races
+    /// SQLCipher's own teardown and crashes; this way they close where their owner lets go.
+    fn detached(&self) -> Self {
+        Self { stores: Arc::new(RwLock::new(None)), ..self.clone() }
+    }
+
     /// Has the sweeper look at the captured traffic's size now, started when the keep-traffic
     /// cap is set and it is not running. Without a cap nothing runs, and a sweeper running
     /// stops.
@@ -887,10 +898,11 @@ impl ProxyCtx {
         }
         sweeper.running = true;
         drop(sweeper);
-        let ctx = self.clone();
+        let ctx = self.detached();
+        let stores = Arc::downgrade(&self.stores);
         let spawned = std::thread::Builder::new().name("proxy-sweep".into()).spawn(move || {
             lower_thread_priority();
-            ctx.run_sweeper();
+            ctx.run_sweeper(&stores);
         });
         if let Err(e) = spawned {
             warn!("Failed to start keeping captured traffic under its cap: {e}");
@@ -906,7 +918,7 @@ impl ProxyCtx {
     /// Sweeps the oldest flows while the captured traffic is over the cap, then waits for
     /// [`SWEEP_INTERVAL`] or a nudge, until the cap is taken away. The cap is read under the
     /// sweeper's lock, so one set as this stops finds it stopped and starts another.
-    fn run_sweeper(&self) {
+    fn run_sweeper(&self, stores: &Weak<RwLock<Option<Stores>>>) {
         let (state, wake) = &*self.sweeper;
         loop {
             let cap = {
@@ -918,7 +930,7 @@ impl ProxyCtx {
                 sweeper.poked = false;
                 cap
             };
-            self.sweep_under(cap);
+            self.sweep_under(cap, stores);
             let sweeper = state.lock().unwrap_or_else(PoisonError::into_inner);
             if !sweeper.poked {
                 drop(wake.wait_timeout(sweeper, SWEEP_INTERVAL));
@@ -928,11 +940,17 @@ impl ProxyCtx {
 
     /// Deletes the oldest flows a batch at a time, yielding the writer between, until the
     /// captured traffic is under `cap`, telling the app of each batch. Stops early when the
-    /// sweeper is nudged, to read the cap again.
-    fn sweep_under(&self, cap: u64) {
+    /// sweeper is nudged, to read the cap again. `stores` is the context's databases, held
+    /// weakly so the sweeper never keeps them open past the context that owns them.
+    fn sweep_under(&self, cap: u64, stores: &Weak<RwLock<Option<Stores>>>) {
         loop {
+            // Held through the batch, letting go of the databases included.
+            let gate = exit_gate::hold();
             // Each batch from the databases open now, which a reset replaces.
-            let Ok(stores) = self.stores() else {
+            let Some(stores) = stores
+                .upgrade()
+                .and_then(|s| s.read().unwrap_or_else(PoisonError::into_inner).clone())
+            else {
                 return;
             };
             match flows::sweep_oldest(&stores, cap) {
@@ -946,6 +964,8 @@ impl ProxyCtx {
                     return;
                 }
             }
+            drop(stores);
+            drop(gate);
             if self.sweeper.0.lock().unwrap_or_else(PoisonError::into_inner).poked {
                 return;
             }
@@ -1133,13 +1153,36 @@ impl ProxyCtx {
         let (resets, reset) = (self.resets.clone(), self.resets.load(Ordering::SeqCst));
         let spawned = std::thread::Builder::new().name("proxy-clear".into()).spawn(move || {
             lower_thread_priority();
+            clean(&db, &blobs, &running, &cleaner, &resets, reset);
+            // Its last hold on the databases, which may close them, is let go of in a batch too.
+            let _gate = exit_gate::hold();
+            drop((db, blobs));
+        });
+        if let Err(e) = spawned {
+            warn!("Failed to start deleting cleared flows: {e}");
+            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        }
+
+        /// Deletes cleared flows a batch at a time until none are left, another process takes
+        /// over, or a reset replaces the databases.
+        fn clean(
+            db: &ProxyQueryManager,
+            blobs: &BlobManager,
+            running: &Mutex<bool>,
+            cleaner: &str,
+            resets: &AtomicU64,
+            reset: u64,
+        ) {
             let mut retry = DELETE_PAUSE;
             loop {
+                let gate = exit_gate::hold();
                 // Its databases are gone, and the reset has let another start.
                 if resets.load(Ordering::SeqCst) != reset {
                     return;
                 }
-                match flows::delete_cleared(&db, &blobs, flows::DELETE_BATCH, &cleaner) {
+                let cleaned = flows::delete_cleared(db, blobs, flows::DELETE_BATCH, cleaner);
+                drop(gate);
+                match cleaned {
                     Ok(flows::Cleaned::More) => {
                         retry = DELETE_PAUSE;
                         std::thread::sleep(DELETE_PAUSE);
@@ -1151,7 +1194,11 @@ impl ProxyCtx {
                         *running.lock().unwrap_or_else(PoisonError::into_inner) = false;
                         // A clear since the last batch saw this running and left its flows to
                         // it, so they are deleted here unless another thread has taken over.
-                        if flows::clear_mark_in(&db) == 0 || !claim(&running) {
+                        let more = {
+                            let _gate = exit_gate::hold();
+                            flows::clear_mark_in(db) != 0
+                        };
+                        if !more || !claim(running) {
                             return;
                         }
                     }
@@ -1164,10 +1211,6 @@ impl ProxyCtx {
                     }
                 }
             }
-        });
-        if let Err(e) = spawned {
-            warn!("Failed to start deleting cleared flows: {e}");
-            *self.deleting_cleared.lock().unwrap_or_else(PoisonError::into_inner) = false;
         }
     }
 }
@@ -2454,6 +2497,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
             match rx.try_recv() {
                 Ok(event) => event,
                 Err(TryRecvError::Empty) => {
+                    let _gate = exit_gate::hold();
                     sink.write_messages(&mut in_flight, &mut pending);
                     sink.write_finished();
                     sink.write_due_flows(&mut in_flight);
@@ -2466,6 +2510,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
             match rx.recv_timeout(wait) {
                 Ok(event) => event,
                 Err(RecvTimeoutError::Timeout) => {
+                    let _gate = exit_gate::hold();
                     sink.write_due_flows(&mut in_flight);
                     continue;
                 }
@@ -2477,6 +2522,8 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
                 Err(_) => break,
             }
         };
+        // Only while writing, not while waiting for an event above.
+        let _gate = exit_gate::hold();
         if let ProxyEvent::Message { id, message } = event {
             record_message(&mut in_flight, &mut pending, id, &message);
             if pending.len() >= MESSAGE_BATCH {
@@ -2501,6 +2548,7 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
         }
     }
 
+    let _gate = exit_gate::hold();
     sink.write_messages(&mut in_flight, &mut pending);
     // The engine stopped: a stream still open ends with it. Other flows in flight are dropped,
     // as they always have been. Every flow that ended is written.
@@ -2512,6 +2560,8 @@ fn run_event_loop(rx: std::sync::mpsc::Receiver<ProxyEvent>, sink: FlowSink) {
         }
     }
     sink.write_finished();
+    // Its hold on the databases goes before the gate opens again.
+    drop(sink);
 }
 
 /// When the next changed streaming flow is due to be written.
@@ -4141,7 +4191,7 @@ mod tests {
         let cap = (empty + full) / 2;
         // Swept here rather than waited on from the sweeper's thread, which a busy machine may
         // not run in time: what goes is the same either way.
-        ctx.sweep_under(cap);
+        ctx.sweep_under(cap, &Arc::downgrade(&ctx.stores));
         let removed: Vec<String> = rx
             .try_iter()
             .filter(|e| e.event == "flows_removed")
@@ -4183,6 +4233,22 @@ mod tests {
         ];
         let payloads = (0..messages).map(|n| format!("{id}.msg.{n}"));
         bodies.into_iter().chain(payloads).filter(|b| conn.body_exists(b).unwrap()).count()
+    }
+
+    /// A thread turning the system proxy on or off holds none of the databases, so it never
+    /// closes them itself, as it would at a process's exit, crashing in SQLCipher's teardown.
+    #[test]
+    fn threads_that_outlive_the_engine_hold_no_databases() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        assert!(ctx.stores().is_ok());
+        let detached = ctx.detached();
+        assert!(detached.stores().is_err(), "none of its own");
+        assert_eq!(Arc::strong_count(&ctx.stores), 1, "the owner's alone");
+        // Everything else is shared, as the system proxy's state is.
+        ctx.system_proxy_on.store(true, Ordering::SeqCst);
+        assert!(detached.system_proxy_on.load(Ordering::SeqCst));
     }
 
     /// A message written for a flow while the sweep deletes it, before its row goes or between
