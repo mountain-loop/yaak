@@ -4211,6 +4211,31 @@ mod tests {
         assert_eq!(blobs_of(&ctx, "fl_b", 10), 1, "the other flow kept");
     }
 
+    /// A sweep that deletes the rows and then fails before the bodies, as on a full disk, leaves
+    /// them pending, and the next sweep deletes them, even with nothing more to sweep.
+    #[test]
+    fn bodies_a_failed_sweep_left_go_on_the_next() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        for id in ["fl_a", "fl_b"] {
+            flow_with_response(&ctx, id, "text/plain", &[1; 4096]);
+        }
+        let stores = ctx.stores().unwrap();
+
+        let rows = flows::sweepable(&stores, 1).unwrap();
+        // The rows go, and the bodies don't.
+        assert_eq!(flows::delete_swept_rows(&stores, rows).unwrap(), ["fl_a"]);
+        assert_eq!(flows::pending_sweeps(&stores).unwrap(), ["fl_a"]);
+        assert_eq!(blobs_of(&ctx, "fl_a", 0), 1, "left behind");
+
+        // Under the cap, so only what was left goes.
+        assert!(flows::sweep_oldest(&stores, u64::MAX).unwrap().is_empty());
+        assert_eq!(blobs_of(&ctx, "fl_a", 0), 0);
+        assert!(flows::pending_sweeps(&stores).unwrap().is_empty());
+        assert_eq!(blobs_of(&ctx, "fl_b", 0), 1, "the other flow kept");
+    }
+
     /// A stream still open is never swept, even while its writer adds messages as the sweep
     /// runs and it is the oldest flow there is.
     #[test]

@@ -511,6 +511,7 @@ mod tests {
                 "_sqlx_migrations",
                 "flow_clear_mark",
                 "flow_messages",
+                "flow_sweep_pending",
                 "flows",
                 "grpc_schemas"
             ]
@@ -598,7 +599,7 @@ mod tests {
             .unwrap()
             .map(|v| v.unwrap())
             .collect();
-        assert_eq!(&applied[6..], ["00000007", "00000008", "00000009", "00000010"]);
+        assert_eq!(&applied[6..], ["00000007", "00000008", "00000009", "00000010", "00000011"]);
         let mark_columns = columns(&conn, "flow_clear_mark");
         assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
         drop(conn);

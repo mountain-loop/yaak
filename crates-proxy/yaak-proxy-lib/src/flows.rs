@@ -695,6 +695,9 @@ pub fn clear_mark_in(db: &ProxyQueryManager) -> i64 {
 /// left to [`delete_cleared`], and a stream still open is never swept: its writer would go on
 /// adding messages to it.
 pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
+    // Bodies a sweep that failed partway left behind go first: they count against the cap.
+    let pending = pending_sweeps(stores)?;
+    delete_swept_bodies(stores, &pending)?;
     let used = stores.used_bytes()?;
     if used <= cap {
         return Ok(Vec::new());
@@ -709,6 +712,18 @@ pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
     let deleted = delete_swept_rows(stores, rows)?;
     delete_swept_bodies(stores, &deleted)?;
     Ok(deleted)
+}
+
+/// Flows whose rows a sweep deleted and whose bodies it may not have, at most a batch of them.
+pub(crate) fn pending_sweeps(stores: &Stores) -> Result<Vec<String>, String> {
+    stores
+        .db
+        .with_conn(|c| {
+            let conn = c.conn().resolve();
+            let mut stmt = conn.prepare("SELECT flow_id FROM flow_sweep_pending LIMIT ?")?;
+            stmt.query_map([DELETE_BATCH as i64], |r| r.get(0))?.collect::<rusqlite::Result<_>>()
+        })
+        .map_err(sweep_failed)
 }
 
 /// A stream still open: it has no end yet, and its writer goes on adding messages to it.
@@ -740,8 +755,9 @@ pub(crate) fn sweepable(stores: &Stores, limit: usize) -> Result<Vec<(i64, Strin
 }
 
 /// Deletes the flows' rows and their messages' rows in one transaction, first, so nothing
-/// written for them after this has an owner left to count under. A flow that changed or was
-/// cleared since it was chosen is kept. Returns the ids deleted.
+/// written for them after this has an owner left to count under, and records them as pending
+/// until their bodies go, so a failure before then is finished by the next sweep. A flow that
+/// changed or was cleared since it was chosen is kept. Returns the ids deleted.
 pub(crate) fn delete_swept_rows(
     stores: &Stores,
     rows: Vec<(i64, String)>,
@@ -756,10 +772,13 @@ pub(crate) fn delete_swept_rows(
             ))?;
             let mut delete_messages =
                 conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
+            let mut pending =
+                conn.prepare("INSERT OR IGNORE INTO flow_sweep_pending (flow_id) VALUES (?)")?;
             let mut deleted = Vec::with_capacity(rows.len());
             for (rowid, id) in rows {
                 if delete.execute(rusqlite::params![rowid, id])? > 0 {
                     delete_messages.execute([&id])?;
+                    pending.execute([&id])?;
                     deleted.push(id);
                 }
             }
@@ -770,7 +789,8 @@ pub(crate) fn delete_swept_rows(
 
 /// Deletes the bodies and message payloads of flows whose rows are gone, then once more the
 /// message rows: anything a writer added for them while the rows went is an orphan, which
-/// would otherwise go on counting against the cap with nothing to sweep it by.
+/// would otherwise go on counting against the cap with nothing to sweep it by. The flows stop
+/// being pending once this is done.
 pub(crate) fn delete_swept_bodies(stores: &Stores, ids: &[String]) -> Result<(), String> {
     if ids.is_empty() {
         return Ok(());
@@ -794,8 +814,10 @@ pub(crate) fn delete_swept_bodies(stores: &Stores, ids: &[String]) -> Result<(),
                 "DELETE FROM flow_messages WHERE flow_id = ?
                     AND NOT EXISTS (SELECT 1 FROM flows WHERE flows.id = flow_messages.flow_id)",
             )?;
+            let mut done = conn.prepare("DELETE FROM flow_sweep_pending WHERE flow_id = ?")?;
             for id in ids {
                 orphans.execute([id])?;
+                done.execute([id])?;
             }
             Ok::<_, yaak_database::Error>(())
         })
