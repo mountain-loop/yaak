@@ -51,6 +51,12 @@ const base: Flow = {
   grpcStatus: null,
   grpcMessage: null,
   tunnelled: false,
+  clientAddr: "127.0.0.1:54321",
+  elapsedConnectMs: 18,
+  elapsedTlsMs: 41,
+  elapsedRequestMs: 43,
+  upstreamTlsVersion: "TLSv1.3",
+  upstreamTlsCipher: "TLS13_AES_128_GCM_SHA256",
 };
 
 const jsonRequest = JSON.stringify({ amount: 4200, currency: "usd", capture: true });

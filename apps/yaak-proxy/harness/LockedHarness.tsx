@@ -21,6 +21,8 @@ const STATE: GetProxyStateResponse = {
   encrypting: null,
   locked: { message: LOCKED, keychain: true },
   otherOwner: null,
+  captureBodyLimit: 10 * 1024 * 1024,
+  keepTrafficBytes: null,
 };
 
 /** What the backend answers while the keychain refuses: the state, and every read refused */

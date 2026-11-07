@@ -59,6 +59,12 @@ const flow: Flow = {
   grpcStatus: null,
   grpcMessage: null,
   tunnelled: false,
+  clientAddr: null,
+  elapsedConnectMs: null,
+  elapsedTlsMs: null,
+  elapsedRequestMs: null,
+  upstreamTlsVersion: null,
+  upstreamTlsCipher: null,
 };
 
 function bytes(text: string): FlowBodyData {

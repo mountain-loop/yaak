@@ -319,6 +319,21 @@ export function syncFlows(store: Store) {
     load();
   });
 
+  // The oldest flows, swept to keep the capture under its size limit: dropped wherever they
+  // are held, and the totals counted again from the database.
+  listen("flows_removed", ({ ids }) => {
+    const removed = new Set(ids);
+    const drop = (win: FlowWindow) =>
+      win.flows.some((f) => removed.has(f.id))
+        ? { ...win, flows: win.flows.filter((f) => !removed.has(f.id)) }
+        : win;
+    pending = pending.filter((p) => !removed.has(p.model.id));
+    store.set(flowWindowAtom, drop);
+    store.set(searchWindowAtom, (s) => (s == null ? s : { ...s, win: drop(s.win) }));
+    if (removed.has(store.get(selectedFlowAtom)?.id ?? "")) store.set(selectedFlowAtom, null);
+    if (recountTimer == null) recountTimer = setTimeout(recount, RECOUNT_MS);
+  });
+
   function load() {
     loaded = false;
     const thisLoad = ++loads;
