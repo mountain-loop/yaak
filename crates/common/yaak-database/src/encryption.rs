@@ -78,8 +78,16 @@ pub fn file_state(path: &Path) -> io::Result<FileState> {
 /// init calls this first. Reads the schema at once, so a wrong key, or a plain file, fails here
 /// ("file is not a database") rather than at the first query.
 pub fn apply_key(conn: &Connection, key: &DatabaseKey) -> rusqlite::Result<()> {
+    init_openssl();
     conn.execute_batch(&format!("PRAGMA key = {};", key.sql_literal()))?;
     conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
+}
+
+/// Initializes OpenSSL before SQLCipher first uses it, without the cleanup OpenSSL otherwise
+/// registers to run at exit: that frees its state while threads still reading or writing an
+/// encrypted database use it, and the process crashes as it quits.
+fn init_openssl() {
+    openssl_sys::init();
 }
 
 /// The bytes a plain database at `path` takes, with its WAL: what [`encrypt_in_place`] has to
@@ -112,6 +120,7 @@ pub fn encrypt_in_place(
     if file_state(path)? != FileState::Plain && !exported.exists() && !replaced.exists() {
         return Ok(false);
     }
+    init_openssl();
 
     let lock = fs::OpenOptions::new()
         .read(true)

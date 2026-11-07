@@ -387,16 +387,22 @@ fn a_refused_key_refuses_capture() {
 
     let dir = plain_capture();
     let ctx = open_ctx(dir.path(), refusing);
-    assert!(ctx.start().is_err());
+    let refused = ctx.start().unwrap_err();
     assert_eq!(ctx.encrypting(), None);
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Plain);
     }
-    // Retrying with access allowed converts it then.
+    // Clear is refused too, rather than clearing the empty scratch flows and leaving the
+    // captured ones to come back.
+    assert_eq!(ctx.clear_flows().unwrap_err(), refused);
+    // Retrying with access allowed converts it then, every flow still there.
     drop(ctx);
     let ctx = open_ctx(dir.path(), MasterKeySource::memory());
     ctx.start().unwrap();
     assert_eq!(flows::count(&ctx.db()).unwrap(), FLOWS);
+    // And clears them now.
+    assert_eq!(ctx.clear_flows().unwrap(), FLOWS);
+    assert_eq!(flows::count(&ctx.db()).unwrap(), 0);
 }
 
 /// A build from before encryption that owns the engine, a CLI daemon, keeps its plain databases

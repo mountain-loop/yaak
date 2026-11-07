@@ -11631,6 +11631,7 @@ dependencies = [
  "include_dir",
  "log 0.4.34",
  "nanoid",
+ "openssl-sys",
  "r2d2",
  "r2d2_sqlite",
  "rusqlite",

@@ -767,7 +767,9 @@ impl ProxyCtx {
     /// Clears every flow at once and tells the app so its list empties, then deletes them and
     /// their bodies in the background. Returns how many there were.
     pub fn clear_flows(&self) -> Result<usize, String> {
-        let cleared = flows::clear(&self.db())?;
+        // The real flows, or none: clearing the scratch ones shown while the key is unavailable
+        // would leave the captured traffic to come back once it is.
+        let cleared = flows::clear(&self.unlocked_db()?)?;
         // After the commit, so the app reloads what is left. Flows written before the clear sent
         // their events before it began.
         self.events.emit("flows_cleared", &FlowsClearedPayload {});
