@@ -6,9 +6,9 @@ import { filterAutocomplete } from "@yaakapp-internal/ui/editor";
 import classNames from "classnames";
 import { atom, useAtom } from "jotai";
 import { useMemo, useRef, useState } from "react";
-import { useDecryptList, useSetDecryptList } from "../hooks/useDecryptList";
+import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcQuery } from "../hooks/useRpcQuery";
-import { decryptFilterOptions, entryLabel, normalizeEntry, withEntry } from "../lib/decrypt";
+import { decryptFilterOptions, entryLabel, normalizeEntry } from "../lib/decrypt";
 
 /**
  * What HTTPS is decrypted: one row per entry, the user's in order and then the built-in
@@ -18,7 +18,7 @@ import { decryptFilterOptions, entryLabel, normalizeEntry, withEntry } from "../
  */
 export function DecryptListEditor({ className }: { className?: string }) {
   const list = useDecryptList();
-  const save = useSetDecryptList();
+  const save = useEditDecryptList();
   // Read when the input opens its suggestions, so new traffic shows without rebuilding it.
   const seen = useRpcQuery("list_seen", {}, { staleTime: 0, refetchOnMount: "always" });
   const seenRef = useRef<SeenTargets | undefined>(seen.data);
@@ -27,7 +27,7 @@ export function DecryptListEditor({ className }: { className?: string }) {
   // Each change replaces the whole list, so one waits for the last to land rather than undo it.
   const remove = (entry: string) => {
     if (save.isPending) return;
-    save.mutate({ entries: list.filter((e) => e.entry !== entry).map((e) => e.entry) });
+    save.mutate({ add: [], remove: [entry] });
   };
 
   return (
@@ -36,7 +36,7 @@ export function DecryptListEditor({ className }: { className?: string }) {
         seenRef={seenRef}
         list={list}
         disabled={save.isPending}
-        onAdd={(entry) => save.mutate({ entries: withEntry(list, entry) })}
+        onAdd={(entry) => save.mutate({ add: [entry], remove: [] })}
       />
       <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
         {list.length === 0 && (

@@ -843,3 +843,30 @@ async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_decrypt_list_is_edited_over_the_control_api() {
+    let dir = tempfile::tempdir().unwrap();
+    let client_dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path(), client_dir.path());
+    let _server = ControlServer::start(ctx.clone()).unwrap();
+    let info = control::read(dir.path()).unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("{}/decrypt", info.base_url());
+
+    for add in ["a.com", "b.com"] {
+        let resp =
+            http.patch(&url).bearer_auth(&info.token).json(&json!({"add": [add]})).send().await;
+        assert_eq!(resp.unwrap().status(), 200);
+    }
+    let resp = http
+        .patch(&url)
+        .bearer_auth(&info.token)
+        .json(&json!({"remove": ["host:a.com"]}))
+        .send()
+        .await
+        .unwrap();
+    let list: Value = resp.json().await.unwrap();
+    assert_eq!(list["entries"][0], json!({"entry": "host:b.com", "builtIn": false}));
+    assert_eq!(list["entries"][1]["builtIn"], true);
+}

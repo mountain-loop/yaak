@@ -107,6 +107,38 @@ impl ProxySettings {
         Ok(())
     }
 
+    /// Removes `remove` from the list as it is and adds `add` after the user's own entries,
+    /// each normalized, as [`Self::set_decrypt_list`] would take the result. A built-in removed
+    /// is remembered as removed, and one added is restored. Fails, changing nothing, on an
+    /// entry that does not parse.
+    pub fn edit_decrypt_list<S: AsRef<str>>(
+        &mut self,
+        add: &[S],
+        remove: &[S],
+    ) -> Result<(), String> {
+        let normalize = |e: &str| DecryptEntry::parse(e).ok().map(|p| p.to_string());
+        let add = add
+            .iter()
+            .map(|e| DecryptEntry::parse(e.as_ref()).map(|p| p.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+        // An entry goes as stored, so one edited by hand, odd case or malformed, can go too.
+        let removed = |stored: &str| {
+            remove.iter().any(|r| {
+                let r = r.as_ref();
+                r == stored || normalize(r).is_some_and(|r| Some(r) == normalize(stored))
+            })
+        };
+        let mut entries: Vec<String> = self
+            .decrypt_list()
+            .entries
+            .into_iter()
+            .map(|e| e.entry)
+            .filter(|e| !removed(e))
+            .collect();
+        entries.extend(add);
+        self.set_decrypt_list(&entries)
+    }
+
     /// The engine's policy from the list. An entry saved by hand that does not parse is left
     /// out, with a warning, rather than stopping the engine.
     pub fn decrypt_policy(&self) -> DecryptPolicy {
@@ -259,6 +291,34 @@ mod tests {
         let before = settings.clone();
         assert!(settings.set_decrypt_list(&["host:a b"]).is_err());
         assert_eq!(settings, before);
+    }
+
+    #[test]
+    fn editing_applies_to_the_list_as_it_is() {
+        let mut settings =
+            ProxySettings { decrypt: vec!["host:a.com".into()], ..Default::default() };
+        // Two edits made from the same earlier copy both land.
+        settings.edit_decrypt_list(&["b.com"], &[]).unwrap();
+        settings.edit_decrypt_list(&["app:Slack"], &["host:a.com"]).unwrap();
+        assert_eq!(settings.decrypt, ["host:b.com", "app:Slack"]);
+        // A built-in removed and restored.
+        settings.edit_decrypt_list(&[], &["!host:*.zoom.us"]).unwrap();
+        assert_eq!(settings.decrypt_built_ins_removed, ["!host:*.zoom.us"]);
+        settings.edit_decrypt_list(&["!host:*.zoom.us"], &[]).unwrap();
+        assert!(settings.decrypt_built_ins_removed.is_empty());
+        let before = settings.clone();
+        assert!(settings.edit_decrypt_list(&["host:a b"], &[]).is_err());
+        assert_eq!(settings, before);
+    }
+
+    #[test]
+    fn entries_edited_by_hand_can_be_removed() {
+        let mut settings = ProxySettings {
+            decrypt: vec!["API.example.com".into(), "host:a b".into(), "b.com".into()],
+            ..Default::default()
+        };
+        settings.edit_decrypt_list(&[], &["host:api.example.com", "host:a b"]).unwrap();
+        assert_eq!(settings.decrypt, ["host:b.com"]);
     }
 
     #[test]

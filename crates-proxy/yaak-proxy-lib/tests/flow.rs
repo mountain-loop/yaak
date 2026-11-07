@@ -568,3 +568,38 @@ async fn seen_lists_hosts_and_apps_most_recent_first() {
         ])
     );
 }
+
+/// Edits made together each land on the list the other left, and every change is announced to
+/// the app, so a list changed elsewhere shows at once.
+#[tokio::test(flavor = "multi_thread")]
+async fn decrypt_list_edits_apply_to_the_latest_list_and_are_announced() {
+    let dir = tempfile::tempdir().unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+    let (events, event_rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+
+    let (a, b) = tokio::join!(
+        rpc(&ctx, "edit_decrypt_list", json!({"add": ["a.com"]})),
+        rpc(&ctx, "edit_decrypt_list", json!({"add": ["app:Slack"]})),
+    );
+    a.unwrap();
+    b.unwrap();
+    let list =
+        rpc(&ctx, "edit_decrypt_list", json!({"remove": ["!host:*.zoom.us"]})).await.unwrap();
+    let user: Vec<&str> = list["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["builtIn"] == false)
+        .map(|e| e["entry"].as_str().unwrap())
+        .collect();
+    assert_eq!(user.len(), 2);
+    assert!(user.contains(&"host:a.com") && user.contains(&"app:Slack"), "{user:?}");
+    assert!(!list["entries"].as_array().unwrap().iter().any(|e| e["entry"] == "!host:*.zoom.us"));
+
+    let changes: Vec<_> =
+        event_rx.try_iter().filter(|e| e.event == "decrypt_list_changed").collect();
+    assert_eq!(changes.len(), 3);
+    assert_eq!(changes[2].payload["list"], list);
+}

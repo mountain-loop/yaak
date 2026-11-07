@@ -7,17 +7,18 @@ import {
   blockerOf,
   blockingExclusion,
   decryptFilterOptions,
+  detailActions,
   decryptMenuAction,
   decrypts,
   decryptsEverything,
   entryLabel,
+  everythingEdit,
   isDecrypted,
+  listEdit,
   normalizeEntry,
   setDecrypted,
   subjectQuery,
   toggleDecrypt,
-  withEntry,
-  withEverything,
 } from "./decrypt";
 
 const user = (...entries: string[]): DecryptListEntry[] =>
@@ -185,19 +186,80 @@ describe("the sidebar menu", () => {
   });
 });
 
-describe("the first-run step", () => {
-  test("Everything adds * once, after the user's entries", () => {
-    expect(decryptsEverything(BUILT_INS)).toBe(false);
-    const on = withEverything([...user("host:a.com"), ...BUILT_INS], true);
-    expect(on).toEqual(["host:a.com", "*", "!host:*.apple.com", "!host:*.icloud.com"]);
-    expect(withEntry(user("*"), "*")).toEqual(["*"]);
+describe("the Not decrypted detail's buttons", () => {
+  const slack = { name: "Slack", bundleId: "com.tinyspeck.slackmacgap" };
+
+  test("each button is offered only when its own change would decrypt the connection", () => {
+    // `!app:Slack` still excludes Slack's connections whatever host is added.
+    const list = user("*", "!app:Slack");
+    expect(detailActions(list, "edgeapi.slack.com", slack)).toEqual({
+      listed: false,
+      host: false,
+      app: true,
+      blocked: null,
+    });
+    // And `!host:` the other way round.
+    expect(detailActions(user("*", "!host:edgeapi.slack.com"), "edgeapi.slack.com", slack)).toEqual(
+      { listed: false, host: true, app: false, blocked: null },
+    );
   });
 
-  test("Pick as they appear takes * out", () => {
-    expect(withEverything([...user("*"), ...BUILT_INS], false)).toEqual([
-      "!host:*.apple.com",
-      "!host:*.icloud.com",
-    ]);
+  test("names the exclusion when neither would", () => {
+    const list = user("*", "!host:*.slack.com", "!app:Slack");
+    expect(detailActions(list, "edgeapi.slack.com", slack)).toEqual({
+      listed: false,
+      host: false,
+      app: false,
+      blocked: "!host:*.slack.com",
+    });
+  });
+
+  test("both on an empty list, and none once it is listed", () => {
+    expect(detailActions(BUILT_INS, "a.com", slack)).toEqual({
+      listed: false,
+      host: true,
+      app: true,
+      blocked: null,
+    });
+    expect(detailActions(user("host:a.com"), "a.com", null).listed).toBe(true);
+  });
+});
+
+describe("the first-run step", () => {
+  test("Everything adds *, and Pick as they appear takes it out", () => {
+    expect(decryptsEverything(BUILT_INS)).toBe(false);
+    expect(decryptsEverything([...user("*"), ...BUILT_INS])).toBe(true);
+    expect(everythingEdit(true)).toEqual({ add: ["*"], remove: [] });
+    expect(everythingEdit(false)).toEqual({ add: [], remove: ["*"] });
+  });
+});
+
+describe("edits sent as additions and removals", () => {
+  test("a toggle becomes what it adds and removes, not the whole list", () => {
+    const list = [...user("*", "!host:*.example.com"), ...BUILT_INS];
+    const site = { kind: "site", site: "example.com" } as const;
+    expect(listEdit(list, setDecrypted(list, [site], true))).toEqual({
+      add: [],
+      remove: ["!host:*.example.com"],
+    });
+    const host = { kind: "host", host: "a.com" } as const;
+    expect(listEdit(BUILT_INS, setDecrypted(BUILT_INS, [host], true))).toEqual({
+      add: ["host:a.com"],
+      remove: [],
+    });
+  });
+
+  test("two edits from the same stale list both survive, applied in turn", () => {
+    // What the lib does with each edit: remove, then add after the user's own entries.
+    const apply = (entries: string[], e: { add: string[]; remove: string[] }) => [
+      ...entries.filter((x) => !e.remove.includes(x)),
+      ...e.add,
+    ];
+    const stale = BUILT_INS;
+    const first = listEdit(stale, setDecrypted(stale, [{ kind: "host", host: "a.com" }], true));
+    const second = listEdit(stale, setDecrypted(stale, [{ kind: "host", host: "b.com" }], true));
+    const saved = apply(apply([], first), second);
+    expect(saved).toEqual(["host:a.com", "host:b.com"]);
   });
 });
 

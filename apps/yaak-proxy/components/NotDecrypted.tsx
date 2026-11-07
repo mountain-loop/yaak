@@ -1,15 +1,8 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import { Button, formatMillis, Icon } from "@yaakapp-internal/ui";
-import { useDecryptList, useSetDecryptList } from "../hooks/useDecryptList";
-import {
-  blockingExclusion,
-  type DecryptSubject,
-  decrypts,
-  setDecrypted,
-  subjectEntry,
-  subjectQuery,
-} from "../lib/decrypt";
+import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
+import { type DecryptSubject, detailActions, listEdit, setDecrypted } from "../lib/decrypt";
 import { sidebarPath } from "../lib/search";
 import { EmptyState } from "./FlowBodyViewer";
 
@@ -19,7 +12,7 @@ import { EmptyState } from "./FlowBodyViewer";
  */
 export function NotDecrypted({ flow }: { flow: Flow }) {
   const list = useDecryptList();
-  const save = useSetDecryptList();
+  const save = useEditDecryptList();
   const host = sidebarPath(flow.url).split("/")[0] ?? flow.url;
   const hostSubject: DecryptSubject = { kind: "host", host };
   const appSubject: DecryptSubject | null =
@@ -27,26 +20,15 @@ export function NotDecrypted({ flow }: { flow: Flow }) {
       ? null
       : { kind: "app", name: flow.clientName, bundleId: flow.clientBundleId };
   const app = flow.clientName;
-  // The connection whole: its host and port, and its app, as the engine judged it.
-  const query = {
-    ...subjectQuery(hostSubject),
-    app: app == null ? null : { name: app, bundleId: flow.clientBundleId },
-  };
-  const listed = decrypts(list, query);
-  // Its own exact exclusions, which Decrypt removes, aside.
-  const own = new Set(
-    [hostSubject, appSubject].map((s) => (s == null ? "" : `!${subjectEntry(s)}`)),
+  const actions = detailActions(
+    list,
+    host,
+    app == null ? null : { name: app, bundleId: flow.clientBundleId },
   );
-  const blocked = listed
-    ? null
-    : blockingExclusion(
-        list.filter((e) => !own.has(e.entry)),
-        query,
-      );
   const open = flow.elapsedMs == null && flow.error == null;
 
   const decrypt = (subject: DecryptSubject) =>
-    save.mutate({ entries: setDecrypted(list, [subject], true).map((e) => e.entry) });
+    save.mutate(listEdit(list, setDecrypted(list, [subject], true)));
 
   const facts = [
     `${formatSize(Number(flow.requestSize))} sent`,
@@ -63,26 +45,28 @@ export function NotDecrypted({ flow }: { flow: Flow }) {
         </div>
         <div className="font-mono text-xs">{facts.join(" · ")}</div>
         {flow.error != null && <div className="text-danger">{flow.error}</div>}
-        {listed ? (
+        {actions.listed ? (
           <div title="Still tunnelled? The app may pin its certificate">
             Decrypting new connections
           </div>
-        ) : blocked != null ? (
+        ) : actions.blocked != null ? (
           <div title="Remove it from the decrypt list to decrypt">
-            Excluded by <span className="font-mono text-xs">{blocked}</span>
+            Excluded by <span className="font-mono text-xs">{actions.blocked}</span>
           </div>
         ) : (
           <div className="flex gap-2 mt-1">
-            <Button
-              size="xs"
-              variant="border"
-              title={`Decrypt new connections to ${host}`}
-              disabled={save.isPending}
-              onClick={() => decrypt(hostSubject)}
-            >
-              Decrypt Host
-            </Button>
-            {appSubject != null && (
+            {actions.host && (
+              <Button
+                size="xs"
+                variant="border"
+                title={`Decrypt new connections to ${host}`}
+                disabled={save.isPending}
+                onClick={() => decrypt(hostSubject)}
+              >
+                Decrypt Host
+              </Button>
+            )}
+            {actions.app && appSubject != null && (
               <Button
                 size="xs"
                 variant="border"

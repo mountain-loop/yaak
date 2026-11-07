@@ -10,9 +10,9 @@ import classNames from "classnames";
 import { atom, useAtom, useAtomValue } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useCallback, useEffect } from "react";
-import { useDecryptList, useSetDecryptList } from "../hooks/useDecryptList";
+import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
-import { blockerOf, decryptMenuAction, isDecrypted, setDecrypted } from "../lib/decrypt";
+import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } from "../lib/decrypt";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
 import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
 import { hideSystemAtom, noteSidebarInput, sidebarTreeAtom } from "../lib/store";
@@ -122,7 +122,7 @@ export function Sidebar() {
     [],
   );
   const decryptList = useDecryptList();
-  const setDecryptList = useSetDecryptList();
+  const setDecryptList = useEditDecryptList();
   const { mutate: saveDecryptList } = setDecryptList;
   const showToast = useShowToast();
 
@@ -146,8 +146,10 @@ export function Sidebar() {
               });
               return;
             }
+            // Only what this changes, applied to the list as it is then, so a second change
+            // made before this one lands keeps it.
             const next = setDecrypted(decryptList, subjects, action.on);
-            saveDecryptList({ entries: next.map((e) => e.entry) });
+            saveDecryptList(listEdit(decryptList, next));
           },
         },
       ];

@@ -12,8 +12,8 @@ use crate::messages::{self, FlowMessage, MessageKind};
 use crate::models::{FlowBody, find_header};
 use crate::save::SaveFlowRequest;
 use crate::{
-    AddGrpcSchemaRequest, ListMessagesResponse, ProxyCtx, ProxyState, ReflectGrpcHostRequest,
-    bodies,
+    AddGrpcSchemaRequest, EditDecryptListRequest, ListMessagesResponse, ProxyCtx, ProxyState,
+    ReflectGrpcHostRequest, bodies,
 };
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -519,6 +519,10 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             json(&status(ctx).await?)
         }
         (&Method::GET, ["decrypt"]) => json(&ctx.decrypt_list()?),
+        (&Method::PATCH, ["decrypt"]) => {
+            let body: EditDecryptListRequest = read_json(req).await?;
+            json(&ctx.edit_decrypt_list(&body.add, &body.remove).map_err(bad_request)?)
+        }
         (&Method::PUT, ["decrypt"]) => {
             let body: DecryptRequest = read_json(req).await?;
             json(&ctx.set_decrypt_list(&body.entries).map_err(bad_request)?)

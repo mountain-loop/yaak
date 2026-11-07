@@ -230,9 +230,13 @@ export function subjectQuery(subject: DecryptSubject): DecryptQuery {
  * An exclusion of the user's that matches `q`, which no entry added beats: Decrypt cannot help
  * until it is edited. Null when there is none.
  */
-export function blockingExclusion(list: DecryptListEntry[], q: DecryptQuery): string | null {
+export function blockingExclusion(
+  list: DecryptListEntry[],
+  q: DecryptQuery,
+  builtIns = false,
+): string | null {
   for (const e of list) {
-    if (e.builtIn) continue;
+    if (e.builtIn && !builtIns) continue;
     const parsed = parseEntry(e.entry);
     if (parsed?.negated && matches(parsed, q)) return e.entry;
   }
@@ -251,6 +255,39 @@ export function blockerOf(list: DecryptListEntry[], subjects: DecryptSubject[]):
     if (blocker != null) return blocker;
   }
   return null;
+}
+
+/** What the Not decrypted detail offers for one tunnelled connection */
+export interface DetailActions {
+  /** The connection is decrypted from the next one on already */
+  listed: boolean;
+  /** Decrypt Host would decrypt it */
+  host: boolean;
+  /** Decrypt App would decrypt it */
+  app: boolean;
+  /** Neither would: the exclusion that keeps it out */
+  blocked: string | null;
+}
+
+/**
+ * Each button judged on its own: whether decrypting the host, or the app, would decrypt this
+ * connection, with its host, port and app together. A button whose change something else
+ * still excludes is not offered; with neither, the exclusion is named.
+ */
+export function detailActions(
+  list: DecryptListEntry[],
+  host: string,
+  app: { name: string; bundleId: string | null } | null,
+): DetailActions {
+  const hostSubject: DecryptSubject = { kind: "host", host };
+  const q = { ...subjectQuery(hostSubject), app };
+  if (decrypts(list, q)) return { listed: true, host: false, app: false, blocked: null };
+  const works = (subject: DecryptSubject) => decrypts(setDecrypted(list, [subject], true), q);
+  const hostWorks = works(hostSubject);
+  const appWorks = app != null && works({ kind: "app", ...app });
+  const blocked =
+    hostWorks || appWorks ? null : (blockingExclusion(list, q) ?? blockingExclusion(list, q, true));
+  return { listed: false, host: hostWorks, app: appWorks, blocked };
 }
 
 /** The list decrypts `subject`'s connections, as its sidebar row marks it */
@@ -308,27 +345,31 @@ function builtIns(list: DecryptListEntry[]): DecryptListEntry[] {
   return list.filter((e) => e.builtIn);
 }
 
-/** The entries with `entry` added after the user's own, unless it is there already */
-export function withEntry(list: DecryptListEntry[], entry: string): string[] {
-  const entries = list.map((e) => e.entry);
-  if (entries.includes(entry)) return entries;
-  const user = list.filter((e) => !e.builtIn).map((e) => e.entry);
-  return [...user, entry, ...builtIns(list).map((e) => e.entry)];
+/**
+ * What turns `before` into `after`, as `edit_decrypt_list` takes it: the entries to add and to
+ * remove, applied to the list as it is when they land, so edits made together each keep the
+ * other's.
+ */
+export function listEdit(
+  before: DecryptListEntry[],
+  after: DecryptListEntry[],
+): { add: string[]; remove: string[] } {
+  const was = new Set(before.map((e) => e.entry));
+  const now = new Set(after.map((e) => e.entry));
+  return {
+    add: after.filter((e) => !was.has(e.entry)).map((e) => e.entry),
+    remove: before.filter((e) => !now.has(e.entry)).map((e) => e.entry),
+  };
 }
 
-/** The entries without `entry` */
-export function withoutEntry(list: DecryptListEntry[], entry: string): string[] {
-  return list.filter((e) => e.entry !== entry).map((e) => e.entry);
+/** The edit that adds `*`, or takes it out, as the first-run card's choice makes it */
+export function everythingEdit(on: boolean): { add: string[]; remove: string[] } {
+  return on ? { add: [EVERYTHING], remove: [] } : { add: [], remove: [EVERYTHING] };
 }
 
 /** Whether the list decrypts everything, as the first-run card's choice reads it */
 export function decryptsEverything(list: DecryptListEntry[]): boolean {
   return list.some((e) => e.entry === EVERYTHING);
-}
-
-/** The entries with `*` added or taken out */
-export function withEverything(list: DecryptListEntry[], on: boolean): string[] {
-  return on ? withEntry(list, EVERYTHING) : withoutEntry(list, EVERYTHING);
 }
 
 /**

@@ -2,9 +2,9 @@ import { Button, Icon, InlineCode, LoadingIcon } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtomValue } from "jotai";
 import type { ReactNode } from "react";
-import { useDecryptList, useSetDecryptList } from "../hooks/useDecryptList";
+import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
-import { withEverything } from "../lib/decrypt";
+import { everythingEdit } from "../lib/decrypt";
 import { decryptStep } from "../lib/firstRun";
 import { proxyStateAtom } from "../lib/store";
 import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./ProxyStatus";
@@ -25,7 +25,7 @@ export function FirstRun() {
   const retry = useRpcMutation("take_over");
   const copyEnvironment = useCopyEnvironment();
   const decryptList = useDecryptList();
-  const saveDecryptList = useSetDecryptList();
+  const saveDecryptList = useEditDecryptList();
 
   const running = proxyState?.state === "running";
   // Changed only by the process that owns the engine, so not from here while the CLI does.
@@ -53,8 +53,7 @@ export function FirstRun() {
           : "todo";
   const decrypt = decryptStep(decryptList, trusted);
   const everything = decrypt.choice === "everything";
-  const setEverything = (on: boolean) =>
-    saveDecryptList.mutate({ entries: withEverything(decryptList, on) });
+  const setEverything = (on: boolean) => saveDecryptList.mutate(everythingEdit(on));
   const ready = trusted && (systemOn || !systemSupported);
   const trafficState: StepState = !running && !otherOwner ? "fail" : ready ? "wait" : "todo";
 

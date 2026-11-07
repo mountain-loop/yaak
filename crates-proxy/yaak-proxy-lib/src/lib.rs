@@ -78,6 +78,9 @@ pub struct ProxyCtx {
     /// This context's name as the one deleting cleared flows, which the database leases to one
     /// process at a time.
     cleaner_id: String,
+    /// Held through each change to the decrypt list, so concurrent edits apply in turn, each to
+    /// the list the last one left.
+    decrypt_edits: Arc<Mutex<()>>,
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
     pub events: RpcEventEmitter,
@@ -106,6 +109,7 @@ impl ProxyCtx {
             start_error: Arc::new(Mutex::new(None)),
             deleting_cleared: Arc::new(Mutex::new(false)),
             cleaner_id: yaak_database::generate_prefixed_id("cln"),
+            decrypt_edits: Arc::new(Mutex::new(())),
             db,
             blobs,
             events,
@@ -536,15 +540,37 @@ impl ProxyCtx {
     /// Replaces the decrypt list, saved in `settings.json` and applied to the running engine's
     /// next connections. Connections already open stay as they were.
     pub fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptList, String> {
+        self.change_decrypt_list(|settings| settings.set_decrypt_list(entries))
+    }
+
+    /// Adds and removes entries in the list as it is now, so edits made together each keep
+    /// the other's, unlike replacing the whole list from a copy read earlier.
+    pub fn edit_decrypt_list(
+        &self,
+        add: &[String],
+        remove: &[String],
+    ) -> Result<DecryptList, String> {
+        self.change_decrypt_list(|settings| settings.edit_decrypt_list(add, remove))
+    }
+
+    /// Changes the list in `settings.json`, one change at a time, applies it to the running
+    /// engine, and tells the app.
+    fn change_decrypt_list(
+        &self,
+        change: impl FnOnce(&mut ProxySettings) -> Result<(), String>,
+    ) -> Result<DecryptList, String> {
+        let _turn = self.decrypt_edits.lock().map_err(|_| "lock poisoned".to_string())?;
         let mut settings = self.settings()?;
-        settings.set_decrypt_list(entries)?;
+        change(&mut settings)?;
         settings.save(&self.settings_path())?;
         if let Ok(handle) = self.handle.lock()
             && let Some(handle) = handle.as_ref()
         {
             handle.set_decrypt_policy(settings.decrypt_policy());
         }
-        Ok(settings.decrypt_list())
+        let list = settings.decrypt_list();
+        self.events.emit("decrypt_list_changed", &DecryptListChangedPayload { list: list.clone() });
+        Ok(list)
     }
 
     /// Intercepts again the hosts passed through after clients rejected the CA, as they no
@@ -807,6 +833,13 @@ pub enum ProxyState {
     Stopped,
 }
 
+/// The decrypt list changed, here or through the control API.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct DecryptListChangedPayload {
+    pub list: DecryptList,
+}
+
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct ProxyStatePayload {
@@ -917,6 +950,16 @@ pub struct SetDecryptListRequest {
     /// Every entry, in order, as typed: a bare hostname is a `host:` entry. A built-in
     /// exclusion left out is removed.
     pub entries: Vec<String>,
+}
+
+/// Entries to add after the user's own and to remove, applied to the list as it is when the
+/// change lands. Each is normalized first.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct EditDecryptListRequest {
+    pub add: Vec<String>,
+    pub remove: Vec<String>,
 }
 
 #[derive(Deserialize, TS)]
@@ -1333,6 +1376,19 @@ async fn set_decrypt_list(
         return ControlClient::new(owner).set_decrypt_list(&req.entries).await.map_err(rpc_error);
     }
     blocking(move || ctx.set_decrypt_list(&req.entries)).await
+}
+
+/// [`set_decrypt_list`], adding and removing entries rather than replacing them all.
+async fn edit_decrypt_list(
+    ctx: ProxyCtx,
+    req: EditDecryptListRequest,
+) -> Result<DecryptList, RpcError> {
+    if ctx.port().is_none()
+        && let Some(owner) = ctx.other_owner()
+    {
+        return ControlClient::new(owner).edit_decrypt_list(&req).await.map_err(rpc_error);
+    }
+    blocking(move || ctx.edit_decrypt_list(&req.add, &req.remove)).await
 }
 
 async fn list_seen(ctx: ProxyCtx, _req: ListSeenRequest) -> Result<flows::SeenTargets, RpcError> {
@@ -2200,6 +2256,7 @@ define_rpc! {
         get_proxy_state(GetProxyStateRequest) -> GetProxyStateResponse,
         helper_register(HelperRegisterRequest) -> SystemProxyStatus,
         helper_unregister(HelperUnregisterRequest) -> SystemProxyStatus,
+        edit_decrypt_list(EditDecryptListRequest) -> DecryptList,
         list_seen(ListSeenRequest) -> flows::SeenTargets,
         set_decrypt_list(SetDecryptListRequest) -> DecryptList,
         list_workspaces(ListWorkspacesRequest) -> ListWorkspacesResponse,
@@ -2212,6 +2269,7 @@ define_rpc! {
         take_over(TakeOverRequest) -> bool,
     }
     events {
+        decrypt_list_changed(DecryptListChangedPayload),
         flows_cleared(FlowsClearedPayload),
         message_write(MessagePayload),
         model_write(ModelPayload),

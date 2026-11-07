@@ -145,6 +145,21 @@ impl ControlClient {
         self.get("/decrypt").await
     }
 
+    /// Adds and removes entries in the owner's decrypt list as it is there.
+    pub async fn edit_decrypt_list(
+        &self,
+        edit: &crate::EditDecryptListRequest,
+    ) -> Result<DecryptList, String> {
+        let body = serde_json::to_vec(edit).map_err(|e| e.to_string())?;
+        let req = self
+            .http
+            .patch(self.url("/decrypt"))
+            .header("content-type", "application/json")
+            .body(body);
+        let resp = self.send(req).await?;
+        resp.json().await.map_err(|e| format!("Invalid response from the proxy: {e}"))
+    }
+
     /// Replaces the decrypt list in the owner, which saves it and applies it to its engine.
     pub async fn set_decrypt_list(&self, entries: &[String]) -> Result<DecryptList, String> {
         let body = serde_json::to_vec(&DecryptRequest { entries: entries.to_vec() })
