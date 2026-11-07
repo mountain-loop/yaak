@@ -28,10 +28,28 @@ pub struct CaStore {
     leaf_configs: Mutex<HashMap<(String, bool), Arc<ServerConfig>>>,
 }
 
+/// Encrypts the CA's private key at rest, for [`CaStore::load_or_create_encrypted`].
+pub trait KeyCipher: Send + Sync {
+    fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, String>;
+    fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String>;
+}
+
 impl CaStore {
     /// Loads the CA from `dir`, or creates one there (key mode 0600) if either file is missing.
     /// Safe to call from several processes at once: `ca.lock` serializes them.
     pub fn load_or_create(dir: &Path) -> io::Result<Self> {
+        Self::open(dir, None)
+    }
+
+    /// [`Self::load_or_create`], keeping `ca.key` encrypted with `cipher`. A plaintext `ca.key`,
+    /// as builds before encryption wrote, is encrypted in place. One `cipher` cannot decrypt,
+    /// encrypted with a key since lost, is replaced along with the certificate: unusable, it
+    /// could only leave the proxy unable to start, and the new one has to be trusted again.
+    pub fn load_or_create_encrypted(dir: &Path, cipher: &dyn KeyCipher) -> io::Result<Self> {
+        Self::open(dir, Some(cipher))
+    }
+
+    fn open(dir: &Path, cipher: Option<&dyn KeyCipher>) -> io::Result<Self> {
         let cert_path = dir.join("ca.pem");
         let key_path = dir.join("ca.key");
 
@@ -43,22 +61,26 @@ impl CaStore {
             .open(dir.join("ca.lock"))?;
         lock.lock()?;
 
-        let (pem, key) = if cert_path.exists() && key_path.exists() {
-            let key =
-                KeyPair::from_pem(&fs::read_to_string(&key_path)?).map_err(io::Error::other)?;
-            (fs::read_to_string(&cert_path)?, key)
+        let stored = if cert_path.exists() && key_path.exists() {
+            load_key(&key_path, cipher)?
         } else {
-            log::info!("Creating proxy CA in {}", dir.display());
-            let key = KeyPair::generate().map_err(io::Error::other)?;
-            let now = OffsetDateTime::now_utc();
-            let mut params = ca_params();
-            params.not_before = now - Duration::days(1);
-            params.not_after = now + Duration::days(CA_VALIDITY_DAYS);
-            let pem = params.self_signed(&key).map_err(io::Error::other)?.pem();
-            remove_if_exists(&cert_path)?;
-            write_atomic(&key_path, key.serialize_pem().as_bytes(), true)?;
-            write_atomic(&cert_path, pem.as_bytes(), false)?;
-            (pem, key)
+            None
+        };
+        let (pem, key) = match stored {
+            Some(key) => (fs::read_to_string(&cert_path)?, key),
+            None => {
+                log::info!("Creating proxy CA in {}", dir.display());
+                let key = KeyPair::generate().map_err(io::Error::other)?;
+                let now = OffsetDateTime::now_utc();
+                let mut params = ca_params();
+                params.not_before = now - Duration::days(1);
+                params.not_after = now + Duration::days(CA_VALIDITY_DAYS);
+                let pem = params.self_signed(&key).map_err(io::Error::other)?.pem();
+                remove_if_exists(&cert_path)?;
+                write_key(&key_path, &key, cipher)?;
+                write_atomic(&cert_path, pem.as_bytes(), false)?;
+                (pem, key)
+            }
         };
         drop(lock);
 
@@ -179,6 +201,48 @@ fn ca_params() -> CertificateParams {
     params
 }
 
+/// The key in `ca.key`: PEM as written without a cipher, or encrypted with one. A plaintext key
+/// is encrypted in place when there is a cipher. None when the cipher cannot decrypt it.
+fn load_key(path: &Path, cipher: Option<&dyn KeyCipher>) -> io::Result<Option<KeyPair>> {
+    let stored = fs::read(path)?;
+    if stored.starts_with(b"-----BEGIN") {
+        let pem = String::from_utf8(stored).map_err(io::Error::other)?;
+        let key = KeyPair::from_pem(&pem).map_err(io::Error::other)?;
+        if cipher.is_some() {
+            write_key(path, &key, cipher)?;
+            log::info!("Encrypted the proxy CA's private key in {}", path.display());
+        }
+        return Ok(Some(key));
+    }
+    let Some(cipher) = cipher else {
+        return Err(io::Error::other(format!(
+            "{} is encrypted, with no key to read it",
+            path.display()
+        )));
+    };
+    let pem = match cipher.decrypt(&stored) {
+        Ok(pem) => String::from_utf8(pem).map_err(io::Error::other)?,
+        Err(e) => {
+            log::warn!(
+                "Failed to decrypt {} ({e}), so the proxy CA is replaced with a new one",
+                path.display()
+            );
+            return Ok(None);
+        }
+    };
+    KeyPair::from_pem(&pem).map(Some).map_err(io::Error::other)
+}
+
+/// Writes `ca.key`, mode 0600, encrypted when there is a cipher.
+fn write_key(path: &Path, key: &KeyPair, cipher: Option<&dyn KeyCipher>) -> io::Result<()> {
+    let pem = key.serialize_pem();
+    let contents = match cipher {
+        Some(cipher) => cipher.encrypt(pem.as_bytes()).map_err(io::Error::other)?,
+        None => pem.into_bytes(),
+    };
+    write_atomic(path, &contents, true)
+}
+
 fn remove_if_exists(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
@@ -215,6 +279,76 @@ fn write_atomic(path: &Path, contents: &[u8], private: bool) -> io::Result<()> {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    /// Flips every bit behind a marker that names the key, so a wrong key fails to decrypt.
+    struct TestCipher(u8);
+
+    impl KeyCipher for TestCipher {
+        fn encrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
+            Ok([b'k', self.0].into_iter().chain(data.iter().map(|b| !b)).collect())
+        }
+
+        fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, String> {
+            let rest = data.strip_prefix(&[b'k', self.0][..]).ok_or("wrong key")?;
+            Ok(rest.iter().map(|b| !b).collect())
+        }
+    }
+
+    fn private(path: &Path) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        #[cfg(not(unix))]
+        let _ = path;
+    }
+
+    #[test]
+    fn keeps_the_key_encrypted() {
+        let dir = tempfile::tempdir().unwrap();
+        let created = CaStore::load_or_create_encrypted(dir.path(), &TestCipher(1)).unwrap();
+        let stored = fs::read(created.key_path()).unwrap();
+        assert!(!stored.windows(11).any(|w| w == b"PRIVATE KEY"), "ca.key is plaintext");
+        private(created.key_path());
+        // The certificate is public, and stays as it was.
+        assert!(fs::read_to_string(created.cert_path()).unwrap().starts_with("-----BEGIN"));
+
+        let loaded = CaStore::load_or_create_encrypted(dir.path(), &TestCipher(1)).unwrap();
+        assert_eq!(loaded.pem(), created.pem());
+        assert_eq!(fs::read(loaded.key_path()).unwrap(), stored, "rewritten");
+        loaded.server_config("example.test", true).unwrap();
+
+        let err = CaStore::load_or_create(dir.path()).err().unwrap();
+        assert!(err.to_string().ends_with("ca.key is encrypted, with no key to read it"), "{err}");
+    }
+
+    #[test]
+    fn encrypts_a_plaintext_key_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let plain = CaStore::load_or_create(dir.path()).unwrap();
+        let pem_key = fs::read_to_string(plain.key_path()).unwrap();
+
+        let encrypted = CaStore::load_or_create_encrypted(dir.path(), &TestCipher(1)).unwrap();
+        assert_eq!(encrypted.pem(), plain.pem(), "the same CA, still trusted");
+        let stored = fs::read(encrypted.key_path()).unwrap();
+        assert_eq!(TestCipher(1).decrypt(&stored).unwrap(), pem_key.as_bytes());
+        private(encrypted.key_path());
+        assert!(!dir.path().join("ca.key.tmp").exists());
+    }
+
+    #[test]
+    fn replaces_a_ca_whose_key_cannot_be_decrypted() {
+        let dir = tempfile::tempdir().unwrap();
+        let lost = CaStore::load_or_create_encrypted(dir.path(), &TestCipher(1)).unwrap();
+
+        let replaced = CaStore::load_or_create_encrypted(dir.path(), &TestCipher(2)).unwrap();
+        assert_ne!(replaced.pem(), lost.pem());
+        let stored = fs::read(replaced.key_path()).unwrap();
+        assert!(TestCipher(2).decrypt(&stored).is_ok());
+        let again = CaStore::load_or_create_encrypted(dir.path(), &TestCipher(2)).unwrap();
+        assert_eq!(again.pem(), replaced.pem());
+    }
 
     /// A host whose leaf is still being signed holds up no lookup of another host's.
     #[test]

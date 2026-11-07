@@ -322,7 +322,8 @@ mod tests {
 
     fn proxy_db() -> (tempfile::TempDir, ProxyQueryManager) {
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         (dir, db)
     }
 

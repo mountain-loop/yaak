@@ -16,10 +16,10 @@ use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
-use yaak_proxy_lib::ProxyCtx;
 use yaak_proxy_lib::bodies::{DecodedBody, read_body, read_raw_body};
 use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::settings::ProxySettings;
+use yaak_proxy_lib::{MasterKeySource, ProxyCtx};
 use yaak_rpc::RpcEventEmitter;
 
 const CAPTURE_LIMIT: usize = 1024;
@@ -95,7 +95,7 @@ async fn spawn_upstream() -> SocketAddr {
 async fn wait_for_flow(ctx: &ProxyCtx, url: &str) -> Flow {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             return flow;
         }
@@ -116,7 +116,7 @@ async fn flow_is_stored_with_its_bodies() {
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
     assert!(dir.path().join("ca/ca.pem").exists());
@@ -149,10 +149,23 @@ async fn flow_is_stored_with_its_bodies() {
     assert!(flow.request_headers.iter().any(|h| h.name == "content-length"));
     assert_eq!(flow.error, None);
 
-    assert_eq!(read_raw_body(&ctx.blobs, &flow.id, FlowBody::Request).unwrap(), b"hello proxy");
-    assert_eq!(read_raw_body(&ctx.blobs, &flow.id, FlowBody::Response).unwrap(), compressed);
-    let decoded =
-        read_body(&ctx.db, &ctx.blobs, &flow, FlowBody::Response, CAPTURE_LIMIT).await.unwrap();
+    assert_eq!(
+        read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Request).unwrap(),
+        b"hello proxy"
+    );
+    assert_eq!(
+        read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Response).unwrap(),
+        compressed
+    );
+    let decoded = read_body(
+        &ctx.db().unwrap(),
+        &ctx.blobs().unwrap(),
+        &flow,
+        FlowBody::Response,
+        CAPTURE_LIMIT,
+    )
+    .await
+    .unwrap();
     let expected = DecodedBody {
         data: b"hello proxy".to_vec(),
         stored_size: compressed.len(),
@@ -170,9 +183,15 @@ async fn flow_is_stored_with_its_bodies() {
     assert_eq!(flow.request_size, 0);
     assert_eq!(flow.response_size, BIG_BODY as i64);
     assert!(flow.response_truncated);
-    let stored = read_raw_body(&ctx.blobs, &flow.id, FlowBody::Response).unwrap();
+    let stored = read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Response).unwrap();
     assert_eq!(stored, vec![b'x'; CAPTURE_LIMIT]);
-    assert!(!ctx.blobs.connect().body_exists(&Flow::body_id(&flow.id, FlowBody::Request)).unwrap());
+    assert!(
+        !ctx.blobs()
+            .unwrap()
+            .connect()
+            .body_exists(&Flow::body_id(&flow.id, FlowBody::Request))
+            .unwrap()
+    );
 
     ctx.stop().unwrap();
     assert_eq!(ctx.port(), None);
@@ -190,7 +209,7 @@ async fn early_response_keeps_request_totals() {
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
 
@@ -205,7 +224,8 @@ async fn early_response_keeps_request_totals() {
 
     let flow = wait_for_flow(&ctx, &url).await;
     assert_eq!(flow.status, Some(200));
-    let stored = read_raw_body(&ctx.blobs, &flow.id, FlowBody::Request).unwrap().len() as i64;
+    let stored =
+        read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Request).unwrap().len() as i64;
     assert!(stored > 0);
     assert!(flow.request_size >= stored, "{} < {stored}", flow.request_size);
     assert_eq!(flow.request_truncated, flow.request_size > stored);
@@ -223,7 +243,7 @@ async fn cancelled_flow_is_not_an_error() {
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
 
@@ -251,7 +271,7 @@ async fn http_version_setting_applies_to_new_connections() {
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
     let ca = std::fs::read(dir.path().join("ca/ca.pem")).unwrap();
@@ -296,7 +316,7 @@ async fn body_rpcs() {
     settings.save(&dir.path().join("settings.json")).unwrap();
 
     let (events, _event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir.path(), events).unwrap();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
     ctx.start().unwrap();
     let port = ctx.port().unwrap();
 
@@ -311,6 +331,8 @@ async fn body_rpcs() {
             "systemProxyAtLaunch": false,
             "httpVersion": "auto",
             "startError": null,
+            "encrypting": null,
+            "locked": null,
             "otherOwner": null,
         })
     );
@@ -392,4 +414,73 @@ async fn body_rpcs() {
 
     let formatted = rpc(&ctx, "format_body", json!({"text": r#"{"a":[1,2]}"#})).await.unwrap();
     assert_eq!(formatted, json!("{\n  \"a\": [\n    1,\n    2\n  ]\n}"));
+}
+
+/// Capture throughput through the engine, end to end: 3,000 requests, 16 at a time over
+/// kept-alive connections, each with a 4 KB response, timed until every flow is stored, and how
+/// long opening one then takes. Run in release: `cargo test --release -p yaak-proxy-lib --test
+/// flow times_capture -- --ignored --nocapture`.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn times_capture_through_the_engine() {
+    const FLOWS: usize = 3_000;
+    const AT_ONCE: usize = 16;
+    let upstream = spawn_upstream().await;
+    let dir = tempfile::tempdir().unwrap();
+    let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
+    settings.save(&dir.path().join("settings.json")).unwrap();
+    let (events, _rx) = RpcEventEmitter::new();
+    let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+    ctx.start().unwrap();
+    let proxy = format!("http://127.0.0.1:{}", ctx.port().unwrap());
+    let client = reqwest::Client::builder()
+        .proxy(reqwest::Proxy::http(&proxy).unwrap())
+        .pool_max_idle_per_host(AT_ONCE)
+        .build()
+        .unwrap();
+
+    let started = Instant::now();
+    let next = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let workers: Vec<_> = (0..AT_ONCE)
+        .map(|_| {
+            let (client, next) = (client.clone(), next.clone());
+            tokio::spawn(async move {
+                loop {
+                    let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if i >= FLOWS {
+                        return;
+                    }
+                    let url = format!("http://{upstream}/v1/items/{i}?api_key=sk_test_123");
+                    let resp = client.get(&url).header("authorization", "Bearer abc").send();
+                    assert_eq!(resp.await.unwrap().bytes().await.unwrap().len(), BIG_BODY);
+                }
+            })
+        })
+        .collect();
+    for worker in workers {
+        worker.await.unwrap();
+    }
+    let db = ctx.db().unwrap();
+    while yaak_proxy_lib::flows::count(&db).unwrap() < FLOWS {
+        tokio::time::sleep(Duration::from_millis(1)).await;
+    }
+    let capture = started.elapsed();
+
+    let ids: Vec<String> = yaak_proxy_lib::flows::list(&db, &Default::default())
+        .unwrap()
+        .into_iter()
+        .map(|f| f.id)
+        .collect();
+    let blobs = ctx.blobs().unwrap();
+    let started = Instant::now();
+    for id in &ids {
+        let flow = yaak_proxy_lib::flows::get(&db, id).unwrap();
+        read_raw_body(&blobs, &flow.id, FlowBody::Response).unwrap();
+    }
+    let open = started.elapsed() / ids.len() as u32;
+    ctx.stop().unwrap();
+    eprintln!(
+        "{FLOWS} flows through the engine in {capture:?}: {:.0} flows/s; opening one: {open:?}",
+        FLOWS as f64 / capture.as_secs_f64()
+    );
 }

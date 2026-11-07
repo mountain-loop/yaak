@@ -12,12 +12,13 @@ import { useState } from "react";
 import { useLocalStorage } from "react-use";
 import { flowLayoutAtom, settingsRequestedAtom } from "../lib/atoms";
 import { setupIncomplete } from "../lib/firstRun";
-import { noFlowsAtom, systemProxyEverOnAtom } from "../lib/store";
+import { lockedAtom, noFlowsAtom, systemProxyEverOnAtom } from "../lib/store";
 import { getOsType } from "../lib/tauri";
 import { ClearFlowsButton } from "./ClearFlowsButton";
 import { FirstRun } from "./FirstRun";
 import { FlowDetail } from "./FlowDetail";
 import { FlowList } from "./FlowList";
+import { LockedState } from "./LockedState";
 import { ProxyStatus, useProxySetup } from "./ProxyStatus";
 import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
@@ -157,10 +158,12 @@ export function ProxyLayout() {
 /**
  * The flow list beside or above the detail pane, or, while setup is incomplete and there are no
  * flows, the first-run card across the whole area. Once setup is done an empty list says so
- * itself, after a Clear too.
+ * itself, after a Clear too. While captured traffic is locked, the locked state takes the whole
+ * area, or the first-run card does, saying why, while setup is incomplete too.
  */
 function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
-  const noFlows = useAtomValue(noFlowsAtom);
+  const locked = useAtomValue(lockedAtom);
+  const noFlows = useAtomValue(noFlowsAtom) || locked != null;
   const { caStatus, systemProxy } = useProxySetup();
   const systemProxyEverOn = useAtomValue(systemProxyEverOnAtom);
   const incomplete = setupIncomplete({
@@ -169,6 +172,7 @@ function FlowsOrFirstRun({ flowLayout }: { flowLayout: SplitLayoutLayout }) {
     systemProxyEverOn,
   });
   if (noFlows && incomplete) return <FirstRun />;
+  if (locked != null) return <LockedState lock={locked} />;
   return (
     <SplitLayout
       storageKey="proxy_detail"

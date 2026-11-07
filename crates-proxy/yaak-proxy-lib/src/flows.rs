@@ -753,7 +753,8 @@ mod tests {
     fn db_of(flows: Vec<Flow>) -> (tempfile::TempDir, ProxyQueryManager) {
         use yaak_database::UpdateSource;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         for (i, flow) in flows.into_iter().enumerate() {
             let started_at = chrono::DateTime::from_timestamp(i as i64, 0).unwrap().naive_utc();
             let flow = Flow { id: format!("fl_{i:03}"), started_at, ..flow };
@@ -964,7 +965,8 @@ mod tests {
     fn after_follows_flows_as_they_are_recorded() {
         use yaak_database::UpdateSource;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         let at = |s| chrono::DateTime::from_timestamp(s, 0).unwrap().naive_utc();
         // A slow flow that started first but ended, and so was written, after a quick one.
         for (id, started) in [("fl_quick", 20), ("fl_slow", 10), ("fl_next", 30)] {
@@ -986,7 +988,8 @@ mod tests {
     fn before_pages_back_through_older_flows() {
         use yaak_database::UpdateSource;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         let at = |s| chrono::DateTime::from_timestamp(s, 0).unwrap().naive_utc();
         // Two started together, which their ids order.
         for (id, started) in [
@@ -1033,8 +1036,10 @@ mod tests {
         use yaak_database::UpdateSource;
         use yaak_models::blob_manager::BodyChunkWriter;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
-        let blobs = yaak_models::init_blob_store(dir.path().join("blobs.sqlite")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
+        let blobs = crate::db::open_blobs(&dir.path().join("blobs.sqlite"), &crate::db::test_key())
+            .unwrap();
         let write_body = |id: &str, which| {
             let mut writer = BodyChunkWriter::new(blobs.clone(), Flow::body_id(id, which));
             writer.write(b"body").unwrap();
@@ -1079,7 +1084,11 @@ mod tests {
         assert_eq!(page(&db, &narrowed).unwrap().1, 1);
 
         // Bodies that fail to delete keep their flows, to delete again.
-        let read_only = crate::db::open_blobs_read_only(&dir.path().join("blobs.sqlite")).unwrap();
+        let read_only = crate::db::open_blobs_read_only(
+            &dir.path().join("blobs.sqlite"),
+            Some(&crate::db::test_key()),
+        )
+        .unwrap();
         assert!(delete_cleared(&db, &read_only, 2, "cln_a").is_err());
         assert_eq!(rows(), 4);
 
@@ -1117,8 +1126,10 @@ mod tests {
     fn one_cleaner_at_a_time_and_never_a_reused_rowid() {
         use yaak_database::UpdateSource;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
-        let blobs = yaak_models::init_blob_store(dir.path().join("blobs.sqlite")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
+        let blobs = crate::db::open_blobs(&dir.path().join("blobs.sqlite"), &crate::db::test_key())
+            .unwrap();
         let write_flow = |id: &str| {
             let flow = Flow { id: id.into(), ..Default::default() };
             db.with_tx(|tx| tx.upsert(&flow, &UpdateSource::Background)).unwrap().0
@@ -1169,7 +1180,8 @@ mod tests {
     fn numbers_flows_by_rowid_and_keeps_it_on_update() {
         use yaak_database::UpdateSource;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         let write = |flow: &Flow| db.with_tx(|tx| tx.upsert(flow, &UpdateSource::Background));
         let (a, _) = write(&Flow { id: "fl_a".into(), ..Default::default() }).unwrap();
         let (b, _) = write(&Flow { id: "fl_b".into(), ..Default::default() }).unwrap();
@@ -1186,7 +1198,8 @@ mod tests {
     fn filters_by_app_name_folder_site_and_system() {
         use yaak_database::UpdateSource;
         let dir = tempfile::tempdir().unwrap();
-        let db = ProxyQueryManager::new(&dir.path().join("proxy.db")).unwrap();
+        let db =
+            ProxyQueryManager::new(&dir.path().join("proxy.db"), &crate::db::test_key()).unwrap();
         let flows = [
             Flow {
                 id: "fl_slack".into(),
