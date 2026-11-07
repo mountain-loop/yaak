@@ -1,14 +1,16 @@
 import { Dropdown, type DropdownItem, IconButton } from "@yaakapp-internal/ui";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useState } from "react";
-import { clearFlowsAtom, flowTotalAtom } from "../lib/store";
+import { clearFlowsAtom, flowTotalAtom, lockedAtom } from "../lib/store";
 
 /**
  * Clears every flow, once confirmed in its menu, which its hotkey opens too. The list empties at
- * once; the flows are deleted in the background.
+ * once; the flows are deleted in the background. Disabled with none to clear, or while captured
+ * traffic is locked.
  */
 export function ClearFlowsButton() {
   const total = useAtomValue(flowTotalAtom);
+  const locked = useAtomValue(lockedAtom);
   const clear = useSetAtom(clearFlowsAtom);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +46,20 @@ export function ClearFlowsButton() {
       },
     },
   ];
+
+  // Nothing to clear, or nothing that can be read while traffic is locked: no menu, nor hotkey.
+  if (locked != null || total === 0) {
+    return (
+      <IconButton
+        className="pointer-events-auto"
+        icon="trash"
+        title={locked != null ? "Clear flows (traffic is locked)" : "Clear flows (none yet)"}
+        size="sm"
+        iconColor="secondary"
+        disabled
+      />
+    );
+  }
 
   return (
     <Dropdown items={items} hotKeyAction="flows_clear">

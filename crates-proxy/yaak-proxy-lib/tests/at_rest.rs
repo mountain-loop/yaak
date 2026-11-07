@@ -54,13 +54,14 @@ fn write_flows(ctx: &ProxyCtx, n: usize) {
         })
         .collect();
     ctx.db()
+        .unwrap()
         .with_tx(|tx| {
             flows.iter().try_for_each(|f| tx.upsert(f, &UpdateSource::Background).map(|_| ()))
         })
         .unwrap();
     for flow in &flows {
         let mut writer =
-            BodyChunkWriter::new(ctx.blobs(), Flow::body_id(&flow.id, FlowBody::Response));
+            BodyChunkWriter::new(ctx.blobs().unwrap(), Flow::body_id(&flow.id, FlowBody::Response));
         let body = format!("{{\"token\":\"{BODY_SECRET}\",\"pad\":\"{}\"}}", "x".repeat(1000));
         writer.write(body.as_bytes()).unwrap();
         writer.finish().unwrap();
@@ -157,8 +158,8 @@ fn stores_nothing_in_plaintext_and_reads_back_with_the_key() {
 
     // Opened again with the key, everything is there.
     let ctx = open_ctx(dir.path(), keys.clone());
-    assert_eq!(flows::count(&ctx.db()).unwrap(), 20);
-    let body = read_raw_body(&ctx.blobs(), "fl_00007", FlowBody::Response).unwrap();
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 20);
+    let body = read_raw_body(&ctx.blobs().unwrap(), "fl_00007", FlowBody::Response).unwrap();
     assert!(String::from_utf8(body).unwrap().contains(BODY_SECRET));
     drop(ctx);
 
@@ -241,10 +242,10 @@ fn converts_a_plain_capture_on_first_launch() {
     assert!(leftovers.is_empty(), "{leftovers:?}");
 
     // Every flow and body came across, each flow under its own number.
-    assert_eq!(flows::count(&ctx.db()).unwrap(), FLOWS - deleted);
-    let body = read_raw_body(&ctx.blobs(), "fl_02999", FlowBody::Response).unwrap();
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS - deleted);
+    let body = read_raw_body(&ctx.blobs().unwrap(), "fl_02999", FlowBody::Response).unwrap();
     assert!(String::from_utf8(body).unwrap().contains(BODY_SECRET));
-    let flow = flows::get(&ctx.db(), "fl_01234").unwrap();
+    let flow = flows::get(&ctx.db().unwrap(), "fl_01234").unwrap();
     assert_eq!(flow.request_headers[0].value, format!("Bearer {HEADER_SECRET}"));
     assert_eq!(flow.number, number);
     // The same CA, so it stays trusted, its key now encrypted.
@@ -263,7 +264,7 @@ fn search_reaches_inside_the_encrypted_database() {
     let dir = plain_capture();
     let ctx = open_ctx(dir.path(), MasterKeySource::memory());
     ctx.load_ca().unwrap();
-    let db = ctx.db();
+    let db = ctx.db().unwrap();
 
     // Query strings are searchable, being inside the encrypted file.
     let q = |q: &str| FlowFilter { q: Some(q.into()), limit: Some(50), ..Default::default() };
@@ -338,7 +339,7 @@ fn concurrent_first_unlocks_agree() {
                     barrier.wait();
                     let ctx = open_ctx(dir.path(), keys.clone());
                     let pem = ctx.load_ca().unwrap().pem().to_string();
-                    assert_eq!(flows::count(&ctx.db()).unwrap(), FLOWS);
+                    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS);
                     pem
                 })
             })
@@ -347,7 +348,7 @@ fn concurrent_first_unlocks_agree() {
     });
     assert_eq!(pems[0], pems[1]);
     let ctx = open_ctx(dir.path(), keys);
-    assert_eq!(flows::count(&ctx.db()).unwrap(), FLOWS);
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS);
     drop(ctx);
     assert_no_plaintext(dir.path());
 }
@@ -368,17 +369,13 @@ fn a_refused_key_refuses_capture() {
     assert_eq!(ctx.start_error().as_deref(), Some(err.as_str()));
     assert_eq!(ctx.port(), None);
     assert!(ctx.load_ca().is_err());
-    // A write that must last is refused rather than kept in a scratch database that goes.
-    assert_eq!(ctx.unlocked_db().err().as_deref(), Some(err.as_str()));
-    let removed =
-        tokio::runtime::Runtime::new().unwrap().block_on(yaak_proxy_lib::build_router().dispatch(
-            "remove_grpc_schema",
-            serde_json::json!({ "id": "gs_1" }),
-            &ctx,
-        ));
-    assert_eq!(removed.err().map(|e| e.message), Some(err.clone()));
-    // The app reads empty scratch databases meanwhile.
-    assert_eq!(flows::count(&ctx.db()).unwrap(), 0);
+    // Nothing is open: what reads or writes captured traffic is refused, saying why.
+    let locked = ctx.db().err().unwrap();
+    assert_eq!(locked.to_string(), format!("Traffic is locked: {err}"));
+    assert!(ctx.blobs().is_err());
+    let lock = ctx.locked().unwrap();
+    assert!(lock.keychain);
+    assert_eq!(lock.message, locked.to_string());
     let made: Vec<_> = files(empty.path())
         .into_iter()
         .filter(|p| p.extension().is_none_or(|e| e != "lock") && !p.ends_with("settings.json"))
@@ -392,17 +389,16 @@ fn a_refused_key_refuses_capture() {
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Plain);
     }
-    // Clear is refused too, rather than clearing the empty scratch flows and leaving the
-    // captured ones to come back.
-    assert_eq!(ctx.clear_flows().unwrap_err(), refused);
+    // Clear is refused too, so the captured flows are not left to come back.
+    assert_eq!(ctx.clear_flows().unwrap_err(), format!("Traffic is locked: {refused}"));
     // Retrying with access allowed converts it then, every flow still there.
     drop(ctx);
     let ctx = open_ctx(dir.path(), MasterKeySource::memory());
     ctx.start().unwrap();
-    assert_eq!(flows::count(&ctx.db()).unwrap(), FLOWS);
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS);
     // And clears them now.
     assert_eq!(ctx.clear_flows().unwrap(), FLOWS);
-    assert_eq!(flows::count(&ctx.db()).unwrap(), 0);
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 0);
 }
 
 /// A build from before encryption that owns the engine, a CLI daemon, keeps its plain databases
@@ -438,7 +434,7 @@ fn waits_for_an_older_owner_before_converting() {
     drop(listener);
     std::fs::remove_file(&control).unwrap();
     ctx.start().unwrap();
-    assert_eq!(flows::count(&ctx.db()).unwrap(), FLOWS);
+    assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), FLOWS);
     for name in [PROXY_DB, BLOBS_DB] {
         assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Encrypted);
     }
@@ -461,5 +457,75 @@ fn a_lost_data_key_is_not_replaced() {
     assert!(err.starts_with("The proxy's captured traffic is encrypted, but its key is missing"));
     assert!(!dir.path().join(DATA_KEY).exists());
     assert_eq!(std::fs::read_to_string(dir.path().join("ca/ca.pem")).unwrap(), pem);
-    assert_eq!(flows::count(&ctx.db()).unwrap(), 0, "scratch");
+    assert!(ctx.db().is_err(), "locked");
+    assert!(!ctx.locked().unwrap().keychain, "not the keychain's doing");
+}
+
+/// While locked, every RPC that reads or writes captured traffic is refused with why, and so is
+/// the control API, with 503; the proxy's state says so, and starting, once the key can be
+/// read, opens the databases.
+#[tokio::test(flavor = "multi_thread")]
+async fn locked_rpcs_and_control_api_refuse() {
+    let dir = plain_capture();
+    let ctx = open_ctx(dir.path(), MasterKeySource::refusing("User canceled the operation"));
+    let router = yaak_proxy_lib::build_router();
+    let rpc = |cmd: &'static str, payload: serde_json::Value| {
+        let (router, ctx) = (&router, ctx.clone());
+        async move { router.dispatch(cmd, payload, &ctx).await.map_err(|e| e.message) }
+    };
+    let flow_id = "fl_00001";
+    for (cmd, payload) in [
+        ("list_flows", serde_json::json!({})),
+        ("clear_flows", serde_json::json!({})),
+        ("list_messages", serde_json::json!({ "flowId": flow_id })),
+        ("get_flow_body", serde_json::json!({ "flowId": flow_id, "which": "response" })),
+        ("preview_save", serde_json::json!({ "flowId": flow_id })),
+        ("list_grpc_schemas", serde_json::json!({})),
+        ("remove_grpc_schema", serde_json::json!({ "id": "gs_1" })),
+        ("execute_action", serde_json::json!({ "scope": "global", "action": "flows_clear" })),
+    ] {
+        let err = rpc(cmd, payload).await.unwrap_err();
+        assert!(err.starts_with("Traffic is locked: "), "{cmd}: {err}");
+    }
+    let state = rpc("get_proxy_state", serde_json::json!({})).await.unwrap();
+    assert_eq!(state["locked"]["keychain"], true);
+    assert!(state["locked"]["message"].as_str().unwrap().starts_with("Traffic is locked: "));
+
+    ctx.serve_control_api().unwrap();
+    let info = ctx.control_info().unwrap();
+    let http = reqwest::Client::builder().no_proxy().build().unwrap();
+    for path in ["/flows", &format!("/flows/{flow_id}"), "/har"] {
+        let resp = http
+            .get(format!("{}{path}", info.base_url()))
+            .bearer_auth(&info.token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 503, "{path}");
+        assert!(resp.text().await.unwrap().contains("Traffic is locked: "), "{path}");
+    }
+    let cleared = http
+        .post(format!("{}/flows/clear", info.base_url()))
+        .bearer_auth(&info.token)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cleared.status(), 503);
+    // The status still answers, saying why.
+    let status: serde_json::Value = http
+        .get(format!("{}/status", info.base_url()))
+        .bearer_auth(&info.token)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(status["flowCount"], 0);
+    assert!(status["locked"].as_str().unwrap().starts_with("Traffic is locked: "));
+    ctx.stop_control_api();
+    // Nothing was cleared or converted meanwhile.
+    for name in [PROXY_DB, BLOBS_DB] {
+        assert_eq!(file_state(&dir.path().join(name)).unwrap(), FileState::Plain);
+    }
 }

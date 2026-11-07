@@ -185,6 +185,9 @@ export const followAtom = atom(
 /** The engine's state, kept current from its events, and polled while another process has it */
 export const proxyStateAtom = atom<GetProxyStateResponse | null>(null);
 
+/** Why captured traffic can't be read, while it can't: nothing that reads it is offered then */
+export const lockedAtom = atom((get) => get(proxyStateAtom)?.locked ?? null);
+
 /** When recording was seen to pause, in this session; null while recording or not known */
 export const pausedAtAtom = atom<number | null>(null);
 

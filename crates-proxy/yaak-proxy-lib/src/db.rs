@@ -9,7 +9,6 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::{OpenFlags, Transaction, TransactionBehavior};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::time::Duration;
 use yaak_crypto::MasterKeySource;
 use yaak_crypto::data_key::DataKey;
@@ -148,8 +147,6 @@ fn missing_data_key(data_dir: &Path) -> String {
 pub struct Stores {
     pub db: ProxyQueryManager,
     pub blobs: BlobManager,
-    /// The directory a scratch store lives in, removed once the last clone goes.
-    _scratch: Option<Arc<tempfile::TempDir>>,
 }
 
 impl Stores {
@@ -160,7 +157,7 @@ impl Stores {
             .map_err(|e| format!("Failed to open proxy database: {e}"))?;
         let blobs = open_blobs(&data_dir.join(BLOBS_DB), key)
             .map_err(|e| format!("Failed to open proxy blob store: {e}"))?;
-        Ok(Self { db, blobs, _scratch: None })
+        Ok(Self { db, blobs })
     }
 
     /// The databases in `data_dir` for reading, with the data key the master key in `keys`
@@ -183,19 +180,7 @@ impl Stores {
             .map_err(|e| format!("Failed to open {}: {e}", db_path.display()))?;
         let blobs = open_blobs_read_only(&blobs_path, key.as_ref())
             .map_err(|e| format!("Failed to open the proxy's blob store: {e}"))?;
-        Ok(Self { db, blobs, _scratch: None })
-    }
-
-    /// Empty databases, encrypted with a key that is never stored, in a directory of their own
-    /// that goes with them: what the app shows while the real ones cannot be opened.
-    pub fn scratch() -> std::result::Result<Self, String> {
-        let dir = tempfile::Builder::new()
-            .prefix("yaak-proxy-locked-")
-            .tempdir()
-            .map_err(|e| format!("Failed to make a scratch directory: {e}"))?;
-        let key = database_key(&DataKey::ephemeral());
-        let stores = Self::open(dir.path(), &key)?;
-        Ok(Self { _scratch: Some(Arc::new(dir)), ..stores })
+        Ok(Self { db, blobs })
     }
 }
 
@@ -236,12 +221,17 @@ pub fn encrypt_existing(
     Ok(converted)
 }
 
+const KEY_UNAVAILABLE: &str =
+    "Yaak Proxy stores traffic encrypted and couldn't read its key from the keychain";
+
 /// Why the databases cannot be opened, or the CA made, without the data key.
 pub fn key_unavailable(reason: &str) -> String {
-    format!(
-        "Yaak Proxy stores traffic encrypted and couldn't read its key from the keychain: \
-        {reason}. Allow it access, then retry."
-    )
+    format!("{KEY_UNAVAILABLE}: {reason}. Allow it access, then retry.")
+}
+
+/// `reason` is [`key_unavailable`]'s: the keychain would not give up the key.
+pub fn is_key_unavailable(reason: &str) -> bool {
+    reason.starts_with(KEY_UNAVAILABLE)
 }
 
 /// The functions filters use: `sidebar_path(url)`, the app sidebar's place for a URL, and
@@ -267,6 +257,7 @@ fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
 }
 
 fn read_only_pool(path: &Path, key: Option<&DatabaseKey>) -> Result<SqlitePool> {
+    encryption::init_crypto();
     let key = match (encryption::file_state(path)?, key) {
         (FileState::Plain, _) => None,
         (_, Some(key)) => Some(key.clone()),
@@ -294,6 +285,7 @@ fn read_only_pool(path: &Path, key: Option<&DatabaseKey>) -> Result<SqlitePool> 
 }
 
 fn file_pool(path: &Path, max_size: u32, key: &DatabaseKey) -> Result<SqlitePool> {
+    encryption::init_crypto();
     let key = key.clone();
     let manager = SqliteConnectionManager::file(path).with_init(move |conn| {
         encryption::apply_key(conn, &key)?;

@@ -7,7 +7,7 @@ import { useCallback } from "react";
 import { base64ToBytes, bodyFileName } from "./body";
 import { curlBodyText, toCurl } from "./curl";
 import { rpc } from "./rpc";
-import { activeQueryAtom } from "./store";
+import { activeQueryAtom, lockedAtom } from "./store";
 import { useShowToast } from "./toast";
 
 /** The flow the save dialog is open for */
@@ -68,10 +68,13 @@ export async function exportHar(
 export function useExportShownHar(): () => DropdownItem {
   const showToast = useShowToast();
   const query = useAtomValue(activeQueryAtom);
+  // Nothing can be read to export while captured traffic is locked.
+  const locked = useAtomValue(lockedAtom) != null;
   return useCallback(
     () => ({
       label: query == null ? "Export All Flows as HAR" : "Export Matching Flows as HAR",
       icon: "download",
+      disabled: locked,
       onSelect: async () => {
         try {
           const written = await exportHar(query == null ? {} : { filter: query }, "flows.har");
@@ -86,7 +89,7 @@ export function useExportShownHar(): () => DropdownItem {
         }
       },
     }),
-    [query, showToast],
+    [query, locked, showToast],
   );
 }
 

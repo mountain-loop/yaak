@@ -76,11 +76,6 @@ impl DataKey {
         }
     }
 
-    /// A new key that is never stored, so what it encrypts is unreadable once it is dropped.
-    pub fn ephemeral() -> Self {
-        Self { key: Key::<XChaCha20Poly1305>::generate() }
-    }
-
     /// The data key kept wrapped in the file at `path`, or None when there is no file. Never
     /// makes one, for a reader that must not create keys.
     pub fn load_file(source: &MasterKeySource, path: &Path) -> Result<Option<Self>> {
@@ -185,7 +180,6 @@ mod tests {
         assert_eq!(loaded.raw_bytes(), made.raw_bytes());
         assert!(DataKey::load_file(&source, &dir.path().join("none.key"))?.is_none());
         assert!(!dir.path().join("none.key").exists());
-        assert_ne!(DataKey::ephemeral().raw_bytes(), DataKey::ephemeral().raw_bytes());
         assert_eq!(fs::read_to_string(&path)?, stored, "not rewritten");
 
         // Another master key cannot read it, and does not replace it.

@@ -3,6 +3,7 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
 import { memo, type RefObject, useEffect, useRef } from "react";
 import {
   allTrafficTotalAtom,
+  lockedAtom,
   searchTermsAtom,
   searchTextAtom,
   searchTextVersionAtom,
@@ -24,6 +25,8 @@ export const SearchBar = memo(function SearchBar() {
   const setTerms = useSetAtom(searchTermsAtom);
   const setSearchText = useSetAtom(setSearchTextAtom);
   const version = useAtomValue(searchTextVersionAtom);
+  // Nothing to search while captured traffic is locked.
+  const locked = useAtomValue(lockedAtom) != null;
   // Read, not subscribed: `PlaceholderCount` keeps it current without re-rendering the field.
   const total = useStore().get(allTrafficTotalAtom);
   // PlainInput hands back its <input> as the ref
@@ -59,7 +62,8 @@ export const SearchBar = memo(function SearchBar() {
       hideLabel
       size="sm"
       className="font-mono text-xs"
-      placeholder={placeholderFor(total)}
+      placeholder={locked ? "Traffic is locked" : placeholderFor(total)}
+      disabled={locked}
       defaultValue={text}
       forceUpdateKey={String(version)}
       onChange={setText}

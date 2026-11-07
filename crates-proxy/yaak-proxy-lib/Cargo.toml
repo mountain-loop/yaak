@@ -24,7 +24,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 ts-rs = { workspace = true, features = ["chrono-impl"] }
-tempfile = "3"
 url = "2"
 yaak-common = { workspace = true }
 yaak-crypto = { workspace = true }
@@ -83,6 +82,7 @@ protoc-bin-vendored = "3"
 tonic = { version = "0.14.6", default-features = false }
 tonic-reflection = "0.14.6"
 reqwest = { workspace = true }
+tempfile = "3"
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
 yaak-crypto = { workspace = true, features = ["test-support"] }
 yaak-proxy-helper = { workspace = true, features = ["test-support"] }

@@ -78,15 +78,17 @@ pub fn file_state(path: &Path) -> io::Result<FileState> {
 /// init calls this first. Reads the schema at once, so a wrong key, or a plain file, fails here
 /// ("file is not a database") rather than at the first query.
 pub fn apply_key(conn: &Connection, key: &DatabaseKey) -> rusqlite::Result<()> {
-    init_openssl();
+    init_crypto();
     conn.execute_batch(&format!("PRAGMA key = {};", key.sql_literal()))?;
     conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(()))
 }
 
-/// Initializes OpenSSL before SQLCipher first uses it, without the cleanup OpenSSL otherwise
-/// registers to run at exit: that frees its state while threads still reading or writing an
-/// encrypted database use it, and the process crashes as it quits.
-fn init_openssl() {
+/// Initializes OpenSSL without the cleanup it otherwise registers to run at exit, which frees
+/// its state while threads still reading or writing an encrypted database use it, so the process
+/// crashes as it quits. Must run before the process opens its first SQLite connection: SQLCipher
+/// uses OpenSSL as SQLite initializes, and a cleanup registered then cannot be taken back. Every
+/// opener here calls it; one that opens a connection itself first calls it too.
+pub fn init_crypto() {
     openssl_sys::init();
 }
 
@@ -114,13 +116,13 @@ pub fn encrypt_in_place(
     key: &DatabaseKey,
     progress: &(dyn Fn(u64) + Sync),
 ) -> Result<bool> {
+    init_crypto();
     let exported = sidecar(path, "-encrypting");
     let replaced = sidecar(path, "-plain");
     // Nothing to convert and nothing left over, the usual case, takes no lock.
     if file_state(path)? != FileState::Plain && !exported.exists() && !replaced.exists() {
         return Ok(false);
     }
-    init_openssl();
 
     let lock = fs::OpenOptions::new()
         .read(true)

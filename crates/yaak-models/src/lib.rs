@@ -73,6 +73,7 @@ mod open {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
+        yaak_database::encryption::init_crypto();
         let key = key.clone();
         let manager = SqliteConnectionManager::file(path).with_init(move |c| {
             yaak_database::encryption::apply_key(c, &key)?;

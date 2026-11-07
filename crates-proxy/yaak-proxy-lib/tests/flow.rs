@@ -95,7 +95,7 @@ async fn spawn_upstream() -> SocketAddr {
 async fn wait_for_flow(ctx: &ProxyCtx, url: &str) -> Flow {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let flows = ctx.db().with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             return flow;
         }
@@ -149,10 +149,23 @@ async fn flow_is_stored_with_its_bodies() {
     assert!(flow.request_headers.iter().any(|h| h.name == "content-length"));
     assert_eq!(flow.error, None);
 
-    assert_eq!(read_raw_body(&ctx.blobs(), &flow.id, FlowBody::Request).unwrap(), b"hello proxy");
-    assert_eq!(read_raw_body(&ctx.blobs(), &flow.id, FlowBody::Response).unwrap(), compressed);
-    let decoded =
-        read_body(&ctx.db(), &ctx.blobs(), &flow, FlowBody::Response, CAPTURE_LIMIT).await.unwrap();
+    assert_eq!(
+        read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Request).unwrap(),
+        b"hello proxy"
+    );
+    assert_eq!(
+        read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Response).unwrap(),
+        compressed
+    );
+    let decoded = read_body(
+        &ctx.db().unwrap(),
+        &ctx.blobs().unwrap(),
+        &flow,
+        FlowBody::Response,
+        CAPTURE_LIMIT,
+    )
+    .await
+    .unwrap();
     let expected = DecodedBody {
         data: b"hello proxy".to_vec(),
         stored_size: compressed.len(),
@@ -170,10 +183,14 @@ async fn flow_is_stored_with_its_bodies() {
     assert_eq!(flow.request_size, 0);
     assert_eq!(flow.response_size, BIG_BODY as i64);
     assert!(flow.response_truncated);
-    let stored = read_raw_body(&ctx.blobs(), &flow.id, FlowBody::Response).unwrap();
+    let stored = read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Response).unwrap();
     assert_eq!(stored, vec![b'x'; CAPTURE_LIMIT]);
     assert!(
-        !ctx.blobs().connect().body_exists(&Flow::body_id(&flow.id, FlowBody::Request)).unwrap()
+        !ctx.blobs()
+            .unwrap()
+            .connect()
+            .body_exists(&Flow::body_id(&flow.id, FlowBody::Request))
+            .unwrap()
     );
 
     ctx.stop().unwrap();
@@ -207,7 +224,8 @@ async fn early_response_keeps_request_totals() {
 
     let flow = wait_for_flow(&ctx, &url).await;
     assert_eq!(flow.status, Some(200));
-    let stored = read_raw_body(&ctx.blobs(), &flow.id, FlowBody::Request).unwrap().len() as i64;
+    let stored =
+        read_raw_body(&ctx.blobs().unwrap(), &flow.id, FlowBody::Request).unwrap().len() as i64;
     assert!(stored > 0);
     assert!(flow.request_size >= stored, "{} < {stored}", flow.request_size);
     assert_eq!(flow.request_truncated, flow.request_size > stored);
@@ -314,6 +332,7 @@ async fn body_rpcs() {
             "httpVersion": "auto",
             "startError": null,
             "encrypting": null,
+            "locked": null,
             "otherOwner": null,
         })
     );
@@ -441,7 +460,7 @@ async fn times_capture_through_the_engine() {
     for worker in workers {
         worker.await.unwrap();
     }
-    let db = ctx.db();
+    let db = ctx.db().unwrap();
     while yaak_proxy_lib::flows::count(&db).unwrap() < FLOWS {
         tokio::time::sleep(Duration::from_millis(1)).await;
     }
@@ -452,7 +471,7 @@ async fn times_capture_through_the_engine() {
         .into_iter()
         .map(|f| f.id)
         .collect();
-    let blobs = ctx.blobs();
+    let blobs = ctx.blobs().unwrap();
     let started = Instant::now();
     for id in &ids {
         let flow = yaak_proxy_lib::flows::get(&db, id).unwrap();
