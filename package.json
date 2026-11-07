@@ -63,6 +63,7 @@
     "crates/yaak-git",
     "crates/yaak-models",
     "crates/yaak-plugins",
+    "crates/yaak-query",
     "crates/yaak-sse",
     "crates/yaak-sync",
     "crates/yaak-templates",

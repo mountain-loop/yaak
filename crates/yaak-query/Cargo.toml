@@ -1,0 +1,36 @@
+[package]
+name = "yaak-query"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The search query language shared by Yaak's sidebar and Yaak Proxy: grammar,
+# parser, schema, evaluator, completion and highlighting. Pure Rust, with a
+# WebAssembly build (`@yaakapp-internal/query`) for the frontends.
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false # Matches yaak-templates; wasm-opt has caused errors in CI
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["wasm"]
+# The `#[wasm_bindgen]` exports that make up the @yaakapp-internal/query
+# package. They only exist when compiling for wasm32, so native builds and
+# `cargo test` never see them. Off for crates that link this one into their own
+# wasm module and do not want these re-exported from theirs.
+wasm = []
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+# Everything that only exists for the WebAssembly package is target-scoped, so
+# a native consumer (the proxy, the CLI) links none of it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen = "0.6.5"
+wasm-bindgen = { version = "0.2.100", features = ["serde-serialize"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+ts-rs = { workspace = true }

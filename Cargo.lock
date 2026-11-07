@@ -11970,6 +11970,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "yaak-query"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "ts-rs",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "yaak-rpc"
 version = "0.0.0"
 dependencies = [

@@ -63,10 +63,9 @@ import { isSidebarFocused } from "../lib/scopes";
 import { navigateToRequestOrFolderOrWorkspace } from "../lib/setWorkspaceSearchParams";
 import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
 import { ContextMenu, Dropdown } from "./core/Dropdown";
-import { type FieldDef, filter } from "@yaakapp-internal/ui/editor";
-import type { Ast } from "./core/Editor/filter/query";
-import { evaluate, parseQuery } from "./core/Editor/filter/query";
-import { formatFieldFilter } from "./core/Editor/filter/format";
+import type { Node as QueryNode, Schema } from "@yaakapp-internal/query";
+import { formatField, parseQuery, QueryMatcher } from "@yaakapp-internal/query";
+import { queryFilter } from "./core/Editor/filter/extension";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import {
   Icon,
@@ -111,7 +110,7 @@ function Sidebar({ className }: { className?: string }) {
   const activeWorkspaceId = useAtomValue(activeWorkspaceAtom)?.id;
   const treeId = `tree.${activeWorkspaceId ?? "unknown"}`;
   const filterText = useAtomValue(sidebarFilterAtom);
-  const [tree, allFields, emptyFilterSuggestions] = useAtomValue(sidebarTreeAtom) ?? [];
+  const [tree, fieldValues, emptyFilterSuggestions] = useAtomValue(sidebarTreeAtom) ?? [];
 
   const wrapperRef = useRef<HTMLElement>(null);
   const treeRef = useRef<TreeHandle>(null);
@@ -552,18 +551,18 @@ function Sidebar({ className }: { className?: string }) {
   const filterCompartmentMountExtRef = useRef<Extension | null>(null);
   if (filterCompartmentMountExtRef.current == null) {
     filterCompartmentMountExtRef.current = filterLanguageCompartmentRef.current.of(
-      filter({ fields: allFields ?? [] }),
+      queryFilter({ schema: sidebarFilterSchema, values: fieldValues }),
     );
   }
 
   useEffect(() => {
     const view = filterRef.current;
     if (!view) return;
-    const ext = filter({ fields: allFields ?? [] });
+    const ext = queryFilter({ schema: sidebarFilterSchema, values: fieldValues });
     view.dispatch({
       effects: filterLanguageCompartmentRef.current.reconfigure(ext),
     });
-  }, [allFields]);
+  }, [fieldValues]);
 
   if (tree == null || hidden) {
     return null;
@@ -851,16 +850,28 @@ function setSidebarFilterText(text: string) {
   jotaiStore.set(sidebarFilterAtom, { text, key: `${Math.random()}` });
 }
 
-function getSidebarSuggestionValue(ast: Ast | null) {
+/** The fields `getItemFields` fills in. Bare words match `getItemText` by word prefix */
+const sidebarFilterSchema: Schema = {
+  fields: ["method", "url", "name", "type", "folder", "grpc_service", "grpc_method"].map(
+    (name) => ({ name, kind: { type: "text" } }),
+  ),
+  freeText: "fuzzy",
+};
+
+function getSidebarSuggestionValue(ast: QueryNode | null, query: string) {
   if (ast == null) return null;
 
   if (ast.type === "Term" || ast.type === "Phrase") {
-    const value = ast.value.trim();
+    const value = ast.text.trim();
     return value.length > 0 ? value : null;
   }
 
   if (ast.type === "Field") {
-    const value = ast.value.trim();
+    const raw =
+      ast.value.type === "text"
+        ? ast.value.text
+        : query.slice(ast.valueSpan.start, ast.valueSpan.end);
+    const value = raw.trim();
     return value.length > 0 ? value : null;
   }
 
@@ -882,7 +893,7 @@ const sidebarSuggestionFieldOrder = [
 ];
 
 const sidebarTreeAtom = atom<
-  [TreeNode<SidebarModel>, FieldDef[], SidebarFilterSuggestion[]] | null
+  [TreeNode<SidebarModel>, Record<string, string[]>, SidebarFilterSuggestion[]] | null
 >((get) => {
   const allModels = get(memoAllPotentialChildrenAtom);
   const activeWorkspace = get(activeWorkspaceAtom);
@@ -903,8 +914,8 @@ const sidebarTreeAtom = atom<
     return null;
   }
 
-  const queryAst = parseQuery(filter.text);
-  const suggestionValue = getSidebarSuggestionValue(queryAst);
+  const suggestionValue = getSidebarSuggestionValue(parseQuery(filter.text), filter.text);
+  const matcher = new QueryMatcher(filter.text, sidebarFilterSchema);
 
   // returns true if this node OR any child matches the filter
   const allFields: Record<string, Set<string>> = {};
@@ -929,8 +940,8 @@ const sidebarTreeAtom = atom<
       }
     }
 
-    if (queryAst != null) {
-      matchesSelf = isLeafNode && evaluate(queryAst, { text: getItemText(node.item), fields });
+    if (!matcher.isEmpty) {
+      matchesSelf = isLeafNode && matcher.matches({ text: getItemText(node.item), fields });
     }
 
     let matchesChild = false;
@@ -976,13 +987,11 @@ const sidebarTreeAtom = atom<
 
   // Build tree and mark visibility in one pass
   build(root, 1);
+  matcher.free();
 
-  const fields: FieldDef[] = [];
+  const fieldValues: Record<string, string[]> = {};
   for (const [name, values] of Object.entries(allFields)) {
-    fields.push({
-      name,
-      values: Array.from(values).filter((v) => v.length < 20),
-    });
+    fieldValues[name] = Array.from(values).filter((v) => v.length < 20);
   }
   const suggestions = Array.from(suggestionFields)
     .sort((a, b) => {
@@ -993,9 +1002,9 @@ const sidebarTreeAtom = atom<
     })
     .map((field) => ({
       field,
-      filterText: formatFieldFilter(field, suggestionValue ?? ""),
+      filterText: formatField(field, suggestionValue ?? ""),
     }));
-  return [root, fields, suggestions] as const;
+  return [root, fieldValues, suggestions] as const;
 });
 
 const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
@@ -1043,7 +1052,10 @@ const sidebarGitStatusByModelIdAtom = atom<Record<string, GitStatus>>((get) => {
 
 const sidebarGitStatusFamily = atomFamily(
   (modelId: string) =>
-    selectAtom(sidebarGitStatusByModelIdAtom, (statusByModelId) => statusByModelId[modelId] ?? null),
+    selectAtom(
+      sidebarGitStatusByModelIdAtom,
+      (statusByModelId) => statusByModelId[modelId] ?? null,
+    ),
   Object.is,
 );
 
