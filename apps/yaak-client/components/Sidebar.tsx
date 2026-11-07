@@ -53,10 +53,7 @@ import { deepEqualAtom } from "../lib/atoms";
 import { showConfirm } from "../lib/confirm";
 import { deleteModelWithConfirm } from "../lib/deleteModelWithConfirm";
 import { showDialog } from "../lib/dialog";
-import {
-  gitWorktreeStatusByModelIdAtom,
-  gitWorktreeStatusFamily,
-} from "../lib/gitWorktreeStatus";
+import { gitWorktreeStatusByModelIdAtom, gitWorktreeStatusFamily } from "../lib/gitWorktreeStatus";
 import { jotaiStore } from "../lib/jotai";
 import { resolvedModelName } from "../lib/resolvedModelName";
 import { isSidebarFocused } from "../lib/scopes";

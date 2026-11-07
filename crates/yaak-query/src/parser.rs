@@ -2,10 +2,15 @@
 //!
 //! Precedence, tightest first: `-`, then AND (implicit or written), then `OR`. The parser is
 //! forgiving and never fails: a stray `)` or a dangling `OR`, `AND` or `-` is ignored, an
-//! unclosed `(` closes at the end, and an empty group is dropped.
+//! unclosed `(` closes at the end, and an empty group is dropped. Groups and negations nest
+//! at most [`MAX_DEPTH`] deep; past that, `(` and `-` are ignored, so pathological input can't
+//! exhaust the stack (the WebAssembly build has a small one).
 
 use crate::ast::{Node, Span};
 use crate::lexer::{Tok, TokKind, lex};
+
+/// How deep groups and negations may nest, together.
+pub const MAX_DEPTH: usize = 32;
 
 /// Parses a query. `None` when it has no terms (empty, only whitespace, or only operators).
 pub fn parse(input: &str) -> Option<Node> {
@@ -77,8 +82,10 @@ impl<'a> Parser<'a> {
             next.span.start == tok.span.end
                 && !matches!(next.kind, TokKind::RParen | TokKind::Or | TokKind::And)
         });
-        next?;
-        let node = self.parse_unary(depth)?;
+        if next.is_none() || depth >= MAX_DEPTH {
+            return None;
+        }
+        let node = self.parse_unary(depth + 1)?;
         let span = tok.span.to(node.span());
         Some(Node::Not { node: Box::new(node), span })
     }
@@ -97,6 +104,8 @@ impl<'a> Parser<'a> {
                 path_span: *path_span,
                 value_span: *value_span,
             }),
+            // Too deep: the group's contents carry on at this level instead
+            TokKind::LParen if depth >= MAX_DEPTH => None,
             TokKind::LParen => {
                 let inner = self.parse_or(depth + 1);
                 if let Some(Tok { kind: TokKind::RParen, .. }) = self.peek() {
@@ -323,6 +332,30 @@ mod tests {
             panic!()
         };
         assert_eq!(value_span, Span::new(8, 8));
+    }
+
+    #[test]
+    fn nesting_is_bounded() {
+        fn depth(node: &Node) -> usize {
+            match node {
+                Node::And { children, .. } | Node::Or { children, .. } => {
+                    children.iter().map(depth).max().unwrap_or(0) + 1
+                }
+                Node::Not { node, .. } => depth(node) + 1,
+                _ => 1,
+            }
+        }
+        let parens = format!("{}a OR b{}", "(".repeat(5000), ")".repeat(5000));
+        let negations = format!("{}a", "-".repeat(5000));
+        let mixed = format!("{}a{}", "-(".repeat(5000), ")".repeat(5000));
+        for input in [parens, negations, mixed] {
+            let node = parse(&input).unwrap();
+            assert!(depth(&node) <= MAX_DEPTH + 2, "too deep for {:?}", &input[..10]);
+        }
+        // Within the limit, nesting is kept exactly
+        let input = format!("{}a{}", "(".repeat(MAX_DEPTH), ")".repeat(MAX_DEPTH));
+        assert_eq!(show(&input), "a");
+        assert_eq!(show(&format!("{}a", "-".repeat(2))), "(not (not a))");
     }
 
     #[test]

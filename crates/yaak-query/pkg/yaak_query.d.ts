@@ -8,9 +8,10 @@ export class QueryMatcher {
     free(): void;
     [Symbol.dispose](): void;
     /**
-     * Whether a `Document` (`{ text, fields }`) matches.
+     * Whether a `Document` (`{ text, fields }`), as JSON, matches. JSON crosses into wasm far
+     * faster than walking a JS object property by property, which matters per sidebar item.
      */
-    matches(doc: any): boolean;
+    matches(doc_json: string): boolean;
     constructor(input: string, schema: any);
     /**
      * Whether the query has no terms, so it matches everything.

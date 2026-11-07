@@ -58,7 +58,7 @@ export class QueryMatcher {
   }
 
   matches(doc: Document): boolean {
-    return this.#inner.matches(doc);
+    return this.#inner.matches(JSON.stringify(doc));
   }
 
   /** Frees the parsed query now rather than when it is garbage collected */

@@ -133,9 +133,11 @@ impl QueryMatcher {
         self.root.is_none()
     }
 
-    /// Whether a `Document` (`{ text, fields }`) matches.
-    pub fn matches(&self, doc: JsValue) -> Result<bool, JsValue> {
-        let doc: Document = from_js(doc)?;
+    /// Whether a `Document` (`{ text, fields }`), as JSON, matches. JSON crosses into wasm far
+    /// faster than walking a JS object property by property, which matters per sidebar item.
+    pub fn matches(&self, doc_json: &str) -> Result<bool, JsValue> {
+        let doc: Document =
+            serde_json::from_str(doc_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
         Ok(crate::evaluate(self.root.as_ref(), &self.schema, &doc))
     }
 }

@@ -21,12 +21,15 @@ export class QueryMatcher {
         return ret !== 0;
     }
     /**
-     * Whether a `Document` (`{ text, fields }`) matches.
-     * @param {any} doc
+     * Whether a `Document` (`{ text, fields }`), as JSON, matches. JSON crosses into wasm far
+     * faster than walking a JS object property by property, which matters per sidebar item.
+     * @param {string} doc_json
      * @returns {boolean}
      */
-    matches(doc) {
-        const ret = wasm.querymatcher_matches(this.__wbg_ptr, doc);
+    matches(doc_json) {
+        const ptr0 = passStringToWasm0(doc_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.querymatcher_matches(this.__wbg_ptr, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

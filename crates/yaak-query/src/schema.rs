@@ -1,6 +1,7 @@
 //! What a consumer's fields are, and how its bare words match.
 
 use crate::ast::{FieldValue, Node, NumberLiteral, Span};
+use crate::lexer::parse_number;
 use serde::{Deserialize, Serialize};
 
 /// A consumer's searchable fields.
@@ -163,6 +164,15 @@ fn value_fits(kind: &FieldKind, value: &FieldValue) -> bool {
         (FieldKind::Number { units }, FieldValue::Range { low, high }) => {
             to_base(low, units).is_some() && to_base(high, units).is_some()
         }
+        // A bare number is equality, so its unit has to be one the field takes
+        (FieldKind::Number { units }, FieldValue::Text { text, quoted: false }) => {
+            parse_number(text).is_none_or(|number| to_base(&number, units).is_some())
+        }
+        // Text holding numbers compares them as plain numbers, without units
+        (FieldKind::Text, FieldValue::Compare { number, .. }) => number.unit.is_none(),
+        (FieldKind::Text, FieldValue::Range { low, high }) => {
+            low.unit.is_none() && high.unit.is_none()
+        }
         (FieldKind::Flag, FieldValue::Text { text, .. }) => {
             text.is_empty() || parse_flag(text).is_some()
         }
@@ -257,6 +267,23 @@ mod tests {
                 Diagnostic::InvalidValue { path: "error".into(), span: Span::new(50, 55) },
             ]
         );
+    }
+
+    /// Diagnostics flag exactly the unit mistakes the evaluator rejects.
+    #[test]
+    fn reports_units_the_evaluator_rejects() {
+        let s = schema();
+        let invalid = |input: &str| !s.diagnostics(&parse(input).unwrap()).is_empty();
+        assert!(invalid("@duration:1m"));
+        assert!(invalid("@duration:[1m TO 2s]"));
+        assert!(invalid("@url:>1s"));
+        assert!(invalid("@url:[1 TO 2s]"));
+        assert!(!invalid("@duration:1s"));
+        assert!(!invalid("@duration:1500"));
+        assert!(!invalid("@duration:abc"));
+        assert!(!invalid("@duration:\"1m\""));
+        assert!(!invalid("@url:>1"));
+        assert!(!invalid("@url:1m"));
     }
 
     #[test]
