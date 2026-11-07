@@ -142,7 +142,7 @@ export function Sidebar() {
               showToast({
                 id: "decrypt-blocked",
                 color: "notice",
-                message: `${blocked} in the decrypt list keeps it from being decrypted. Remove it from the list first.`,
+                message: `Excluded by ${blocked}`,
               });
               return;
             }

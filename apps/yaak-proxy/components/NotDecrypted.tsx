@@ -11,11 +11,11 @@ import {
   subjectQuery,
 } from "../lib/decrypt";
 import { sidebarPath } from "../lib/search";
+import { EmptyState } from "./FlowBodyViewer";
 
 /**
- * The detail of HTTPS passed through undecrypted: what was recorded of it, and buttons that add
- * its host, or its app, to the decrypt list. Adding takes effect from the next connection, as
- * this one was never read.
+ * The detail of HTTPS passed through undecrypted: its sizes and time, and buttons that add its
+ * host or its app to the decrypt list, from the next connection on.
  */
 export function NotDecrypted({ flow }: { flow: Flow }) {
   const list = useDecryptList();
@@ -48,65 +48,54 @@ export function NotDecrypted({ flow }: { flow: Flow }) {
   const decrypt = (subject: DecryptSubject) =>
     save.mutate({ entries: setDecrypted(list, [subject], true).map((e) => e.entry) });
 
+  const facts = [
+    `${formatSize(Number(flow.requestSize))} sent`,
+    `${formatSize(Number(flow.responseSize))} received`,
+    open ? "open" : flow.elapsedMs == null ? null : formatMillis(flow.elapsedMs),
+  ].filter((f) => f != null);
+
   return (
-    <div className="h-full grid place-items-center px-6 py-8 overflow-auto">
-      <div className="max-w-[30rem] w-full grid gap-3">
-        <div className="flex items-center gap-2 text-text">
-          <Icon icon="lock" className="text-text-subtle" />
-          <span className="text-base font-semibold">Not decrypted</span>
+    <EmptyState>
+      <div className="grid justify-items-center gap-2">
+        <div className="flex items-center gap-1.5 text-text-subtle">
+          <Icon icon="lock" size="sm" />
+          Not decrypted
         </div>
-        <p className="text-sm text-text-subtle leading-relaxed">
-          {app == null ? "This" : `${app}'s`} HTTPS connection to{" "}
-          <span className="font-mono text-xs text-text">{host}</span> passed through as it was sent,
-          so only its size and timing are recorded: {formatSize(Number(flow.requestSize))} sent,{" "}
-          {formatSize(Number(flow.responseSize))} received
-          {open
-            ? ", still open."
-            : flow.elapsedMs == null
-              ? "."
-              : ` over ${formatMillis(flow.elapsedMs)}.`}
-        </p>
-        {flow.error != null && <p className="text-sm text-danger">{flow.error}</p>}
+        <div className="font-mono text-xs">{facts.join(" · ")}</div>
+        {flow.error != null && <div className="text-danger">{flow.error}</div>}
         {listed ? (
-          <p className="text-sm text-text-subtle leading-relaxed">
-            The decrypt list covers it now, so new connections from {app ?? "the app"} to {host} are
-            decrypted. If they still are not, the app rejected Yaak Proxy's certificate: it pins its
-            own, or the certificate is not trusted yet.
-          </p>
+          <div title="Still tunnelled? The app may pin its certificate">
+            Decrypting new connections
+          </div>
         ) : blocked != null ? (
-          <p className="text-sm text-text-subtle leading-relaxed">
-            <span className="font-mono text-xs text-text">{blocked}</span> in the decrypt list keeps
-            it from being decrypted. Remove it from the list, under More… by the state, to decrypt
-            it.
-          </p>
+          <div title="Remove it from the decrypt list to decrypt">
+            Excluded by <span className="font-mono text-xs">{blocked}</span>
+          </div>
         ) : (
-          <>
-            <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 mt-1">
+            <Button
+              size="xs"
+              variant="border"
+              title={`Decrypt new connections to ${host}`}
+              disabled={save.isPending}
+              onClick={() => decrypt(hostSubject)}
+            >
+              Decrypt Host
+            </Button>
+            {appSubject != null && (
               <Button
-                size="sm"
-                color="primary"
+                size="xs"
+                variant="border"
+                title={`Decrypt new connections from ${app}`}
                 disabled={save.isPending}
-                onClick={() => decrypt(hostSubject)}
+                onClick={() => decrypt(appSubject)}
               >
-                Decrypt {host}
+                Decrypt App
               </Button>
-              {appSubject != null && (
-                <Button
-                  size="sm"
-                  variant="border"
-                  disabled={save.isPending}
-                  onClick={() => decrypt(appSubject)}
-                >
-                  Decrypt everything from {app}
-                </Button>
-              )}
-            </div>
-            <p className="text-xs text-text-subtlest">
-              New connections are decrypted from then on; this one stays as it was.
-            </p>
-          </>
+            )}
+          </div>
         )}
       </div>
-    </div>
+    </EmptyState>
   );
 }

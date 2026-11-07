@@ -344,10 +344,10 @@ export function decryptFilterOptions(seen: SeenTargets | null | undefined): Filt
   return {
     fieldPrefix: "",
     replaceValueOnly: true,
-    negation: { prefix: "!", info: "Never decrypt what follows" },
+    negation: { prefix: "!", info: "Exclude" },
     fields: [
-      { name: "host", values: seen?.hosts ?? [], info: "A host, or *.example.com for a site" },
-      { name: "app", values: [...apps], info: "An app, by name or bundle id" },
+      { name: "host", values: seen?.hosts ?? [], info: "Host or *.site" },
+      { name: "app", values: [...apps], info: "App name or bundle id" },
     ],
   };
 }

@@ -64,7 +64,7 @@ export function FirstRun() {
         <div className="text-xl font-semibold mb-1.5">Set up Yaak Proxy</div>
         <div className="text-text-subtle text-sm leading-relaxed mb-4">
           {systemSupported ? "Four" : "Three"} steps, once. Then every app on this Mac sends its
-          traffic here, and the HTTPS you choose reads as plain text.
+          traffic here.
         </div>
         <div className="rounded-lg border border-border-subtle bg-surface divide-y divide-border-subtle">
           <Step
@@ -122,11 +122,13 @@ export function FirstRun() {
           <Step
             n={systemSupported ? 3 : 2}
             state={decrypt.state}
-            title={everything ? "Decrypting everything" : "Choose what to decrypt"}
+            title="What to decrypt"
             description={
-              everything
-                ? "Except Apple's services and apps that pin their certificates. Change it in the decrypt list."
-                : "Nothing is decrypted until you pick it: decrypt hosts and apps as they appear, from the sidebar or a flow, or everything at once."
+              everything ? (
+                <span title="Except the built-in exclusions">Everything</span>
+              ) : (
+                <span title="From a flow or the sidebar">Pick as they appear</span>
+              )
             }
             action={
               everything ? (

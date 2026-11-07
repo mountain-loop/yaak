@@ -40,7 +40,7 @@ export function DecryptListEditor({ className }: { className?: string }) {
       />
       <div className="rounded-md border border-border-subtle divide-y divide-border-subtle">
         {list.length === 0 && (
-          <div className="px-3 py-2 text-sm text-text-subtle">Nothing is decrypted.</div>
+          <div className="px-3 py-2 text-sm text-text-subtle">Nothing decrypted</div>
         )}
         {list.map((e) => (
           <EntryRow
@@ -76,13 +76,18 @@ function EntryRow({
         icon={negated ? "lock" : "lock_open"}
         size="sm"
         className={classNames("shrink-0", entry.builtIn ? "opacity-60" : "text-text-subtle")}
-        title={negated ? "Never decrypted" : "Decrypted"}
+        title={negated ? "Excluded" : "Decrypted"}
       />
       <span className={classNames("truncate", entry.entry !== "*" && "font-mono text-xs")}>
         {entryLabel(entry.entry)}
       </span>
       {entry.builtIn && (
-        <span className="shrink-0 text-2xs rounded px-1 border border-border-subtle">built-in</span>
+        <span
+          title="Ships with Yaak Proxy"
+          className="shrink-0 text-2xs rounded px-1 border border-border-subtle"
+        >
+          built-in
+        </span>
       )}
       <IconButton
         size="xs"
@@ -134,7 +139,7 @@ function EntryInput({
       if (disabledRef.current) return true;
       const entry = normalizeEntry(text);
       if (entry == null) {
-        setError(`${text.trim()} is not a host, an app or *`);
+        setError("Not a host or app");
         return true;
       }
       setError(null);
@@ -147,14 +152,14 @@ function EntryInput({
   }, [seenRef]);
 
   return (
-    <div className="grid gap-1">
+    <div className="grid gap-1" title="Applies to new connections">
       <Input
-        label="Add a host or app to decrypt"
+        label="Add entry"
         hideLabel
         size="sm"
         stateKey={null}
         language={null}
-        placeholder="api.example.com, host:*.example.com, app:Google Chrome, or *"
+        placeholder="Add host, app or *"
         extensions={extensions}
         onChange={() => setError(null)}
       />
@@ -173,8 +178,7 @@ export function DecryptListDialog() {
       open={open}
       onClose={() => setOpen(false)}
       size="dynamic"
-      title="Decrypt list"
-      description="HTTPS from these hosts and apps is decrypted; the rest passes through untouched. Changes apply to new connections."
+      title="Decrypt List"
       className="w-[36rem]"
     >
       <div className="pb-4">{open && <DecryptListEditor />}</div>

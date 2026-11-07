@@ -465,7 +465,7 @@ function FlowMark({ flow }: { flow: Flow }) {
   const states: string[] = [];
   if (flow.error != null) states.push(`Failed: ${flow.error}`);
   if (flow.cancelled) states.push("Cancelled by the app");
-  if (flow.tunnelled) states.push("Not decrypted: passed through as it was sent");
+  if (flow.tunnelled) states.push("Not decrypted");
   if (open) states.push("Streaming");
   if (flow.responseTruncated) states.push("Body cut at the capture limit");
   if (flow.savedRequestId != null) states.push("Saved to Yaak");
