@@ -1,9 +1,10 @@
-//! Runs a parsed query against one document in memory.
+//! Runs a parsed query in memory, against one document or a whole table of them.
 
 use crate::ast::{FieldValue, Node};
-use crate::fuzzy::fuzzy_match;
-use crate::schema::{FieldKind, FreeText, ResolvedField, Schema, parse_flag, to_base};
+use crate::fuzzy::{FuzzyScratch, fuzzy_match_in};
+use crate::schema::{FieldKind, FreeText, Schema, parse_flag, to_base};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// What a query is matched against: free text for bare words and phrases, and field values by
@@ -61,28 +62,6 @@ impl Document {
         };
         self
     }
-
-    /// The values under `path` (lowercase), and for a map field with no key, the values of
-    /// every key under it.
-    fn values(&self, field: &ResolvedField) -> Vec<&DocValue> {
-        let path = field.document_path();
-        let mut out = Vec::new();
-        for (key, values) in &self.fields {
-            let key_lower = key.to_lowercase();
-            let hit = key_lower == path
-                || (field.def.map
-                    && field.key.is_none()
-                    && key_lower.strip_prefix(&path).is_some_and(|rest| rest.starts_with('.')));
-            if !hit {
-                continue;
-            }
-            match values {
-                DocValues::One(v) => out.push(v),
-                DocValues::Many(vs) => out.extend(vs.iter()),
-            }
-        }
-        out
-    }
 }
 
 impl From<&str> for DocValue {
@@ -110,36 +89,184 @@ impl From<bool> for DocValue {
 }
 
 impl DocValue {
-    fn as_text(&self) -> String {
+    fn view(&self) -> Val<'_> {
         match self {
-            DocValue::Text(text) => text.to_lowercase(),
-            DocValue::Number(n) => format_number(*n),
-            DocValue::Flag(b) => b.to_string(),
+            DocValue::Text(text) => Val::Text(text),
+            DocValue::Number(n) => Val::Number(*n),
+            DocValue::Flag(b) => Val::Flag(*b),
+        }
+    }
+}
+
+/// Many documents with the same fields, as one flat run of cells: for each row, its free text,
+/// then a text value (or none) per column. Cells may borrow from the input they were read from.
+/// Matching a table is much cheaper than matching its rows one document at a time.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Table<'a> {
+    /// Lowercase field paths, one per column.
+    columns: Vec<String>,
+    cells: Vec<Option<Cow<'a, str>>>,
+}
+
+impl<'a> Table<'a> {
+    /// An empty table whose columns hold the fields at these paths.
+    pub fn new(columns: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        let columns = columns.into_iter().map(|c| c.into().to_lowercase()).collect();
+        Self { columns, cells: Vec::new() }
+    }
+
+    /// A table from its cells, already flat (text first, then a cell per column, row after
+    /// row). `None` when the cells don't fill whole rows.
+    pub fn from_cells(
+        columns: impl IntoIterator<Item = impl Into<String>>,
+        cells: Vec<Option<Cow<'a, str>>>,
+    ) -> Option<Self> {
+        let table = Self { cells, ..Self::new(columns) };
+        table.cells.len().is_multiple_of(table.stride()).then_some(table)
+    }
+
+    /// A table from cells packed the way JavaScript can produce them cheaply: every cell joined
+    /// into `joined`, with each cell's length in UTF-16 code units in `lengths` (or
+    /// [`Table::NO_VALUE`] for a cell with no value). Cells borrow from `joined`. `None` when
+    /// the lengths don't add up to `joined` or the cells don't fill whole rows.
+    pub fn from_packed(
+        columns: impl IntoIterator<Item = impl Into<String>>,
+        joined: &'a str,
+        lengths: &[u32],
+    ) -> Option<Self> {
+        let mut cells = Vec::with_capacity(lengths.len());
+        let ascii = joined.is_ascii();
+        let mut start = 0;
+        for &len in lengths {
+            if len == Self::NO_VALUE {
+                cells.push(None);
+                continue;
+            }
+            let end = if ascii {
+                start + len as usize
+            } else {
+                // Walk `len` UTF-16 units forward
+                let mut units = 0;
+                let mut end = start;
+                for c in joined.get(start..)?.chars() {
+                    if units >= len as usize {
+                        break;
+                    }
+                    units += c.len_utf16();
+                    end += c.len_utf8();
+                }
+                if units != len as usize {
+                    return None;
+                }
+                end
+            };
+            cells.push(Some(Cow::Borrowed(joined.get(start..end)?)));
+            start = end;
+        }
+        if start != joined.len() {
+            return None;
+        }
+        Self::from_cells(columns, cells)
+    }
+
+    /// The length [`Table::from_packed`] reads as a cell with no value.
+    pub const NO_VALUE: u32 = u32::MAX;
+
+    /// Adds a row: its free text, and a value or `None` per column, in column order. Missing
+    /// trailing cells are `None`; extra ones are dropped.
+    pub fn push(
+        &mut self,
+        text: impl Into<Cow<'a, str>>,
+        cells: impl IntoIterator<Item = Option<Cow<'a, str>>>,
+    ) {
+        self.cells.push(Some(text.into()));
+        let mut cells = cells.into_iter();
+        for _ in 0..self.columns.len() {
+            self.cells.push(cells.next().flatten());
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.cells.len() / self.stride()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
+
+    fn stride(&self) -> usize {
+        self.columns.len() + 1
+    }
+}
+
+/// A field value as matching sees it, borrowed from a document or a table.
+#[derive(Clone, Copy, Debug)]
+enum Val<'a> {
+    Text(&'a str),
+    Number(f64),
+    Flag(bool),
+}
+
+impl Val<'_> {
+    /// The value as lowercase text.
+    fn lower(&self) -> Cow<'_, str> {
+        match self {
+            Val::Text(text) => Cow::Owned(text.to_lowercase()),
+            Val::Number(n) => Cow::Owned(format_number(*n)),
+            Val::Flag(b) => Cow::Borrowed(if *b { "true" } else { "false" }),
+        }
+    }
+
+    /// Whether the value, lowercased, contains `needle` (lowercase).
+    fn contains(&self, needle: &str) -> bool {
+        match self {
+            Val::Text(text) => contains_ignore_case(text, needle),
+            _ => self.lower().contains(needle),
         }
     }
 
     fn as_number(&self) -> Option<f64> {
         match self {
-            DocValue::Number(n) => Some(*n),
-            DocValue::Text(text) => text.trim().parse().ok(),
-            DocValue::Flag(_) => None,
+            Val::Number(n) => Some(*n),
+            Val::Text(text) => text.trim().parse().ok(),
+            Val::Flag(_) => None,
         }
     }
 
     fn as_flag(&self) -> Option<bool> {
         match self {
-            DocValue::Flag(b) => Some(*b),
-            DocValue::Text(text) => parse_flag(text),
-            DocValue::Number(n) => Some(*n != 0.0),
+            Val::Flag(b) => Some(*b),
+            Val::Text(text) => parse_flag(text),
+            Val::Number(n) => Some(*n != 0.0),
         }
     }
 
     fn is_present(&self) -> bool {
         match self {
-            DocValue::Text(text) => !text.is_empty(),
-            DocValue::Number(_) => true,
-            DocValue::Flag(b) => *b,
+            Val::Text(text) => !text.is_empty(),
+            Val::Number(_) => true,
+            Val::Flag(b) => *b,
         }
+    }
+}
+
+/// Whether `hay`, lowercased, contains `needle` (lowercase), without copying ASCII text.
+fn contains_ignore_case(hay: &str, needle: &str) -> bool {
+    if !(hay.is_ascii() && needle.is_ascii()) {
+        return hay.to_lowercase().contains(needle);
+    }
+    let (hay, needle) = (hay.as_bytes(), needle.as_bytes());
+    needle.is_empty() || hay.windows(needle.len()).any(|w| w.eq_ignore_ascii_case(needle))
+}
+
+/// `text` lowercased into `out`, without a fresh allocation per call.
+fn lowercase_into(text: &str, out: &mut String) {
+    out.clear();
+    if text.is_ascii() {
+        out.push_str(text);
+        out.make_ascii_lowercase();
+    } else {
+        out.push_str(&text.to_lowercase());
     }
 }
 
@@ -148,73 +275,233 @@ fn format_number(n: f64) -> String {
     if n.fract() == 0.0 && n.abs() < 1e15 { format!("{}", n as i64) } else { n.to_string() }
 }
 
-/// Whether `doc` matches the query. `None` (an empty query) matches everything.
-pub fn evaluate(root: Option<&Node>, schema: &Schema, doc: &Document) -> bool {
-    let Some(root) = root else { return true };
-    let text = doc.text.to_lowercase();
-    eval_node(root, schema, doc, &text)
+/// Where field values come from: a [`Document`], or a row of a [`Table`].
+trait FieldSource {
+    /// Whether any value under `path` (lowercase) passes `test`. With `any_key`, `path` is a
+    /// map field and the values of every key under it count.
+    fn any_value(&self, path: &str, any_key: bool, test: &mut dyn FnMut(Val) -> bool) -> bool;
 }
 
-fn eval_node(node: &Node, schema: &Schema, doc: &Document, text: &str) -> bool {
-    match node {
-        Node::And { children, .. } => children.iter().all(|c| eval_node(c, schema, doc, text)),
-        Node::Or { children, .. } => children.iter().any(|c| eval_node(c, schema, doc, text)),
-        Node::Not { node, .. } => !eval_node(node, schema, doc, text),
-        Node::Term { text: term, .. } => {
-            let term = term.trim().to_lowercase();
-            if term.is_empty() {
-                return false;
+impl FieldSource for Document {
+    fn any_value(&self, path: &str, any_key: bool, test: &mut dyn FnMut(Val) -> bool) -> bool {
+        self.fields.iter().filter(|(key, _)| path_matches(key, path, any_key)).any(|(_, values)| {
+            match values {
+                DocValues::One(v) => test(v.view()),
+                DocValues::Many(vs) => vs.iter().any(|v| test(v.view())),
             }
-            match schema.free_text {
-                FreeText::Fuzzy => fuzzy_match(text, &term),
-                FreeText::Substring => text.contains(&term),
-            }
+        })
+    }
+}
+
+struct RowSource<'t, 'a> {
+    columns: &'t [String],
+    /// The row's cells, after its text.
+    cells: &'t [Option<Cow<'a, str>>],
+}
+
+impl FieldSource for RowSource<'_, '_> {
+    fn any_value(&self, path: &str, any_key: bool, test: &mut dyn FnMut(Val) -> bool) -> bool {
+        self.columns.iter().zip(self.cells).any(|(column, cell)| {
+            path_matches(column, path, any_key)
+                && cell.as_deref().is_some_and(|v| test(Val::Text(v)))
+        })
+    }
+}
+
+/// Whether a document key is `path`, or with `any_key`, any key under it (`path.<key>`). Paths
+/// are ASCII identifiers, so comparing ASCII case-insensitively is exact.
+fn path_matches(key: &str, path: &str, any_key: bool) -> bool {
+    let (key, path) = (key.as_bytes(), path.as_bytes());
+    if key.eq_ignore_ascii_case(path) {
+        return true;
+    }
+    any_key
+        && key.len() > path.len() + 1
+        && key[..path.len()].eq_ignore_ascii_case(path)
+        && key[path.len()] == b'.'
+}
+
+/// Whether `doc` matches the query. `None` (an empty query) matches everything. To match many
+/// documents, build a [`Matcher`] once instead.
+pub fn evaluate(root: Option<&Node>, schema: &Schema, doc: &Document) -> bool {
+    Matcher::new(root, schema).matches(doc)
+}
+
+/// A query resolved against a schema once (fields looked up, text lowercased), to match many
+/// documents.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Matcher {
+    plan: Option<Plan>,
+    fuzzy: bool,
+    /// Whether any term reads the free text, which then has to be lowercased per document.
+    uses_text: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Plan {
+    And(Vec<Plan>),
+    Or(Vec<Plan>),
+    Not(Box<Plan>),
+    /// A bare word, lowercased and trimmed.
+    Term(String),
+    /// A phrase, lowercased.
+    Phrase(String),
+    Field {
+        /// The lowercase path the document stores the values under.
+        path: String,
+        /// A map field with no key: every key's values.
+        any_key: bool,
+        kind: FieldKind,
+        /// With its text and wildcard pattern lowercased.
+        value: FieldValue,
+    },
+    /// A term that can match nothing: an unknown field, an empty word or phrase.
+    Never,
+}
+
+/// Buffers reused from one document to the next.
+#[derive(Default)]
+struct Scratch {
+    text: String,
+    fuzzy: FuzzyScratch,
+}
+
+impl Matcher {
+    pub fn new(root: Option<&Node>, schema: &Schema) -> Self {
+        let mut uses_text = false;
+        let plan = root.map(|root| plan_node(root, schema, &mut uses_text));
+        Self { plan, fuzzy: schema.free_text == FreeText::Fuzzy, uses_text }
+    }
+
+    /// Whether the query has no terms, so it matches everything.
+    pub fn is_empty(&self) -> bool {
+        self.plan.is_none()
+    }
+
+    pub fn matches(&self, doc: &Document) -> bool {
+        self.matches_source(&doc.text, doc, &mut Scratch::default())
+    }
+
+    /// The indexes of the rows that match, in order.
+    pub fn matching_rows(&self, table: &Table) -> Vec<u32> {
+        let mut scratch = Scratch::default();
+        let rows = table.cells.chunks_exact(table.stride());
+        rows.enumerate()
+            .filter(|(_, row)| {
+                let text = row[0].as_deref().unwrap_or_default();
+                let source = RowSource { columns: &table.columns, cells: &row[1..] };
+                self.matches_source(text, &source, &mut scratch)
+            })
+            .map(|(i, _)| i as u32)
+            .collect()
+    }
+
+    fn matches_source(&self, text: &str, source: &impl FieldSource, scratch: &mut Scratch) -> bool {
+        let Some(plan) = &self.plan else { return true };
+        if self.uses_text {
+            lowercase_into(text, &mut scratch.text);
         }
-        Node::Phrase { text: phrase, .. } => {
-            !phrase.is_empty() && text.contains(&phrase.to_lowercase())
+        let Scratch { text, fuzzy } = scratch;
+        self.eval(plan, text, source, fuzzy)
+    }
+
+    fn eval(
+        &self,
+        plan: &Plan,
+        text: &str,
+        source: &impl FieldSource,
+        fuzzy: &mut FuzzyScratch,
+    ) -> bool {
+        match plan {
+            Plan::And(children) => children.iter().all(|c| self.eval(c, text, source, fuzzy)),
+            Plan::Or(children) => children.iter().any(|c| self.eval(c, text, source, fuzzy)),
+            Plan::Not(node) => !self.eval(node, text, source, fuzzy),
+            Plan::Term(term) if self.fuzzy => fuzzy_match_in(text, term, fuzzy),
+            Plan::Term(term) | Plan::Phrase(term) => text.contains(term.as_str()),
+            Plan::Field { path, any_key, kind, value } => {
+                let mut any =
+                    |test: &mut dyn FnMut(Val) -> bool| source.any_value(path, *any_key, test);
+                match kind {
+                    FieldKind::Text => match_text(&mut any, value),
+                    FieldKind::Number { units } => match_number(&mut any, value, units),
+                    FieldKind::Flag => match_flag(&mut any, value),
+                }
+            }
+            Plan::Never => false,
+        }
+    }
+}
+
+fn plan_node(node: &Node, schema: &Schema, uses_text: &mut bool) -> Plan {
+    let mut children =
+        |nodes: &[Node]| nodes.iter().map(|n| plan_node(n, schema, uses_text)).collect();
+    match node {
+        Node::And { children: nodes, .. } => Plan::And(children(nodes)),
+        Node::Or { children: nodes, .. } => Plan::Or(children(nodes)),
+        Node::Not { node, .. } => Plan::Not(Box::new(plan_node(node, schema, uses_text))),
+        Node::Term { text, .. } => {
+            let term = text.trim().to_lowercase();
+            if term.is_empty() {
+                return Plan::Never;
+            }
+            *uses_text = true;
+            Plan::Term(term)
+        }
+        Node::Phrase { text, .. } => {
+            if text.is_empty() {
+                return Plan::Never;
+            }
+            *uses_text = true;
+            Plan::Phrase(text.to_lowercase())
         }
         Node::Field { path, value, .. } => {
             let Some(field) = schema.resolve(path) else {
-                return false;
+                return Plan::Never;
             };
-            let values = doc.values(&field);
-            match &field.def.kind {
-                FieldKind::Text => match_text(&values, value),
-                FieldKind::Number { units } => match_number(&values, value, units),
-                FieldKind::Flag => match_flag(&values, value),
+            let value = match value {
+                FieldValue::Text { text, quoted } => {
+                    FieldValue::Text { text: text.to_lowercase(), quoted: *quoted }
+                }
+                FieldValue::Wildcard { pattern } => {
+                    FieldValue::Wildcard { pattern: pattern.to_lowercase() }
+                }
+                other => other.clone(),
+            };
+            Plan::Field {
+                path: field.document_path(),
+                any_key: field.def.map && field.key.is_none(),
+                kind: field.def.kind.clone(),
+                value,
             }
         }
     }
 }
 
-fn match_text(values: &[&DocValue], value: &FieldValue) -> bool {
+/// Asks whether any of a field's values passes a test.
+type AnyValue<'s> = dyn FnMut(&mut dyn FnMut(Val) -> bool) -> bool + 's;
+
+/// `value`'s text and wildcard pattern are already lowercase (see [`plan_node`]).
+fn match_text(any: &mut AnyValue, value: &FieldValue) -> bool {
     match value {
-        FieldValue::Text { text, .. } => {
-            let needle = text.to_lowercase();
-            !needle.is_empty() && values.iter().any(|v| v.as_text().contains(&needle))
+        FieldValue::Text { text: needle, .. } => {
+            !needle.is_empty() && any(&mut |v| v.contains(needle))
         }
-        FieldValue::Wildcard { pattern } => {
-            let pattern = pattern.to_lowercase();
-            values.iter().any(|v| wildcard_match(&pattern, &v.as_text()))
-        }
-        FieldValue::Exists => values.iter().any(|v| v.is_present()),
+        FieldValue::Wildcard { pattern } => any(&mut |v| wildcard_match(pattern, &v.lower())),
+        FieldValue::Exists => any(&mut |v| v.is_present()),
         // A text field holding numbers, such as a status shown as text
         FieldValue::Compare { op, number } => {
             number.unit.is_none()
-                && values.iter().any(|v| v.as_number().is_some_and(|n| op.test(n, number.value)))
+                && any(&mut |v| v.as_number().is_some_and(|n| op.test(n, number.value)))
         }
         FieldValue::Range { low, high } => {
             low.unit.is_none()
                 && high.unit.is_none()
-                && values
-                    .iter()
-                    .any(|v| v.as_number().is_some_and(|n| n >= low.value && n <= high.value))
+                && any(&mut |v| v.as_number().is_some_and(|n| n >= low.value && n <= high.value))
         }
     }
 }
 
-fn match_number(values: &[&DocValue], value: &FieldValue, units: &[crate::Unit]) -> bool {
-    let numbers = || values.iter().filter_map(|v| v.as_number());
+fn match_number(any: &mut AnyValue, value: &FieldValue, units: &[crate::Unit]) -> bool {
     match value {
         FieldValue::Text { text, quoted } => {
             if text.is_empty() {
@@ -222,26 +509,26 @@ fn match_number(values: &[&DocValue], value: &FieldValue, units: &[crate::Unit])
             }
             // `@status:404` is equality; anything else matches the number as text
             match (!quoted).then(|| crate::lexer::parse_number(text)).flatten() {
-                Some(number) => {
-                    to_base(&number, units).is_some_and(|target| numbers().any(|n| n == target))
-                }
-                None => match_text(values, value),
+                Some(number) => to_base(&number, units)
+                    .is_some_and(|target| any(&mut |v| v.as_number() == Some(target))),
+                None => match_text(any, value),
             }
         }
-        FieldValue::Wildcard { .. } => match_text(values, value),
-        FieldValue::Exists => numbers().next().is_some(),
-        FieldValue::Compare { op, number } => {
-            to_base(number, units).is_some_and(|target| numbers().any(|n| op.test(n, target)))
-        }
+        FieldValue::Wildcard { .. } => match_text(any, value),
+        FieldValue::Exists => any(&mut |v| v.as_number().is_some()),
+        FieldValue::Compare { op, number } => to_base(number, units)
+            .is_some_and(|target| any(&mut |v| v.as_number().is_some_and(|n| op.test(n, target)))),
         FieldValue::Range { low, high } => match (to_base(low, units), to_base(high, units)) {
-            (Some(low), Some(high)) => numbers().any(|n| n >= low && n <= high),
+            (Some(low), Some(high)) => {
+                any(&mut |v| v.as_number().is_some_and(|n| n >= low && n <= high))
+            }
             _ => false,
         },
     }
 }
 
-fn match_flag(values: &[&DocValue], value: &FieldValue) -> bool {
-    let is_set = || values.iter().any(|v| v.as_flag() == Some(true));
+fn match_flag(any: &mut AnyValue, value: &FieldValue) -> bool {
+    let mut is_set = || any(&mut |v| v.as_flag() == Some(true));
     match value {
         FieldValue::Exists => is_set(),
         FieldValue::Text { text, .. } => match parse_flag(text) {
@@ -533,6 +820,153 @@ mod tests {
     fn multiple_values() {
         let doc = Document::default().with("url", "a").with("url", "b");
         assert!(matches("@url:b", &proxy_like(), &doc));
+    }
+
+    /// A table gives the same answers as matching its rows one document at a time.
+    #[test]
+    fn tables_match_like_documents() {
+        let columns = [
+            "method",
+            "url",
+            "name",
+            "type",
+            "folder",
+            "grpc_service",
+            "grpc_method",
+        ];
+        let docs = [
+            request("post", "Create user", "https://api.yaak.app/users", Some("Users")),
+            request("get", "List users", "https://api.yaak.app/users", Some("Admin")),
+            request("GET", "My Request", "https://yaak.app", None),
+            grpc("Say hello", "helloworld.Greeter", "SayHello"),
+            Document::new("Folder"),
+        ];
+        let mut table = Table::new(columns);
+        for doc in &docs {
+            let cells = columns.iter().map(|c| match doc.fields.get(*c) {
+                Some(DocValues::One(DocValue::Text(v))) => Some(Cow::Borrowed(v.as_str())),
+                _ => None,
+            });
+            table.push(doc.text.as_str(), cells);
+        }
+        assert_eq!(table.len(), docs.len());
+
+        for query in [
+            "",
+            "user",
+            "mr",
+            "\"my req\"",
+            "@method:post",
+            "-@type:grpc",
+            "@folder:users OR @folder:admin",
+            "(users OR hello) -create",
+            "@grpc_method:*",
+            "-@folder:*",
+            "@url:*yaak.app*",
+            "@nope:x",
+            "-@nope:x",
+            "method:post",
+        ] {
+            let matcher = Matcher::new(parse(query).as_ref(), &sidebar());
+            let expected: Vec<u32> = (0..docs.len() as u32)
+                .filter(|&i| sidebar_matches(query, &docs[i as usize]))
+                .collect();
+            assert_eq!(matcher.matching_rows(&table), expected, "{query:?}");
+        }
+        assert!(Matcher::new(None, &sidebar()).is_empty());
+    }
+
+    #[test]
+    fn table_cells_line_up_with_columns() {
+        let mut table = Table::new(["Method", "url"]);
+        table.push("a", [Some("GET".into())]);
+        table.push("b", [None, Some("x".into()), Some("ignored".into())]);
+        assert_eq!(table.len(), 2);
+        let rows = |q: &str| Matcher::new(parse(q).as_ref(), &sidebar()).matching_rows(&table);
+        assert_eq!(rows("@method:get"), vec![0]);
+        assert_eq!(rows("@url:x"), vec![1]);
+        assert_eq!(rows("-@url:*"), vec![0]);
+        assert_eq!(rows("b"), vec![1]);
+    }
+
+    #[test]
+    fn tables_from_flat_cells() {
+        let cells = vec![
+            Some("GET List".into()),
+            Some("GET".into()),
+            None,
+            Some("POST".into()),
+        ];
+        let table = Table::from_cells(["method"], cells.clone()).unwrap();
+        assert_eq!(table.len(), 2);
+        let rows = |q: &str| Matcher::new(parse(q).as_ref(), &sidebar()).matching_rows(&table);
+        assert_eq!(rows("@method:post"), vec![1]);
+        assert_eq!(rows("list"), vec![0]);
+        // Cells that don't fill whole rows
+        assert!(Table::from_cells(["method", "url"], cells).is_none());
+        assert!(Table::from_cells(["method"], Vec::new()).unwrap().is_empty());
+    }
+
+    /// Packs cells the way the JavaScript side does: joined, with UTF-16 lengths.
+    fn pack(cells: &[Option<&str>]) -> (String, Vec<u32>) {
+        let joined = cells.iter().flatten().copied().collect();
+        let lengths = cells
+            .iter()
+            .map(|c| c.map_or(Table::NO_VALUE, |c| c.encode_utf16().count() as u32))
+            .collect();
+        (joined, lengths)
+    }
+
+    #[test]
+    fn tables_from_packed_cells() {
+        let rows = |table: &Table, q: &str| {
+            Matcher::new(parse(q).as_ref(), &sidebar()).matching_rows(table)
+        };
+
+        let (joined, lengths) = pack(&[
+            Some("GET List"),
+            Some("GET"),
+            Some(""),
+            None,
+            Some("POST"),
+            Some("x"),
+        ]);
+        let table = Table::from_packed(["method", "url"], &joined, &lengths).unwrap();
+        assert_eq!(table.len(), 2);
+        assert_eq!(rows(&table, "@method:post"), vec![1]);
+        assert_eq!(rows(&table, "@url:x"), vec![1]);
+        assert_eq!(rows(&table, "list"), vec![0]);
+        assert_eq!(rows(&table, "-@method:*"), Vec::<u32>::new());
+
+        // Non-ASCII text, including a character outside the BMP (two UTF-16 units)
+        let (joined, lengths) = pack(&[
+            Some("Über 🦀 crab"),
+            Some("GET"),
+            Some("Café"),
+            Some("x"),
+            None,
+            Some("y"),
+        ]);
+        let table = Table::from_packed(["method", "name"], &joined, &lengths).unwrap();
+        assert_eq!(rows(&table, "🦀"), vec![0]);
+        assert_eq!(rows(&table, "@name:café"), vec![0]);
+        assert_eq!(rows(&table, "@name:y"), vec![1]);
+
+        // Lengths that don't add up, or don't fill whole rows
+        assert!(Table::from_packed(["method"], "abc", &[1, 1]).is_none());
+        assert!(Table::from_packed(["method"], "abc", &[2, 2]).is_none());
+        assert!(Table::from_packed(["method"], "abc", &[3]).is_none());
+        assert!(Table::from_packed(["method"], "é", &[2, 0]).is_none());
+        assert!(Table::from_packed(["method"], "", &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn non_ascii_text_matches_case_insensitively() {
+        let doc = Document::new("ÜBER Café").with("name", "ÜBER Café");
+        assert!(sidebar_matches("über", &doc));
+        assert!(sidebar_matches("@name:café", &doc));
+        assert!(sidebar_matches("\"über c\"", &doc));
+        assert!(!sidebar_matches("@name:cafe", &doc));
     }
 
     #[test]

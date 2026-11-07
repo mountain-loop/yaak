@@ -3,7 +3,7 @@
 //! JavaScript counts string positions in UTF-16 code units, so every span going out is
 //! converted from bytes, and the cursor coming in is converted to bytes.
 
-use crate::{Document, Node, Schema, Span};
+use crate::{Document, Matcher, Schema, Span, Table};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
@@ -113,31 +113,49 @@ pub fn query_format_field(field: &str, value: &str, negated: bool) -> String {
     crate::format_field(field, value, negated)
 }
 
-/// A query parsed once and matched against many documents.
+/// A query parsed and resolved once, then matched against many documents.
 #[wasm_bindgen]
 pub struct QueryMatcher {
-    root: Option<Node>,
-    schema: Schema,
+    matcher: Matcher,
 }
 
 #[wasm_bindgen]
 impl QueryMatcher {
     #[wasm_bindgen(constructor)]
     pub fn new(input: &str, schema: JsValue) -> Result<QueryMatcher, JsValue> {
-        Ok(QueryMatcher { root: crate::parse(input), schema: from_js(schema)? })
+        let schema: Schema = from_js(schema)?;
+        Ok(QueryMatcher { matcher: Matcher::new(crate::parse(input).as_ref(), &schema) })
     }
 
     /// Whether the query has no terms, so it matches everything.
     #[wasm_bindgen(getter, js_name = isEmpty)]
     pub fn is_empty(&self) -> bool {
-        self.root.is_none()
+        self.matcher.is_empty()
     }
 
     /// Whether a `Document` (`{ text, fields }`), as JSON, matches. JSON crosses into wasm far
-    /// faster than walking a JS object property by property, which matters per sidebar item.
+    /// faster than walking a JS object property by property.
     pub fn matches(&self, doc_json: &str) -> Result<bool, JsValue> {
-        let doc: Document =
-            serde_json::from_str(doc_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-        Ok(crate::evaluate(self.root.as_ref(), &self.schema, &doc))
+        let doc: Document = serde_json::from_str(doc_json).map_err(js_error)?;
+        Ok(self.matcher.matches(&doc))
     }
+
+    /// The indexes of the matching rows, for many documents in one call. The cells (per row,
+    /// its free text, then one per column) are packed as in [`Table::from_packed`]: joined into
+    /// one string, with each one's UTF-16 length, or `Table::NO_VALUE` for no value.
+    #[wasm_bindgen(js_name = matchingRows)]
+    pub fn matching_rows(
+        &self,
+        columns: Vec<String>,
+        joined: &str,
+        lengths: &[u32],
+    ) -> Result<Vec<u32>, JsValue> {
+        let table = Table::from_packed(columns, joined, lengths)
+            .ok_or_else(|| JsValue::from_str("cells do not line up with the columns"))?;
+        Ok(self.matcher.matching_rows(&table))
+    }
+}
+
+fn js_error(e: impl std::fmt::Display) -> JsValue {
+    JsValue::from_str(&e.to_string())
 }

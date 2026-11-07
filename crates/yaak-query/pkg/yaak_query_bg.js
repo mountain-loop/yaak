@@ -1,5 +1,5 @@
 /**
- * A query parsed once and matched against many documents.
+ * A query parsed and resolved once, then matched against many documents.
  */
 export class QueryMatcher {
     __destroy_into_raw() {
@@ -22,7 +22,7 @@ export class QueryMatcher {
     }
     /**
      * Whether a `Document` (`{ text, fields }`), as JSON, matches. JSON crosses into wasm far
-     * faster than walking a JS object property by property, which matters per sidebar item.
+     * faster than walking a JS object property by property.
      * @param {string} doc_json
      * @returns {boolean}
      */
@@ -34,6 +34,30 @@ export class QueryMatcher {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] !== 0;
+    }
+    /**
+     * The indexes of the matching rows, for many documents in one call. The cells (per row,
+     * its free text, then one per column) are packed as in [`Table::from_packed`]: joined into
+     * one string, with each one's UTF-16 length, or `Table::NO_VALUE` for no value.
+     * @param {string[]} columns
+     * @param {string} joined
+     * @param {Uint32Array} lengths
+     * @returns {Uint32Array}
+     */
+    matchingRows(columns, joined, lengths) {
+        const ptr0 = passArrayJsValueToWasm0(columns, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(joined, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray32ToWasm0(lengths, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.querymatcher_matchingRows(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v4 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+        return v4;
     }
     /**
      * @param {string} input
@@ -438,6 +462,11 @@ function debugString(val) {
     return className;
 }
 
+function getArrayU32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
@@ -453,6 +482,14 @@ function getDataViewMemory0() {
 
 function getStringFromWasm0(ptr, len) {
     return decodeText(ptr >>> 0, len);
+}
+
+let cachedUint32ArrayMemory0 = null;
+function getUint32ArrayMemory0() {
+    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
+        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
+    }
+    return cachedUint32ArrayMemory0;
 }
 
 let cachedUint8ArrayMemory0 = null;
@@ -474,6 +511,23 @@ function handleError(f, args) {
 
 function isLikeNone(x) {
     return x === undefined || x === null;
+}
+
+function passArray32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArrayJsValueToWasm0(array, malloc) {
+    const ptr = malloc(array.length * 4, 4) >>> 0;
+    for (let i = 0; i < array.length; i++) {
+        const add = addToExternrefTable0(array[i]);
+        getDataViewMemory0().setUint32(ptr + 4 * i, add, true);
+    }
+    WASM_VECTOR_LEN = array.length;
+    return ptr;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {

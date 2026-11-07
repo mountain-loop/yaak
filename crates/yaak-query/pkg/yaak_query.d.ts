@@ -2,16 +2,22 @@
 /* eslint-disable */
 
 /**
- * A query parsed once and matched against many documents.
+ * A query parsed and resolved once, then matched against many documents.
  */
 export class QueryMatcher {
     free(): void;
     [Symbol.dispose](): void;
     /**
      * Whether a `Document` (`{ text, fields }`), as JSON, matches. JSON crosses into wasm far
-     * faster than walking a JS object property by property, which matters per sidebar item.
+     * faster than walking a JS object property by property.
      */
     matches(doc_json: string): boolean;
+    /**
+     * The indexes of the matching rows, for many documents in one call. The cells (per row,
+     * its free text, then one per column) are packed as in [`Table::from_packed`]: joined into
+     * one string, with each one's UTF-16 length, or `Table::NO_VALUE` for no value.
+     */
+    matchingRows(columns: string[], joined: string, lengths: Uint32Array): Uint32Array;
     constructor(input: string, schema: any);
     /**
      * Whether the query has no terms, so it matches everything.

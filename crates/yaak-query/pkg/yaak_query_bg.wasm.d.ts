@@ -9,6 +9,7 @@ export const query_format_field: (a: number, b: number, c: number, d: number, e:
 export const query_tokens: (a: number, b: number) => [number, number, number];
 export const querymatcher_isEmpty: (a: number) => number;
 export const querymatcher_matches: (a: number, b: number, c: number) => [number, number, number];
+export const querymatcher_matchingRows: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const querymatcher_new: (a: number, b: number, c: any) => [number, number, number];
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

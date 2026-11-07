@@ -46,8 +46,9 @@ pub enum CompletionKind {
 /// `@`), these are the schema's fields whose path contains what is typed, those starting with
 /// it first. After `@map.` they are the keys given in `values` under the map's name. After
 /// `@field:` they are the values given in `values` under the field's path that contain what is
-/// typed (quotes and escapes aside); the whole value is replaced. Inside a phrase, after a
-/// `)`, or in other text there are none.
+/// typed (quotes and escapes aside); the whole value is replaced. A field written without its
+/// `@` (`method:post`) gets the term with the `@`. Inside a phrase, after a `)`, or in other
+/// text there are none.
 pub fn completions(
     input: &str,
     cursor: usize,
@@ -72,8 +73,11 @@ pub fn completions(
         TokKind::Minus | TokKind::LParen if cursor == tok.span.end() => {
             field_completions(schema, values, "", Span::new(cursor, cursor))
         }
-        TokKind::Word(_) => {
+        TokKind::Word(word) => {
             let typed = &input[tok.span.start()..cursor];
+            if let Some(fix) = missing_at(word, typed, schema) {
+                return Some(Completions { span: tok.span, items: vec![fix] });
+            }
             let partial = typed.strip_prefix('@').unwrap_or(typed);
             if !partial.chars().all(|c| is_ident_char(c) || c == '.') {
                 return None;
@@ -90,6 +94,30 @@ pub fn completions(
         }
         _ => None,
     }
+}
+
+/// A word written like a field but without its `@` (`method:post`), once the cursor is past the
+/// colon: the same term with the `@`, replacing the word. Words like `localhost:3000`, whose
+/// part before the colon is no field, get nothing.
+fn missing_at(word: &str, typed: &str, schema: &Schema) -> Option<Completion> {
+    if word.starts_with('@') || !typed.contains(':') {
+        return None;
+    }
+    let (path, value) = word.split_once(':')?;
+    if !is_valid_path(path) {
+        return None;
+    }
+    let path: Vec<String> = path.split('.').map(String::from).collect();
+    schema.resolve(&path)?;
+    let term = format!("@{word}");
+    Some(Completion {
+        label: term.clone(),
+        insert: term,
+        kind: CompletionKind::Field,
+        info: None,
+        // With no value yet, go on to the field's values
+        reopen: value.is_empty(),
+    })
 }
 
 fn field_completions(
@@ -308,6 +336,29 @@ mod tests {
     #[test]
     fn editing_a_field_name() {
         assert_eq!(at("@met|hod:post"), Some(("@method:".into(), inserts(&["@method:"]))));
+    }
+
+    #[test]
+    fn suggests_the_at_for_a_field_written_without_it() {
+        assert_eq!(at("method:post|"), Some(("method:post".into(), inserts(&["@method:post"]))));
+        assert_eq!(at("x method:p|"), Some(("method:p".into(), inserts(&["@method:p"]))));
+        assert_eq!(at("-method:po|st"), Some(("method:post".into(), inserts(&["@method:post"]))));
+        assert_eq!(at("(METHOD:get|"), Some(("METHOD:get".into(), inserts(&["@METHOD:get"]))));
+        assert_eq!(
+            at("header.accept:json|"),
+            Some(("header.accept:json".into(), inserts(&["@header.accept:json"])))
+        );
+        // With nothing after the colon, the field's values come next
+        let c = completions("method:", 7, &schema(), &values()).unwrap();
+        assert_eq!(c.items[0].insert, "@method:");
+        assert!(c.items[0].reopen);
+        assert!(!completions("method:x", 8, &schema(), &values()).unwrap().items[0].reopen);
+        // Not a field: plain text, nothing to suggest
+        assert_eq!(at("localhost:3000|"), None);
+        assert_eq!(at("nope:x|"), None);
+        assert_eq!(at("http://x|"), None);
+        // Before the colon, the word still completes field names
+        assert_eq!(at("met|hod:post"), Some(("met".into(), inserts(&["@method:"]))));
     }
 
     #[test]

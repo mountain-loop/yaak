@@ -851,10 +851,17 @@ function setSidebarFilterText(text: string) {
 }
 
 /** The fields `getItemFields` fills in. Bare words match `getItemText` by word prefix */
+const sidebarFilterColumns = [
+  "method",
+  "url",
+  "name",
+  "type",
+  "folder",
+  "grpc_service",
+  "grpc_method",
+];
 const sidebarFilterSchema: Schema = {
-  fields: ["method", "url", "name", "type", "folder", "grpc_service", "grpc_method"].map(
-    (name) => ({ name, kind: { type: "text" } }),
-  ),
+  fields: sidebarFilterColumns.map((name) => ({ name, kind: { type: "text" } })),
   freeText: "fuzzy",
 };
 
@@ -917,12 +924,15 @@ const sidebarTreeAtom = atom<
   const suggestionValue = getSidebarSuggestionValue(parseQuery(filter.text), filter.text);
   const matcher = new QueryMatcher(filter.text, sidebarFilterSchema);
 
-  // returns true if this node OR any child matches the filter
+  // Every request goes into one flat table (its text, then a cell per column), matched in a
+  // single call after the tree is built
+  const leaves: TreeNode<SidebarModel>[] = [];
+  const cells: (string | null)[] = [];
+
   const allFields: Record<string, Set<string>> = {};
   const suggestionFields = new Set<string>();
-  const build = (node: TreeNode<SidebarModel>, depth: number): boolean => {
+  const build = (node: TreeNode<SidebarModel>, depth: number) => {
     const childItems = childrenMap[node.item.id] ?? [];
-    let matchesSelf = true;
     const fields = getItemFields(node);
     const model = node.item.model;
     const isLeafNode = !(model === "folder" || model === "workspace");
@@ -940,11 +950,11 @@ const sidebarTreeAtom = atom<
       }
     }
 
-    if (!matcher.isEmpty) {
-      matchesSelf = isLeafNode && matcher.matches({ text: getItemText(node.item), fields });
+    if (isLeafNode && !matcher.isEmpty) {
+      leaves.push(node);
+      cells.push(getItemText(node.item));
+      for (const column of sidebarFilterColumns) cells.push(fields[column] ?? null);
     }
-
-    let matchesChild = false;
 
     // Recurse to children
     node.children = !isLeafNode ? [] : undefined;
@@ -963,19 +973,21 @@ const sidebarTreeAtom = atom<
 
       for (const item of childItems) {
         const childNode = { item, parent: node, depth };
-        const childMatches = build(childNode, depth + 1);
-        if (childMatches) {
-          matchesChild = true;
-        }
+        build(childNode, depth + 1);
         node.children.push(childNode);
       }
     }
+  };
 
-    // hide node IFF nothing in its subtree matches
-    const anyMatch = matchesSelf || matchesChild;
-    node.hidden = !anyMatch;
-
-    return anyMatch;
+  // Hide a node IFF nothing in its subtree matches; with no query, nothing is hidden
+  let matched: Set<TreeNode<SidebarModel>> | null = null;
+  const markHidden = (node: TreeNode<SidebarModel>): boolean => {
+    let visible = matched == null || matched.has(node);
+    for (const child of node.children ?? []) {
+      if (markHidden(child)) visible = true;
+    }
+    node.hidden = !visible;
+    return visible;
   };
 
   const root: TreeNode<SidebarModel> = {
@@ -985,9 +997,13 @@ const sidebarTreeAtom = atom<
     depth: 0,
   };
 
-  // Build tree and mark visibility in one pass
   build(root, 1);
+  if (!matcher.isEmpty) {
+    const rows = matcher.matchingRows(sidebarFilterColumns, cells);
+    matched = new Set(Array.from(rows, (i) => leaves[i]!));
+  }
   matcher.free();
+  markHidden(root);
 
   const fieldValues: Record<string, string[]> = {};
   for (const [name, values] of Object.entries(allFields)) {

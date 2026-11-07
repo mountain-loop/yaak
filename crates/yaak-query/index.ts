@@ -44,6 +44,9 @@ export function formatField(field: string, value: string, negated = false): stri
   return query_format_field(field, value, negated);
 }
 
+/** The length that marks a cell with no value (`Table::NO_VALUE` in the crate) */
+const NO_VALUE = 0xffffffff;
+
 /** A query parsed once, to match against many documents */
 export class QueryMatcher {
   readonly #inner: WasmQueryMatcher;
@@ -59,6 +62,20 @@ export class QueryMatcher {
 
   matches(doc: Document): boolean {
     return this.#inner.matches(JSON.stringify(doc));
+  }
+
+  /**
+   * The indexes of the matching rows, for many documents in one call. `cells` is flat: for
+   * each row, its free text, then a value (or `null` when it has none) for each of `columns`
+   */
+  matchingRows(columns: string[], cells: (string | null)[]): Uint32Array {
+    // Packed as one string plus each cell's length, which crosses into wasm far faster than
+    // JSON: nothing to escape or parse, and the cells are read in place
+    const lengths = new Uint32Array(cells.length);
+    for (let i = 0; i < cells.length; i++) {
+      lengths[i] = cells[i]?.length ?? NO_VALUE;
+    }
+    return this.#inner.matchingRows(columns, cells.join(""), lengths);
   }
 
   /** Frees the parsed query now rather than when it is garbage collected */

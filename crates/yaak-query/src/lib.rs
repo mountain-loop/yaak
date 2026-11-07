@@ -33,7 +33,7 @@ mod wasm;
 
 pub use ast::{CompareOp, FieldValue, Node, NumberLiteral, Span};
 pub use complete::{Completion, CompletionKind, Completions, completions};
-pub use eval::{DocValue, DocValues, Document, evaluate};
+pub use eval::{DocValue, DocValues, Document, Matcher, Table, evaluate};
 pub use format::{format_field, format_value, is_valid_path, quote};
 pub use parser::parse;
 pub use schema::{Diagnostic, FieldDef, FieldKind, FreeText, ResolvedField, Schema, Unit};

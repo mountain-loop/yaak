@@ -10,6 +10,20 @@
 
 /// Whether `search` matches `target`, both already lowercased and trimmed.
 pub fn fuzzy_match(target: &str, search: &str) -> bool {
+    fuzzy_match_in(target, search, &mut FuzzyScratch::default())
+}
+
+/// Buffers [`fuzzy_match_in`] reuses from one call to the next.
+#[derive(Default)]
+pub(crate) struct FuzzyScratch {
+    target: Vec<char>,
+    search: Vec<char>,
+    skips: Vec<usize>,
+}
+
+/// [`fuzzy_match`], reusing `scratch` instead of allocating per call. ASCII text, the usual case,
+/// is matched byte by byte without copying.
+pub(crate) fn fuzzy_match_in(target: &str, search: &str, scratch: &mut FuzzyScratch) -> bool {
     if target.is_empty() {
         return false;
     }
@@ -30,46 +44,83 @@ pub fn fuzzy_match(target: &str, search: &str) -> bool {
         return true;
     }
 
-    let search: Vec<char> = search.chars().collect();
     // One character that is not a substring can't match fuzzily either
-    if search.len() == 1 || quoted {
+    let mut chars = search.chars();
+    if quoted || (chars.next().is_some() && chars.next().is_none()) {
         return false;
     }
 
-    let target: Vec<char> = target.chars().collect();
-    let skips = target_skips(&target);
-    (0..skips.len() - 1).any(|skip| {
-        target[skips[skip]] == search[0] && prefix_match(skip, &search, &target, &skips)
-    })
+    let skips = &mut scratch.skips;
+    if target.is_ascii() && search.is_ascii() {
+        return word_prefix_match(target.as_bytes(), search.as_bytes(), skips);
+    }
+    scratch.target.clear();
+    scratch.target.extend(target.chars());
+    scratch.search.clear();
+    scratch.search.extend(search.chars());
+    word_prefix_match(&scratch.target, &scratch.search, skips)
 }
 
-/// fuzzbunny counts every char code from 127 up as alphanumeric.
-fn is_alpha_num(c: char) -> bool {
-    c.is_ascii_lowercase() || c.is_ascii_digit() || c as u32 >= 127
+/// A unit of text the matcher walks: a byte of ASCII text, or a char.
+trait Unit: Copy + PartialEq {
+    /// fuzzbunny counts lowercase letters, digits, and every char code from 127 up.
+    fn is_alpha_num(self) -> bool;
+    /// ASCII punctuation: `!` to `/`, `:` to `@`, `[` to `` ` ``, `{` to `~`.
+    fn is_punctuation(self) -> bool;
+    fn is_space(self) -> bool;
 }
 
-/// ASCII punctuation: `!` to `/`, `:` to `@`, `[` to `` ` ``, `{` to `~`.
-fn is_punctuation(c: char) -> bool {
-    matches!(c, '!'..='/' | ':'..='@' | '['..='`' | '{'..='~')
+impl Unit for char {
+    fn is_alpha_num(self) -> bool {
+        self.is_ascii_lowercase() || self.is_ascii_digit() || self as u32 >= 127
+    }
+
+    fn is_punctuation(self) -> bool {
+        matches!(self, '!'..='/' | ':'..='@' | '['..='`' | '{'..='~')
+    }
+
+    fn is_space(self) -> bool {
+        self == ' '
+    }
+}
+
+impl Unit for u8 {
+    fn is_alpha_num(self) -> bool {
+        (self as char).is_alpha_num()
+    }
+
+    fn is_punctuation(self) -> bool {
+        (self as char).is_punctuation()
+    }
+
+    fn is_space(self) -> bool {
+        self == b' '
+    }
+}
+
+/// The word-prefix fallback, once `search` is known not to be a plain substring.
+fn word_prefix_match<T: Unit>(target: &[T], search: &[T], skips: &mut Vec<usize>) -> bool {
+    target_skips(target, skips);
+    (0..skips.len() - 1)
+        .any(|skip| target[skips[skip]] == search[0] && prefix_match(skip, search, target, skips))
 }
 
 /// The indices where a word starts or a punctuation mark sits, then the target's length, so
 /// every run lies between `skips[i]` and `skips[i + 1]`.
-fn target_skips(target: &[char]) -> Vec<usize> {
-    let mut skips = Vec::new();
+fn target_skips<T: Unit>(target: &[T], skips: &mut Vec<usize>) {
+    skips.clear();
     let mut was_alpha_num = false;
     for (i, &c) in target.iter().enumerate() {
-        let alpha_num = is_alpha_num(c);
-        if (alpha_num && !was_alpha_num) || is_punctuation(c) {
+        let alpha_num = c.is_alpha_num();
+        if (alpha_num && !was_alpha_num) || c.is_punctuation() {
             skips.push(i);
         }
         was_alpha_num = alpha_num;
     }
     skips.push(target.len());
-    skips
 }
 
-fn prefix_match(mut skip: usize, search: &[char], target: &[char], skips: &[usize]) -> bool {
+fn prefix_match<T: Unit>(mut skip: usize, search: &[T], target: &[T], skips: &[usize]) -> bool {
     let mut search_idx = 0;
     while skip < skips.len() - 1 {
         let mut target_idx = skips[skip];
@@ -80,9 +131,9 @@ fn prefix_match(mut skip: usize, search: &[char], target: &[char], skips: &[usiz
             if t == s {
                 target_idx += 1;
                 search_idx += 1;
-            } else if t == ' ' {
+            } else if t.is_space() {
                 target_idx += 1;
-            } else if s == ' ' {
+            } else if s.is_space() {
                 search_idx += 1;
             } else {
                 break;
