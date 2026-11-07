@@ -1,7 +1,6 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
 import {
-  Banner,
   CountBadge,
   Dropdown,
   EmptyStateText,
@@ -49,6 +48,7 @@ import {
 import { messagesTabLabel } from "../lib/messages";
 import { FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowInfo } from "./FlowInfo";
+import { FlowRequestBody } from "./FlowRequestBody";
 import { FlowMessages } from "./FlowMessages";
 import { FlowTimeline } from "./FlowTimeline";
 import { ProxyEditorHost } from "./ProxyEditorHost";
@@ -161,23 +161,19 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       defaultTab={defaultTab}
       onTabChange={onTabChange}
       urlLine={<UrlLine flow={flow} />}
-      renderBody={(editor) =>
-        request.bodyType === BODY_TYPE_BINARY ? (
+      renderBody={(editor) => (
+        <FlowRequestBody
+          body={body}
+          editor={editor}
           // The proxy's own viewer, with its hexdump and save, rather than a size alone
-          <FlowBodyViewer flow={flow} which="request" pretty />
-        ) : body.data?.truncated ? (
-          <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
-            <Banner color="notice" className="text-sm mb-2">
-              <span title="The app sent all of it">
-                First {formatSize(body.data.storedSize)} of {formatSize(flow.requestSize)} kept
-              </span>
-            </Banner>
-            <div className="min-h-0">{editor}</div>
-          </div>
-        ) : (
-          editor
-        )
-      }
+          binaryViewer={
+            request.bodyType === BODY_TYPE_BINARY ? (
+              <FlowBodyViewer flow={flow} which="request" pretty />
+            ) : null
+          }
+          requestSize={flow.requestSize}
+        />
+      )}
     />
   );
 }

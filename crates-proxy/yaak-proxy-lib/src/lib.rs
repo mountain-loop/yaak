@@ -4165,6 +4165,99 @@ mod tests {
         assert!(ctx.set_keep_traffic(Some(0)).is_err());
     }
 
+    /// Writes a body for `body_id` straight to the blob store, as the event loop does.
+    fn write_blob(ctx: &ProxyCtx, body_id: &str, bytes: &[u8]) {
+        let mut writer = BodyChunkWriter::new(ctx.blobs().unwrap(), body_id.to_string());
+        writer.write(bytes).unwrap();
+        writer.finish().unwrap();
+    }
+
+    /// The bodies stored under a flow's id: its request and response, and its messages' payloads
+    /// numbered below `messages`.
+    fn blobs_of(ctx: &ProxyCtx, id: &str, messages: usize) -> usize {
+        let blobs = ctx.blobs().unwrap();
+        let conn = blobs.connect();
+        let bodies = [
+            Flow::body_id(id, FlowBody::Request),
+            Flow::body_id(id, FlowBody::Response),
+        ];
+        let payloads = (0..messages).map(|n| format!("{id}.msg.{n}"));
+        bodies.into_iter().chain(payloads).filter(|b| conn.body_exists(b).unwrap()).count()
+    }
+
+    /// A message written for a flow while the sweep deletes it, before its row goes or between
+    /// its row and its bodies, is deleted with it rather than left counting against the cap.
+    #[test]
+    fn a_message_written_while_its_flow_is_swept_goes_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        for id in ["fl_a", "fl_b"] {
+            flow_with_response(&ctx, id, "text/plain", &[1; 4096]);
+        }
+        let stores = ctx.stores().unwrap();
+
+        let rows = flows::sweepable(&stores, 1).unwrap();
+        assert_eq!(rows.iter().map(|(_, id)| id.as_str()).collect::<Vec<_>>(), ["fl_a"]);
+        // Written after it was chosen, before its row is deleted...
+        write_blob(&ctx, "fl_a.msg.7", b"late");
+        let deleted = flows::delete_swept_rows(&stores, rows).unwrap();
+        // ...and after its row is gone, before its bodies are.
+        write_blob(&ctx, "fl_a.msg.8", b"later");
+        flows::delete_swept_bodies(&stores, &deleted).unwrap();
+
+        assert_eq!(deleted, ["fl_a"]);
+        assert_eq!(blobs_of(&ctx, "fl_a", 10), 0, "no orphans");
+        assert_eq!(blobs_of(&ctx, "fl_b", 10), 1, "the other flow kept");
+    }
+
+    /// A stream still open is never swept, even while its writer adds messages as the sweep
+    /// runs and it is the oldest flow there is.
+    #[test]
+    fn an_open_stream_is_not_swept_while_it_is_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let (events, _rx) = RpcEventEmitter::new();
+        let ctx = ProxyCtx::new(dir.path(), events, MasterKeySource::memory()).unwrap();
+        let open = Flow {
+            id: "fl_open".into(),
+            stream_kind: Some(StreamKind::Websocket),
+            status: Some(101),
+            ..Default::default()
+        };
+        ctx.db().unwrap().with_tx(|tx| tx.upsert(&open, &UpdateSource::Background)).unwrap();
+        write_blob(&ctx, "fl_open.msg.0", &[2; 16 * 1024]);
+        let ended: Vec<String> = (0..10).map(|i| format!("fl_{i:02}")).collect();
+        for id in &ended {
+            flow_with_response(&ctx, id, "application/octet-stream", &[3; 32 * 1024]);
+        }
+
+        let done = Arc::new(AtomicBool::new(false));
+        let writer = {
+            let (ctx, done) = (ctx.clone(), done.clone());
+            std::thread::spawn(move || {
+                let mut seq = 1;
+                while !done.load(Ordering::SeqCst) {
+                    write_blob(&ctx, &format!("fl_open.msg.{seq}"), &[4; 1024]);
+                    seq += 1;
+                }
+                seq
+            })
+        };
+        // A cap below anything reachable, so the sweep takes every flow it may.
+        let stores = ctx.stores().unwrap();
+        while !flows::sweep_oldest(&stores, 1).unwrap().is_empty() {}
+        done.store(true, Ordering::SeqCst);
+        let written = writer.join().unwrap();
+
+        let db = ctx.db().unwrap();
+        assert!(flows::find(&db, "fl_open").is_some(), "the open stream stays");
+        assert_eq!(flows::count(&db).unwrap(), 1, "every ended flow swept");
+        assert_eq!(blobs_of(&ctx, "fl_open", written), written, "its messages all kept");
+        for id in &ended {
+            assert_eq!(blobs_of(&ctx, id, 0), 0, "{id} left nothing behind");
+        }
+    }
+
     /// Resetting deletes the traffic and its data key and opens empty databases under a new
     /// one; the CA, readable with the old key, is kept, so it stays trusted.
     #[test]

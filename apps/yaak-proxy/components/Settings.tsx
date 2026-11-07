@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getVersion } from "@tauri-apps/api/app";
 import { appDataDir, appLogDir } from "@tauri-apps/api/path";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   Dialog,
   EmptyStateText,
@@ -18,8 +17,10 @@ import {
 import { atom, useAtom, useSetAtom } from "jotai";
 import { useEffect, useMemo, useState } from "react";
 import { settingsValuesAtom } from "../lib/interfaceSettings";
+import { openLink, revealPath } from "../lib/opener";
 import { proxySettingsView } from "../lib/settings";
 import { getOsType } from "../lib/tauri";
+import { useShowToast } from "../lib/toast";
 import { SettingsProxy } from "./SettingsProxy";
 
 export const SETTINGS_TAB_PROXY = "proxy";
@@ -57,20 +58,21 @@ export function SettingsContent({ defaultTab }: { defaultTab: string }) {
     () => proxySettingsView(values, app, systemAppearance),
     [values, app, systemAppearance],
   );
-  const callbacks = useMemo<SettingsCallbacks>(
-    () => ({
+  const showToast = useShowToast();
+  const callbacks = useMemo<SettingsCallbacks>(() => {
+    const fail = (message: string) => showToast({ message, color: "danger" });
+    return {
       onChange: (patch) => change(patch),
       // The proxy draws its own title bar always; the row isn't shown
       onApplyNativeTitlebar: (useNativeTitlebar) => change({ useNativeTitlebar }),
       onCheckForUpdates: () => undefined,
       onActivateLicense: async () => undefined,
       onDeactivateLicense: () => undefined,
-      onOpenUrl: (url) => void openUrl(url).catch(console.error),
-      onRevealPath: (path) => void revealItemInDir(path).catch(console.error),
+      onOpenUrl: (url) => void openLink(url, fail),
+      onRevealPath: (path) => void revealPath(path, fail),
       pricingUrl: (intent) => `https://yaak.app/pricing?intent=${encodeURIComponent(intent)}`,
-    }),
-    [change],
-  );
+    };
+  }, [change, showToast]);
   const props = { view, callbacks };
 
   return (

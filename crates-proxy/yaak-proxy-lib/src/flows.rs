@@ -692,9 +692,9 @@ pub fn clear_mark_in(db: &ProxyQueryManager) -> i64 {
 /// deletes the flows written first, with their bodies and messages: as many as the average flow
 /// says would bring it under, from one to [`DELETE_BATCH`]. Returns the ids deleted, none once it
 /// is under or no flow is left, so a caller sweeps a batch per call until then. Cleared flows are
-/// left to [`delete_cleared`]. Bodies go first, in their own transaction, as there.
+/// left to [`delete_cleared`], and a stream still open is never swept: its writer would go on
+/// adding messages to it.
 pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
-    let fail = |e: String| format!("Failed to delete the oldest flows: {e}");
     let used = stores.used_bytes()?;
     if used <= cap {
         return Ok(Vec::new());
@@ -705,32 +705,55 @@ pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
     }
     let average = (used / count).max(1);
     let batch = (used - cap).div_ceil(average).clamp(1, DELETE_BATCH as u64);
-    let rows: Vec<(i64, String)> = stores
+    let rows = sweepable(stores, batch as usize)?;
+    let deleted = delete_swept_rows(stores, rows)?;
+    delete_swept_bodies(stores, &deleted)?;
+    Ok(deleted)
+}
+
+/// A stream still open: it has no end yet, and its writer goes on adding messages to it.
+const OPEN_STREAM: &str =
+    "stream_kind IS NOT NULL AND elapsed_ms IS NULL AND error IS NULL AND NOT cancelled";
+
+/// Fail messages for sweeping, all of a kind.
+fn sweep_failed(e: impl std::fmt::Display) -> String {
+    format!("Failed to delete the oldest flows: {e}")
+}
+
+/// Up to `limit` of the oldest flows that are neither cleared nor an open stream, by rowid.
+pub(crate) fn sweepable(stores: &Stores, limit: usize) -> Result<Vec<(i64, String)>, String> {
+    stores
         .db
         .with_conn(|c| {
             let conn = c.conn().resolve();
-            let mut stmt =
-                conn.prepare("SELECT rowid, id FROM flows WHERE rowid > ? ORDER BY rowid LIMIT ?")?;
-            stmt.query_map([clear_mark(conn), batch as i64], |r| Ok((r.get(0)?, r.get(1)?)))?
-                .collect::<rusqlite::Result<_>>()
+            let mut stmt = conn.prepare(&format!(
+                "SELECT rowid, id FROM flows WHERE rowid > ?
+                    AND NOT ({OPEN_STREAM})
+                    ORDER BY rowid LIMIT ?"
+            ))?;
+            stmt.query_map(rusqlite::params![clear_mark(conn), limit as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?
+            .collect::<rusqlite::Result<_>>()
         })
-        .map_err(|e| fail(e.to_string()))?;
-    stores
-        .blobs
-        .with_tx(|b| {
-            for (_, id) in &rows {
-                b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
-                b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
-                b.delete_chunks_like(&format!("{id}.msg.%"))?;
-            }
-            Ok::<_, yaak_models::error::Error>(())
-        })
-        .map_err(|e| fail(format!("flow bodies: {e}")))?;
+        .map_err(sweep_failed)
+}
+
+/// Deletes the flows' rows and their messages' rows in one transaction, first, so nothing
+/// written for them after this has an owner left to count under. A flow that changed or was
+/// cleared since it was chosen is kept. Returns the ids deleted.
+pub(crate) fn delete_swept_rows(
+    stores: &Stores,
+    rows: Vec<(i64, String)>,
+) -> Result<Vec<String>, String> {
     stores
         .db
         .with_tx(|c| {
             let conn = c.conn().resolve();
-            let mut delete = conn.prepare("DELETE FROM flows WHERE rowid = ? AND id = ?")?;
+            let mut delete = conn.prepare(&format!(
+                "DELETE FROM flows WHERE rowid = ? AND id = ?
+                    AND NOT ({OPEN_STREAM})"
+            ))?;
             let mut delete_messages =
                 conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
             let mut deleted = Vec::with_capacity(rows.len());
@@ -742,7 +765,41 @@ pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
             }
             Ok::<_, yaak_database::Error>(deleted)
         })
-        .map_err(|e| fail(e.to_string()))
+        .map_err(sweep_failed)
+}
+
+/// Deletes the bodies and message payloads of flows whose rows are gone, then once more the
+/// message rows: anything a writer added for them while the rows went is an orphan, which
+/// would otherwise go on counting against the cap with nothing to sweep it by.
+pub(crate) fn delete_swept_bodies(stores: &Stores, ids: &[String]) -> Result<(), String> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    stores
+        .blobs
+        .with_tx(|b| {
+            for id in ids {
+                b.delete_chunks(&Flow::body_id(id, FlowBody::Request))?;
+                b.delete_chunks(&Flow::body_id(id, FlowBody::Response))?;
+                b.delete_chunks_like(&format!("{id}.msg.%"))?;
+            }
+            Ok::<_, yaak_models::error::Error>(())
+        })
+        .map_err(|e| sweep_failed(format!("flow bodies: {e}")))?;
+    stores
+        .db
+        .with_tx(|c| {
+            let conn = c.conn().resolve();
+            let mut orphans = conn.prepare(
+                "DELETE FROM flow_messages WHERE flow_id = ?
+                    AND NOT EXISTS (SELECT 1 FROM flows WHERE flows.id = flow_messages.flow_id)",
+            )?;
+            for id in ids {
+                orphans.execute([id])?;
+            }
+            Ok::<_, yaak_database::Error>(())
+        })
+        .map_err(sweep_failed)
 }
 
 /// A flow by id, with its number. None once it is cleared, though its row may not be deleted
