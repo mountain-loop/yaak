@@ -416,6 +416,28 @@ async fn grpc_web_calls_are_stored_and_decoded() {
             "every byte that came, framed as it was"
         );
         assert_eq!(cut_body["truncated"], true);
+        // The same bytes are what Save to File writes and what the HAR export carries.
+        let saved_path = dir.path().join("cut.bin");
+        let saved = rpc(
+            &ctx,
+            "save_flow_body",
+            json!({ "flowId": cut.id, "which": "response", "path": saved_path }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(saved["truncated"], true);
+        assert_eq!(std::fs::read(&saved_path).unwrap(), cut_sent);
+        let har_path = dir.path().join("cut.har");
+        rpc(&ctx, "export_har", json!({ "ids": [cut.id], "path": har_path })).await.unwrap();
+        let har: Value = serde_json::from_slice(&std::fs::read(&har_path).unwrap()).unwrap();
+        let content = &har["log"]["entries"][0]["response"]["content"];
+        assert_eq!(content["_truncated"], true);
+        let text = content["text"].as_str().unwrap();
+        let exported = match content["encoding"].as_str() {
+            Some("base64") => BASE64.decode(text).unwrap(),
+            _ => text.as_bytes().to_vec(),
+        };
+        assert_eq!(exported, cut_sent);
 
         // No schema, and reflection against the server fails: decoded by wire type alone.
         let decode = json!({ "flowId": flow.id, "seq": 1 });

@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vite-plus/test";
-import { payloadText, StreamEventRow } from "./EventStreamViewer";
+import { isLargePayload, payloadText, shouldLoadText, StreamEventRow } from "./EventStreamViewer";
 import type { StreamEvent } from "./streamEvents";
 
 // The detail header's select asks the platform which OS it runs on
@@ -93,5 +93,21 @@ describe("payloadText", () => {
     });
     expect(payloadText(bytes("42"))).toEqual({ text: "42", language: "text" });
     expect(payloadText(bytes("plain"))).toEqual({ text: "plain", language: "text" });
+  });
+});
+
+describe("large payloads", () => {
+  test("nothing is decoded or pretty-printed over 1 MB until asked to", () => {
+    const big = 2_000_000;
+    expect(isLargePayload(big, false)).toBe(true);
+    expect(isLargePayload(big, true)).toBe(false);
+    expect(isLargePayload(1000, false)).toBe(false);
+    // A gRPC message's decode starts before its bytes are in, but not when it is too large
+    expect(shouldLoadText({ hasBytes: false, decodes: true, tooLarge: false })).toBe(true);
+    expect(shouldLoadText({ hasBytes: false, decodes: true, tooLarge: true })).toBe(false);
+    expect(shouldLoadText({ hasBytes: true, decodes: false, tooLarge: true })).toBe(false);
+    // Text read from the bytes waits for them
+    expect(shouldLoadText({ hasBytes: false, decodes: false, tooLarge: false })).toBe(false);
+    expect(shouldLoadText({ hasBytes: true, decodes: false, tooLarge: false })).toBe(true);
   });
 });

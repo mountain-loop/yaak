@@ -178,13 +178,17 @@ fn message_body(
                     let payload = messages::payload(db, blobs, &message)?;
                     out.extend_from_slice(&sse_event_lines(&message, &payload));
                 }
-                MessageKind::GrpcMessage => {
+                MessageKind::GrpcMessage | MessageKind::GrpcTrailers
+                    if message.kind == MessageKind::GrpcMessage || trailers_in_body =>
+                {
                     let payload = messages::payload(db, blobs, &message)?;
-                    grpc_frame(&mut out, 0, &message, &payload);
-                }
-                MessageKind::GrpcTrailers if trailers_in_body => {
-                    let payload = messages::payload(db, blobs, &message)?;
-                    grpc_frame(&mut out, 0x80, &message, &payload);
+                    let flag = if message.kind == MessageKind::GrpcMessage { 0 } else { 0x80 };
+                    // A frame cut short declares more than it holds, so a reader would take the
+                    // frames after it as its rest: the body ends there, cut.
+                    if !grpc_frame(&mut out, flag, &message, &payload) {
+                        truncated = true;
+                        break 'pages;
+                    }
                 }
                 _ => continue,
             }
@@ -237,7 +241,9 @@ fn sse_event_lines(message: &FlowMessage, payload: &[u8]) -> Vec<u8> {
 /// it came (never compressed, or failing to decompress) keeps its flag and the length it was
 /// sent with, so one cut short (at the capture limit, or by the body ending partway through it)
 /// reads back as it was on the wire, cut.
-fn grpc_frame(out: &mut Vec<u8>, flag: u8, message: &FlowMessage, payload: &[u8]) {
+///
+/// Returns whether the frame is whole: false when it declares more bytes than it holds.
+fn grpc_frame(out: &mut Vec<u8>, flag: u8, message: &FlowMessage, payload: &[u8]) -> bool {
     let as_sent = !message.compressed || message.error.is_some();
     let (flag, length) = if as_sent {
         (flag | u8::from(message.compressed), usize::try_from(message.size).unwrap_or(usize::MAX))
@@ -247,6 +253,7 @@ fn grpc_frame(out: &mut Vec<u8>, flag: u8, message: &FlowMessage, payload: &[u8]
     out.push(flag);
     out.extend_from_slice(&u32::try_from(length).unwrap_or(u32::MAX).to_be_bytes());
     out.extend_from_slice(payload);
+    payload.len() >= length
 }
 
 /// A body's text as the app's viewer reads it, as `decodeBodyText` in `@yaakapp-internal/lib`
@@ -570,6 +577,39 @@ mod tests {
             };
             assert!(!from_messages(&encoded, FlowBody::Response), "{encoding}");
         }
+    }
+
+    /// A message cut at the capture limit declares more than it holds: the body ends with it,
+    /// so no reader takes the frames after it as its rest.
+    #[tokio::test]
+    async fn grpc_body_ends_at_a_cut_message() {
+        use yaak_proxy::{MessageDirection as D, MessageKind as K};
+        let (_db, blobs, _rx) = yaak_models::init_in_memory().unwrap();
+        let (_dir, db) = proxy_db();
+        let mut cut = stream_message(D::Server, K::GrpcMessage, 11, b"\x0a\x09Hel");
+        cut.truncated = true;
+        store_messages(
+            &db,
+            "fl_cut",
+            &[
+                stream_message(D::Server, K::GrpcMessage, 2, b"\x08\x01"),
+                cut,
+                stream_message(D::Server, K::GrpcMessage, 2, b"\x08\x02"),
+            ],
+        );
+        let flow = Flow {
+            id: "fl_cut".into(),
+            stream_kind: Some(StreamKind::Grpc),
+            response_headers: vec![crate::models::ProxyHeader {
+                name: "content-type".into(),
+                value: "application/grpc".into(),
+            }],
+            ..Default::default()
+        };
+
+        let body = read_body(&db, &blobs, &flow, FlowBody::Response, 1024).await.unwrap();
+        assert_eq!(body.data, b"\x00\x00\x00\x00\x02\x08\x01\x00\x00\x00\x00\x0b\x0a\x09Hel");
+        assert!(body.truncated);
     }
 
     #[tokio::test]

@@ -277,6 +277,28 @@ function EventLabel({ children, isActive }: { children: ReactNode; isActive?: bo
 
 const LARGE_PAYLOAD = 1000 * 1000;
 
+/** A payload too large to show until asked to: over 1 MB, and not yet asked */
+export function isLargePayload(size: number, showLarge: boolean): boolean {
+  return !showLarge && size > LARGE_PAYLOAD;
+}
+
+/**
+ * Whether a payload's text view may load: decoding, parsing and pretty-printing it. Not for a
+ * payload too large to show yet, nor before its bytes are in unless the view decodes on its own
+ * (a gRPC message's decodes).
+ */
+export function shouldLoadText({
+  hasBytes,
+  decodes,
+  tooLarge,
+}: {
+  hasBytes: boolean;
+  decodes: boolean;
+  tooLarge: boolean;
+}): boolean {
+  return !tooLarge && (hasBytes || decodes);
+}
+
 /** The text and hexdump views every payload has */
 function defaultViews(bytes: Uint8Array | null): StreamPayloadView[] {
   return [
@@ -352,11 +374,19 @@ function StreamEventDetail({
   const defaultView = event.binary && extraViews == null ? "hexdump" : views[0]?.value;
   const viewValue = chosen[event.key] ?? defaultView ?? "message";
   const view = views.find((v) => v.value === viewValue) ?? views[0];
-  const [showLarge, setShowLarge] = useState(false);
+  const [shownLarge, setShownLarge] = useState<Record<string, boolean>>({});
+  const showLarge = shownLarge[event.key] === true;
+  const tooLarge = isLargePayload(bytes?.length ?? event.size ?? 0, showLarge);
 
   const textLoad =
-    view?.type === "text" && (extraViews != null || bytes != null) ? view.load : null;
-  const text = useLoaded(textLoad, `${event.key}:${view?.value}:${bytes == null ? 0 : 1}`);
+    view?.type === "text" &&
+    shouldLoadText({ hasBytes: bytes != null, decodes: extraViews != null, tooLarge })
+      ? view.load
+      : null;
+  const text = useLoaded(
+    textLoad,
+    `${event.key}:${view?.value}:${bytes == null ? 0 : 1}:${textLoad == null ? 0 : 1}`,
+  );
 
   const setView = (value: string) => setChosen((c) => ({ ...c, [event.key]: value }));
   const actions: EventDetailAction[] =
@@ -403,12 +433,17 @@ function StreamEventDetail({
     // An empty payload has nothing to show as text or bytes; a decode of one may (an empty
     // protobuf message is its defaults)
     body = <EmptyStateText>No Content</EmptyStateText>;
-  } else if (!showLarge && bytes != null && bytes.length > LARGE_PAYLOAD) {
+  } else if (tooLarge) {
     body = (
       <VStack space={2} className="italic text-text-subtlest">
         Message previews larger than 1MB are hidden
         <div>
-          <Button onClick={() => setShowLarge(true)} color="secondary" variant="border" size="xs">
+          <Button
+            onClick={() => setShownLarge((s) => ({ ...s, [event.key]: true }))}
+            color="secondary"
+            variant="border"
+            size="xs"
+          >
             Try Showing
           </Button>
         </div>
