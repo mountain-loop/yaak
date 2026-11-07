@@ -732,10 +732,13 @@ impl ProxyCtx {
             self.emit_state();
             return Ok(port);
         }
-        if let Err(e) = self.restart() {
+        // Read once: stopping clears it, and a failed start would leave the rollback reading
+        // the cleared value, so the old port would come back without the system proxy.
+        let proxy_on = self.system_proxy_on.load(Ordering::SeqCst);
+        if let Err(e) = self.restart(proxy_on) {
             settings.port = previous;
             settings.save(&self.settings_path())?;
-            if let Err(e) = self.restart() {
+            if let Err(e) = self.restart(proxy_on) {
                 warn!("Failed to restart the proxy on port {previous}: {e}");
             }
             return Err(e);
@@ -744,9 +747,8 @@ impl ProxyCtx {
     }
 
     /// Stops the engine and starts it again as `settings.json` has it, with the system proxy
-    /// turned on again when it was.
-    fn restart(&self) -> Result<(), String> {
-        let proxy_on = self.system_proxy_on.load(Ordering::SeqCst);
+    /// turned on again when `proxy_on`, as it was before the first stop.
+    fn restart(&self, proxy_on: bool) -> Result<(), String> {
         self.stop()?;
         self.start()?;
         self.resume_system_proxy(proxy_on);
@@ -841,7 +843,20 @@ impl ProxyCtx {
                 Ok(stored) => key.decrypt(&stored).ok(),
                 Err(_) => None,
             });
-            db::remove_captured(&self.data_dir)?;
+            // The event loop and a clear's batch let go of the databases moments after the
+            // engine stops; until then Windows refuses to delete files still open.
+            if let Err(e) = remove_captured_when_closed(&self.data_dir) {
+                drop(unlocked);
+                // What is left opens again, so the app is not left without its databases.
+                if let Err(e) = self.unlock() {
+                    warn!("Failed to reopen the proxy's databases: {e}");
+                }
+                if running {
+                    self.start()?;
+                    self.resume_system_proxy(proxy_on);
+                }
+                return Err(e);
+            }
             let new_key = db::load_or_create_data_key(&self.keys, &self.data_dir);
             match (ca_pem, &new_key) {
                 (Some(pem), Ok(new_key)) => {
@@ -1184,6 +1199,25 @@ struct Sweeper {
     running: bool,
     poked: bool,
 }
+
+/// Deletes the captured databases, trying again for a few seconds while something still has
+/// them open, as Windows refuses to delete an open file.
+fn remove_captured_when_closed(data_dir: &Path) -> Result<(), String> {
+    let mut tries = 0;
+    loop {
+        match db::remove_captured(data_dir) {
+            Ok(()) => return Ok(()),
+            Err(_) if tries < REMOVE_TRIES => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+/// Tries at deleting the captured databases, 100 ms apart, before a reset gives up.
+const REMOVE_TRIES: u32 = 50;
 
 /// How often the sweeper measures the captured traffic against the keep-traffic cap.
 const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
@@ -1941,10 +1975,7 @@ fn set_capture_body_limit(
 }
 
 /// The cap as saved, in bytes, or null to keep everything.
-fn set_keep_traffic(
-    ctx: &ProxyCtx,
-    req: SetKeepTrafficRequest,
-) -> Result<Option<usize>, RpcError> {
+fn set_keep_traffic(ctx: &ProxyCtx, req: SetKeepTrafficRequest) -> Result<Option<usize>, RpcError> {
     let bytes = ctx.set_keep_traffic(req.bytes).map_err(rpc_error)?;
     Ok(bytes.map(|b| usize::try_from(b).unwrap_or(usize::MAX)))
 }
@@ -4122,24 +4153,29 @@ mod tests {
         assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), 20);
 
         let cap = (empty + full) / 2;
-        assert_eq!(ctx.set_keep_traffic(Some(cap)).unwrap(), Some(cap));
-        assert_eq!(ctx.settings().unwrap().keep_traffic_bytes, Some(cap));
-        // Each batch's bodies go before its rows, and the app hears of it after both.
-        let removed = std::cell::RefCell::new(Vec::<String>::new());
-        wait_until("swept under the cap", || {
-            for e in rx.try_iter().filter(|e| e.event == "flows_removed") {
-                let ids: Vec<String> = serde_json::from_value(e.payload["ids"].clone()).unwrap();
-                removed.borrow_mut().extend(ids);
-            }
-            let kept = flows::count(&ctx.db().unwrap()).unwrap();
-            ctx.storage_size().unwrap() <= cap && removed.borrow().len() == 20 - kept
-        });
-        let removed = removed.into_inner();
-        assert!(!removed.is_empty() && removed.len() < 20, "{removed:?}");
+        // Swept here rather than waited on from the sweeper's thread, which a busy machine may
+        // not run in time: what goes is the same either way.
+        ctx.sweep_under(cap);
+        let removed: Vec<String> = rx
+            .try_iter()
+            .filter(|e| e.event == "flows_removed")
+            .flat_map(|e| serde_json::from_value::<Vec<String>>(e.payload["ids"].clone()).unwrap())
+            .collect();
+        let kept = flows::count(&ctx.db().unwrap()).unwrap();
+        let after = ctx.storage_size().unwrap();
+        let sizes = format!("empty {empty}, full {full}, cap {cap}, after {after}");
+        assert!(after <= cap, "under the cap: {sizes}");
+        assert!(!removed.is_empty() && removed.len() < 20, "some, not all: {removed:?}, {sizes}");
+        assert_eq!(removed.len(), 20 - kept, "the app hears of each");
         assert_eq!(removed, ids[..removed.len()], "the oldest, in order");
 
+        // Set, the cap starts the sweeper, which finds nothing more to do; taken away, it stops.
+        assert_eq!(ctx.set_keep_traffic(Some(cap)).unwrap(), Some(cap));
+        assert_eq!(ctx.settings().unwrap().keep_traffic_bytes, Some(cap));
+        assert!(sweeper_running(&ctx));
         assert_eq!(ctx.set_keep_traffic(None).unwrap(), None);
         wait_until("the sweeper stops", || !sweeper_running(&ctx));
+        assert_eq!(flows::count(&ctx.db().unwrap()).unwrap(), kept, "nothing more went");
         assert!(ctx.set_keep_traffic(Some(0)).is_err());
     }
 

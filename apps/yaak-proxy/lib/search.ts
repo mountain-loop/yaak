@@ -151,7 +151,11 @@ export function folderOf(flow: Pick<Flow, "clientBundleId" | "clientCwd">): stri
 /** The last part of a path: `fieldwork` of `/src/fieldwork/` */
 function folderName(path: string | null): string | null {
   if (path == null) return null;
-  const name = path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() ?? "";
+  const name =
+    path
+      .replace(/[/\\]+$/, "")
+      .split(/[/\\]/)
+      .pop() ?? "";
   return name === "" ? null : name;
 }
 

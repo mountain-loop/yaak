@@ -20,11 +20,7 @@ import { helperRegisteredAtAtom } from "../lib/atoms";
 import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, systemProxyEverOnAtom } from "../lib/store";
-import {
-  helperPollInterval,
-  recordingLabel,
-  systemProxySwitch,
-} from "../lib/systemProxy";
+import { helperPollInterval, recordingLabel, systemProxySwitch } from "../lib/systemProxy";
 import { onWindowFocus } from "../lib/tauri";
 import { useShowToast } from "../lib/toast";
 

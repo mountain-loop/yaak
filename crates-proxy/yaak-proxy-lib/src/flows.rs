@@ -121,7 +121,11 @@ impl FlowFilter {
                 query.append_pair(key, value);
             }
         }
-        for (key, values) in [("under", &self.under), ("app", &self.app), ("cwd", &self.cwd)] {
+        for (key, values) in [
+            ("under", &self.under),
+            ("app", &self.app),
+            ("cwd", &self.cwd),
+        ] {
             for value in values.iter().flatten() {
                 query.append_pair(key, value);
             }
@@ -727,7 +731,8 @@ pub fn sweep_oldest(stores: &Stores, cap: u64) -> Result<Vec<String>, String> {
         .with_tx(|c| {
             let conn = c.conn().resolve();
             let mut delete = conn.prepare("DELETE FROM flows WHERE rowid = ? AND id = ?")?;
-            let mut delete_messages = conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
+            let mut delete_messages =
+                conn.prepare("DELETE FROM flow_messages WHERE flow_id = ?")?;
             let mut deleted = Vec::with_capacity(rows.len());
             for (rowid, id) in rows {
                 if delete.execute(rusqlite::params![rowid, id])? > 0 {

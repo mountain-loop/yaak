@@ -23,7 +23,9 @@ export const settingsValuesAtom = atom(
 );
 
 /** The interface and editor sizes, the editor's through the variable the editors read */
-export function applyFontSizes(values: Pick<SettingsValues, "interfaceFontSize" | "editorFontSize">) {
+export function applyFontSizes(
+  values: Pick<SettingsValues, "interfaceFontSize" | "editorFontSize">,
+) {
   const root = document.documentElement;
   root.style.fontSize = `${values.interfaceFontSize}px`;
   root.style.setProperty("--editor-font-size", `${values.editorFontSize}px`);

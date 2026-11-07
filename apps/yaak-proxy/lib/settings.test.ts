@@ -42,7 +42,11 @@ describe("proxySettingsView", () => {
     const view = proxySettingsView(DEFAULT_SETTINGS_VALUES, APP, "dark");
     expect(view.themes?.resolvedAppearance).toBe("dark");
     expect(view.themes?.active.dark).toBe(true);
-    const light = proxySettingsView({ ...DEFAULT_SETTINGS_VALUES, appearance: "light" }, APP, "dark");
+    const light = proxySettingsView(
+      { ...DEFAULT_SETTINGS_VALUES, appearance: "light" },
+      APP,
+      "dark",
+    );
     expect(light.themes?.resolvedAppearance).toBe("light");
     expect(light.themes?.active.dark).toBe(false);
   });
@@ -56,6 +60,12 @@ describe("proxySettingsView", () => {
     const view = proxySettingsView(DEFAULT_SETTINGS_VALUES, APP, "light");
     expect(view.updates).toBeNull();
     expect(view.license).toBeNull();
+    expect(view.hiddenInterfaceRows).toEqual([
+      "editorKeymap",
+      "editorSoftWrap",
+      "coloredMethods",
+      "nativeTitlebar",
+    ]);
     expect(view.app.name).toBe("Yaak Proxy");
   });
 });

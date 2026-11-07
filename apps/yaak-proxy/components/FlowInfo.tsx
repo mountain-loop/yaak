@@ -50,7 +50,11 @@ export function FlowInfo({ flow }: { flow: Flow }) {
       </Section>
       <Section title="Timing">
         {[
-          row("started", "Started", format(utcTimestamp(flow.startedAt), "MMM d, yyyy, h:mm:ss.SSS a")),
+          row(
+            "started",
+            "Started",
+            format(utcTimestamp(flow.startedAt), "MMM d, yyyy, h:mm:ss.SSS a"),
+          ),
           row("headers", "Headers", ms(flow.elapsedHeadersMs)),
           row("total", "Total", ms(flow.elapsedMs)),
         ]}

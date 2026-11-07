@@ -10,7 +10,7 @@ import {
   RadioDropdown,
   SettingRow,
   SettingRowBoolean,
-  SettingRowNumber,
+  PlainInput,
   SettingRowSelect,
   SettingSelectControl,
   SettingSnippet,
@@ -23,7 +23,13 @@ import { useState } from "react";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperDialogOpenAtom } from "../lib/atoms";
-import { defaultShell, environmentBlock, environmentVars, TERMINAL_SHELLS, type TerminalShell } from "../lib/env";
+import {
+  defaultShell,
+  environmentBlock,
+  environmentVars,
+  TERMINAL_SHELLS,
+  type TerminalShell,
+} from "../lib/env";
 import {
   CAPTURE_LIMIT_OPTIONS,
   KEEP_TRAFFIC_OPTIONS,
@@ -46,7 +52,6 @@ export function SettingsProxy() {
   const proxyState = useAtomValue(proxyStateAtom);
   const store = useStore();
   const refresh = { onSettled: () => void refreshProxyState(store) };
-  const setPort = useRpcMutation("set_port", refresh);
   const setHttpVersion = useRpcMutation("set_http_version", refresh);
   const setCaptureLimit = useRpcMutation("set_capture_body_limit", refresh);
   const setAtLaunch = useRpcMutation("set_system_proxy_at_launch", refresh);
@@ -62,15 +67,7 @@ export function SettingsProxy() {
       </div>
       <SettingsList className="space-y-8">
         <SettingsSection title="Listening">
-          <SettingRowNumber
-            name="port"
-            title="Port"
-            description="Restarts the proxy"
-            value={proxyState?.configuredPort ?? 9090}
-            disabled={elsewhere}
-            validate={(v) => /^\d+$/.test(v) && Number(v) > 0 && Number(v) < 65536}
-            onChange={(port) => setPort.mutate({ port })}
-          />
+          <PortRow disabled={elsewhere} />
           <SettingRowSelect<HttpVersion>
             name="httpVersion"
             title="HTTP version"
@@ -128,6 +125,68 @@ export function SettingsProxy() {
   );
 }
 
+/** A port from 1 to 65535, or null */
+function parsePort(text: string): number | null {
+  if (!/^\d+$/.test(text.trim())) return null;
+  const port = Number(text.trim());
+  return port > 0 && port < 65536 ? port : null;
+}
+
+/**
+ * The port, saved when the field is left or Enter is pressed rather than on each keystroke:
+ * every save restarts a running proxy, so typing 8080 must not restart it on 8, 80 and 808.
+ */
+function PortRow({ disabled }: { disabled: boolean }) {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const store = useStore();
+  const showToast = useShowToast();
+  const saved = proxyState?.configuredPort ?? 9090;
+  const [draft, setDraft] = useState<string | null>(null);
+  // Puts the saved port back in the field after a rejected or failed change
+  const [resets, setResets] = useState(0);
+  const reset = () => {
+    setDraft(null);
+    setResets((n) => n + 1);
+  };
+  const setPort = useRpcMutation("set_port", {
+    onError: (err) => showToast({ message: err.message, color: "danger" }),
+    onSettled: () => {
+      reset();
+      void refreshProxyState(store);
+    },
+  });
+  const commit = () => {
+    if (draft == null || setPort.isPending) return;
+    const port = parsePort(draft);
+    if (port == null || port === saved) {
+      reset();
+      return;
+    }
+    setPort.mutate({ port });
+  };
+  return (
+    <SettingRow title="Port" description="Restarts the proxy">
+      <PlainInput
+        hideLabel
+        size="sm"
+        name="port"
+        label="Port"
+        type="number"
+        containerClassName="w-48!"
+        defaultValue={`${saved}`}
+        forceUpdateKey={`${saved}.${resets}`}
+        disabled={disabled || setPort.isPending}
+        validate={(v) => parsePort(v) != null}
+        onChange={setDraft}
+        onBlur={commit}
+        onKeyDownCapture={(e) => {
+          if (e.key === "Enter") commit();
+        }}
+      />
+    </SettingRow>
+  );
+}
+
 function HelperRow({ status }: { status: SystemProxyStatus }) {
   const queryClient = useQueryClient();
   const openDialog = useSetAtom(helperDialogOpenAtom);
@@ -155,7 +214,11 @@ function HelperRow({ status }: { status: SystemProxyStatus }) {
           isLoading={unregister.isPending}
           onClick={() => (row.action === "unregister" ? unregister.mutate({}) : openDialog(true))}
         >
-          {row.action === "install" ? "Install" : row.action === "approve" ? "Approve" : "Unregister"}
+          {row.action === "install"
+            ? "Install"
+            : row.action === "approve"
+              ? "Approve"
+              : "Unregister"}
         </Button>
       )}
     </SettingRow>
@@ -272,17 +335,27 @@ function TerminalRow() {
           size="2xs"
           variant="border"
           className="ml-auto"
-          title={os === "macos" ? "A new Terminal window with these set" : "Not available on this platform yet"}
+          title={
+            os === "macos"
+              ? "A new Terminal window with these set"
+              : "Not available on this platform yet"
+          }
           disabled={caPath == null || os !== "macos"}
           isLoading={openTerminal.isPending}
-          onClick={() => caPath != null && openTerminal.mutate({ vars: environmentVars(port, caPath) })}
+          onClick={() =>
+            caPath != null && openTerminal.mutate({ vars: environmentVars(port, caPath) })
+          }
         >
           Open Terminal
         </Button>
       </div>
       <p className="mt-1 text-sm text-text-subtle">Proxies one terminal instead of the system</p>
       {caPath != null && (
-        <SettingSnippet className="mt-3" language="text" snippet={environmentBlock(shell, port, caPath)} />
+        <SettingSnippet
+          className="mt-3"
+          language="text"
+          snippet={environmentBlock(shell, port, caPath)}
+        />
       )}
     </div>
   );

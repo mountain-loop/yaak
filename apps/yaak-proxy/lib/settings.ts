@@ -47,7 +47,10 @@ export function readSettingsValues(raw: string | null): SettingsValues {
     const value = (parsed as Record<string, unknown>)[key];
     const nullable = fallback === null;
     if (value === undefined) continue;
-    if ((nullable && (value === null || typeof value === "string")) || typeof value === typeof fallback) {
+    if (
+      (nullable && (value === null || typeof value === "string")) ||
+      typeof value === typeof fallback
+    ) {
       out[key] = value;
     }
   }
@@ -61,17 +64,14 @@ const THEMES: SettingsThemeOption[] = [defaultDarkTheme, defaultLightTheme].map(
 }));
 
 /** The appearance showing, with `system` resolved by the OS's */
-export function resolveAppearance(
-  appearance: string,
-  system: "light" | "dark",
-): "light" | "dark" {
+export function resolveAppearance(appearance: string, system: "light" | "dark"): "light" | "dark" {
   return appearance === "light" || appearance === "dark" ? appearance : system;
 }
 
 /**
  * The proxy's settings as the shared tabs render them. The proxy has Yaak's two themes, no
  * installed-font list, updater or feedback prompts yet, and its license comes with the license
- * work, so those parts are left out.
+ * work, so those parts are left out, as are the Interface rows it doesn't act on.
  */
 export function proxySettingsView(
   values: SettingsValues,
@@ -96,6 +96,9 @@ export function proxySettingsView(
     updates: null,
     feedbackPrompts: false,
     license: null,
+    // Not acted on in the proxy yet: its editors take no keymap or wrap setting, its list draws
+    // methods uncoloured, and it always draws its own title bar.
+    hiddenInterfaceRows: ["editorKeymap", "editorSoftWrap", "coloredMethods", "nativeTitlebar"],
   };
 }
 
@@ -133,10 +136,16 @@ export function sizeLabel(bytes: number): string {
 }
 
 /** How much captured traffic is kept before the oldest flows are dropped */
-export const KEEP_TRAFFIC_OPTIONS = sizeOptions([null, 500 * MB, GB, 2 * GB, 5 * GB, 10 * GB, 20 * GB], "Unlimited");
+export const KEEP_TRAFFIC_OPTIONS = sizeOptions(
+  [null, 500 * MB, GB, 2 * GB, 5 * GB, 10 * GB, 20 * GB],
+  "Unlimited",
+);
 
 /** How much of each body is stored */
-export const CAPTURE_LIMIT_OPTIONS = sizeOptions([MB, 5 * MB, 10 * MB, 50 * MB, 100 * MB], "Unlimited");
+export const CAPTURE_LIMIT_OPTIONS = sizeOptions(
+  [MB, 5 * MB, 10 * MB, 50 * MB, 100 * MB],
+  "Unlimited",
+);
 
 /**
  * The option a stored size selects. A size set elsewhere (the CLI or `settings.json`) that no

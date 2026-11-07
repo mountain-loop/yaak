@@ -134,7 +134,11 @@ function useAppInfo() {
   const { data } = useQuery({
     queryKey: ["settings_app_info"],
     queryFn: async () => {
-      const [version, dataDir, logDir] = await Promise.all([getVersion(), appDataDir(), appLogDir()]);
+      const [version, dataDir, logDir] = await Promise.all([
+        getVersion(),
+        appDataDir(),
+        appLogDir(),
+      ]);
       return { version, dataDir, logDir };
     },
     retry: false,
@@ -145,7 +149,12 @@ function useAppInfo() {
       version: data?.version ?? "",
       dataDir: data?.dataDir ?? "",
       logDir: data?.logDir ?? "",
-      revealPathLabel: os === "macos" ? "Reveal in Finder" : os === "windows" ? "Show in Explorer" : "Show in Folder",
+      revealPathLabel:
+        os === "macos"
+          ? "Reveal in Finder"
+          : os === "windows"
+            ? "Show in Explorer"
+            : "Show in Folder",
     }),
     [data, os],
   );

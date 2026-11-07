@@ -109,7 +109,11 @@ describe("programs outside an app", () => {
     clientPath: "/usr/local/bin/claude",
     clientCwd: cwd,
   });
-  const python = { clientName: "python3.12", clientPath: "/usr/bin/python3.12", clientCwd: "/src/ml" };
+  const python = {
+    clientName: "python3.12",
+    clientPath: "/usr/bin/python3.12",
+    clientCwd: "/src/ml",
+  };
   const curl = { clientName: "curl", clientPath: "/usr/bin/curl", clientCwd: null };
   const root = buildSidebarTree(
     [

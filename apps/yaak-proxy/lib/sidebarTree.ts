@@ -116,13 +116,21 @@ function placeOf(flow: Flow): Place {
   if (app != null) {
     const folder = runtimeFolderOf(flow) == null ? folderOf(flow) : null;
     if (folder == null) {
-      appRows = rows.map((r) => ({ ...r, id: `app:${app}|${r.id}`, query: `${appQuery} ${r.query}` }));
+      appRows = rows.map((r) => ({
+        ...r,
+        id: `app:${app}|${r.id}`,
+        query: `${appQuery} ${r.query}`,
+      }));
     } else {
       const folderId = `app:${app}|cwd:${folder}`;
       const folderQuery = `${appQuery} ${formatFieldFilter("cwd", folder)}`;
       appRows = [
         { id: folderId, kind: "folder", label: folder, query: folderQuery },
-        ...rows.map((r) => ({ ...r, id: `${folderId}|${r.id}`, query: `${folderQuery} ${r.query}` })),
+        ...rows.map((r) => ({
+          ...r,
+          id: `${folderId}|${r.id}`,
+          query: `${folderQuery} ${r.query}`,
+        })),
       ];
     }
   }

@@ -33,7 +33,9 @@ export type PhaseFlow = Pick<
  * no end yet.
  */
 export function flowPhases(flow: PhaseFlow): FlowPhase[] {
-  const steps: Omit<FlowPhase, "tookMs">[] = [{ key: "start", label: "Started", kind: "start", atMs: 0 }];
+  const steps: Omit<FlowPhase, "tookMs">[] = [
+    { key: "start", label: "Started", kind: "start", atMs: 0 },
+  ];
   const add = (key: string, label: string, atMs: number | null | undefined) => {
     if (atMs != null) steps.push({ key, label, kind: "step", atMs });
   };

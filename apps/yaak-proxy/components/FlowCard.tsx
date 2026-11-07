@@ -1,6 +1,7 @@
 import { formatSize } from "@yaakapp-internal/lib/formatSize";
 import type { Flow, FlowBody } from "@yaakapp-internal/proxy-lib";
 import {
+  Banner,
   CountBadge,
   Dropdown,
   EmptyStateText,
@@ -154,6 +155,20 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       defaultTab={defaultTab}
       onTabChange={onTabChange}
       urlLine={<UrlLine flow={flow} />}
+      renderBody={(editor) =>
+        body.data?.truncated ? (
+          <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
+            <Banner color="notice" className="text-sm mb-2">
+              <span title="The app sent all of it">
+                First {formatSize(body.data.storedSize)} of {formatSize(flow.requestSize)} kept
+              </span>
+            </Banner>
+            <div className="min-h-0">{editor}</div>
+          </div>
+        ) : (
+          editor
+        )
+      }
     />
   );
 }
@@ -178,10 +193,7 @@ function UrlLine({ flow }: { flow: Flow }) {
 function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }) {
   const [viewMode, setViewMode] = useState<ResponseViewMode>("pretty");
   const body = useLoadedBody(flow, "response");
-  const response = useMemo(
-    () => flowResponseToView(flow, body.data ?? null),
-    [flow, body.data],
-  );
+  const response = useMemo(() => flowResponseToView(flow, body.data ?? null), [flow, body.data]);
   const loader = useMemo(
     () =>
       flowBodyLoader({
@@ -196,7 +208,10 @@ function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }
 
   const extraTabs = useMemo<ExtraPaneTab[]>(
     () => [
-      { tab: { value: RESPONSE_TAB_TIMELINE, label: "Timeline" }, content: <FlowTimeline flow={flow} /> },
+      {
+        tab: { value: RESPONSE_TAB_TIMELINE, label: "Timeline" },
+        content: <FlowTimeline flow={flow} />,
+      },
       { tab: { value: RESPONSE_TAB_INFO, label: "Info" }, content: <FlowInfo flow={flow} /> },
       ...(messagesLabel == null
         ? []

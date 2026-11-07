@@ -198,6 +198,37 @@ export const pausedAtAtom = atom<number | null>(null);
  */
 let changesDuringPage: ModelPayload[] | null = null;
 
+/**
+ * Flows the keep-traffic sweep deleted while a page was being read: the page may be a snapshot
+ * from before, so it is filtered by these as it lands. Forgotten once no page is being read.
+ */
+const removedWhileLoading = new Set<string>();
+let pagesLoading = 0;
+
+function pageStarted() {
+  pagesLoading++;
+}
+
+function pageSettled() {
+  pagesLoading = Math.max(0, pagesLoading - 1);
+  if (pagesLoading === 0) removedWhileLoading.clear();
+}
+
+/** A page's flows less any the sweep deleted since it was asked for */
+function withoutRemoved(flows: Flow[]): Flow[] {
+  return removedWhileLoading.size === 0
+    ? flows
+    : flows.filter((f) => !removedWhileLoading.has(f.id));
+}
+
+/** Changes still to apply, less the ones that would bring back a deleted flow */
+function dropRemovedChanges(changes: ModelPayload[], removed: Set<string>) {
+  for (let i = changes.length - 1; i >= 0; i--) {
+    const c = changes[i];
+    if (c != null && c.change.type !== "delete" && removed.has(c.model.id)) changes.splice(i, 1);
+  }
+}
+
 /** Loads the page of flows before the oldest one shown, from the search's flows when searching */
 export const loadOlderFlowsAtom = atom(null, async (get, set) => {
   const search = get(searchWindowAtom);
@@ -206,12 +237,13 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
   if (changesDuringPage != null || !hasOlder || first == null) return;
   const changes: ModelPayload[] = [];
   changesDuringPage = changes;
+  pageStarted();
   try {
     const res = await rpc("list_flows", { ...search?.query, before: first.id, limit: PAGE_SIZE });
     // Dropped when the window moved on meanwhile, trimmed, cleared or searched again.
     const merge = (win: FlowWindow) => {
       if (win.flows[0]?.id !== first.id) return win;
-      const merged = prependOlder(win, res.flows, PAGE_SIZE);
+      const merged = prependOlder(win, withoutRemoved(res.flows), PAGE_SIZE);
       const kept = search == null ? changes : changesFor(search.query, changes);
       // Counted when they first applied.
       return { ...applyChanges(merged, kept), total: merged.total };
@@ -225,6 +257,7 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
     console.warn("Failed to load older flows", err);
   } finally {
     changesDuringPage = null;
+    pageSettled();
   }
 });
 
@@ -327,9 +360,16 @@ export function syncFlows(store: Store) {
       win.flows.some((f) => removed.has(f.id))
         ? { ...win, flows: win.flows.filter((f) => !removed.has(f.id)) }
         : win;
-    pending = pending.filter((p) => !removed.has(p.model.id));
+    if (pagesLoading > 0) for (const id of ids) removedWhileLoading.add(id);
+    dropRemovedChanges(pending, removed);
+    if (changesDuringPage != null) dropRemovedChanges(changesDuringPage, removed);
     store.set(flowWindowAtom, drop);
-    store.set(searchWindowAtom, (s) => (s == null ? s : { ...s, win: drop(s.win) }));
+    store.set(searchWindowAtom, (s) => {
+      if (s == null) return s;
+      const buffered = [...s.buffered];
+      dropRemovedChanges(buffered, removed);
+      return { ...s, win: drop(s.win), buffered };
+    });
     if (removed.has(store.get(selectedFlowAtom)?.id ?? "")) store.set(selectedFlowAtom, null);
     if (recountTimer == null) recountTimer = setTimeout(recount, RECOUNT_MS);
   });
@@ -337,18 +377,24 @@ export function syncFlows(store: Store) {
   function load() {
     loaded = false;
     const thisLoad = ++loads;
-    void rpc("list_flows", { limit: WINDOW_SIZE }).then((res) => {
-      // A clear since asked for a newer page.
-      if (thisLoad !== loads) return;
-      store.set(flowWindowAtom, windowFromPage(res.flows, WINDOW_SIZE, res.total));
-      seenId = res.flows[0]?.id ?? null;
-      loaded = true;
-      store.set(flowsLoadedAtom, true);
-      // Flows recorded before this install remembered it mean setup was done.
-      if (res.total > 0) store.set(systemProxyEverOnAtom, true);
-      flush();
-      recount();
-    });
+    pageStarted();
+    void rpc("list_flows", { limit: WINDOW_SIZE })
+      .then((res) => {
+        // A clear since asked for a newer page.
+        if (thisLoad !== loads) return;
+        store.set(
+          flowWindowAtom,
+          windowFromPage(withoutRemoved(res.flows), WINDOW_SIZE, res.total),
+        );
+        seenId = res.flows[0]?.id ?? null;
+        loaded = true;
+        store.set(flowsLoadedAtom, true);
+        // Flows recorded before this install remembered it mean setup was done.
+        if (res.total > 0) store.set(systemProxyEverOnAtom, true);
+        flush();
+        recount();
+      })
+      .finally(pageSettled);
     loadSearch(store.get(activeQueryAtom));
   }
   reloadFlows = load;
@@ -375,12 +421,16 @@ export function syncFlows(store: Store) {
           buffered: [],
         };
       });
+    pageStarted();
     void rpc("list_flows", { ...query, limit: WINDOW_SIZE })
-      .then((res) => settle(windowFromPage(res.flows, WINDOW_SIZE, res.matching ?? res.total)))
+      .then((res) =>
+        settle(windowFromPage(withoutRemoved(res.flows), WINDOW_SIZE, res.matching ?? res.total)),
+      )
       .catch((err) => {
         console.warn("Failed to search flows", err);
         settle(null);
-      });
+      })
+      .finally(pageSettled);
   }
 
   // The sidebar takes the window's flows at once when it empties or first fills, and at most

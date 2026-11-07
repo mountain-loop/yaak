@@ -1,5 +1,11 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
-import { EventViewer, EventViewerRow, formatMillis, Icon, type IconProps } from "@yaakapp-internal/ui";
+import {
+  EventViewer,
+  EventViewerRow,
+  formatMillis,
+  Icon,
+  type IconProps,
+} from "@yaakapp-internal/ui";
 import { useMemo } from "react";
 import { type FlowPhase, flowPhases, type PhaseKind } from "../lib/phases";
 
