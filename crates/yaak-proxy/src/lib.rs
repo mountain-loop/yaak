@@ -31,7 +31,7 @@ use rustls::ClientConfig;
 use rustls::pki_types::CertificateDer;
 use tokio::net::TcpListener;
 
-pub use cert::CaStore;
+pub use cert::{CaStore, KeyCipher};
 use connection::handle_connection;
 pub use decrypt::{
     BUILT_IN_EXCLUSIONS, DecryptApp, DecryptEntry, DecryptPolicy, DecryptQuery, DecryptTarget,

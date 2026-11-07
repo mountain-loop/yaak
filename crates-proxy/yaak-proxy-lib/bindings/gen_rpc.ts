@@ -287,6 +287,15 @@ httpVersion: HttpVersion,
  */
 startError: string | null, 
 /**
+ * How far encrypting traffic stored before encryption has got, from 0 to 1, while it
+ * runs. The engine starts once it is done.
+ */
+encrypting: number | null, 
+/**
+ * Captured traffic cannot be read: its key is unavailable, or it is being encrypted.
+ */
+locked: ProxyLock | null, 
+/**
  * Another process that owns the engine, such as the CLI daemon. While one does, this app
  * cannot start its own, and new flows reach it only through the database.
  */
@@ -373,6 +382,20 @@ proxyPort: number | null, };
 export type Owner = "app" | "cli";
 
 export type PreviewSaveRequest = { flowId: string, };
+
+/**
+ * Why captured traffic cannot be read, for the window's locked state.
+ */
+export type ProxyLock = { 
+/**
+ * What every refused read says.
+ */
+message: string, 
+/**
+ * The keychain would not give up the key, or has not been asked yet, so allowing Yaak
+ * Proxy in Keychain Access is the way out.
+ */
+keychain: boolean, };
 
 export type ProxySetting = { enabled: boolean, server: string, port: number, };
 

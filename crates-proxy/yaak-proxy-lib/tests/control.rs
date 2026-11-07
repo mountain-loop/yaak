@@ -20,7 +20,7 @@ use yaak_proxy_lib::flows::{BodyEncoding, FlowFilter};
 use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::save::SaveFlowRequest;
 use yaak_proxy_lib::settings::ProxySettings;
-use yaak_proxy_lib::{ProxyCtx, ProxyState};
+use yaak_proxy_lib::{MasterKeySource, ProxyCtx, ProxyState};
 use yaak_rpc::RpcEventEmitter;
 
 async fn route(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
@@ -44,12 +44,18 @@ async fn spawn_upstream() -> SocketAddr {
     addr
 }
 
+/// The keychain every context and reader here shares, as the app and the CLI share one.
+fn keys() -> MasterKeySource {
+    static KEYS: std::sync::OnceLock<MasterKeySource> = std::sync::OnceLock::new();
+    KEYS.get_or_init(MasterKeySource::memory).clone()
+}
+
 /// A context over `dir` whose engine picks a free port, saving into Yaak's data in `client`.
 fn ctx(dir: &Path, client: &Path) -> ProxyCtx {
     let settings = ProxySettings { port: 0, system_proxy_at_launch: false, ..Default::default() };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, _rx) = RpcEventEmitter::new();
-    ProxyCtx::new(dir, events).unwrap().with_client_data_dir(client)
+    ProxyCtx::new(dir, events, keys()).unwrap().with_client_data_dir(client)
 }
 
 /// Sends one POST through the engine and waits for its flow.
@@ -72,7 +78,7 @@ async fn capture_flow(ctx: &ProxyCtx) -> Flow {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             return flow;
         }
@@ -117,7 +123,8 @@ async fn round_trip() {
     let wrong = http.get(&url).bearer_auth("not-the-token").send().await.unwrap();
     assert_eq!(wrong.status(), 401);
 
-    let ProxyConnection::Live(client) = ProxyConnection::connect(dir.path()).unwrap() else {
+    let ProxyConnection::Live(client) = ProxyConnection::connect(dir.path(), &keys()).unwrap()
+    else {
         panic!("expected the live owner");
     };
     let status = client.status().await.unwrap();
@@ -268,7 +275,7 @@ async fn offline_reads_proxy_db() {
         flow
     };
 
-    let connection = ProxyConnection::connect(dir.path()).unwrap();
+    let connection = ProxyConnection::connect(dir.path(), &keys()).unwrap();
     assert!(matches!(connection, ProxyConnection::Offline(_)));
     let flows = connection.flows(&FlowFilter::default()).await.unwrap();
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
@@ -280,7 +287,7 @@ async fn offline_reads_proxy_db() {
     assert_eq!(connection.har(&posts).await.unwrap().log.entries.len(), 1);
 
     let empty = tempfile::tempdir().unwrap();
-    let err = ProxyConnection::connect(empty.path()).err().unwrap();
+    let err = ProxyConnection::connect(empty.path(), &keys()).err().unwrap();
     assert!(err.starts_with("No captured traffic yet"), "{err}");
 }
 
@@ -365,7 +372,7 @@ async fn save_writes_the_request_into_yaak() {
     assert!(source.contains("sync"), "{source}");
 
     // The flow remembers what it was saved as.
-    let flow = yaak_proxy_lib::flows::get(&ctx.db, &flow.id).unwrap();
+    let flow = yaak_proxy_lib::flows::get(&ctx.db().unwrap(), &flow.id).unwrap();
     assert_eq!(flow.saved_request_id, Some(saved.request.id));
 
     // Without a name, through the control API as the CLI saves, it stays unnamed, as Yaak
@@ -564,7 +571,8 @@ async fn the_save_dialog_reads_workspaces_previews_and_saves() {
         (workspace.id.as_str(), Some(folder.id.as_str()))
     );
     let stored = ctx
-        .db
+        .db()
+        .unwrap()
         .with_conn(|db| db.find_one::<Flow>(yaak_proxy_lib::models::FlowIden::Id, &flow.id))
         .unwrap();
     assert_eq!(stored.saved_request_id.as_deref(), Some(request_id));
@@ -636,7 +644,7 @@ async fn flows_name_the_app_that_sent_them() {
 
     let deadline = Instant::now() + Duration::from_secs(5);
     let flow = loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url) {
             break flow;
         }
@@ -650,7 +658,7 @@ async fn flows_name_the_app_that_sent_them() {
 
     // The search and the sidebar's Apps group find it by its path.
     let filter = FlowFilter { app: Some(vec!["/usr/bin/curl".into()]), ..Default::default() };
-    assert_eq!(yaak_proxy_lib::flows::list(&ctx.db, &filter).unwrap().len(), 1);
+    assert_eq!(yaak_proxy_lib::flows::list(&ctx.db().unwrap(), &filter).unwrap().len(), 1);
 }
 
 /// Sends one GET through the engine, without waiting for a flow.
@@ -682,9 +690,12 @@ async fn pausing_stores_no_flows_and_resuming_stores_them_again() {
     assert_eq!((state["state"].as_str(), &state["recording"]), (Some("running"), &json!(false)));
     let paused = send_through(&ctx, "/while-paused").await;
     tokio::time::sleep(Duration::from_millis(300)).await;
-    let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+    let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
     assert!(flows.iter().all(|f| f.url != paused), "a flow was stored while paused");
-    assert!(ctx.blobs.connect().list_body_ids().unwrap().is_empty(), "a body was stored");
+    assert!(
+        ctx.blobs().unwrap().connect().list_body_ids().unwrap().is_empty(),
+        "a body was stored"
+    );
 
     // Resumed through the control API, as the CLI would.
     let status = client.set_recording(true).await.unwrap();
@@ -834,7 +845,7 @@ async fn the_decrypt_list_reaches_the_cli_that_owns_the_engine() {
     assert_eq!(client.get(&url).send().await.unwrap().status(), 502);
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let flows = cli.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = cli.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.iter().find(|f| f.url == url) {
             assert!(!flow.tunnelled);
             break;

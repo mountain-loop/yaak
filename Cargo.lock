@@ -4156,6 +4156,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95b4103cffefa72eb8428cb6b47d6627161e51c2739fc5e3b734584157bc642a"
 dependencies = [
  "cc",
+ "openssl-sys",
  "pkg-config",
  "vcpkg",
 ]
@@ -11612,9 +11613,11 @@ dependencies = [
  "base32",
  "base64 0.23.1",
  "chacha20poly1305",
+ "dbus-secret-service",
  "keyring",
  "log 0.4.34",
  "serde",
+ "tempfile",
  "thiserror 2.0.21",
  "yaak-models",
 ]
@@ -11628,6 +11631,7 @@ dependencies = [
  "include_dir",
  "log 0.4.34",
  "nanoid",
+ "openssl-sys",
  "r2d2",
  "r2d2_sqlite",
  "rusqlite",
@@ -11635,6 +11639,7 @@ dependencies = [
  "sea-query-rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "ts-rs",
  "uuid",
@@ -11951,6 +11956,7 @@ dependencies = [
  "ts-rs",
  "url",
  "yaak-common",
+ "yaak-crypto",
  "yaak-database",
  "yaak-filter",
  "yaak-grpc",

@@ -7,6 +7,7 @@ import {
   type DropdownItem,
   type DropdownRef,
   Icon,
+  LoadingIcon,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai";
@@ -17,6 +18,7 @@ import { useRpcMutation } from "../hooks/useRpcMutation";
 import { useRpcQuery } from "../hooks/useRpcQuery";
 import { helperDialogOpenAtom, helperRegisteredAtAtom } from "../lib/atoms";
 import { decryptListDialogOpenAtom } from "./DecryptListEditor";
+import { encryptingPercent } from "../lib/encrypting";
 import { environmentExports } from "../lib/env";
 import { proxyStateAtom, refreshProxyState, systemProxyEverOnAtom } from "../lib/store";
 import {
@@ -53,9 +55,17 @@ export function ProxyStatus() {
   const other = proxyState?.otherOwner ?? null;
   const port = proxyState?.port ?? other?.proxyPort ?? null;
   const untrusted = caStatus.data != null && !caStatus.data.trusted;
+  // Traffic stored before encryption is being encrypted; the engine starts once it is.
+  const encrypting = !running && other == null ? encryptingPercent(proxyState) : null;
 
   const stateRow =
-    other != null ? (
+    encrypting != null ? (
+      <MenuRow
+        icon={<LoadingIcon size="sm" className="text-text-subtle" />}
+        title={`Encrypting stored traffic, ${encrypting}`}
+        description="Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
+      />
+    ) : other != null ? (
       <MenuRow
         icon={<StateDot state="cli" />}
         title="Running from the CLI"
@@ -259,8 +269,20 @@ export function ProxyStatus() {
   return (
     <>
       <Dropdown ref={dropdownRef} items={items}>
-        <Pill color={!running && other == null && proxyState != null ? "warning" : undefined}>
-          {other != null ? (
+        <Pill
+          color={
+            !running && other == null && encrypting == null && proxyState != null
+              ? "warning"
+              : undefined
+          }
+        >
+          {encrypting != null ? (
+            <>
+              <LoadingIcon size="xs" />
+              <span className="text-text">Encrypting</span>
+              <span className="font-mono text-text-subtle">{encrypting}</span>
+            </>
+          ) : other != null ? (
             <>
               <StateDot state="cli" />
               <span className="text-text">CLI</span>

@@ -22,7 +22,7 @@ use tokio::net::TcpListener;
 use yaak_proxy_lib::bodies::read_raw_body;
 use yaak_proxy_lib::models::{Flow, FlowBody};
 use yaak_proxy_lib::settings::ProxySettings;
-use yaak_proxy_lib::{GrpcConfig, ProxyCtx};
+use yaak_proxy_lib::{GrpcConfig, MasterKeySource, ProxyCtx};
 use yaak_rpc::RpcEventEmitter;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -210,7 +210,7 @@ fn start(dir: &Path) -> (ProxyCtx, std::sync::mpsc::Receiver<yaak_rpc::RpcEvent>
     };
     settings.save(&dir.join("settings.json")).unwrap();
     let (events, event_rx) = RpcEventEmitter::new();
-    let ctx = ProxyCtx::new(dir, events).unwrap().with_protoc(protoc());
+    let ctx = ProxyCtx::new(dir, events, MasterKeySource::memory()).unwrap().with_protoc(protoc());
     ctx.start().unwrap();
     (ctx, event_rx)
 }
@@ -228,7 +228,7 @@ async fn rpc(ctx: &ProxyCtx, cmd: &str, payload: Value) -> Result<Value, String>
 async fn wait_for(ctx: &ProxyCtx, url: &str, check: impl Fn(&Flow) -> bool) -> Flow {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
-        let flows = ctx.db.with_conn(|db| db.find_all::<Flow>().unwrap());
+        let flows = ctx.db().unwrap().with_conn(|db| db.find_all::<Flow>().unwrap());
         if let Some(flow) = flows.into_iter().find(|f| f.url == url && check(f)) {
             return flow;
         }
@@ -280,7 +280,9 @@ async fn server_sent_events_are_stored_while_the_stream_is_open() {
 
         // The events are the body's record: nothing of it went to the blob store, and it reads
         // back as the client read it.
-        assert!(read_raw_body(&ctx.blobs, &ended.id, FlowBody::Response).unwrap().is_empty());
+        assert!(
+            read_raw_body(&ctx.blobs().unwrap(), &ended.id, FlowBody::Response).unwrap().is_empty()
+        );
         let body = rpc(&ctx, "get_flow_body", json!({ "flowId": ended.id, "which": "response" }))
             .await
             .unwrap();
@@ -342,7 +344,10 @@ async fn grpc_web_calls_are_stored_and_decoded() {
             (FlowBody::Request, "request"),
             (FlowBody::Response, "response"),
         ] {
-            assert!(read_raw_body(&ctx.blobs, &flow.id, which).unwrap().is_empty(), "{side}");
+            assert!(
+                read_raw_body(&ctx.blobs().unwrap(), &flow.id, which).unwrap().is_empty(),
+                "{side}"
+            );
         }
         let read =
             |which: &str| rpc(&ctx, "get_flow_body", json!({ "flowId": flow.id, "which": which }));
@@ -381,7 +386,7 @@ async fn grpc_web_calls_are_stored_and_decoded() {
             .unwrap();
         let down = wait_for(&ctx, &gateway, |f| f.elapsed_ms.is_some()).await;
         assert_eq!(
-            read_raw_body(&ctx.blobs, &down.id, FlowBody::Response).unwrap(),
+            read_raw_body(&ctx.blobs().unwrap(), &down.id, FlowBody::Response).unwrap(),
             b"upstream down"
         );
         let page = rpc(&ctx, "get_flow_body", json!({ "flowId": down.id, "which": "response" }))
@@ -515,11 +520,13 @@ async fn grpc_web_calls_are_stored_and_decoded() {
         assert!(rpc(&ctx, "list_messages", json!({ "flowId": flow.id })).await.is_err());
         // The rows go with the background delete the clear starts.
         let deadline = Instant::now() + Duration::from_secs(10);
-        while ctx.db.with_conn(|c| yaak_proxy_lib::flows::clear_mark(c.conn().resolve())) > 0 {
+        while ctx.db().unwrap().with_conn(|c| yaak_proxy_lib::flows::clear_mark(c.conn().resolve()))
+            > 0
+        {
             assert!(Instant::now() < deadline, "cleared flows were not deleted");
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-        let left: i64 = ctx.db.with_conn(|c| {
+        let left: i64 = ctx.db().unwrap().with_conn(|c| {
             c.conn()
                 .resolve()
                 .query_row("SELECT COUNT(*) FROM flow_messages", [], |r| r.get(0))

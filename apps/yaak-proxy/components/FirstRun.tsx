@@ -6,6 +6,7 @@ import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
 import { useRpcMutation } from "../hooks/useRpcMutation";
 import { everythingEdit } from "../lib/decrypt";
 import { decryptStep } from "../lib/firstRun";
+import { encryptingPercent } from "../lib/encrypting";
 import { proxyStateAtom } from "../lib/store";
 import { useCopyEnvironment, useProxySetup, useSystemProxySwitch } from "./ProxyStatus";
 
@@ -55,7 +56,9 @@ export function FirstRun() {
   const everything = decrypt.choice === "everything";
   const setEverything = (on: boolean) => saveDecryptList.mutate(everythingEdit(on));
   const ready = trusted && (systemOn || !systemSupported);
-  const trafficState: StepState = !running && !otherOwner ? "fail" : ready ? "wait" : "todo";
+  const encrypting = !running && !otherOwner ? encryptingPercent(proxyState) : null;
+  const trafficState: StepState =
+    encrypting != null ? "wait" : !running && !otherOwner ? "fail" : ready ? "wait" : "todo";
 
   return (
     <div className="grid place-items-center h-full px-10 pb-16 pt-6">
@@ -155,9 +158,17 @@ export function FirstRun() {
           <Step
             n={systemSupported ? 4 : 3}
             state={trafficState}
-            title={trafficState === "wait" ? "Waiting for traffic" : "See traffic"}
+            title={
+              encrypting != null
+                ? `Encrypting stored traffic, ${encrypting}`
+                : trafficState === "wait"
+                  ? "Waiting for traffic"
+                  : "See traffic"
+            }
             description={
-              trafficState === "fail"
+              encrypting != null
+                ? "Traffic captured before this version is being encrypted on disk. Recording starts when it's done."
+                : trafficState === "fail"
                 ? (retry.error?.message ?? proxyState?.startError ?? "The proxy has not started.")
                 : !recording
                   ? "Recording is paused, so traffic passes through without being stored."
@@ -202,6 +213,10 @@ export function FirstRun() {
         <div className="mt-2 text-sm text-text-subtle">
           Working with an agent? <InlineCode>yaak mcp</InlineCode> gives it the proxy's flows and
           actions.
+        </div>
+        <div className="mt-2 text-sm text-text-subtle">
+          Captured traffic is encrypted on disk with a key kept in your keychain, so macOS may ask
+          to let Yaak Proxy use it.
         </div>
       </div>
     </div>

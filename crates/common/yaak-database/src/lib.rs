@@ -1,5 +1,7 @@
 pub mod connection_or_tx;
 pub mod db_context;
+#[cfg(all(feature = "sqlcipher", not(target_arch = "wasm32")))]
+pub mod encryption;
 pub mod error;
 pub mod migrate;
 pub mod pool;
