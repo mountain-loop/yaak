@@ -820,18 +820,19 @@ pub async fn detail(
     body_cap: usize,
 ) -> Result<FlowDetail, String> {
     let flow = get(db, flow_id)?;
-    let request_body = preview(blobs, &flow, FlowBody::Request, body_cap).await?;
-    let response_body = preview(blobs, &flow, FlowBody::Response, body_cap).await?;
+    let request_body = preview(db, blobs, &flow, FlowBody::Request, body_cap).await?;
+    let response_body = preview(db, blobs, &flow, FlowBody::Response, body_cap).await?;
     Ok(FlowDetail { flow, request_body, response_body })
 }
 
 async fn preview(
+    db: &ProxyQueryManager,
     blobs: &BlobManager,
     flow: &Flow,
     which: FlowBody,
     cap: usize,
 ) -> Result<Option<BodyPreview>, String> {
-    let body = bodies::read_body(blobs, flow, which, cap).await?;
+    let body = bodies::read_body(db, blobs, flow, which, cap).await?;
     if body.data.is_empty() && !body.truncated {
         return Ok(None);
     }

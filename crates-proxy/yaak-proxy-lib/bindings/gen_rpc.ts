@@ -58,7 +58,11 @@ path: string,
  */
 cwd: string | null, };
 
-export type DecodeGrpcMessageRequest = { flowId: string, seq: number, };
+export type DecodeGrpcMessageRequest = { flowId: string, seq: number, 
+/**
+ * Decode without a schema even when one is found.
+ */
+schemaless?: boolean, };
 
 /**
  * A captured gRPC message as JSON.
@@ -237,7 +241,11 @@ storedSize: number,
 /**
  * Why the body failed to decode, in which case `data` is as it was on the wire.
  */
-decodeError?: string, };
+decodeError?: string, 
+/**
+ * What to know about the body beyond its bytes, as that a WebSocket has none.
+ */
+note?: string, };
 
 export type GetMessagePayloadRequest = { flowId: string, seq: number, };
 

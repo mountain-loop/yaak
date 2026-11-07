@@ -43,7 +43,7 @@ impl BodyParser {
     fn finish(&mut self) -> Vec<StreamMessage> {
         match self {
             Self::Sse(p) => p.finish(),
-            Self::Grpc(_) => Vec::new(),
+            Self::Grpc(p) => p.end().into_iter().collect(),
         }
     }
 }

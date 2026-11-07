@@ -19,7 +19,7 @@ const FLAG_TRAILERS: u8 = 0x80;
 const PREFIX_LEN: usize = 5;
 
 /// The gRPC flavor a request's `Content-Type` names, and whether it is gRPC-Web's base64 one.
-pub(crate) fn detect(content_type: Option<&str>) -> Option<(StreamKind, bool)> {
+pub fn detect(content_type: Option<&str>) -> Option<(StreamKind, bool)> {
     let content_type = content_type?.trim().to_ascii_lowercase();
     let essence = content_type.split(';').next().unwrap_or_default().trim();
     if let Some(rest) = essence.strip_prefix("application/grpc-web") {
@@ -165,6 +165,31 @@ impl GrpcParser {
         messages
     }
 
+    /// The body ended: a message it ended partway through, as much of it as came, cut short and
+    /// as it came (not decompressed), so its bytes are still recorded. A prefix alone, with none
+    /// of a message's bytes yet, carries nothing to keep.
+    pub(crate) fn end(&mut self) -> Option<StreamMessage> {
+        let (flag, length, remaining, mut payload) = self.current.take()?;
+        let (data, _) = payload.take();
+        let compressed = flag & FLAG_COMPRESSED != 0;
+        // A gRPC-Web trailers frame stays one, its status read from what came when it can be.
+        let mut message = if flag & FLAG_TRAILERS != 0 {
+            let text = if compressed { "".into() } else { String::from_utf8_lossy(&data) };
+            trailers_message(self.direction, &text)
+        } else {
+            StreamMessage::new(self.direction, MessageKind::GrpcMessage)
+        };
+        message.data = data;
+        message.size = u64::from(length);
+        message.truncated = true;
+        message.compressed = compressed;
+        message.error = Some(format!(
+            "The body ended partway through this message, {} of its {length} bytes in",
+            length - remaining
+        ));
+        Some(message)
+    }
+
     fn finish(&mut self) -> StreamMessage {
         let (flag, length, _, mut payload) = self.current.take().expect("a message being read");
         let (data, truncated) = payload.take();
@@ -281,6 +306,30 @@ mod tests {
         out.extend((payload.len() as u32).to_be_bytes());
         out.extend(payload);
         out
+    }
+
+    /// A body that ends partway through a message keeps what came of it, cut short.
+    #[test]
+    fn a_message_cut_off_by_the_end_is_kept() {
+        let mut parser = GrpcParser::new(MessageDirection::Server, None, false, 1024);
+        let mut stream = frame(0, b"whole");
+        stream.extend(&frame(0, b"half of it")[..8]);
+        let messages = parser.feed(&stream);
+        assert_eq!(messages.len(), 1);
+        let cut = parser.end().expect("the unfinished message");
+        assert_eq!((&cut.data[..], cut.size, cut.truncated), (&b"hal"[..], 10, true));
+        assert!(cut.error.as_deref().unwrap().contains("3 of its 10 bytes"));
+        // Nothing unfinished: nothing more.
+        assert!(parser.end().is_none());
+        // A trailers frame cut short is still a trailers frame.
+        let mut parser = GrpcParser::new(MessageDirection::Server, None, false, 1024);
+        parser.feed(&frame(FLAG_TRAILERS, b"grpc-status: 0\r\n")[..12]);
+        let cut = parser.end().expect("the unfinished trailers");
+        assert!(matches!(cut.kind, MessageKind::GrpcTrailers { .. }));
+        assert_eq!((&cut.data[..], cut.truncated), (&b"grpc-st"[..], true));
+        // A prefix alone carries none of a message's bytes.
+        parser.feed(&[0, 0]);
+        assert!(parser.end().is_none());
     }
 
     #[test]

@@ -4,16 +4,18 @@ import { createStore, Provider } from "jotai";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { FlowPanesHarness } from "./FlowPanesHarness";
+import { MessagesHarness } from "./MessagesHarness";
 import "../main.css";
 
-const dark = new URLSearchParams(location.search).get("theme") !== "light";
+const params = new URLSearchParams(location.search);
+const dark = params.get("theme") !== "light";
 applyThemeToDocument(dark ? defaultDarkTheme : defaultLightTheme);
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={new QueryClient()}>
       <Provider store={createStore()}>
-        <FlowPanesHarness />
+        {params.has("stream") ? <MessagesHarness /> : <FlowPanesHarness />}
       </Provider>
     </QueryClientProvider>
   </StrictMode>,

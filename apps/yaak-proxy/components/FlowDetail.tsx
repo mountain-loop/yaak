@@ -11,6 +11,7 @@ import {
   HttpStatusTagRaw,
   Icon,
   IconButton,
+  LoadingIcon,
   SizeTag,
   type TabButtonRenderProps,
   type TabItem,
@@ -25,14 +26,17 @@ import { selectedFlowAtom } from "../lib/atoms";
 import { findHeader, mimeEssence } from "../lib/body";
 import { saveDialogFlowAtom, useFlowActions } from "../lib/flowActions";
 import { statusReason } from "../lib/statusReason";
+import { messagesTabLabel, streamIsOpen } from "../lib/messages";
 import { EmptyState, FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
 import { FlowHeaders, FlowQuery, queryParams } from "./FlowHeaders";
+import { FlowMessages } from "./FlowMessages";
 import { NotDecrypted } from "./NotDecrypted";
 
 const TAB_RESPONSE = "response";
 const TAB_REQUEST = "request";
 const TAB_HEADERS = "headers";
 const TAB_QUERY = "query";
+const TAB_MESSAGES = "messages";
 
 export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideBySide: boolean }) {
   const flow = useAtomValue(selectedFlowAtom);
@@ -78,9 +82,19 @@ function FlowPane({ flow }: { flow: Flow }) {
   const queryCount = useMemo(() => queryParams(flow.url).length, [flow.url]);
   const openSave = useSetAtom(saveDialogFlowAtom);
   const flowActions = useFlowActions();
+  const messagesLabel = messagesTabLabel(flow);
 
   const tabs = useMemo<TabItem[]>(
     () => [
+      ...(messagesLabel == null
+        ? []
+        : [
+            {
+              value: TAB_MESSAGES,
+              label: messagesLabel,
+              rightSlot: <CountBadge count={flow.messageCount} color="info" showZero />,
+            },
+          ]),
       {
         value: TAB_RESPONSE,
         renderButton: ({ buttonProps, isActive }) => (
@@ -117,6 +131,8 @@ function FlowPane({ flow }: { flow: Flow }) {
       },
     ],
     [
+      messagesLabel,
+      flow.messageCount,
       pretty,
       mime,
       flow.requestSize,
@@ -136,6 +152,7 @@ function FlowPane({ flow }: { flow: Flow }) {
         )}
       >
         <HStack space={2} className="w-full shrink-0">
+          {streamIsOpen(flow) && <LoadingIcon size="sm" />}
           {flow.cancelled && flow.status == null ? (
             <span>Cancelled</span>
           ) : (
@@ -212,6 +229,9 @@ function FlowPane({ flow }: { flow: Flow }) {
           </Banner>
         )}
         <Tabs
+          // A stream opens on its messages; moving between streams keeps the tab chosen
+          key={flow.streamKind == null ? "http" : "stream"}
+          defaultValue={messagesLabel == null ? undefined : TAB_MESSAGES}
           tabs={tabs}
           label="Flow"
           className="ml-3 mr-3 mb-3 min-h-0 flex-1"
@@ -243,6 +263,11 @@ function FlowPane({ flow }: { flow: Flow }) {
           <TabContent value={TAB_QUERY}>
             <FlowQuery flow={flow} />
           </TabContent>
+          {messagesLabel != null && (
+            <TabContent value={TAB_MESSAGES}>
+              <FlowMessages flow={flow} />
+            </TabContent>
+          )}
         </Tabs>
       </div>
     </div>

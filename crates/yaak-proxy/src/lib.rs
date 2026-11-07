@@ -36,7 +36,7 @@ use connection::handle_connection;
 pub use decrypt::{
     BUILT_IN_EXCLUSIONS, DecryptApp, DecryptEntry, DecryptPolicy, DecryptQuery, DecryptTarget,
 };
-pub use grpc::service_and_method;
+pub use grpc::{detect as detect_grpc, service_and_method};
 pub use messages::{MessageDirection, MessageKind, RAW_LIMIT, StreamKind, StreamMessage};
 use request::BoxBody;
 

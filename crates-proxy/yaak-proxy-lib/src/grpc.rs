@@ -391,13 +391,14 @@ async fn find_schema(
     }
 }
 
-/// Decodes a captured gRPC message.
+/// Decodes a captured gRPC message, with its call's schema unless `schemaless_only`.
 pub async fn decode(
     db: &ProxyQueryManager,
     blobs: &BlobManager,
     state: &GrpcState,
     flow: &Flow,
     seq: i64,
+    schemaless_only: bool,
 ) -> Result<DecodedGrpcMessage, String> {
     let message = messages::get(db, &flow.id, seq)?;
     if message.kind != MessageKind::GrpcMessage {
@@ -406,6 +407,9 @@ pub async fn decode(
     let payload = messages::payload(db, blobs, &message)?;
     if message.compressed && message.error.is_some() {
         return Err(message.error.unwrap_or_default());
+    }
+    if schemaless_only {
+        return Ok(schemaless(&payload, &message, None));
     }
     let (Some(service), Some(method)) = (&flow.grpc_service, &flow.grpc_method) else {
         return Ok(schemaless(&payload, &message, Some("The call's path names no service".into())));

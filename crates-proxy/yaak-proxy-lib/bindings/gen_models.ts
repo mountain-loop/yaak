@@ -2,7 +2,8 @@
 import type { ModelChangeEvent } from "./ModelChangeEvent";
 
 /**
- * One proxied request and its response. The bodies are in `blobs.sqlite`, not the row.
+ * One proxied request and its response. The bodies are in `blobs.sqlite`, not the row; a
+ * stream's are its messages, and read back from them (`bodies::from_messages`).
  */
 export type Flow = { id: string, 
 /**
@@ -31,11 +32,13 @@ requestSize: number,
  */
 responseSize: number, 
 /**
- * Only the first `capture_body_limit` bytes of the body are stored.
+ * Only the first `capture_body_limit` bytes of the body are stored. For a body that is a
+ * stream's messages, a message was cut at the limit.
  */
 requestTruncated: boolean, 
 /**
- * Only the first `capture_body_limit` bytes of the body are stored.
+ * Only the first `capture_body_limit` bytes of the body are stored. For a body that is a
+ * stream's messages, a message was cut at the limit.
  */
 responseTruncated: boolean, 
 /**

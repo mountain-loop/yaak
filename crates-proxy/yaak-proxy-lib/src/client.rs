@@ -5,8 +5,8 @@
 use crate::bodies::{self, DecodedBody};
 use crate::ca::CaStatus;
 use crate::control::{
-    self, ControlInfo, ControlStatus, DecryptRequest, ErrorBody, RecordingRequest, StartRequest,
-    SystemProxyRequest, TRUNCATED_HEADER,
+    self, ControlInfo, ControlStatus, DecryptRequest, ErrorBody, NOTE_HEADER, RecordingRequest,
+    StartRequest, SystemProxyRequest, TRUNCATED_HEADER,
 };
 use crate::db::ProxyQueryManager;
 use crate::flows::{self, FlowDetail, FlowFilter};
@@ -111,8 +111,9 @@ impl ControlClient {
         let resp =
             self.send(self.http.get(self.url(&format!("/flows/{}/{side}", encode(id))))).await?;
         let truncated = resp.headers().get(TRUNCATED_HEADER).is_some_and(|v| v == "true");
+        let note = resp.headers().get(NOTE_HEADER).and_then(|v| v.to_str().ok()).map(String::from);
         let data = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
-        Ok(DecodedBody { stored_size: data.len(), data, truncated, decode_error: None })
+        Ok(DecodedBody { note, ..DecodedBody::new(data, truncated) })
     }
 
     pub async fn har(&self, filter: &FlowFilter) -> Result<Har, String> {
@@ -257,7 +258,7 @@ impl OfflineStore {
 
     pub async fn body(&self, id: &str, which: FlowBody) -> Result<DecodedBody, String> {
         let flow = flows::get(&self.db, id)?;
-        bodies::read_body(&self.blobs, &flow, which, self.capture_body_limit).await
+        bodies::read_body(&self.db, &self.blobs, &flow, which, self.capture_body_limit).await
     }
 
     pub async fn har(&self, filter: &FlowFilter) -> Result<Har, String> {
