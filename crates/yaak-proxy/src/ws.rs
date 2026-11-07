@@ -120,7 +120,7 @@ pub(crate) async fn relay(
     };
     let (client_read, client_write) = tokio::io::split(TokioIo::new(client));
     let (upstream_read, upstream_write) = tokio::io::split(TokioIo::new(upstream));
-    let limit = flow.engine.capture_body_limit;
+    let limit = flow.engine.capture_body_limit();
     let outbound = FrameParser::new(
         MessageDirection::Client,
         flow.clone(),

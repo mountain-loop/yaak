@@ -67,7 +67,10 @@ export function installLockedBackend() {
   localStorage.setItem("system_proxy_ever_on", "true");
 }
 
-/** The whole window, as the app renders it, while captured traffic is locked */
+/**
+ * The whole window, as the app renders it: while captured traffic is locked, or over the
+ * fixture backend with `?window`
+ */
 export function LockedHarness() {
   const store = useStore();
   const [synced, setSynced] = useState(false);

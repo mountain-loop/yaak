@@ -25,12 +25,22 @@ export function LockedState({ lock }: { lock: ProxyLock }) {
         ) : (
           <Icon icon="lock" size="lg" className="text-text-subtle mb-1" />
         )}
-        <div className="text-lg font-semibold">
-          {encrypting != null ? `Encrypting stored traffic, ${encrypting}` : "Traffic is locked"}
+        <div className="text-lg font-semibold whitespace-nowrap">
+          {encrypting != null ? (
+            <>
+              Encrypting stored traffic,{" "}
+              {/* Sized for "100%" and right-aligned, so the centred line never changes width as
+                  the number ticks: a changing width re-rasterizes every glyph at a new
+                  sub-pixel offset, and the line shakes */}
+              <span className="inline-block w-[4.5ch] text-right tabular-nums">{encrypting}</span>
+            </>
+          ) : (
+            "Traffic is locked"
+          )}
         </div>
         <div className="text-sm text-text-subtle">
           {encrypting != null
-            ? "Traffic captured before this version is being encrypted on disk. It shows here when it's done."
+            ? "Earlier traffic shows here once it's encrypted."
             : lockedLine(lock, getOsType())}
         </div>
         {encrypting == null && (

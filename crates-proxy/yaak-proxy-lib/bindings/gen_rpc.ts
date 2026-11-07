@@ -171,6 +171,11 @@ under?: Array<string>,
  */
 app?: Array<string>, 
 /**
+ * Only flows from a process that ran in one of these working directories: the whole path,
+ * or its folder's name in any case (`fieldwork`). With `app`, a program in a folder.
+ */
+cwd?: Array<string>, 
+/**
  * Only flows from macOS's own daemons (true), or none of them (false), as [`is_system`]
  * tells them by their executable.
  */
@@ -211,6 +216,11 @@ after?: string,
 before?: string, };
 
 export type FlowsClearedPayload = Record<string, never>;
+
+/**
+ * Flows deleted to keep captured traffic under the keep-traffic cap, the oldest first.
+ */
+export type FlowsRemovedPayload = { ids: Array<string>, };
 
 export type FolderSummary = { id: string, name: string, 
 /**
@@ -283,6 +293,14 @@ systemProxyAtLaunch: boolean,
  */
 httpVersion: HttpVersion, 
 /**
+ * Bytes of each body stored per flow.
+ */
+captureBodyLimit: number, 
+/**
+ * The most captured traffic kept, in bytes, or null to keep everything.
+ */
+keepTrafficBytes: number | null, 
+/**
  * Why the engine last failed to start, until it starts.
  */
 startError: string | null, 
@@ -300,6 +318,15 @@ locked: ProxyLock | null,
  * cannot start its own, and new flows reach it only through the database.
  */
 otherOwner: OtherOwner | null, };
+
+export type GetStorageSizeRequest = Record<string, never>;
+
+export type GetStorageSizeResponse = { 
+/**
+ * The databases' used pages, as the keep-traffic cap counts them; locked, their files'
+ * sizes on disk.
+ */
+bytes: number, };
 
 export type GlobalAction = "recording_toggle" | "flows_clear";
 
@@ -370,6 +397,12 @@ yaakFound: boolean, workspaces: Array<WorkspaceSummary>, };
  */
 export type MessagePayload = { message: FlowMessage, };
 
+export type OpenTerminalRequest = { 
+/**
+ * Environment variables the shell starts with, by name: `HTTPS_PROXY`.
+ */
+vars: Array<[string, string]>, };
+
 export type OtherOwner = { owner: Owner, pid: number, startedAt: string, 
 /**
  * The engine's port while it runs.
@@ -412,9 +445,11 @@ host: string, };
 
 export type RemoveGrpcSchemaRequest = { id: string, };
 
-export type RpcEventSchema = { decrypt_list_changed: DecryptListChangedPayload, flows_cleared: FlowsClearedPayload, message_write: MessagePayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
+export type ResetCapturedDataRequest = Record<string, never>;
 
-export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_decrypt_list: [GetDecryptListRequest, DecryptList], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], edit_decrypt_list: [EditDecryptListRequest, DecryptList], list_seen: [ListSeenRequest, SeenTargets], set_decrypt_list: [SetDecryptListRequest, DecryptList], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], };
+export type RpcEventSchema = { decrypt_list_changed: DecryptListChangedPayload, flows_cleared: FlowsClearedPayload, flows_removed: FlowsRemovedPayload, message_write: MessagePayload, model_write: ModelPayload, proxy_state_changed: ProxyStatePayload, };
+
+export type RpcSchema = { execute_action: [ActionInvocation, boolean], format_body: [FormatBodyRequest, string], get_decrypt_list: [GetDecryptListRequest, DecryptList], get_message_payload: [GetMessagePayloadRequest, GetMessagePayloadResponse], list_actions: [ListActionsRequest, ListActionsResponse], list_flows: [FlowFilter, ListFlowsResponse], list_grpc_schemas: [ListGrpcSchemasRequest, Array<GrpcSchema>], list_messages: [ListMessagesRequest, ListMessagesResponse], remove_grpc_schema: [RemoveGrpcSchemaRequest, boolean], set_recording: [SetRecordingRequest, boolean], set_system_proxy_at_launch: [SetSystemProxyAtLaunchRequest, boolean], set_http_version: [SetHttpVersionRequest, HttpVersion], set_capture_body_limit: [SetCaptureBodyLimitRequest, number], set_keep_traffic: [SetKeepTrafficRequest, number | null], add_grpc_schema: [AddGrpcSchemaRequest, GrpcSchema], app_icon: [AppIconRequest, string | null], ca_status: [CaStatusRequest, CaStatus], ca_trust: [CaTrustRequest, CaStatus], clear_flows: [ClearFlowsRequest, number], decode_grpc_message: [DecodeGrpcMessageRequest, DecodedGrpcMessage], export_har: [ExportHarRequest, number], filter_body: [FilterBodyRequest, FilterBodyResponse], get_flow_body: [GetFlowBodyRequest, GetFlowBodyResponse], get_proxy_state: [GetProxyStateRequest, GetProxyStateResponse], helper_register: [HelperRegisterRequest, SystemProxyStatus], helper_unregister: [HelperUnregisterRequest, SystemProxyStatus], edit_decrypt_list: [EditDecryptListRequest, DecryptList], list_seen: [ListSeenRequest, SeenTargets], set_decrypt_list: [SetDecryptListRequest, DecryptList], list_workspaces: [ListWorkspacesRequest, ListWorkspacesResponse], preview_save: [PreviewSaveRequest, SavePreview], reflect_grpc_host: [ReflectGrpcHostRequest, GrpcSchema], save_flow: [SaveFlowToYaakRequest, SavedFlow], save_flow_body: [SaveFlowBodyRequest, SaveFlowBodyResponse], system_proxy_set: [SystemProxySetRequest, SystemProxyStatus], system_proxy_status: [SystemProxyStatusRequest, SystemProxyStatus], take_over: [TakeOverRequest, boolean], set_port: [SetPortRequest, number], get_storage_size: [GetStorageSizeRequest, GetStorageSizeResponse], reset_captured_data: [ResetCapturedDataRequest, boolean], open_terminal: [OpenTerminalRequest, boolean], };
 
 export type SaveFlowBodyRequest = { flowId: string, which: FlowBody, 
 /**
@@ -504,6 +539,8 @@ name: string,
  */
 id?: string, http: ProxySetting, https: ProxySetting, };
 
+export type SetCaptureBodyLimitRequest = { bytes: number, };
+
 export type SetDecryptListRequest = { 
 /**
  * Every entry, in order, as typed: a bare hostname is a `host:` entry. A built-in
@@ -512,6 +549,14 @@ export type SetDecryptListRequest = {
 entries: Array<string>, };
 
 export type SetHttpVersionRequest = { httpVersion: HttpVersion, };
+
+export type SetKeepTrafficRequest = { 
+/**
+ * Null keeps everything.
+ */
+bytes: number | null, };
+
+export type SetPortRequest = { port: number, };
 
 export type SetRecordingRequest = { enabled: boolean, };
 

@@ -1,50 +1,22 @@
-import { formatSize } from "@yaakapp-internal/lib/formatSize";
-import type { Flow } from "@yaakapp-internal/proxy-lib";
-import {
-  Banner,
-  Button,
-  CountBadge,
-  Dropdown,
-  type DropdownItem,
-  formatMillis,
-  HStack,
-  HttpStatusTagRaw,
-  Icon,
-  IconButton,
-  LoadingIcon,
-  SizeTag,
-  type TabButtonRenderProps,
-  type TabItem,
-  TabContent,
-  Tabs,
-} from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useAtomValue } from "jotai";
 import type { CSSProperties } from "react";
-import { useMemo, useState } from "react";
 import { selectedFlowAtom } from "../lib/atoms";
-import { findHeader, mimeEssence } from "../lib/body";
-import { saveDialogFlowAtom, useFlowActions } from "../lib/flowActions";
-import { statusReason } from "../lib/statusReason";
-import { messagesTabLabel, streamIsOpen } from "../lib/messages";
-import { EmptyState, FlowBodyViewer, useFlowBody } from "./FlowBodyViewer";
-import { FlowHeaders, FlowQuery, queryParams } from "./FlowHeaders";
-import { FlowMessages } from "./FlowMessages";
+import { EmptyState } from "./FlowBodyViewer";
+import { FlowCard } from "./FlowCard";
 import { NotDecrypted } from "./NotDecrypted";
 
-const TAB_RESPONSE = "response";
-const TAB_REQUEST = "request";
-const TAB_HEADERS = "headers";
-const TAB_QUERY = "query";
-const TAB_MESSAGES = "messages";
-
+/**
+ * The detail pane: the selected flow's card, or what the pane holds before one is selected. Side
+ * by side, a wider gutter separates the card from the list and it sits a little under the header.
+ */
 export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideBySide: boolean }) {
   const flow = useAtomValue(selectedFlowAtom);
 
   return (
     <div
       style={style}
-      className={classNames("min-h-0 min-w-0 pb-2", sideBySide ? "pr-2 pt-2" : "px-2")}
+      className={classNames("min-h-0 min-w-0 pb-2", sideBySide ? "pr-2 pl-3 pt-3" : "px-2")}
     >
       <div
         className={classNames(
@@ -66,272 +38,11 @@ export function FlowDetail({ style, sideBySide }: { style?: CSSProperties; sideB
         ) : flow.tunnelled ? (
           <NotDecrypted flow={flow} />
         ) : (
-          <FlowPane flow={flow} />
+          <FlowCard flow={flow} listBeside={sideBySide} />
         )}
       </div>
     </div>
   );
-}
-
-function FlowPane({ flow }: { flow: Flow }) {
-  const [pretty, setPretty] = useState(true);
-  const responseBody = useFlowBody(flow, "response", flow.responseTruncated);
-  // Failed or cancelled before any response; after the headers, the body was cut short mid-way.
-  const noResponse = (flow.error != null || flow.cancelled) && flow.status == null;
-  const mime = mimeEssence(findHeader(flow.responseHeaders, "content-type"));
-  const queryCount = useMemo(() => queryParams(flow.url).length, [flow.url]);
-  const openSave = useSetAtom(saveDialogFlowAtom);
-  const flowActions = useFlowActions();
-  const messagesLabel = messagesTabLabel(flow);
-
-  const tabs = useMemo<TabItem[]>(
-    () => [
-      ...(messagesLabel == null
-        ? []
-        : [
-            {
-              value: TAB_MESSAGES,
-              label: messagesLabel,
-              rightSlot: <CountBadge count={flow.messageCount} color="info" showZero />,
-            },
-          ]),
-      {
-        value: TAB_RESPONSE,
-        renderButton: ({ buttonProps, isActive }) => (
-          <ViewModeButton
-            buttonProps={buttonProps}
-            isActive={isActive}
-            pretty={pretty}
-            onChangePretty={setPretty}
-            prettyLabel={mime === "text/html" ? "Preview" : "Response"}
-            allowRaw={!mime?.startsWith("image/")}
-          />
-        ),
-      },
-      {
-        value: TAB_REQUEST,
-        label: "Request",
-        rightSlot: flow.requestSize > 0 ? <CountBadge count={true} /> : null,
-      },
-      {
-        value: TAB_HEADERS,
-        label: "Headers",
-        rightSlot: (
-          <CountBadge
-            count={flow.requestHeaders.length}
-            count2={flow.responseHeaders.length}
-            showZero
-          />
-        ),
-      },
-      {
-        value: TAB_QUERY,
-        label: "Query",
-        rightSlot: <CountBadge count={queryCount} showZero />,
-      },
-    ],
-    [
-      messagesLabel,
-      flow.messageCount,
-      pretty,
-      mime,
-      flow.requestSize,
-      flow.requestHeaders.length,
-      flow.responseHeaders.length,
-      queryCount,
-    ],
-  );
-
-  return (
-    <div className="h-full w-full grid grid-rows-[auto_minmax(0,1fr)] grid-cols-1">
-      <div
-        className={classNames(
-          "grid grid-cols-[auto_minmax(4rem,1fr)_auto] items-center h-sm -mb-1.5",
-          "cursor-default select-none whitespace-nowrap w-full px-3",
-          "overflow-x-auto font-mono text-sm text-text-subtle hide-scrollbars",
-        )}
-      >
-        <HStack space={2} className="w-full shrink-0">
-          {streamIsOpen(flow) && <LoadingIcon size="sm" />}
-          {flow.cancelled && flow.status == null ? (
-            <span>Cancelled</span>
-          ) : (
-            <HttpStatusTagRaw
-              showReason
-              status={flow.status ?? 0}
-              statusReason={flow.status == null ? null : statusReason(flow.status)}
-            />
-          )}
-          {flow.elapsedMs != null && (
-            <>
-              <span>&bull;</span>
-              <span
-                title={
-                  flow.elapsedHeadersMs == null
-                    ? undefined
-                    : `HEADERS: ${formatMillis(flow.elapsedHeadersMs)}\nTOTAL: ${formatMillis(flow.elapsedMs)}`
-                }
-              >
-                {formatMillis(flow.elapsedMs)}
-              </span>
-            </>
-          )}
-          {!noResponse && (
-            <>
-              <span>&bull;</span>
-              <SizeTag contentLength={flow.responseSize} />
-            </>
-          )}
-        </HStack>
-        {flow.responseTruncated ? (
-          <span
-            className={classNames(
-              "justify-self-end flex items-center gap-1.5 h-5 px-2.5 ml-3 rounded-full",
-              "border border-notice/50 text-notice font-sans text-xs",
-            )}
-          >
-            <Icon icon="scissors" size="xs" />
-            {responseBody.data == null
-              ? "Body cut"
-              : `First ${formatSize(responseBody.data.storedSize)} kept`}
-          </span>
-        ) : (
-          <span />
-        )}
-        <HStack space={1} className="font-sans ml-3">
-          <Button
-            size="2xs"
-            variant="border"
-            color={flow.savedRequestId == null ? "default" : "primary"}
-            title={flow.savedRequestId == null ? undefined : "Saved to Yaak. Click to save again."}
-            leftSlot={<Icon icon="bookmark" size="xs" />}
-            onClick={() => openSave(flow)}
-          >
-            {flow.savedRequestId == null ? "Save to Yaak" : "Saved"}
-          </Button>
-          <Dropdown items={flowActions(flow).slice(2)}>
-            <IconButton size="xs" icon="ellipsis" iconColor="secondary" title="Copy and export" />
-          </Dropdown>
-        </HStack>
-      </div>
-
-      <div className="overflow-hidden flex flex-col min-h-0">
-        {flow.error != null && (
-          <Banner color="danger" className="mx-3 mt-1 shrink-0 font-mono text-sm">
-            {flow.error}
-          </Banner>
-        )}
-        {flow.cancelled && (
-          <Banner color="secondary" className="mx-3 mt-1 shrink-0 text-sm">
-            {flow.status == null
-              ? "The app cancelled the request before a response came back."
-              : "The app cancelled the request before the response finished."}
-          </Banner>
-        )}
-        <Tabs
-          // A stream opens on its messages; moving between streams keeps the tab chosen
-          key={flow.streamKind == null ? "http" : "stream"}
-          defaultValue={messagesLabel == null ? undefined : TAB_MESSAGES}
-          tabs={tabs}
-          label="Flow"
-          className="ml-3 mr-3 mb-3 min-h-0 flex-1"
-          tabListClassName="mt-0.5 -mb-1.5"
-        >
-          <TabContent value={TAB_RESPONSE}>
-            {noResponse ? (
-              <EmptyState>
-                <div className="text-text-subtle mb-1">
-                  {flow.cancelled ? "Cancelled" : "No response"}
-                </div>
-                <div className="text-xs">
-                  {flow.cancelled
-                    ? "The app cancelled the request before a response came back."
-                    : "The request never got a response."}{" "}
-                  The Request tab has what the app sent.
-                </div>
-              </EmptyState>
-            ) : (
-              <FlowBodyViewer flow={flow} which="response" pretty={pretty} />
-            )}
-          </TabContent>
-          <TabContent value={TAB_REQUEST}>
-            <FlowBodyViewer flow={flow} which="request" pretty />
-          </TabContent>
-          <TabContent value={TAB_HEADERS}>
-            <FlowHeaders flow={flow} />
-          </TabContent>
-          <TabContent value={TAB_QUERY}>
-            <FlowQuery flow={flow} />
-          </TabContent>
-          {messagesLabel != null && (
-            <TabContent value={TAB_MESSAGES}>
-              <FlowMessages flow={flow} />
-            </TabContent>
-          )}
-        </Tabs>
-      </div>
-    </div>
-  );
-}
-
-interface ViewModeButtonProps {
-  buttonProps: TabButtonRenderProps["buttonProps"];
-  isActive: boolean;
-  pretty: boolean;
-  onChangePretty: (pretty: boolean) => void;
-  prettyLabel: string;
-  allowRaw: boolean;
-}
-
-/** The client's Response tab: a click on the active tab opens its view menu */
-function ViewModeButton({
-  buttonProps,
-  isActive,
-  pretty,
-  onChangePretty,
-  prettyLabel,
-  allowRaw,
-}: ViewModeButtonProps) {
-  const showPretty = pretty || !allowRaw;
-  const items: DropdownItem[] = [
-    {
-      label: prettyLabel,
-      leftSlot: <CheckMark visible={showPretty} />,
-      onSelect: () => onChangePretty(true),
-    },
-    {
-      label: `${prettyLabel} (Raw)`,
-      hidden: !allowRaw,
-      leftSlot: <CheckMark visible={!showPretty} />,
-      onSelect: () => onChangePretty(false),
-    },
-  ];
-
-  return (
-    <Dropdown items={items}>
-      <Button
-        {...buttonProps}
-        onClick={(e) => {
-          if (isActive) return;
-          e.preventDefault();
-          buttonProps.onClick?.(e);
-        }}
-        rightSlot={
-          <Icon
-            size="sm"
-            icon="chevron_down"
-            className={classNames("ml-1", isActive ? "text-text-subtle" : "text-text-subtlest")}
-          />
-        }
-      >
-        {showPretty ? prettyLabel : "Raw"}
-      </Button>
-    </Dropdown>
-  );
-}
-
-function CheckMark({ visible }: { visible: boolean }) {
-  return <Icon icon={visible ? "check" : "empty"} size="sm" />;
 }
 
 function Keys({ keys }: { keys: string[] }) {

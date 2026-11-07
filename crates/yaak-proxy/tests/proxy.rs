@@ -415,6 +415,7 @@ fn flow_id(event: &ProxyEvent) -> u64 {
         | ProxyEvent::RequestHeader { id, .. }
         | ProxyEvent::RequestBodyChunk { id, .. }
         | ProxyEvent::RequestBodyComplete { id, .. }
+        | ProxyEvent::UpstreamConnection { id, .. }
         | ProxyEvent::ResponseStart { id, .. }
         | ProxyEvent::ResponseHeader { id, .. }
         | ProxyEvent::ResponseBodyChunk { id, .. }
@@ -1710,6 +1711,29 @@ async fn h2_client_to_an_h2_upstream() {
             (*size, error.clone(), *cancelled));
     assert_eq!((size, error, cancelled), (text.len() as u64, None, false));
     assert_eq!(body(&events, false).0, text);
+
+    // The connection opened for it, timed from the flow's start, and its TLS.
+    let (connect, tls, version, cipher) = find!(events,
+        ProxyEvent::UpstreamConnection { elapsed_connect_ms, elapsed_tls_ms, tls_version, tls_cipher, .. } =>
+            (*elapsed_connect_ms, *elapsed_tls_ms, tls_version.clone(), tls_cipher.clone()));
+    let headers_at = find!(events, ProxyEvent::ResponseStart { elapsed_ms, .. } => *elapsed_ms);
+    assert!(connect.unwrap() <= tls.unwrap() && tls.unwrap() <= headers_at);
+    assert_eq!(version.as_deref(), Some("TLSv1.3"));
+    assert!(cipher.unwrap().starts_with("TLS13_"));
+
+    // The next request shares it: no connect or handshake of its own, the same TLS.
+    let resp = client.send_request(h2_request("POST", port, "/echo", full("again"))).await;
+    resp.unwrap().into_body().collect().await.unwrap();
+    let events = h.flow_events();
+    let (connect, tls, version) = find!(events,
+        ProxyEvent::UpstreamConnection { elapsed_connect_ms, elapsed_tls_ms, tls_version, .. } =>
+            (*elapsed_connect_ms, *elapsed_tls_ms, tls_version.clone()));
+    assert_eq!((connect, tls, version.as_deref()), (None, None, Some("TLSv1.3")));
+    let (sent_at, end_at) = (
+        find!(events, ProxyEvent::RequestBodyComplete { elapsed_ms, .. } => *elapsed_ms),
+        find!(events, ProxyEvent::ResponseBodyComplete { elapsed_ms, .. } => *elapsed_ms),
+    );
+    assert!(sent_at <= end_at, "{sent_at} {end_at}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

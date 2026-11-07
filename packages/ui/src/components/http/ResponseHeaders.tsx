@@ -2,6 +2,7 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import type { ReactElement } from "react";
 import { DetailsBanner } from "../DetailsBanner";
 import { useEditorHost } from "../EditorHost";
+import { EmptyStateText } from "../EmptyStateText";
 import { HeadersTable } from "../HeadersTable";
 import { IconButton } from "../IconButton";
 import type { KeyValueRowProps } from "../KeyValueRow";
@@ -12,10 +13,30 @@ interface Props {
   response: HttpResponseView;
   /** More rows for the Info section, after the standard ones, each keyed */
   infoRows?: ReactElement[];
+  /** Only the response's headers, for a pane whose request and info are shown elsewhere */
+  responseOnly?: boolean;
 }
 
-export function ResponseHeaders({ response, infoRows }: Props) {
+export function ResponseHeaders({ response, infoRows, responseOnly }: Props) {
   const { openUrl, useDetailsBannerStoredValue } = useEditorHost();
+  if (responseOnly) {
+    return (
+      <div className="overflow-auto h-full pb-4 pr-0.5">
+        {response.headers.length === 0 ? (
+          <EmptyStateText>No Headers</EmptyStateText>
+        ) : (
+          <KeyValueRows>
+            {response.headers.map((h, i) => (
+              // oxlint-disable-next-line react/no-array-index-key
+              <KeyValueRow labelColor="info" key={i} label={h.name}>
+                {h.value}
+              </KeyValueRow>
+            ))}
+          </KeyValueRows>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="overflow-auto h-full pb-4 gap-y-3 flex flex-col pr-0.5">
       <DetailsBanner

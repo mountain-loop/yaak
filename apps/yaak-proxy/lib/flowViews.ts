@@ -84,7 +84,18 @@ export function flowResponseToView(
 ): HttpResponseView | null {
   const ended = flow.elapsedMs != null || flow.error != null || flow.cancelled;
   if (flow.status == null && !ended) return null;
+  return responseView(flow, body, ended);
+}
 
+/**
+ * A flow as the shared cookie lists read it, whether or not a response came: the request
+ * half's Cookies tab shows what was sent before anything was received.
+ */
+export function flowCookiesView(flow: Flow): HttpResponseView {
+  return responseView(flow, null, flow.elapsedMs != null || flow.error != null || flow.cancelled);
+}
+
+function responseView(flow: Flow, body: FlowBodyData | null, ended: boolean): HttpResponseView {
   const encoding = findHeader(flow.responseHeaders, "content-encoding")?.trim().toLowerCase();
   const encoded = encoding != null && encoding !== "" && encoding !== "identity";
 

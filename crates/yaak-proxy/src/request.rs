@@ -150,7 +150,7 @@ impl Flow {
 
     fn capture_request(&self, body: Incoming) -> BoxBody {
         let parser = self.grpc.as_ref().map(|call| {
-            let limit = self.engine.capture_body_limit;
+            let limit = self.engine.capture_body_limit();
             let encoding = call.encoding.as_deref();
             let parser = GrpcParser::new(MessageDirection::Client, encoding, call.text, limit)
                 .with_content_encoding(call.content_encoding.as_deref());
@@ -165,7 +165,7 @@ impl Flow {
     /// How the response's body is read for messages, if it streams them, after recording that
     /// it does.
     fn response_parser(&self, resp: &Response<Incoming>) -> Option<BodyParser> {
-        let limit = self.engine.capture_body_limit;
+        let limit = self.engine.capture_body_limit();
         let headers = resp.headers();
         if self.grpc.is_some() {
             // A call that fails at once answers with its status in the headers, and no body.
@@ -187,6 +187,21 @@ impl Flow {
         self.engine.emit(ProxyEvent::StreamStart { id: self.id, kind: StreamKind::Sse });
         let encoding = header_str(headers, "content-encoding");
         Some(BodyParser::Sse(Box::new(SseParser::new(encoding, limit))))
+    }
+
+    /// Records the connection the request goes on: its timings when it was opened for this
+    /// request, and its TLS either way.
+    fn goes_on(&self, conn: &UpstreamConn, reused: bool) {
+        let since = |at: Instant| {
+            (!reused).then(|| at.saturating_duration_since(self.start).as_millis() as u64)
+        };
+        self.engine.emit(ProxyEvent::UpstreamConnection {
+            id: self.id,
+            elapsed_connect_ms: since(conn.tls.connected),
+            elapsed_tls_ms: since(conn.tls.handshaken),
+            tls_version: conn.tls.version.clone(),
+            tls_cipher: conn.tls.cipher.clone(),
+        });
     }
 
     fn respond_head(&mut self, resp: &Response<Incoming>, remote_addr: Option<SocketAddr>) {
@@ -576,9 +591,36 @@ enum Upstream {
 struct UpstreamConn {
     sender: Upstream,
     remote_addr: Option<SocketAddr>,
+    tls: TlsInfo,
+}
+
+/// When a connection to the server was made, and the TLS it negotiated.
+#[derive(Debug, Clone)]
+struct TlsInfo {
+    connected: Instant,
+    handshaken: Instant,
+    version: Option<String>,
+    cipher: Option<String>,
+}
+
+impl TlsInfo {
+    fn of(conn: &rustls::ClientConnection, connected: Instant) -> Self {
+        let version = conn.protocol_version().map(|v| match v {
+            rustls::ProtocolVersion::TLSv1_3 => "TLSv1.3".to_string(),
+            rustls::ProtocolVersion::TLSv1_2 => "TLSv1.2".to_string(),
+            other => format!("{other:?}"),
+        });
+        let cipher = conn.negotiated_cipher_suite().map(|s| format!("{:?}", s.suite()));
+        Self { connected, handshaken: Instant::now(), version, cipher }
+    }
 }
 
 impl UpstreamConn {
+    /// Shared by another request, as an HTTP/2 connection is.
+    fn share(&self, sender: Upstream) -> Self {
+        Self { sender, remote_addr: self.remote_addr, tls: self.tls.clone() }
+    }
+
     fn is_h2(&self) -> bool {
         matches!(self.sender, Upstream::H2(_))
     }
@@ -636,10 +678,7 @@ impl Upstreams {
         conns.retain(|c| !c.is_closed());
         if let Some(i) = conns.iter().position(UpstreamConn::is_ready) {
             let conn = match &conns[i].sender {
-                Upstream::H2(s) => UpstreamConn {
-                    sender: Upstream::H2(s.clone()),
-                    remote_addr: conns[i].remote_addr,
-                },
+                Upstream::H2(s) => conns[i].share(Upstream::H2(s.clone())),
                 Upstream::H1(_) => conns.swap_remove(i),
             };
             return Ok((conn, true));
@@ -650,10 +689,7 @@ impl Upstreams {
         }
         let conn = connect_upstream(engine, &self.target, false).await?;
         match &conn.sender {
-            Upstream::H2(s) => conns.push(UpstreamConn {
-                sender: Upstream::H2(s.clone()),
-                remote_addr: conn.remote_addr,
-            }),
+            Upstream::H2(s) => conns.push(conn.share(Upstream::H2(s.clone()))),
             Upstream::H1(_) => self.h1.store(true, Ordering::Relaxed),
         }
         Ok((conn, false))
@@ -682,10 +718,12 @@ async fn connect_upstream(
     h1_only: bool,
 ) -> Result<UpstreamConn, BoxError> {
     let tcp = TcpStream::connect(&target.addr).await?;
+    let connected = Instant::now();
     let remote_addr = tcp.peer_addr().ok();
     let config = if h1_only { &engine.upstream_tls_h1 } else { &engine.upstream_tls };
     let server_name = ServerName::try_from(target.server_name.clone())?;
     let tls = TlsConnector::from(config.clone()).connect(server_name, tcp).await?;
+    let tls_info = TlsInfo::of(tls.get_ref().1, connected);
     let is_h2 = tls.get_ref().1.alpn_protocol() == Some(b"h2");
     let io = TokioIo::new(tls);
 
@@ -711,7 +749,7 @@ async fn connect_upstream(
         });
         Upstream::H1(sender)
     };
-    Ok(UpstreamConn { sender: upstream, remote_addr })
+    Ok(UpstreamConn { sender: upstream, remote_addr, tls: tls_info })
 }
 
 /// Addresses a request to the server in the protocol of `conn`. It may be addressed for the
@@ -790,6 +828,7 @@ async fn forward_https(
         Ok(taken) => taken,
         Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
     };
+    flow.goes_on(&conn, reused);
 
     let (mut parts, body) = req.into_parts();
     if let Err(e) = address(&mut parts, &conn, target, &path, !body.is_end_stream()) {
@@ -813,6 +852,7 @@ async fn forward_https(
             Err(e) => return Ok(flow.fail(error_chain(e.as_ref()))),
         };
         reused = false;
+        flow.goes_on(&conn, reused);
         let (mut parts, body) = unsent.into_parts();
         if let Err(e) = address(&mut parts, &conn, target, &path, !body.is_end_stream()) {
             return Ok(flow.fail(e));

@@ -1,0 +1,293 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { formatSize } from "@yaakapp-internal/lib/formatSize";
+import type { HttpVersion, SystemProxyStatus } from "@yaakapp-internal/proxy-lib";
+import {
+  Button,
+  Dialog,
+  DialogFooter,
+  Heading,
+  Icon,
+  RadioDropdown,
+  SettingRow,
+  SettingRowBoolean,
+  SettingRowNumber,
+  SettingRowSelect,
+  SettingSelectControl,
+  SettingSnippet,
+  SettingsList,
+  SettingsSection,
+  VStack,
+} from "@yaakapp-internal/ui";
+import { useAtomValue, useSetAtom, useStore } from "jotai";
+import { useState } from "react";
+import { useRpcMutation } from "../hooks/useRpcMutation";
+import { useRpcQuery } from "../hooks/useRpcQuery";
+import { helperDialogOpenAtom } from "../lib/atoms";
+import { defaultShell, environmentBlock, environmentVars, TERMINAL_SHELLS, type TerminalShell } from "../lib/env";
+import {
+  CAPTURE_LIMIT_OPTIONS,
+  KEEP_TRAFFIC_OPTIONS,
+  sizeFromOptionValue,
+  sizeOptionsFor,
+  sizeOptionValue,
+} from "../lib/settings";
+import { helperRow } from "../lib/systemProxy";
+import { proxyStateAtom, refreshProxyState } from "../lib/store";
+import { getOsType } from "../lib/tauri";
+import { useShowToast } from "../lib/toast";
+import { DecryptListEditor } from "./DecryptListEditor";
+
+/**
+ * The proxy's own settings tab: how it listens, what it decrypts, the system proxy and its
+ * helper, how much traffic it keeps, and the environment for one terminal. Everything set once
+ * and left alone, which is what left the state pill's menu.
+ */
+export function SettingsProxy() {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const store = useStore();
+  const refresh = { onSettled: () => void refreshProxyState(store) };
+  const setPort = useRpcMutation("set_port", refresh);
+  const setHttpVersion = useRpcMutation("set_http_version", refresh);
+  const setCaptureLimit = useRpcMutation("set_capture_body_limit", refresh);
+  const setAtLaunch = useRpcMutation("set_system_proxy_at_launch", refresh);
+  const systemProxy = useRpcQuery("system_proxy_status", {});
+  // Another process owning the engine wouldn't see changes until it restarts
+  const elsewhere = proxyState?.otherOwner != null;
+
+  return (
+    <VStack space={1.5} className="mb-4">
+      <div className="mb-3">
+        <Heading>Proxy</Heading>
+        <p className="text-text-subtle">Listening, decryption, storage and terminals</p>
+      </div>
+      <SettingsList className="space-y-8">
+        <SettingsSection title="Listening">
+          <SettingRowNumber
+            name="port"
+            title="Port"
+            description="Restarts the proxy"
+            value={proxyState?.configuredPort ?? 9090}
+            disabled={elsewhere}
+            validate={(v) => /^\d+$/.test(v) && Number(v) > 0 && Number(v) < 65536}
+            onChange={(port) => setPort.mutate({ port })}
+          />
+          <SettingRowSelect<HttpVersion>
+            name="httpVersion"
+            title="HTTP version"
+            description="For new connections"
+            value={proxyState?.httpVersion ?? "auto"}
+            disabled={elsewhere}
+            onChange={(httpVersion) => setHttpVersion.mutate({ httpVersion })}
+            options={[
+              { label: "Auto", value: "auto" },
+              { label: "HTTP/1.1 only", value: "http1Only" },
+            ]}
+          />
+          <SettingRowSelect
+            name="captureBodyLimit"
+            title="Body limit"
+            description="Stored per body"
+            value={sizeOptionValue(proxyState?.captureBodyLimit ?? null)}
+            disabled={elsewhere}
+            onChange={(v) => {
+              const bytes = sizeFromOptionValue(v);
+              if (bytes != null) setCaptureLimit.mutate({ bytes });
+            }}
+            options={sizeOptionsFor(CAPTURE_LIMIT_OPTIONS, proxyState?.captureBodyLimit ?? null)
+              .filter((o) => o.bytes != null)
+              .map(({ label, value }) => ({ label, value }))}
+          />
+        </SettingsSection>
+
+        <SettingsSection title="Decrypt">
+          <DecryptListEditor className="py-4" />
+        </SettingsSection>
+
+        {systemProxy.data?.supported === true && (
+          <SettingsSection title="System proxy">
+            <SettingRowBoolean
+              title="Override at launch"
+              checked={proxyState?.systemProxyAtLaunch ?? true}
+              disabled={setAtLaunch.isPending}
+              onChange={(enabled) => setAtLaunch.mutate({ enabled })}
+            />
+            <HelperRow status={systemProxy.data} />
+          </SettingsSection>
+        )}
+
+        <SettingsSection title="Storage">
+          <KeepTrafficRow />
+          <ResetRow />
+        </SettingsSection>
+
+        <SettingsSection title="Terminal">
+          <TerminalRow />
+        </SettingsSection>
+      </SettingsList>
+    </VStack>
+  );
+}
+
+function HelperRow({ status }: { status: SystemProxyStatus }) {
+  const queryClient = useQueryClient();
+  const openDialog = useSetAtom(helperDialogOpenAtom);
+  const unregister = useRpcMutation("helper_unregister", {
+    onSuccess: (status) =>
+      queryClient.setQueryData<SystemProxyStatus>(["system_proxy_status", {}], status),
+  });
+  const row = helperRow(status.helper, status.backend);
+  return (
+    <SettingRow
+      title="Helper"
+      description={
+        unregister.error != null ? (
+          <span className="text-danger">{unregister.error.message}</span>
+        ) : (
+          `${capitalize(row.title.replace(/^Helper: /, ""))}. ${row.description}`
+        )
+      }
+    >
+      {row.action != null && (
+        <Button
+          size="xs"
+          variant="border"
+          color={row.action === "unregister" ? "default" : "primary"}
+          isLoading={unregister.isPending}
+          onClick={() => (row.action === "unregister" ? unregister.mutate({}) : openDialog(true))}
+        >
+          {row.action === "install" ? "Install" : row.action === "approve" ? "Approve" : "Unregister"}
+        </Button>
+      )}
+    </SettingRow>
+  );
+}
+
+function KeepTrafficRow() {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const store = useStore();
+  const size = useRpcQuery("get_storage_size", {}, { refetchInterval: 10_000 });
+  const setKeep = useRpcMutation("set_keep_traffic", {
+    onSettled: () => void refreshProxyState(store),
+  });
+  const keep = proxyState?.keepTrafficBytes ?? null;
+  return (
+    <SettingRow title="Keep traffic" description="Oldest flows dropped past the limit">
+      <div className="flex items-center gap-3">
+        {size.data != null && (
+          <span className="text-sm text-text-subtle tabular-nums whitespace-nowrap">
+            {formatSize(size.data.bytes)} used
+          </span>
+        )}
+        <SettingSelectControl
+          name="keepTraffic"
+          label="Keep traffic"
+          value={sizeOptionValue(keep)}
+          disabled={proxyState?.otherOwner != null}
+          onChange={(v) => setKeep.mutate({ bytes: sizeFromOptionValue(v) })}
+          options={sizeOptionsFor(KEEP_TRAFFIC_OPTIONS, keep).map(({ label, value }) => ({
+            label,
+            value,
+          }))}
+        />
+      </div>
+    </SettingRow>
+  );
+}
+
+function ResetRow() {
+  const [confirming, setConfirming] = useState(false);
+  const store = useStore();
+  const queryClient = useQueryClient();
+  const showToast = useShowToast();
+  const reset = useRpcMutation("reset_captured_data", {
+    onSuccess: () => {
+      setConfirming(false);
+      void queryClient.invalidateQueries();
+      showToast({ message: "Captured data reset" });
+    },
+    onSettled: () => void refreshProxyState(store),
+  });
+  return (
+    <SettingRow title="Reset captured data" description="Deletes all flows and their keys">
+      <Button size="xs" variant="border" color="danger" onClick={() => setConfirming(true)}>
+        Reset…
+      </Button>
+      <Dialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        size="sm"
+        title="Reset captured data?"
+        description="Every captured flow and the keys that encrypt them are deleted."
+      >
+        {reset.error != null && <p className="text-danger text-sm">{reset.error.message}</p>}
+        <DialogFooter
+          actions={[
+            { label: "Cancel", variant: "border", onClick: () => setConfirming(false) },
+            {
+              label: "Reset",
+              color: "danger",
+              isLoading: reset.isPending,
+              onClick: () => reset.mutate({}),
+            },
+          ]}
+        />
+      </Dialog>
+    </SettingRow>
+  );
+}
+
+function TerminalRow() {
+  const proxyState = useAtomValue(proxyStateAtom);
+  const caStatus = useRpcQuery("ca_status", {});
+  const showToast = useShowToast();
+  const os = getOsType();
+  const [shell, setShell] = useState<TerminalShell>(() => defaultShell(os));
+  const openTerminal = useRpcMutation("open_terminal", {
+    onError: (err) => showToast({ message: err.message, color: "danger" }),
+  });
+  const port =
+    proxyState?.port ?? proxyState?.otherOwner?.proxyPort ?? proxyState?.configuredPort ?? 9090;
+  const caPath = caStatus.data?.certPath;
+  const shellLabel = TERMINAL_SHELLS.find((s) => s.value === shell)?.label ?? shell;
+
+  return (
+    <div className="py-4">
+      <div className="flex items-center gap-2">
+        <span className="text-text">Environment</span>
+        <RadioDropdown
+          value={shell}
+          onChange={(v) => setShell(v as TerminalShell)}
+          items={TERMINAL_SHELLS.map((s) => ({ label: s.label, value: s.value }))}
+        >
+          <Button
+            size="2xs"
+            variant="border"
+            title="Shell"
+            rightSlot={<Icon icon="chevron_down" size="xs" className="ml-1" />}
+          >
+            {shellLabel}
+          </Button>
+        </RadioDropdown>
+        <Button
+          size="2xs"
+          variant="border"
+          className="ml-auto"
+          title={os === "macos" ? "A new Terminal window with these set" : "Not available on this platform yet"}
+          disabled={caPath == null || os !== "macos"}
+          isLoading={openTerminal.isPending}
+          onClick={() => caPath != null && openTerminal.mutate({ vars: environmentVars(port, caPath) })}
+        >
+          Open Terminal
+        </Button>
+      </div>
+      <p className="mt-1 text-sm text-text-subtle">Proxies one terminal instead of the system</p>
+      {caPath != null && (
+        <SettingSnippet className="mt-3" language="text" snippet={environmentBlock(shell, port, caPath)} />
+      )}
+    </div>
+  );
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

@@ -6,19 +6,31 @@ import {
   folderOf,
   formatFieldFilter,
   isSystemFlow,
+  runtimeFolderOf,
   sidebarPath,
   siteOf,
   tokenize,
 } from "./search";
 
-export type SidebarKind = "all" | "tunnelled" | "group" | "app" | "site" | "host" | "path";
+export type SidebarKind =
+  | "all"
+  | "tunnelled"
+  | "group"
+  | "app"
+  | "folder"
+  | "site"
+  | "host"
+  | "path";
 
-/** A row of the sidebar: All traffic, a group, an app, or a site, host or path under one */
+/**
+ * A row of the sidebar: All traffic, a group, an app, a program's working directory, or a site,
+ * host or path under one
+ */
 export interface SidebarItem {
   id: string;
   kind: SidebarKind;
   label: string;
-  /** Dim beside the label: a program's folder */
+  /** Dim beside the label: a generic runtime's folder */
   sublabel?: string;
   /** Flows under the row, of those loaded */
   count: number;
@@ -42,7 +54,7 @@ export const TUNNELLED_ID = "tunnelled";
 /** A row a flow sits under, with what makes it, so a rebuild only looks it up */
 interface PlaceRow {
   id: string;
-  kind: "site" | "host" | "path";
+  kind: "folder" | "site" | "host" | "path";
   label: string;
   query: string;
   decrypt?: DecryptSubject;
@@ -50,7 +62,8 @@ interface PlaceRow {
 
 /**
  * Where a flow sits, parsed once per flow rather than on every rebuild: its site, host and path
- * rows in Domains, and the same rows under its app.
+ * rows in Domains, and the same rows under its app, below its working directory for a program
+ * outside an app that isn't a generic runtime (those are named by their folder instead).
  */
 interface Place {
   /** What `@app` names its app by, or null when unknown */
@@ -99,10 +112,20 @@ function placeOf(flow: Flow): Place {
   }
   const system = isSystemFlow(flow);
   const appQuery = app == null ? "" : appQueryFor(app, system);
-  const appRows =
-    app == null
-      ? []
-      : rows.map((r) => ({ ...r, id: `app:${app}|${r.id}`, query: `${appQuery} ${r.query}` }));
+  let appRows: PlaceRow[] = [];
+  if (app != null) {
+    const folder = runtimeFolderOf(flow) == null ? folderOf(flow) : null;
+    if (folder == null) {
+      appRows = rows.map((r) => ({ ...r, id: `app:${app}|${r.id}`, query: `${appQuery} ${r.query}` }));
+    } else {
+      const folderId = `app:${app}|cwd:${folder}`;
+      const folderQuery = `${appQuery} ${formatFieldFilter("cwd", folder)}`;
+      appRows = [
+        { id: folderId, kind: "folder", label: folder, query: folderQuery },
+        ...rows.map((r) => ({ ...r, id: `${folderId}|${r.id}`, query: `${folderQuery} ${r.query}` })),
+      ];
+    }
+  }
   place = { app, system, rows, appRows };
   places.set(flow, place);
   return place;
@@ -164,8 +187,10 @@ function toNodes(
   });
 }
 
+/** By label, a program's working directories before the sites it reached directly */
 function byLabel(a: Trie, b: Trie): number {
-  return collator.compare(a.item.label, b.item.label);
+  const folders = Number(b.item.kind === "folder") - Number(a.item.kind === "folder");
+  return folders || collator.compare(a.item.label, b.item.label);
 }
 
 function group(id: string, label: string): Trie {
@@ -203,7 +228,7 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
     const id = `app:${place.app}`;
     let app = parent.children.get(id);
     if (app == null) {
-      const folder = folderOf(flow);
+      const folder = runtimeFolderOf(flow);
       const item: SidebarItem = {
         id,
         kind: "app",

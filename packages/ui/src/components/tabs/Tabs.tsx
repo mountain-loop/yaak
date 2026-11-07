@@ -41,6 +41,8 @@ export type TabItem =
       value: string;
       label: string;
       hidden?: boolean;
+      /** Nothing in it: the label reads in the subtlest colour */
+      empty?: boolean;
       leftSlot?: ReactNode;
       rightSlot?: ReactNode;
     }
@@ -57,6 +59,8 @@ export type TabItem =
 export interface TabOptionsItem {
   value: string;
   options: Omit<RadioDropdownProps, "children">;
+  /** Nothing in it: the label reads in the subtlest colour */
+  empty?: boolean;
   leftSlot?: ReactNode;
   rightSlot?: ReactNode;
 }
@@ -89,6 +93,11 @@ export interface TabsProps {
   activeTabKey?: string;
   /** Where the order and active tab under `storageKey` are kept */
   useStoredValue?: UseStoredValue;
+  /**
+   * A key with no stored tab opens on `defaultValue`, not on the tab last chosen under another
+   * key, and a stored tab no longer offered falls back the same way
+   */
+  keyedDefault?: boolean;
 }
 
 export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
@@ -105,6 +114,7 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
     storageKey,
     activeTabKey,
     useStoredValue: useStoredValueProp,
+    keyedDefault = false,
   }: TabsProps,
   forwardedRef: Ref<TabsRef>,
 ) {
@@ -131,8 +141,12 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
 
   // Get the active tab value - prefer storage (if activeTabKey), then defaultValue, then first tab
   const storedActiveTab = activeTabKey ? storage?.activeTabs?.[activeTabKey] : undefined;
-  const [internalValue, setInternalValue] = useState<string | undefined>(undefined);
-  const value = storedActiveTab ?? internalValue ?? defaultValue ?? originalTabs[0]?.value;
+  const [internal, setInternal] = useState<{ key?: string; value: string } | undefined>(undefined);
+  const internalValue =
+    keyedDefault && internal?.key !== activeTabKey ? undefined : internal?.value;
+  const offered = (v: string | undefined) =>
+    v != null && (!keyedDefault || originalTabs.some((t) => t.value === v));
+  const value = [storedActiveTab, internalValue, defaultValue].find(offered) ?? originalTabs[0]?.value;
 
   // Helper to normalize storage (handle migration from old format)
   const normalizeStorage = useCallback(
@@ -144,7 +158,7 @@ export const Tabs = forwardRef<TabsRef, TabsProps>(function Tabs(
   // Handle tab change - update internal state, storage if we have a key, and call prop callback
   const onChangeValue = useCallback(
     async (newValue: string) => {
-      setInternalValue(newValue);
+      setInternal({ key: activeTabKey, value: newValue });
       if (storageKey && activeTabKey) {
         await setStorage((s) => {
           const normalized = normalizeStorage(s);
@@ -501,7 +515,15 @@ function TabButton({
     ) : "options" in tab ? (
       <TabOptionsButton tab={tab} buttonProps={btnProps} isActive={isActive} />
     ) : (
-      <Button leftSlot={tab.leftSlot} rightSlot={tab.rightSlot} {...btnProps}>
+      <Button
+        leftSlot={tab.leftSlot}
+        rightSlot={tab.rightSlot}
+        {...btnProps}
+        className={classNames(
+          btnProps.className,
+          !isActive && "empty" in tab && tab.empty && "text-text-subtlest!",
+        )}
+      >
         {"label" in tab && tab.label ? tab.label : tab.value}
       </Button>
     );
@@ -574,6 +596,7 @@ function TabOptionsButton({
           </div>
         }
         {...buttonProps}
+        className={classNames(buttonProps.className, !isActive && tab.empty && "text-text-subtlest!")}
       >
         {option && "shortLabel" in option && option.shortLabel
           ? option.shortLabel
