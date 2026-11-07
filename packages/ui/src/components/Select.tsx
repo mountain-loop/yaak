@@ -27,6 +27,15 @@ export interface SelectProps<T extends string> {
   filterable?: boolean;
 }
 
+/** On macOS, where the host can say; an app with no platform host (the proxy) says no */
+function isMacOs(): boolean {
+  try {
+    return platform.osType() === "macos";
+  } catch {
+    return false;
+  }
+}
+
 export function Select<T extends string>({
   labelPosition = "top",
   name,
@@ -66,7 +75,7 @@ export function Select<T extends string>({
       <Label htmlFor={id} visuallyHidden={hideLabel} className={labelClassName} help={help}>
         {label}
       </Label>
-      {platform.osType() === "macos" && !filterable ? (
+      {isMacOs() && !filterable ? (
         <HStack
           space={2}
           className={classNames(

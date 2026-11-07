@@ -266,6 +266,8 @@ pub struct RemovedResponse {
 
 /// Raw body headers: whether the body is cut short, at the capture limit or on the wire.
 pub const TRUNCATED_HEADER: &str = "x-yaak-truncated";
+/// Raw body headers: what to know about a body beyond its bytes, as that a WebSocket has none.
+pub const NOTE_HEADER: &str = "x-yaak-note";
 
 // -- Server --
 
@@ -544,7 +546,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             })?;
             let payload = messages::payload(&ctx.db, &ctx.blobs, &message)?;
             let (decoded, decode_error) = if message.kind == MessageKind::GrpcMessage {
-                match grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, seq).await {
+                match grpc::decode(&ctx.db, &ctx.blobs, &ctx.grpc, &flow, seq, false).await {
                     Ok(decoded) => (Some(decoded), None),
                     Err(e) => (None, Some(e)),
                 }
@@ -639,11 +641,15 @@ fn found(ctx: &ProxyCtx, id: &str) -> Result<(), ApiError> {
 async fn raw_body(ctx: &ProxyCtx, id: &str, which: FlowBody) -> Result<ControlResponse, ApiError> {
     let flow = flows::find(&ctx.db, id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("No flow {id}")))?;
-    let body = bodies::read_body(&ctx.blobs, &flow, which, ctx.capture_body_limit()?).await?;
+    let body =
+        bodies::read_body(&ctx.db, &ctx.blobs, &flow, which, ctx.capture_body_limit()?).await?;
     let content_type =
         find_header(flow.headers(which), "content-type").unwrap_or("application/octet-stream");
     let mut resp = response(StatusCode::OK, content_type, body.data);
     resp.headers_mut().insert(TRUNCATED_HEADER, body.truncated.to_string().parse().unwrap());
+    if let Some(note) = body.note.as_deref().and_then(|n| n.parse().ok()) {
+        resp.headers_mut().insert(NOTE_HEADER, note);
+    }
     Ok(resp)
 }
 

@@ -1,7 +1,9 @@
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+import classNames from "classnames";
 import type { ReactElement, ReactNode, UIEvent } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { IconButton } from "./IconButton";
+import { Icon } from "../Icon";
+import { IconButton } from "../IconButton";
 
 interface Props<T> {
   data: T[];
@@ -11,6 +13,14 @@ interface Props<T> {
   focusable?: boolean;
   /** Callback to expose the virtualizer for keyboard navigation */
   onVirtualizerReady?: (virtualizer: Virtualizer<HTMLDivElement, Element>) => void;
+  /**
+   * Holds and catches up as the proxy's flow list does: once scrolled away from the end (or
+   * `holdSignal` changes), new items wait under a pill counting them, which scrolls back down.
+   * Without it, a button locks the scroll to the bottom again.
+   */
+  catchUp?: { label: (count: number) => string };
+  /** Holds the scroll where it is whenever this changes, as selecting an item does */
+  holdSignal?: unknown;
 }
 
 export function AutoScroller<T>({
@@ -19,9 +29,15 @@ export function AutoScroller<T>({
   header,
   focusable = false,
   onVirtualizerReady,
+  catchUp,
+  holdSignal,
 }: Props<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState<boolean>(true);
+  // How many items there were when the scroll was held, to count the new ones
+  const [heldAt, setHeldAt] = useState<number>(0);
+  const latestLength = useRef(data.length);
+  latestLength.current = data.length;
 
   // The virtualizer
   const rowVirtualizer = useVirtualizer({
@@ -35,6 +51,11 @@ export function AutoScroller<T>({
     onVirtualizerReady?.(rowVirtualizer);
   }, [rowVirtualizer, onVirtualizerReady]);
 
+  const hold = useCallback(() => {
+    setAutoScroll(false);
+    setHeldAt(latestLength.current);
+  }, []);
+
   // Scroll to new items
   const handleScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
@@ -44,11 +65,20 @@ export function AutoScroller<T>({
       const pixelsFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
       const newAutoScroll = pixelsFromBottom <= 0;
       if (newAutoScroll !== autoScroll) {
-        setAutoScroll(newAutoScroll);
+        if (newAutoScroll) setAutoScroll(true);
+        else hold();
       }
     },
-    [autoScroll],
+    [autoScroll, hold],
   );
+
+  // Selecting an item holds the list where it is
+  const lastHoldSignal = useRef(holdSignal);
+  useLayoutEffect(() => {
+    if (Object.is(lastHoldSignal.current, holdSignal)) return;
+    lastHoldSignal.current = holdSignal;
+    if (catchUp != null && autoScroll) hold();
+  }, [autoScroll, catchUp, hold, holdSignal]);
 
   // Scroll to bottom on count change
   useLayoutEffect(() => {
@@ -62,9 +92,11 @@ export function AutoScroller<T>({
     el.scrollTop = el.scrollHeight;
   }, [autoScroll, data.length]);
 
+  const newCount = data.length - heldAt;
+
   return (
     <div className="h-full w-full relative grid grid-rows-[auto_minmax(0,1fr)]">
-      {!autoScroll && (
+      {!autoScroll && catchUp == null && (
         <div className="absolute bottom-0 right-0 m-2">
           <IconButton
             title="Lock scroll to bottom"
@@ -76,6 +108,21 @@ export function AutoScroller<T>({
             onClick={() => setAutoScroll((v) => !v)}
           />
         </div>
+      )}
+      {!autoScroll && catchUp != null && newCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setAutoScroll(true)}
+          className={classNames(
+            "absolute bottom-3 left-1/2 -translate-x-1/2 z-10",
+            "flex items-center gap-1.5 h-6 px-3 rounded-full",
+            "bg-surface border border-border shadow-lg text-text text-xs",
+            "hover:bg-surface-highlight",
+          )}
+        >
+          <Icon icon="arrow_down_to_line" size="sm" color="primary" />
+          {catchUp.label(newCount)}
+        </button>
       )}
       {header ?? <span aria-hidden />}
       <div

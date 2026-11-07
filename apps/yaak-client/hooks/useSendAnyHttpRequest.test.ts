@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+// Loaded once as the file is collected (the mocks below are hoisted above it), so the first
+// transform of its module graph, the shared UI package among it, is not timed against whichever
+// test imports it first. Each test still gets the module fresh after `vi.resetModules()`, which
+// reuses that transform.
+import "./useSendAnyHttpRequest";
 
 const mocks = vi.hoisted(() => ({
   platform: { httpProxyUrl: "https://web.yaak.test" as string | null },
