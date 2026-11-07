@@ -345,7 +345,13 @@ impl ProxyCtx {
     /// another process owns the engine, so there are never two. A failure is kept until the
     /// next start, for the app to show.
     pub fn start_on(&self, port: Option<u16>) -> Result<(), String> {
-        let started = self.start_engine(port);
+        self.start_routing(port, None)
+    }
+
+    /// [`Self::start_on`], the system proxy pointed at the engine when `system_proxy` says so,
+    /// or as the settings ask at launch when it is None.
+    fn start_routing(&self, port: Option<u16>, system_proxy: Option<bool>) -> Result<(), String> {
+        let started = self.start_engine(port, system_proxy);
         if let Ok(mut start_error) = self.start_error.lock() {
             *start_error = started.as_ref().err().cloned();
         }
@@ -361,7 +367,7 @@ impl ProxyCtx {
         self.start_error.lock().ok()?.clone()
     }
 
-    fn start_engine(&self, port: Option<u16>) -> Result<(), String> {
+    fn start_engine(&self, port: Option<u16>, system_proxy: Option<bool>) -> Result<(), String> {
         if let Some(owner) = control::live_owner(&self.data_dir)
             && owner.pid != std::process::id()
         {
@@ -424,8 +430,9 @@ impl ProxyCtx {
         if let Ok(mut last_port) = self.last_port.lock() {
             *last_port = Some(bound);
         }
-        self.system_proxy_on.store(settings.system_proxy_at_launch, Ordering::SeqCst);
-        if settings.system_proxy_at_launch {
+        let route = system_proxy.unwrap_or(settings.system_proxy_at_launch);
+        self.system_proxy_on.store(route, Ordering::SeqCst);
+        if route {
             // The password dialog can sit open for a while; the engine is up regardless.
             let ctx = self.clone();
             std::thread::spawn(move || {
@@ -746,31 +753,12 @@ impl ProxyCtx {
         Ok(port)
     }
 
-    /// Stops the engine and starts it again as `settings.json` has it, with the system proxy
-    /// turned on again when `proxy_on`, as it was before the first stop.
+    /// Stops the engine and starts it again as `settings.json` has it, routing the system proxy
+    /// to it only when `proxy_on`, as it was before the first stop: a restart keeps the routing
+    /// as the user left it rather than applying the launch setting again.
     fn restart(&self, proxy_on: bool) -> Result<(), String> {
         self.stop()?;
-        self.start()?;
-        self.resume_system_proxy(proxy_on);
-        Ok(())
-    }
-
-    /// Points the system proxy at the engine just started again when it was on before it
-    /// stopped. Starting has already done so when the settings ask for it at launch.
-    fn resume_system_proxy(&self, was_on: bool) {
-        let at_launch = self.settings().is_ok_and(|s| s.system_proxy_at_launch);
-        let Some(port) = self.port().filter(|_| was_on && !at_launch) else {
-            return;
-        };
-        self.system_proxy_on.store(true, Ordering::SeqCst);
-        let ctx = self.clone();
-        std::thread::spawn(move || {
-            if let Err(e) = ctx.change_system_proxy(true, port, true) {
-                warn!("Failed to turn on the system proxy: {e}");
-                ctx.system_proxy_on.store(false, Ordering::SeqCst);
-            }
-            ctx.emit_state();
-        });
+        self.start_routing(None, Some(proxy_on))
     }
 
     /// Bytes of each body stored per flow, saved in `settings.json` and applied to the running
@@ -852,8 +840,7 @@ impl ProxyCtx {
                     warn!("Failed to reopen the proxy's databases: {e}");
                 }
                 if running {
-                    self.start()?;
-                    self.resume_system_proxy(proxy_on);
+                    self.start_routing(None, Some(proxy_on))?;
                 }
                 return Err(e);
             }
@@ -879,8 +866,7 @@ impl ProxyCtx {
         self.emit_state();
         unlocked?;
         if running {
-            self.start()?;
-            self.resume_system_proxy(proxy_on);
+            self.start_routing(None, Some(proxy_on))?;
         }
         Ok(())
     }

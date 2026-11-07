@@ -19,6 +19,7 @@ import {
 import classNames from "classnames";
 import { useSetAtom } from "jotai";
 import { useCallback, useMemo, useState } from "react";
+import { BODY_TYPE_BINARY } from "@yaakapp-internal/ui/httpTypes";
 import { findHeader } from "../lib/body";
 import {
   browserTabMemory,
@@ -96,10 +97,15 @@ function useShapeTab(pane: FlowPane, flow: Flow, available: string[]) {
 }
 
 /** A body read through the engine's body RPC, as the shared panes' loaders ask for it */
-function useLoadedBody(flow: Flow, which: FlowBody): HttpBodyResult<FlowBodyData | null> {
+function useLoadedBody(
+  flow: Flow,
+  which: FlowBody,
+  enabled = true,
+): HttpBodyResult<FlowBodyData | null> {
   const size = which === "request" ? flow.requestSize : flow.responseSize;
-  const body = useFlowBody(flow, which, size > 0 || flow.streamKind != null);
-  if (size === 0 && flow.streamKind == null) return { data: null, isLoading: false, error: null };
+  const load = enabled && size > 0;
+  const body = useFlowBody(flow, which, load);
+  if (!load) return { data: null, isLoading: false, error: null };
   return { data: body.data ?? undefined, isLoading: body.isLoading, error: body.error };
 }
 
@@ -156,7 +162,10 @@ function FlowRequestHalf({ flow }: { flow: Flow }) {
       onTabChange={onTabChange}
       urlLine={<UrlLine flow={flow} />}
       renderBody={(editor) =>
-        body.data?.truncated ? (
+        request.bodyType === BODY_TYPE_BINARY ? (
+          // The proxy's own viewer, with its hexdump and save, rather than a size alone
+          <FlowBodyViewer flow={flow} which="request" pretty />
+        ) : body.data?.truncated ? (
           <div className="h-full grid grid-rows-[auto_minmax(0,1fr)]">
             <Banner color="notice" className="text-sm mb-2">
               <span title="The app sent all of it">
@@ -192,15 +201,18 @@ function UrlLine({ flow }: { flow: Flow }) {
 
 function FlowResponseHalf({ flow, className }: { flow: Flow; className: string }) {
   const [viewMode, setViewMode] = useState<ResponseViewMode>("pretty");
-  const body = useLoadedBody(flow, "response");
+  // A stream's body is its messages, read by the Messages tab; reading it whole again on every
+  // message would only hold copies of it
+  const loadBody = flow.streamKind == null;
+  const body = useLoadedBody(flow, "response", loadBody);
   const response = useMemo(() => flowResponseToView(flow, body.data ?? null), [flow, body.data]);
   const loader = useMemo(
     () =>
       flowBodyLoader({
-        useBody: () => useLoadedBody(flow, "response"),
+        useBody: () => useLoadedBody(flow, "response", loadBody),
         contentType: findHeader(flow.responseHeaders, "content-type"),
       }),
-    [flow],
+    [flow, loadBody],
   );
   const openSave = useSetAtom(saveDialogFlowAtom);
   const flowActions = useFlowActions();

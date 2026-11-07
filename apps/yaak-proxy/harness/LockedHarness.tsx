@@ -3,6 +3,7 @@ import type { GetProxyStateResponse } from "@yaakapp-internal/proxy-lib";
 import { useStore } from "jotai";
 import { type ReactNode, useEffect, useState } from "react";
 import { ProxyLayout } from "../components/ProxyLayout";
+import { DragRegionCheck } from "./DragRegionCheck";
 import { useHotkeyContextValue } from "../lib/hotkeys";
 import { syncFlows, syncProxyState, syncSidebarSelection } from "../lib/store";
 
@@ -57,8 +58,9 @@ export function installLockedBackend() {
     if (cmd.startsWith("plugin:event|")) return 0;
     throw new Error(`Not in the harness: ${cmd}`);
   };
-  (window as unknown as { __TAURI_OS_PLUGIN_INTERNALS__: Record<string, string> })
-    .__TAURI_OS_PLUGIN_INTERNALS__ = {
+  (
+    window as unknown as { __TAURI_OS_PLUGIN_INTERNALS__: Record<string, string> }
+  ).__TAURI_OS_PLUGIN_INTERNALS__ = {
     os_type: "macos",
     platform: "macos",
     family: "unix",
@@ -86,6 +88,7 @@ export function LockedHarness() {
   return (
     <Hotkeys>
       <ProxyLayout />
+      {new URLSearchParams(location.search).has("dragcheck") && <DragRegionCheck />}
     </Hotkeys>
   );
 }
