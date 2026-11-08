@@ -1,4 +1,9 @@
-import type { Flow, GetProxyStateResponse, ModelPayload } from "@yaakapp-internal/proxy-lib";
+import type {
+  Flow,
+  GetProxyStateResponse,
+  ModelPayload,
+  SavedQuery,
+} from "@yaakapp-internal/proxy-lib";
 import { selectedIdsFamily } from "@yaakapp-internal/ui";
 import { atom, type createStore } from "jotai";
 import { atomWithStorage } from "jotai/utils";
@@ -20,8 +25,9 @@ import {
   WINDOW_SIZE,
   windowFromPage,
 } from "./flowWindow";
+import { activeQuery, anyCountsBackFromNow, countsBackFromNow, type FlowQuery } from "./query";
 import { listen, rpc } from "./rpc";
-import { type FlowQuery, matchesQuery, parseSearch } from "./search";
+import { changesFor, FlowEvents } from "./searchChanges";
 import {
   ALL_ID,
   APPS_ID,
@@ -29,6 +35,8 @@ import {
   DOMAINS_ID,
   itemsById,
   queryInText,
+  SAVED_ID,
+  type SavedRow,
   selectionText,
 } from "./sidebarTree";
 
@@ -40,6 +48,8 @@ const FLUSH_MS = 100;
 const RECOUNT_MS = 1000;
 /** How often the database is read for new flows while another process owns the engine */
 const POLL_MS = 1000;
+/** How often a search counting back from now is read again, as flows age in and out of it */
+const AGE_REFRESH_MS = 15_000;
 /** How often the engine's owner is checked while it is another process */
 const OWNER_POLL_MS = 2000;
 
@@ -90,8 +100,25 @@ export const hideSystemAtom = atomWithStorage("sidebar_hide_system", false, unde
 
 /** The search the list shows, from the search box's settled text, or null for all traffic */
 export const activeQueryAtom = atom<FlowQuery | null>((get) =>
-  parseSearch(get(searchTermsAtom), get(hideSystemAtom)),
+  activeQuery(get(searchTermsAtom), get(hideSystemAtom)),
 );
+
+/** The saved searches, in their order */
+export const savedQueriesAtom = atom<SavedQuery[]>([]);
+
+/** How many flows each saved search covers, by id, counted in the database */
+export const savedCountsAtom = atom<Record<string, number>>({});
+
+/** The saved searches as the sidebar lists them */
+const savedRowsAtom = atom<SavedRow[]>((get) => {
+  const counts = get(savedCountsAtom);
+  return get(savedQueriesAtom).map((s) => ({
+    id: s.id,
+    name: s.name,
+    query: s.query,
+    count: counts[s.id] ?? 0,
+  }));
+});
 
 /** Writes `text` into the search box at once, as the sidebar does, without waiting for typing */
 export const setSearchTextAtom = atom(null, (_get, set, text: string) => {
@@ -119,7 +146,7 @@ const SIDEBAR_MS = 1000;
 
 /** The sidebar's rows, from the flows loaded */
 export const sidebarTreeAtom = atom((get) =>
-  buildSidebarTree(get(sidebarFlowsAtom), get(allTrafficTotalAtom)),
+  buildSidebarTree(get(sidebarFlowsAtom), get(allTrafficTotalAtom), get(savedRowsAtom)),
 );
 
 const storedColumnPrefsAtom = atomWithStorage<unknown>(
@@ -244,7 +271,7 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
     const merge = (win: FlowWindow) => {
       if (win.flows[0]?.id !== first.id) return win;
       const merged = prependOlder(win, withoutRemoved(res.flows), PAGE_SIZE);
-      const kept = search == null ? changes : changesFor(search.query, changes);
+      const kept = search == null ? changes : changesOf(search, merged, changes);
       // Counted when they first applied.
       return { ...applyChanges(merged, kept), total: merged.total };
     };
@@ -261,9 +288,47 @@ export const loadOlderFlowsAtom = atom(null, async (get, set) => {
   }
 });
 
-/** The changes a search's window takes: flows it matches, and every deletion */
-function changesFor(query: FlowQuery, changes: ModelPayload[]): ModelPayload[] {
-  return changes.filter((c) => c.change.type === "delete" || matchesQuery(c.model, query));
+/** `changesFor`, with flows matched against another search sent to be matched again */
+function changesOf(
+  search: Pick<SearchWindow, "key" | "query">,
+  win: FlowWindow,
+  changes: ModelPayload[],
+): ModelPayload[] {
+  return changesFor(search.key, win, changes, (unknown) => matchLater(search, unknown));
+}
+
+/** The store `syncFlows` keeps, for answers that come after the changes they are for */
+let syncedStore: Store | null = null;
+
+/** The order flow events arrived in, for judging answers that come late */
+const flowEvents = new FlowEvents();
+
+/**
+ * Matches flows against the search in the database, then has its window take them as it takes
+ * events matched as they were sent. A flow a newer event updated or removed meanwhile, in the
+ * window or not, keeps what that event left.
+ */
+function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelPayload[]) {
+  const store = syncedStore;
+  if (store == null) return;
+  const ids = [...new Set(changes.map((c) => c.model.id))];
+  rpc("match_flows", { filter: search.query, ids })
+    .then((matched) => {
+      const covered = new Set(matched);
+      const marked = flowEvents.current(changes).map((c) => ({
+        ...c,
+        search: { key: search.key, matches: covered.has(c.model.id) },
+      }));
+      if (marked.length === 0) return;
+      const following = store.get(followingAtom);
+      store.set(searchWindowAtom, (s) => {
+        if (s?.key !== search.key) return s;
+        if (s.loading) return { ...s, buffered: [...s.buffered, ...marked] };
+        const next = applyChanges(s.win, changesOf(s, s.win, marked));
+        return { ...s, win: following ? trimWindow(next) : next };
+      });
+    })
+    .catch((err) => console.warn("Failed to match flows", err));
 }
 
 /**
@@ -274,6 +339,7 @@ function changesFor(query: FlowQuery, changes: ModelPayload[]): ModelPayload[] {
  * way.
  */
 export function syncFlows(store: Store) {
+  syncedStore = store;
   let pending: ModelPayload[] = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
   let loaded = false;
@@ -297,7 +363,7 @@ export function syncFlows(store: Store) {
       if (s == null) return s;
       // A matching flow written after the page's snapshot would otherwise be missed.
       if (s.loading) return { ...s, buffered: [...s.buffered, ...changes] };
-      const next = applyChanges(s.win, changesFor(s.query, changes));
+      const next = applyChanges(s.win, changesOf(s, s.win, changes));
       return { ...s, win: following ? trimWindow(next) : next };
     });
     const selected = store.get(selectedFlowAtom);
@@ -309,6 +375,7 @@ export function syncFlows(store: Store) {
   }
 
   function receive(changes: ModelPayload[]) {
+    flowEvents.arrived(changes);
     pending.push(...changes);
     if (timer == null) timer = setTimeout(flush, FLUSH_MS);
   }
@@ -326,10 +393,11 @@ export function syncFlows(store: Store) {
       );
     });
     if (store.get(hideSystemAtom)) {
-      void rpc("list_flows", { system: false, limit: 0 }).then((res) => {
+      void rpc("list_flows", { hideSystem: true, limit: 0 }).then((res) => {
         if (thisLoad === loads) store.set(nonSystemTotalAtom, res.matching ?? res.total);
       });
     }
+    countSaved();
     const search = store.get(searchWindowAtom);
     if (search == null || search.loading) return;
     void rpc("list_flows", { ...search.query, limit: 0 }).then((res) => {
@@ -340,21 +408,60 @@ export function syncFlows(store: Store) {
     });
   }
 
+  // Saved searches, and their counts, which change with the traffic.
+  function loadSaved() {
+    rpc("list_saved_queries", {})
+      .then((saved) => {
+        store.set(savedQueriesAtom, saved);
+        countSaved();
+      })
+      .catch((err) => console.warn("Failed to list saved searches", err));
+  }
+  let counting = false;
+  let countAgain = false;
+  function countSaved() {
+    if (store.get(savedQueriesAtom).length === 0) return;
+    // One count at a time; one asked for meanwhile runs after it, with the latest traffic.
+    if (counting) {
+      countAgain = true;
+      return;
+    }
+    counting = true;
+    rpc("count_saved_queries", { hideSystem: store.get(hideSystemAtom) })
+      .then((counts) =>
+        store.set(savedCountsAtom, Object.fromEntries(counts.map((c) => [c.id, c.count]))),
+      )
+      .catch((err) => console.warn("Failed to count saved searches", err))
+      .finally(() => {
+        counting = false;
+        if (countAgain) {
+          countAgain = false;
+          countSaved();
+        }
+      });
+  }
+  listen("saved_queries_changed", loadSaved);
+  loadSaved();
+
   listen("model_write", (payload) => {
     seenId = payload.model.id;
     receive([payload]);
   });
 
   // Loads again rather than only emptying, for a flow written between the clear and the event.
+  // Saved searches too, which could not be read while the database was locked.
   listen("flows_cleared", () => {
+    flowEvents.reset();
     store.set(emptyFlowsAtom);
     pending = [];
     load();
+    loadSaved();
   });
 
   // The oldest flows, swept to keep the capture under its size limit: dropped wherever they
   // are held, and the totals counted again from the database.
   listen("flows_removed", ({ ids }) => {
+    flowEvents.removed(ids);
     const removed = new Set(ids);
     const drop = (win: FlowWindow) =>
       win.flows.some((f) => removed.has(f.id))
@@ -399,21 +506,31 @@ export function syncFlows(store: Store) {
   }
   reloadFlows = load;
 
-  /** Loads the first page of `query`'s flows into a window of its own, or drops it for null */
-  function loadSearch(query: FlowQuery | null) {
+  /**
+   * Loads the first page of `query`'s flows into a window of its own, or drops it for null. The
+   * backend matches the flows written from now on against it, and their events say so.
+   */
+  function loadSearch(query: FlowQuery | null, keepRows = false) {
     if (query == null) {
       store.set(searchWindowAtom, null);
+      void rpc("watch_query", { key: "" }).catch(() => {});
       return;
     }
     // Unique to this load, so a slower answer to an earlier one with the same query, such as
     // one read before a clear, is dropped.
     const key = `${++searchLoads}:${JSON.stringify(query)}`;
-    store.set(searchWindowAtom, { key, query, win: emptyWindow, loading: true, buffered: [] });
+    // Read again, it keeps showing its rows until the new ones are in.
+    const win = (keepRows ? store.get(searchWindowAtom)?.win : null) ?? emptyWindow;
+    store.set(searchWindowAtom, { key, query, win, loading: true, buffered: [] });
+    void rpc("watch_query", { key, query: query.query, hideSystem: query.hideSystem }).catch(
+      (err) => console.warn("Failed to watch the search", err),
+    );
     const settle = (page: FlowWindow | null) =>
       store.set(searchWindowAtom, (s) => {
         if (s?.key !== key) return s;
         // Applied again over the page: a flow already in it is replaced, not added.
-        const win = applyChanges(page ?? s.win, changesFor(query, s.buffered));
+        const base = page ?? s.win;
+        const win = applyChanges(base, changesOf(s, base, s.buffered));
         return {
           ...s,
           win: page == null ? win : { ...win, total: page.total },
@@ -451,10 +568,20 @@ export function syncFlows(store: Store) {
     }
   });
 
-  // All traffic's count leaves System out while it is hidden.
+  // All traffic's count, and the saved searches', leave System out while it is hidden.
   store.sub(hideSystemAtom, () => {
     if (loaded) recount();
   });
+
+  // A search counting back from now, `@time:<5m`, is read again while it is shown and the list
+  // follows new traffic, so flows leave it and join it as they age. Saved ones are counted
+  // again, as their counts change with no traffic at all.
+  setInterval(() => {
+    if (anyCountsBackFromNow(store.get(savedQueriesAtom).map((q) => q.query))) countSaved();
+    const s = store.get(searchWindowAtom);
+    if (s == null || s.loading || !store.get(followingAtom)) return;
+    if (countsBackFromNow(s.query.query)) loadSearch(s.query, true);
+  }, AGE_REFRESH_MS);
 
   let activeKey = JSON.stringify(store.get(activeQueryAtom));
   store.sub(activeQueryAtom, () => {
@@ -576,7 +703,7 @@ export function syncSidebarSelection(store: Store) {
     lastRows = key;
     if (syncing || Date.now() - lastSidebarInput > SIDEBAR_INPUT_MS) return;
     // Group headings are not filters.
-    const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID);
+    const rows = ids.filter((id) => id !== APPS_ID && id !== DOMAINS_ID && id !== SAVED_ID);
     if (rows.length === 0) return;
     const items = itemsById(store.get(sidebarTreeAtom));
     const selected = rows.flatMap((id) => {

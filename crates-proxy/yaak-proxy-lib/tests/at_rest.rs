@@ -267,17 +267,13 @@ fn search_reaches_inside_the_encrypted_database() {
     let db = ctx.db().unwrap();
 
     // Query strings are searchable, being inside the encrypted file.
-    let q = |q: &str| FlowFilter { q: Some(q.into()), limit: Some(50), ..Default::default() };
+    let q = |q: &str| FlowFilter { limit: Some(50), ..FlowFilter::search(q) };
     let (page, total, matching) = flows::page(&db, &q(QUERY_SECRET)).unwrap();
     assert_eq!((page.len(), total, matching), (50, FLOWS, Some(FLOWS)));
     let (page, _, matching) = flows::page(&db, &q("items/2999")).unwrap();
     assert_eq!((page[0].id.as_str(), matching), ("fl_02999", Some(1)));
-    let posts_not_found = FlowFilter {
-        method: Some("post".into()),
-        status: Some("4xx".into()),
-        limit: Some(1),
-        ..Default::default()
-    };
+    let posts_not_found =
+        FlowFilter { limit: Some(1), ..FlowFilter::search("@method:post @status:4xx") };
     let (_, _, matching) = flows::page(&db, &posts_not_found).unwrap();
     assert_eq!(matching, Some((0..FLOWS).filter(|i| i % 3 == 0 && i % 10 == 0).count()));
 
@@ -295,11 +291,11 @@ fn search_reaches_inside_the_encrypted_database() {
     }
     assert_eq!(seen, FLOWS);
 
-    // The sidebar's site and path filters, which run the database's own functions.
-    let under = |u: &str| FlowFilter { under: Some(vec![u.into()]), ..Default::default() };
-    assert_eq!(flows::list(&db, &under("api.example.com")).unwrap().len(), FLOWS);
-    assert_eq!(flows::list(&db, &under("*.example.com")).unwrap().len(), FLOWS);
-    assert_eq!(flows::list(&db, &under("api.example.com/v1/items/42")).unwrap().len(), 1);
+    // The sidebar's host, site and path terms, which run the database's own functions.
+    let found = |q: &str| flows::list(&db, &FlowFilter::search(q)).unwrap().len();
+    assert_eq!(found("@host:api.example.com"), FLOWS);
+    assert_eq!(found("@host:*.example.com"), FLOWS);
+    assert_eq!(found("@host:api.example.com @path:/v1/items/42/*"), 1);
 
     // A full-text table, as body search will want, made and searched in the encrypted file.
     let hits: i64 = db

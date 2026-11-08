@@ -107,6 +107,9 @@ pub struct Flow {
     /// client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
     /// the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
     pub tunnelled: bool,
+    /// An agent read the flow through the control API: its detail, a body or its messages.
+    /// Never written by an upsert, which keeps what is stored.
+    pub agent_read: bool,
 }
 
 /// The streaming protocol a flow carries.
@@ -194,6 +197,21 @@ pub fn find_header<'a>(headers: &'a [ProxyHeader], name: &str) -> Option<&'a str
 pub struct ModelPayload {
     pub model: Flow,
     pub change: ModelChangeEvent,
+    /// Whether the flow belongs in the list of the search the app shows, decided as the event
+    /// is sent. None while no search is shown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub search: Option<SearchMatch>,
+}
+
+/// A written flow, matched against the search the app shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_models.ts")]
+pub struct SearchMatch {
+    /// The search's key, as the app gave it with the search.
+    pub key: String,
+    pub matches: bool,
 }
 
 impl UpsertModelInfo for Flow {
@@ -357,6 +375,7 @@ impl UpsertModelInfo for Flow {
             grpc_status: added_column(r, "grpc_status")?,
             grpc_message: added_column(r, "grpc_message")?,
             tunnelled: added_column(r, "tunnelled")?.unwrap_or_default(),
+            agent_read: added_column(r, "agent_read")?.unwrap_or_default(),
         })
     }
 }

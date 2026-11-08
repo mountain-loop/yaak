@@ -7,10 +7,11 @@ import {
   type TreeProps,
 } from "@yaakapp-internal/ui";
 import classNames from "classnames";
-import { atom, useAtom, useAtomValue } from "jotai";
+import { atom, useAtom, useAtomValue, useSetAtom } from "jotai";
 import { atomWithStorage } from "jotai/utils";
 import { useCallback, useEffect } from "react";
 import { useDecryptList, useEditDecryptList } from "../hooks/useDecryptList";
+import { useRpcMutation } from "../hooks/useRpcMutation";
 import { SIDEBAR_TREE_ID } from "../lib/atoms";
 import { blockerOf, decryptMenuAction, isDecrypted, listEdit, setDecrypted } from "../lib/decrypt";
 import { applyCollapsed, type CollapsedMap, collapsedMap, folderIds } from "../lib/sidebarCollapse";
@@ -18,6 +19,7 @@ import { type SidebarItem, SYSTEM_ID } from "../lib/sidebarTree";
 import { hideSystemAtom, noteSidebarInput, sidebarTreeAtom } from "../lib/store";
 import { useShowToast } from "../lib/toast";
 import { AppIcon } from "./AppIcon";
+import { savedSearchDialogAtom } from "./SavedSearchDialog";
 
 /** The apps, sites, hosts and paths the user expanded, by node id, kept across launches */
 const expandedAtom = atomWithStorage<Record<string, boolean>>("sidebar_expanded", {}, undefined, {
@@ -63,6 +65,7 @@ function ItemInner({ item }: { item: SidebarItem }) {
     <div className="flex items-center gap-2 w-full min-w-0">
       {item.kind === "all" && <Icon icon="layers" size="sm" className="text-text-subtle" />}
       {item.kind === "tunnelled" && <Icon icon="lock" size="sm" className="text-text-subtle" />}
+      {item.kind === "saved" && <Icon icon="bookmark" size="sm" className="text-text-subtle" />}
       {item.kind === "folder" && <Icon icon="folder" size="sm" className="text-text-subtle" />}
       {item.appPath != null && <AppIcon path={item.appPath} />}
       <span className="truncate">{item.label}</span>
@@ -119,17 +122,46 @@ function HideSystemToggle() {
 export function Sidebar() {
   const tree = useAtomValue(sidebarTreeAtom);
   const getItemKey = useCallback(
-    (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}`,
+    // The label too, as a saved search's changes when it is renamed
+    (item: SidebarItem) => `${item.id}:${item.count}:${item.countLabel ?? ""}:${item.label}`,
     [],
   );
   const decryptList = useDecryptList();
   const setDecryptList = useEditDecryptList();
   const { mutate: saveDecryptList } = setDecryptList;
   const showToast = useShowToast();
+  const setSavedDialog = useSetAtom(savedSearchDialogAtom);
+  const { mutate: deleteSaved } = useRpcMutation("delete_saved_query", {
+    onError: (err) => showToast({ id: "saved-search", message: err.message, color: "danger" }),
+  });
 
   // Decrypt or Stop Decrypting the selected hosts, sites and apps, from new connections on.
+  // A saved search is renamed or deleted.
   const getContextMenu = useCallback(
     (items: SidebarItem[]): DropdownItem[] => {
+      const saved = items.flatMap((i) => (i.savedId == null ? [] : [{ ...i, id: i.savedId }]));
+      if (saved.length > 0) {
+        const [first] = saved;
+        return [
+          {
+            label: "Rename",
+            leftSlot: <Icon icon="pencil" />,
+            hidden: saved.length > 1 || first == null,
+            onSelect: () => {
+              if (first != null)
+                setSavedDialog({ mode: "rename", id: first.id, name: first.label });
+            },
+          },
+          {
+            label: "Delete",
+            color: "danger",
+            leftSlot: <Icon icon="trash" />,
+            onSelect: () => {
+              for (const s of saved) deleteSaved({ id: s.id });
+            },
+          },
+        ];
+      }
       const subjects = items.flatMap((i) => (i.decrypt == null ? [] : [i.decrypt]));
       const action = decryptMenuAction(decryptList, subjects);
       if (action == null) return [];
@@ -155,7 +187,7 @@ export function Sidebar() {
         },
       ];
     },
-    [decryptList, saveDecryptList, showToast],
+    [decryptList, saveDecryptList, showToast, setSavedDialog, deleteSaved],
   );
   const renderContextMenu = useCallback<NonNullable<TreeProps<SidebarItem>["renderContextMenu"]>>(
     ({ items, position, onClose }) =>

@@ -10,7 +10,15 @@ label: string,
 /**
  * What replaces the span: `@method:`, `@header.`, or a value quoted when it needs to be.
  */
-insert: string, kind: CompletionKind, info: string | null, 
+insert: string, kind: CompletionKind, 
+/**
+ * What a field is, from its definition.
+ */
+info: string | null, 
+/**
+ * A term using the field, from its definition.
+ */
+example: string | null, 
 /**
  * The term is not finished after inserting (a field still needs its value, a map field its
  * key), so completion should open again.
@@ -57,9 +65,13 @@ name: string, kind: FieldKind,
  */
 map?: boolean, 
 /**
- * A short note shown with the field in completions.
+ * What the field is, in a few words, shown with it in completions: `GET, POST, …`.
  */
-info?: string, };
+info?: string, 
+/**
+ * A term using it, shown with it in completions: `@method:post`.
+ */
+example?: string, };
 
 export type FieldKind = { "type": "text" } | { "type": "number", units: Array<Unit>, } | { "type": "flag" };
 

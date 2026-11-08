@@ -22,6 +22,7 @@ import { LockedState } from "./LockedState";
 import { ProxyStatus, useProxySetup } from "./ProxyStatus";
 import { HelperDialog } from "./HelperDialog";
 import { SaveDialog } from "./SaveDialog";
+import { SavedSearchDialog } from "./SavedSearchDialog";
 import { SearchBar } from "./SearchBar";
 import { SettingsWindow, useOpenSettings } from "./Settings";
 import { Sidebar } from "./Sidebar";
@@ -158,6 +159,7 @@ export function ProxyLayout() {
         </div>
       </SidebarLayout>
       <SaveDialog />
+      <SavedSearchDialog />
       <HelperDialog />
       <SettingsWindow />
       <Toasts />

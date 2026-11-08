@@ -45,10 +45,14 @@ pub struct FieldDef {
     #[serde(default)]
     #[cfg_attr(test, ts(optional, as = "Option<bool>"))]
     pub map: bool,
-    /// A short note shown with the field in completions.
+    /// What the field is, in a few words, shown with it in completions: `GET, POST, …`.
     #[serde(default)]
     #[cfg_attr(test, ts(optional))]
     pub info: Option<String>,
+    /// A term using it, shown with it in completions: `@method:post`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub example: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -207,7 +211,7 @@ mod tests {
     use crate::parse;
 
     fn field(name: &str, kind: FieldKind, map: bool) -> FieldDef {
-        FieldDef { name: name.to_string(), kind, map, info: None }
+        FieldDef { name: name.to_string(), kind, map, info: None, example: None }
     }
 
     fn schema() -> Schema {

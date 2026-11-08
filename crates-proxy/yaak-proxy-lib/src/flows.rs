@@ -1,6 +1,7 @@
 use crate::bodies;
 use crate::db::{ProxyQueryManager, Stores};
 use crate::models::{Flow, FlowBody};
+use crate::query::{FlowColumns, FlowQuery};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use rusqlite::types::Value;
@@ -9,52 +10,19 @@ use ts_rs::TS;
 use yaak_database::UpsertModelInfo;
 use yaak_models::blob_manager::BlobManager;
 
-/// Which flows a listing or a HAR export covers. Every field narrows it; none is all of them.
+/// Which flows a listing or a HAR export covers: a search, and a page of it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(default, rename_all = "camelCase")]
 #[ts(export, export_to = "gen_rpc.ts")]
 pub struct FlowFilter {
-    /// Search terms, any case, each of which must match the URL (host, path or query), the
-    /// method, the status (`404`, `40`, `4xx`) or the content type: `stripe post 4xx`.
+    /// A search in the query language (`crate::query`): `stripe @status:4xx`,
+    /// `@host:*.github.com -@is:system`. None or blank covers every flow.
     #[ts(optional)]
-    pub q: Option<String>,
-    /// Part of the host, any case: `stripe` matches `api.stripe.com`.
-    #[ts(optional)]
-    pub host: Option<String>,
-    /// Only flows under one of these hosts or paths, as the app's sidebar names them:
-    /// `api.stripe.com` or `api.stripe.com/v1/charges`, with any port after the host. A host
-    /// written `*.github.com` is a site: `github.com` and every host below it.
-    #[ts(optional)]
-    pub under: Option<Vec<String>>,
-    /// Only flows from one of these apps: by bundle id, by path for a process outside an app
-    /// bundle, by name in any case (`slack`), or, for a process outside an app, by the folder
-    /// it ran in (`fieldwork`).
-    #[ts(optional)]
-    pub app: Option<Vec<String>>,
-    /// Only flows from a process that ran in one of these working directories: the whole path,
-    /// or its folder's name in any case (`fieldwork`). With `app`, a program in a folder.
-    #[ts(optional)]
-    pub cwd: Option<Vec<String>>,
-    /// Only flows from macOS's own daemons (true), or none of them (false), as [`is_system`]
-    /// tells them by their executable.
-    #[ts(optional)]
-    pub system: Option<bool>,
-    /// Only HTTPS connections tunnelled undecrypted (true), or none of them (false).
-    #[ts(optional)]
-    pub tunnelled: Option<bool>,
-    /// Only flows one of these groups covers, each judged on its own: several sidebar rows
-    /// selected, `@app:Slack @host:a.com OR @app:Chrome @host:b.com`, are two groups and not every
-    /// pairing of their apps and hosts. A group's `after`, `before` and `limit` do not apply. Not
-    /// carried by a query string.
-    #[ts(optional)]
-    pub any: Option<Vec<FlowFilter>>,
-    /// The method, any case.
-    #[ts(optional)]
-    pub method: Option<String>,
-    /// A status (`404`), a class of them (`4xx`), or `error` for flows that failed, gRPC calls
-    /// that ended with a status other than OK among them.
-    #[ts(optional)]
-    pub status: Option<String>,
+    pub query: Option<String>,
+    /// Leaves out macOS's own daemons, as hiding System does, unless the query says
+    /// `@is:system` itself.
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_system: bool,
     /// At most this many flows, the newest.
     #[ts(optional, type = "number")]
     pub limit: Option<usize>,
@@ -69,30 +37,24 @@ pub struct FlowFilter {
 }
 
 impl FlowFilter {
-    /// The filter from a query string's `q`, `host`, `under`, `app`, `cwd`, `system`, `method`,
-    /// `status`, `limit`, `after` and `before`. `under`, `app` and `cwd` may repeat.
+    /// A filter for a search alone.
+    pub fn search(query: impl Into<String>) -> Self {
+        Self { query: Some(query.into()), ..Self::default() }
+    }
+
+    /// The filter from a query string's `query`, `hide_system`, `limit`, `after` and `before`.
     pub fn from_query(query: &str) -> Result<Self, String> {
         let mut filter = Self::default();
         for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
             let value = Some(value.into_owned()).filter(|v| !v.is_empty());
             match key.as_ref() {
-                "q" => filter.q = value,
-                "host" => filter.host = value,
-                "under" => filter.under.get_or_insert_default().extend(value),
-                "app" => filter.app.get_or_insert_default().extend(value),
-                "cwd" => filter.cwd.get_or_insert_default().extend(value),
-                "system" => {
-                    filter.system = value
-                        .map(|v| v.parse().map_err(|_| format!("Invalid system {v:?}")))
+                "query" => filter.query = value,
+                "hide_system" => {
+                    filter.hide_system = value
+                        .map(|v| v.parse().map_err(|_| format!("Invalid hide_system {v:?}")))
                         .transpose()?
+                        .unwrap_or_default()
                 }
-                "tunnelled" => {
-                    filter.tunnelled = value
-                        .map(|v| v.parse().map_err(|_| format!("Invalid tunnelled {v:?}")))
-                        .transpose()?
-                }
-                "method" => filter.method = value,
-                "status" => filter.status = value,
                 "after" => filter.after = value,
                 "before" => filter.before = value,
                 "limit" => {
@@ -109,30 +71,10 @@ impl FlowFilter {
     pub fn to_query(&self) -> String {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         let limit = self.limit.map(|l| l.to_string());
-        let system = self.system.map(|s| s.to_string());
-        let tunnelled = self.tunnelled.map(|t| t.to_string());
+        let hide_system = self.hide_system.then(|| "true".to_string());
         for (key, value) in [
-            ("q", &self.q),
-            ("host", &self.host),
-            ("system", &system),
-            ("tunnelled", &tunnelled),
-        ] {
-            if let Some(value) = value {
-                query.append_pair(key, value);
-            }
-        }
-        for (key, values) in [
-            ("under", &self.under),
-            ("app", &self.app),
-            ("cwd", &self.cwd),
-        ] {
-            for value in values.iter().flatten() {
-                query.append_pair(key, value);
-            }
-        }
-        for (key, value) in [
-            ("method", &self.method),
-            ("status", &self.status),
+            ("query", &self.query),
+            ("hide_system", &hide_system),
             ("limit", &limit),
             ("after", &self.after),
             ("before", &self.before),
@@ -144,166 +86,21 @@ impl FlowFilter {
         query.finish()
     }
 
+    /// The search, prepared to run now.
+    pub fn flow_query(&self) -> FlowQuery {
+        FlowQuery::new(self.query.as_deref().unwrap_or_default(), self.hide_system)
+    }
+
     /// Narrows more than `after`, `before` and `limit` do, so it covers fewer than all flows.
     pub fn narrows(&self) -> bool {
-        let given = |v: &Option<String>| v.as_deref().is_some_and(|v| !v.trim().is_empty());
-        given(&self.q)
-            || given(&self.host)
-            || given(&self.method)
-            || given(&self.status)
-            || self.under.is_some()
-            || self.app.is_some()
-            || self.cwd.is_some()
-            || self.system.is_some()
-            || self.tunnelled.is_some()
-            || self.any.as_ref().is_some_and(|groups| groups.iter().any(FlowFilter::narrows))
+        !self.flow_query().is_empty()
     }
 
-    /// The SQL condition for every field but `after`, `before` and `limit`, and its parameters,
-    /// for the database `conn` reads, which may be from before the folder or gRPC columns, when
-    /// read without migrating.
+    /// The SQL condition for the search, and its parameters, for the database `conn` reads,
+    /// which may be from before later columns, when read without migrating.
     fn condition_in(&self, conn: &rusqlite::Connection) -> (String, Vec<Value>) {
-        let columns = Columns {
-            cwd: has_column(conn, "client_cwd"),
-            grpc: has_column(conn, "grpc_status"),
-            tunnelled: has_column(conn, "tunnelled"),
-        };
-        self.condition(columns)
+        self.flow_query().sql(&FlowColumns::of(conn))
     }
-
-    /// [`Self::condition_in`], told which of the later columns the database has.
-    fn condition(&self, columns: Columns) -> (String, Vec<Value>) {
-        let Columns { cwd: has_cwd, grpc, tunnelled } = columns;
-        let mut sql = String::from("1");
-        let mut params: Vec<Value> = Vec::new();
-        for term in self.q.iter().flat_map(|q| q.split_whitespace()) {
-            let term = term.to_lowercase();
-            sql.push_str(
-                " AND (instr(lower(url), ?) > 0 OR lower(method) = ? \
-                OR instr(lower(content_type), ?) > 0",
-            );
-            params.extend([
-                term.clone().into(),
-                term.clone().into(),
-                term.clone().into(),
-            ]);
-            if let Some(status) = status_condition(&term, &mut params) {
-                sql.push_str(" OR ");
-                sql.push_str(&status);
-            }
-            sql.push(')');
-        }
-        if let Some(host) = self.host.as_deref().filter(|h| !h.is_empty()) {
-            sql.push_str(&format!(" AND instr(lower({HOST_SQL}), ?) > 0"));
-            params.push(host.to_lowercase().into());
-        }
-        if let Some(under) = &self.under {
-            // The node itself, or anything below it, by the sidebar's rules.
-            let mut any = Vec::new();
-            for node in under {
-                if let Some(site) = site_of_node(node) {
-                    any.push("under_site(url, ?)");
-                    params.push(site.into());
-                    continue;
-                }
-                let node = normalize_node(node);
-                any.push("(sidebar_path(url) = ? OR substr(sidebar_path(url), 1, ?) = ?)");
-                let below = format!("{node}/");
-                params.extend([
-                    node.into(),
-                    (below.chars().count() as i64).into(),
-                    below.into(),
-                ]);
-            }
-            let any = if any.is_empty() { "0".to_string() } else { any.join(" OR ") };
-            sql.push_str(&format!(" AND ({any})"));
-        }
-        if let Some(apps) = &self.app {
-            let marks = vec!["?"; apps.len()].join(", ");
-            sql.push_str(&format!(
-                " AND (coalesce(client_bundle_id, client_path) IN ({marks}) \
-                OR lower(client_name) IN ({marks})"
-            ));
-            params.extend(apps.iter().map(|a| a.clone().into()));
-            params.extend(apps.iter().map(|a| a.to_lowercase().into()));
-            if has_cwd {
-                sql.push_str(&format!(
-                    " OR (client_bundle_id IS NULL AND lower(folder_name(client_cwd)) IN ({marks}))"
-                ));
-                params.extend(apps.iter().map(|a| a.to_lowercase().into()));
-            }
-            sql.push(')');
-        }
-        if let Some(cwds) = &self.cwd {
-            if has_cwd && !cwds.is_empty() {
-                let marks = vec!["?"; cwds.len()].join(", ");
-                sql.push_str(&format!(
-                    " AND (client_cwd IN ({marks}) OR lower(folder_name(client_cwd)) IN ({marks}))"
-                ));
-                params.extend(cwds.iter().map(|c| c.clone().into()));
-                params.extend(cwds.iter().map(|c| c.to_lowercase().into()));
-            } else {
-                // None, or a database from before the column, which has no folders.
-                sql.push_str(" AND 0");
-            }
-        }
-        match self.system {
-            Some(true) => sql.push_str(" AND is_system(client_bundle_id, client_path)"),
-            Some(false) => sql.push_str(" AND NOT is_system(client_bundle_id, client_path)"),
-            None => {}
-        }
-        match (self.tunnelled, tunnelled) {
-            (Some(true), true) => sql.push_str(" AND tunnelled"),
-            (Some(false), true) => sql.push_str(" AND NOT tunnelled"),
-            // A database from before tunnelled flows has none.
-            (Some(true), false) => sql.push_str(" AND 0"),
-            _ => {}
-        }
-        // Each group whole, then any of them.
-        if let Some(groups) = self.any.as_ref().filter(|g| !g.is_empty()) {
-            let mut any = Vec::new();
-            for group in groups {
-                let (condition, group_params) = group.condition(columns);
-                any.push(format!("({condition})"));
-                params.extend(group_params);
-            }
-            sql.push_str(&format!(" AND ({})", any.join(" OR ")));
-        }
-        if let Some(method) = self.method.as_deref().filter(|m| !m.is_empty()) {
-            sql.push_str(" AND lower(method) = ?");
-            params.push(method.to_lowercase().into());
-        }
-        match self.status.as_deref().map(str::trim) {
-            None | Some("") => {}
-            // A gRPC call that ended with a status other than OK failed too.
-            Some(s) if s.eq_ignore_ascii_case("error") && grpc => {
-                sql.push_str(" AND (error IS NOT NULL OR coalesce(grpc_status, 0) != 0)")
-            }
-            Some(s) if s.eq_ignore_ascii_case("error") => sql.push_str(" AND error IS NOT NULL"),
-            // A whole status or a class, not the start of one as a search term may be.
-            Some(s) if s.len() == 3 => match status_condition(&s.to_ascii_lowercase(), &mut params)
-            {
-                Some(status) => {
-                    sql.push_str(" AND ");
-                    sql.push_str(&status);
-                }
-                None => sql.push_str(" AND 0"),
-            },
-            Some(_) => sql.push_str(" AND 0"),
-        }
-        (sql, params)
-    }
-}
-
-/// Which of the columns later migrations added a database has, as one opened read-only before
-/// they ran may not.
-#[derive(Clone, Copy)]
-struct Columns {
-    /// The folder a program ran in.
-    cwd: bool,
-    /// gRPC statuses.
-    grpc: bool,
-    tunnelled: bool,
 }
 
 /// The host and port of `url`, in SQL: what follows `://` up to the first `/`, `?` or `#`.
@@ -339,38 +136,6 @@ pub fn sidebar_path(url: &str) -> String {
         key.push_str(segment);
     }
     key
-}
-
-/// A sidebar node as `sidebar_path` writes it, its host lowercased.
-fn normalize_node(node: &str) -> String {
-    match node.split_once('/') {
-        Some((host, path)) => format!("{}/{path}", host.to_ascii_lowercase()),
-        None => node.to_ascii_lowercase(),
-    }
-}
-
-/// The site a sidebar node names, `github.com` for `*.github.com`, lowercased. None for a host or
-/// a path.
-fn site_of_node(node: &str) -> Option<String> {
-    let site = node.strip_prefix("*.")?;
-    (!site.is_empty() && !site.contains('/')).then(|| site.to_ascii_lowercase())
-}
-
-/// `url`'s host, without its port, is `site` or a host below it: `api.github.com` is under
-/// `github.com`.
-pub fn under_site(url: &str, site: &str) -> bool {
-    let path = sidebar_path(url);
-    let host = path.split('/').next().unwrap_or_default();
-    let host = strip_port(host);
-    host == site || host.strip_suffix(site).is_some_and(|rest| rest.ends_with('.'))
-}
-
-/// `host` without a `:port` after it, keeping an IPv6 address's brackets.
-fn strip_port(host: &str) -> &str {
-    if host.starts_with('[') {
-        return host.find(']').map_or(host, |end| &host[..=end]);
-    }
-    host.rsplit_once(':').map_or(host, |(h, _)| h)
 }
 
 /// The last part of a directory's path, `fieldwork` for `/Users/me/src/fieldwork`. None for the
@@ -418,26 +183,6 @@ pub fn is_system(bundle_id: Option<&str>, path: Option<&str>) -> bool {
     SYSTEM_DIRS.iter().any(|dir| path.starts_with(dir)) || SYSTEM_PROGRAMS.contains(&name)
 }
 
-/// The SQL condition for a status term: `404` exactly, `40` as the start of one, or a class
-/// such as `4xx`. None when the term is not one.
-fn status_condition(term: &str, params: &mut Vec<Value>) -> Option<String> {
-    if let Some(class) = term.strip_suffix("xx")
-        && let Ok(class @ 1..=9) = class.parse::<i64>()
-    {
-        params.push(class.into());
-        return Some("status / 100 = ?".into());
-    }
-    if term.is_empty() || term.len() > 3 || !term.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    if term.len() == 3 {
-        params.push(term.parse::<i64>().ok()?.into());
-        return Some("status = ?".into());
-    }
-    params.push(format!("{term}%").into());
-    Some("CAST(status AS TEXT) LIKE ?".into())
-}
-
 /// The flows `filter` covers, newest first: by start, then by id. Reads the table in that order
 /// through its index and stops at the limit, so a page of a common match costs the same however
 /// many flows there are.
@@ -460,13 +205,6 @@ pub fn page(
         tx.commit().map_err(|e| e.to_string())?;
         Ok((flows, total, matching))
     })
-}
-
-/// The database has the gRPC status column, added by a later migration.
-/// The flows table has `column`: a database opened read-only before its migrations have run may
-/// not.
-fn has_column(conn: &rusqlite::Connection, column: &str) -> bool {
-    conn.prepare(&format!("SELECT {column} FROM flows LIMIT 0")).is_ok()
 }
 
 fn list_in(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<Vec<Flow>, String> {
@@ -509,6 +247,40 @@ fn count_matching(conn: &rusqlite::Connection, filter: &FlowFilter) -> Result<us
     conn.query_row(&sql, rusqlite::params_from_iter(params), |r| r.get::<_, i64>(0))
         .map(|n| n as usize)
         .map_err(|e| e.to_string())
+}
+
+/// How many flows each filter's search covers, whatever its limit, read from one snapshot.
+pub fn count_each(db: &ProxyQueryManager, filters: &[FlowFilter]) -> Result<Vec<usize>, String> {
+    db.with_conn(|c| {
+        let tx = c.conn().resolve().unchecked_transaction().map_err(|e| e.to_string())?;
+        let counts = filters.iter().map(|f| count_matching(&tx, f)).collect::<Result<_, _>>()?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(counts)
+    })
+}
+
+/// The flows of `ids` that `filter`'s search covers, in any order. Cleared ones are left out.
+pub fn matching_ids(
+    db: &ProxyQueryManager,
+    filter: &FlowFilter,
+    ids: &[String],
+) -> Result<Vec<String>, String> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    db.with_conn(|c| {
+        let conn = c.conn().resolve();
+        let (condition, mut params) = filter.condition_in(conn);
+        let marks = vec!["?"; ids.len()].join(", ");
+        let mut sql = format!("SELECT id FROM flows WHERE ({condition}) AND id IN ({marks})");
+        params.extend(ids.iter().map(|id| Value::from(id.clone())));
+        push_clear_mark(conn, &mut sql, &mut params);
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(rusqlite::params_from_iter(params), |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<String>, _>>().map_err(|e| e.to_string())
+    })
 }
 
 /// Leaves out cleared flows, when a clear is pending; otherwise adds nothing, so SQLite keeps its
@@ -1031,6 +803,13 @@ mod tests {
         list(db, &filter).unwrap().into_iter().map(|f| f.url).collect()
     }
 
+    /// The urls a search covers, sorted.
+    fn found(db: &ProxyQueryManager, query: &str) -> Vec<String> {
+        let mut found = urls(db, FlowFilter::search(query));
+        found.sort();
+        found
+    }
+
     #[test]
     fn filters() {
         let (_dir, db) = db_of(vec![
@@ -1038,18 +817,20 @@ mod tests {
             flow("http://example.com/missing", "GET", Some(404), None),
             flow("https://down.example.com/", "GET", None, Some("refused")),
         ]);
-        let by = |filter: FlowFilter| urls(&db, filter).len();
-        assert_eq!(by(FlowFilter::default()), 3);
-        assert_eq!(by(FlowFilter { host: Some("STRIPE".into()), ..Default::default() }), 1);
-        assert_eq!(by(FlowFilter { host: Some("example.com".into()), ..Default::default() }), 2);
-        assert_eq!(by(FlowFilter { host: Some("charges".into()), ..Default::default() }), 0);
-        assert_eq!(by(FlowFilter { host: Some("8443".into()), ..Default::default() }), 1);
-        assert_eq!(by(FlowFilter { method: Some("get".into()), ..Default::default() }), 2);
-        assert_eq!(by(FlowFilter { status: Some("404".into()), ..Default::default() }), 1);
-        assert_eq!(by(FlowFilter { status: Some("2xx".into()), ..Default::default() }), 1);
-        assert_eq!(by(FlowFilter { status: Some("5XX".into()), ..Default::default() }), 0);
-        assert_eq!(by(FlowFilter { status: Some("40".into()), ..Default::default() }), 0);
-        assert_eq!(by(FlowFilter { status: Some("error".into()), ..Default::default() }), 1);
+        let by = |query: &str| urls(&db, FlowFilter::search(query)).len();
+        assert_eq!(urls(&db, FlowFilter::default()).len(), 3);
+        // A host whole, with or without its port; a part of one with wildcards.
+        assert_eq!(by("@host:API.STRIPE.COM"), 1);
+        assert_eq!(by("@host:api.stripe.com:8443"), 1);
+        assert_eq!(by("@host:stripe"), 0);
+        assert_eq!(by("@host:*stripe*"), 1);
+        assert_eq!(by("@host:*.example.com"), 2);
+        assert_eq!(by("@method:get"), 2);
+        assert_eq!(by("@status:404"), 1);
+        assert_eq!(by("@status:2xx"), 1);
+        assert_eq!(by("@status:5XX"), 0);
+        assert_eq!(by("@status:40"), 0);
+        assert_eq!(by("@is:error"), 1);
     }
 
     #[test]
@@ -1067,12 +848,7 @@ mod tests {
             },
             flow("http://localhost:3000/health", "HEAD", Some(503), None),
         ]);
-        let search = |q: &str| {
-            let filter = FlowFilter { q: Some(q.into()), ..Default::default() };
-            let mut found = urls(&db, filter);
-            found.sort();
-            found
-        };
+        let search = |q: &str| found(&db, q);
         let stripe = "https://api.stripe.com/v1/charges?customer=cus_9";
         let github = "https://api.github.com/repos/yaak";
         let logo = "https://images.ctfassets.net/logo.png";
@@ -1081,28 +857,28 @@ mod tests {
         assert_eq!(search("STRIPE"), vec![stripe]);
         assert_eq!(search("/repos/"), vec![github]);
         assert_eq!(search("cus_9"), vec![stripe]);
-        // The method, whole.
+        // The method and the status, any part of them.
         assert_eq!(search("head"), vec![health]);
-        assert_eq!(search("ead"), Vec::<&str>::new());
-        // A status, its start, or its class.
+        assert_eq!(search("ead"), vec![health]);
         assert_eq!(search("404"), vec![github]);
         assert_eq!(search("50"), vec![health]);
-        assert_eq!(search("2xx"), vec![stripe, logo]);
         // The content type.
         assert_eq!(search("png"), vec![logo]);
         assert_eq!(search("json"), vec![github, stripe]);
         // Every term must match, each anywhere.
         assert_eq!(search("json get"), vec![github]);
-        assert_eq!(search("  json   2xx "), vec![stripe]);
-        assert_eq!(search("json 5xx"), Vec::<&str>::new());
+        assert_eq!(search("  json   @status:2xx "), vec![stripe]);
+        assert_eq!(search("json @status:5xx"), Vec::<&str>::new());
         // `%` and `_` are plain characters, not patterns.
         assert_eq!(search("%"), Vec::<&str>::new());
         assert_eq!(search("cus_"), vec![stripe]);
         assert_eq!(search(""), vec![health, github, stripe, logo]);
     }
 
+    /// The terms a sidebar row writes cover what is under it: a host, with any port, and a
+    /// path with what is below it.
     #[test]
-    fn under_matches_a_host_or_a_path_as_the_sidebar_does() {
+    fn hosts_and_paths_as_the_sidebar_writes_them() {
         let (_dir, db) = db_of(vec![
             flow("https://api.stripe.com/v1/charges", "GET", Some(200), None),
             flow("https://api.stripe.com/v1/charges/ch_1?expand=x", "GET", Some(200), None),
@@ -1110,29 +886,38 @@ mod tests {
             flow("https://api.stripe.com:8443/v1/charges", "GET", Some(200), None),
             flow("http://api.stripe.com", "GET", Some(200), None),
             flow("https://api.stripe.community/", "GET", Some(200), None),
-            flow("https://example.com/v1//users", "GET", Some(200), None),
             flow("http://x.com:80/a", "GET", Some(200), None),
             flow("https://x.com:443/a", "GET", Some(200), None),
+            flow("https://example.com/v1//users", "GET", Some(200), None),
         ]);
-        let under = |nodes: &[&str]| {
-            let nodes = nodes.iter().map(|n| n.to_string()).collect();
-            urls(&db, FlowFilter { under: Some(nodes), ..Default::default() }).len()
-        };
-        // A host on another port is a node of its own, as in the sidebar.
-        assert_eq!(under(&["api.stripe.com"]), 4);
-        assert_eq!(under(&["api.stripe.com:8443"]), 1);
-        assert_eq!(under(&["api.stripe.com/v1/charges"]), 2);
-        // Empty segments and default ports are left out, as the sidebar leaves them.
-        assert_eq!(under(&["example.com/v1/users"]), 1);
-        assert_eq!(under(&["x.com/a"]), 2);
-        assert_eq!(under(&["api.stripe.com/v1/charges", "example.com"]), 3);
-        assert_eq!(under(&[]), 0);
-        // The sidebar lowercases hosts; paths keep their case.
-        assert_eq!(under(&["API.stripe.com/v1/charges"]), 2);
-        assert_eq!(under(&["api.stripe.com/V1/charges"]), 0);
+        let count = |query: &str| found(&db, query).len();
+        assert_eq!(count("@host:api.stripe.com"), 5);
+        assert_eq!(count("@host:api.stripe.com:8443"), 1);
+        assert_eq!(count("@host:api.stripe.com @path:/v1/charges/*"), 3);
+        assert_eq!(count("@host:x.com @path:/a"), 2);
+        assert_eq!(count("@host:api.stripe.com @path:/v1/charges/* OR @host:x.com"), 5);
+        assert_eq!(count("@host:API.stripe.com @path:/V1/charges/*"), 3);
+        // A path with empty segments is found by the sidebar's row for it.
+        assert_eq!(count("@host:example.com @path:/v1/users/*"), 1);
     }
 
     /// The cases `lib/search.test.ts` checks `sidebarPath` against, so the two agree.
+    /// A search with `OR` at its top still pages and leaves out cleared flows.
+    #[test]
+    fn a_top_level_or_keeps_to_the_page_and_the_clear() {
+        let (_dir, db) = db_of(vec![
+            flow("https://a.com/1", "GET", Some(200), None),
+            flow("https://a.com/2", "GET", Some(404), None),
+            flow("https://a.com/3", "GET", Some(200), None),
+        ]);
+        let query = "@status:200 OR @status:404";
+        let before = FlowFilter { before: Some("fl_001".into()), ..FlowFilter::search(query) };
+        assert_eq!(urls(&db, before), vec!["https://a.com/1"]);
+        clear(&db).unwrap();
+        assert!(urls(&db, FlowFilter::search(query)).is_empty());
+        assert_eq!(page(&db, &FlowFilter::search(query)).unwrap().2, Some(0));
+    }
+
     #[test]
     fn sidebar_path_rules() {
         for (url, path) in [
@@ -1163,18 +948,15 @@ mod tests {
             from(None, "/usr/bin/curl"),
             flow("https://example.com/", "GET", Some(200), None),
         ]);
-        let app = |apps: &[&str]| {
-            let apps = apps.iter().map(|a| a.to_string()).collect();
-            urls(&db, FlowFilter { app: Some(apps), ..Default::default() }).len()
-        };
-        assert_eq!(app(&["com.google.Chrome"]), 2);
-        assert_eq!(app(&["/usr/bin/curl"]), 1);
-        assert_eq!(app(&["/Applications/Google Chrome.app"]), 0);
-        assert_eq!(app(&["com.google.Chrome", "/usr/bin/curl"]), 3);
+        let app = |query: &str| found(&db, query).len();
+        assert_eq!(app("@app:com.google.Chrome"), 2);
+        assert_eq!(app("@app:/usr/bin/curl"), 1);
+        assert_eq!(app("@app:\"/Applications/Google Chrome.app\""), 0);
+        assert_eq!(app("@app:com.google.Chrome OR @app:/usr/bin/curl"), 3);
     }
 
-    /// A program in a folder: its working directory by the whole path, or its folder's name in
-    /// any case, along with whatever else the filter asks.
+    /// A program in a folder: its working directory by the whole path, or its folder's name,
+    /// any case, along with whatever else the search asks.
     #[test]
     fn cwd_matches_a_path_or_a_folder_name() {
         let node_in = |cwd: Option<&str>| Flow {
@@ -1191,22 +973,14 @@ mod tests {
             Flow { client_cwd: Some("/tmp/fieldwork".into()), ..node_in(None) },
             Flow { client_path: Some("/usr/bin/curl".into()), ..node_in(Some("/tmp/ledger")) },
         ]);
-        let count = |app: Option<&str>, cwds: &[&str]| {
-            let cwd = Some(cwds.iter().map(|c| c.to_string()).collect());
-            let app = app.map(|a| vec![a.to_string()]);
-            urls(&db, FlowFilter { app, cwd, ..Default::default() }).len()
-        };
-        assert_eq!(count(None, &["/Users/ada/Workspace/fieldwork"]), 2, "the whole path");
-        assert_eq!(count(None, &["/users/ada/workspace/fieldwork"]), 0, "a path exactly");
-        assert_eq!(count(None, &["FieldWork"]), 3, "a folder name, any case");
-        assert_eq!(count(None, &["fieldwork", "ledger"]), 5, "any of them");
-        assert_eq!(count(Some("/usr/local/bin/node"), &["ledger"]), 1, "and the program");
-        assert_eq!(count(Some("/usr/bin/curl"), &["ledger"]), 1);
-        assert_eq!(count(None, &[]), 0);
-        let query = FlowFilter { cwd: Some(vec!["a".into(), "/b".into()]), ..Default::default() };
-        assert_eq!(query.to_query(), "cwd=a&cwd=%2Fb");
-        assert_eq!(FlowFilter::from_query(&query.to_query()).unwrap(), query);
-        assert!(query.narrows());
+        let count = |query: &str| found(&db, query).len();
+        assert_eq!(count("@cwd:/Users/ada/Workspace/fieldwork"), 2, "the whole path");
+        assert_eq!(count("@cwd:/users/ada/workspace/fieldwork"), 2, "any case");
+        assert_eq!(count("@cwd:FieldWork"), 3, "a folder name");
+        assert_eq!(count("@cwd:fieldwork OR @cwd:ledger"), 5, "any of them");
+        assert_eq!(count("@app:/usr/local/bin/node @cwd:ledger"), 1, "and the program");
+        assert_eq!(count("@app:/usr/bin/curl @cwd:ledger"), 1);
+        assert_eq!(count("@cwd:work"), 0, "whole");
     }
 
     #[test]
@@ -1221,7 +995,7 @@ mod tests {
                 .collect(),
         );
         let search = |before: Option<String>| FlowFilter {
-            q: Some("post".into()),
+            query: Some("post".into()),
             before,
             limit: Some(4),
             ..Default::default()
@@ -1245,8 +1019,7 @@ mod tests {
         let (_dir, db) = db_of(vec![]);
         let plan: Vec<String> = db.with_conn(|c| {
             let conn = c.conn().resolve();
-            let (condition, params) =
-                FlowFilter { q: Some("stripe".into()), ..Default::default() }.condition_in(conn);
+            let (condition, params) = FlowFilter::search("stripe @status:>=400").condition_in(conn);
             let sql = format!(
                 "EXPLAIN QUERY PLAN SELECT * FROM flows WHERE {condition} \
                 ORDER BY started_at DESC, id DESC LIMIT 500"
@@ -1322,7 +1095,7 @@ mod tests {
         // The limit counts flows the filter keeps.
         let ok = FlowFilter {
             before: Some("fl_e".into()),
-            status: Some("2xx".into()),
+            query: Some("@status:2xx".into()),
             limit: Some(2),
             ..Default::default()
         };
@@ -1380,7 +1153,7 @@ mod tests {
         write_flow("fl_d");
         assert_eq!(ids(&FlowFilter::default()), vec!["fl_d"]);
         assert_eq!(find(&db, "fl_d").map(|f| f.number), Some(4));
-        let narrowed = FlowFilter { q: Some("example".into()), ..Default::default() };
+        let narrowed = FlowFilter::search("example");
         assert_eq!(page(&db, &narrowed).unwrap().1, 1);
 
         // Bodies that fail to delete keep their flows, to delete again.
@@ -1540,49 +1313,39 @@ mod tests {
             ids.sort();
             ids
         };
-        let app = |a: &str| FlowFilter { app: Some(vec![a.into()]), ..Default::default() };
-        assert_eq!(ids(app("slack")), vec!["fl_slack"]);
-        assert_eq!(ids(app("com.tinyspeck.slackmacgap")), vec!["fl_slack"]);
-        assert_eq!(ids(app("Fieldwork")), vec!["fl_node"]);
-        assert_eq!(ids(app("/opt/homebrew/bin/node")), vec!["fl_node"]);
-        let under = |n: &str| FlowFilter { under: Some(vec![n.into()]), ..Default::default() };
-        assert_eq!(ids(under("*.github.com")), vec!["fl_daemon", "fl_node"]);
-        assert_eq!(ids(under("api.github.com")), vec!["fl_node"]);
-        let system = |s| FlowFilter { system: Some(s), ..Default::default() };
-        assert_eq!(ids(system(true)), vec!["fl_daemon"]);
-        assert_eq!(ids(system(false)), vec!["fl_node", "fl_none", "fl_slack"]);
+        let ids = |query: &str| ids(FlowFilter::search(query));
+        assert_eq!(ids("@app:slack"), vec!["fl_slack"]);
+        assert_eq!(ids("@app:com.tinyspeck.slackmacgap"), vec!["fl_slack"]);
+        assert_eq!(ids("@app:Fieldwork"), vec!["fl_node"]);
+        assert_eq!(ids("@app:/opt/homebrew/bin/node"), vec!["fl_node"]);
+        assert_eq!(ids("@host:*.github.com"), vec!["fl_daemon", "fl_node"]);
+        assert_eq!(ids("@host:api.github.com"), vec!["fl_node"]);
+        assert_eq!(ids("@is:system"), vec!["fl_daemon"]);
+        assert_eq!(ids("-@is:system"), vec!["fl_node", "fl_none", "fl_slack"]);
 
         // Groups, as two sidebar rows under different apps write them, each judged whole:
         // flattened, the apps and hosts would pair across rows and match both flows.
-        let group = |a: &str, n: &str| FlowFilter {
-            app: Some(vec![a.into()]),
-            under: Some(vec![n.into()]),
-            ..Default::default()
-        };
-        let crossed = FlowFilter {
-            any: Some(vec![
-                group("fieldwork", "github.com"),
-                group("nsurlsessiond", "api.github.com"),
-            ]),
-            ..Default::default()
-        };
-        assert_eq!(ids(crossed.clone()), Vec::<String>::new());
-        assert_eq!(page(&db, &crossed).unwrap().2, Some(0));
-        let flattened = FlowFilter {
-            app: Some(vec!["fieldwork".into(), "nsurlsessiond".into()]),
-            under: Some(vec!["github.com".into(), "api.github.com".into()]),
-            ..Default::default()
-        };
+        let crossed = "@app:fieldwork @host:github.com OR @app:nsurlsessiond @host:api.github.com";
+        assert_eq!(ids(crossed), Vec::<String>::new());
+        assert_eq!(page(&db, &FlowFilter::search(crossed)).unwrap().2, Some(0));
+        let flattened = "(@app:fieldwork OR @app:nsurlsessiond) \
+            (@host:github.com OR @host:api.github.com)";
         assert_eq!(ids(flattened), vec!["fl_daemon", "fl_node"]);
-        let either = FlowFilter {
-            any: Some(vec![
-                group("fieldwork", "api.github.com"),
-                FlowFilter { app: Some(vec!["slack".into()]), ..Default::default() },
-            ]),
-            q: Some("https".into()),
-            ..Default::default()
-        };
+        let either = "(@app:fieldwork @host:api.github.com OR @app:slack) https";
         assert_eq!(ids(either), vec!["fl_node", "fl_slack"]);
+
+        // Hiding System leaves out its daemons, unless the search names them.
+        let hidden = |query: &str| {
+            let filter = FlowFilter { hide_system: true, ..FlowFilter::search(query) };
+            let mut ids: Vec<String> =
+                list(&db, &filter).unwrap().into_iter().map(|f| f.id).collect();
+            ids.sort();
+            ids
+        };
+        assert_eq!(hidden(""), vec!["fl_node", "fl_none", "fl_slack"]);
+        assert_eq!(hidden("@host:*.github.com"), vec!["fl_node"]);
+        assert_eq!(hidden("@is:system"), vec!["fl_daemon"]);
+        assert_eq!(hidden("@host:*.github.com OR @is:SYSTEM"), vec!["fl_daemon", "fl_node"]);
     }
 
     #[test]
@@ -1603,35 +1366,24 @@ mod tests {
         assert!(!is_system(None, None));
         assert_eq!(folder_name(Some("/Users/me/src/fieldwork/")), Some("fieldwork"));
         assert_eq!(folder_name(Some("/")), None);
-        assert!(under_site("https://api.github.com:8443/x", "github.com"));
-        assert!(!under_site("https://notgithub.com/", "github.com"));
     }
 
     #[test]
     fn query_round_trip() {
         let filter = FlowFilter {
-            q: Some("post json".into()),
-            host: Some("api.stripe.com".into()),
-            under: Some(vec!["api.stripe.com/v1".into(), "example.com".into()]),
-            app: Some(vec!["com.google.Chrome".into()]),
-            status: Some("4xx".into()),
+            query: Some("post @status:4xx".into()),
+            hide_system: true,
             limit: Some(20),
             ..Default::default()
         };
-        assert_eq!(
-            filter.to_query(),
-            "q=post+json&host=api.stripe.com&under=api.stripe.com%2Fv1&under=example.com\
-            &app=com.google.Chrome&status=4xx&limit=20"
-        );
+        assert_eq!(filter.to_query(), "query=post+%40status%3A4xx&hide_system=true&limit=20");
         assert_eq!(FlowFilter::from_query(&filter.to_query()).unwrap(), filter);
         assert_eq!(FlowFilter::from_query("").unwrap(), FlowFilter::default());
         assert!(FlowFilter::from_query("limit=lots").is_err());
-
-        let tunnelled = FlowFilter { tunnelled: Some(true), ..Default::default() };
-        assert_eq!(tunnelled.to_query(), "tunnelled=true");
-        assert_eq!(FlowFilter::from_query("tunnelled=true").unwrap(), tunnelled);
-        assert!(tunnelled.narrows());
-        assert!(FlowFilter::from_query("tunnelled=maybe").is_err());
+        assert!(FlowFilter::from_query("hide_system=maybe").is_err());
+        assert!(filter.narrows());
+        assert!(FlowFilter { hide_system: true, ..Default::default() }.narrows());
+        assert!(!FlowFilter::search("  ").narrows());
     }
 
     #[test]

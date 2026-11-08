@@ -1,20 +1,13 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import type { DecryptSubject } from "./decrypt";
-import {
-  appKeyOf,
-  folderOf,
-  formatFieldFilter,
-  isSystemFlow,
-  runtimeFolderOf,
-  sidebarPath,
-  siteOf,
-  tokenize,
-} from "./search";
+import { fieldTerm, pathTerm, siteTerm, termKeys } from "./query";
+import { appKeyOf, folderOf, isSystemFlow, runtimeFolderOf, sidebarPath, siteOf } from "./search";
 
 export type SidebarKind =
   | "all"
   | "tunnelled"
+  | "saved"
   | "group"
   | "app"
   | "folder"
@@ -23,8 +16,8 @@ export type SidebarKind =
   | "path";
 
 /**
- * A row of the sidebar: All traffic, a group, an app, a program's working directory, or a site,
- * host or path under one
+ * A row of the sidebar: All traffic, a saved search, a group, an app, a program's working
+ * directory, or a site, host or path under one
  */
 export interface SidebarItem {
   id: string;
@@ -42,10 +35,21 @@ export interface SidebarItem {
   query: string;
   /** What Decrypt in the row's menu decrypts: its host, site or app */
   decrypt?: DecryptSubject;
+  /** The saved search a Saved row is, for renaming and deleting it */
+  savedId?: string;
+}
+
+/** A saved search as the sidebar lists it, with how many flows it covers */
+export interface SavedRow {
+  id: string;
+  name: string;
+  query: string;
+  count: number;
 }
 
 /** The ids of All traffic and the groups */
 export const ALL_ID = "all";
+export const SAVED_ID = "saved";
 export const APPS_ID = "apps";
 export const DOMAINS_ID = "domains";
 export const SYSTEM_ID = "system";
@@ -83,13 +87,13 @@ function placeOf(flow: Flow): Place {
   const [host = "", ...segments] = schemeless ? [path] : path.split("/");
   const site = siteOf(host);
   const app = appKeyOf(flow);
-  const hostQuery = formatFieldFilter("host", host);
+  const hostQuery = fieldTerm("host", host);
   const rows: PlaceRow[] = [
     {
       id: `site:${site}`,
       kind: "site",
       label: site,
-      query: formatFieldFilter("host", `*.${site}`),
+      query: siteTerm(site),
       decrypt: { kind: "site", site },
     },
     {
@@ -107,7 +111,7 @@ function placeOf(flow: Flow): Place {
       id: `path:${host}${p}`,
       kind: "path",
       label: `/${segment}`,
-      query: `${hostQuery} ${formatFieldFilter("path", p)}`,
+      query: `${hostQuery} ${pathTerm(p)}`,
     });
   }
   const system = isSystemFlow(flow);
@@ -123,7 +127,7 @@ function placeOf(flow: Flow): Place {
       }));
     } else {
       const folderId = `app:${app}|cwd:${folder}`;
-      const folderQuery = `${appQuery} ${formatFieldFilter("cwd", folder)}`;
+      const folderQuery = `${appQuery} ${fieldTerm("cwd", folder)}`;
       appRows = [
         { id: folderId, kind: "folder", label: folder, query: folderQuery },
         ...rows.map((r) => ({
@@ -144,8 +148,8 @@ function placeOf(flow: Flow): Place {
  * while System is hidden from All traffic.
  */
 function appQueryFor(app: string, system: boolean): string {
-  const query = formatFieldFilter("app", app);
-  return system ? `${formatFieldFilter("is", "system")} ${query}` : query;
+  const query = fieldTerm("app", app);
+  return system ? `${fieldTerm("is", "system")} ${query}` : query;
 }
 
 /** A node being built, its children by id */
@@ -209,10 +213,14 @@ function group(id: string, label: string): Trie {
  * The sidebar: All traffic, then Apps, each app opening to its own sites, hosts and paths, then
  * Domains by site, host and path, then System, macOS's daemons, apart from the apps. A group with
  * nothing in it is left out. Not decrypted, after All traffic, gathers the HTTPS passed through
- * undecrypted, when there is any. `total` is All traffic's count: every flow it covers in the
- * database.
+ * undecrypted, when there is any, and Saved lists the saved searches, each with its count from
+ * the database. `total` is All traffic's count: every flow it covers in the database.
  */
-export function buildSidebarTree(flows: Flow[], total: number): TreeNode<SidebarItem> {
+export function buildSidebarTree(
+  flows: Flow[],
+  total: number,
+  saved: SavedRow[] = [],
+): TreeNode<SidebarItem> {
   const root: TreeNode<SidebarItem> = {
     item: { id: "root", kind: "group", label: "", count: 0, query: "" },
     parent: null,
@@ -223,7 +231,7 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
   const apps = group(APPS_ID, "Apps");
   const domains = group(DOMAINS_ID, "Domains");
   const system = { ...group(SYSTEM_ID, "System") };
-  system.item.query = formatFieldFilter("is", "system");
+  system.item.query = fieldTerm("is", "system");
   let tunnelled = 0;
 
   for (const flow of flows) {
@@ -273,12 +281,35 @@ export function buildSidebarTree(flows: Flow[], total: number): TreeNode<Sidebar
         kind: "tunnelled",
         label: "Not decrypted",
         count: tunnelled,
-        query: formatFieldFilter("is", "tunnelled"),
+        query: fieldTerm("is", "tunnelled"),
       },
       parent: root,
       depth: 1,
       draggable: false,
     });
+  }
+  if (saved.length > 0) {
+    const node: TreeNode<SidebarItem> = {
+      item: { id: SAVED_ID, kind: "group", label: "Saved", count: 0, query: "" },
+      parent: root,
+      depth: 1,
+      children: [],
+      draggable: false,
+    };
+    node.children = saved.map((s) => ({
+      item: {
+        id: `saved:${s.id}`,
+        kind: "saved",
+        label: s.name,
+        count: s.count,
+        query: s.query,
+        savedId: s.id,
+      },
+      parent: node,
+      depth: 2,
+      draggable: false,
+    }));
+    root.children?.push(node);
   }
   for (const g of [apps, domains, system]) {
     if (g.children.size === 0) continue;
@@ -318,12 +349,8 @@ export function selectionText(items: SidebarItem[]): string {
  * stays selected while it is, so typing after selecting keeps it.
  */
 export function queryInText(query: string, text: string): boolean {
-  const have = new Set(tokenize(text).map(tokenKey));
-  const want = tokenize(query);
+  const have = new Set(termKeys(text));
+  const want = termKeys(query);
   if (want.length === 0) return have.size === 0;
-  return want.every((t) => have.has(tokenKey(t)));
-}
-
-function tokenKey(t: { field: string | null; value: string; negated: boolean }): string {
-  return `${t.negated ? "-" : ""}${t.field ?? ""}:${t.value.toLowerCase()}`;
+  return want.every((t) => have.has(t));
 }

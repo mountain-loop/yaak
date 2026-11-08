@@ -65,7 +65,7 @@ import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
 import { ContextMenu, Dropdown } from "./core/Dropdown";
 import type { Node as QueryNode, Schema } from "@yaakapp-internal/query";
 import { formatField, parseQuery, QueryMatcher } from "@yaakapp-internal/query";
-import { queryFilter } from "./core/Editor/filter/extension";
+import { queryFilter } from "@yaakapp-internal/ui/editor";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import {
   Icon,
@@ -850,18 +850,27 @@ function setSidebarFilterText(text: string) {
   jotaiStore.set(sidebarFilterAtom, { text, key: `${Math.random()}` });
 }
 
-/** The fields `getItemFields` fills in. Bare words match `getItemText` by word prefix */
-const sidebarFilterColumns = [
-  "method",
-  "url",
-  "name",
-  "type",
-  "folder",
-  "grpc_service",
-  "grpc_method",
+/**
+ * The fields `getItemFields` fills in, each with what it is and a term using it, as completion
+ * shows them. Bare words match `getItemText` by word prefix
+ */
+const sidebarFilterFields: [name: string, info: string, example: string][] = [
+  ["method", "GET, POST, …", "@method:post"],
+  ["url", "Request URL", "@url:*/users*"],
+  ["name", "Request name", '@name:"Get user"'],
+  ["type", "http, grpc or ws", "@type:grpc"],
+  ["folder", "Parent folder", "@folder:auth"],
+  ["grpc_service", "gRPC service", "@grpc_service:*Greeter"],
+  ["grpc_method", "gRPC method", "@grpc_method:SayHello"],
 ];
+const sidebarFilterColumns = sidebarFilterFields.map(([name]) => name);
 const sidebarFilterSchema: Schema = {
-  fields: sidebarFilterColumns.map((name) => ({ name, kind: { type: "text" } })),
+  fields: sidebarFilterFields.map(([name, info, example]) => ({
+    name,
+    kind: { type: "text" },
+    info,
+    example,
+  })),
   freeText: "fuzzy",
 };
 
@@ -1005,9 +1014,12 @@ const sidebarTreeAtom = atom<
   matcher.free();
   markHidden(root);
 
+  // Values offered after `@field:`. URLs and names are left out: nearly every one is unique,
+  // so a list of them is noise rather than a shortcut.
   const fieldValues: Record<string, string[]> = {};
   for (const [name, values] of Object.entries(allFields)) {
-    fieldValues[name] = Array.from(values).filter((v) => v.length < 20);
+    if (name === "url" || name === "name") continue;
+    fieldValues[name] = Array.from(values);
   }
   const suggestions = Array.from(suggestionFields)
     .sort((a, b) => {

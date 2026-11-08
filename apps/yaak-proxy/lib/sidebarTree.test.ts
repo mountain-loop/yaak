@@ -1,7 +1,7 @@
 import type { Flow } from "@yaakapp-internal/proxy-lib";
 import type { TreeNode } from "@yaakapp-internal/ui";
 import { describe, expect, test } from "vite-plus/test";
-import { parseSearch } from "./search";
+import { parseQuery } from "@yaakapp-internal/query";
 import {
   buildSidebarTree,
   itemsById,
@@ -83,8 +83,9 @@ describe("buildSidebarTree", () => {
     const query = (id: string) => items.get(id)?.query;
     expect(query("all")).toBe("");
     expect(query("app:fieldwork")).toBe("@app:fieldwork");
+    // A path row takes in what is under the path.
     expect(query("app:fieldwork|path:api.github.com/repos")).toBe(
-      "@app:fieldwork @host:api.github.com @path:/repos",
+      "@app:fieldwork @host:api.github.com @path:/repos/*",
     );
     expect(query("site:github.com")).toBe("@host:*.github.com");
     expect(query("system")).toBe("@is:system");
@@ -93,12 +94,12 @@ describe("buildSidebarTree", () => {
     expect(query("app:trustd|host:ocsp.apple.com")).toBe(
       "@is:system @app:trustd @host:ocsp.apple.com",
     );
-    expect(parseSearch(query("app:trustd") ?? "", true)?.system).toBe(true);
-    // What each writes, read back, covers the flows the row counts.
+    // What each writes reads back as the terms it wrote.
     for (const item of items.values()) {
-      const parsed = parseSearch(item.query);
-      if (parsed == null || item.kind === "group") continue;
+      if (item.kind === "group" || item.kind === "all") continue;
+      const parsed = parseQuery(item.query);
       expect(parsed, item.id).toBeTruthy();
+      expect(parsed?.type, item.id).not.toBe("Or");
     }
   });
 });
@@ -164,7 +165,7 @@ describe("programs outside an app", () => {
     expect(items.get("app:claude|cwd:yaak|host:statsig.anthropic.com")?.query).toBe(
       "@app:claude @cwd:yaak @host:statsig.anthropic.com",
     );
-    expect(parseSearch(query)).toEqual({ app: ["claude"], cwd: ["yaak"] });
+    expect(parseQuery(query)?.type).toBe("And");
   });
 });
 
@@ -215,12 +216,10 @@ describe("selection and the search text", () => {
       pick("app:Slack|site:slack.com"),
     ]);
     expect(text).toBe("@app:fieldwork @host:api.github.com OR @app:Slack @host:*.slack.com");
-    expect(parseSearch(text)).toEqual({
-      any: [
-        { app: ["fieldwork"], under: ["api.github.com"] },
-        { app: ["Slack"], under: ["*.slack.com"] },
-      ],
-    });
+    // Two groups, each judged whole
+    const parsed = parseQuery(text);
+    expect(parsed?.type).toBe("Or");
+    expect(parsed?.type === "Or" ? parsed.children.map((c) => c.type) : []).toEqual(["And", "And"]);
   });
 
   test("writes the selected rows' queries, OR'd, or nothing for All traffic", () => {
@@ -238,5 +237,31 @@ describe("selection and the search text", () => {
     expect(queryInText("@app:Slack @host:x.com", "@app:Slack")).toBe(false);
     expect(queryInText("", "")).toBe(true);
     expect(queryInText("", "card")).toBe(false);
+  });
+});
+
+describe("saved searches", () => {
+  test("follow All traffic, each a row with its count that writes its query", () => {
+    const saved = [
+      { id: "sq_1", name: "Errors", query: "@status:>=400", count: 12 },
+      { id: "sq_2", name: "Stripe", query: "@host:*.stripe.com", count: 0 },
+    ];
+    const root = buildSidebarTree(flows, 4, saved);
+    expect((root.children ?? []).slice(0, 2).flatMap((c) => shape(c))).toEqual([
+      "All traffic 4",
+      "Saved 0",
+      "  Errors 12",
+      "  Stripe 0",
+    ]);
+    const items = itemsById(root);
+    expect(items.get("saved:sq_1")).toMatchObject({
+      kind: "saved",
+      query: "@status:>=400",
+      savedId: "sq_1",
+    });
+    // Rows, not folders
+    const group = (root.children ?? []).find((c) => c.item.id === "saved");
+    expect(group?.children?.every((c) => c.children == null)).toBe(true);
+    expect(itemsById(buildSidebarTree(flows, 4)).has("saved")).toBe(false);
   });
 });
