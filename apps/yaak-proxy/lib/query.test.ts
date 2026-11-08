@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vite-plus/test";
 import {
   activeQuery,
+  anyCountsBackFromNow,
   asOneTerm,
   countsBackFromNow,
   fieldTerm,
@@ -81,6 +82,12 @@ describe("countsBackFromNow", () => {
     expect(countsBackFromNow("x -(@time:[1h TO 2h] OR y)")).toBe(true);
     expect(countsBackFromNow("@time:2026-11-07")).toBe(false);
     expect(countsBackFromNow("@status:<500 time")).toBe(false);
+  });
+
+  test("of saved searches, tells when their counts change with time alone", () => {
+    expect(anyCountsBackFromNow(["@status:4xx", "-@time:>1h stripe"])).toBe(true);
+    expect(anyCountsBackFromNow(["@status:4xx", "@time:2026-11-07"])).toBe(false);
+    expect(anyCountsBackFromNow([])).toBe(false);
   });
 });
 

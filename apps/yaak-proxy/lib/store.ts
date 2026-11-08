@@ -25,9 +25,9 @@ import {
   WINDOW_SIZE,
   windowFromPage,
 } from "./flowWindow";
-import { activeQuery, countsBackFromNow, type FlowQuery } from "./query";
+import { activeQuery, anyCountsBackFromNow, countsBackFromNow, type FlowQuery } from "./query";
 import { listen, rpc } from "./rpc";
-import { changesFor } from "./searchChanges";
+import { changesFor, FlowEvents } from "./searchChanges";
 import {
   ALL_ID,
   APPS_ID,
@@ -300,9 +300,13 @@ function changesOf(
 /** The store `syncFlows` keeps, for answers that come after the changes they are for */
 let syncedStore: Store | null = null;
 
+/** The order flow events arrived in, for judging answers that come late */
+const flowEvents = new FlowEvents();
+
 /**
  * Matches flows against the search in the database, then has its window take them as it takes
- * events matched as they were sent. A flow the window holds a newer copy of meanwhile keeps it.
+ * events matched as they were sent. A flow a newer event updated or removed meanwhile, in the
+ * window or not, keeps what that event left.
  */
 function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelPayload[]) {
   const store = syncedStore;
@@ -311,20 +315,16 @@ function matchLater(search: Pick<SearchWindow, "key" | "query">, changes: ModelP
   rpc("match_flows", { filter: search.query, ids })
     .then((matched) => {
       const covered = new Set(matched);
-      const marked = changes.map((c) => ({
+      const marked = flowEvents.current(changes).map((c) => ({
         ...c,
         search: { key: search.key, matches: covered.has(c.model.id) },
       }));
+      if (marked.length === 0) return;
       const following = store.get(followingAtom);
       store.set(searchWindowAtom, (s) => {
         if (s?.key !== search.key) return s;
         if (s.loading) return { ...s, buffered: [...s.buffered, ...marked] };
-        const newer = new Map(s.win.flows.map((f) => [f.id, f.updatedAt]));
-        const current = marked.filter((c) => {
-          const held = newer.get(c.model.id);
-          return held == null || held <= c.model.updatedAt;
-        });
-        const next = applyChanges(s.win, changesOf(s, s.win, current));
+        const next = applyChanges(s.win, changesOf(s, s.win, marked));
         return { ...s, win: following ? trimWindow(next) : next };
       });
     })
@@ -375,6 +375,7 @@ export function syncFlows(store: Store) {
   }
 
   function receive(changes: ModelPayload[]) {
+    flowEvents.arrived(changes);
     pending.push(...changes);
     if (timer == null) timer = setTimeout(flush, FLUSH_MS);
   }
@@ -450,6 +451,7 @@ export function syncFlows(store: Store) {
   // Loads again rather than only emptying, for a flow written between the clear and the event.
   // Saved searches too, which could not be read while the database was locked.
   listen("flows_cleared", () => {
+    flowEvents.reset();
     store.set(emptyFlowsAtom);
     pending = [];
     load();
@@ -459,6 +461,7 @@ export function syncFlows(store: Store) {
   // The oldest flows, swept to keep the capture under its size limit: dropped wherever they
   // are held, and the totals counted again from the database.
   listen("flows_removed", ({ ids }) => {
+    flowEvents.removed(ids);
     const removed = new Set(ids);
     const drop = (win: FlowWindow) =>
       win.flows.some((f) => removed.has(f.id))
@@ -571,8 +574,10 @@ export function syncFlows(store: Store) {
   });
 
   // A search counting back from now, `@time:<5m`, is read again while it is shown and the list
-  // follows new traffic, so flows leave it and join it as they age.
+  // follows new traffic, so flows leave it and join it as they age. Saved ones are counted
+  // again, as their counts change with no traffic at all.
   setInterval(() => {
+    if (anyCountsBackFromNow(store.get(savedQueriesAtom).map((q) => q.query))) countSaved();
     const s = store.get(searchWindowAtom);
     if (s == null || s.loading || !store.get(followingAtom)) return;
     if (countsBackFromNow(s.query.query)) loadSearch(s.query, true);

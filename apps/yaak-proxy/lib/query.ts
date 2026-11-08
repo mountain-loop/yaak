@@ -136,6 +136,11 @@ export function countsBackFromNow(text: string): boolean {
   return found;
 }
 
+/** Any of the searches counts back from now, so its count changes as time passes */
+export function anyCountsBackFromNow(queries: string[]): boolean {
+  return queries.some(countsBackFromNow);
+}
+
 /** `text` to sit beside other terms as one: in parentheses when it is an `OR` at its top */
 export function asOneTerm(text: string): string {
   return parseQuery(text)?.type === "Or" ? `(${text})` : text;

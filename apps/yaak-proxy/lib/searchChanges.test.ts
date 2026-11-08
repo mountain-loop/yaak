@@ -1,7 +1,7 @@
 import type { Flow, ModelPayload } from "@yaakapp-internal/proxy-lib";
 import { describe, expect, test } from "vite-plus/test";
 import { emptyWindow, type FlowWindow } from "./flowWindow";
-import { changesFor } from "./searchChanges";
+import { changesFor, FlowEvents } from "./searchChanges";
 
 const none = () => {};
 
@@ -42,5 +42,55 @@ describe("changesFor", () => {
       later.push(...unknown.map((c) => c.model.id)),
     );
     expect([kept, later]).toEqual([[], ["a"]]);
+  });
+});
+
+describe("FlowEvents", () => {
+  test("drops a late answer for a flow a newer event removed, though the window no longer holds it", () => {
+    const events = new FlowEvents();
+    const old = write("a", true, "old");
+    events.arrived([old]);
+    // Under the new search the flow stops matching and leaves the window...
+    events.arrived([write("a", false)]);
+    // ...and the re-check of the old event answers after
+    expect(events.current([old])).toEqual([]);
+  });
+
+  test("drops a late answer for a flow the sweep removed", () => {
+    const events = new FlowEvents();
+    const old = write("a", true, "old");
+    events.arrived([old]);
+    events.removed(["a"]);
+    expect(events.current([old])).toEqual([]);
+  });
+
+  test("keeps an answer no newer event has passed, and one for other flows", () => {
+    const events = new FlowEvents();
+    const a = write("a", true, "old");
+    const b = write("b", true, "old");
+    events.arrived([a, b]);
+    events.arrived([write("c", true)]);
+    expect(events.current([a, b])).toEqual([a, b]);
+    // Not noted: nothing to judge it by
+    const unseen = write("d", true, "old");
+    expect(events.current([unseen])).toEqual([unseen]);
+  });
+
+  test("past what it remembers, drops what it can no longer judge", () => {
+    const events = new FlowEvents(2);
+    const a = write("a", true, "old");
+    events.arrived([a, write("b", true), write("c", true)]);
+    expect(events.current([a])).toEqual([]);
+    const c = write("c", true, "old");
+    events.arrived([c]);
+    expect(events.current([c])).toEqual([c]);
+  });
+
+  test("drops answers from before a clear", () => {
+    const events = new FlowEvents();
+    const a = write("a", true, "old");
+    events.arrived([a]);
+    events.reset();
+    expect(events.current([a])).toEqual([]);
   });
 });
