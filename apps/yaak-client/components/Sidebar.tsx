@@ -1005,9 +1005,12 @@ const sidebarTreeAtom = atom<
   matcher.free();
   markHidden(root);
 
+  // Values offered after `@field:`. URLs and names are left out: nearly every one is unique,
+  // so a list of them is noise rather than a shortcut.
   const fieldValues: Record<string, string[]> = {};
   for (const [name, values] of Object.entries(allFields)) {
-    fieldValues[name] = Array.from(values).filter((v) => v.length < 20);
+    if (name === "url" || name === "name") continue;
+    fieldValues[name] = Array.from(values);
   }
   const suggestions = Array.from(suggestionFields)
     .sort((a, b) => {
