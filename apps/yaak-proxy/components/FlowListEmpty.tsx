@@ -3,7 +3,7 @@ import classNames from "classnames";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
-import { parseSearch, widerQueries } from "../lib/search";
+import { activeQuery, widerQueries } from "../lib/query";
 import {
   hideSystemAtom,
   pausedAtAtom,
@@ -77,7 +77,7 @@ function NoResults({ text }: { text: string }) {
     const candidates = widerQueries(text);
     void Promise.all(
       candidates.map(async (candidate) => {
-        const query = parseSearch(candidate, hideSystem);
+        const query = activeQuery(candidate, hideSystem);
         const res = await rpc("list_flows", { ...query, limit: 0 });
         return { text: candidate, count: query == null ? res.total : (res.matching ?? res.total) };
       }),

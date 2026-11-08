@@ -370,7 +370,7 @@ async fn grpc_web_calls_are_stored_and_decoded() {
             (failed.grpc_status, failed.grpc_message.as_deref()),
             (Some(12), Some("not here"))
         );
-        let errors = rpc(&ctx, "list_flows", json!({ "status": "error" })).await.unwrap();
+        let errors = rpc(&ctx, "list_flows", json!({ "query": "@is:error" })).await.unwrap();
         let ids: Vec<_> =
             errors["flows"].as_array().unwrap().iter().map(|f| f["id"].clone()).collect();
         assert_eq!(ids, vec![json!(failed.id)], "a non-zero status is a failed call");

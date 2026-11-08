@@ -14,7 +14,9 @@ pub mod helper;
 pub mod macos;
 pub mod messages;
 pub mod models;
+pub mod query;
 pub mod save;
+pub mod saved_queries;
 pub mod settings;
 pub mod terminal;
 
@@ -47,7 +49,7 @@ use std::time::{Duration, SystemTime};
 use ts_rs::TS;
 pub use yaak_crypto::MasterKeySource;
 use yaak_crypto::data_key::DataKey;
-use yaak_database::{ModelChangeEvent, UpdateSource, UpsertModelInfo};
+use yaak_database::{UpdateSource, UpsertModelInfo};
 pub use yaak_grpc::GrpcConfig;
 use yaak_models::blob_manager::{BlobManager, BodyChunkWriter};
 use yaak_proxy::{CaStore, KeyCipher, ProxyConfig, ProxyEvent, ProxyHandle};
@@ -107,6 +109,8 @@ pub struct ProxyCtx {
     pub events: RpcEventEmitter,
     /// gRPC schemas as decoded, and the protoc that compiles attached protos.
     pub grpc: GrpcState,
+    /// The search the app shows, which written flows' events are matched against.
+    live_search: Arc<query::LiveSearch>,
 }
 
 impl ProxyCtx {
@@ -148,6 +152,7 @@ impl ProxyCtx {
             sweeper: Default::default(),
             events,
             grpc: GrpcState::default(),
+            live_search: Default::default(),
         };
         if db::needs_encrypting(data_dir) {
             let unlocking = ctx.clone();
@@ -418,6 +423,7 @@ impl ProxyCtx {
                 db: self.db()?,
                 blobs: self.blobs()?,
                 events: self.events.clone(),
+                live_search: self.live_search.clone(),
                 attribution,
                 recording: self.recording.clone(),
                 finished: Default::default(),
@@ -1118,14 +1124,36 @@ impl ProxyCtx {
                 }
                 let (flow, created) = tx.upsert(&flow, &UpdateSource::Background)?;
                 // Sent before the commit, so it cannot reach the app after a clear that follows.
-                self.events.emit(
-                    "model_write",
-                    &ModelPayload { model: flow, change: ModelChangeEvent::Upsert { created } },
-                );
+                self.events.emit("model_write", &self.live_search.payload(flow, created));
                 Ok::<_, yaak_database::Error>(())
             })
             .map_err(|e| format!("Failed to record the saved request on the flow: {e}"))?;
         Ok(saved)
+    }
+
+    /// Records that an agent read the flow through the control API, for `@is:read`, and tells
+    /// the app. Only the first read writes anything.
+    pub fn note_agent_read(&self, flow_id: &str) {
+        let noted = self.db().map_err(String::from).and_then(|db| {
+            db.with_tx(|tx| {
+                let conn = tx.conn().resolve();
+                let changed = conn.execute(
+                    "UPDATE flows SET agent_read = TRUE WHERE id = ? AND NOT agent_read",
+                    [flow_id],
+                )?;
+                // Sent before the commit, as every flow's event is.
+                if changed > 0
+                    && let Some(flow) = flows::find_in(conn, flow_id)
+                {
+                    self.events.emit("model_write", &self.live_search.payload(flow, false));
+                }
+                Ok::<_, yaak_database::Error>(())
+            })
+            .map_err(|e| e.to_string())
+        });
+        if let Err(e) = noted {
+            warn!("Failed to note that an agent read flow {flow_id}: {e}");
+        }
     }
 
     /// Clears every flow at once and tells the app so its list empties, then deletes them and
@@ -1384,6 +1412,91 @@ pub struct ListFlowsResponse {
     #[ts(type = "number | null")]
     pub matching: Option<usize>,
 }
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct QuerySchemaRequest {}
+
+/// The search's fields, for the search box's highlighting and completion.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct QuerySchemaResponse {
+    #[ts(type = "import(\"@yaakapp-internal/query\").Schema")]
+    pub schema: serde_json::Value,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ValidateQueryRequest {
+    pub query: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct QueryValuesRequest {
+    /// A field's path: `host`, `header` for header names, `header.accept` for a header's values.
+    pub path: String,
+}
+
+/// The search the app shows, which flows written from now on are matched against, their events
+/// naming `key`. No query stops it.
+#[derive(Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct WatchQueryRequest {
+    pub key: String,
+    #[ts(optional)]
+    pub query: Option<String>,
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_system: bool,
+}
+
+/// Which of some flows a search covers, for flows whose events were matched against another.
+#[derive(Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct MatchFlowsRequest {
+    pub filter: flows::FlowFilter,
+    pub ids: Vec<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct ListSavedQueriesRequest {}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CreateSavedQueryRequest {
+    pub name: String,
+    pub query: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct RenameSavedQueryRequest {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct DeleteSavedQueryRequest {
+    pub id: String,
+}
+
+#[derive(Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct CountSavedQueriesRequest {
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub hide_system: bool,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "gen_rpc.ts")]
+pub struct SavedQueriesChangedPayload {}
 
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "gen_rpc.ts")]
@@ -2326,6 +2439,73 @@ async fn clear_flows(ctx: ProxyCtx, _req: ClearFlowsRequest) -> Result<usize, Rp
     blocking(move || ctx.clear_flows()).await
 }
 
+fn query_schema(
+    _ctx: &ProxyCtx,
+    _req: QuerySchemaRequest,
+) -> Result<QuerySchemaResponse, RpcError> {
+    let schema = serde_json::to_value(query::schema()).map_err(rpc_error)?;
+    Ok(QuerySchemaResponse { schema })
+}
+
+fn validate_query(
+    _ctx: &ProxyCtx,
+    req: ValidateQueryRequest,
+) -> Result<Vec<query::QueryDiagnostic>, RpcError> {
+    Ok(query::diagnostics(&req.query))
+}
+
+async fn query_values(ctx: ProxyCtx, req: QueryValuesRequest) -> Result<Vec<String>, RpcError> {
+    blocking(move || query::seen_values(&ctx.db()?, &req.path)).await
+}
+
+fn watch_query(ctx: &ProxyCtx, req: WatchQueryRequest) -> Result<bool, RpcError> {
+    let watched = req.query.filter(|q| !q.trim().is_empty() || req.hide_system);
+    ctx.live_search.watch(watched.map(|q| (req.key, q, req.hide_system)));
+    Ok(true)
+}
+
+async fn match_flows(ctx: ProxyCtx, req: MatchFlowsRequest) -> Result<Vec<String>, RpcError> {
+    blocking(move || flows::matching_ids(&ctx.db()?, &req.filter, &req.ids)).await
+}
+
+fn list_saved_queries(
+    ctx: &ProxyCtx,
+    _req: ListSavedQueriesRequest,
+) -> Result<Vec<saved_queries::SavedQuery>, RpcError> {
+    saved_queries::list(&ctx.db()?).map_err(rpc_error)
+}
+
+fn create_saved_query(
+    ctx: &ProxyCtx,
+    req: CreateSavedQueryRequest,
+) -> Result<saved_queries::SavedQuery, RpcError> {
+    let saved = saved_queries::create(&ctx.db()?, &req.name, &req.query).map_err(rpc_error)?;
+    ctx.events.emit("saved_queries_changed", &SavedQueriesChangedPayload {});
+    Ok(saved)
+}
+
+fn rename_saved_query(
+    ctx: &ProxyCtx,
+    req: RenameSavedQueryRequest,
+) -> Result<saved_queries::SavedQuery, RpcError> {
+    let saved = saved_queries::rename(&ctx.db()?, &req.id, &req.name).map_err(rpc_error)?;
+    ctx.events.emit("saved_queries_changed", &SavedQueriesChangedPayload {});
+    Ok(saved)
+}
+
+fn delete_saved_query(ctx: &ProxyCtx, req: DeleteSavedQueryRequest) -> Result<bool, RpcError> {
+    let deleted = saved_queries::delete(&ctx.db()?, &req.id).map_err(rpc_error)?;
+    ctx.events.emit("saved_queries_changed", &SavedQueriesChangedPayload {});
+    Ok(deleted)
+}
+
+async fn count_saved_queries(
+    ctx: ProxyCtx,
+    req: CountSavedQueriesRequest,
+) -> Result<Vec<saved_queries::SavedQueryCount>, RpcError> {
+    blocking(move || saved_queries::counts(&ctx.db()?, req.hide_system)).await
+}
+
 // -- Event loop --
 
 /// Why the engine cannot be taken over from another app.
@@ -2429,6 +2609,8 @@ struct FlowSink {
     db: ProxyQueryManager,
     blobs: BlobManager,
     events: RpcEventEmitter,
+    /// The search the app shows, which each flow written is matched against.
+    live_search: Arc<query::LiveSearch>,
     attribution: Attribution,
     recording: Arc<Mutex<RecordingLog>>,
     /// Flows that have ended, waiting to be written together.
@@ -3076,10 +3258,7 @@ impl FlowSink {
         let (saved, created) = ctx.upsert(&flow, &UpdateSource::Background)?;
         // Sent while this holds the writer, before the commit, so a clear's event, sent after
         // its own commit, always comes after it.
-        self.events.emit(
-            "model_write",
-            &ModelPayload { model: saved, change: ModelChangeEvent::Upsert { created } },
-        );
+        self.events.emit("model_write", &self.live_search.payload(saved, created));
         Ok(true)
     }
 
@@ -3142,6 +3321,13 @@ define_rpc! {
         get_message_payload(GetMessagePayloadRequest) -> GetMessagePayloadResponse,
         list_actions(ListActionsRequest) -> ListActionsResponse,
         list_flows(flows::FlowFilter) -> ListFlowsResponse,
+        query_schema(QuerySchemaRequest) -> QuerySchemaResponse,
+        validate_query(ValidateQueryRequest) -> Vec<query::QueryDiagnostic>,
+        watch_query(WatchQueryRequest) -> bool,
+        list_saved_queries(ListSavedQueriesRequest) -> Vec<saved_queries::SavedQuery>,
+        create_saved_query(CreateSavedQueryRequest) -> saved_queries::SavedQuery,
+        rename_saved_query(RenameSavedQueryRequest) -> saved_queries::SavedQuery,
+        delete_saved_query(DeleteSavedQueryRequest) -> bool,
         list_grpc_schemas(ListGrpcSchemasRequest) -> Vec<GrpcSchema>,
         list_messages(ListMessagesRequest) -> ListMessagesResponse,
         remove_grpc_schema(RemoveGrpcSchemaRequest) -> bool,
@@ -3179,6 +3365,9 @@ define_rpc! {
         get_storage_size(GetStorageSizeRequest) -> GetStorageSizeResponse,
         reset_captured_data(ResetCapturedDataRequest) -> bool,
         open_terminal(OpenTerminalRequest) -> bool,
+        query_values(QueryValuesRequest) -> Vec<String>,
+        match_flows(MatchFlowsRequest) -> Vec<String>,
+        count_saved_queries(CountSavedQueriesRequest) -> Vec<saved_queries::SavedQueryCount>,
     }
     events {
         decrypt_list_changed(DecryptListChangedPayload),
@@ -3187,6 +3376,7 @@ define_rpc! {
         message_write(MessagePayload),
         model_write(ModelPayload),
         proxy_state_changed(ProxyStatePayload),
+        saved_queries_changed(SavedQueriesChangedPayload),
     }
 }
 
@@ -3256,6 +3446,7 @@ mod tests {
             db: ctx.db().unwrap(),
             blobs: ctx.blobs().unwrap(),
             events: ctx.events.clone(),
+            live_search: ctx.live_search.clone(),
             attribution: Attribution::new(0),
             recording: ctx.recording.clone(),
             finished: Default::default(),

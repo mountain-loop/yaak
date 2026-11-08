@@ -131,7 +131,12 @@ grpcMessage: string | null,
  * client rejected the proxy's certificate: method `CONNECT`, its URL the host, its sizes
  * the bytes each way, and no headers or bodies. Open until `elapsedMs` or `error` is set.
  */
-tunnelled: boolean, };
+tunnelled: boolean, 
+/**
+ * An agent read the flow through the control API: its detail, a body or its messages.
+ * Never written by an upsert, which keeps what is stored.
+ */
+agentRead: boolean, };
 
 export type FlowBody = "request" | "response";
 
@@ -239,9 +244,33 @@ grpcStatus?: number,
  */
 grpcMessage?: string, };
 
-export type ModelPayload = { model: Flow, change: ModelChangeEvent, };
+export type ModelPayload = { model: Flow, change: ModelChangeEvent, 
+/**
+ * Whether the flow belongs in the list of the search the app shows, decided as the event
+ * is sent. None while no search is shown.
+ */
+search?: SearchMatch, };
 
 export type ProxyHeader = { name: string, value: string, };
+
+export type SavedQuery = { id: string, name: string, 
+/**
+ * The search, as the search box takes it.
+ */
+query: string, 
+/**
+ * Where it sits in the list, lowest first.
+ */
+sortOrder: number, };
+
+/**
+ * A written flow, matched against the search the app shows.
+ */
+export type SearchMatch = { 
+/**
+ * The search's key, as the app gave it with the search.
+ */
+key: string, matches: boolean, };
 
 /**
  * The streaming protocol a flow carries.

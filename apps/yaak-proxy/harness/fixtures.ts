@@ -51,6 +51,7 @@ const base: Flow = {
   grpcStatus: null,
   grpcMessage: null,
   tunnelled: false,
+  agentRead: false,
   clientAddr: "127.0.0.1:54321",
   elapsedConnectMs: 18,
   elapsedTlsMs: 41,

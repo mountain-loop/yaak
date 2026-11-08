@@ -1,8 +1,11 @@
 //! Runs a parsed query in memory, against one document or a whole table of them.
 
-use crate::ast::{FieldValue, Node};
+use crate::ast::Node;
+#[cfg(test)]
+use crate::condition::wildcard_match;
+use crate::condition::Condition;
 use crate::fuzzy::{FuzzyScratch, fuzzy_match_in};
-use crate::schema::{FieldKind, FreeText, Schema, parse_flag, to_base};
+use crate::schema::{FreeText, Schema};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -208,55 +211,13 @@ enum Val<'a> {
 }
 
 impl Val<'_> {
-    /// The value as lowercase text.
-    fn lower(&self) -> Cow<'_, str> {
+    fn passes(&self, condition: &Condition) -> bool {
         match self {
-            Val::Text(text) => Cow::Owned(text.to_lowercase()),
-            Val::Number(n) => Cow::Owned(format_number(*n)),
-            Val::Flag(b) => Cow::Borrowed(if *b { "true" } else { "false" }),
+            Val::Text(text) => condition.matches_text(text),
+            Val::Number(n) => condition.matches_number(*n),
+            Val::Flag(b) => condition.matches_flag(*b),
         }
     }
-
-    /// Whether the value, lowercased, contains `needle` (lowercase).
-    fn contains(&self, needle: &str) -> bool {
-        match self {
-            Val::Text(text) => contains_ignore_case(text, needle),
-            _ => self.lower().contains(needle),
-        }
-    }
-
-    fn as_number(&self) -> Option<f64> {
-        match self {
-            Val::Number(n) => Some(*n),
-            Val::Text(text) => text.trim().parse().ok(),
-            Val::Flag(_) => None,
-        }
-    }
-
-    fn as_flag(&self) -> Option<bool> {
-        match self {
-            Val::Flag(b) => Some(*b),
-            Val::Text(text) => parse_flag(text),
-            Val::Number(n) => Some(*n != 0.0),
-        }
-    }
-
-    fn is_present(&self) -> bool {
-        match self {
-            Val::Text(text) => !text.is_empty(),
-            Val::Number(_) => true,
-            Val::Flag(b) => *b,
-        }
-    }
-}
-
-/// Whether `hay`, lowercased, contains `needle` (lowercase), without copying ASCII text.
-fn contains_ignore_case(hay: &str, needle: &str) -> bool {
-    if !(hay.is_ascii() && needle.is_ascii()) {
-        return hay.to_lowercase().contains(needle);
-    }
-    let (hay, needle) = (hay.as_bytes(), needle.as_bytes());
-    needle.is_empty() || hay.windows(needle.len()).any(|w| w.eq_ignore_ascii_case(needle))
 }
 
 /// `text` lowercased into `out`, without a fresh allocation per call.
@@ -268,11 +229,6 @@ fn lowercase_into(text: &str, out: &mut String) {
     } else {
         out.push_str(&text.to_lowercase());
     }
-}
-
-/// `200`, not `200.0`, so a number field's text matches what the user sees.
-fn format_number(n: f64) -> String {
-    if n.fract() == 0.0 && n.abs() < 1e15 { format!("{}", n as i64) } else { n.to_string() }
 }
 
 /// Where field values come from: a [`Document`], or a row of a [`Table`].
@@ -351,9 +307,8 @@ enum Plan {
         path: String,
         /// A map field with no key: every key's values.
         any_key: bool,
-        kind: FieldKind,
-        /// With its text and wildcard pattern lowercased.
-        value: FieldValue,
+        /// Never [`Condition::Never`], which plans as [`Plan::Never`].
+        condition: Condition,
     },
     /// A term that can match nothing: an unknown field, an empty word or phrase.
     Never,
@@ -418,14 +373,10 @@ impl Matcher {
             Plan::Not(node) => !self.eval(node, text, source, fuzzy),
             Plan::Term(term) if self.fuzzy => fuzzy_match_in(text, term, fuzzy),
             Plan::Term(term) | Plan::Phrase(term) => text.contains(term.as_str()),
-            Plan::Field { path, any_key, kind, value } => {
-                let mut any =
-                    |test: &mut dyn FnMut(Val) -> bool| source.any_value(path, *any_key, test);
-                match kind {
-                    FieldKind::Text => match_text(&mut any, value),
-                    FieldKind::Number { units } => match_number(&mut any, value, units),
-                    FieldKind::Flag => match_flag(&mut any, value),
-                }
+            Plan::Field { path, any_key, condition } => {
+                let any = source.any_value(path, *any_key, &mut |v| v.passes(condition));
+                // `@flag:false`: no value is set
+                if *condition == Condition::Flag(false) { !any } else { any }
             }
             Plan::Never => false,
         }
@@ -458,113 +409,23 @@ fn plan_node(node: &Node, schema: &Schema, uses_text: &mut bool) -> Plan {
             let Some(field) = schema.resolve(path) else {
                 return Plan::Never;
             };
-            let value = match value {
-                FieldValue::Text { text, quoted } => {
-                    FieldValue::Text { text: text.to_lowercase(), quoted: *quoted }
-                }
-                FieldValue::Wildcard { pattern } => {
-                    FieldValue::Wildcard { pattern: pattern.to_lowercase() }
-                }
-                other => other.clone(),
-            };
+            let condition = Condition::new(&field.def.kind, value);
+            if condition == Condition::Never {
+                return Plan::Never;
+            }
             Plan::Field {
                 path: field.document_path(),
                 any_key: field.def.map && field.key.is_none(),
-                kind: field.def.kind.clone(),
-                value,
+                condition,
             }
         }
     }
-}
-
-/// Asks whether any of a field's values passes a test.
-type AnyValue<'s> = dyn FnMut(&mut dyn FnMut(Val) -> bool) -> bool + 's;
-
-/// `value`'s text and wildcard pattern are already lowercase (see [`plan_node`]).
-fn match_text(any: &mut AnyValue, value: &FieldValue) -> bool {
-    match value {
-        FieldValue::Text { text: needle, .. } => {
-            !needle.is_empty() && any(&mut |v| v.contains(needle))
-        }
-        FieldValue::Wildcard { pattern } => any(&mut |v| wildcard_match(pattern, &v.lower())),
-        FieldValue::Exists => any(&mut |v| v.is_present()),
-        // A text field holding numbers, such as a status shown as text
-        FieldValue::Compare { op, number } => {
-            number.unit.is_none()
-                && any(&mut |v| v.as_number().is_some_and(|n| op.test(n, number.value)))
-        }
-        FieldValue::Range { low, high } => {
-            low.unit.is_none()
-                && high.unit.is_none()
-                && any(&mut |v| v.as_number().is_some_and(|n| n >= low.value && n <= high.value))
-        }
-    }
-}
-
-fn match_number(any: &mut AnyValue, value: &FieldValue, units: &[crate::Unit]) -> bool {
-    match value {
-        FieldValue::Text { text, quoted } => {
-            if text.is_empty() {
-                return false;
-            }
-            // `@status:404` is equality; anything else matches the number as text
-            match (!quoted).then(|| crate::lexer::parse_number(text)).flatten() {
-                Some(number) => to_base(&number, units)
-                    .is_some_and(|target| any(&mut |v| v.as_number() == Some(target))),
-                None => match_text(any, value),
-            }
-        }
-        FieldValue::Wildcard { .. } => match_text(any, value),
-        FieldValue::Exists => any(&mut |v| v.as_number().is_some()),
-        FieldValue::Compare { op, number } => to_base(number, units)
-            .is_some_and(|target| any(&mut |v| v.as_number().is_some_and(|n| op.test(n, target)))),
-        FieldValue::Range { low, high } => match (to_base(low, units), to_base(high, units)) {
-            (Some(low), Some(high)) => {
-                any(&mut |v| v.as_number().is_some_and(|n| n >= low && n <= high))
-            }
-            _ => false,
-        },
-    }
-}
-
-fn match_flag(any: &mut AnyValue, value: &FieldValue) -> bool {
-    let mut is_set = || any(&mut |v| v.as_flag() == Some(true));
-    match value {
-        FieldValue::Exists => is_set(),
-        FieldValue::Text { text, .. } => match parse_flag(text) {
-            Some(true) => is_set(),
-            Some(false) => !is_set(),
-            None => false,
-        },
-        _ => false,
-    }
-}
-
-/// Whether `pattern`, where `*` matches any run of characters, matches the whole of `text`.
-pub(crate) fn wildcard_match(pattern: &str, text: &str) -> bool {
-    let mut parts = pattern.split('*');
-    let first = parts.next().unwrap_or_default();
-    let Some(mut rest) = text.strip_prefix(first) else {
-        return false;
-    };
-    let parts: Vec<&str> = parts.collect();
-    let Some((last, middle)) = parts.split_last() else {
-        // No `*` at all: the whole text must equal the pattern
-        return rest.is_empty();
-    };
-    for part in middle {
-        match rest.find(part) {
-            Some(i) => rest = &rest[i + part.len()..],
-            None => return false,
-        }
-    }
-    rest.len() >= last.len() && rest.ends_with(last)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::{FieldDef, Unit};
+    use crate::schema::{FieldDef, FieldKind, Unit};
     use crate::{format_field, parse};
 
     fn text_field(name: &str) -> FieldDef {

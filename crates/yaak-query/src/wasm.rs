@@ -3,42 +3,12 @@
 //! JavaScript counts string positions in UTF-16 code units, so every span going out is
 //! converted from bytes, and the cursor coming in is converted to bytes.
 
-use crate::{Document, Matcher, Schema, Span, Table};
+use crate::{Document, Matcher, Schema, Table, Utf16Offsets as Offsets};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::prelude::wasm_bindgen;
-
-/// Byte offset to UTF-16 offset, and back, for one input.
-struct Offsets {
-    /// `utf16[i]` is the UTF-16 offset of byte `i`, for every char boundary and the end.
-    utf16: Vec<u32>,
-}
-
-impl Offsets {
-    fn new(input: &str) -> Self {
-        let mut utf16 = vec![0; input.len() + 1];
-        let mut units = 0u32;
-        for (i, c) in input.char_indices() {
-            for b in 0..c.len_utf8() {
-                utf16[i + b] = units;
-            }
-            units += c.len_utf16() as u32;
-        }
-        utf16[input.len()] = units;
-        Self { utf16 }
-    }
-
-    fn span(&self, span: Span) -> Span {
-        Span { start: self.utf16[span.start()], end: self.utf16[span.end()] }
-    }
-
-    /// The byte offset of UTF-16 offset `pos`, or of the char it falls inside.
-    fn byte(&self, pos: u32) -> usize {
-        self.utf16.partition_point(|&u| u < pos).min(self.utf16.len() - 1)
-    }
-}
 
 fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
     value

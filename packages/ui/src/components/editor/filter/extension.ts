@@ -1,8 +1,5 @@
 import type { Completion, CompletionContext, CompletionResult } from "@codemirror/autocomplete";
 import { autocompletion, startCompletion } from "@codemirror/autocomplete";
-import { LanguageSupport, LRLanguage, syntaxTree } from "@codemirror/language";
-import type { SyntaxNode } from "@lezer/common";
-import { parser } from "./filter";
 
 export interface FieldDef {
   name: string;
@@ -87,17 +84,7 @@ function fieldCompletionFrom(
   return null;
 }
 
-function inPhrase(ctx: CompletionContext): boolean {
-  // Lezer node names from your grammar: Phrase is the quoted token
-  let n: SyntaxNode | null = syntaxTree(ctx.state).resolveInner(ctx.pos, -1);
-  while (n) {
-    if (n.name === "Phrase") return true;
-    n = n.parent;
-  }
-  return false;
-}
-
-// While typing an incomplete quote, there's no Phrase token yet.
+/** Inside a quote, opened and not yet closed */
 function inUnclosedQuote(doc: string, pos: number): boolean {
   let quotes = 0;
   for (let i = 0; i < pos; i++) {
@@ -200,7 +187,7 @@ export function makeCompletionSource(opts: FilterOptions) {
     const { state, pos } = ctx;
     const doc = state.doc.toString();
 
-    if (inPhrase(ctx) || inUnclosedQuote(doc, pos)) {
+    if (inUnclosedQuote(doc, pos)) {
       return null;
     }
 
@@ -250,24 +237,10 @@ export function makeCompletionSource(opts: FilterOptions) {
   };
 }
 
-const language = LRLanguage.define({
-  name: "filter",
-  parser,
-  languageData: {
-    autocompletion: {},
-  },
-});
-
 /**
  * Field and value suggestions, as the sidebar's filter offers them, for a field of another
  * language: a plain input of `host:` and `app:` entries, say
  */
 export function filterAutocomplete(options: FilterOptions) {
   return autocompletion({ override: [makeCompletionSource(options)] });
-}
-
-/** Public extension */
-export function filter(options: FilterOptions) {
-  const source = makeCompletionSource(options);
-  return new LanguageSupport(language, [autocompletion({ override: [source] })]);
 }

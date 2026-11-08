@@ -11965,6 +11965,7 @@ dependencies = [
  "yaak-models",
  "yaak-proxy",
  "yaak-proxy-helper",
+ "yaak-query",
  "yaak-rpc",
  "yaak-templates",
 ]

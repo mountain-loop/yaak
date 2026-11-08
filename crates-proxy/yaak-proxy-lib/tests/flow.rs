@@ -502,10 +502,10 @@ async fn a_tunnelled_connect_is_recorded_with_its_sizes() {
     assert_eq!(done.error, None);
     assert!(done.request_headers.is_empty() && done.response_headers.is_empty());
 
-    let tunnelled = rpc(&ctx, "list_flows", json!({"tunnelled": true})).await.unwrap();
+    let tunnelled = rpc(&ctx, "list_flows", json!({"query": "@is:tunnelled"})).await.unwrap();
     assert_eq!(tunnelled["flows"].as_array().unwrap().len(), 1);
     assert_eq!(tunnelled["flows"][0]["tunnelled"], true);
-    let decrypted = rpc(&ctx, "list_flows", json!({"tunnelled": false})).await.unwrap();
+    let decrypted = rpc(&ctx, "list_flows", json!({"query": "-@is:tunnelled"})).await.unwrap();
     assert_eq!(decrypted["flows"].as_array().unwrap().len(), 0);
 }
 

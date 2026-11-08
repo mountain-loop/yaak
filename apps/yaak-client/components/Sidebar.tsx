@@ -65,7 +65,7 @@ import type { ContextMenuProps, DropdownItem } from "./core/Dropdown";
 import { ContextMenu, Dropdown } from "./core/Dropdown";
 import type { Node as QueryNode, Schema } from "@yaakapp-internal/query";
 import { formatField, parseQuery, QueryMatcher } from "@yaakapp-internal/query";
-import { queryFilter } from "./core/Editor/filter/extension";
+import { queryFilter } from "@yaakapp-internal/ui/editor";
 import { HttpMethodTag } from "./core/HttpMethodTag";
 import {
   Icon,

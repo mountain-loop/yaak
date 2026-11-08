@@ -144,14 +144,18 @@ async fn round_trip() {
     assert_eq!(flows.iter().map(|f| &f.id).collect::<Vec<_>>(), vec![&flow.id]);
     let following = FlowFilter { after: Some(flow.id.clone()), ..Default::default() };
     assert!(client.flows(&following).await.unwrap().is_empty());
-    let filter = FlowFilter { status: Some("4xx".into()), ..Default::default() };
+    let filter = FlowFilter::search("@status:4xx");
     assert!(client.flows(&filter).await.unwrap().is_empty());
-    let search = FlowFilter { q: Some("CHARGES post 2xx".into()), ..Default::default() };
+    let search = FlowFilter::search("CHARGES post @status:2xx");
     assert_eq!(client.flows(&search).await.unwrap().len(), 1);
-    let search = FlowFilter { q: Some("charges get".into()), ..Default::default() };
+    let search = FlowFilter::search("charges @method:get");
     assert!(client.flows(&search).await.unwrap().is_empty());
+    // Listing is not reading; an agent reading the flow marks it.
+    let read = FlowFilter::search("@is:read");
+    assert!(client.flows(&read).await.unwrap().is_empty());
 
     let detail = client.flow(&flow.id, 8).await.unwrap();
+    assert_eq!(client.flows(&read).await.unwrap().len(), 1);
     assert_eq!(detail.flow.method, "POST");
     let request_body = detail.request_body.unwrap();
     assert_eq!((request_body.data.as_str(), request_body.truncated), (r#"{"amount"#, true));
@@ -283,7 +287,7 @@ async fn offline_reads_proxy_db() {
     assert_eq!(detail.response_body.unwrap().data, r#"{"id":"ch_1","amount":42}"#);
     let body = connection.body(&flow.id, FlowBody::Request).await.unwrap();
     assert_eq!(body.data, br#"{"amount":42}"#);
-    let posts = FlowFilter { method: Some("post".into()), ..Default::default() };
+    let posts = FlowFilter::search("@method:post");
     assert_eq!(connection.har(&posts).await.unwrap().log.entries.len(), 1);
 
     let empty = tempfile::tempdir().unwrap();
@@ -602,7 +606,7 @@ async fn export_har_writes_the_flows_asked_for() {
     assert_eq!(read(&selected)["log"]["entries"].as_array().unwrap().len(), 1);
 
     let searched = dir.path().join("searched.har");
-    let filter = json!({ "q": "charges", "limit": 1 });
+    let filter = json!({ "query": "charges", "limit": 1 });
     let written =
         rpc(&ctx, "export_har", json!({ "path": searched, "filter": filter })).await.unwrap();
     // The whole search, not the page the list had loaded.
@@ -613,7 +617,7 @@ async fn export_har_writes_the_flows_asked_for() {
 
     let none = dir.path().join("none.har");
     let written =
-        rpc(&ctx, "export_har", json!({ "path": none, "filter": { "q": "nothing-matches" } }))
+        rpc(&ctx, "export_har", json!({ "path": none, "filter": { "query": "nothing-matches" } }))
             .await
             .unwrap();
     assert_eq!(written, 0);
@@ -657,7 +661,7 @@ async fn flows_name_the_app_that_sent_them() {
     assert_eq!(flow.client_path.as_deref(), Some("/usr/bin/curl"));
 
     // The search and the sidebar's Apps group find it by its path.
-    let filter = FlowFilter { app: Some(vec!["/usr/bin/curl".into()]), ..Default::default() };
+    let filter = FlowFilter::search("@app:/usr/bin/curl");
     assert_eq!(yaak_proxy_lib::flows::list(&ctx.db().unwrap(), &filter).unwrap().len(), 1);
 }
 

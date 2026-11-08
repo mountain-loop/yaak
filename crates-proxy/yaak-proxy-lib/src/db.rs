@@ -320,17 +320,11 @@ pub fn is_key_unavailable(reason: &str) -> bool {
     reason.starts_with(KEY_UNAVAILABLE)
 }
 
-/// The functions filters use: `sidebar_path(url)`, the app sidebar's place for a URL, and
-/// `under_site(url, site)`, for filtering by its nodes; `folder_name(dir)`, for naming a program
-/// by its folder; and `is_system(bundle_id, path)`, for macOS's own daemons.
+/// The functions searches use: `folder_name(dir)`, for naming a program by its folder;
+/// `is_system(bundle_id, path)`, for macOS's own daemons; and those the query compiler reads
+/// flows' values and tests them with ([`crate::query::add_functions`]).
 fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
     let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
-    conn.create_scalar_function("sidebar_path", 1, flags, |ctx| {
-        Ok(crate::flows::sidebar_path(&ctx.get::<String>(0)?))
-    })?;
-    conn.create_scalar_function("under_site", 2, flags, |ctx| {
-        Ok(crate::flows::under_site(&ctx.get::<String>(0)?, &ctx.get::<String>(1)?))
-    })?;
     conn.create_scalar_function("folder_name", 1, flags, |ctx| {
         let dir = ctx.get::<Option<String>>(0)?;
         Ok(crate::flows::folder_name(dir.as_deref()).map(str::to_string))
@@ -339,7 +333,8 @@ fn add_functions(conn: &mut rusqlite::Connection) -> rusqlite::Result<()> {
         let bundle_id = ctx.get::<Option<String>>(0)?;
         let path = ctx.get::<Option<String>>(1)?;
         Ok(crate::flows::is_system(bundle_id.as_deref(), path.as_deref()))
-    })
+    })?;
+    crate::query::add_functions(conn)
 }
 
 fn read_only_pool(path: &Path, key: Option<&DatabaseKey>) -> Result<SqlitePool> {
@@ -448,7 +443,7 @@ mod tests {
         assert_eq!((flows[0].stream_kind, flows[0].message_count), (None, 0));
         // Failed flows are found without the gRPC status column too.
         let failed =
-            crate::flows::FlowFilter { status: Some("error".into()), ..Default::default() };
+            crate::flows::FlowFilter::search("@is:error");
         assert_eq!(crate::flows::list(&db, &failed).unwrap().len(), 0);
 
         // Filters by app work without the folder column, and count without the clear mark.
@@ -466,7 +461,7 @@ mod tests {
         drop(conn);
         let db = ProxyQueryManager::open_read_only(&path, Some(&test_key())).unwrap();
         let filter =
-            crate::flows::FlowFilter { app: Some(vec!["curl".into()]), ..Default::default() };
+            crate::flows::FlowFilter::search("@app:curl");
         let (page, total, matching) = crate::flows::page(&db, &filter).unwrap();
         assert_eq!((page.len(), total, matching), (1, 1, Some(1)));
         assert_eq!(page[0].number, 1);
@@ -513,7 +508,8 @@ mod tests {
                 "flow_messages",
                 "flow_sweep_pending",
                 "flows",
-                "grpc_schemas"
+                "grpc_schemas",
+                "saved_queries"
             ]
         );
 
@@ -532,6 +528,7 @@ mod tests {
             "grpc_method",
             "grpc_status",
             "grpc_message",
+            "agent_read",
         ] {
             assert!(flow_columns.contains(&column.to_string()), "{column} in {flow_columns:?}");
         }
@@ -599,7 +596,9 @@ mod tests {
             .unwrap()
             .map(|v| v.unwrap())
             .collect();
-        assert_eq!(&applied[6..], ["00000007", "00000008", "00000009", "00000010", "00000011"]);
+        assert_eq!(&applied[6..], [
+            "00000007", "00000008", "00000009", "00000010", "00000011", "00000012"
+        ]);
         let mark_columns = columns(&conn, "flow_clear_mark");
         assert_eq!(mark_columns, ["id", "max_rowid", "cleaner", "cleaner_at"]);
         drop(conn);
@@ -718,7 +717,7 @@ mod tests {
         };
         db.with_tx(|c| c.upsert(&tunnel, &yaak_database::UpdateSource::Background).map(|_| ()))
             .unwrap();
-        let filter = crate::flows::FlowFilter { tunnelled: Some(true), ..Default::default() };
+        let filter = crate::flows::FlowFilter::search("@is:tunnelled");
         let listed = crate::flows::list(&db, &filter).unwrap();
         assert_eq!(listed.iter().map(|f| f.id.as_str()).collect::<Vec<_>>(), ["fl_tunnel"]);
         let old = crate::flows::find(&db, "fl_old").unwrap();

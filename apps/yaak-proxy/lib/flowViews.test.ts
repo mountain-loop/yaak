@@ -59,6 +59,7 @@ const flow: Flow = {
   grpcStatus: null,
   grpcMessage: null,
   tunnelled: false,
+  agentRead: false,
   clientAddr: null,
   elapsedConnectMs: null,
   elapsedTlsMs: null,

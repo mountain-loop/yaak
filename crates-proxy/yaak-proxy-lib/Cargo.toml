@@ -36,6 +36,8 @@ yaak-lifecycle = { workspace = true }
 yaak-models = { workspace = true, features = ["sqlcipher"] }
 yaak-proxy = { workspace = true }
 yaak-proxy-helper = { workspace = true, features = ["ts"] }
+# The search query language: parsing, the evaluator for live flows, completion.
+yaak-query = { workspace = true }
 yaak-rpc = { workspace = true }
 yaak-templates = { workspace = true }
 

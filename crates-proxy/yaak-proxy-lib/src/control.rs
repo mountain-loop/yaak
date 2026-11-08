@@ -554,7 +554,9 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
         (&Method::GET, ["flows", id]) => {
             found(ctx, id)?;
             let limit = body_limit(&query)?;
-            json(&flows::detail(&ctx.db()?, &ctx.blobs()?, id, limit).await?)
+            let detail = flows::detail(&ctx.db()?, &ctx.blobs()?, id, limit).await?;
+            ctx.note_agent_read(id);
+            json(&detail)
         }
         (&Method::GET, ["flows", id, "request-body"]) => raw_body(ctx, id, FlowBody::Request).await,
         (&Method::GET, ["flows", id, "response-body"]) => {
@@ -565,6 +567,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
             let (after_seq, limit) = message_page(&query)?;
             let messages = messages::list(&ctx.db()?, id, after_seq, limit)?;
             let total = messages::count(&ctx.db()?, id)?;
+            ctx.note_agent_read(id);
             json(&ListMessagesResponse { messages, total })
         }
         (&Method::GET, ["flows", id, "messages", seq]) => {
@@ -584,6 +587,7 @@ async fn route(state: &ServerState, req: Request<Incoming>) -> Result<ControlRes
                 (None, None)
             };
             let payload = BodyPreview::new(&payload, message.truncated);
+            ctx.note_agent_read(id);
             json(&MessageDetail { message, payload, decoded, decode_error })
         }
         (&Method::GET, ["grpc-schemas"]) => json(&grpc::list(&ctx.db()?)?),
@@ -687,6 +691,7 @@ async fn raw_body(ctx: &ProxyCtx, id: &str, which: FlowBody) -> Result<ControlRe
     let body =
         bodies::read_body(&ctx.db()?, &ctx.blobs()?, &flow, which, ctx.capture_body_limit()?)
             .await?;
+    ctx.note_agent_read(id);
     let content_type =
         find_header(flow.headers(which), "content-type").unwrap_or("application/octet-stream");
     let mut resp = response(StatusCode::OK, content_type, body.data);
